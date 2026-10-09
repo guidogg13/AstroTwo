@@ -13,8 +13,8 @@ Regole applicate in tutto il modulo:
   da e verso la convenzione FITS avviene solo in
   :func:`convert_pixel_convention` (DC7 di ``02-convenzioni.md``).
 
-``resolve_name`` non è ancora qui: dipende dalla cache condivisa di
-``mdfiles/04-cache.md``, in attesa di approvazione.
+``resolve_name`` usa la cache comune di ``mdfiles/04-cache.md`` (prima la
+cache, poi SIMBAD) e i timeout di rete comuni.
 """
 
 from __future__ import annotations
@@ -23,11 +23,14 @@ import math
 import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Literal
 
 import astropy
 import astropy.units as u
 import numpy as np
+import pyvo
+import requests
 from astropy.coordinates import (
     BaseCoordinateFrame,
     SkyCoord,
@@ -42,6 +45,8 @@ from astropy.wcs.utils import (
     wcs_to_celestial_frame,
 )
 
+from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts, SharedCache
+
 __all__ = [
     "SUPPORTED_PROJECTIONS",
     "PIXEL_CONVENTIONS",
@@ -51,6 +56,7 @@ __all__ = [
     "SkyPositions",
     "PixelPositions",
     "PropagatedPosition",
+    "ResolvedName",
     "WcsSolution",
     "CalibrationThresholds",
     "CalibrationSolution",
@@ -62,6 +68,7 @@ __all__ = [
     "supported_frames",
     "convert_pixel_convention",
     "convert_coordinates",
+    "resolve_name",
     "propagate_position",
     "wcs_from_header",
     "pixel_to_sky",
@@ -325,6 +332,171 @@ def convert_coordinates(coords: SkyFrame, to_frame: str, *, equinox=None, obstim
             f"conversione {coords.frame_name} → {to_frame} non eseguibile: {exc}",
         ) from exc
     return SkyFrame(coord=converted, epoch=coords.epoch, frame_defaults_note=coords.frame_defaults_note)
+
+
+# --------------------------------------------------------------------------
+# Risoluzione dei nomi (SIMBAD; cache comune di 04-cache.md, D10-3)
+# --------------------------------------------------------------------------
+
+_NAME_TABLE = "name_resolution"
+_NAME_COLUMNS = {
+    "main_id": "TEXT",
+    "ra_deg": "REAL",
+    "dec_deg": "REAL",
+    "coo_err_maj_mas": "REAL",
+    "coo_err_min_mas": "REAL",
+    "coo_err_angle_deg": "REAL",
+    "coo_bibcode": "TEXT",
+}
+_SIMBAD_EPOCH_NOTE = "coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD)"
+_NETWORK_ERRORS = (requests.exceptions.RequestException, pyvo.dal.DALServiceError, OSError)
+
+
+@dataclass(frozen=True)
+class ResolvedName:
+    """Nome risolto: coordinate ICRS con fonte, origine, data e incertezza."""
+
+    name: str
+    main_id: str
+    coords: SkyFrame
+    source: str
+    origin: str
+    retrieved_at: datetime
+    from_cache: bool
+    coo_err_maj: u.Quantity | None
+    coo_err_min: u.Quantity | None
+    coo_err_angle: u.Quantity | None
+    coo_bibcode: str | None
+    notes: tuple[str, ...] = ()
+
+
+class _TimeoutSession(requests.Session):
+    """Sessione HTTP che applica i timeout comuni (04-cache.md, CA1) a ogni richiesta."""
+
+    def __init__(self, timeouts: NetworkTimeouts) -> None:
+        super().__init__()
+        self.timeouts = timeouts.as_requests()
+
+    def request(self, method, url, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.timeouts
+        return super().request(method, url, **kwargs)
+
+
+def _query_simbad(name: str, timeouts: NetworkTimeouts):
+    """Interroga SIMBAD (TAP) con ``astroquery``; restituisce (tabella, URL del servizio)."""
+    from astroquery.simbad import SimbadClass
+
+    simbad = SimbadClass()
+    session = _TimeoutSession(timeouts)
+    session.headers.update(simbad._session.headers)  # stesso User-Agent di astroquery
+    simbad._session = session
+    table = simbad.query_object(name)
+    return table, simbad.tap.baseurl
+
+
+def _column_value(table, column: str, target_unit) -> float | None:
+    """Valore della prima riga convertito con l'unità dichiarata dalla colonna."""
+    if column not in table.colnames:
+        return None
+    value = table[column][0]
+    if np.ma.is_masked(value) or not np.isfinite(float(value)):
+        return None
+    unit = table[column].unit
+    if unit is None:
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", f"colonna SIMBAD {column!r} senza unità")
+    return float((float(value) * u.Unit(unit)).to_value(target_unit))
+
+
+def _name_result(name: str, values: dict, origin: str, retrieved_at: datetime, from_cache: bool, notes=()) -> ResolvedName:
+    def quantity(key, unit):
+        value = values.get(key)
+        return None if value is None else value * unit
+
+    coords = SkyFrame.from_lonlat(
+        values["ra_deg"] * u.deg, values["dec_deg"] * u.deg, "icrs", epoch=Time("J2000.0")
+    )
+    return ResolvedName(
+        name=name,
+        main_id=values["main_id"],
+        coords=coords,
+        source=f"SIMBAD (CDS) via astroquery; {_SIMBAD_EPOCH_NOTE}",
+        origin=origin,
+        retrieved_at=retrieved_at,
+        from_cache=from_cache,
+        coo_err_maj=quantity("coo_err_maj_mas", u.mas),
+        coo_err_min=quantity("coo_err_min_mas", u.mas),
+        coo_err_angle=quantity("coo_err_angle_deg", u.deg),
+        coo_bibcode=values.get("coo_bibcode"),
+        notes=tuple(notes),
+    )
+
+
+def resolve_name(
+    name: str,
+    *,
+    source: str = "simbad",
+    cache: SharedCache | None = None,
+    refresh: bool = False,
+    timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+) -> ResolvedName:
+    """Risolve un nome di oggetto in coordinate ICRS con SIMBAD.
+
+    Politica (D10-3 e decisione del 2026-10-09): **prima la cache** — un nome
+    già risolto viene dalla cache comune, dichiarato tale con origine e data;
+    ``refresh=True`` interroga di nuovo SIMBAD. Se la rete non risponde si usa
+    la copia in cache, se c'è, dichiarandolo; altrimenti ``NET_TIMEOUT``.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise CoordinatesWcsError("NAME_NOT_FOUND", "nome vuoto")
+    if source != "simbad":
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"fonte {source!r} non prevista: unica fonte 'simbad'")
+    clean = " ".join(name.split())
+    key = f"simbad:{clean}"
+    cache = SharedCache() if cache is None else cache
+    table = cache.table("10", _NAME_TABLE, _NAME_COLUMNS)
+
+    cached = table.get(key)
+    if cached is not None and not refresh:
+        return _name_result(clean, cached.data, cached.origin, cached.retrieved_at, from_cache=True)
+
+    try:
+        result, origin = _query_simbad(clean, timeouts)
+    except _NETWORK_ERRORS as exc:
+        if cached is not None:
+            return _name_result(
+                clean, cached.data, cached.origin, cached.retrieved_at, from_cache=True,
+                notes=(f"SIMBAD non raggiungibile ({type(exc).__name__}): copia in cache",),
+            )
+        raise CoordinatesWcsError(
+            "NET_TIMEOUT",
+            f"SIMBAD non raggiungibile per {clean!r} (timeout {timeouts.connect:g} s connessione, "
+            f"{timeouts.read:g} s lettura): {exc}",
+        ) from exc
+
+    if result is None or len(result) == 0:
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} non trovato in SIMBAD")
+    if len({str(r["main_id"]) for r in result}) > 1:
+        raise CoordinatesWcsError(
+            "NAME_NOT_FOUND", f"{clean!r} è ambiguo in SIMBAD: nessun nome risolto approssimativamente"
+        )
+    ra, dec = _column_value(result, "ra", u.deg), _column_value(result, "dec", u.deg)
+    if ra is None or dec is None:
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} è in SIMBAD ma senza coordinate")
+    row = result[0]
+    bibcode = None if "coo_bibcode" not in result.colnames or np.ma.is_masked(row["coo_bibcode"]) else str(row["coo_bibcode"])
+    values = {
+        "main_id": str(row["main_id"]),
+        "ra_deg": ra,
+        "dec_deg": dec,
+        "coo_err_maj_mas": _column_value(result, "coo_err_maj", u.mas),
+        "coo_err_min_mas": _column_value(result, "coo_err_min", u.mas),
+        "coo_err_angle_deg": _column_value(result, "coo_err_angle", u.deg),
+        "coo_bibcode": bibcode,
+    }
+    retrieved_at = datetime.now(UTC)
+    table.put(key, values, origin=origin, retrieved_at=retrieved_at)
+    return _name_result(clean, values, origin, retrieved_at, from_cache=False)
 
 
 # --------------------------------------------------------------------------

@@ -24,6 +24,13 @@ viene e quando è stato preso.
   - **file su disco** (sottocartella `files/`, una sottocartella per modulo)
     per immagini e tagli FITS (`11`), riquadri HiPS (`12`) e MOC in formato
     FITS IVOA (`16`, D16-2).
+- **Chiavi e proprietà:** la chiave di una voce è unica in tutta la cache
+  e appartiene al modulo che l'ha scritta; un altro modulo che la legge o
+  la riscrive riceve `CACHE_FORBIDDEN`. I dati in byte si salvano come file
+  (`put`/`get`), le righe nelle tabelle SQLite del modulo (`table`), con le
+  colonne dichiarate dal modulo (tipi SQLite `TEXT`, `REAL`, `INTEGER`,
+  `BLOB`); la dimensione di una riga è la somma dei byte dei suoi valori
+  (testo in UTF-8, numeri 8 byte).
 - **Origine e data di ogni dato:** ogni voce (riga SQLite o file) ha un
   registro con: modulo proprietario, chiave della richiesta, **origine**
   (servizio, URL o identificativo del servizio interrogato), **data e ora di
@@ -33,7 +40,12 @@ viene e quando è stato preso.
   chi lo mostra (UI) o lo registra (`24`) le riporta.
 - **Limite di spazio unico (CA2):** **un solo limite di 5 GB per tutta la
   cache** (D11-3 di `11-core-immagini-fits.md`), configurabile dall'utente;
-  il totale comprende database e file di tutti i moduli. Quando una scrittura supererebbe il limite si eliminano
+  **5 GB = 5 × 10⁹ byte** (GB decimale, come nel Finder di macOS). **Il
+  totale è la somma delle dimensioni dei dati di tutte le voci** registrate
+  (byte dei file + byte delle righe SQLite dei moduli), di tutti i moduli;
+  l'overhead fisso del database (registro, indici, pagine libere) non si
+  conta (decisione del proprietario del 2026-10-09: misura deterministica,
+  indipendente dal funzionamento interno di SQLite). Quando una scrittura supererebbe il limite si eliminano
   le voci **usate meno di recente** (LRU) fino a rientrare; ogni
   eliminazione è registrata nel log. Se una sola voce supera il limite, non
   si scrive e si segnala `CACHE_FULL`.
@@ -43,6 +55,10 @@ viene e quando è stato preso.
   riportati nel messaggio d'errore `NET_TIMEOUT`. La cache non
   fa richieste di rete da sé: riceve dai moduli i dati scaricati e li
   restituisce; i timeout sono qui perché siano gli stessi per tutti.
+- **Database corrotto:** la cache si ricrea vuota (database e file); i file
+  rimasti senza registro non si possono servire, perché non hanno
+  provenienza. **Cartella non scrivibile:** la cache resta disattivata
+  (scritture ignorate, letture assenti), sempre con avviso.
 - **Uso senza rete:** se la rete non risponde, il modulo chiamante può
   chiedere alla cache l'ultima copia disponibile; la risposta dichiara che
   il dato viene dalla cache, con origine e data, mai come se fosse fresco.
@@ -127,8 +143,8 @@ Nomi proposti, descrizione in parole, nessun codice:
 
 - **Nessun dato senza provenienza:** `origin` e `retrieved_at` sono
   obbligatori in scrittura e sempre restituiti in lettura (vincolo A7).
-- **Limite sempre rispettato:** il totale (database + file) non supera mai
-  il limite dopo una scrittura riuscita.
+- **Limite sempre rispettato:** il totale (somma dei dati delle voci, §3)
+  non supera mai il limite dopo una scrittura riuscita.
 - **Separazione per modulo:** un modulo legge e scrive solo le proprie voci;
   nessuno schema SQLite condiviso tra moduli (D10-3).
 - **Nessun segreto in cache** (regola d'oro n. 5).
@@ -161,7 +177,7 @@ data dei dati restituiti dagli strumenti dei moduli che la usano.
 |---|---|---|---|---|
 | T1 | Provenienza | scrivere e rileggere una voce con origine e data | stessi byte, stessa origine, stessa data, `from_cache` vero | confronto diretto |
 | T2 | Provenienza obbligatoria | scrivere senza `origin` | `CACHE_PROVENANCE_MISSING` | test di unità |
-| T3 | Limite LRU | limite piccolo (es. 10 kB), scrivere voci oltre il limite usandone alcune | eliminate le voci usate meno di recente; totale ≤ limite | misura dello spazio nella cartella di prova |
+| T3 | Limite LRU | limite piccolo (es. 10 kB), scrivere voci oltre il limite usandone alcune | eliminate le voci usate meno di recente; totale ≤ limite | somma delle dimensioni dei file nella cartella di prova e delle righe registrate |
 | T4 | Voce troppo grande | una voce più grande del limite | `CACHE_FULL`, nessuna scrittura | test di unità |
 | T5 | Separazione per modulo | il modulo `"13"` chiede una voce del `"10"` | `CACHE_FORBIDDEN` | test di unità |
 | T6 | Database corrotto | sovrascrivere `cache.sqlite` con byte casuali e riaprire | `CACHE_UNAVAILABLE` con avviso, cache ricreata | test di unità |
@@ -188,3 +204,5 @@ Nessuna decisione aperta. Decise dal proprietario il 2026-10-09:
 |---|---|---|
 | 2026-10-09 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario (AM1 accettata il 2026-10-09, da D10-8 punto 2): cache A7 condivisa in `~/Library/Caches/AstroTwo/`, limite 5 GB (D11-3), timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16. Decisioni aperte CA1–CA4. In attesa dell'approvazione del proprietario. |
 | 2026-10-09 | Claude Code | **Decisioni del proprietario CA1–CA4 applicate:** timeout 10 s/60 s configurabili (§3, §7), un solo limite di 5 GB (§3), codice in `src/astrotwo/core/cache.py` (§7), nessuna cache propria nei moduli (§3, §13). Collegati 10, 11, 12, 13, 14, 16 (§5). **Stato portato ad `approvato`** su decisione del proprietario. |
+| 2026-10-09 | Claude Code | **Precisazioni del proprietario prima del codice:** il totale del limite è la somma dei dati delle voci (overhead di SQLite escluso); 5 GB = 5 × 10⁹ byte; descritti chiavi uniche con modulo proprietario, righe con colonne dichiarate dal modulo, ricreazione della cache corrotta e cache disattivata se la cartella non è scrivibile (§3, §9, §12-T3). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **Codice scritto:** `src/astrotwo/core/cache.py` (`SharedCache`, `CacheTable`, `CachedValue`, `CacheUsage`, `NETWORK_TIMEOUTS`) con i test T1–T8 di §12 e casi aggiuntivi in `tests/core/test_cache.py` (18 superati; sempre in cartella temporanea o home simulata). Stato `approvato` invariato. |

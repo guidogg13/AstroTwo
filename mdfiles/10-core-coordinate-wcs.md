@@ -21,8 +21,15 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   condiviso con `13-core-cataloghi.md` — D10-3 decisa il 2026-10-04), cioè
   nella cache condivisa descritta in `04-cache.md` (cartella, limite e
   timeout di rete — 10 s connessione, 60 s lettura — sono definiti lì;
-  approvato il 2026-10-09). **Il codice di `resolve_name` si scrive dopo
-  quello della cache comune.**
+  approvato il 2026-10-09). **Politica (decisione del proprietario del
+  2026-10-09): prima la cache** — se il nome è già in cache, il risultato
+  viene da lì, dichiarato tale con origine e data, senza rete; con
+  `refresh=True` si interroga di nuovo SIMBAD e si aggiorna la cache; se la
+  rete non risponde e il nome è in cache, si restituisce la copia in cache
+  dichiarandolo. Le richieste a SIMBAD (TAP di `astroquery`) usano i timeout
+  comuni di `04-cache.md` (10 s connessione, 60 s lettura). Le coordinate
+  SIMBAD sono ICRS all'epoca J2000 (documentazione di SIMBAD): l'epoca è
+  scritta nel risultato con questa fonte.
 - **Letture e raffigurazioni:** coordinate del cursore nel campo visualizzato
   (con `pixel_to_sky`); **geometria della griglia di coordinate** con
   `compute_grid_lines` — meridiani e paralleli a passo dichiarato, come
@@ -158,9 +165,12 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   parametri: coordinate di origine, frame di partenza, frame/epoca di arrivo;
   restituisce coordinate con unità e frame di destinazione.
 - **`resolve_name(name)`** — risolve un nome in coordinate ICRS; parametri:
-  nome, opzione di fonte; restituisce coordinate + fonte + timestamp, o errore
-  se non trovato o se la rete non risponde. Cache e timeout: `04-cache.md`
-  (codice dopo la sua approvazione).
+  nome, opzione di fonte (solo `simbad`), cache comune, `refresh`;
+  restituisce coordinate (epoca J2000 dichiarata) + identificativo
+  principale SIMBAD + fonte + origine + data di scaricamento + "dalla cache
+  sì/no" + incertezza dichiarata da SIMBAD se presente, o errore se non
+  trovato o se la rete non risponde e il nome non è in cache. Cache e
+  timeout: `04-cache.md`.
 - **`wcs_from_header(header)`** / **`sky_to_pixel(...)`** / **`pixel_to_sky(...)`**
   — costruiscono la WCS da un header e fanno le trasformazioni in entrambe le
   direzioni. `wcs_from_header` restituisce la parte celeste della WCS con
@@ -329,7 +339,7 @@ propone i parametri e interpreta il risultato.
 | T2 | Conversione nota | convertire le coordinate di una sorgente presa da SIMBAD (fonte scelta dal tester) da ICRS a galattico | coincidenza con il valore ricalcolato dallo stesso test con Astropy, entro 1e-9 gradi | confronto con `astropy.coordinates` + seconda lettura da SIMBAD |
 | T3 | Round-trip pixel ↔ cielo | costruire la WCS da un header FITS di prova, passare da pixel a cielo e ritorno | errore < 1e-6 pixel | ricalcolo con `astropy.wcs` |
 | T4 | Propagazione con moto proprio | propagare una posizione con moto proprio noto (valori presi dal tester da un catalogo Gaia) a un'epoca +10 anni | coincidenza con `SkyCoord.apply_space_motion` calcolata nel test | ricalcolo con Astropy |
-| T5 | Risoluzione nome | `resolve_name("M31")` con rete disponibile | coordinate coerenti con quelle di SIMBAD entro la precisione dichiarata da SIMBAD | confronto incrociato con SIMBAD (dipende dalla rete: test separato, marcato di rete); **in attesa del codice della cache comune** (`04-cache.md` approvato il 2026-10-09) |
+| T5 | Risoluzione nome | `resolve_name("M31")` con rete disponibile | coordinate coerenti con quelle di SIMBAD entro la precisione dichiarata da SIMBAD | confronto incrociato con SIMBAD (test marcato di rete); nei test di default, risposte simulate di SIMBAD: prima la cache, `refresh`, nome non trovato o ambiguo, rete assente con e senza copia in cache, timeout applicati alla sessione HTTP, colonna senza unità |
 | T6 | Input fuori range | passare Dec = 95° | errore `COORD_OUT_OF_RANGE`, nessun output numerico | test di unità |
 | T7 | Una prova per proiezione (D10-4) | per ciascuna delle 8 proiezioni dell'elenco D10-4 (`SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN`), convertire lo stesso campo pixel ↔ cielo | round-trip entro 1e-6 pixel per **ogni** proiezione; `TAN` di default per le immagini, `AIT` per le viste all-sky | ricalcolo con `astropy.wcs` per ciascuna proiezione |
 | T8 | Convenzione dei pixel (DC7) | `convert_pixel_convention` su (1, 1) da `fits` a `numpy` e su (−0.5, −0.5) da `numpy` a `fits` | (0, 0) e (0.5, 0.5) | aritmetica esatta della regola DC7 |
@@ -443,3 +453,5 @@ propone i parametri e interpreta il risultato.
 | 2026-10-09 | Claude Code | **Codice scritto** (FASE: CODICE – livello 1): `src/astrotwo/core/coordinates_wcs.py` con tutto il §7 tranne `resolve_name` (attende `04-cache.md`); test T1–T22 in `tests/core/test_coordinates_wcs.py`: 60 superati, 1 saltato (T5), 2 di rete superati a parte (SIMBAD per T2, archivio Gaia DR3 per T4). Emerso nei test e aggiunto in §10: una matrice CD tutta nulla viene sostituita da WCSLIB con l'identità senza errore → ora `WCS_INVALID`. Interpretazioni applicate (da confermare): `wcs_from_header` accetta anche proiezioni di WCSLIB fuori dall'elenco D10-4 (l'elenco limita calibrazione e scelta della proiezione, non la lettura dei dati); `compute_grid_lines` richiede il passo esplicito (scelta automatica del passo non prevista). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | **Decisioni del proprietario** (autorizzazione esplicita a modificare il file approvato): confermate le interpretazioni 1, 3, 4, 5 (proiezioni WCSLIB in lettura, `obstime` esplicito, velocità radiale 0 dichiarata, `PV2_m` per `ZPN`) in §9; **nuova `choose_grid_spacing`** (passo automatico come Aladin; elenchi di valori tondi e 5 linee per asse in §9, coincidenza con Aladin da verificare) in §3, §6, §7, §12 (T23); `compute_grid_lines` sceglie il passo da sé se i passi sono omessi; D10-9 da decidere con il 41; `04-cache.md` approvato (`resolve_name` dopo il codice della cache). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | §9: passo automatico della griglia **confermato** dal proprietario, coincidenza con Aladin da verificare con AP1. Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | `resolve_name`: politica **prima la cache** con `refresh=True` (decisione del proprietario), timeout comuni di `04`, epoca J2000 delle coordinate SIMBAD dichiarata (§3, §7). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **`resolve_name` scritto** con la cache comune di `04` (prima la cache, `refresh`, timeout 10 s / 60 s sulla sessione HTTP di SIMBAD, unità lette dalle colonne SIMBAD): tutto il §7 è ora nel codice. T5 non più saltato (simulato di default, reale con il marcatore `network`). Test del modulo: 75 superati di default + 3 di rete. Stato `approvato` invariato. |

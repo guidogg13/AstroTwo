@@ -8,7 +8,11 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-09 — nomi dei file Python in inglese (tabella in
+**Ultimo aggiornamento:** 2026-10-09 — **codice della cache comune (`04`) e di
+`resolve_name` (modulo 10) scritto**; precisazioni di `04` (limite sui dati, 5 × 10⁹
+byte) e del `10` (prima la cache). Test: 103 superati di default, 106 con la rete.
+Aperte 18. Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-09 — nomi dei file Python in inglese (tabella in
 `02` §3); nuova D11-8. Aperte 18 (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15).
 Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
 Prima di questo aggiornamento: 2026-10-09 — **`04-cache.md` approvato** (CA1–CA4 decise);

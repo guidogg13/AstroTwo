@@ -60,6 +60,8 @@ dependencies = [
     { name = "astropy" },
     { name = "astroquery" },
     { name = "numpy" },
+    { name = "pyvo" },
+    { name = "requests" },
     { name = "scipy" },
 ]
 
@@ -73,6 +75,8 @@ requires-dist = [
     { name = "astropy", specifier = ">=8.0.1" },
     { name = "astroquery", specifier = ">=0.4.11" },
     { name = "numpy", specifier = ">=2.5.3" },
+    { name = "pyvo", specifier = ">=1.9.1" },
+    { name = "requests", specifier = ">=2.34.2" },
     { name = "scipy", specifier = ">=1.18.1" },
 ]
 

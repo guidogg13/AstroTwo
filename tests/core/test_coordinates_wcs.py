@@ -212,9 +212,146 @@ def test_t4_network_gaia_values():
 # --- T5 ---------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="resolve_name si scrive dopo il codice della cache comune (04-cache.md, approvato)")
-def test_t5_resolve_name():
-    pass
+def simbad_table(main_id="M  31", ra=10.684708333333333, dec=41.268750000000004, rows=1):
+    """Tabella con il formato di SimbadClass.query_object (astroquery 0.4.11)."""
+    from astropy.table import MaskedColumn, Table
+
+    return Table(
+        {
+            "main_id": [main_id] * rows if isinstance(main_id, str) else main_id,
+            "ra": [ra] * rows,
+            "dec": [dec] * rows,
+            "coo_err_maj": MaskedColumn([0.0] * rows, mask=[True] * rows),
+            "coo_err_min": MaskedColumn([0.0] * rows, mask=[True] * rows),
+            "coo_err_angle": MaskedColumn([0.0] * rows, mask=[True] * rows),
+            "coo_wavelength": ["I"] * rows,
+            "coo_bibcode": ["2006AJ....131.1163S"] * rows,
+            "matched_id": [main_id] * rows if isinstance(main_id, str) else main_id,
+        },
+        units={"ra": u.deg, "dec": u.deg, "coo_err_maj": u.mas, "coo_err_min": u.mas, "coo_err_angle": u.deg},
+    )
+
+
+SIMBAD_TAP = "https://simbad.cds.unistra.fr/simbad/sim-tap"
+
+
+@pytest.fixture
+def fake_simbad(monkeypatch):
+    """Risposte simulate di SIMBAD: nessuna rete nei test di default."""
+    calls = []
+    state = {"response": simbad_table()}
+
+    def query(name, timeouts):
+        calls.append((name, timeouts))
+        response = state["response"]
+        if isinstance(response, Exception):
+            raise response
+        return response, SIMBAD_TAP
+
+    monkeypatch.setattr(cw, "_query_simbad", query)
+    return calls, state
+
+
+def test_t5_resolve_name_cache_first(fake_simbad, tmp_path):
+    from astrotwo.core.cache import NETWORK_TIMEOUTS, SharedCache
+
+    calls, _ = fake_simbad
+    with SharedCache(tmp_path) as cache:
+        first = cw.resolve_name("  M31 ", cache=cache)
+        assert not first.from_cache and len(calls) == 1
+        assert calls[0] == ("M31", NETWORK_TIMEOUTS)
+        expected = SkyCoord(10.684708333333333, 41.268750000000004, unit="deg", frame="icrs")
+        assert first.coords.coord.separation(expected).deg < 1e-12
+        assert first.coords.frame_name == "icrs" and first.coords.epoch == Time("J2000.0")
+        assert first.main_id == "M  31" and first.origin == SIMBAD_TAP
+        assert first.coo_err_maj is None and first.coo_bibcode == "2006AJ....131.1163S"
+        assert first.retrieved_at.tzinfo is not None
+        second = cw.resolve_name("M31", cache=cache)  # dalla cache, senza rete
+        assert second.from_cache and len(calls) == 1
+        assert second.coords.coord.separation(first.coords.coord).deg == 0.0
+        assert second.retrieved_at == first.retrieved_at and second.origin == SIMBAD_TAP
+        third = cw.resolve_name("M31", cache=cache, refresh=True)
+        assert not third.from_cache and len(calls) == 2
+
+
+def test_t5_name_not_found_and_ambiguous(fake_simbad, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    _, state = fake_simbad
+    with SharedCache(tmp_path) as cache:
+        state["response"] = simbad_table(rows=0)
+        expect_error("NAME_NOT_FOUND", cw.resolve_name, "NonEsiste", cache=cache)
+        state["response"] = simbad_table(main_id=["A", "B"], rows=2)
+        expect_error("NAME_NOT_FOUND", cw.resolve_name, "Ambiguo", cache=cache)
+        state["response"] = simbad_table(ra=np.nan, dec=np.nan)
+        expect_error("NAME_NOT_FOUND", cw.resolve_name, "SenzaCoordinate", cache=cache)
+        assert cache.usage().total_bytes == 0  # nulla in cache
+    expect_error("NAME_NOT_FOUND", cw.resolve_name, "M31", source="ned", cache=SharedCache(tmp_path / "c2"))
+
+
+def test_t5_network_down(fake_simbad, tmp_path):
+    import requests
+
+    from astrotwo.core.cache import SharedCache
+
+    _, state = fake_simbad
+    with SharedCache(tmp_path) as cache:
+        state["response"] = requests.exceptions.ConnectTimeout("rete assente")
+        err = expect_error("NET_TIMEOUT", cw.resolve_name, "M31", cache=cache)
+        assert "10 s" in err.message and "60 s" in err.message
+        state["response"] = simbad_table()
+        cw.resolve_name("M31", cache=cache)
+        state["response"] = requests.exceptions.ConnectionError("rete assente")
+        stale = cw.resolve_name("M31", cache=cache, refresh=True)
+        assert stale.from_cache and any("copia in cache" in note for note in stale.notes)
+
+
+def test_t5_timeouts_reach_the_http_session(monkeypatch, tmp_path):
+    """Percorso reale di astroquery/pyvo, con la richiesta HTTP simulata."""
+    import requests
+
+    from astrotwo.core.cache import NetworkTimeouts, SharedCache
+
+    seen = []
+
+    def fake_request(self, method, url, **kwargs):
+        seen.append(kwargs.get("timeout"))
+        raise requests.exceptions.ConnectTimeout("rete simulata assente")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    custom = NetworkTimeouts(connect=3.0, read=7.0)
+    with SharedCache(tmp_path) as cache:
+        expect_error("NET_TIMEOUT", cw.resolve_name, "M31", cache=cache, timeouts=custom)
+    assert seen and all(t == (3.0, 7.0) for t in seen)
+
+
+def test_t5_column_without_unit_is_rejected(fake_simbad, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    _, state = fake_simbad
+    table = simbad_table()
+    table["ra"].unit = None
+    state["response"] = table
+    with SharedCache(tmp_path) as cache:
+        expect_error("COORD_UNIT_MISSING", cw.resolve_name, "M31", cache=cache)
+
+
+@pytest.mark.network
+def test_t5_network_resolve_m31(tmp_path):
+    from astroquery.simbad import SimbadClass
+
+    from astrotwo.core.cache import SharedCache
+
+    with SharedCache(tmp_path) as cache:
+        resolved = cw.resolve_name("M31", cache=cache)
+        again = cw.resolve_name("M31", cache=cache)
+    reference = SimbadClass().query_object("M31")
+    expected = SkyCoord(reference["ra"][0], reference["dec"][0], unit="deg", frame="icrs")
+    # SIMBAD per M31 non dichiara un'ellisse d'errore: confronto al limite numerico.
+    tolerance_deg = 1e-9 if resolved.coo_err_maj is None else resolved.coo_err_maj.to_value(u.deg)
+    assert resolved.coords.coord.separation(expected).deg <= tolerance_deg
+    assert not resolved.from_cache and again.from_cache
+    assert resolved.main_id == str(reference["main_id"][0])
 
 
 # --- T6 ---------------------------------------------------------------------
