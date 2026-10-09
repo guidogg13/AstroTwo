@@ -8,7 +8,28 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-09 — **livello 1 interamente approvato** (01, 02,
+**Ultimo aggiornamento:** 2026-10-09 — nomi dei file Python in inglese (tabella in
+`02` §3); nuova D11-8. Aperte 18 (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15).
+Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-09 — **`04-cache.md` approvato** (CA1–CA4 decise);
+12, 13, 14, 16 (e 11) collegati alla cache comune, senza cache proprie (restano
+approvati); D11-7 decisa; nel 10 nuova `choose_grid_spacing` e conferme delle
+interpretazioni; codice: `choose_grid_spacing` (modulo 10) e `star_centroid`
+(modulo 11). Aperte 17 (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 14). Riepilogo:
+approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-09 — decise D10-7 e D10-8; **AM1 accettata: creato
+`04-cache.md`** (bozza); applicate le decisioni in 10, 11, 17, 18 (restano
+approvati); **modulo 10 scritto e testato** (60 superati, 1 saltato, 2 di rete
+superati); vincolo LGPL-3 di WCSLIB per il 60. Aperte 22 (Gruppo 1 = 0,
+Gruppo 2 = 7, Gruppo 3 = 15). Riepilogo: approvato 13, bozza 6, non esiste 23,
+totale 42.
+Prima di questo aggiornamento: 2026-10-09 — **FASE: CODICE – livello 1** dichiarata dal
+proprietario: creata la base del progetto (`pyproject.toml`, `src/astrotwo/`,
+`tests/`); verifiche del modulo 10 eseguite, aperte nel `10` le nuove D10-7
+(calibrazione per associazione di stelle) e D10-8 (parti senza interfaccia in
+§7), Gruppo 3. Aperte 18 (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15).
+Riepilogo invariato: approvato 13, bozza 5, non esiste 23, totale 41.
+Prima di questo aggiornamento: 2026-10-09 — **livello 1 interamente approvato** (01, 02,
 03, 10–19): decise D11-6, D13-7, D14-7, D14-8, D15-5 e il framework `pytest`;
 approvati 11, 13, 14, 15. Aperte 16 (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 =
 13). Riepilogo: approvato 13, bozza 5, non esiste 23, totale 41.
@@ -164,6 +185,7 @@ Dove si trovano le decisioni:
 | `AP1`–`AP6` | `03-parita-aladin.md` |
 | `AM1`, `P1`–`P10` | `panoramica.md` |
 | `DC1`–`DC7` | `02-convenzioni.md` |
+| `CA1`–`CA4` | `04-cache.md` |
 
 ## File generali
 
@@ -177,7 +199,8 @@ Dove si trovano le decisioni:
 | `01-architettura.md` | Architettura generale, scelte tecniche e motivazioni; decisioni `A1`–`A9` (prese, aperte, rimandate) | approvato |
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (16: Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 13) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
+| `decisioni-aperte.md` | Decisioni aperte (18: Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 
@@ -239,7 +262,7 @@ Dove si trovano le decisioni:
 
 | File | Descrizione | Stato |
 |---|---|---|
-| `60-distribuzione-dmg.md` | Costruzione, firma, notarizzazione e consegna del `.dmg` | non esiste |
+| `60-distribuzione-dmg.md` | Costruzione, firma, notarizzazione e consegna del `.dmg`; **vincolo (2026-10-09): WCSLIB, incluso in astropy, è LGPL-3** — obblighi di distribuzione da rispettare nel `.dmg` | non esiste |
 | `61-strategia-test.md` | Strategia dei test: unitari, integrazione, confronto con riferimenti; qui vanno definiti gli obiettivi di prestazioni **almeno pari ad Aladin** (righe di catalogo, dimensione di immagini e cubi — §8 di `01-architettura.md`) | non esiste |
 
 ## Riepilogo
@@ -248,6 +271,6 @@ Dove si trovano le decisioni:
 |---|---|
 | bozza | 5 |
 | in revisione | 0 |
-| approvato | 13 |
+| approvato | 14 |
 | non esiste | 23 |
-| **Totale file in `mdfiles/`** | **41** |
+| **Totale file in `mdfiles/`** | **42** |

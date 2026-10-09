@@ -11,7 +11,25 @@ funzioni avanzate, consegnata come file `.dmg`.
 
 ## 2. Fase attuale
 
-**FASE: SPECIFICHE (nessun codice).**
+**FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
+tutti gli altri livelli restano in **FASE: SPECIFICHE**.
+
+- Stato del codice al 2026-10-09: base del progetto creata (`pyproject.toml`
+  con Python 3.12 e `uv`, `uv.lock`, `src/astrotwo/` con i sotto-pacchetti
+  `core`, `analysis`, `ai`, `ui`, `advanced`, `tests/` specchiato; dipendenze
+  del modulo 10: `astropy`, `astroquery`, `numpy`, `scipy`; `pytest`).
+  **Modulo 10 scritto** (`src/astrotwo/core/coordinates_wcs.py`) con tutto il
+  §7 tranne `resolve_name`, che si scrive dopo il codice della cache comune
+  (`04-cache.md`, approvato); dell'11 è scritto solo `star_centroid`
+  (`src/astrotwo/core/images_fits.py`). Test: **80 superati, 1 saltato (T5),
+  0 falliti**, più 2 test di rete superati a parte. Codice della cache: non
+  ancora scritto (scelta del prossimo passo al proprietario).
+- **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
+  **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
+  MPL-2.0 per `certifi`). Gli obblighi LGPL per il `.dmg` vanno specificati
+  nel 60.
+
+Regole della fase specifiche (livelli 2, 3, 4, interfaccia, distribuzione):
 
 - Si scrivono e si approvano solo file `.md` in `mdfiles/`.
 - Nessun codice applicativo prima che il proprietario dichiari per iscritto
@@ -239,6 +257,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `01-architettura.md` | Architettura generale e scelte tecniche | — | approvato |
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, test | — | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo coprente | — | approvato |
+| `04-cache.md` | Cache A7 comune (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s, origine e data; nessuna cache propria nei moduli), usata da 10–14 e 16 | 1 (generale) | approvato |
 | `decisioni-aperte.md` | Decisioni aperte, smistate in tre gruppi; §3 = esiti delle decisioni prese il 2026-10-04 | — | bozza |
 | **Nucleo (livello 1)** | | | |
 | `10-core-coordinate-wcs.md` | Coordinate, WCS, sistemi di riferimento | 1 | approvato |
@@ -338,6 +357,14 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D17-2 | **Geometria nel 17, rendering nel 41** | 2026-10-04 | decisione del proprietario, `17-core-misure.md` §13 | "l'interfaccia non fa calcoli" (`01-architettura.md` §3) e riuso delle forme da 16 e 20 |
 | D17-3 | **Tag nel file di sessione del 24, condiviso con i segnalibri di 40**; la sessione salva **riferimenti ai file e operazioni eseguite (non i pixel)** e deve poter essere **rieseguita** | 2026-10-04 | decisione del proprietario, `17-core-misure.md` §13 | un solo formato di sessione; il 17 resta senza I/O su disco |
 | D17-4 | **La fotometria (F4) sta interamente nel 20** | 2026-10-04 | decisione del proprietario, `17-core-misure.md` §13 | la fotometria è livello 2; nessun test duplicato |
+| AM1 (cache) | **Nuovo file generale `04-cache.md`**: cache A7 condivisa in `~/Library/Caches/AstroTwo/`, limite 5 GB (D11-3), timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16 | 2026-10-09 | decisione del proprietario (da D10-8) | file in `bozza`, in attesa di approvazione; decisioni aperte CA1–CA4 |
+| D10-7 | Calibrazione per associazione di stelle: partenza da un adattamento `TAN`, poi tre controlli obbligatori configurabili — stelle minime 6 (`TAN`/`STG`) o 10; RMS ≤ 1 px e massimo ≤ 3 px; scostamento al centro ≤ 5 × RMS della `TAN` | 2026-10-09 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 | RMS della `TAN` precisato dal proprietario dopo la prova su dati esatti |
+| D10-8 | `compute_grid_lines` e `choose_projection` nel 10; cache in `04`; centroide nell'11, soluzioni come lista (annulla/ripeti in 24/40); `coordinate_calculator` tolta, offset e calcolo inverso nel 17, calcolatrice del 18 su 10 e 17 | 2026-10-09 | decisione del proprietario, `10` §13 | applicata in 10, 11, 17, 18 (restano `approvato`) |
+| LGPL | WCSLIB (in astropy) è LGPL-3: **vincolo da rispettare nel modulo 60** | 2026-10-09 | decisione del proprietario | da specificare in `60-distribuzione-dmg.md` |
+| CA1–CA4 | Cache comune (`04-cache.md`): timeout 10 s connessione e 60 s lettura, configurabili; **un solo limite di 5 GB**; codice in `src/astrotwo/core/cache.py`; **nessuna cache propria nei moduli** (tolte `ImageCache`, `HiPSCache`, `CatalogCache`, `QueryCache` e la cache MOC) | 2026-10-09 | decisione del proprietario, `04-cache.md` §13 | `04` approvato; 11, 12, 13, 14, 16 collegati (restano approvati) |
+| D11-7 | Fondo cielo del centroide = **mediana con sigma clipping in una corona** attorno alla stella (`astropy.stats.sigma_clipped_stats`) | 2026-10-09 | decisione del proprietario, `11-core-immagini-fits.md` §13 | `star_centroid` scritto e testato |
+| Griglia | **`choose_grid_spacing`** nel 10: passo automatico in base al campo visibile, come Aladin; il passo esplicito resta possibile | 2026-10-09 | decisione del proprietario, `10` §7/§9 | elenchi dei valori tondi e 5 linee per asse: proposta, coincidenza con Aladin da verificare |
+| 10 (interpretazioni) | Confermate: proiezioni WCSLIB fuori da D10-4 accettate in lettura; `obstime` esplicito per i frame che lo hanno; velocità radiale assente = 0 km/s dichiarata; `PV2_m` obbligatori per `ZPN` | 2026-10-09 | decisione del proprietario, `10` §9 | D10-9 resta aperta e si decide con il 41 |
 
 ## 6. Decisioni aperte
 
@@ -356,8 +383,12 @@ aggiunta la proposta AM1 per H21 (32 aperte), accettata lo stesso giorno →
 31 aperte; con i moduli 18 e 19 se ne aggiungono 13 (44); il 2026-10-09
 applicate le decisioni su D19-2, D19-3, D19-4 (42); con la checklist del
 livello 1 (14); con il completamento dei moduli 11–17 (20); con le decisioni
-su D11-6, D13-7, D14-7, D14-8, D15-5 → **16 aperte** (Gruppo 1 = 0, Gruppo 2 =
-3: A2, A6, A9 per `60`/`40`; Gruppo 3 = 13).
+su D11-6, D13-7, D14-7, D14-8, D15-5 → 16 aperte; con le verifiche del
+modulo 10 in fase codice (D10-7, D10-8) → 18 aperte; con D10-7 e D10-8
+decise, le nuove D10-9 e D11-7 e le CA1–CA4 di `04-cache.md` → 22 aperte;
+con CA1–CA4 e D11-7 decise → 17; con la nuova D11-8 → **18 aperte** (Gruppo
+1 = 0, Gruppo 2 = 3: A2, A6, A9 per `60`/`40`; Gruppo 3 = 15, con D10-9 da
+decidere con il 41 e D11-8 con 20 e 41).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -385,6 +416,12 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
+0. **Subito (fase codice del livello 1):** il proprietario sceglie il
+   prossimo passo. Candidati: codice della cache comune
+   (`src/astrotwo/core/cache.py`, test T1–T8 di `04`) e poi `resolve_name`
+   (T5 del 10); poi gli altri moduli del livello 1, uno alla volta, ciascuno
+   dopo le sue verifiche "da verificare prima del codice". D10-9 si decide
+   con il `41`.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -407,8 +444,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (16): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 3, Gruppo 3 = 13); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (18): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 3, Gruppo 3 = 15); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -435,3 +472,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-09 | Claude Code | **Checklist del livello 1 applicata (decisioni del proprietario):** 30 raccomandazioni scritte nei file di origine (`02`, `03`, `10`–`19`), con le verifiche come vincoli prima del codice; A2/A6/A9 con orientamento, bloccanti solo per `60`/`40` (§5, §6, `01`); D19-3 esteso al `15` (regola, errori, test T7–T8); nuove A10 e D10-6 (Gruppo 3); `CLAUDE.md`: fase codice per livello. Aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). **Approvazione non eseguita:** nessuna decisione dei Gruppi 1 e 2 blocca 01, 02, 03 e 10–19, ma i moduli 11–17 non descrivono ancora le funzioni assegnate loro dalla lettura AP5 (H22, H23, H24, H26, H27, E3, F1); si attende l'indicazione del proprietario. Stati invariati: bozza 18, non esiste 23, totale 41. |
 | 2026-10-09 | Claude Code | **Approvati 01, 02, 03, 10, 18, 19** (decisione del proprietario). **Moduli 11–17 completati** con gli esiti di AP5 (§3, §6, §7, §10, §12) e 10 con H25; verifica di copertura di `03` sui moduli 10–19 senza altre lacune. **Approvati 12, 16, 17**; **11, 13, 14, 15 restano in bozza** per le nuove decisioni del Gruppo 2 D11-6, D13-7, D14-7, D14-8, D15-5 (nuova D13-8 nel Gruppo 3). §2, §4, §5, §6, §7 aggiornati. Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 8, Gruppo 3 = 12). Stati: approvato 9, bozza 9, non esiste 23, totale 41. |
 | 2026-10-09 | Claude Code | **Livello 1 interamente approvato:** applicate D11-6 (`Pillow`), D13-7 e D14-8 (`defusedxml`), D14-7 (nessun plugin; parte "plugin" di H14 nel 24, anche in `03`), D15-5 (Mahalanobis, soglia in sigma; nuova D15-6 Gruppo 3) e il framework `pytest` (`01`, `02` §8); approvati 11, 13, 14, 15. §2, §4, §5, §6, §7 aggiornati. Aperte **16** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 13). Stati: approvato 13, bozza 5, non esiste 23, totale 41. |
+| 2026-10-09 | Claude Code | **FASE: CODICE – livello 1** dichiarata dal proprietario. Creata la base del progetto: `pyproject.toml` (Python 3.12, `uv`, build `hatchling`, `pytest` con marcatore `network` escluso di default), `uv.lock`, `.python-version`, `src/astrotwo/` con `core`, `analysis`, `ai`, `ui`, `advanced`, `tests/` specchiato; dipendenze del modulo 10 (`astropy` 8.0.1, `astroquery` 0.4.11, `numpy` 2.5.3, `scipy` 1.18.1 per `fit_wcs_from_points`) e `pytest` 9.1.1. **Verifiche del modulo 10:** `NCP` supportata (tradotta in `SIN` + `PV2_2`), DSS1 supportata (WCSLIB 8.6, riferimento STScI entro 0.010″), licenze permissive con WCSLIB LGPL-3 da considerare in `60`; **`fit_wcs_from_points` non copre `SIN`, `AIT`, `ZEA`, `CAR`, `NCP`, `ZPN`** → nuova D10-7; lacune di §7 → nuova D10-8 (Gruppo 3, bloccanti ora). `coordinates_wcs.py` non scritto: ci si ferma per la decisione del proprietario. §2, §6, §7 aggiornati; `10`, `decisioni-aperte.md`, `INDICE.md`, `riassunto.md`, `CLAUDE.md` allineati. Aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). Stati invariati: approvato 13, bozza 5, non esiste 23, totale 41. |
+| 2026-10-09 | Claude Code | **Decisioni del proprietario D10-7 e D10-8 applicate** (con autorizzazione a modificare 10, 11, 17, 18, che restano `approvato`): calibrazione per associazione di stelle con partenza `TAN` e tre controlli (coerenza con l'RMS della `TAN`, precisazione del proprietario); `compute_grid_lines`, `choose_projection` (nuova D10-9); centroide `star_centroid` nell'11 (nuova D11-7); offset e calcolo inverso nel 17; calcolatrice del 18 su 10 e 17. **AM1 accettata: creato `04-cache.md`** (bozza; CA1–CA4); collegati per ora solo 10 e 11 (12, 13, 14, 16 all'approvazione di 04, scelta del proprietario). Vincolo LGPL-3 di WCSLIB registrato per il 60. **Modulo 10 scritto** (`src/astrotwo/core/coordinates_wcs.py`, tutto il §7 tranne `resolve_name`) con test T1–T22: 60 superati, 1 saltato (T5), 2 di rete superati. §2, §4, §5, §6, §7 aggiornati. Aperte **22** (Gruppo 1 = 0, Gruppo 2 = 7, Gruppo 3 = 15). Stati: approvato 13, bozza 6, non esiste 23, totale 42. |
+| 2026-10-09 | Claude Code | **Decisioni del proprietario:** confermate le interpretazioni 1, 3, 4, 5 del modulo 10; nuova `choose_grid_spacing` (passo automatico come Aladin, test T23); **D11-7 decisa** (mediana con sigma clipping in una corona) e `star_centroid` scritto con test T16–T19; D10-9 resta aperta (si decide con il 41); **CA1–CA4 decise e `04-cache.md` approvato**; 11, 12, 13, 14, 16 collegati alla cache comune senza cache proprie (restano approvati, modifica nel registro). Test: 80 superati, 1 saltato (T5), 0 falliti; rete: 2 superati. Codice della cache non scritto (in attesa della scelta del prossimo passo). §2, §4, §5, §6, §7 aggiornati. Aperte **17** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 14). Stati: approvato 14, bozza 5, non esiste 23, totale 42. |
+| 2026-10-09 | Claude Code | **Decisioni del proprietario:** nomi dei file Python in inglese con tabella in `02` §3 (04 e 10–19); passo automatico della griglia confermato (da verificare con AP1); centroide confermato, nuova **D11-8** (default dei raggi della corona, da fissare con 20 e 41). Aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). Stati invariati. |

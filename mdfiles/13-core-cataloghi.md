@@ -45,9 +45,10 @@ sempre separate le regole di disegno dalle selezioni dei record.
   altrimenti J2000; per i cataloghi: la **propria epoca di riferimento**);
   **l'epoca usata è sempre scritta nel risultato**.
 - **Cache delle interrogazioni (A7):** le interrogazioni ai cataloghi
-  (risultati di query, cone search, sottoinsiemi salvati) si conservano in
-  **SQLite**, con limite di spazio configurabile, rimozione dei dati meno
-  usati, origine e data di scaricamento per ogni voce servita dalla cache.
+  (risultati di query, cone search, sottoinsiemi salvati) si conservano nelle
+  tabelle SQLite di questo modulo dentro la **cache comune di `04-cache.md`**
+  (limite unico di 5 GB, rimozione dei dati meno usati, origine e data di
+  scaricamento per ogni voce servita dalla cache); nessuna cache propria (CA4).
 - **Formati delle tabelle (H22, sez. 8.1 del manuale di Aladin, ed. giugno 2022):**
   VOTable (lettura tramite `14-core-protocolli-vo.md`), tabelle FITS ASCII e
   binarie, CSV, TSV, **BSV** (valori separati da spazi), **IPAC TBL**,
@@ -86,7 +87,8 @@ sempre separate le regole di disegno dalle selezioni dei record.
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** `10-core-coordinate-wcs.md` (propagazione, moto proprio,
+- **Dipende da:** `04-cache.md` (cache comune A7),
+  `10-core-coordinate-wcs.md` (propagazione, moto proprio,
   coordinate di ricerca), `14-core-protocolli-vo.md` (download e VOTable).
 - **Usato da:** `15-core-crossmatch.md`, `16-core-moc.md`,
   `18-core-calcolatrici.md`, `19-core-dati-planetari.md`,
@@ -133,8 +135,8 @@ sempre separate le regole di disegno dalle selezioni dei record.
 - **`histogram(column)`** / **`xy_plot(x, y)`** — dati per istogramma e
   grafico x-y (H8): il calcolo numerico è del modulo, il disegno della UI.
 - **`time_filter(table, range)`** (H3) — selezione per epoca osservativa.
-- **`CatalogCache`** (classe) — cache SQLite delle interrogazioni con limite
-  configurabile, rimozione dei dati meno usati, origine e data per voce (A7).
+- **Cache:** nessuna classe propria (CA4): le interrogazioni si salvano nelle
+  tabelle del modulo con `SharedCache` di `04-cache.md`.
 - **`read_table(source)`** (H22) — riconosce il formato dal contenuto e
   carica la tabella con unità e provenienza; ASTRORES con il lettore `defusedxml` (D13-7).
 
@@ -145,7 +147,7 @@ sempre separate le regole di disegno dalle selezioni dei record.
 | `astropy.table` | rappresentazione delle tabelle con unità | standard del dominio |
 | `astropy.io.votable` / `pyvo` (via modulo 14) | lettura dei formati VO | standard VO |
 | `numpy` | espressioni su colonne, istogrammi, grafici dati | consolidato |
-| `sqlite3` (libreria standard Python) | cache delle interrogazioni (A7) | persistenza semplice e interrogabile |
+| `sqlite3` (tramite `04-cache.md`) | cache delle interrogazioni (A7) | persistenza semplice e interrogabile |
 | `astropy.units` | unità delle colonne | unità esplicite sempre |
 | `astropy.io.ascii` | lettura di CSV, TSV, BSV, IPAC TBL e formato SExtractor (H22) | lettori consolidati della comunità |
 | `defusedxml` (D13-7) | lettore ASTRORES (H22) protetto contro file XML malevoli | parser XML sicuro per file non fidati; **licenza da verificare prima del codice** |
@@ -293,3 +295,4 @@ questi strumenti deterministici e poi verificati da
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per H22 (formati CSV, TSV, BSV, IPAC TBL, SExtractor con `astropy.io.ascii`; ASTRORES; riconoscimento dal contenuto) e H8 (colonne calcolate con unità, UCD, decimali ed espressioni `${colonna}` con la tecnica di D18-1). Nuove decisioni: **D13-7** (lettore ASTRORES, Gruppo 2) e D13-8 (Gruppo 3). Il modulo resta in `bozza`. |
 | 2026-10-09 | Claude Code | **D13-7 DECISA** (decisione del proprietario): lettore ASTRORES con `defusedxml` (licenza da verificare), testato su esempi del CDS, altrimenti solo errore. §3, §7, §8, §10 (`ASTRORES_UNREADABLE`, `XML_UNSAFE`), §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `CatalogCache`, interrogazioni nelle tabelle del modulo dentro `SharedCache`. Stato `approvato` invariato. |

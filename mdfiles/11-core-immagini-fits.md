@@ -32,11 +32,28 @@ alterare i valori dei pixel memorizzati.
   la modifica silenziosa dell'originale.
 - **Contorni / isofote (H7):** calcolare le linee di livello di intensità
   sull'immagine.
+- **Centroide per la calibrazione astrometrica (H6; D10-8 del
+  `10-core-coordinate-wcs.md`, decisa il 2026-10-09):** dato un punto
+  indicato dall'utente (pixel, convenzione numpy) e una finestra quadrata
+  intorno, calcolare il **baricentro pesato sull'intensità** dei pixel della
+  finestra (calcolo in `float64` con `scipy.ndimage.center_of_mass`) e
+  restituirlo in convenzione numpy; queste posizioni sono quelle che il
+  modulo 10 riceve per la calibrazione per associazione di stelle (il 10 non
+  legge pixel). **Fondo cielo (D11-7, decisa il 2026-10-09):** prima del
+  baricentro si sottrae il fondo, stimato come **mediana dei pixel di una
+  corona circolare attorno alla stella con sigma clipping**
+  (`astropy.stats.sigma_clipped_stats`, parametri di default della libreria
+  `sigma = 3`, `maxiters = 5`, scritti nel risultato); raggi interno ed
+  esterno della corona sono parametri obbligatori. Il
+  centroide qui serve solo alla calibrazione: la fotometria resta nel `20`
+  (D17-4).
 - **Cache su disco (A7):** i riquadri di immagine (tagli, HiPS richiesti,
   immagini da rete) si conservano come file su disco con **limite di default
   5 GB, configurabile**, eliminazione dei dati meno usati e, per ogni dato
   servito dalla cache, origine e data di scaricamento mostrabili all'utente
-  (D11-3 decisa il 2026-10-04).
+  (D11-3 decisa il 2026-10-04). La cache è quella comune di `04-cache.md`
+  (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s):
+  il modulo non ha una cache propria (CA4).
 - **Esportazione:** salvare la vista come immagine e salvare tagli FITS.
 - **Formati e compressioni (H22, sez. 8.1 del manuale di Aladin, ed. giugno 2022):**
   FITS anche compressi (RICE, GZIP, **HCOMPRESS / HCOMP**, letti con le HDU
@@ -87,9 +104,8 @@ alterare i valori dei pixel memorizzati.
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** `10-core-coordinate-wcs.md` (WCS, tagli coerenti),
-  `12-core-hips.md` (per i riquadri HiPS da mettere in cache — solo per la
-  parte cache su disco).
+- **Dipende da:** `04-cache.md` (cache comune A7),
+  `10-core-coordinate-wcs.md` (WCS, tagli coerenti).
 - **Usato da:** `17-core-misure.md`, `18-core-calcolatrici.md`,
   `19-core-dati-planetari.md`, `20-analisi-fotometria.md`,
   `23-analisi-cubi-di-dati.md`, `41-ui-visualizzatore-cielo.md`,
@@ -130,8 +146,20 @@ alterare i valori dei pixel memorizzati.
 - **`image_operation(a, b, op)`** — aritmetica/convoluzione/normalizzazione/
   specchiatura (H5); `op` da un elenco chiuso.
 - **`contours(image, levels)`** — isofote (H7); `levels` in unità dell'immagine.
-- **`ImageCache`** (classe): cache su disco con limite configurabile e
-  politica di eliminazione; espone per ogni voce origine, data e dimensione.
+- **`star_centroid(image, position, box_size, annulus_inner, annulus_outer)`**
+  — baricentro pesato sull'intensità, dopo la sottrazione del fondo (D11-7),
+  nella finestra quadrata di lato `box_size` pixel (intero dispari ≥ 3)
+  centrata sul pixel più vicino a `position` (convenzione numpy); il fondo è
+  la mediana con sigma clipping dei pixel a distanza da `position` in
+  [`annulus_inner`, `annulus_outer`) pixel; `image` è un array 2-D o un
+  oggetto con l'attributo `data` (`FitsImage`). Restituisce la posizione in
+  convenzione numpy, dichiarata, con la finestra, il fondo, la sua
+  deviazione standard, il numero di pixel della corona e i parametri del
+  sigma clipping; le posizioni vanno al modulo 10 per
+  `astrometric_calibration`.
+- **Cache:** nessuna classe propria (CA4 di `04-cache.md`): immagini e tagli
+  scaricati si salvano con `SharedCache`, che espone origine, data e
+  dimensione di ogni voce.
 - **`detect_format(source)`** — riconosce la natura del file dal contenuto
   (FITS, FITS compresso, JPEG, PNG, GIF); restituisce il formato o
   `FORMAT_UNSUPPORTED`.
@@ -152,7 +180,8 @@ alterare i valori dei pixel memorizzati.
 | `astropy.io.fits` | lettura/scrittura FITS | standard di fatto |
 | `astropy.wcs` (via modulo 10) | WCS dei tagli | coerente con il nucleo |
 | `numpy` | manipolazione array | base dell'ecosistema scientifico |
-| `scipy.ndimage` | convoluzione, ricampionamento semplice | consolidato e testato |
+| `scipy.ndimage` | convoluzione, ricampionamento semplice, baricentro del centroide (`center_of_mass`) | consolidato e testato |
+| `astropy.stats` | fondo cielo del centroide con `sigma_clipped_stats` (D11-7) | libreria di riferimento |
 | `reproject` (D11-2, decisa; licenza da verificare prima del codice) | ricampionamento tra proiezioni (B7) | pensato per questo scopo; vedi §13 |
 | Standard FITS | formato di tagli ed export | formato del dominio |
 | `Pillow` (D11-6) | lettura di JPEG, PNG e GIF e del segmento di commento con la calibrazione | libreria di riferimento per questi formati; **licenza da verificare prima del codice** |
@@ -191,6 +220,8 @@ alterare i valori dei pixel memorizzati.
 | RGB con meno di 2 o più di 3 immagini, o immagini non monocrome | rifiuto con il numero e il tipo ricevuti | `RGB_INPUT_INVALID` |
 | RGB o mosaico con un'immagine senza WCS | rifiuto: il ricampionamento richiede la calibrazione | `WCS_MISSING` |
 | Misura richiesta su una vista a bassa risoluzione | la misura usa i pixel originali; se non disponibili, errore | `PREVIEW_NOT_MEASURABLE` |
+| Finestra o corona del centroide fuori dall'immagine | rifiuto con la finestra e i limiti dell'immagine | `CENTROID_OUT_OF_IMAGE` |
+| Centroide non definito (somma dei pesi ≤ 0 dopo la sottrazione del fondo, pixel non finiti nella finestra, nessun pixel finito nella corona) | nessuna posizione prodotta | `CENTROID_UNDEFINED` |
 
 ## 11. Esposizione all'IA
 
@@ -225,6 +256,10 @@ numero mostrato.
 | T13 | RGB con 2 immagini (B11) | due immagini sintetiche | terza componente = media delle due | ricalcolo con `numpy` |
 | T14 | Differenza di colori (B11) | due immagini con differenze note di segno opposto | positivi nella prima componente, negativi nella seconda, normalizzati 0–255 | ricalcolo con `numpy` |
 | T15 | Costanti per il 18 (H4) | `pixel_scaling` su un FITS con `BZERO` = 32768, `BSCALE` = 1 | valori dell'intestazione restituiti senza modifiche | test di unità |
+| T16 | Centroide (H6, D10-8, D11-7) | stella gaussiana sintetica con centro non intero noto su fondo costante con rumore | posizione uguale a `scipy.ndimage.center_of_mass` sulla finestra meno la mediana di `sigma_clipped_stats` sulla corona, ricalcolati nel test; vicina al centro vero; fondo uguale alla mediana ricalcolata | ricalcolo con SciPy e `astropy.stats` |
+| T17 | Centroide fuori immagine | finestra o corona che esce dal bordo | `CENTROID_OUT_OF_IMAGE` | test di unità |
+| T18 | Centroide non definito | finestra con un NaN; finestra senza stella (tutta fondo) con pesi a somma ≤ 0 | `CENTROID_UNDEFINED` | test di unità |
+| T19 | Fondo robusto | stella vicina dentro la corona | fondo stimato entro 3 deviazioni standard dal fondo vero (sigma clipping la esclude) | confronto con il fondo costante del test |
 
 ## 13. Decisioni aperte
 
@@ -258,6 +293,15 @@ numero mostrato.
   proprietario).** **`Pillow`** per JPEG, PNG e GIF e per il segmento di
   commento con la calibrazione (H6). **Da verificare prima del codice:**
   licenza e installazione su macOS.
+- **D11-7 — Fondo cielo nel centroide: DECISA il 2026-10-09 (decisione del
+  proprietario).** Mediana in una corona attorno alla stella con sigma
+  clipping (`astropy.stats.sigma_clipped_stats`); applicata in §3, §7, §8,
+  §10, §12.
+- **D11-8 — Valori di default dei raggi della corona del centroide:** oggi
+  `annulus_inner` e `annulus_outer` sono parametri obbligatori. Da decidere
+  (Gruppo 3) **insieme a `20-analisi-fotometria.md` e
+  `41-ui-visualizzatore-cielo.md`** (decisione del proprietario del
+  2026-10-09).
 
 ## 14. Registro modifiche
 
@@ -270,3 +314,7 @@ numero mostrato.
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §10, §12 per H22 (formati e compressioni, compreso GIF e HCOMPRESS; riconoscimento dal contenuto), H27 (immagini di qualsiasi dimensione a due livelli di risoluzione), B11 (RGB, differenza di colori, mosaico), H25/H4 (convenzione dei pixel e costanti per il 18). Nuova decisione aperta **D11-6** (libreria per JPEG, PNG e GIF, Gruppo 2): il modulo resta in `bozza`. |
 | 2026-10-09 | Claude Code | **D11-6 DECISA** (decisione del proprietario): `Pillow` (licenza da verificare prima del codice). §3, §8, §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): nuovo centroide baricentrico per la calibrazione astrometrica (§3, §7 `star_centroid`, §10 `CENTROID_OUT_OF_IMAGE`/`CENTROID_UNDEFINED`, §12 T16–T17), nuova D11-7 (fondo cielo, Gruppo 3); cache collegata a `04-cache.md` (§3, §5). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5 e §7 — tolta `ImageCache`, immagini e tagli nella cache comune `SharedCache`; tolta da §5 la dipendenza da `12` per la cache. Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **D11-7 DECISA** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): fondo cielo del centroide = mediana con sigma clipping in una corona attorno alla stella; `star_centroid` con raggi della corona obbligatori (§3, §7), `astropy.stats` (§8), casi limite (§10), test T16–T19 (§12). Codice di `star_centroid` scritto in `src/astrotwo/core/images_fits.py` (solo questa funzione). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | Centroide **confermato** dal proprietario (D11-7 e parametri); nuova **D11-8** (valori di default dei raggi della corona, Gruppo 3, da fissare con 20 e 41). Stato `approvato` invariato. |

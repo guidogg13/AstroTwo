@@ -37,7 +37,21 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-09 (decisioni su D11-6, D13-7, D14-7, D14-8, D15-5): 16 aperte**
+**Dal 2026-10-09, con la nuova `D11-8`: 18 aperte** — Gruppo 1: **0** · Gruppo 2:
+**3** (`A2`, `A6`, `A9`, che bloccano solo `60` e `40`) · Gruppo 3: **15** (`D10-9`
+si decide con il `41`; `D11-8` con `20` e `41`).
+
+Prima, sempre il 2026-10-09, dopo le decisioni su `04-cache.md` (CA1–CA4) e D11-7: 17 aperte.
+
+Prima, sempre il 2026-10-09, dopo le decisioni D10-7 e D10-8: 22 aperte — Gruppo 1: **0** ·
+Gruppo 2: **7** (`A2`, `A6`, `A9`; `CA1`–`CA4` di `04-cache.md`) · Gruppo 3: **15**
+(chiuse `D10-7` e `D10-8`; nuove `D10-9` e `D11-7`).
+
+Prima, sempre il 2026-10-09, FASE: CODICE – livello 1 (verifiche del modulo 10): 18 aperte
+— Gruppo 1: **0** · Gruppo 2: **3** (`A2`, `A6`, `A9`) · Gruppo 3: **15** (nuove
+`D10-7` e `D10-8`, che bloccano ora parti del codice del modulo 10).
+
+Prima, sempre il 2026-10-09 (decisioni su D11-6, D13-7, D14-7, D14-8, D15-5): 16 aperte
 — Gruppo 1: **0** · Gruppo 2: **3** (`A2`, `A6`, `A9`, che bloccano solo `60` e
 `40`) · Gruppo 3: **13** (nuova `D15-6`). **Nessuna decisione dei Gruppi 1 e 2
 riguarda il livello 1.**
@@ -165,7 +179,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (13)
+## 5. GRUPPO 3 — rimandabili al momento del codice (15)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -182,6 +196,8 @@ gruppi successivi, A8 dopo il livello 1).
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
 | `D13-8` | Dove vive nel codice la tabella delle funzioni condivisa da colonne calcolate (13) e calcolatrice (18)? | `13-core-cataloghi.md` |
 | `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
+| `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
+| `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
 
 ## 6. Note
 
@@ -228,3 +244,7 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-09 | Claude Code | **Checklist del livello 1 (decisioni del proprietario):** chiuse 30 decisioni del Gruppo 2 (elenco in §1, testo nei file di origine); A2, A6, A9 restano nel Gruppo 2 ma bloccano solo `60` (A2, A6) e `40` (A9), con orientamento registrato; nuove `A10` (tetti di memoria) e `D10-6` (prestazioni delle conversioni di massa) nel Gruppo 3. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |
 | 2026-10-09 | Claude Code | **Completamento dei moduli 11–17 con gli esiti di AP5:** nuove decisioni del Gruppo 2 `D11-6` (libreria JPEG/PNG/GIF), `D13-7` (lettore ASTRORES), `D14-7` (sistema di plugin), `D14-8` (formato IDHA), `D15-5` (criterio delle ellissi d'errore); nuova `D13-8` nel Gruppo 3. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 8, Gruppo 3 = 12). |
 | 2026-10-09 | Claude Code | **Decise dal proprietario** D11-6 (`Pillow`), D13-7 e D14-8 (lettori ASTRORES e IDHA con `defusedxml`, altrimenti solo errore), D14-7 (nessun sistema di plugin nel livello 1; estensioni tramite l'API Python del 24), D15-5 (Mahalanobis con covarianza combinata, soglia in sigma) e tolte dal Gruppo 2; nuova `D15-6` (soglia predefinita, Gruppo 3). Framework dei test `pytest` registrato in `01`/`02`. Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 13). |
+| 2026-10-09 | Claude Code | **FASE: CODICE – livello 1, verifiche del modulo 10:** nuove `D10-7` (calibrazione per associazione di stelle, verifica di `fit_wcs_from_points` non superata) e `D10-8` (parti del 10 senza interfaccia in §7) nel Gruppo 3, entrambe bloccanti per il codice delle parti interessate. Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). |
+| 2026-10-09 | Claude Code | **Decise dal proprietario `D10-7`** (partenza `TAN` + tre controlli; coerenza con l'RMS della `TAN`) e **`D10-8`** (griglia e scelta della proiezione nel 10, cache in `04-cache.md` con AM1 accettata, centroide nell'11, soluzioni come lista, offset e calcolo inverso nel 17) e tolte dal Gruppo 3; nuove `D10-9` e `D11-7` (Gruppo 3) e `CA1`–`CA4` di `04-cache.md` (Gruppo 2, bloccano l'approvazione del 04). Conteggi: aperte **22** (Gruppo 1 = 0, Gruppo 2 = 7, Gruppo 3 = 15). |
+| 2026-10-09 | Claude Code | **Decise dal proprietario** `CA1` (timeout 10 s / 60 s, configurabili), `CA2` (un solo limite di 5 GB), `CA3` (`src/astrotwo/core/cache.py`), `CA4` (nessuna cache propria nei moduli) — `04-cache.md` approvato — e `D11-7` (fondo = mediana con sigma clipping in una corona); tolte dai Gruppi 2 e 3. `D10-9` resta aperta, da decidere con il 41. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 14). |
+| 2026-10-09 | Claude Code | Nuova `D11-8` (default dei raggi della corona del centroide, Gruppo 3, da fissare con 20 e 41) su decisione del proprietario. Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). |

@@ -50,9 +50,11 @@ riproducibile.
   tecnica decisa il 2026-10-09: SSA 1.1 con `pyvo` (§13-D14-6).
   **L'analisi degli spettri** (dereddening, misure di linea) **vive in
   `21-analisi-spettroscopia.md`**, che riceve lo spettro caricato qui.
-- **Cache delle interrogazioni (A7):** i risultati delle query ai cataloghi si
-  conservano in **SQLite** (scelta A7) con limite configurabile, rimozione dei
-  dati meno usati e origine/data per ogni voce.
+- **Cache delle interrogazioni (A7):** i risultati delle query si conservano
+  nelle tabelle SQLite di questo modulo dentro la **cache comune di
+  `04-cache.md`** (limite unico di 5 GB, rimozione dei dati meno usati,
+  origine/data per ogni voce); le richieste di rete usano i timeout comuni
+  (10 s connessione, 60 s lettura, configurabili); nessuna cache propria (CA4).
 - **Liste di immagini SIA e SIA2 (H23, sez. 5.14 e 8.1 del manuale di
   Aladin, ed. giugno 2022):** ricerca di immagini per posizione e raggio (SIA) e per
   posizione, banda e intervallo di tempo (SIA2) con `pyvo` (D14-1). Il
@@ -100,7 +102,8 @@ riproducibile.
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** `10-core-coordinate-wcs.md` (centri e raggi in coordinate),
+- **Dipende da:** `04-cache.md` (cache comune A7 e timeout di rete),
+  `10-core-coordinate-wcs.md` (centri e raggi in coordinate),
   `13-core-cataloghi.md` (rappresentazione delle tabelle ricevute).
 - **Usato da:** `13-core-cataloghi.md`, `15-core-crossmatch.md`,
   `16-core-moc.md`, `19-core-dati-planetari.md`,
@@ -157,8 +160,8 @@ riproducibile.
 - **`ssa_load(sp_id)`** (E4) — caricamento dello spettro scelto: assi, unità,
   metadati e provenienza; restituisce la tabella dello spettro a
   `21-analisi-spettroscopia.md`.
-- **`QueryCache`** (classe) — cache SQLite dei risultati di query con limite
-  configurabile e provenienza (A7).
+- **Cache:** nessuna classe propria (CA4): i risultati si salvano con
+  `SharedCache` di `04-cache.md`.
 - **`sia_search(criteria, version)`** (H23) — ricerca SIA o SIA2 con `pyvo`;
   restituisce la lista di immagini con provenienza.
 - **`simbad_pointer(position, radius)`** (H17) — oggetto Simbad più citato
@@ -176,7 +179,7 @@ riproducibile.
 | `astroquery` | alcuni servizi (es. cone search via CDS) | integrazione consolidata |
 | `astropy.table` | tabelle in uscita | unità e metadati |
 | Protocolli IVOA (VOTable, TAP, DataLink, SAMP, SSA) | standard di scambio | standard della comunità |
-| `sqlite3` | cache delle query (A7) | scelta A7 |
+| `sqlite3` (tramite `04-cache.md`) | cache delle query (A7) | scelta A7 |
 | `pyvo` (D14-1) | ricerche SIA e SIA2 (H23) | stessa libreria VO già scelta |
 | `astroquery.simbad` | puntatore Simbad (H17) | servizio CDS ufficiale, già usato dal modulo 10 |
 | Servizio fotometrico di VizieR (CDS) | misure di flusso per la SED (H17) | servizio usato da Aladin; interfaccia da verificare prima del codice |
@@ -328,3 +331,4 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per H23 (SIA e SIA2 con `pyvo`), H17 (puntatori Simbad e VizieR, parte VO; SED nel 20), H19 (SAMP come equivalente di VOApp per i programmi non Python) e H14 (sistema di plugin). Nuove decisioni del Gruppo 2: **D14-7** (sistema di plugin) e **D14-8** (formato IDHA). Il modulo resta in `bozza`. |
 | 2026-10-09 | Claude Code | **D14-7 DECISA** (decisione del proprietario): nessun sistema di plugin nel livello 1, estensioni tramite l'API Python del 24 (parte "plugin" di H14 spostata nel 24). **D14-8 DECISA**: lettore IDHA con `defusedxml`, altrimenti solo errore. §3, §8, §10 (`IDHA_UNREADABLE`, `XML_UNSAFE`), §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `QueryCache`, risultati nella cache comune `SharedCache`, timeout comuni 10 s / 60 s. Stato `approvato` invariato. |

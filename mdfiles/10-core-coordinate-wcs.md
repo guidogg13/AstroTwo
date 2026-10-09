@@ -18,9 +18,20 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   "Aldebaran") in coordinate, con fonte dichiarata (servizio SIMBAD via
   `astroquery`). Le risoluzioni si **cacheano** in una **tabella SQLite
   separata dentro la cache A7** (limite e provenienza unici, schema non
-  condiviso con `13-core-cataloghi.md` — D10-3 decisa il 2026-10-04).
-- **Letture e raffigurazioni:** coordinate del cursore nel campo visualizzato,
-  griglia di coordinate sovrapposta, scelta della proiezione celeste del campo.
+  condiviso con `13-core-cataloghi.md` — D10-3 decisa il 2026-10-04), cioè
+  nella cache condivisa descritta in `04-cache.md` (cartella, limite e
+  timeout di rete — 10 s connessione, 60 s lettura — sono definiti lì;
+  approvato il 2026-10-09). **Il codice di `resolve_name` si scrive dopo
+  quello della cache comune.**
+- **Letture e raffigurazioni:** coordinate del cursore nel campo visualizzato
+  (con `pixel_to_sky`); **geometria della griglia di coordinate** con
+  `compute_grid_lines` — meridiani e paralleli a passo dichiarato, come
+  tratti di coordinate pixel dentro l'immagine (il disegno resta nel `41`);
+  il passo si dà in modo esplicito oppure si sceglie in automatico con
+  `choose_grid_spacing` in base al campo visibile, come fa Aladin;
+  **scelta della proiezione del campo** con `choose_projection` — `TAN` per i
+  campi piccoli, `AIT` per i campi grandi, con la soglia che è la decisione
+  D10-9, da decidere con il `41` (D10-8, decisa il 2026-10-09).
 - **WCS (World Coordinate System):** leggere, validare e applicare la soluzione
   astrometrica (`WCS`) di un'immagine FITS: da pixel a coordinate e viceversa;
   verificare che la soluzione sia internally consistente.
@@ -35,25 +46,51 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   coordinate per tabelle prive di coordinate, usando sorgenti di riferimento.
   Procedura: i tre metodi manuali di Aladin (parametri, associazione di
   stelle, intestazione WCS) — D10-1, decisa il 2026-10-09 (§13).
-- **Calcolatrice delle coordinate (A5):** strumento che, dati degli input
-  (coordinate + sistema/epoca, o coordinate + offset angolari), restituisce il
-  risultato della conversione richiesta con `astropy.coordinates`. Fa parte
-  della conversione (A5) e resta qui; la **calcolatrice H4** (algebrica,
-  unità, pixel, coordinate e tempo) è il modulo separato
-  `18-core-calcolatrici.md` (accettato in AM1 il 2026-10-04), che per la
-  parte coordinate/tempo richiama questo modulo.
+  - **Il modulo non riceve pixel** (D10-8): nel metodo per associazione di
+    stelle le posizioni pixel delle stelle (convenzione numpy) arrivano già
+    calcolate dal centroide di `11-core-immagini-fits.md`; qui arrivano solo
+    coppie posizione pixel ↔ posizione celeste.
+  - **Associazione di stelle (D10-7, decisa il 2026-10-09):** prima un
+    adattamento `TAN` con `fit_wcs_from_points`; la sua matrice CD e il suo
+    pixel di riferimento sono il punto di partenza dell'adattamento nella
+    proiezione richiesta (che altrimenti non converge per `SIN`, `AIT`,
+    `ZEA`, `CAR`, `NCP`, `ZPN`). Poi **tre controlli obbligatori**, con
+    valori configurabili e scritti nel risultato: (1) **stelle minime** — 6
+    per `TAN`/`STG`, 10 per le altre proiezioni; (2) **residui** — RMS ≤ 1
+    pixel e residuo massimo ≤ 3 pixel, altrimenti errore con l'elenco delle
+    stelle peggiori; (3) **coerenza** — al centro del campo la soluzione
+    finale non si scosta da quella `TAN` di più di 5 × l'RMS dei residui
+    della soluzione `TAN` (scelta dell'RMS `TAN` del proprietario,
+    2026-10-09: con l'RMS della soluzione finale il controllo scatta per
+    errore su dati esatti). Se un controllo fallisce: errore, nessuna
+    soluzione restituita.
+  - **Più soluzioni per immagine (D10-8):** il modulo non conserva stato;
+    riceve le soluzioni già calcolate per l'immagine e le restituisce come
+    **lista** con la nuova soluzione in coda. Annulla/ripeti stanno in
+    `24-analisi-pipeline-riproducibili.md` e `40-ui-finestra-principale.md`.
+- **Calcolatrice delle coordinate (A5): non è più in questo modulo** (D10-8,
+  decisa il 2026-10-09). Le conversioni restano qui (`convert_coordinates`,
+  `propagate_position`); gli offset angolari e il calcolo inverso (posizione
+  da distanza + angolo di posizione) sono in `17-core-misure.md`; la
+  calcolatrice H4 di `18-core-calcolatrici.md` usa i moduli 10 e 17.
 - **Tutti i calcoli angolari interni sono in gradi `float64`**, con unità
   esplicite in ingresso e in uscita come da `02-convenzioni.md`.
 - **Calibrazioni storiche (H25, sez. 8.2 del manuale di Aladin, ed. giugno 2022):**
   oltre alle soluzioni WCS standard si riconoscono le soluzioni astrometriche
   storiche delle lastre (metodo DSS1), come fa Aladin. Il supporto in
   `astropy.wcs` è **da verificare prima del codice**; se manca, la scelta di
-  come trattarle diventa una decisione da registrare.
+  come trattarle diventa una decisione da registrare. **Verificato il
+  2026-10-09:** con astropy 8.0.1 (WCSLIB 8.6) un'intestazione DSS1 con
+  coefficienti `AMDX`/`AMDY` viene tradotta da WCSLIB in una distorsione
+  polinomiale TPD; sul file `dss.14.29.56-62.41.05.fits.gz` (dati di test di
+  astropy) la posizione dell'oggetto dichiarata da STScI nell'intestazione
+  (`OBJCTRA`/`OBJCTDEC` ↔ `OBJCTX`/`OBJCTY`) è riprodotta entro 0.010″.
 - **Convenzione dei pixel (H25, DC7):** le coordinate pixel interne sono in
   convenzione numpy; la conversione da e verso la convenzione FITS avviene
   solo con `convert_pixel_convention` (§7).
 - Righe di `03-parita-aladin.md` coperte qui: A2 (vai a per nome, con
-  `resolve_name`), A3 (vai a coordinate), A4 (coordinate del cursore), A5,
+  `resolve_name`), A3 (vai a coordinate), A4 (coordinate del cursore), A5
+  (parte conversioni; offset e calcolo inverso nel 17, interfaccia nel 18),
   A6 (griglia: calcolo delle linee; disegno nel 41), A9, H6, H25.
 
 ## 4. Cosa NON fa
@@ -66,12 +103,20 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   la cache dei cataloghi di `13-core-cataloghi.md`.
 - Non fa cross-match (`15-core-crossmatch.md`), non misura distanze per utente
   (`17-core-misure.md`), non gestisce MOC (`16-core-moc.md`).
+- Non legge pixel e non calcola centroidi: le posizioni delle stelle per la
+  calibrazione arrivano dall'`11` (D10-8).
+- Non conserva le soluzioni astrometriche né gestisce annulla/ripeti (`24`,
+  `40`): le restituisce come lista.
+- Non calcola offset angolari né posizioni da distanza + angolo di posizione
+  (`17`), non ha una propria calcolatrice (`18`).
+- Non gestisce la cache: usa quella condivisa di `04-cache.md`.
 - Non calcola nulla con l'IA: ogni numero è prodotto da Astropy/ERFA.
 
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** nessuno (è il fondamento del livello 1).
+- **Dipende da:** `04-cache.md` (solo per la cache della risoluzione dei
+  nomi); per tutto il resto nessuno (è il fondamento del livello 1).
 - **Usato da:** `11-core-immagini-fits.md`, `12-core-hips.md`,
   `13-core-cataloghi.md`, `14-core-protocolli-vo.md`, `15-core-crossmatch.md`,
   `16-core-moc.md`, `17-core-misure.md`, `18-core-calcolatrici.md`,
@@ -86,14 +131,21 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
 | in | `name` | stringa | nome di oggetto (es. "M31") | per la risoluzione nomi |
 | in | `ra`, `dec` | float64 | gradi, ICRS J2000 | RA ∈ [0,360), Dec ∈ [−90,+90] |
 | in | `l`, `b` | float64 | gradi, sistema galattico | l ∈ [0,360), b ∈ [−90,+90] |
-| in | `frame` | enumerativo | nome frame Astropy (`icrs`, `galactic`, `ecliptic`, …) | sempre esplicito |
+| in | `frame` | enumerativo | nome frame Astropy (`icrs`, `fk5`, `fk4`, `galactic`, `barycentricmeanecliptic`, …) | sempre esplicito; i frame con equinozio od `obstime` li richiedono espliciti |
 | in | `equinox` / `obstime` | epoca | anno giuliano (es. 2000.0) o data ISO 8601 | sempre dichiarati quando rilevanti |
 | in | `pm_ra_cosdec`, `pm_dec`, `parallax` | float64 | mas/yr, mas | per la propagazione |
 | in | `wcs` | oggetto WCS | — | soluzione astrometrica di un'immagine |
 | in | `x`, `y` | float64 | pixel (origini dichiarate: 0 o 1) | da pixel a coordinate |
 | out | coordinate convertite | float64 | gradi + sistema + epoca dichiarati | mai coordinate "nude" |
 | out | `name → coordinate` | float64 | gradi, ICRS | con fonte e data della richiesta |
-| out | residui calibrazione | float64 | arcosecondi | RMS/mediana dichiarati |
+| in | stelle di calibrazione | coppie | pixel (convenzione numpy, dall'`11`) ↔ coordinate celesti con frame | metodo per associazione di stelle |
+| in | soglie di calibrazione | struttura | stelle minime, pixel | default D10-7, configurabili |
+| in | passo della griglia | `Quantity` angolare | gradi (o altra unità angolare) | uno per le longitudini, uno per le latitudini; se omessi, scelti da `choose_grid_spacing` |
+| in | `target_lines` | intero ≥ 1 | numero di linee desiderate per asse | default 5 (vedi §9) |
+| in | campo di vista, soglia | `Quantity` angolare | gradi | per `choose_projection` (soglia: D10-9) |
+| out | residui calibrazione | float64 | pixel e arcosecondi | RMS e massimo dichiarati, con le soglie usate |
+| out | soluzioni astrometriche | lista | — | le precedenti + la nuova in coda |
+| out | linee della griglia | lista | tratti in pixel (convenzione numpy) + valore della coordinata | geometria per il `41` |
 
 ## 7. Interfaccia pubblica
 
@@ -107,10 +159,14 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   restituisce coordinate con unità e frame di destinazione.
 - **`resolve_name(name)`** — risolve un nome in coordinate ICRS; parametri:
   nome, opzione di fonte; restituisce coordinate + fonte + timestamp, o errore
-  se non trovato o se la rete non risponde.
+  se non trovato o se la rete non risponde. Cache e timeout: `04-cache.md`
+  (codice dopo la sua approvazione).
 - **`wcs_from_header(header)`** / **`sky_to_pixel(...)`** / **`pixel_to_sky(...)`**
   — costruiscono la WCS da un header e fanno le trasformazioni in entrambe le
-  direzioni.
+  direzioni. `wcs_from_header` restituisce la parte celeste della WCS con
+  l'elenco delle correzioni applicate da WCSLIB (es. `NCP` → `SIN`, DSS →
+  TPD); le trasformazioni lavorano in convenzione numpy e dichiarano frame,
+  epoca e i punti fuori dal campo.
 - **`convert_pixel_convention(x, y, from_convention, to_convention)`** —
   **unico punto di conversione** tra la convenzione FITS (indice da 1) e la
   convenzione numpy (indice da 0) prevista da DC7 di `02-convenzioni.md`:
@@ -124,13 +180,38 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   moto proprio e parallasse; restituisce posizione all'epoca richiesta e
   dichiara l'epoca usata.
 - **`astrometric_calibration(...)`** — determina/rifinisce la soluzione
-  astrometrica (H6); restituisce soluzione + qualità (residui in arcosecondi).
-  Implementazione: D10-1, decisa il 2026-10-09 (§13).
-- **`coordinate_calculator(...)`** — calcolatrice coordinate (A5): conversioni
-  e calcoli inversi; nessun calcolo fatto dal modello linguistico. Le altre
-  calcolatrici (H4: algebrica, unità, pixel, tempo) vivono in
-  `18-core-calcolatrici.md` (modulo accettato in AM1 il 2026-10-04), che
-  richiama questa funzione per la parte coordinate.
+  astrometrica (H6) con uno dei tre metodi di D10-1: **parametri** (posizione
+  e pixel di riferimento, scala, rotazione, proiezione, verso
+  dell'ascensione retta), **associazione di stelle** (coppie pixel ↔ cielo
+  ricevute dall'`11`, procedura e controlli di D10-7) o **intestazione WCS**.
+  Riceve anche la lista delle soluzioni già calcolate per l'immagine e
+  restituisce **la lista con la nuova soluzione in coda**; ogni soluzione
+  porta metodo, proiezione, residui (RMS e massimo in pixel e arcosecondi,
+  se ci sono stelle), soglie usate ed elenco delle stelle peggiori.
+- **`compute_grid_lines(...)`** — geometria della griglia di coordinate (A6):
+  parametri: WCS, dimensioni dell'immagine, frame della griglia (con
+  epoca se il frame la richiede), passo in longitudine e in latitudine;
+  restituisce l'elenco di meridiani e paralleli, ciascuno con il valore
+  della coordinata e i tratti visibili come coordinate pixel (convenzione
+  numpy). Nessun disegno (`41`). Se i due passi sono omessi li sceglie
+  `choose_grid_spacing`; se ne è dato uno solo, errore.
+- **`choose_grid_spacing(...)`** — passo automatico della griglia in base al
+  campo visibile, come Aladin: parametri: WCS, dimensioni dell'immagine,
+  frame della griglia (con epoca se il frame la richiede), numero di linee
+  desiderate per asse; misura l'estensione in longitudine e in latitudine
+  del campo nel frame della griglia (360° in longitudine se un polo è nel
+  campo) e per ogni asse sceglie **il più piccolo passo "tondo" ≥
+  estensione / linee desiderate** dagli elenchi di §9; restituisce i due
+  passi, le estensioni misurate e l'elenco usato (orario o in arco).
+- **`choose_projection(...)`** — sceglie la proiezione del campo: `TAN` se
+  il campo di vista è minore della soglia, `AIT` altrimenti; la soglia è un
+  parametro obbligatorio finché D10-9 non ne fissa il valore (si decide con
+  il `41`).
+
+La calcolatrice delle coordinate (A5) non è più in questo modulo (D10-8): le
+sue funzioni sono `convert_coordinates` e `propagate_position` qui, gli
+offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
+`18-core-calcolatrici.md`.
 
 ## 8. Librerie e standard di riferimento
 
@@ -140,6 +221,8 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
 | `astropy.units` | unità e `Quantity` ovunque | niente angoli senza unità |
 | `astropy.wcs` | lettura/applicazione delle soluzioni WCS | standard di fatto per FITS WCS |
 | `astropy.erfa` (via Astropy) | trasformazioni di riferimento a basso livello | librerie IAU verificate |
+| `astropy.wcs.utils.fit_wcs_from_points` (richiede `scipy`) | calibrazione per associazione di stelle (D10-1, D10-7) | adattamento consolidato di Astropy |
+| `numpy` | campionamento delle linee della griglia, residui | consolidato |
 | `astroquery.simbad` | risoluzione dei nomi | servizio CDS ufficiale |
 | Standard FITS WCS (paper I/IV) | struttura delle soluzioni | standard IAU/OHSA |
 
@@ -153,11 +236,45 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
 - Internamente gradi `float64`; nessun arrotondamento prima del display.
 - Nessuna conversione scritta a mano: solo Astropy/ERFA (regola d'oro n. 4).
 - Ogni output riporta frame, epoca e unità; un output senza frame è un errore.
+- **Epoche dei frame:** se il frame prevede un equinozio (`fk5`, `fk4`, i
+  frame eclittici…) o un `obstime`, va dato in modo esplicito: i valori di
+  default di Astropy non si usano (errore `EPOCH_REQUIRED`). Fa eccezione
+  solo la WCS letta da un header: lì valgono le regole di default dello
+  standard FITS WCS (Paper II, `RADESYS`/`EQUINOX`), applicate da WCSLIB e
+  dichiarate nel risultato.
+- **Calibrazione per associazione di stelle (D10-7):** soglie di default 6
+  stelle per `TAN`/`STG` e 10 per le altre proiezioni, RMS ≤ 1 pixel,
+  residuo massimo ≤ 3 pixel, scostamento al centro ≤ 5 × RMS della soluzione
+  `TAN`; configurabili, sempre scritte nel risultato. `ZPN` richiede i
+  coefficienti della proiezione (`PV2_m`) espliciti: non si adattano e non
+  si assumono (confermato dal proprietario il 2026-10-09).
+- **Passo automatico della griglia (`choose_grid_spacing`):** per ogni asse
+  il più piccolo valore "tondo" ≥ estensione del campo / linee desiderate
+  (default **5** linee per asse). Valori tondi **in arco** (latitudini e
+  longitudini dei frame non equatoriali): 0.01″, 0.02″, 0.05″, 0.1″, 0.2″,
+  0.5″, 1″, 2″, 5″, 10″, 15″, 30″, 1′, 2′, 5′, 10′, 15′, 30′, 1°, 2°, 5°,
+  10°, 15°, 30°, 45°, 90°; **in tempo** (ascensione retta dei frame
+  equatoriali): 0.001 s, 0.002 s, 0.005 s, 0.01 s, 0.02 s, 0.05 s, 0.1 s,
+  0.2 s, 0.5 s, 1 s, 2 s, 5 s, 10 s, 15 s, 30 s, 1 m, 2 m, 5 m, 10 m, 15 m,
+  30 m, 1 h, 2 h, 3 h, 4 h, 6 h (1 s = 15″). Se l'estensione richiede più
+  del valore massimo, si usa il massimo. Elenchi e numero di linee:
+  **confermati dal proprietario il 2026-10-09**; coincidenza con Aladin **da
+  verificare con AP1** (validazione finale della parità).
+- **Interpretazioni confermate dal proprietario il 2026-10-09:**
+  `wcs_from_header` accetta anche le proiezioni di WCSLIB fuori dall'elenco
+  D10-4 (l'elenco limita calibrazione e scelta della proiezione, non la
+  lettura dei dati); i frame con `obstime` lo richiedono esplicito (es. FK4:
+  equinozio e `obstime`), salvo le coordinate di una WCS letta da header;
+  senza velocità radiale la propagazione usa 0 km/s (ERFA) e lo dichiara in
+  una nota del risultato; `ZPN` richiede i `PV2_m` espliciti.
 - **Proiezioni celesti (D10-4 decisa il 2026-10-04):** stessa lista di
   proiezioni di Aladin secondo il manuale utente ed. giugno 2022 (sez. 5.14):
   `SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN` (precisata il 2026-10-08; il manuale chiude l'elenco con
   "…": eventuali altre proiezioni **da verificare con la documentazione
-  ufficiale**; supporto di `NCP` in `astropy.wcs` **da verificare**); default **`TAN` per le immagini** e **`AIT` per le viste a cielo
+  ufficiale**; supporto di `NCP` in `astropy.wcs` **verificato il
+  2026-10-09**: WCSLIB lo traduce, come prevede lo standard FITS WCS Paper
+  II, in `SIN` con `PV2_2 = cot δ₀`, round-trip pixel ↔ cielo entro 1.3e-9
+  pixel); default **`TAN` per le immagini** e **`AIT` per le viste a cielo
   intero**; **un test per proiezione** (§12).
 - La risoluzione nomi è un'operazione di rete: timeout dichiarato, errore
   esplicito se offline; nessun nome risolto "approssimativamente"; i risultati
@@ -175,12 +292,20 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
 | Nome non trovato | nessuna coordinata prodotta, messaggio con il nome e la fonte interrogata | `NAME_NOT_FOUND` |
 | Rete assente durante la risoluzione nomi | errore esplicito, nessun valore inventato | `NET_TIMEOUT` |
 | Dec fuori [−90,+90] o RA fuori intervallo | rifiuto dell'input prima del calcolo | `COORD_OUT_OF_RANGE` |
-| Header senza WCS o WCS incoerente | la WCS non viene costruita; l'immagine si apre solo come griglia di pixel | `WCS_MISSING` / `WCS_INVALID` |
+| Header senza WCS o WCS incoerente (matrice di scala singolare, andata e ritorno al centro oltre 1e-6 pixel, matrice CD tutta nulla — che WCSLIB sostituirebbe in silenzio con l'identità) | la WCS non viene costruita; l'immagine si apre solo come griglia di pixel | `WCS_MISSING` / `WCS_INVALID` |
 | Conversione a un frame sconosciuto | errore con elenco dei frame supportati | `FRAME_UNSUPPORTED` |
 | Epoca mancante dove richiesta (es. propagazione) | errore che chiede l'epoca: **l'epoca non si assume mai** (D10-2) | `EPOCH_REQUIRED` |
 | Fuori campo (pixel → cielo) | valore restituito con avviso "fuori dal campo" | `OUT_OF_FIELD` |
 | Convenzione pixel diversa da `fits` o `numpy`, o mancante | rifiuto: la convenzione non si assume | `PIXEL_CONVENTION_UNKNOWN` |
 | Intestazione con soluzione storica (DSS1) non supportata dalla libreria | nessuna WCS costruita, l'immagine si apre come griglia di pixel con avviso che indica il tipo di soluzione | `WCS_LEGACY_UNSUPPORTED` |
+| Valore angolare senza unità | rifiuto: nessun angolo senza unità | `COORD_UNIT_MISSING` |
+| Proiezione fuori dall'elenco D10-4 | rifiuto con l'elenco delle proiezioni supportate | `PROJECTION_UNSUPPORTED` |
+| `ZPN` senza coefficienti `PV2_m` | rifiuto: i coefficienti non si assumono | `PROJECTION_PARAMETERS_MISSING` |
+| Calibrazione con meno stelle del minimo | nessuna soluzione; messaggio con stelle date e minimo richiesto | `CALIB_TOO_FEW_STARS` |
+| Residui oltre le soglie | nessuna soluzione; messaggio con RMS, massimo, soglie e stelle peggiori | `CALIB_RESIDUALS_TOO_LARGE` |
+| Soluzione finale incoerente con la `TAN` al centro del campo | nessuna soluzione; messaggio con scostamento e soglia | `CALIB_INCONSISTENT` |
+| Adattamento che non converge | nessuna soluzione, messaggio della libreria | `CALIB_FIT_FAILED` |
+| Passo della griglia non positivo o senza unità | rifiuto | `GRID_SPACING_INVALID` |
 
 ## 11. Esposizione all'IA
 
@@ -204,14 +329,25 @@ propone i parametri e interpreta il risultato.
 | T2 | Conversione nota | convertire le coordinate di una sorgente presa da SIMBAD (fonte scelta dal tester) da ICRS a galattico | coincidenza con il valore ricalcolato dallo stesso test con Astropy, entro 1e-9 gradi | confronto con `astropy.coordinates` + seconda lettura da SIMBAD |
 | T3 | Round-trip pixel ↔ cielo | costruire la WCS da un header FITS di prova, passare da pixel a cielo e ritorno | errore < 1e-6 pixel | ricalcolo con `astropy.wcs` |
 | T4 | Propagazione con moto proprio | propagare una posizione con moto proprio noto (valori presi dal tester da un catalogo Gaia) a un'epoca +10 anni | coincidenza con `SkyCoord.apply_space_motion` calcolata nel test | ricalcolo con Astropy |
-| T5 | Risoluzione nome | `resolve_name("M31")` con rete disponibile | coordinate coerenti con quelle di SIMBAD entro la precisione dichiarata da SIMBAD | confronto incrociato con SIMBAD (dipende dalla rete: test separato, marcato di rete) |
+| T5 | Risoluzione nome | `resolve_name("M31")` con rete disponibile | coordinate coerenti con quelle di SIMBAD entro la precisione dichiarata da SIMBAD | confronto incrociato con SIMBAD (dipende dalla rete: test separato, marcato di rete); **in attesa del codice della cache comune** (`04-cache.md` approvato il 2026-10-09) |
 | T6 | Input fuori range | passare Dec = 95° | errore `COORD_OUT_OF_RANGE`, nessun output numerico | test di unità |
 | T7 | Una prova per proiezione (D10-4) | per ciascuna delle 8 proiezioni dell'elenco D10-4 (`SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN`), convertire lo stesso campo pixel ↔ cielo | round-trip entro 1e-6 pixel per **ogni** proiezione; `TAN` di default per le immagini, `AIT` per le viste all-sky | ricalcolo con `astropy.wcs` per ciascuna proiezione |
 | T8 | Convenzione dei pixel (DC7) | `convert_pixel_convention` su (1, 1) da `fits` a `numpy` e su (−0.5, −0.5) da `numpy` a `fits` | (0, 0) e (0.5, 0.5) | aritmetica esatta della regola DC7 |
 | T9 | Round-trip delle convenzioni | 1000 coordinate pixel non intere (semina fissa) `numpy` → `fits` → `numpy` | identiche (differenza 0 in `float64` per valori rappresentabili) | test di unità |
 | T10 | Coerenza con `astropy.wcs` | stessa posizione: `pixel_to_sky` in convenzione numpy (origine 0) e `wcs_pix2world` di `astropy.wcs` con origine 1 sulla coordinata convertita in FITS | stesse coordinate celesti entro 1e-12 gradi | ricalcolo con `astropy.wcs` |
 | T11 | Convenzione non valida | `convert_pixel_convention` con convenzione `idl` o mancante | `PIXEL_CONVENTION_UNKNOWN` | test di unità |
-| T12 | Calibrazione storica DSS1 (H25) | aprire un'intestazione DSS1 di prova e convertire alcuni pixel in coordinate | coordinate coincidenti con quelle di riferimento fornite con il file di prova; se la libreria non supporta il metodo, `WCS_LEGACY_UNSUPPORTED` | confronto con valori di riferimento (file di prova da individuare, **da verificare**) |
+| T12 | Calibrazione storica DSS1 (H25) | aprire un'intestazione DSS1 di prova e convertire alcuni pixel in coordinate | coordinate coincidenti con quelle di riferimento fornite con il file di prova; se la libreria non supporta il metodo, `WCS_LEGACY_UNSUPPORTED` | file di prova: `dss.14.29.56-62.41.05.fits.gz` dei dati di test di astropy; riferimento = posizione dell'oggetto scritta da STScI (`OBJCTRA`/`OBJCTDEC` ↔ `OBJCTX`/`OBJCTY`), tolleranza 0.02″ (arrotondamenti del riferimento) |
+| T13 | Calibrazione per associazione di stelle (D10-7) | per ognuna delle 8 proiezioni: 30 stelle generate da una WCS nota, con e senza rumore di 0.2 pixel | soluzione accettata; scarto dalla WCS nota piccolo rispetto al rumore; soglie scritte nel risultato | ricalcolo con `astropy.wcs` della WCS nota |
+| T14 | Caso dei 780″ (D10-7) | 6 stelle su `SIN` | errore `CALIB_TOO_FEW_STARS`, nessuna soluzione | test di unità |
+| T15 | Residui oltre soglia | 30 stelle con una coppia sbagliata (stella scambiata) | `CALIB_RESIDUALS_TOO_LARGE` con la stella sbagliata tra le peggiori | test di unità |
+| T16 | Controllo di coerenza | soluzione finale spostata al centro oltre 5 × RMS `TAN` | `CALIB_INCONSISTENT` | test di unità sul controllo |
+| T17 | Metodi "parametri" e "intestazione" | costruire la soluzione dai parametri e dall'header | coincide con la WCS costruita dal test con `astropy.wcs` sugli stessi valori (1e-9 gradi) | ricalcolo con `astropy.wcs` |
+| T18 | Lista delle soluzioni | due calibrazioni successive | lista di 2 soluzioni, le precedenti invariate | test di unità |
+| T19 | Linee della griglia | griglia ICRS e galattica su un campo `TAN` | ogni punto di un meridiano/parallelo ha la coordinata dichiarata entro 1e-9 gradi e sta dentro l'immagine | ricalcolo con `astropy.wcs` + `astropy.coordinates` |
+| T20 | Scelta della proiezione | `choose_projection` con campo sotto e sopra la soglia data dal test | `TAN` e `AIT` | test di unità |
+| T21 | Unità ed epoche obbligatorie | coordinate senza unità; `fk5` senza equinozio | `COORD_UNIT_MISSING`; `EPOCH_REQUIRED` | test di unità |
+| T23 | Passo automatico della griglia | `choose_grid_spacing` su un campo `TAN` di 2°, su un campo piccolo, con un polo nel campo e in galattico | per ogni asse il più piccolo valore tondo ≥ estensione / linee, con l'estensione ricalcolata nel test con `astropy.wcs`; campo più piccolo → passo non maggiore; polo → estensione 360°; `compute_grid_lines` senza passi usa questi | ricalcolo con `astropy.wcs` + elenchi di §9 |
+| T22 | Fuori campo | `pixel_to_sky` su un pixel fuori dall'immagine | valore restituito con avviso `OUT_OF_FIELD` | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -225,7 +361,9 @@ propone i parametri e interpreta il risultato.
   risoluzione automatica "alla cieca" (es. astrometry.net) è un'estensione
   successiva, non prevista ora. **Da verificare prima del codice:** che
   `fit_wcs_from_points` copra le proiezioni dell'elenco D10-4 usate dalla
-  calibrazione.
+  calibrazione. **Esito del 2026-10-09: verifica NON superata**; risolta con
+  D10-7 (decisa il 2026-10-09). Il centroide è dell'`11` e annulla/ripeti
+  di `24`/`40` (D10-8).
 - **D10-2 — Epoca per la propagazione: DECISA il 2026-10-04.** L'epoca di
   ogni dato si legge dai suoi metadati e **non si assume mai**; epoca di
   visualizzazione = epoca dell'immagine se nota, altrimenti J2000; l'epoca
@@ -242,7 +380,8 @@ propone i parametri e interpreta il risultato.
   proiezioni di Aladin secondo il manuale utente ed. giugno 2022 (sez. 5.14):
   `SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN` (precisata il 2026-10-08; il manuale chiude l'elenco con
   "…": eventuali altre proiezioni **da verificare con la documentazione
-  ufficiale**; supporto di `NCP` in `astropy.wcs` **da verificare**), default **`TAN` per le immagini** e **`AIT` per le viste a cielo
+  ufficiale**; supporto di `NCP` in `astropy.wcs` **verificato il
+  2026-10-09**, vedi §9), default **`TAN` per le immagini** e **`AIT` per le viste a cielo
   intero**,
   **un test per proiezione** (T7). **Motivazione:** la parità documentale è
   il minimo (P11) e il test per proiezione verifica `astropy.wcs` in modo
@@ -252,6 +391,36 @@ propone i parametri e interpreta il risultato.
 - **D10-6 — Prestazioni delle conversioni di massa:** tempo massimo per
   convertire migliaia di posizioni (valore e test misurabile). Da fissare al
   momento del codice insieme a `61-strategia-test.md` (Gruppo 3).
+- **D10-7 — Calibrazione per associazione di stelle: DECISA il 2026-10-09
+  (decisione del proprietario, opzione a).** Origine: la verifica di D10-1
+  con astropy 8.0.1 — `fit_wcs_from_points` converge da sé solo per `TAN` e
+  `STG`; `SIN`, `AIT`, `ZEA`, `CAR` falliscono ("Residuals are not finite in
+  the initial point", stima iniziale CD = identità), `NCP` e `ZPN` non sono
+  accettati come codici; partendo da un adattamento `TAN` convergono tutte,
+  ma con 6 stelle `SIN` è arrivata in silenzio a una soluzione sbagliata
+  (780″). **Decisione:** punto di partenza dal primo adattamento `TAN`, poi
+  tre controlli obbligatori, configurabili e scritti nel risultato — stelle
+  minime 6 (`TAN`/`STG`) o 10 (altre); RMS ≤ 1 pixel e residuo massimo ≤ 3
+  pixel, con elenco delle stelle peggiori; scostamento al centro del campo
+  tra soluzione finale e `TAN` ≤ 5 × RMS **della soluzione `TAN`**
+  (precisazione del proprietario del 2026-10-09). Test T13–T16. Applicata in
+  §3, §7, §9, §10, §12.
+- **D10-8 — Parti del modulo senza interfaccia in §7: DECISA il 2026-10-09
+  (decisione del proprietario).** (1) Nuove funzioni `compute_grid_lines`
+  (geometria; disegno nel `41`) e `choose_projection` (`TAN` campi piccoli,
+  `AIT` grandi; soglia in D10-9). (2) Cache: proposta AM1 accettata, nuovo
+  file generale `04-cache.md` (cache A7 condivisa in
+  `~/Library/Caches/AstroTwo/`); `resolve_name` si scrive dopo la sua
+  approvazione. (3) Il modulo non riceve pixel: il centroide è nell'`11`, che
+  passa le posizioni; le soluzioni multiple si restituiscono come lista,
+  annulla/ripeti in `24` e `40`. (4) `coordinate_calculator` tolta: offset e
+  calcolo inverso nel `17`, la calcolatrice del `18` usa `10` e `17`.
+  Applicata in §3–§7, §10, §12.
+- **D10-9 — Soglia di `choose_projection`:** campo di vista oltre il quale
+  si passa da `TAN` ad `AIT`. Da decidere (Gruppo 3) **insieme al modulo
+  `41-ui-visualizzatore-cielo.md`** (indicazione del proprietario del
+  2026-10-09); fino ad allora la soglia è un parametro obbligatorio della
+  funzione, senza valore di default.
 
 ## 14. Registro modifiche
 
@@ -269,3 +438,8 @@ propone i parametri e interpreta il risultato.
 | 2026-10-09 | Claude Code | **D10-1 DECISA** (checklist del livello 1): i tre metodi di calibrazione di Aladin (parametri, associazione di stelle con `fit_wcs_from_points`, intestazione WCS); risoluzione automatica rimandata; verifica sulle proiezioni prima del codice. §3, §7 aggiornati. Nuova **D10-6** (prestazioni delle conversioni di massa, Gruppo 3) al posto del rinvio senza etichetta in §9. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | Completamento dalla verifica di copertura di `03-parita-aladin.md` (decisione del proprietario del 2026-10-09): §3 calibrazioni storiche DSS1 (H25, supporto in `astropy.wcs` da verificare prima del codice), convenzione dei pixel (H25/DC7) e righe di parità coperte (A2–A6, A9, H6, H25); §10 errore `WCS_LEGACY_UNSUPPORTED`; §12 nuovo test. Nessuna nuova decisione dei Gruppi 1 e 2: stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **Verifiche "da verificare prima del codice" eseguite** (FASE: CODICE – livello 1, astropy 8.0.1 / WCSLIB 8.6): `NCP` supportata (§9, D10-4); calibrazioni storiche DSS1 supportate, riproduzione del riferimento STScI entro 0.010″ (§3; file di prova candidato per T12: `dss.14.29.56-62.41.05.fits.gz` dei dati di test di astropy); **`fit_wcs_from_points` non copre `SIN`, `AIT`, `ZEA`, `CAR`, `NCP`, `ZPN`** → nuova **D10-7** (da decidere); lacune dell'interfaccia di §7 → nuova **D10-8** (da decidere). Codice del modulo non scritto in attesa delle decisioni. Stato `approvato` invariato (decisione del proprietario). |
+| 2026-10-09 | Claude Code | **Decisioni del proprietario D10-7 e D10-8 applicate** (autorizzazione esplicita a modificare il file approvato): D10-7 = partenza da un adattamento `TAN` + tre controlli obbligatori (stelle minime 6/10, RMS ≤ 1 px e massimo ≤ 3 px, coerenza al centro ≤ 5 × RMS `TAN`), nuovi errori `CALIB_*`, test T13–T16; D10-8 = nuove `compute_grid_lines` e `choose_projection` (soglia: nuova **D10-9**, Gruppo 3), cache in `04-cache.md` (AM1 accettata; `resolve_name` dopo la sua approvazione), centroide nell'`11` e soluzioni come lista (annulla/ripeti in `24`/`40`), `coordinate_calculator` tolta (offset e calcolo inverso nel `17`). Precisate le epoche dei frame (§9), aggiunti `COORD_UNIT_MISSING`, `PROJECTION_UNSUPPORTED`, `PROJECTION_PARAMETERS_MISSING`, `GRID_SPACING_INVALID`; T12 con il file di prova individuato; test T17–T22. Esempio di frame in §6 corretto (`ecliptic` non è un nome di frame di Astropy). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **Codice scritto** (FASE: CODICE – livello 1): `src/astrotwo/core/coordinates_wcs.py` con tutto il §7 tranne `resolve_name` (attende `04-cache.md`); test T1–T22 in `tests/core/test_coordinates_wcs.py`: 60 superati, 1 saltato (T5), 2 di rete superati a parte (SIMBAD per T2, archivio Gaia DR3 per T4). Emerso nei test e aggiunto in §10: una matrice CD tutta nulla viene sostituita da WCSLIB con l'identità senza errore → ora `WCS_INVALID`. Interpretazioni applicate (da confermare): `wcs_from_header` accetta anche proiezioni di WCSLIB fuori dall'elenco D10-4 (l'elenco limita calibrazione e scelta della proiezione, non la lettura dei dati); `compute_grid_lines` richiede il passo esplicito (scelta automatica del passo non prevista). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | **Decisioni del proprietario** (autorizzazione esplicita a modificare il file approvato): confermate le interpretazioni 1, 3, 4, 5 (proiezioni WCSLIB in lettura, `obstime` esplicito, velocità radiale 0 dichiarata, `PV2_m` per `ZPN`) in §9; **nuova `choose_grid_spacing`** (passo automatico come Aladin; elenchi di valori tondi e 5 linee per asse in §9, coincidenza con Aladin da verificare) in §3, §6, §7, §12 (T23); `compute_grid_lines` sceglie il passo da sé se i passi sono omessi; D10-9 da decidere con il 41; `04-cache.md` approvato (`resolve_name` dopo il codice della cache). Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | §9: passo automatico della griglia **confermato** dal proprietario, coincidenza con Aladin da verificare con AP1. Stato `approvato` invariato. |

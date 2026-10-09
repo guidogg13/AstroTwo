@@ -71,8 +71,13 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
      internamente sono in convenzione numpy (DC7 di `02-convenzioni.md`, con
      conversione nel modulo 10).
 4. **Calcolatrice delle coordinate (sez. 5.7.4).** Interfaccia di calcolo
-   verso `coordinate_calculator` del modulo `10-core-coordinate-wcs.md` (A5),
-   che **non viene riscritta qui**.
+   che usa i moduli `10-core-coordinate-wcs.md` (conversioni con
+   `convert_coordinates`, propagazione con `propagate_position`) e
+   `17-core-misure.md` (offset con `angular_offsets`/`apply_offsets`, calcolo
+   inverso — posizione da distanza + angolo di posizione — con
+   `offset_position`); nessuno di questi calcoli **viene riscritto qui**
+   (D10-8 del modulo 10, decisa il 2026-10-09: la vecchia
+   `coordinate_calculator` del 10 non esiste più).
    - Raccoglie gli input (coordinate scritte, clic nella vista o riga di un
      catalogo) e restituisce le stesse coordinate in tutti i sistemi ed epoche
      richiesti, in forma decimale e sessagesimale.
@@ -95,8 +100,9 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
   di `40-ui-finestra-principale.md` (menu Strumenti) e, per il clic sulla
   vista, di `41-ui-visualizzatore-cielo.md`.
 - Non converte coordinate e non propaga posizioni da sé: lo fa il modulo
-  `10-core-coordinate-wcs.md`; qui si raccolgono input e si presentano i
-  risultati.
+  `10-core-coordinate-wcs.md`; non calcola offset né posizioni da distanza +
+  angolo di posizione: lo fa `17-core-misure.md`; qui si raccolgono input e
+  si presentano i risultati.
 - Non legge file FITS né applica funzioni di trasferimento: lo fa
   `11-core-immagini-fits.md`.
 - Non misura distanze o angoli tra oggetti della vista (`17-core-misure.md`)
@@ -118,7 +124,8 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
   `11-core-immagini-fits.md` (BZERO, BSCALE, BLANK, parametri di
   visualizzazione), `13-core-cataloghi.md` (moto proprio, velocità radiale ed
   epoca di una riga di catalogo), `17-core-misure.md` (`angular_distance` per
-  `skydist`, `read_pixel`).
+  `skydist`, `read_pixel`, offset e calcolo inverso per la calcolatrice delle
+  coordinate).
 - **Usato da:** `24-analisi-pipeline-riproducibili.md` (comandi `=` e
   `convert` negli script e nel registro), `32-ia-registro-strumenti.md`
   (strumenti per l'IA), `40-ui-finestra-principale.md` (finestre delle
@@ -160,7 +167,9 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
   visualizzazione, l'indice di colore; con un'immagine e una posizione legge
   le costanti e il valore dai moduli 11 e 17.
 - **`calculate_coordinates(...)`** — raccoglie gli input e chiama
-  `coordinate_calculator` del modulo 10; restituisce le rappresentazioni
+  `convert_coordinates`/`propagate_position` del modulo 10 e, per offset e
+  calcolo inverso, `angular_offsets`/`apply_offsets`/`offset_position` del
+  modulo 17; restituisce le rappresentazioni
   richieste (sistemi, epoche, decimale e sessagesimale) con frame ed epoca
   dichiarati.
 - **`convert_time(time_value, time_format, scale, target_scale)`** —
@@ -240,7 +249,8 @@ della libreria dichiarata nel risultato.
 - **`convert_time`** — input: data, formato, scala; output: tutte le
   rappresentazioni con la scala. Calcolo: `astropy.time`.
 - Le coordinate passano dagli strumenti del modulo 10 (`convert_coordinates`,
-  `propagate_position`): questo modulo non ne definisce di nuovi.
+  `propagate_position`) e del modulo 17 (`offset_position`,
+  `angular_offsets`): questo modulo non ne definisce di nuovi.
 
 ## 12. Test di accettazione
 
@@ -304,3 +314,4 @@ elementare.
 | 2026-10-08 | Claude Code | Creazione del file (stato: bozza). Origine: riga H4 di `03-parita-aladin.md` (manuale di Aladin ed. giugno 2022, sez. 5.7.1–5.7.5); cinque calcolatrici, dipendenze da 10, 11, 13 e 17 senza riscriverne le funzioni; convenzione dei pixel DC7; decisioni aperte D18-1…D18-6. |
 | 2026-10-09 | Claude Code | **D18-1…D18-4 DECISE** (checklist del livello 1): analizzatore `ast` con elenco chiuso; alias delle unità di Aladin in un'unica tabella (elenco da verificare); equivalenze spettrale, densità di flusso, temperatura, parallasse, Doppler su richiesta; magnitudine ↔ flusso solo nel 20. §3, §8 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
+| 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): `coordinate_calculator` tolta dal 10; la calcolatrice delle coordinate usa `convert_coordinates`/`propagate_position` del 10 e `angular_offsets`/`apply_offsets`/`offset_position` del 17 (§3, §4, §5, §7, §11). Stato `approvato` invariato. |

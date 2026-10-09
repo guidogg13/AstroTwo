@@ -19,10 +19,11 @@ riquadro mostrato.
 - **Richiesta dei riquadri:** scaricare i tile necessari al campo visualizzato
   mantenendo la risoluzione appropriata, con timeout e ripiego se la rete
   manca.
-- **Cache su disco (A7):** i riquadri HiPS si conservano come file su disco
-  con **limite di default 5 GB, configurabile** (D11-3, stessa cache di file
-  di `11-core-immagini-fits.md`), eliminazione dei dati meno usati e
-  provenienza (origine + data di scaricamento) per ogni riquadro servito.
+- **Cache su disco (A7):** i riquadri HiPS si conservano come file nella
+  **cache comune di `04-cache.md`** (`~/Library/Caches/AstroTwo/`, un solo
+  limite di 5 GB per tutta la cache, timeout 10 s / 60 s), con eliminazione
+  dei dati meno usati e provenienza (origine + data di scaricamento) per ogni
+  riquadro servito; il modulo non ha una cache propria (CA4).
 - **Impronta del survey (C4):** mostrare la copertura del survey attivo —
   i dati di copertura appartengono a `16-core-moc.md`, questo modulo fornisce
   l'identità e la posizione del survey.
@@ -79,10 +80,10 @@ riquadro mostrato.
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** `10-core-coordinate-wcs.md` (calcolo del campo e delle
+- **Dipende da:** `04-cache.md` (cache comune A7),
+  `10-core-coordinate-wcs.md` (calcolo del campo e delle
   coordinate dei tile), `16-core-moc.md` (formati HEALPix condivisi per H12).
-- **Usato da:** `11-core-immagini-fits.md` (per la parte cache condivisa dei
-  riquadri), `16-core-moc.md`, `19-core-dati-planetari.md`,
+- **Usato da:** `16-core-moc.md`, `19-core-dati-planetari.md`,
   `41-ui-visualizzatore-cielo.md`.
 
 ## 6. Input e output
@@ -116,8 +117,8 @@ riquadro mostrato.
   un tile finto.
 - **`tiles_for_fov(center, fov, order)`** — calcola quali riquadri servono per
   un campo. Calcolo deterministico su griglia HEALPix.
-- **`HiPSCache`** (classe) — cache su disco dei riquadri con limite
-  configurabile, politica di rimozione e provenienza per voce (A7).
+- **Cache:** nessuna classe propria (CA4): i riquadri si salvano e si
+  rileggono con `SharedCache` di `04-cache.md`.
 - **`build_hips(...)`** — generazione HiPS (H9) secondo D12-1 (decisa il
   2026-10-09): libreria Python se disponibile, altrimenti Hipsgen esterno.
 - **`healpix_map(...)`** / **`healpix_grid(...)`** — mappe e griglie HEALPix
@@ -142,8 +143,8 @@ riquadro mostrato.
 
 - Ogni tile servito (dalla rete o dalla cache) riporta **origine e data di
   scaricamento** (A7).
-- La cache HiPS è su **file su disco**, non in SQLite (A7), con limite di
-  default **5 GB**, configurabile e rimozione dei dati meno usati (D11-3).
+- I riquadri HiPS stanno su **file su disco** della cache comune, non in
+  SQLite (A7); limite unico di 5 GB per tutta la cache (CA2 di `04-cache.md`).
 - Nessuna richiesta di rete senza timeout dichiarato; offline ⇒ errore o tile
   già in cache, mai pixel inventati.
 - La richiesta dei tile deve seguire il campo di vista calcolato con il
@@ -247,3 +248,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-09 | Claude Code | **D12-1, D12-3, D12-4 DECISE** (checklist del livello 1): generazione HiPS con libreria Python se `reproject` la offre (da verificare), altrimenti Hipsgen esterno; survey dal MocServer con default DSS2 a colori; client HTTP diretto HiPS 1.0 (hips2fits come complemento). §7 aggiornato. |
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per H24 (cubi HiPS), H26 (collezioni dal MocServer con copia locale; filtro spaziale nel 16; client `astroquery.mocserver`, interfaccia da verificare) e H27 (solo tile del campo; valore del pixel dal tile FITS). §8: riga `hips2fits` allineata a D12-4. Nessuna nuova decisione dei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §9 — tolta `HiPSCache`, riquadri nella cache comune `SharedCache`; tolto da "Usato da" l'`11` per la cache. Stato `approvato` invariato. |

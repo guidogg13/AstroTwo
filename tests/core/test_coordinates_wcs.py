@@ -1,0 +1,653 @@
+"""Test di accettazione del modulo 10 (``mdfiles/10-core-coordinate-wcs.md`` §12).
+
+I valori attesi sono sempre ricalcolati nel test con Astropy (o con
+l'aritmetica esatta della regola DC7); nessun numero atteso è scritto a
+memoria. Fa eccezione T12, che per specifica si confronta con il riferimento
+contenuto nel file di prova (posizione dell'oggetto scritta da STScI).
+"""
+
+from __future__ import annotations
+
+import warnings
+
+import astropy.units as u
+import numpy as np
+import pytest
+from astropy.coordinates import Distance, SkyCoord
+from astropy.io import fits
+from astropy.time import Time
+from astropy.utils.data import get_pkg_data_filename
+from astropy.wcs import WCS, FITSFixedWarning
+
+from astrotwo.core import coordinates_wcs as cw
+from astrotwo.core.coordinates_wcs import (
+    SUPPORTED_PROJECTIONS,
+    CalibrationThresholds,
+    CoordinatesWcsError,
+    SkyFrame,
+    astrometric_calibration,
+    choose_grid_spacing,
+    choose_projection,
+    compute_grid_lines,
+    convert_coordinates,
+    convert_pixel_convention,
+    pixel_to_sky,
+    propagate_position,
+    sky_to_pixel,
+    wcs_from_header,
+)
+
+SHAPE = (200, 200)
+ZPN_PARAMS = {1: 1.0, 3: 0.2}
+
+
+def make_header(projection, crval=(10.0, 41.0), rotation_deg=0.0, scale=0.01, shape=SHAPE, pv=None):
+    """Header di prova con matrice CD (scala in gradi per pixel)."""
+    if projection == "NCP" and crval == (10.0, 41.0):
+        crval = (10.0, 60.0)
+    if projection == "ZPN" and pv is None:
+        pv = ZPN_PARAMS
+    c, s = np.cos(np.radians(rotation_deg)), np.sin(np.radians(rotation_deg))
+    h = fits.Header()
+    h["NAXIS"] = 2
+    h["NAXIS1"], h["NAXIS2"] = shape
+    h["CTYPE1"], h["CTYPE2"] = f"RA---{projection}", f"DEC--{projection}"
+    h["RADESYS"] = "ICRS"
+    h["CUNIT1"] = h["CUNIT2"] = "deg"
+    h["CRPIX1"], h["CRPIX2"] = shape[0] / 2 + 0.5, shape[1] / 2 + 0.5
+    h["CRVAL1"], h["CRVAL2"] = crval
+    h["CD1_1"], h["CD1_2"] = -scale * c, scale * s
+    h["CD2_1"], h["CD2_2"] = scale * s, scale * c
+    for m, value in (pv or {}).items():
+        h[f"PV2_{m}"] = value
+    return h
+
+
+def astropy_wcs(header):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FITSFixedWarning)
+        return WCS(header)
+
+
+def expect_error(code, func, *args, **kwargs):
+    with pytest.raises(CoordinatesWcsError) as info:
+        func(*args, **kwargs)
+    assert info.value.code == code, info.value
+    return info.value
+
+
+# --- T1 ---------------------------------------------------------------------
+
+
+def test_t1_roundtrip_icrs_galactic_icrs():
+    rng = np.random.default_rng(12345)
+    ra = rng.uniform(0.0, 360.0, 1000) * u.deg
+    dec = np.degrees(np.arcsin(rng.uniform(-1.0, 1.0, 1000))) * u.deg
+    start = SkyFrame.from_lonlat(ra, dec, "icrs")
+    gal = convert_coordinates(start, "galactic")
+    back = convert_coordinates(gal, "icrs")
+    # Intermedio ricalcolato con Astropy.
+    expected_gal = SkyCoord(ra, dec, frame="icrs").galactic
+    assert gal.frame_name == "galactic"
+    assert np.max(gal.coord.separation(expected_gal).deg) < 1e-9
+    assert np.max(back.coord.separation(start.coord).deg) < 1e-9
+
+
+# --- T2 ---------------------------------------------------------------------
+
+# Posizione ICRS di M31 su SIMBAD (fonte scelta dal tester): solo dato
+# d'ingresso; la seconda lettura da SIMBAD è il test di rete qui sotto.
+M31_RA, M31_DEC = "00h42m44.330s", "+41d16m07.50s"
+
+
+def test_t2_known_conversion_icrs_to_galactic():
+    ref = SkyCoord(M31_RA, M31_DEC, frame="icrs")
+    pos = SkyFrame.from_lonlat(ref.ra, ref.dec, "icrs")
+    out = convert_coordinates(pos, "galactic")
+    expected = ref.galactic
+    assert abs(out.lon - expected.l).to_value(u.deg) < 1e-9
+    assert abs(out.lat - expected.b).to_value(u.deg) < 1e-9
+
+
+@pytest.mark.network
+def test_t2_network_simbad_second_reading():
+    from astroquery.simbad import Simbad
+
+    table = Simbad.query_object("M31")
+    live = SkyCoord(table["ra"][0], table["dec"][0], unit="deg", frame="icrs")
+    assert live.separation(SkyCoord(M31_RA, M31_DEC, frame="icrs")).arcsec < 0.01
+
+
+# --- T3 ---------------------------------------------------------------------
+
+
+def test_t3_roundtrip_pixel_sky():
+    solution = wcs_from_header(make_header("TAN", rotation_deg=17.0))
+    rng = np.random.default_rng(3)
+    x, y = rng.uniform(0, 199, 500), rng.uniform(0, 199, 500)
+    sky = pixel_to_sky(solution, x, y, convention="numpy")
+    back = sky_to_pixel(solution, sky.coords, convention="numpy")
+    assert back.pixels.convention == "numpy"
+    assert np.max(np.hypot(back.pixels.x - x, back.pixels.y - y)) < 1e-6
+    # Ricalcolo con astropy.wcs.
+    ra, dec = astropy_wcs(make_header("TAN", rotation_deg=17.0)).all_pix2world(x, y, 0)
+    assert np.max(sky.coords.coord.separation(SkyCoord(ra, dec, unit="deg")).deg) < 1e-12
+
+
+# --- T4 ---------------------------------------------------------------------
+
+# Stella di Barnard, Gaia DR3 (source_id 4472832130942575872), epoca J2016.0
+# TCB: dati d'ingresso scelti dal tester; l'atteso è ricalcolato con Astropy.
+# La corrispondenza con l'archivio Gaia si controlla nel test di rete.
+BARNARD = dict(
+    ra=269.44850252543836 * u.deg,
+    dec=4.739420051112412 * u.deg,
+    pm_ra_cosdec=-801.551 * u.mas / u.yr,
+    pm_dec=10362.394 * u.mas / u.yr,
+    parallax=546.9759 * u.mas,
+    radial_velocity=-110.11 * u.km / u.s,
+)
+GAIA_EPOCH = Time(2016.0, format="jyear", scale="tcb")
+
+
+@pytest.mark.parametrize("with_rv", [False, True])
+def test_t4_propagation_matches_apply_space_motion(with_rv):
+    pos = SkyFrame.from_lonlat(BARNARD["ra"], BARNARD["dec"], "icrs", epoch=GAIA_EPOCH)
+    target = Time(2026.0, format="jyear", scale="tcb")
+    rv = BARNARD["radial_velocity"] if with_rv else None
+    out = propagate_position(
+        pos,
+        pm_ra_cosdec=BARNARD["pm_ra_cosdec"],
+        pm_dec=BARNARD["pm_dec"],
+        parallax=BARNARD["parallax"],
+        target_epoch=target,
+        radial_velocity=rv,
+    )
+    kwargs = dict(
+        ra=BARNARD["ra"], dec=BARNARD["dec"], pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"],
+        distance=Distance(parallax=BARNARD["parallax"]), obstime=GAIA_EPOCH, frame="icrs",
+    )
+    if with_rv:
+        kwargs["radial_velocity"] = rv
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        expected = SkyCoord(**kwargs).apply_space_motion(new_obstime=target)
+    assert out.position.coord.separation(expected).deg < 1e-9
+    assert out.target_epoch == target and out.position.epoch == target
+    assert out.source_epoch == GAIA_EPOCH
+    if not with_rv:
+        assert any("velocità radiale non fornita" in n for n in out.notes)
+    # Spostamento reale: ~10 anni × ~10.4″/anno.
+    assert out.position.coord.separation(pos.coord).arcsec > 90
+
+
+def test_t4_epoch_and_motion_never_assumed():
+    no_epoch = SkyFrame.from_lonlat(BARNARD["ra"], BARNARD["dec"], "icrs")
+    common = dict(pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"], parallax=BARNARD["parallax"])
+    expect_error("EPOCH_REQUIRED", propagate_position, no_epoch, target_epoch=2026.0, **common)
+    with_epoch = SkyFrame.from_lonlat(BARNARD["ra"], BARNARD["dec"], "icrs", epoch=GAIA_EPOCH)
+    expect_error(
+        "EPOCH_REQUIRED", propagate_position, with_epoch, pm_ra_cosdec=None, pm_dec=BARNARD["pm_dec"],
+        parallax=BARNARD["parallax"], target_epoch=2026.0,
+    )
+    expect_error("EPOCH_REQUIRED", propagate_position, with_epoch, target_epoch=None, **common)
+
+
+@pytest.mark.network
+def test_t4_network_gaia_values():
+    from astroquery.gaia import Gaia
+
+    job = Gaia.launch_job(
+        "SELECT ra, dec, pmra, pmdec, parallax, radial_velocity FROM gaiadr3.gaia_source "
+        "WHERE source_id = 4472832130942575872"
+    )
+    row = job.get_results()[0]
+    assert abs(row["ra"] - BARNARD["ra"].value) < 1e-9
+    assert abs(row["dec"] - BARNARD["dec"].value) < 1e-9
+    assert abs(row["pmra"] - BARNARD["pm_ra_cosdec"].value) < 1e-2
+    assert abs(row["pmdec"] - BARNARD["pm_dec"].value) < 1e-2
+    assert abs(row["parallax"] - BARNARD["parallax"].value) < 1e-3
+
+
+# --- T5 ---------------------------------------------------------------------
+
+
+@pytest.mark.skip(reason="resolve_name si scrive dopo il codice della cache comune (04-cache.md, approvato)")
+def test_t5_resolve_name():
+    pass
+
+
+# --- T6 ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "lon,lat", [(10.0, 95.0), (10.0, -90.5), (360.0, 0.0), (-1.0, 0.0), (np.nan, 0.0)]
+)
+def test_t6_input_out_of_range(lon, lat):
+    expect_error("COORD_OUT_OF_RANGE", SkyFrame.from_lonlat, lon * u.deg, lat * u.deg, "icrs")
+
+
+# --- T7 ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("projection", SUPPORTED_PROJECTIONS)
+def test_t7_one_test_per_projection(projection):
+    header = make_header(projection, rotation_deg=12.0)
+    solution = wcs_from_header(header)
+    assert solution.projection == projection
+    rng = np.random.default_rng(7)
+    x, y = rng.uniform(0, 199, 500), rng.uniform(0, 199, 500)
+    sky = pixel_to_sky(solution, x, y, convention="numpy")
+    back = sky_to_pixel(solution, sky.coords, convention="numpy")
+    assert np.max(np.hypot(back.pixels.x - x, back.pixels.y - y)) < 1e-6
+    ra, dec = astropy_wcs(header).all_pix2world(x, y, 0)
+    assert np.max(sky.coords.coord.separation(SkyCoord(ra, dec, unit="deg")).deg) < 1e-12
+    if projection == "NCP":
+        assert any("SIN" in fix or "celfix" in fix for fix in solution.fixes)
+
+
+# --- T8-T11: convenzione dei pixel (DC7) -----------------------------------
+
+
+def test_t8_pixel_convention_values():
+    a = convert_pixel_convention(1, 1, "fits", "numpy")
+    b = convert_pixel_convention(-0.5, -0.5, "numpy", "fits")
+    assert (float(a.x), float(a.y), a.convention) == (0.0, 0.0, "numpy")
+    assert (float(b.x), float(b.y), b.convention) == (0.5, 0.5, "fits")
+
+
+def test_t9_pixel_convention_roundtrip():
+    rng = np.random.default_rng(9)
+    # Valori non interi rappresentabili esattamente (multipli di 2**-10).
+    x = rng.integers(0, 2**21, 1000) / 1024.0 + 1 / 1024.0
+    y = rng.integers(0, 2**21, 1000) / 1024.0 + 3 / 1024.0
+    fits_pos = convert_pixel_convention(x, y, "numpy", "fits")
+    back = convert_pixel_convention(fits_pos.x, fits_pos.y, "fits", "numpy")
+    assert np.array_equal(back.x, x) and np.array_equal(back.y, y)
+
+
+def test_t10_coherence_with_astropy_origin_1():
+    header = make_header("TAN", rotation_deg=5.0)
+    solution = wcs_from_header(header)
+    rng = np.random.default_rng(10)
+    x, y = rng.uniform(0, 199, 200), rng.uniform(0, 199, 200)
+    ours = pixel_to_sky(solution, x, y, convention="numpy").coords.coord
+    fits_pos = convert_pixel_convention(x, y, "numpy", "fits")
+    ra, dec = astropy_wcs(header).wcs_pix2world(fits_pos.x, fits_pos.y, 1)
+    assert np.max(ours.separation(SkyCoord(ra, dec, unit="deg")).deg) < 1e-12
+
+
+@pytest.mark.parametrize("bad", ["idl", None, "", "FITS"])
+def test_t11_invalid_convention(bad):
+    expect_error("PIXEL_CONVENTION_UNKNOWN", convert_pixel_convention, 1, 1, bad, "numpy")
+    expect_error("PIXEL_CONVENTION_UNKNOWN", convert_pixel_convention, 1, 1, "numpy", bad)
+
+
+def test_t11_convention_mandatory_in_transforms():
+    solution = wcs_from_header(make_header("TAN"))
+    with pytest.raises(TypeError):
+        pixel_to_sky(solution, 1, 1)  # convenzione mancante
+    expect_error("PIXEL_CONVENTION_UNKNOWN", pixel_to_sky, solution, 1, 1, convention=None)
+
+
+# --- T12 --------------------------------------------------------------------
+
+
+def test_t12_dss1_legacy_solution():
+    path = get_pkg_data_filename("data/dss.14.29.56-62.41.05.fits.gz", package="astropy.wcs.tests")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        header = fits.getheader(path)
+    solution = wcs_from_header(header)
+    assert solution.legacy == "DSS"
+    # Convenzione DSS di WCSLIB: x_lastra = CNPIX1 + p - 0.5 (p pixel FITS).
+    p_x = header["OBJCTX"] - header["CNPIX1"] + 0.5
+    p_y = header["OBJCTY"] - header["CNPIX2"] + 0.5
+    px = convert_pixel_convention(p_x, p_y, "fits", "numpy")
+    sky = pixel_to_sky(solution, px.x, px.y, convention="numpy")
+    ref = SkyCoord(header["OBJCTRA"], header["OBJCTDEC"], unit=(u.hourangle, u.deg), frame="fk5", equinox="J2000")
+    # Tolleranza: arrotondamenti del riferimento (0.001 s, 0.01″, 0.01 pixel).
+    assert sky.coords.coord.separation(ref).arcsec < 0.02
+    assert sky.warnings == ()
+
+
+def test_t12_legacy_unsupported_is_reported():
+    header = fits.Header({"NAXIS": 2, "NAXIS1": 10, "NAXIS2": 10, "PLTRAH": 1, "AMDX1": 1.0})
+    expect_error("WCS_LEGACY_UNSUPPORTED", wcs_from_header, header)
+
+
+# --- T13-T18: calibrazione astrometrica (D10-1, D10-7, D10-8) ---------------
+
+
+def stars_from_truth(projection, n, seed, noise=0.0):
+    truth = astropy_wcs(make_header(projection, rotation_deg=17.0))
+    rng = np.random.default_rng(seed)
+    x, y = rng.uniform(5, 195, n), rng.uniform(5, 195, n)
+    sky = truth.pixel_to_world(x, y)
+    xm, ym = x + rng.normal(0, noise, n), y + rng.normal(0, noise, n)
+    return truth, xm, ym, SkyFrame(coord=sky)
+
+
+def calibrate_stars(projection, x, y, sky, **extra):
+    params = ZPN_PARAMS if projection == "ZPN" else None
+    return astrometric_calibration(
+        "stars", pixel_x=x, pixel_y=y, convention="numpy", sky=sky, projection=projection,
+        pixel_shape=SHAPE, projection_parameters=params, **extra,
+    )
+
+
+# Criterio sull'errore vero (rispetto alla WCS nota) su 300 punti del campo:
+# senza rumore entro 0.01 pixel; con rumore gaussiano σ = 0.2 pixel per asse,
+# RMS < σ e massimo < 2σ (atteso statistico per 6 parametri da 30 stelle:
+# RMS ≈ σ·√2·√(6/30) ≈ 0.13 pixel, più alto agli angoli del campo).
+@pytest.mark.parametrize("noise,max_true_rms_px,max_true_error_px", [(0.0, 0.01, 0.01), (0.2, 0.2, 0.4)])
+@pytest.mark.parametrize("projection", SUPPORTED_PROJECTIONS)
+def test_t13_star_calibration_every_projection(projection, noise, max_true_rms_px, max_true_error_px):
+    truth, x, y, sky = stars_from_truth(projection, 30, seed=13, noise=noise)
+    [solution] = calibrate_stars(projection, x, y, sky)
+    assert solution.method == "stars" and solution.projection == projection
+    assert solution.thresholds == CalibrationThresholds()
+    assert solution.rms_px <= 1.0 and solution.max_residual_px <= 3.0
+    assert solution.center_deviation_px <= 5.0 * solution.tan_rms_px
+    # Scarto dalla WCS vera su tutto il campo (ricalcolo con astropy.wcs).
+    rng = np.random.default_rng(130)
+    gx, gy = rng.uniform(0, 199, 300), rng.uniform(0, 199, 300)
+    scale_deg = 0.01
+    err_px = truth.pixel_to_world(gx, gy).separation(solution.wcs.pixel_to_world(gx, gy)).deg / scale_deg
+    assert np.sqrt(np.mean(err_px**2)) < max_true_rms_px
+    assert np.max(err_px) < max_true_error_px
+
+
+def test_t14_six_stars_on_sin_is_an_error():
+    _, x, y, sky = stars_from_truth("SIN", 6, seed=2)
+    err = expect_error("CALIB_TOO_FEW_STARS", calibrate_stars, "SIN", x, y, sky)
+    assert err.details == {"n_stars": 6, "minimum": 10}
+
+
+def test_t14_lowered_minimum_never_silently_wrong():
+    """Con il minimo abbassato a 6: o errore CALIB_*, o soluzione davvero buona."""
+    lowered = CalibrationThresholds(min_stars_other=6)
+    for seed in range(40):
+        truth, x, y, sky = stars_from_truth("SIN", 6, seed=seed)
+        try:
+            [solution] = calibrate_stars("SIN", x, y, sky, thresholds=lowered)
+        except CoordinatesWcsError as exc:
+            assert exc.code.startswith("CALIB_")
+            continue
+        cx, cy = (SHAPE[0] - 1) / 2, (SHAPE[1] - 1) / 2
+        err_px = truth.pixel_to_world(cx, cy).separation(solution.wcs.pixel_to_world(cx, cy)).deg / 0.01
+        assert err_px < 3.0, (seed, err_px)
+
+
+def test_t15_residuals_above_threshold_list_worst_stars():
+    _, x, y, sky = stars_from_truth("TAN", 30, seed=15)
+    order = np.arange(30)
+    order[[3, 7]] = [7, 3]  # coppia sbagliata: cielo delle stelle 3 e 7 scambiato
+    sky_bad = SkyFrame(coord=sky.coord[order])
+    err = expect_error("CALIB_RESIDUALS_TOO_LARGE", calibrate_stars, "TAN", x, y, sky_bad)
+    worst_indices = [i for i, _ in err.details["worst_stars"]]
+    assert {3, 7} & set(worst_indices[:2])
+
+
+def test_t16_coherence_check():
+    tan = astropy_wcs(make_header("TAN"))
+    same = cw._check_coherence(tan, tan, SHAPE, tan_rms_px=0.1, factor=5.0)
+    assert same == pytest.approx(0.0, abs=1e-9)
+    shifted = astropy_wcs(make_header("TAN"))
+    shifted.wcs.crpix = shifted.wcs.crpix + np.array([2.0, 0.0])  # 2 pixel > 5 × 0.1
+    err = expect_error("CALIB_INCONSISTENT", cw._check_coherence, tan, shifted, SHAPE, 0.1, 5.0)
+    assert err.details["center_deviation_px"] == pytest.approx(2.0, rel=1e-6)
+
+
+def test_t17_parameters_and_header_methods():
+    ref = SkyFrame.from_lonlat(150.0 * u.deg, 2.0 * u.deg, "icrs")
+    [solution] = astrometric_calibration(
+        "parameters", reference=ref, reference_pixel=(99.5, 99.5), convention="numpy",
+        scale=1.0 * u.arcsec, rotation=30.0 * u.deg, projection="TAN", east_left=True, pixel_shape=SHAPE,
+    )
+    h = fits.Header({
+        "NAXIS": 2, "NAXIS1": 200, "NAXIS2": 200, "CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN",
+        "RADESYS": "ICRS", "CRVAL1": 150.0, "CRVAL2": 2.0, "CRPIX1": 100.5, "CRPIX2": 100.5,
+        "CDELT1": -1 / 3600, "CDELT2": 1 / 3600, "CROTA2": 30.0,
+    })
+    expected = astropy_wcs(h)
+    rng = np.random.default_rng(17)
+    x, y = rng.uniform(0, 199, 100), rng.uniform(0, 199, 100)
+    assert np.max(solution.wcs.pixel_to_world(x, y).separation(expected.pixel_to_world(x, y)).deg) < 1e-9
+    [from_header] = astrometric_calibration("header", header=h)
+    assert from_header.method == "header"
+    assert np.max(from_header.wcs.pixel_to_world(x, y).separation(expected.pixel_to_world(x, y)).deg) < 1e-9
+
+
+def test_t18_solutions_returned_as_list():
+    header = make_header("TAN")
+    first = astrometric_calibration("header", header=header)
+    _, x, y, sky = stars_from_truth("TAN", 30, seed=18)
+    second = calibrate_stars("TAN", x, y, sky, previous_solutions=first)
+    assert len(first) == 1 and len(second) == 2
+    assert second[0] is first[0] and second[1].method == "stars"
+
+
+def test_calibration_projection_errors():
+    _, x, y, sky = stars_from_truth("TAN", 30, seed=1)
+    expect_error(
+        "PROJECTION_PARAMETERS_MISSING", astrometric_calibration, "stars", pixel_x=x, pixel_y=y,
+        convention="numpy", sky=sky, projection="ZPN", pixel_shape=SHAPE,
+    )
+    expect_error(
+        "PROJECTION_UNSUPPORTED", astrometric_calibration, "stars", pixel_x=x, pixel_y=y,
+        convention="numpy", sky=sky, projection="MOL", pixel_shape=SHAPE,
+    )
+
+
+# --- T19: griglia -----------------------------------------------------------
+
+
+def _check_grid(grid, header, frame, equinox=None):
+    w = astropy_wcs(header)
+    assert grid.lines
+    for line in grid.lines:
+        for xs, ys in line.segments:
+            assert np.all((xs >= -0.5) & (xs <= SHAPE[0] - 0.5) & (ys >= -0.5) & (ys <= SHAPE[1] - 0.5))
+            target = SkyCoord(0, 0, unit="deg", frame=frame, equinox=equinox) if equinox else frame
+            sky = w.pixel_to_world(xs, ys).transform_to(target)
+            if line.kind == "meridian":
+                # Al polo la longitudine non è definita: il punto sta su ogni meridiano.
+                keep = np.abs(sky.spherical.lat.deg) < 90.0 - 1e-7
+                diff = (sky.spherical.lon.deg[keep] - line.value.to_value(u.deg) + 180.0) % 360.0 - 180.0
+            else:
+                diff = sky.spherical.lat.deg - line.value.to_value(u.deg)
+            assert np.max(np.abs(diff)) < 1e-9
+
+
+def test_t19_grid_lines_icrs_and_galactic():
+    header = make_header("TAN", rotation_deg=17.0)
+    for frame in ("icrs", "galactic"):
+        grid = compute_grid_lines(
+            wcs_from_header(header), frame=frame, lon_spacing=0.5 * u.deg, lat_spacing=0.5 * u.deg
+        )
+        assert grid.frame_name == frame
+        _check_grid(grid, header, frame)
+    # Completezza in ICRS: ogni multiplo di 0.5° dentro l'intervallo di RA e Dec
+    # dei pixel (ricalcolato con astropy.wcs) ha la sua linea.
+    w = astropy_wcs(header)
+    gx, gy = np.meshgrid(np.linspace(0, 199, 50), np.linspace(0, 199, 50))
+    sky = w.pixel_to_world(gx.ravel(), gy.ravel())
+    grid = compute_grid_lines(w, frame="icrs", lon_spacing=0.5 * u.deg, lat_spacing=0.5 * u.deg)
+    meridians = {round(line.value.to_value(u.deg), 9) for line in grid.lines if line.kind == "meridian"}
+    parallels = {round(line.value.to_value(u.deg), 9) for line in grid.lines if line.kind == "parallel"}
+    for v in np.arange(np.ceil(sky.ra.deg.min() / 0.5) * 0.5, sky.ra.deg.max(), 0.5):
+        assert round(v, 9) in meridians
+    for v in np.arange(np.ceil(sky.dec.deg.min() / 0.5) * 0.5, sky.dec.deg.max(), 0.5):
+        assert round(v, 9) in parallels
+
+
+def test_t19_grid_with_pole_in_field():
+    header = make_header("SIN", crval=(0.0, 89.5), scale=0.02)
+    grid = compute_grid_lines(wcs_from_header(header), frame="icrs", lon_spacing=30 * u.deg, lat_spacing=1 * u.deg)
+    meridians = {round(line.value.to_value(u.deg), 6) for line in grid.lines if line.kind == "meridian"}
+    assert meridians == {float(v) for v in range(0, 360, 30)}
+    _check_grid(grid, header, "icrs")
+
+
+def test_t19_grid_errors():
+    solution = wcs_from_header(make_header("TAN"))
+    expect_error("GRID_SPACING_INVALID", compute_grid_lines, solution, frame="icrs", lon_spacing=0.5, lat_spacing=1 * u.deg)
+    expect_error("GRID_SPACING_INVALID", compute_grid_lines, solution, frame="icrs", lon_spacing=0 * u.deg, lat_spacing=1 * u.deg)
+    expect_error("EPOCH_REQUIRED", compute_grid_lines, solution, frame="fk5", lon_spacing=1 * u.deg, lat_spacing=1 * u.deg)
+
+
+# --- T23: passo automatico della griglia -----------------------------------
+
+# Elenchi di §9 del 10, riscritti qui dalla specifica (non importati dal modulo).
+ARC_STEPS = (
+    [v * u.arcsec for v in (0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30)]
+    + [v * u.arcmin for v in (1, 2, 5, 10, 15, 30)]
+    + [v * u.deg for v in (1, 2, 5, 10, 15, 30, 45, 90)]
+)
+TIME_STEPS = (
+    [v * 15 * u.arcsec for v in (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30)]
+    + [v * 15 * u.arcmin for v in (1, 2, 5, 10, 15, 30)]
+    + [v * 15 * u.deg for v in (1, 2, 3, 4, 6)]
+)
+
+
+def expected_step(extent_deg, steps, lines=5):
+    for step in steps:
+        if step.to_value(u.deg) >= extent_deg / lines:
+            return step.to_value(u.deg)
+    return steps[-1].to_value(u.deg)
+
+
+def field_extent_astropy(header, frame):
+    """Estensione del campo ricalcolata con astropy.wcs su 301×301 punti."""
+    w = astropy_wcs(header)
+    nx, ny = header["NAXIS1"], header["NAXIS2"]
+    gx, gy = np.meshgrid(np.linspace(-0.5, nx - 0.5, 301), np.linspace(-0.5, ny - 0.5, 301))
+    sky = w.pixel_to_world(gx.ravel(), gy.ravel()).transform_to(frame)
+    lon, lat = sky.spherical.lon.deg, sky.spherical.lat.deg
+    px, py = w.world_to_pixel(SkyCoord([0, 0], [90, -90], unit="deg", frame=frame))
+    inside = np.isfinite(px) & (px >= -0.5) & (px <= nx - 0.5) & (py >= -0.5) & (py <= ny - 0.5)
+    if inside.any():
+        lon_ext = 360.0
+    else:
+        center = w.pixel_to_world((nx - 1) / 2, (ny - 1) / 2).transform_to(frame).spherical.lon.deg
+        rel = (lon - center + 180.0) % 360.0 - 180.0
+        lon_ext = rel.max() - rel.min()
+    lat_hi = 90.0 if inside[0] else lat.max()
+    lat_lo = -90.0 if inside[1] else lat.min()
+    return lon_ext, lat_hi - lat_lo
+
+
+@pytest.mark.parametrize(
+    "header_kwargs,frame,lon_steps",
+    [
+        (dict(projection="TAN"), "icrs", TIME_STEPS),
+        (dict(projection="TAN", rotation_deg=17.0), "galactic", ARC_STEPS),
+        (dict(projection="TAN", scale=1e-4), "icrs", TIME_STEPS),
+        (dict(projection="SIN", crval=(0.0, 89.5), scale=0.02), "icrs", TIME_STEPS),
+    ],
+)
+def test_t23_choose_grid_spacing(header_kwargs, frame, lon_steps):
+    header = make_header(**header_kwargs)
+    spacing = choose_grid_spacing(wcs_from_header(header), frame=frame)
+    lon_ext, lat_ext = field_extent_astropy(header, frame)
+    assert spacing.lon_extent.to_value(u.deg) == pytest.approx(lon_ext, rel=1e-3)
+    assert spacing.lat_extent.to_value(u.deg) == pytest.approx(lat_ext, rel=1e-3)
+    assert spacing.lon_spacing.to_value(u.deg) == pytest.approx(expected_step(lon_ext, lon_steps), rel=1e-12)
+    assert spacing.lat_spacing.to_value(u.deg) == pytest.approx(expected_step(lat_ext, ARC_STEPS), rel=1e-12)
+    assert spacing.lon_steps == ("time" if lon_steps is TIME_STEPS else "arc")
+
+
+def test_t23_smaller_field_never_larger_step():
+    big = choose_grid_spacing(wcs_from_header(make_header("TAN", scale=0.01)), frame="icrs")
+    small = choose_grid_spacing(wcs_from_header(make_header("TAN", scale=1e-4)), frame="icrs")
+    assert small.lon_spacing <= big.lon_spacing and small.lat_spacing <= big.lat_spacing
+
+
+def test_t23_grid_lines_use_automatic_spacing():
+    solution = wcs_from_header(make_header("TAN", rotation_deg=17.0))
+    spacing = choose_grid_spacing(solution, frame="icrs")
+    auto = compute_grid_lines(solution, frame="icrs")
+    explicit = compute_grid_lines(
+        solution, frame="icrs", lon_spacing=spacing.lon_spacing, lat_spacing=spacing.lat_spacing
+    )
+    assert auto.lon_spacing == explicit.lon_spacing and auto.lat_spacing == explicit.lat_spacing
+    assert [(line.kind, line.value) for line in auto.lines] == [(line.kind, line.value) for line in explicit.lines]
+    for kind in ("meridian", "parallel"):
+        assert 1 <= sum(line.kind == kind for line in auto.lines) <= 2 * spacing.target_lines + 2
+    _check_grid(auto, make_header("TAN", rotation_deg=17.0), "icrs")
+
+
+def test_t23_errors():
+    solution = wcs_from_header(make_header("TAN"))
+    expect_error("GRID_SPACING_INVALID", choose_grid_spacing, solution, frame="icrs", target_lines=0)
+    expect_error("GRID_SPACING_INVALID", compute_grid_lines, solution, frame="icrs", lon_spacing=1 * u.deg)
+    expect_error("EPOCH_REQUIRED", choose_grid_spacing, solution, frame="fk5")
+
+
+# --- T20 --------------------------------------------------------------------
+
+
+def test_t20_choose_projection():
+    threshold = 30 * u.deg  # soglia data dal test: il valore di progetto è D10-9
+    assert choose_projection(1 * u.deg, threshold=threshold) == "TAN"
+    assert choose_projection(180 * u.deg, threshold=threshold) == "AIT"
+    assert choose_projection(threshold, threshold=threshold) == "AIT"
+    with pytest.raises(TypeError):
+        choose_projection(1 * u.deg)  # soglia obbligatoria finché D10-9 è aperta
+    expect_error("COORD_UNIT_MISSING", choose_projection, 1.0, threshold=threshold)
+
+
+# --- T21 --------------------------------------------------------------------
+
+
+def test_t21_units_and_epochs_mandatory():
+    expect_error("COORD_UNIT_MISSING", SkyFrame.from_lonlat, 10.0, 20.0, "icrs")
+    expect_error("COORD_UNIT_MISSING", SkyFrame.from_lonlat, 10.0 * u.m, 20.0 * u.deg, "icrs")
+    expect_error("EPOCH_REQUIRED", SkyFrame.from_lonlat, 10 * u.deg, 20 * u.deg, "fk5")
+    expect_error("EPOCH_REQUIRED", SkyFrame, SkyCoord(10, 20, unit="deg", frame="fk5"))
+    expect_error("EPOCH_REQUIRED", SkyFrame.from_lonlat, 10 * u.deg, 20 * u.deg, "fk5", equinox="2000-01-01")
+    expect_error("FRAME_UNSUPPORTED", SkyFrame.from_lonlat, 10 * u.deg, 20 * u.deg, "ecliptic")
+    pos = SkyFrame.from_lonlat(10 * u.deg, 20 * u.deg, "icrs")
+    expect_error("EPOCH_REQUIRED", convert_coordinates, pos, "fk5")
+    fk5 = convert_coordinates(pos, "fk5", equinox="J2000")
+    expected = SkyCoord(10, 20, unit="deg", frame="icrs").transform_to("fk5")
+    assert fk5.coord.separation(expected).deg < 1e-12 and fk5.equinox == Time("J2000")
+    fk4 = convert_coordinates(pos, "fk4", equinox="B1950", obstime="B1950")
+    expected = SkyCoord(10, 20, unit="deg").transform_to(SkyCoord(0, 0, unit="deg", frame="fk4", equinox="B1950", obstime="B1950").frame)
+    assert fk4.coord.separation(expected).deg < 1e-12
+
+
+# --- T22 --------------------------------------------------------------------
+
+
+def test_t22_out_of_field_warning():
+    solution = wcs_from_header(make_header("TAN"))
+    res = pixel_to_sky(solution, [-5.0, 100.0, 250.0], [10.0, 100.0, 10.0], convention="numpy")
+    assert res.warnings == ("OUT_OF_FIELD",)
+    assert res.out_of_field.tolist() == [True, False, True]
+    assert np.all(np.isfinite(res.coords.lon.value))  # il valore è comunque restituito
+    inside = pixel_to_sky(solution, [0.0], [0.0], convention="numpy")
+    assert inside.warnings == ()
+    assert inside.display_epoch == Time("J2000.0")  # header senza DATE-OBS (D10-2)
+
+
+# --- Altri casi limite di §10 -------------------------------------------------
+
+
+def test_wcs_errors():
+    expect_error("WCS_MISSING", wcs_from_header, fits.Header({"NAXIS": 2, "NAXIS1": 10, "NAXIS2": 10}))
+    zero = make_header("TAN")
+    zero["CD1_1"] = zero["CD1_2"] = zero["CD2_1"] = zero["CD2_2"] = 0.0  # WCSLIB la renderebbe identità
+    expect_error("WCS_INVALID", wcs_from_header, zero)
+    rank_one = make_header("TAN")
+    rank_one["CD1_1"] = rank_one["CD1_2"] = rank_one["CD2_1"] = rank_one["CD2_2"] = 0.01
+    expect_error("WCS_INVALID", wcs_from_header, rank_one)
+
+
+def test_header_defaults_are_declared():
+    header = make_header("TAN")
+    del header["RADESYS"]
+    solution = wcs_from_header(header)
+    assert any("RADESYS assente" in fix for fix in solution.fixes)

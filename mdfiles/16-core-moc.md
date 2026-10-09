@@ -58,7 +58,8 @@ di un dato sia sempre verificabile e confrontabile.
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** `10-core-coordinate-wcs.md` (coordinate di cerchi/poligoni),
+- **Dipende da:** `04-cache.md` (cache comune A7),
+  `10-core-coordinate-wcs.md` (coordinate di cerchi/poligoni),
   `13-core-cataloghi.md` (tabelle per creare MOC da cataloghi e per il filtro),
   `12-core-hips.md` (identità dei survey per C4/H12), `14-core-protocolli-vo.md`
   (eventuali MOC scaricati dai servizi).
@@ -102,8 +103,9 @@ di un dato sia sempre verificabile e confrontabile.
 - **`build_moc(...)`** — ingresso da riga di comando (H9), delegato alle
   funzioni sopra.
 - **Persistenza e export (D16-2):** i MOC si salvano in cache in **formato
-  FITS standard IVOA** (file, con origine e data come gli altri dati della
-  cache A7); l'export dell'utente offre anche **JSON** e **testo**.
+  FITS standard IVOA** (file nella cache comune di `04-cache.md`, con origine
+  e data come gli altri dati; nessuna cache propria, CA4); l'export
+  dell'utente offre anche **JSON** e **testo**.
 - **`read_moc(source)`** (H22) — legge un MOC FITS o JSON e ne dichiara la
   versione.
 - **`query_mocserver(region_or_moc, property_filter)`** (H26) — collezioni
@@ -138,8 +140,9 @@ di un dato sia sempre verificabile e confrontabile.
   di tempo si dichiara sempre** (UTC, TDB, TCB); i **MOC temporali usano la
   scala dello standard IVOA (da verificare)**. Regola di progetto in
   `02-convenzioni.md` DC1.
-- **Formato in cache:** FITS standard IVOA su file, con origine e data come
-  gli altri dati della cache A7 (D16-2).
+- **Formato in cache:** FITS standard IVOA su file nella cache comune di
+  `04-cache.md` (limite unico di 5 GB), con origine e data come gli altri
+  dati (D16-2).
 
 - **Corpo di riferimento (`body`, D19-3 decisa il 2026-10-08):** ogni MOC porta
   nei metadati il campo **obbligatorio** `body`. Per i dati astronomici vale
@@ -241,3 +244,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-09 | Claude Code | **D16-4 DECISA** (checklist del livello 1): mappe LIGO/Virgo/KAGRA piatte e multi-ordine, somma verificata = 1, regioni di credibilità con `mocpy` (da verificare). |
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per H22 (versioni MOC 1.0–2.1, FITS e JSON; supporto in `mocpy` da verificare) e H26 (filtro spaziale delle collezioni con il MocServer, client `astroquery.mocserver`). Nessuna nuova decisione dei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §5, §7, §9 — MOC salvati come file nella cache comune `SharedCache`. Stato `approvato` invariato. |

@@ -19,7 +19,7 @@ Principio P11: **la parità con Aladin è il minimo, non il traguardo.** Tutte l
 - Nei livelli in fase specifiche si lavora solo sui file `.md` in `mdfiles/`.
 - Se ti viene chiesto codice per un livello ancora in fase specifiche, ricorda la regola e proponi di completare prima il `.md` del modulo.
 - Solo i file con stato `approvato` autorizzano a scrivere il codice di quel modulo; le verifiche segnate "da verificare prima del codice" nel `.md` si fanno prima di scriverlo.
-- Livelli in fase codice: **nessuno**.
+- Livelli in fase codice: **livello 1** (dichiarato dal proprietario il 2026-10-09).
 
 ## Regole d'oro (non negoziabili)
 

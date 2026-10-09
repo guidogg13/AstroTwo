@@ -37,7 +37,7 @@ documenti e implementazioni siano coerenti e confrontabili con la letteratura.
 | Elemento | Convenzione | Esempio |
 |---|---|---|
 | File di specifica | `NN-nome-con-trattini.md` | `10-core-coordinate-wcs.md` |
-| File Python | `snake_case.py` dentro `src/astrotwo/<sotto-pacchetto>/` (struttura decisa con A3 in `01-architettura.md`); stessa radice della specifica senza il numero di gruppo | `10-core-coordinate-wcs.md` → `src/astrotwo/core/coordinates_wcs.py` |
+| File Python | `snake_case.py` dentro `src/astrotwo/<sotto-pacchetto>/` (struttura decisa con A3 in `01-architettura.md`); **traduzione inglese** del nome della specifica senza numero né gruppo, in `snake_case` (decisione del proprietario del 2026-10-09; tabella qui sotto) | `10-core-coordinate-wcs.md` → `src/astrotwo/core/coordinates_wcs.py` |
 | Sotto-pacchetti | uno per gruppo di specifiche: `core`, `analysis`, `ai`, `ui`, `advanced` (deciso con A3) | `src/astrotwo/analysis/` |
 | Cartella dei test | `tests/` con la stessa struttura di `src/astrotwo/` (deciso con A3) | `tests/core/…` |
 | Classi | `PascalCase` | `SkyCoordinate` |
@@ -46,6 +46,25 @@ documenti e implementazioni siano coerenti e confrontabili con la letteratura.
 | Identificatori d'errore | `MAIUSCOLO`, in inglese, prefisso del dominio | `WCS_OUT_OF_RANGE`, `NET_TIMEOUT` |
 | Nomi di file di output | `snake_case` con timestamp ISO 8601 quando serve | `lightcurve_2026-10-04T13:00:00Z.csv` |
 | Nomi IA (strumenti) | `verbo_oggetto` in inglese | `cone_search`, `plot_lightcurve` |
+
+**Nomi dei file Python dei moduli scritti** (regola: traduzione inglese del
+nome della specifica, `snake_case`; decisione del proprietario del
+2026-10-09). Un modulo nuovo aggiunge qui la sua riga quando nasce la
+specifica.
+
+| Specifica | File Python | Test |
+|---|---|---|
+| `04-cache.md` | `src/astrotwo/core/cache.py` | `tests/core/test_cache.py` |
+| `10-core-coordinate-wcs.md` | `src/astrotwo/core/coordinates_wcs.py` | `tests/core/test_coordinates_wcs.py` |
+| `11-core-immagini-fits.md` | `src/astrotwo/core/images_fits.py` | `tests/core/test_images_fits.py` |
+| `12-core-hips.md` | `src/astrotwo/core/hips.py` | `tests/core/test_hips.py` |
+| `13-core-cataloghi.md` | `src/astrotwo/core/catalogs.py` | `tests/core/test_catalogs.py` |
+| `14-core-protocolli-vo.md` | `src/astrotwo/core/vo_protocols.py` | `tests/core/test_vo_protocols.py` |
+| `15-core-crossmatch.md` | `src/astrotwo/core/crossmatch.py` | `tests/core/test_crossmatch.py` |
+| `16-core-moc.md` | `src/astrotwo/core/moc.py` | `tests/core/test_moc.py` |
+| `17-core-misure.md` | `src/astrotwo/core/measurements.py` | `tests/core/test_measurements.py` |
+| `18-core-calcolatrici.md` | `src/astrotwo/core/calculators.py` | `tests/core/test_calculators.py` |
+| `19-core-dati-planetari.md` | `src/astrotwo/core/planetary_data.py` | `tests/core/test_planetary_data.py` |
 
 ## 4. Unità di misura
 
@@ -237,3 +256,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-09 | Claude Code | **Decisioni del proprietario (checklist del livello 1):** DC1 parte residua = **TDB** per le serie temporali (scala originale sempre conservata); DC3 = RA 0.01 s, Dec 0.1″, magnitudini 3 decimali, configurabili; DC4 = SemVer. §7 e §9 aggiornati: nessuna decisione aperta in questo file. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | §8: **framework dei test = `pytest`** (decisione del proprietario), anticipata da `61-strategia-test.md`. Stato `approvato` invariato. |
+| 2026-10-09 | Claude Code | §3: **nomi dei file Python confermati in inglese** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): regola = traduzione inglese del nome della specifica in `snake_case`; tabella con il file Python e il file di test di `04` e dei moduli 10–19. Stato `approvato` invariato. |

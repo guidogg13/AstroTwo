@@ -25,6 +25,17 @@ disegno — con risultati in unità esplicite e sempre verificabili.
   `PA_UNDEFINED`/`FRAME_UNKNOWN` **senza mai approssimare** un angolo.
   Inclusa per decisione del proprietario (2026-10-04): in Aladin la funzione
   non risulta documentata, ma la parità con Aladin è il minimo → §13-D17-1.
+- **Offset angolari e calcolo inverso (A5; da D10-8 del
+  `10-core-coordinate-wcs.md`, decisa il 2026-10-09):** (1) gli **offset**
+  tra due punti, Δα·cos δ e Δδ (offset sferici nel frame del primo punto,
+  `SkyCoord.spherical_offsets_to`); (2) la **posizione ottenuta applicando
+  degli offset** a un punto (`SkyCoord.spherical_offsets_by`); (3) il
+  **calcolo inverso**: la posizione che si trova a una distanza angolare e a
+  un angolo di posizione (nord → est) dati da un punto
+  (`SkyCoord.directional_offset_by`). Ogni risultato dichiara frame, epoca e
+  unità come le altre misure; queste funzioni erano la parte "offset e
+  calcolo inverso" della calcolatrice delle coordinate, tolta dal modulo 10,
+  e sono usate da `18-core-calcolatrici.md`.
 - **Lettura dei valori pixel (F3):** leggere il valore (o i valori nei pressi)
   in una posizione di un'immagine; la fotometria vera e propria (baricentri,
   ellissi, statistiche su cerchi/poligoni — F4) è **interamente** di
@@ -74,7 +85,8 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 - **Dipende da:** `10-core-coordinate-wcs.md` (coordinate, frame, distanze
   angolari), `11-core-immagini-fits.md` (accesso ai pixel e WCS dell'immagine),
   `13-core-cataloghi.md` (posizioni delle sorgenti da misurare).
-- **Usato da:** `18-core-calcolatrici.md` (`skydist`, lettura pixel),
+- **Usato da:** `18-core-calcolatrici.md` (`skydist`, lettura pixel, offset
+  e calcolo inverso per la calcolatrice delle coordinate),
   `20-analisi-fotometria.md` (lettura pixel), `41-ui-visualizzatore-cielo.md`
   (forme, tag, distanza con profilo), `42-ui-pannello-cataloghi.md`,
   `34-ia-verifica-risultati.md`.
@@ -95,6 +107,10 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 | out | forma/tag | oggetto geometrico | coordinate + attributi | |
 | in | due sorgenti di catalogo | righe di `CatalogTable` | posizioni con frame, epoca e `body` | F1 automatica |
 | out | distanza automatica | struttura | distanza con unità + estremi del segmento + epoca usata | F1 automatica |
+| in | offset | due `Quantity` angolari | Δα·cos δ e Δδ, unità angolare esplicita | per `apply_offsets` |
+| in | distanza + angolo di posizione | due `Quantity` angolari | distanza ≥ 0; PA da nord verso est | per `offset_position` |
+| out | offset | due `Quantity` angolari | Δα·cos δ e Δδ nel frame del primo punto | da `angular_offsets` |
+| out | posizione calcolata | coordinate | gradi + frame + epoca del punto di partenza | da `apply_offsets` / `offset_position` |
 
 ## 7. Interfaccia pubblica
 
@@ -118,6 +134,13 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 - **`tag(point, label)`** — marcatura con coordinate e etichetta; la UI la
   rende, la **sessione del 24** la persiste insieme ai segnalibri di 40
   (D17-3).
+- **`angular_offsets(p1, p2)`** — offset Δα·cos δ e Δδ da `p1` a `p2` nel
+  frame di `p1`. **Calcolo: `SkyCoord.spherical_offsets_to` (Astropy).**
+- **`apply_offsets(p, d_lon, d_lat)`** — posizione ottenuta applicando a `p`
+  gli offset dati. **Calcolo: `SkyCoord.spherical_offsets_by`.**
+- **`offset_position(p, distance, position_angle)`** — calcolo inverso:
+  posizione a distanza e angolo di posizione dati da `p`. **Calcolo:
+  `SkyCoord.directional_offset_by`.**
 - **`auto_distance(source_a, source_b, unit)`** (F1) — distanza tra due
   sorgenti di catalogo selezionate; restituisce distanza, estremi del
   segmento ed epoca usata.
@@ -163,6 +186,7 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 | Selezione diversa da due sorgenti di catalogo | nessuna misura, messaggio con il numero selezionato | `SELECTION_NOT_TWO_SOURCES` |
 | Epoche diverse senza dati per propagare | nessuna misura: l'epoca non si assume | `EPOCH_REQUIRED` |
 | Sorgenti di corpi diversi | nessuna misura | `BODY_MISMATCH` |
+| Offset, distanza o angolo senza unità, o distanza negativa | rifiuto dell'input | `OFFSET_INVALID` |
 
 ## 11. Esposizione all'IA
 
@@ -174,6 +198,10 @@ disegno — con risultati in unità esplicite e sempre verificabili.
   unità dell'header. **Calcolo: accesso all'array del modulo 11.**
 - **`distance_with_profile`** — input: due punti; output: distanza + profilo.
   **Calcolo: Astropy + NumPy.**
+- **`offset_position`** — input: punto, distanza, angolo di posizione;
+  output: posizione con frame. **Calcolo: Astropy.**
+- **`angular_offsets`** — input: due punti; output: Δα·cos δ, Δδ.
+  **Calcolo: Astropy.**
 - **`describe_shape`** — input: forma; output: parametri geometrici (raggio,
   assi, centro, vertici). Nessun calcolo inferenziale.
 
@@ -197,6 +225,9 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | T10 | Distanza automatica (F1) | selezionare due sorgenti di un catalogo di prova | distanza uguale a `SkyCoord.separation` sulle stesse posizioni; estremi = posizioni delle sorgenti | ricalcolo con Astropy |
 | T11 | Selezione errata (F1) | selezionare una o tre sorgenti | `SELECTION_NOT_TWO_SOURCES` | test di unità |
 | T12 | Epoche diverse (F1) | due sorgenti di cataloghi con epoche diverse e moto proprio noto | distanza calcolata dopo la propagazione del modulo 10; epoca usata nel risultato | ricalcolo con `apply_space_motion` nel test |
+| T13 | Offset tra due punti | `angular_offsets` su coppie scelte dal tester | uguali a `SkyCoord.spherical_offsets_to` ricalcolato nel test; `apply_offsets` con quegli offset torna al secondo punto entro 1e-9 gradi | ricalcolo con Astropy |
+| T14 | Calcolo inverso | `offset_position` con distanza e PA dati | uguale a `SkyCoord.directional_offset_by`; `angular_distance` e `position_angle` dal punto di partenza restituiscono distanza e PA dati entro 1e-9 gradi | ricalcolo con Astropy |
+| T15 | Input non valido | distanza negativa o senza unità | `OFFSET_INVALID` | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -240,3 +271,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-09 | Claude Code | **D17-6 DECISA** (checklist del livello 1): distanza + profilo + grafico esportabile, come lo strumento "dist" di Aladin. |
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §10, §12 per F1 (misura automatica della distanza tra due sorgenti di catalogo selezionate, con epoca mai assunta e stesso `body`). Nessuna nuova decisione dei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): offset angolari e calcolo inverso (posizione da distanza + angolo di posizione) spostati qui dalla calcolatrice delle coordinate del 10 — §3, §5, §6, §7 (`angular_offsets`, `apply_offsets`, `offset_position`), §10 (`OFFSET_INVALID`), §11, §12 (T13–T15). Stato `approvato` invariato. |
