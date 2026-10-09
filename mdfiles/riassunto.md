@@ -1,0 +1,9 @@
+# riassunto.md — il progetto in 5 righe
+
+**Stato:** bozza
+
+1. **Cos'è:** AstroTwo è il successore di Aladin per gli astrofisici: app desktop macOS consegnata come `.dmg`, con nucleo scientifico Python 3.12 pari ad Aladin e più (P11), interfaccia PySide6, IA a capacità con provider e chiavi scelti dall'utente.
+2. **Struttura:** 4 livelli che devono funzionare sempre — 1 nucleo (10–19), 2 analisi (20–24), 3 IA (30–35), 4 avanzate (50–53), più interfaccia (40–45) e distribuzione/test (60–61); le dipendenze vanno solo verso il basso (`4 → 3 → 2 → 1`).
+3. **Regole d'oro:** l'IA non calcola mai (ogni numero viene da codice deterministico testato), le chiavi API vivono solo nel Portachiavi di macOS, ogni operazione è registrata e rieseguibile, prima la specifica `.md` approvata poi il codice.
+4. **Stato (2026-10-09):** FASE SPECIFICHE, nessun codice — 41 file in `mdfiles/`, 13 `approvato` (01, 02, 03 e tutto il livello 1, moduli 10–19), 5 in `bozza` (file di servizio), 23 `non esiste`, 16 decisioni ancora aperte (nessuna blocca il livello 1) (elenco completo in `decisioni-aperte.md`); edizione di riferimento del manuale di Aladin = giugno 2022 (AP6); Aladin Lite escluso dalla parità (AP3). Regole di lavoro in `CLAUDE.md`.
+5. **Prossimi passi:** AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08; livello 1 approvato: attende la dichiarazione "FASE: CODICE – livello 1" del proprietario (prima del codice di ogni modulo, le sue verifiche "da verificare"); poi i gruppi rimanenti (20–24, 30–35, 40–45, 50–53, 60–61), chiudere le decisioni aperte, poi chiedere per iscritto "FASE: CODICE".

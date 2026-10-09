@@ -1,0 +1,437 @@
+# panoramica.md — riassunto di tutto il progetto
+
+**Stato:** bozza
+
+## 1. Scopo
+
+AstroTwo è il successore di Aladin per gli astrofisici: un'app desktop macOS
+con un nucleo scientifico pari ad Aladin, un livello di analisi, un livello di
+intelligenza artificiale con provider scelti dall'utente e un livello di
+funzioni avanzate, consegnata come file `.dmg`.
+
+## 2. Fase attuale
+
+**FASE: SPECIFICHE (nessun codice).**
+
+- Si scrivono e si approvano solo file `.md` in `mdfiles/`.
+- Nessun codice applicativo prima che il proprietario dichiari per iscritto
+  "FASE: CODICE".
+- Solo i file con stato `approvato` autorizzano a scrivere il codice del modulo corrispondente.
+- Regole complete in `CLAUDE.md`; modello dei moduli in `TEMPLATE-modulo.md`.
+
+Stato al 2026-10-04: creati i file generali (panoramica, indice, architettura,
+convenzioni, parità con Aladin) e il template. Prese le decisioni A3, A4 e A7
+(struttura del codice, Python e dipendenze, cache); **il 2026-10-04 sono state
+decise anche A1 (PySide6) e A5 (provider IA)**; rimandate A8 (scripting
+Aladin) e AP1 (validazione parità). Elenco completo in §5 e §6.
+
+Sempre al 2026-10-04: **gruppo nucleo scritto** — gli 8 file `10–17` sono in
+stato `bozza` (coordinate/WCS, immagini FITS, HiPS, cataloghi, protocolli VO,
+cross-match, MOC, misure). Restano 24 file di modulo da scrivere (`18`,
+20–24, 30–35, 40–45, 50–53, 60–61); `18` e `45` sono registrati con stato
+`non esiste` (accettati in AM1).
+
+Sempre al 2026-10-04: completata la **prima verifica documentale** di
+`03-parita-aladin.md` (manuale utente Aladin Desktop ed. giugno 2022 sezioni
+1–5.8, manuale script v12.0, FAQ): 58 righe in A–G (19 `nota`, 23 `verificata`,
+12 `corretta`, 4 `non trovata`), 16 funzioni nuove trovate e messe in sezione H,
+1 funzione extra AstroTwo (allora D12, rientrata nella sezione D il 2026-10-04:
+vedi esito parziale di AP5 qui sotto). **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**; esito
+parziale 2026-10-04 qui sotto. Dalla
+verifica sono emerse due proposte di nuovo modulo in AM1,
+**accettate il 2026-10-04** (AM1 decisa: `18-core-calcolatrici.md` da H4,
+`45-ui-viste-multiple.md` da H2 — vedi §6 e §8).
+
+Sempre al 2026-10-04: **decisione del proprietario P11** — la parità con Aladin
+è il minimo, non il traguardo: AstroTwo include tutte le funzioni di
+`03-parita-aladin.md`, anche quelle non confermate nella documentazione. Le 4
+righe `non trovata` (C3 HiPS da ID/URL, F2 position angle, G3 invio a strumenti
+esterni, E4 spettri SSA) passano a `inclusa (decisione del proprietario)`; nei
+moduli 12, 17 e 14 le funzioni sono descritte per intero e restano aperte solo
+verifiche tecniche di implementazione.
+
+Sempre al 2026-10-04: **decisioni del proprietario su tutto il Gruppo 1 di
+`decisioni-aperte.md`** — le 22 decisioni che bloccavano altri moduli sono
+tutte decise (A1, A5, AP5, D10-2 … D17-4; esiti in §5, dettagli nei file di
+origine e in `decisioni-aperte.md` §3). Restano 25 decisioni aperte (Gruppo 2
+= 20, Gruppo 3 = 5). Impegno collegato: **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**,
+prima di scrivere il gruppo analisi (20–24).
+
+Sempre al 2026-10-04: **esito parziale di AP5 e correzioni in
+`03-parita-aladin.md`** (fonte: manuale utente Aladin Desktop **edizione
+febbraio 2021**, lette **sezioni 1–5.7.2 e l'indice completo**). **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**; l'esistenza di tutte le
+funzioni elencate è però verificata dall'indice. **D12 corretta:** in Aladin
+l'estrazione di sorgenti **esiste** (sezione 6.6, ed. giugno 2022) **tramite il programma
+esterno SExtractor** → la riga D12 è tornata nella sezione D come `verificata`
+(in AstroTwo estrazione **nativa** nel modulo 20, senza programmi esterni,
+libreria da decidere) e la sezione "funzioni extra" è ora senza righe. Aggiunte
+in H: **H17** strumento Exam (5.10, ed. giugno 2022), **H18** avvio
+tramite URL (7.2 dell'ed. febbraio 2021, sezione assente nell'ed. giugno 2022), **H19** interfacce VOApp/VOObserver
+(7.4, ed. giugno 2022) — tutte con "dettagli da leggere" e modulo
+proposto. Note su **A13** (stampa, 5.19, ed. giugno 2022), **B11** (mosaici e sequenze animate
+con blink), **E4** (vecchia FAQ: Aladin mostra gli spettri con programmi
+esterni via SAMP; AstroTwo li mostra nel modulo 21), **F4** (fotometria su HiPS:
+in Aladin solo con cerchio manuale e alla risoluzione della vista; AstroTwo
+dichiara la risoluzione usata e, se possibile, misura alla risoluzione nativa).
+In `01-architettura.md` §8 nuovo **requisito non funzionale**: obiettivi di
+prestazioni (righe di catalogo, dimensione di immagini e cubi) **almeno pari ad
+Aladin** (sezione 8.3 del manuale, ed. giugno 2022, da leggere) da definire in
+`61-strategia-test.md`. In `INDICE.md` la voce di
+`24-analisi-pipeline-riproducibili.md` annota il principio: in Aladin la
+cronologia dei comandi registra anche le azioni con il mouse come comandi di
+script; **AstroTwo adotta lo stesso principio (ogni azione dell'interfaccia =
+un comando registrato)**.
+
+Al 2026-10-08: **manutenzione delle specifiche** (nessun modulo nuovo, nessuno
+stato cambiato). `AGENTS.md` sostituito da `CLAUDE.md` nella cartella radice e
+in tutti i riferimenti; intervalli dei moduli allineati ad AM1 (nucleo
+**10–18**, interfaccia **40–45**) in `01-architettura.md` e qui in §3;
+riferimento AP5 uniformato a **5.7.3–8**; refusi corretti in `01` e `02`.
+Nuova decisione aperta **AP6 — edizione di riferimento del manuale di
+Aladin** (giugno 2022 o febbraio 2021), decisa lo stesso giorno (sotto).
+
+Sempre al 2026-10-08: **decisioni del proprietario sui punti aperti della
+manutenzione.** **AP6 decisa:** edizione di riferimento = la più recente
+ufficiale del manuale utente di Aladin Desktop; verifica sul sito del CDS →
+**giugno 2022** (nessuna edizione più recente). Accanto ai numeri di sezione
+del manuale è indicata l'edizione; dove nell'edizione giugno 2022 numero o
+titolo è diverso (A13 5.18, D12 6.5, H17 5.9, H18 7.2, H19 7.5) è marcato
+"numerazione da verificare", senza correggere. `decisioni-aperte.md`
+completato con AP1–AP4 e con la parte aperta di DC1, DC3, DC4 (AP1 nel Gruppo
+3 con A8): **32 decisioni aperte** (Gruppo 1 = 0, Gruppo 2 = 25, Gruppo 3 =
+7). AP5 scritta ovunque come "AP5 decisa; lettura delle sezioni 5.7.3–8
+ancora da fare". Test T3/T4 di `03` estesi a 10–18; D14-6 rinominata
+"inclusione decisa; parte tecnica aperta"; calcolatrici (18) aggiunte al
+nucleo in §3; refusi corretti in questo file e in `03`.
+
+Sempre al 2026-10-08: **numeri di sezione riportati all'ed. giugno 2022**
+(A13 → 5.19, D12 → 6.6, H17 → 5.10, H19 → 7.4; tolta la marcatura
+"numerazione da verificare"). **H18**: la sezione 7.2 "Launch of Aladin by
+URL" dell'ed. febbraio 2021 non esiste nell'ed. giugno 2022 (lì 7.2 = avvio da
+riga di comando; l'avvio da URL compare solo nella sezione 2 "Installation"):
+riga mantenuta per P11. **AP5** ora: "AP5 decisa; lettura delle sezioni 5.9–8
+(ed. giugno 2022) ancora da fare" (con l'ed. giugno 2022 le sezioni 1–5.8
+risultano già lette). **AP3 decisa:** Aladin Lite escluso dalla parità (app
+desktop; versione web → proposta AM1). Smistamento dei gruppi confermato:
+**31 decisioni aperte** (Gruppo 1 = 0, Gruppo 2 = 24, Gruppo 3 = 7).
+
+Sempre al 2026-10-08: **lettura AP5 completata** — lette le sezioni 5.9–8 del
+manuale utente ed. giugno 2022 e integrate in `03-parita-aladin.md`: note con
+sezione ed edizione su 20 righe; **correzioni** di D12 (SExtractor eseguito su
+un server remoto del CDS), E3 (correlazione anche per campo e per ellissi
+d'errore) e F4 (le serie temporali esistono in Aladin, sez. 5.10 e 5.12);
+dettagli di H17 (puntatori Simbad e VizieR con SED), H18 e H19; **8 nuove
+righe H20–H27** (mappa cliccabile, dati planetari, formati e riconoscimento dal
+contenuto, SIA/SIA2, cubi HiPS, convenzione dei pixel FITS, MocServer, immagini
+di qualsiasi dimensione) → 86 righe in tutto. **Nuova proposta AM1: H21, dati
+planetari** (nessun file creato). Decisioni aperte: **32** (Gruppo 1 = 1,
+Gruppo 2 = 24, Gruppo 3 = 7). Nessun modulo del gruppo analisi è stato scritto:
+si attende la validazione del proprietario.
+
+Sempre al 2026-10-08: **decisioni del proprietario sugli esiti di AP5.**
+**AM1 accettata per H21:** nuovo modulo `19-core-dati-planetari.md` (livello
+1, stato `non esiste`) → il nucleo è ora **10–19**. In `01-architettura.md` §8
+**obiettivo minimo di prestazioni: almeno 1 milione di sorgenti di catalogo con
+1 GB di RAM** (manuale Aladin ed. giugno 2022, sez. 8.3; test in `61`). In
+`10-core-coordinate-wcs.md` **D10-4 precisata** con le proiezioni del manuale
+(SIN, TAN, AIT, ZEA, STG, CAR, NCP, ZPN; un test per proiezione). In
+`02-convenzioni.md` nuova **DC7: convenzione dei pixel** FITS (indice da 1)
+contro numpy (indice da 0) con regola di conversione unica nel modulo 10.
+**H17:** la SED si costruisce nel modulo 20, ogni punto con origine
+dichiarata. **H19:** equivalente di VOApp = API Python nel 24 + SAMP nel 14,
+nessuna interfaccia nuova. Decisioni aperte: **31** (Gruppo 1 = 0, Gruppo 2 =
+24, Gruppo 3 = 7).
+
+Sempre al 2026-10-08: **scritti `18-core-calcolatrici.md` e
+`19-core-dati-planetari.md`** (stato `bozza`, 14 sezioni ciascuno): il nucleo
+10–19 è ora tutto in bozza. Il 18 copre le cinque calcolatrici di Aladin (sez.
+5.7) richiamando i moduli 10, 11, 13 e 17 senza riscriverne le funzioni; il 19
+copre i dati planetari con corpo mai assunto e nessuna sovrapposizione tra
+corpi diversi o tra dati celesti e planetari. Nuove decisioni aperte: D18-1…
+D18-6 e D19-1…D19-7 → **44 aperte** (Gruppo 1 = 2: D19-2, D19-3; Gruppo 2 =
+33; Gruppo 3 = 9; smistamento proposto, da confermare). Nessun modulo del
+gruppo analisi è stato scritto.
+
+Al 2026-10-09: applicate le **decisioni del proprietario del 2026-10-08** —
+smistamento delle 13 decisioni di 18 e 19 confermato; **D19-3**: campo `body`
+obbligatorio nei metadati dei moduli 12, 13, 14 e 16 (`celestial` per i dati
+astronomici, ricavato dal sistema di coordinate, mai assunto); **D19-2**: PDS
+letto nel 19, PDS4 obbligatorio, PDS3 solo con libreria consolidata (resta
+aperta `D19-2b`, libreria e licenza); **D19-4**: sovrapposizione tra corpi
+diversi = errore di default, forzabile con opzione esplicita citata nel
+risultato; **DC7 confermata** e nuova funzione `convert_pixel_convention` nel
+modulo 10 (test T8–T11); `CLAUDE.md` aggiornato (nucleo 10–19, nota su
+`AGENTS.md`, regole su pixel e corpo). Decisioni aperte: **42** (Gruppo 1 = 0,
+Gruppo 2 = 33, Gruppo 3 = 9).
+
+Sempre al 2026-10-09: **checklist di approvazione del livello 1 decisa dal
+proprietario.** Accettate 30 raccomandazioni (DC1, DC3, DC4, AP2, D10-1,
+D11-2, D11-4, D11-5, D12-1, D12-3, D12-4, D13-3, D14-3, D14-4, D14-6,
+D15-1…D15-4, D16-4, D17-6, D18-1…D18-4, D19-1, D19-2b, D19-5, D19-6, D19-7),
+scritte nei file di origine; le verifiche "da verificare" restano vincoli
+prima del codice di ciascun modulo. A2, A6, A9 non bloccano il livello 1:
+bloccano `60` (A2, A6) e `40` (A9), con orientamento registrato. D19-3 esteso
+al modulo 15 (crossmatch: `BODY_MISMATCH` forzabile come D19-4). Nuove
+decisioni del Gruppo 3: A10 (tetti di memoria) e D10-6 (prestazioni delle
+conversioni di massa). `CLAUDE.md`: la fase codice si dichiara **per
+livello** ("FASE: CODICE – livello N"). Decisioni aperte: **14** (Gruppo 1 = 0,
+Gruppo 2 = 3, Gruppo 3 = 11). **Nessuna decisione dei Gruppi 1 e 2 blocca più
+01, 02, 03 e 10–19**, ma i file **restano in bozza**: le funzioni emerse dalla
+lettura AP5 e assegnate ai moduli 11–17 (H22, H23, H24, H26, H27, E3, F1) non
+sono ancora descritte in quei moduli; l'approvazione attende l'indicazione del
+proprietario.
+
+Sempre al 2026-10-09: **approvati 01, 02, 03, 10, 18 e 19** (decisione del
+proprietario). **Moduli 11–17 completati** con le funzioni assegnate dalla
+lettura AP5 (11: H22, H27, B11, H25; 12: H24, H26, H27; 13: H22, H8; 14: H23,
+H17, H19, H14; 15: E3; 16: H22, H26; 17: F1) e **10 completato** con H25
+(calibrazioni storiche DSS1, supporto da verificare). Verifica di copertura di
+`03` sui moduli 10–19: nessun'altra funzione mancante. **Approvati anche 12, 16
+e 17**; restano **in bozza 11, 13, 14 e 15** per nuove decisioni del Gruppo 2
+(D11-6, D13-7, D14-7, D14-8, D15-5). Decisioni aperte: **20** (Gruppo 1 = 0,
+Gruppo 2 = 8, Gruppo 3 = 12).
+
+Sempre al 2026-10-09: **livello 1 interamente approvato.** Decise dal
+proprietario D11-6 (`Pillow`), D13-7 e D14-8 (lettori ASTRORES e IDHA con
+`defusedxml`, testati su esempi del CDS, altrimenti solo errore), D14-7
+(nessun sistema di plugin nel livello 1: estensioni tramite l'API Python del
+24, parte "plugin" di H14 spostata nel 24 anche in `03`), D15-5 (distanza di
+Mahalanobis con covarianza combinata, soglia in sigma; nuova D15-6 nel Gruppo
+3); **framework dei test `pytest`** (anticipato da 61, registrato in `01` e
+`02` §8). **Approvati 11, 13, 14 e 15**: ora sono `approvato` 01, 02, 03 e
+10–19. Decisioni aperte: **16** (Gruppo 1 = 0, Gruppo 2 = 3: A2, A6, A9 per
+`60`/`40`; Gruppo 3 = 13). Nessun livello in fase codice: serve la
+dichiarazione "FASE: CODICE – livello 1".
+
+## 3. Struttura a 4 livelli
+
+Regola n. 7 di `CLAUDE.md`: il progetto è a livelli e deve funzionare sempre.
+Un livello superiore non rompe mai quello inferiore; se un livello superiore
+fallisce, i livelli sotto continuano a funzionare.
+
+| Livello | Nome | Cosa contiene | Moduli |
+|---|---|---|---|
+| 1 | Nucleo | tutto ciò che Aladin già fa: coordinate/WCS, immagini FITS, HiPS, cataloghi, protocolli VO, cross-match, MOC, misure, calcolatrici, dati planetari | 10–19 |
+| 2 | Analisi | fotometria, spettroscopia, curve di luce, cubi di dati, pipeline riproducibili | 20–24 |
+| 3 | IA | adattatore provider, chiavi nel Portachiavi, registro strumenti, query ADQL, verifica risultati, assistente chat | 30–35 |
+| 4 | Funzioni avanzate | transienti, multi-messaggero, collaborazione, vista 3D | 50–53 |
+| — | Interfaccia | UI (attraversa i livelli, ma senza logica scientifica propria) | 40–45 |
+| — | Distribuzione e test | pacchetto `.dmg`, strategia dei test | 60–61 |
+
+Direzione delle dipendenze: `4 → 3 → 2 → 1`; l'interfaccia chiama i livelli ma
+non viene chiamata da nessuno; il livello 1 non dipende da nulla di sopra.
+
+**Regola d'oro n. 1 (riassunto):** l'IA non calcola mai. Ogni numero mostrato
+all'utente viene da codice deterministico e testato; l'IA interpreta richieste,
+sceglie gli strumenti e spiega i risultati. Ogni modulo che produce numeri deve
+dichiarare libreria o algoritmo deterministico responsabile del calcolo.
+
+## 4. Tabella dei moduli
+
+Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` → `approvato`.
+
+| File | Titolo | Livello | Stato |
+|---|---|---|---|
+| `TEMPLATE-modulo.md` | Modello obbligatorio per ogni modulo | — | bozza |
+| `panoramica.md` | Questo file | — | bozza |
+| `INDICE.md` | Elenco di tutti i file con stato | — | bozza |
+| `riassunto.md` | Il progetto in 5 righe: cos'è, struttura, regole d'oro, stato, prossimi passi | — | bozza |
+| `01-architettura.md` | Architettura generale e scelte tecniche | — | approvato |
+| `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, test | — | approvato |
+| `03-parita-aladin.md` | Funzioni di Aladin e modulo coprente | — | approvato |
+| `decisioni-aperte.md` | Decisioni aperte, smistate in tre gruppi; §3 = esiti delle decisioni prese il 2026-10-04 | — | bozza |
+| **Nucleo (livello 1)** | | | |
+| `10-core-coordinate-wcs.md` | Coordinate, WCS, sistemi di riferimento | 1 | approvato |
+| `11-core-immagini-fits.md` | Immagini FITS e visualizzazione | 1 | approvato |
+| `12-core-hips.md` | Servizi HiPS all-sky | 1 | approvato |
+| `13-core-cataloghi.md` | Cataloghi e tabelle | 1 | approvato |
+| `14-core-protocolli-vo.md` | Protocolli Virtual Observatory (VOTable, TAP, cone search, SAMP, SSA) | 1 | approvato |
+| `15-core-crossmatch.md` | Incrocio tra cataloghi | 1 | approvato |
+| `16-core-moc.md` | Mappe di copertura MOC | 1 | approvato |
+| `17-core-misure.md` | Misure angolari e strumenti di misura | 1 | approvato |
+| `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo — origine: H4 di `03-parita-aladin.md`; dipende da `10` (coordinate/tempo) e `11` (pixel) | 1 | approvato |
+| `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari — origine: H21 di `03-parita-aladin.md` (AM1 accettata il 2026-10-08) | 1 | approvato |
+| **Analisi (livello 2)** | | | |
+| `20-analisi-fotometria.md` | Fotometria | 2 | non esiste |
+| `21-analisi-spettroscopia.md` | Spettroscopia | 2 | non esiste |
+| `22-analisi-curve-di-luce.md` | Curve di luce | 2 | non esiste |
+| `23-analisi-cubi-di-dati.md` | Cubi di dati (λ o velocità) | 2 | non esiste |
+| `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili e registro operazioni | 2 | non esiste |
+| **IA (livello 3)** | | | |
+| `30-ia-adattatore-provider.md` | Adattatore per provider IA | 3 | non esiste |
+| `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS | 3 | non esiste |
+| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA | 3 | non esiste |
+| `33-ia-query-adql.md` | Costruzione ed esecuzione di query ADQL | 3 | non esiste |
+| `34-ia-verifica-risultati.md` | Verifica indipendente dei risultati dell'IA | 3 | non esiste |
+| `35-ia-assistente-chat.md` | Assistente conversazionale | 3 | non esiste |
+| **Interfaccia** | | | |
+| `40-ui-finestra-principale.md` | Finestra, menu, barre di stato | — | non esiste |
+| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo | — | non esiste |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle | — | non esiste |
+| `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
+| `44-ui-pannello-ia.md` | Pannello IA / chat | — | non esiste |
+| `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
+| **Funzioni avanzate (livello 4)** | | | |
+| `50-avanzate-transienti.md` | Caccia ai transienti | 4 | non esiste |
+| `51-avanzate-multi-messaggero.md` | Dati multi-messaggero | 4 | non esiste |
+| `52-avanzate-collaborazione.md` | Collaborazione tra utenti | 4 | non esiste |
+| `53-avanzate-vista-3d.md` | Vista 3D | 4 | non esiste |
+| **Distribuzione e test** | | | |
+| `60-distribuzione-dmg.md` | Pacchetto macOS `.dmg` | — | non esiste |
+| `61-strategia-test.md` | Strategia dei test | — | non esiste |
+
+## 5. Decisioni prese
+
+| # | Decisione | Data | Fonte | Note |
+|---|---|---|---|---|
+| P1 | Nucleo scientifico in Python | 2026-10-04 | `CLAUDE.md`, confermata in `01-architettura.md` | usare librerie consolidate, non riscrivere la scienza |
+| P2 | App desktop per macOS, consegna come `.dmg` | 2026-10-04 | `CLAUDE.md`, confermata in `01-architettura.md` | |
+| P3 | Livello IA separato dal resto, con adattatore per più provider | 2026-10-04 | `CLAUDE.md`, confermata in `01-architettura.md` | l'utente sceglie il provider e inserisce la propria chiave |
+| P4 | Le chiavi API vivono solo nel Portachiavi di macOS | 2026-10-04 | `CLAUDE.md` | mai in file, log o repository |
+| P5 | Numerazione dei file per gruppi (00-09 generali, 10-19 nucleo, ecc.) | 2026-10-04 | `CLAUDE.md` | |
+| P6 | Un modulo = un file `.md`, modello unico in `TEMPLATE-modulo.md` | 2026-10-04 | `CLAUDE.md` | 14 sezioni obbligatorie |
+| P7 | Unità, sistemi di coordinate e convenzioni tecniche | 2026-10-04 | `02-convenzioni.md` | quelle marcate "provvisorie" sono ancora da ratificare |
+| P8 (A3) | UI e nucleo nello stesso progetto Python: codice in `src/astrotwo/` con sotto-pacchetti `core`, `analysis`, `ai`, `ui`, `advanced`; test in `tests/` con la stessa struttura | 2026-10-04 | decisione del proprietario, dettagli in `01-architettura.md` §4.2 | motivazione: corrispondenza 1:1 tra specifica e codice, un solo ambiente da costruire e testare |
+| P9 (A4) | Python 3.12, `pyproject.toml`, gestore pacchetti `uv` | 2026-10-04 | decisione del proprietario, dettagli in `01-architettura.md` §4.2 | motivazione: versione stabile dell'ecosistema scientifico; installazione e test rapidi e riproducibili |
+| P10 (A7) | Cache su due media: SQLite per le interrogazioni ai cataloghi, file su disco per i riquadri HiPS e FITS; limite di spazio configurabile con eliminazione dei dati meno usati; origine e data di scaricamento mostrate per ogni dato dalla cache | 2026-10-04 | decisione del proprietario, dettagli in `01-architettura.md` §4.2 e §8 | motivazione: media adatte al tipo di dato, cache sotto controllo, tracciabilità e riproducibilità |
+| P11 | **La parità con Aladin è il minimo, non il traguardo: AstroTwo include TUTTE le funzioni di `03-parita-aladin.md`, anche quelle non confermate nella documentazione di Aladin** (righe C3, F2, G3, E4) | 2026-10-04 | decisione del proprietario, applicata in `03-parita-aladin.md` | sulle funzioni non documentate resta solo la verifica tecnica su come implementarle, non l'esistenza in Aladin |
+| A1 | Interfaccia con **PySide6 (Qt)**; il rendering delle mappe con OpenGL si specifica in `41-ui-visualizzatore-cielo.md` | 2026-10-04 | decisione del proprietario, `01-architettura.md` §4.2/§9 | un solo ambiente Python coerente con A3/A4; prima orientamento, ora confermata |
+| A5 | Interfaccia IA **a capacità** (chiamata di strumenti, streaming) con due implementazioni iniziali: **provider cloud** e **endpoint compatibile OpenAI** | 2026-10-04 | decisione del proprietario, `01-architettura.md` §4.2/§9 | conforme a CLAUDE.md (l'utente sceglie il provider); prima orientamento, ora confermata |
+| AP5 | **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**; le sezioni si leggono e si integrano in `03-parita-aladin.md` **prima di scrivere i gruppi successivi** (prima di 20–24) | 2026-10-04 | decisione del proprietario, `03-parita-aladin.md` §2/§6 | evita riscritture di specifiche già scritte e protegge i test T2/T5. **Esito parziale 2026-10-04:** lette sezioni 1–5.7.2 e indice completo (manuale ed. febbraio 2021); esistenza di tutte le funzioni verificata dall'indice; restano i dettagli di 5.7.3–8 |
+| AP6 | Edizione di riferimento del manuale di Aladin = **la più recente ufficiale del manuale utente di Aladin Desktop**: verificata sul sito del CDS il 2026-10-08 → **edizione giugno 2022** (nessuna più recente) | 2026-10-08 | decisione del proprietario, `03-parita-aladin.md` §2/§6 | i numeri di sezione del manuale si riferiscono a questa edizione (riportati alla sua numerazione il 2026-10-08; H18: sezione presente solo nell'ed. febbraio 2021) |
+| AP3 | **Aladin Lite escluso dalla parità**: AstroTwo è un'app desktop; un'eventuale versione web richiederà una proposta AM1 | 2026-10-08 | decisione del proprietario, `03-parita-aladin.md` §4/§6 | chiusa anche in `decisioni-aperte.md` |
+| AM1 (H21) | **Nuovo modulo `19-core-dati-planetari.md`, livello 1** (dati planetari, riga H21 di `03-parita-aladin.md`) | 2026-10-08 | decisione del proprietario, §6 qui sotto | registrato con stato `non esiste` |
+| Prestazioni | **Obiettivo minimo: almeno 1 milione di sorgenti di catalogo con 1 GB di RAM** (manuale Aladin ed. giugno 2022, sez. 8.3) | 2026-10-08 | decisione del proprietario, `01-architettura.md` §8 | dettaglio dei test in `61-strategia-test.md` |
+| D10-4 (precisata) | Proiezioni = quelle del manuale Aladin ed. giugno 2022, sez. 5.14: `SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN`; un test per proiezione | 2026-10-08 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 | da verificare: altre proiezioni oltre l'elenco del manuale e supporto `NCP` in `astropy.wcs` |
+| DC7 | **Convenzione dei pixel:** FITS indice da 1, numpy indice da 0; `fits = numpy + 1` per asse, `array[y, x]`; uso interno numpy, conversione solo ai confini e in un solo punto (modulo 10) | 2026-10-08 | decisione del proprietario, `02-convenzioni.md` §6/§9 | origine H25 di `03-parita-aladin.md` |
+| H17 (SED) | La SED del puntatore VizieR si costruisce nel **modulo 20** (fotometria), ogni punto con origine dichiarata | 2026-10-08 | decisione del proprietario, `03-parita-aladin.md` H17 | |
+| H19 (VOApp) | Equivalente di VOApp/VOObserver = **API Python nel 24** (strada principale) + **SAMP nel 14** per gli altri programmi; nessuna interfaccia nuova | 2026-10-08 | decisione del proprietario, `03-parita-aladin.md` H19 | |
+| D19-2 | Lettura PDS **nel modulo 19** (non nell'11); **PDS4 obbligatorio**, PDS3 solo con libreria consolidata | 2026-10-08 | decisione del proprietario, `19-core-dati-planetari.md` §13 | libreria e licenza aperte come D19-2b (candidata `pds4_tools`) |
+| D19-3 | Campo **`body` obbligatorio** nei metadati dei moduli 12, 13, 14, 16; `celestial` (sfera celeste) per i dati astronomici, ricavato dal sistema di coordinate, mai assunto | 2026-10-08 | decisione del proprietario, `19-core-dati-planetari.md` §13 | applicata nei moduli 12, 13, 14, 16 il 2026-10-09 |
+| D19-4 | Sovrapposizione tra corpi diversi (o tra dati celesti e planetari) = **errore di default**, forzabile con **opzione esplicita citata nel risultato** (schema di D13-5) | 2026-10-08 | decisione del proprietario, `19-core-dati-planetari.md` §13 | applicata anche alle operazioni tra MOC nel 16 |
+| DC7 (conferma) | Pixel da 0 in memoria, convenzione FITS solo ai bordi; funzione unica `convert_pixel_convention` nel modulo 10 | 2026-10-08 | decisione del proprietario, `02-convenzioni.md` §6, `10-core-coordinate-wcs.md` §7 | test T8–T11 del 10 |
+| Checklist livello 1 | Accettate 30 raccomandazioni: DC1 (TDB), DC3 (RA 0.01 s, Dec 0.1″, mag 3 decimali), DC4 (SemVer), AP2 (parità funzionale), D10-1 (tre metodi di calibrazione di Aladin), D11-2 (`reproject`), D11-4 (tutte le HDU immagine), D11-5 (9 tabelle di colori, default Gray), D12-1 (HiPS con libreria Python o Hipsgen esterno), D12-3 (MocServer, default DSS2 a colori), D12-4 (client HiPS diretto), D13-3 (albero per popolarità), D14-3 (DataLink con descrittori), D14-4 (schede di Aladin + server personali), D14-6 (SSA 1.1 con `pyvo`), D15-1 (`best`), D15-2 (`astroquery.xmatch`), D15-3 (tetto 1 milione di righe), D15-4 (nessuna probabilità nel livello 1), D16-4 (mappe LIGO/Virgo/KAGRA), D17-6 (distanza + profilo + grafico), D18-1 (`ast`), D18-2 (alias delle unità), D18-3 (equivalenze), D18-4 (magnitudini solo nel 20), D19-1 (`spiceypy` + PCK), D19-2b (`pds4_tools`, `pdr` da valutare), D19-5 (disattivati), D19-6 (corpi con HiPS e PCK; Luna e Marte), D19-7 (MOC planetari da verificare) | 2026-10-09 | decisione del proprietario, file di origine §13 (e §9 per 01/02/03) | le verifiche "da verificare" restano vincoli prima del codice del modulo |
+| A2, A6, A9 (orientamento) | A2 = PyInstaller + dmgbuild; A6 = sì, notarizzazione con account Apple Developer solo alla distribuzione; A9 = inglese di base + italiano con Qt. Non bloccano il livello 1; bloccano `60` (A2, A6) e `40` (A9) | 2026-10-09 | decisione del proprietario, `01-architettura.md` §5/§9 | restano nel Gruppo 2 di `decisioni-aperte.md` |
+| D19-3 esteso al 15 | Il crossmatch tra tabelle di corpi diversi dà `BODY_MISMATCH`, forzabile come D19-4 | 2026-10-09 | decisione del proprietario, `15-core-crossmatch.md` §9/§10/§12 | test T7–T8 del 15 |
+| Fase codice per livello | "FASE: CODICE – livello N" autorizza il codice solo per i moduli `approvato` di quel livello; gli altri livelli restano in fase specifiche | 2026-10-09 | decisione del proprietario, `CLAUDE.md` | livelli in fase codice: nessuno |
+| Approvazione livello 1 (parziale) | **Approvati** 01, 02, 03, 10, 18, 19 (decisione del proprietario) e 12, 16, 17 (completati, nessuna decisione dei Gruppi 1 e 2); 11, 13, 14, 15 in bozza fino a D11-6, D13-7, D14-7, D14-8, D15-5 | 2026-10-09 | decisione e regola del proprietario | nessun livello in fase codice |
+| D11-6 | `Pillow` per JPEG, PNG e GIF | 2026-10-09 | decisione del proprietario, `11-core-immagini-fits.md` §13 | licenza da verificare prima del codice |
+| D13-7 / D14-8 | Lettori ASTRORES (13) e IDHA (14) con **`defusedxml`**, testati su esempi del CDS; senza documentazione o esempi, solo errore | 2026-10-09 | decisione del proprietario, `13` e `14` §13 | sicurezza su file XML non fidati; licenza da verificare |
+| D14-7 | **Nessun sistema di plugin nel livello 1**; estensioni tramite l'API Python del 24 (parte "plugin" di H14 spostata nel 24) | 2026-10-09 | decisione del proprietario, `14` §13, `03` H14 | |
+| D15-5 | Correlazione con ellissi: distanza di Mahalanobis con covarianza combinata, soglia in sigma (default D15-6, Gruppo 3) | 2026-10-09 | decisione del proprietario, `15` §13 | criterio di Aladin da verificare, differenza dichiarata |
+| Test | Framework dei test **`pytest`** (anticipato da 61) | 2026-10-09 | decisione del proprietario, `01` §4, `02` §8 | dettagli in `61-strategia-test.md` |
+| Approvazione livello 1 | **01, 02, 03 e 10–19 tutti `approvato`** | 2026-10-09 | decisione e regola del proprietario | livelli in fase codice: nessuno |
+| D10-2 + D13-2 | Epoca di ogni dato **letta dai suoi metadati e mai assunta**; epoca di visualizzazione = epoca dell'immagine se nota, altrimenti **J2000**; **epoca usata sempre scritta nel risultato**; ogni catalogo ha la **propria epoca di riferimento** | 2026-10-04 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 e `13-core-cataloghi.md` §13 | regola scritta anche in `02-convenzioni.md` DC2 (§5); riproducibilità (regola d'oro n. 6) |
+| D10-3 | Cache della risoluzione nomi in **tabella SQLite separata dentro la cache A7** | 2026-10-04 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 | limite e provenienza unici come A7, schema non condiviso con il 13 |
+| D10-4 | **Stessa lista di proiezioni di Aladin** (da verificare con AP5); **`TAN`** default immagini, **`AIT`** viste a cielo intero; **un test per proiezione** (T7) | 2026-10-04 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 | parità documentale = minimo (P11) |
+| D11-1 | **Tipo nativo del file in memoria; ogni calcolo in `float64`; `float32` solo per la visualizzazione** | 2026-10-04 | decisione del proprietario, `11-core-immagini-fits.md` §13 | regola scritta anche in `02-convenzioni.md` DC6 (§6) |
+| D11-3 | Limite cache su disco **5 GB di default, configurabile**, con eliminazione dei dati meno usati | 2026-10-04 | decisione del proprietario, `11-core-immagini-fits.md` §13 | estensione di A7; interfaccia di configurazione in `40`/`60` |
+| D12-5 + D16-5 | **Calcoli HEALPix nel 16, servizio dei tile nel 12** (stesso confine in entrambi i file) | 2026-10-04 | decisione del proprietario, `12-core-hips.md` e `16-core-moc.md` §13 | nessuna logica HEALPix duplicata, un solo confine dichiarato |
+| D13-1 | **Stringa con grammatica ristretta alla Aladin** per `search` (jolly `?`/`*`; operatori `=`, `!=`, `<`, `>`, `<=`, `>=`; valore assoluto; prefissi `+`/`-` per aggiungere/togliere), **validata prima dell'esecuzione** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | un solo validatore deterministico per UI, IA e pipeline |
+| D13-5 | Operazioni sulle tabelle **sempre non distruttive**; in-place solo con **flag esplicito citato nel report** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | coerenza con 15/16/17 e con la riproducibilità |
+| D13-6 | **Colonna DataLink nel 13, risoluzione dei link nel 14** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | nessuna duplicazione di client VO |
+| D14-1 | **`pyvo` per TAP e DataLink**; per SAMP si **valuta `astropy.samp` (da verificare)**; **licenze da riverificare prima di approvare il 14** | 2026-10-04 | decisione del proprietario, `14-core-protocolli-vo.md` §13 | stack VO IVOA, un solo punto da mockare nei test |
+| D14-2 | **Hub SAMP: collegarsi a uno già attivo se c'è, altrimenti avviarne uno proprio**; primo perimetro **tabelle, selezioni, puntamenti**; **immagini come estensione prevista** | 2026-10-04 | decisione del proprietario, `14-core-protocolli-vo.md` §13 | parte tecnica residua chiusa; l'inclusione era già decisa con P11 |
+| D16-1 | **`mocpy`** per i MOC; **licenza e installazione su macOS da verificare prima di approvare il 16** | 2026-10-04 | decisione del proprietario, `16-core-moc.md` §13 | copre MOC spaziali e temporali (E6), allineato allo standard IVOA |
+| D16-2 | **MOC in cache in formato FITS standard IVOA; export anche JSON e testo** | 2026-10-04 | decisione del proprietario, `16-core-moc.md` §13 | formato standard della comunità e tracciabilità A7 sui file |
+| D16-3 | **Tempo numerico internamente (JD via `astropy.time`); ISO 8601 solo in interfaccia e file; scala di tempo sempre dichiarata (UTC, TDB, TCB); MOC temporali con la scala IVOA (da verificare)** | 2026-10-04 | decisione del proprietario, `16-core-moc.md` §13 | regola scritta anche in `02-convenzioni.md` DC1 |
+| D17-2 | **Geometria nel 17, rendering nel 41** | 2026-10-04 | decisione del proprietario, `17-core-misure.md` §13 | "l'interfaccia non fa calcoli" (`01-architettura.md` §3) e riuso delle forme da 16 e 20 |
+| D17-3 | **Tag nel file di sessione del 24, condiviso con i segnalibri di 40**; la sessione salva **riferimenti ai file e operazioni eseguite (non i pixel)** e deve poter essere **rieseguita** | 2026-10-04 | decisione del proprietario, `17-core-misure.md` §13 | un solo formato di sessione; il 17 resta senza I/O su disco |
+| D17-4 | **La fotometria (F4) sta interamente nel 20** | 2026-10-04 | decisione del proprietario, `17-core-misure.md` §13 | la fotometria è livello 2; nessun test duplicato |
+
+## 6. Decisioni aperte
+
+Ogni decisione qui ha una voce corrispondente nel file `.md` pertinente.
+Etichette: `A1–A9` definite in `01-architettura.md`, `AP1` in
+`03-parita-aladin.md`, `AM1` qui sotto. Le decisioni già prese sono in §5.
+
+L'elenco completo e aggiornato di **tutte** le decisioni aperte — con opzioni,
+raccomandazioni e dipendenze — è in `decisioni-aperte.md`. Alla creazione
+erano 47, smistate in tre gruppi; **il 2026-10-04 sono state decise tutte e 22
+le decisioni del Gruppo 1** (A1, A5, AP5, D10-2 … D17-4 — esiti in §5 qui
+sopra): restavano 25 aperte. Il 2026-10-08 AP6 è stata aggiunta e decisa
+(§5) e l'elenco è stato completato con AP1–AP4 e con la parte aperta di DC1,
+DC3, DC4; AP3 decisa lo stesso giorno → 31 aperte; dopo la lettura AP5 si è
+aggiunta la proposta AM1 per H21 (32 aperte), accettata lo stesso giorno →
+31 aperte; con i moduli 18 e 19 se ne aggiungono 13 (44); il 2026-10-09
+applicate le decisioni su D19-2, D19-3, D19-4 (42); con la checklist del
+livello 1 (14); con il completamento dei moduli 11–17 (20); con le decisioni
+su D11-6, D13-7, D14-7, D14-8, D15-5 → **16 aperte** (Gruppo 1 = 0, Gruppo 2 =
+3: A2, A6, A9 per `60`/`40`; Gruppo 3 = 13).
+Quando una decisione viene chiusa, si aggiorna prima il file di origine e
+poi `decisioni-aperte.md`.
+
+| # | Decisione | File pertinente | Stato |
+|---|---|---|---|
+| A2 | Strumento di packaging del `.dmg` | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): PyInstaller + dmgbuild; non blocca il livello 1, blocca l'approvazione di `60` |
+| A6 | Firma e notarizzazione Apple | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): sì, notarizzazione con account Apple Developer solo al momento della distribuzione; blocca l'approvazione di `60` |
+| A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
+| A9 | Lingua dell'interfaccia | `01-architettura.md`, `40-ui-finestra-principale.md` | orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt; blocca l'approvazione di `40` |
+| AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md` |
+| AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
+
+Le altre decisioni aperte di `03-parita-aladin.md` (AP2 profondità della
+parità, AP4 scripting legacy; AP3 Aladin Lite è decisa, §5) e di `02-convenzioni.md`
+(parte aperta di DC1, DC3, DC4) sono elencate nel file di origine e, dal
+2026-10-08, in `decisioni-aperte.md` (AP2, DC1, DC3, DC4 nel Gruppo 2;
+AP1 e AP4 nel Gruppo 3). **AP5** (verifica documentale residua) è in §5:
+**AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**, prima di scrivere i gruppi successivi; esito
+parziale 2026-10-04 = lette 1–5.7.2 e indice completo, esistenza di tutte le
+funzioni verificata.
+
+**Nota su AM1:** durante la scrittura delle specifiche potrebbe emergere che un
+modulo va diviso o che serve un modulo aggiuntivo. Non si aggiungono file di
+propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
+
+## 7. Prossimi passi
+
+1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
+2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
+   dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
+   D12/E3/F4). Esiti validati e AM1 per H21 accettata il 2026-10-08
+   (`19-core-dati-planetari.md`).
+3. Scrittura dei file di modulo in gruppi, un gruppo alla volta:
+   nucleo 10–19 in bozza (18 e 19 scritti il 2026-10-08); poi analisi (20–24), poi IA
+   (30–35), poi interfaccia (40–45, con `45-ui-viste-multiple.md`), poi
+   avanzate (50–53), poi distribuzione e test (60–61). Il Gruppo 1 è vuoto
+   e nessuna decisione del Gruppo 2 blocca più 01–03 e 10–19 (checklist del
+   2026-10-09). **Livello 1 approvato** (01, 02, 03, 10–19). Prossimo passo:
+   la dichiarazione "FASE: CODICE – livello 1" del proprietario (`CLAUDE.md`);
+   le verifiche "da verificare prima del codice" dei moduli si fanno prima di
+   scrivere ciascun modulo. **A1 (PySide6) e A5 (interfaccia a capacità) sono già decise:
+   i moduli 40–45 e 30–35 possono essere scritti senza attendere conferme.**
+4. Dopo ogni gruppo: aggiornare questo file e `INDICE.md`, fermarsi e far validare.
+5. Quando tutti i file necessari sono `approvato`, chiedere per iscritto
+   "FASE: CODICE" e iniziare dal livello 1 (struttura `src/astrotwo/` già decisa).
+6. Dopo il completamento del livello 1: decidere A8 (compatibilità con i comandi
+   di Aladin).
+7. Alla fine del progetto: validazione della parità con Aladin (AP1),
+   confrontando i risultati sugli stessi dati.
+8. Decisioni ancora aperte (16): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 3, Gruppo 3 = 13); vanno chiuse prima dell'approvazione del modulo
+   interessato o, per il Gruppo 3, al momento del codice.
+
+## 8. Registro modifiche
+
+| Data | Chi | Cosa è cambiato |
+|---|---|---|
+| 2026-10-04 | agente di sviluppo | Creazione di `TEMPLATE-modulo.md`, `panoramica.md`, `INDICE.md`, `01-architettura.md`, `02-convenzioni.md`, `03-parita-aladin.md` (tutti in stato bozza). Nessun file di modulo ancora scritto. |
+| 2026-10-04 | agente di sviluppo | Decisioni del proprietario registrate. **Prese** (da aperte a prese): A3 struttura `src/astrotwo/` con sotto-pacchetti `core/analysis/ai/ui/advanced` e `tests/` specchiato; A4 Python 3.12 + `pyproject.toml` + `uv`; A7 cache SQLite (cataloghi) + file su disco (riquadri HiPS/FITS) con limite configurabile e provenienza mostrata. **Orientamento, da confermare:** A1 = PySide6 (Qt); A5 = interfaccia a capacità (chiamata di strumenti, streaming) con provider cloud + endpoint compatibile OpenAI. **Rimandate:** A8 = scripting principale in Python, compatibilità con i comandi Aladin dopo il livello 1; AP1 = validazione parità alla fine, su stessi dati. **Rietichettatura per coerenza tra i file:** A5 ora = provider IA (prima in `01` era A6), A6 ora = firma Apple (prima in `01` era A5), A8 ora = scripting (prima era A6 in questo file), AM1 = aggiunta/separazione moduli (prima era A8 in questo file), AP1 = parità (prima era A7 in questo file). |
+| 2026-10-04 | agente di sviluppo | `03-parita-aladin.md` aggiornato con l'esito della verifica documentale (fonti: manuale utente Aladin Desktop ed. giugno 2022 sezioni 1–5.8, manuale comandi script v12.0, FAQ). Nuovi valori di Copertura; 23 righe verificate, 12 corrette, 4 non trovate; D12 spostata in una sezione "funzioni extra AstroTwo" (livello 2, modulo 20); nuova sezione H con 16 funzioni trovate e mancanti (H1–H16); nota di licenza GPL v3; nuova decisione AP5 (sezioni 5.7.3–8 [indicate in origine come 5.9–8] del manuale ancora da leggere); test T2 aggiornato, aggiunto T5. Proposte di nuovi moduli da H2 e H4 registrate in AM1 (`45-ui-viste-multiple.md`, `18-core-calcolatrici.md`). |
+| 2026-10-04 | agente di sviluppo | **Gruppo nucleo scritto:** creati `10-core-coordinate-wcs.md`, `11-core-immagini-fits.md`, `12-core-hips.md`, `13-core-cataloghi.md`, `14-core-protocolli-vo.md`, `15-core-crossmatch.md`, `16-core-moc.md`, `17-core-misure.md` (tutti `bozza`, 14 sezioni ciascuno). Vincoli A7 (cache) e regole d'oro riflessi in ogni file; perimetri allineati alle assegnazioni di `03-parita-aladin.md` (inclusi C4/H9/H10/H11/H12/H14); decisioni aperte nuove: D12-1…D17-6. Stati aggiornati in questo file e in `INDICE.md` (bozza 14, non esiste 22). |
+| 2026-10-04 | agente di sviluppo | **Decisione del proprietario P11:** la parità con Aladin è il minimo, non il traguardo — AstroTwo include tutte le funzioni di `03-parita-aladin.md`, anche non confermate nella documentazione (principio scritto anche in `01-architettura.md` §2). In `03-parita-aladin.md` nuovo valore `inclusa (decisione del proprietario)`: C3, F2, G3 ed E4 passate da `non trovata` (nessuna riga `non trovata` resta). Funzioni descritte per intero nei moduli: C3 in `12-core-hips.md` (`add_hips`, errori, test T7–T8), F2 in `17-core-misure.md` (PA nord→est, casi limite ai poli, test T8–T9), G3 SAMP in `14-core-protocolli-vo.md` (tabelle/selezioni/puntamenti, interfaccia in `42`), E4 SSA in `14-core-protocolli-vo.md` (ricerca e caricamento spettri, analisi in `21`). D12-2, D17-1 e D14-2 chiuse come decise; nuova D14-6 (dettagli tecnici SSA). Titolo del 14 aggiornato in §4; `INDICE.md` aggiornato. Stati invariati (bozza 14, non esiste 22). |
+| 2026-10-04 | agente di sviluppo | **AM1 DECISA:** accettate le due proposte — creati gli elenchi `18-core-calcolatrici.md` (H4: calcolatrice algebrica, unità, pixel, coordinate, tempo; livello 1; dipende da `10` e `11`) e `45-ui-viste-multiple.md` (H2: viste 2/4/9/16 con sincronizzazione, blocco, miniature; interfaccia; dipende da `41` e `40`) in §4 di questo file e in `INDICE.md`, entrambi `non esiste` (file veri da scrivere col gruppo). Righe H2 e H4 di `03-parita-aladin.md` puntano ai nuovi moduli; §7 passi aggiornati; `10-core-coordinate-wcs.md` corretto nei riferimenti A5/H4. In parallelo: **D14-2 riaperta** in `14-core-protocolli-vo.md` §13 (scelte tecniche residue: tipi di messaggio SAMP, hub interno vs libreria); D12-2 e D17-1 restano chiuse (nessuna scelta tecnica residua). Stati: bozza 14, non esiste 24. |
+| 2026-10-04 | agente di sviluppo | Creato `decisioni-aperte.md` (stato: bozza): raccolte tutte le 47 decisioni ancora aperte — §13 di `10`–`17` (40), `01-architettura.md` §5 (`A1`, `A2`, `A5`, `A6`, `A8`, `A9`), `03-parita-aladin.md` §6 (`AP5`) — e smistate in tre gruppi: Gruppo 1 = 22 bloccanti per altri moduli (con opzioni, pro/contro, raccomandazioni da confermare e dipendenze), Gruppo 2 = 20 bloccanti solo per l'approvazione del modulo, Gruppo 3 = 5 rimandabili al momento del codice; escluse le chiuse D12-2 e D17-1, D14-2 mantenuta per la parte tecnica residua. Registrato in `INDICE.md` (bozza 15, totale 39) e linkato in §4 e §6 di questo file. Nessuna decisione risolta qui: le raccomandazioni sono proposte da confermare dal proprietario. |
+| 2026-10-04 | agente di sviluppo | **22 DECISIONI DEL PROPRIETARIO (Gruppo 1 di `decisioni-aperte.md`) passate da aperte a prese.** A1 = PySide6 (Qt), rendering OpenGL delle mappe da specificare in 41; A5 = interfaccia a capacità (chiamata di strumenti, streaming) con provider cloud + endpoint compatibile OpenAI; AP5 = sezioni 5.7.3–8 [indicate in origine come 5.9–8] del manuale di Aladin da leggere **prima di scrivere i gruppi successivi**; D10-2/D13-2 = epoca dai metadati e mai assunta, epoca di visualizzazione = epoca dell'immagine se nota altrimenti J2000, epoca sempre nel risultato, cataloghi con propria epoca di riferimento; D10-3 = cache nomi in tabella SQLite separata in A7; D10-4 = lista proiezioni = Aladin (da verificare con AP5), TAN immagini / AIT all-sky, un test per proiezione; D11-1 = tipo nativo in memoria, calcoli in float64, float32 solo display; D11-3 = cache su disco 5 GB di default, configurabile; D12-5/D16-5 = HEALPix nel 16, tile nel 12; D13-1 = grammatica `search` alla Aladin validata prima dell'esecuzione; D13-5 = operazioni non distruttive, in-place con flag nel report; D13-6 = colonna DataLink nel 13, risoluzione nel 14; D14-1 = `pyvo` per TAP/DataLink, `astropy.samp` da valutare, licenze da riverificare; D14-2 = hub SAMP attivo o proprio, perimetro tabelle/selezioni/puntamenti, immagini come estensione; D16-1 = `mocpy` (licenza/macOS da verificare); D16-2 = MOC in cache FITS IVOA, export JSON/testo; D16-3 = JD interno, ISO 8601 in UI/file, scala sempre dichiarata, scala IVOA per i MOC temporali; D17-2 = geometria 17 / rendering 41; D17-3 = tag nella sessione del 24 (riferimenti e operazioni, non pixel, rieseguibile); D17-4 = fotometria F4 interamente nel 20. Aggiornati §5 (esiti), §6 (A1/A5/AP5 rimosse dalle aperte), §2 e §7 (AP5 prima del gruppo analisi); file di origine `01`, `02` (DC1/DC2/DC6), `03`, `10`, `11`, `12`, `13`, `14`, `16`, `17` e `decisioni-aperte.md` allineati. Aperte rimaste: 25 (Gruppo 1 = 0, Gruppo 2 = 20, Gruppo 3 = 5). Stati invariati. |
+| 2026-10-04 | agente di sviluppo | **Esito parziale di AP5 e correzioni alla parità** (`03-parita-aladin.md`): fonte manuale utente Aladin Desktop ed. **febbraio 2021**, lette **sezioni 1–5.7.2 e indice completo** — AP5 resta **aperta** per i dettagli di **5.7.3–8**, esistenza di tutte le funzioni verificata dall'indice. **D12 corretta** (l'estrazione in Aladin esiste, sezione 6.5, via SExtractor esterno): riga tornata nella sezione D come `verificata` (AstroTwo: estrazione nativa nel 20, libreria da decidere), sezione "funzioni extra" vuota. Aggiunte **H17** (Exam, 5.9), **H18** (avvio via URL, 7.2), **H19** (VOApp/VOObserver, 7.5) con "dettagli da leggere" e modulo proposto; note su **A13** (stampa 5.18), **B11** (mosaici e blink), **E4** (spettri mostrati nel 21), **F4** (risoluzione fotometria su HiPS). `01-architettura.md` §8: nuovo **requisito non funzionale** — obiettivi di prestazioni ≥ Aladin (righe di catalogo, immagini, cubi; sezione 8.3 da leggere) da definire in `61-strategia-test.md`. `INDICE.md`: annotato in `24-analisi-pipeline-riproducibili.md` che ogni azione dell'interfaccia = un comando registrato (come la cronologia di Aladin). Conteggi 03: 59 righe A–G + 19 H + 0 extra = 78. Stati invariati (bozza 15, non esiste 24, totale 39). |
+| 2026-10-04 | agente di sviluppo | Creato `riassunto.md` (bozza): il progetto in 5 righe — cos'è (successore di Aladin, `.dmg`, Python 3.12, PySide6, IA a capacità con provider scelti dall'utente), struttura a 4 livelli con dipendenze solo verso il basso, regole d'oro (l'IA non calcola, chiavi nel Portachiavi, riproducibilità, specifica approvata prima del codice), stato (16 `bozza`, 24 `non esiste`, 0 `approvato`, 25 decisioni aperte) e prossimi passi (AP5 prima del gruppo analisi, poi "FASE: CODICE"). Registrato in §4 qui sopra e in `INDICE.md` (bozza 16, totale 40). |
+| 2026-10-08 | Claude Code | **Manutenzione delle specifiche** (nessun modulo nuovo, stati invariati: bozza 16, non esiste 24, totale 40). (1) Migrazione `AGENTS.md` → `CLAUDE.md`: riferimenti sostituiti in `01-architettura.md`, `INDICE.md`, `TEMPLATE-modulo.md` e qui (§2, §3, §5); `AGENTS.md` rimosso dalla radice (spostato nel Cestino). (2) Intervalli dopo AM1: nucleo 10–18 e interfaccia 40–45 in `01-architettura.md` §3/§6 e qui in §3. (3) Riferimento AP5: corretto = **5.7.3–8**; nelle voci di registro di `03-parita-aladin.md`, `decisioni-aperte.md`, `INDICE.md` e qui la vecchia dicitura "5.9–8" è annotata come "5.7.3–8 [indicate in origine come 5.9–8]". (4) Nuova decisione aperta **AP6 — edizione di riferimento del manuale di Aladin** (giugno 2022 o febbraio 2021), non scelta: in `03-parita-aladin.md` §2/§6, `decisioni-aperte.md` Gruppo 2 e §6 qui; aperte 26 (Gruppo 2 = 21, Gruppo 3 = 5). (5) Refusi: "igualmente" in `01`, "Ånm" → "Å, nm" in `02`. Aggiornati §2, §6, §7, `INDICE.md` e `riassunto.md`. |
+| 2026-10-08 | Claude Code | **Decisioni del proprietario sui punti aperti della manutenzione.** **AP6 decisa:** edizione di riferimento = la più recente ufficiale del manuale utente di Aladin Desktop → verificata sul sito del CDS: **giugno 2022** (§5; file di origine `03-parita-aladin.md` §2/§6). Edizione indicata accanto ai numeri di sezione del manuale in `01` §8, `03`, `10`, `14`, `decisioni-aperte.md` e qui (§2); numeri con numerazione diversa nell'ed. giugno 2022 marcati "numerazione da verificare" senza correggerli (A13 5.18, D12 6.5, H17 5.9, H18 7.2, H19 7.5). `decisioni-aperte.md` completato: AP2, AP3, DC1 (parte aperta), DC3, DC4 nel Gruppo 2; AP1 e AP4 nel Gruppo 3 → aperte **32** (Gruppo 1 = 0, Gruppo 2 = 25, Gruppo 3 = 7); §6 corretto (non più "elencate solo in quel file"). AP5 scritta in forma uniforme ("AP5 decisa; lettura delle sezioni 5.7.3–8 ancora da fare") in §2, §5, §6, §7 e nei file `03`, `10`, `14`, `decisioni-aperte.md`, `INDICE.md`, `riassunto.md` (voci di registro non toccate). `03` T3/T4 → moduli 10–18; §7 punto 3 → "nucleo 10–17 in bozza, 18 da scrivere"; §3 nucleo con le calcolatrici (18); D14-6 rinominata "inclusione decisa; parte tecnica aperta" in `14`; DC1/DC3/DC4 rimandati a `decisioni-aperte.md` in `02` §9. Refusi: "i 8" → "gli 8", "approvato" → "approvazione", "uno gruppo" → "un gruppo" (qui); "reproducerlo" → "riprodurlo", "mostro" → "mostra" (`03`). Stati invariati: bozza 16, non esiste 24, totale 40. |
+| 2026-10-08 | Claude Code | **Decisioni del proprietario (seguito):** numeri di sezione del manuale riportati all'ed. giugno 2022 in `03` e qui (A13 → 5.19, D12 → 6.6, H17 → 5.10 "study"/« examen », H19 → 7.4), marcatura "numerazione da verificare" tolta; H18 lasciata con la fonte dell'ed. febbraio 2021 (sezione 7.2 "Launch of Aladin by URL", assente nell'ed. giugno 2022, dove l'avvio da URL compare solo nella sezione 2). AP5 riscritta ovunque come "AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) ancora da fare" (`03`, `10`, `14`, `decisioni-aperte.md`, `INDICE.md`, `riassunto.md`, qui §2/§5/§6/§7); nota sulla numerazione in `03` §2. **AP3 decisa** (Aladin Lite escluso dalla parità; versione web → AM1): §5 qui, `03` §4/§6, tolta dal Gruppo 2. Smistamento dei gruppi confermato. Aperte: **31** (Gruppo 1 = 0, Gruppo 2 = 24, Gruppo 3 = 7). Stati invariati. |
+| 2026-10-08 | Claude Code | **Lettura AP5 completata** (sezioni 5.9–8 del manuale utente ed. giugno 2022), integrata in `03-parita-aladin.md`: note su 20 righe, correzioni D12/E3/F4, dettagli H17–H19, nuove righe H20–H27 (86 righe in tutto). **Nuova proposta AM1: H21, dati planetari** (§6; nessun file creato), registrata anche in `decisioni-aperte.md` Gruppo 1 (smistamento proposto). AP5 scritta come "AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08" in §2/§5/§6/§7 e in `10`, `14`, `decisioni-aperte.md`, `INDICE.md`, `riassunto.md`. Aperte: **32** (Gruppo 1 = 1, Gruppo 2 = 24, Gruppo 3 = 7). Nessun modulo del gruppo analisi scritto. Stati invariati: bozza 16, non esiste 24, totale 40. |
+| 2026-10-08 | Claude Code | **Decisioni del proprietario sugli esiti di AP5:** AM1 per H21 **accettata** → `19-core-dati-planetari.md` (livello 1, `non esiste`) registrato in §4 e in `INDICE.md`, riga H21 di `03` collegata, decisione chiusa nel Gruppo 1 di `decisioni-aperte.md`; nucleo = 10–19 (§3, `01` §6, test T3/T4 di `03`). `01` §8: obiettivo minimo di prestazioni = almeno 1 milione di sorgenti con 1 GB di RAM. `10`: D10-4 precisata con le 8 proiezioni del manuale (T7 esplicito). `02`: nuova DC7 (convenzione dei pixel FITS/numpy, conversione unica nel 10, moduli che la usano). `03`: H17 → SED nel 20; H19 → API Python nel 24 + SAMP nel 14. §5 con le nuove decisioni, §6 AM1, §7 aggiornati. Aperte: **31** (Gruppo 1 = 0, Gruppo 2 = 24, Gruppo 3 = 7). Stati: bozza 16, non esiste 25, totale 41. |
+| 2026-10-08 | Claude Code | **Scritti `18-core-calcolatrici.md` e `19-core-dati-planetari.md`** (stato `bozza`, da `non esiste`), secondo `TEMPLATE-modulo.md`: 18 = calcolatrici algebrica, unità, pixel, coordinate (tramite 10) e tempo (H4, sez. 5.7); 19 = dati planetari (H21, sez. 5.21/7.2/8.1). Decisioni aperte nei file: D18-1…D18-6, D19-1…D19-7, registrate in `decisioni-aperte.md` (smistamento proposto) → aperte **44** (Gruppo 1 = 2, Gruppo 2 = 33, Gruppo 3 = 9). "Usato da" aggiornato in `10`, `11`, `12`, `13`, `14`, `16`, `17`. §2, §4, §6, §7 aggiornati. Stati: bozza 18, non esiste 23, totale 41. Nessun modulo del gruppo analisi scritto. |
+| 2026-10-09 | Claude Code | **Decisioni del proprietario del 2026-10-08 applicate:** smistamento delle 13 decisioni di 18/19 confermato; D19-3 (campo `body` in `12`, `13`, `14`, `16`: §6, §9, §10 e registri), D19-2 (PDS nel 19, PDS4 obbligatorio; resta D19-2b), D19-4 (errore di default, forzabile con opzione esplicita; nel 16 anche per operazioni tra MOC) in `19`; DC7 confermata in `02` e funzione `convert_pixel_convention` con test T8–T11 in `10`; `CLAUDE.md` aggiornato (nucleo 10–19, nota su `AGENTS.md`, regole su pixel e corpo). §2, §5, §6, §7 aggiornati. Aperte **42** (Gruppo 1 = 0, Gruppo 2 = 33, Gruppo 3 = 9). Stati invariati: bozza 18, non esiste 23, totale 41. |
+| 2026-10-09 | Claude Code | **Checklist del livello 1 applicata (decisioni del proprietario):** 30 raccomandazioni scritte nei file di origine (`02`, `03`, `10`–`19`), con le verifiche come vincoli prima del codice; A2/A6/A9 con orientamento, bloccanti solo per `60`/`40` (§5, §6, `01`); D19-3 esteso al `15` (regola, errori, test T7–T8); nuove A10 e D10-6 (Gruppo 3); `CLAUDE.md`: fase codice per livello. Aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). **Approvazione non eseguita:** nessuna decisione dei Gruppi 1 e 2 blocca 01, 02, 03 e 10–19, ma i moduli 11–17 non descrivono ancora le funzioni assegnate loro dalla lettura AP5 (H22, H23, H24, H26, H27, E3, F1); si attende l'indicazione del proprietario. Stati invariati: bozza 18, non esiste 23, totale 41. |
+| 2026-10-09 | Claude Code | **Approvati 01, 02, 03, 10, 18, 19** (decisione del proprietario). **Moduli 11–17 completati** con gli esiti di AP5 (§3, §6, §7, §10, §12) e 10 con H25; verifica di copertura di `03` sui moduli 10–19 senza altre lacune. **Approvati 12, 16, 17**; **11, 13, 14, 15 restano in bozza** per le nuove decisioni del Gruppo 2 D11-6, D13-7, D14-7, D14-8, D15-5 (nuova D13-8 nel Gruppo 3). §2, §4, §5, §6, §7 aggiornati. Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 8, Gruppo 3 = 12). Stati: approvato 9, bozza 9, non esiste 23, totale 41. |
+| 2026-10-09 | Claude Code | **Livello 1 interamente approvato:** applicate D11-6 (`Pillow`), D13-7 e D14-8 (`defusedxml`), D14-7 (nessun plugin; parte "plugin" di H14 nel 24, anche in `03`), D15-5 (Mahalanobis, soglia in sigma; nuova D15-6 Gruppo 3) e il framework `pytest` (`01`, `02` §8); approvati 11, 13, 14, 15. §2, §4, §5, §6, §7 aggiornati. Aperte **16** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 13). Stati: approvato 13, bozza 5, non esiste 23, totale 41. |
