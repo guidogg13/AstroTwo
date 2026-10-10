@@ -1089,3 +1089,100 @@ def test_t21_mosaic_matches_reproject_and_coadd(tmp_path, method):
     assert np.allclose(result.image.data, expected, equal_nan=True, rtol=0, atol=0)
     assert np.array_equal(result.footprint, footprint) and result.method == method
     assert "nessuna correzione del fondo" in result.image.history[-1]
+
+
+# =============================================================================
+# Decisioni del proprietario del 2026-10-10: commento contro .hhh (T32) e
+# tetto di memoria A10 per le operazioni sull'immagine intera (T33).
+# =============================================================================
+
+
+def calibration_text_at(nx, ny, crval):
+    header = wcs_header(nx=nx, ny=ny, crval=crval)
+    for card in (("NAXIS2", ny), ("NAXIS1", nx), ("NAXIS", 2)):
+        header.insert(0, card)
+    return header.tostring()
+
+
+def png_with_comment(path, nx, ny, text):
+    info = PngInfo()
+    info.add_text("Comment", text)
+    PilImage.fromarray(gradient_rgb(nx, ny)).save(path, pnginfo=info)
+    return path
+
+
+def test_t32_comment_wins_and_different_hhh_is_reported(tmp_path):
+    nx, ny = 40, 30
+    png = png_with_comment(tmp_path / "foto.png", nx, ny, calibration_text_at(nx, ny, (150.0, 2.0)))
+    hhh = tmp_path / "foto.hhh"
+    # Stesso WCS: il .hhh è ignorato, nessun avviso di differenza.
+    hhh.write_text(calibration_text_at(nx, ny, (150.0, 2.0)), encoding="latin-1")
+    same = load_image(png)
+    codes = [code for code, _ in same.warnings]
+    assert same.calibration_source == "comment" and "HHH_IGNORED" in codes and "HHH_WCS_DIFFERS" not in codes
+    # WCS diverso: vale il commento, l'avviso cita le parole chiave diverse.
+    hhh.write_text(calibration_text_at(nx, ny, (151.0, 2.0)), encoding="latin-1")
+    different = load_image(png)
+    messages = dict(different.warnings)
+    assert different.calibration_source == "comment" and "HHH_WCS_DIFFERS" in messages
+    assert "CRVAL1" in messages["HHH_WCS_DIFFERS"] and "CRVAL2" not in messages["HHH_WCS_DIFFERS"]
+    expected = WCS(fits.Header.fromstring(calibration_text_at(nx, ny, (150.0, 2.0))))
+    assert different.wcs.wcs.wcs.compare(expected.wcs, tolerance=1e-12)
+    # .hhh non valido accanto a un commento valido: due calibrazioni diverse, avviso.
+    hhh.write_text("non e un header FITS", encoding="latin-1")
+    assert "HHH_WCS_DIFFERS" in dict(load_image(png).warnings)
+
+
+TINY = LargeImageLimits(memory_bytes=2_000, two_level_bytes=50_000, compressed_bytes=2_000, preview_max_side=16)
+
+
+def test_t33_memory_limit_before_whole_image_operations(tmp_path):
+    header = wcs_header(nx=20, ny=10)
+    a = open_large_image(write_fits(tmp_path / "a.fits", star_field(10, 20), header), limits=TINY)
+    b = open_large_image(write_fits(tmp_path / "b.fits", star_field(10, 20), header), limits=TINY)
+    assert a.strategy == "memory"  # 800 byte di dati: sotto il tetto di 2000 byte
+    pixels = 200
+    calls = {
+        "operazione add": (lambda: image_operation(a, b, "add"), pixels * 24),
+        "operazione mul": (lambda: image_operation(a, 2.0, "mul"), pixels * 16),
+        "operazione convolve": (lambda: image_operation(a, Box2DKernel(3), "convolve"), pixels * 24),
+        "operazione flip_x": (lambda: image_operation(a, None, "flip_x"), pixels * 16),
+        "contorni": (lambda: contours(a, [500.0]), pixels * 16),
+        "visualizzazione": (lambda: set_display(a, 0, 6000), pixels * 32),
+        "ricampionamento": (lambda: resample_to_reference(a, b, "nearest"), pixels * 8 + 2 * pixels * 8),
+        "mosaico": (lambda: mosaic([a, b], b, "nearest"), 2 * pixels * 8 + 6 * pixels * 8),
+        "RGB": (lambda: rgb_composite([a, b], display=[(0, 1, "linear")] * 2), 2 * pixels * 8 + 6 * pixels * 8),
+    }
+    for what, (call, needed) in calls.items():
+        with pytest.raises(ImagesFitsError) as info:
+            call()
+        assert info.value.code == "MEMORY_LIMIT_EXCEEDED", what
+        assert info.value.details == {"needed_bytes": needed, "limit_bytes": 2_000}, what
+        assert info.value.message.startswith(what)
+    # Salvataggio: dati più la copia big-endian (200 × 4 × 2 = 1600 byte) → sotto il tetto.
+    assert save_fits(a, tmp_path / "ok.fits").exists()
+    # Taglio: solo i pixel del taglio contano.
+    center = convert_pixel_convention(10.0, 5.0, "numpy", "numpy")
+    assert cutout(a, center, (5, 5)).data.shape == (5, 5)
+    # Con le soglie di default (1 GB) le stesse operazioni riescono.
+    full = load_image(tmp_path / "a.fits")
+    assert image_operation(full, load_image(tmp_path / "b.fits"), "add").data.shape == (10, 20)
+
+
+def test_t33_memmap_image_refused_instead_of_loaded(tmp_path):
+    # Immagine oltre il tetto in memoria, letta dal disco su richiesta: le operazioni
+    # sull'immagine intera non la caricano, il taglio piccolo sì.
+    path = write_fits(tmp_path / "mapped.fits", star_field(60, 100), wcs_header(nx=100, ny=60))
+    image = open_large_image(path, limits=SMALL)
+    assert image.strategy == "memmap"
+    for call in (lambda: image_operation(image, 2.0, "mul"), lambda: save_fits(image, tmp_path / "x.fits"),
+                 lambda: contours(image, [500.0]), lambda: set_display(image, 0, 6000)):
+        with pytest.raises(ImagesFitsError) as info:
+            call()
+        assert info.value.code == "MEMORY_LIMIT_EXCEEDED"
+    center = convert_pixel_convention(50.0, 30.0, "numpy", "numpy")
+    with pytest.raises(ImagesFitsError) as info:
+        cutout(image, center, (60, 100))  # 24000 byte, oltre 10000
+    assert info.value.code == "MEMORY_LIMIT_EXCEEDED"
+    with fits.open(path, memmap=False) as hdul:
+        assert np.array_equal(cutout(image, center, (11, 21)).data, hdul[0].data[25:36, 40:61])

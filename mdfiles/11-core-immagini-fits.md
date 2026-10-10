@@ -5,8 +5,8 @@
 ## 2. Scopo
 
 Aprire, gestire e regolare la visualizzazione delle immagini astronomiche
-(FITS e non solo) con la stessa fedeltà scientifica di Aladin, senza mai
-alterare i valori dei pixel memorizzati.
+(FITS e non solo) con fedeltà scientifica, senza mai alterare i valori dei
+pixel memorizzati.
 
 ## 3. Cosa fa
 
@@ -112,8 +112,9 @@ alterare i valori dei pixel memorizzati.
   matrice `CD` o `PC`; un WCS con distorsioni (SIP, TPD, tabelle) non si
   specchia: errore `OPERATION_UNSUPPORTED`. Le operazioni tra immagini
   richiedono la **stessa griglia** (stesse dimensioni e, se c'è, stesso
-  WCS): altrimenti si ricampiona prima con P7 (in Aladin il ricampionamento
-  della seconda immagine è automatico; qui è esplicito); per somma e
+  WCS): altrimenti si ricampiona prima con P7, in modo **esplicito**, perché
+  il ricampionamento cambia i valori e il suo metodo va scelto e dichiarato
+  (decisione confermata dal proprietario il 2026-10-10); per somma e
   differenza servono le stesse unità. Ogni operazione produce un **nuovo** oggetto, calcolato in
   `float64`, mai la modifica silenziosa dell'originale. Il passaggio a
   `float32` per il display non è un'operazione H5: è di `set_display`.
@@ -173,7 +174,13 @@ alterare i valori dei pixel memorizzati.
     un'intestazione FITS come testo (standard FITS 4.0). In tutti i casi il
     testo si accetta come schede FITS da 80 caratteri attaccate oppure
     separate da a capo (`astropy.io.fits.Header.fromstring`). Se c'è il
-    commento nel file, vale quello e il `.hhh` si ignora (dichiarato); se il
+    commento nel file, vale quello e il `.hhh` si ignora (dichiarato,
+    `HHH_IGNORED`); **se i due WCS sono diversi** (decisione del
+    proprietario del 2026-10-10) il risultato porta anche l'avviso
+    `HHH_WCS_DIFFERS` con le parole chiave diverse. Criterio: i due WCS si
+    confrontano sulle parole chiave normalizzate da `astropy.wcs`
+    (`WCS.to_header(relax=True)`), valore per valore; sono diversi anche
+    quando uno solo dei due testi è una calibrazione valida. Se il
     testo non è un'intestazione FITS valida con WCS celeste, o i suoi
     `NAXIS1`/`NAXIS2` non sono le dimensioni dell'immagine, l'immagine si
     apre senza WCS con avviso `WCS_MISSING`.
@@ -182,8 +189,8 @@ alterare i valori dei pixel memorizzati.
     righe si mettono **dal basso verso l'alto** (la riga 0 dell'array è
     l'ultima del file), così l'immagine ha la stessa disposizione di un FITS
     e il WCS letto dal commento vale con la convenzione dei pixel FITS
-    (DC7). Coincidenza con il comportamento di Aladin **da verificare con
-    AP1**.
+    (DC7): una sola disposizione delle righe per tutte le immagini, qualunque
+    sia il formato (confermata dal proprietario il 2026-10-10).
   - **Modi di colore (`Pillow`):** grigi a 8, 16 o 32 bit e float → immagine
     monocroma 2-D con i valori del file; bianco e nero (`1`) → 0/1 in 8
     bit; tavolozza (`P`, tipica delle GIF) → grigi se la tavolozza è tutta
@@ -200,8 +207,8 @@ alterare i valori dei pixel memorizzati.
   nessuna convenzione si indovina. La **natura del file si riconosce dal
   contenuto** (firma del file), non dall'estensione. Libreria per JPEG, PNG e
   GIF: **`Pillow`** (D11-6, decisa il 2026-10-09; licenza da verificare
-  prima del codice). Limite dichiarato da Aladin come riferimento:
-  JPEG/PNG con WCS fino a 100 megapixel.
+  prima del codice). Obiettivo minimo di dimensione (parità, `01-architettura.md`
+  §8): JPEG/PNG con WCS fino a 100 megapixel.
 - **Immagini di qualsiasi dimensione (H27, sez. 8.3.1):** strategia per
   dimensione — immagini piccole in memoria; immagini di centinaia di
   megabyte lette dal disco su richiesta (`memmap` di `astropy.io.fits`);
@@ -268,8 +275,37 @@ alterare i valori dei pixel memorizzati.
     copertura > 0.
 - **Mosaico e sequenza animata (B11, sez. 5.16):** mosaico nella griglia
   dell'immagine di riferimento con **media** nelle zone sovrapposte e senza
-  correzione del fondo (come Aladin, dichiarato nel risultato); cubo come
-  sequenza animata (scorrimento nel 41, analisi nel 23).
+  correzione del fondo, dichiarato nel risultato: correggere il fondo
+  richiede un modello del cielo di ciascuna immagine, che è una scelta di
+  analisi e non va fatta in silenzio; senza correzione i valori restano
+  quelli delle immagini ricampionate. Cubo come sequenza animata
+  (scorrimento nel 41, analisi nel 23).
+- **Tetto di memoria per le operazioni sull'immagine intera (decisione del
+  proprietario del 2026-10-10):** prima di ogni operazione H5, dei contorni,
+  di `set_display`, di `save_fits`, del ricampionamento, dell'RGB, del
+  mosaico e del taglio si **stima la memoria necessaria**; se supera il
+  tetto in memoria di A10 (`LargeImageLimits.memory_bytes`, 1 GB di default;
+  con più immagini vale il più piccolo dei loro tetti) l'operazione **non
+  carica nulla** e dà `MEMORY_LIMIT_EXCEEDED`, con la stima e il tetto nel
+  messaggio. La stima conta gli array presenti insieme durante il calcolo
+  (`N` = pixel; 8 byte per ogni array `float64`):
+
+  | Operazione | Stima (byte) |
+  |---|---|
+  | H5 tra due immagini (somma, differenza, prodotto, rapporto) | 3 × 8 × `N` (due operandi e risultato) |
+  | H5 con costante, normalizzazione, specchiature | 2 × 8 × `N` |
+  | H5 convoluzione | 3 × 8 × `N` (operando, risultato, copia di lavoro di `astropy.convolution`) |
+  | contorni | 2 × 8 × `N` (copia `float64` con maschera, strutture di `contourpy`) |
+  | `set_display` | 4 × 8 × `N` per piano (copia, intervallo, funzione di trasferimento, valori e colori) |
+  | `save_fits` | 2 × byte per pixel × `N` (dati e copia nell'ordine di byte del FITS) |
+  | ricampionamento | 8 × `N` dell'ingresso + 2 × 8 × `N` del riferimento (risultato e copertura) |
+  | mosaico e RGB | 8 × Σ `N` degli ingressi + (2 × numero di ingressi + 2) × 8 × `N` del riferimento |
+  | taglio | byte per pixel × pixel del taglio (× 3 per le immagini a colori) |
+
+  La stima è un ordine di grandezza dichiarato, non una misura: serve a
+  rifiutare prima di caricare. Le immagini a due livelli restano rifiutate
+  da `PREVIEW_NOT_MEASURABLE` prima di questo controllo; `set_display` su di
+  esse conta solo l'anteprima.
 - **Convenzione dei pixel e costanti (H25, H4):** coordinate pixel interne in
   convenzione numpy, conversione FITS solo con `convert_pixel_convention` del
   modulo 10 (DC7); `BZERO`, `BSCALE`, `BLANK` e unità dei pixel sono esposti a
@@ -374,8 +410,10 @@ alterare i valori dei pixel memorizzati.
   A10); restituisce un `FitsImage` con strategia, motivo e soglie usate,
   vista a bassa risoluzione marcata (due livelli) e accesso all'alta
   risoluzione per regione (`FitsImage.read_region`).
-- **`LargeImageLimits`** (struttura) — soglie configurabili: memoria 1 GB,
-  due livelli 4 GB, compressi 1 GB, lato massimo dell'anteprima 4096 pixel.
+- **`LargeImageLimits`** (struttura) — soglie configurabili: memoria 1 GB
+  (anche tetto delle operazioni sull'immagine intera, `MEMORY_LIMIT_EXCEEDED`,
+  §3), due livelli 4 GB, compressi 1 GB, lato massimo dell'anteprima 4096
+  pixel.
 - **`FitsImage.read_region(x0, x1, y0, y1)`** — pixel originali della
   regione `[y0:y1, x0:x1]` (convenzione numpy), qualunque sia la strategia;
   **`FitsImage.memory_bytes`** — memoria occupata dai dati in RAM.
@@ -426,6 +464,8 @@ alterare i valori dei pixel memorizzati.
   senza che origine e data siano note.
 - Le immagini caricate devono risultare con WCS o senza WCS dichiarato: non si
   indovina.
+- Nessuna operazione sull'immagine intera carica dati oltre il tetto di
+  memoria A10: prima la stima, poi il calcolo (§3).
 
 ## 10. Casi limite ed errori
 
@@ -452,20 +492,18 @@ alterare i valori dei pixel memorizzati.
 | Calibrazione nel commento di JPEG/PNG o nel `.hhh` non leggibile | l'immagine si apre senza WCS, con avviso che cita la calibrazione scartata | `WCS_MISSING` |
 | Finestra o corona del centroide fuori dall'immagine | rifiuto con la finestra e i limiti dell'immagine | `CENTROID_OUT_OF_IMAGE` |
 | Centroide non definito (somma dei pesi ≤ 0 dopo la sottrazione del fondo, pixel non finiti nella finestra, nessun pixel finito nella corona) | nessuna posizione prodotta | `CENTROID_UNDEFINED` |
+| Memoria stimata di un'operazione oltre il tetto A10 | nessun dato caricato, errore con stima e tetto | `MEMORY_LIMIT_EXCEEDED` |
+| JPEG/PNG con commento e `.hhh` che descrivono WCS diversi | vale il commento; avviso con le parole chiave diverse | avviso `HHH_WCS_DIFFERS` |
 
 ## 11. Esposizione all'IA
 
-- **`load_image_info`** — input: percorso/URL; output: dimensioni, unità,
-  WCS, campo di vista, origine e data. Nessun calcolo numerico nuovo.
-- **`get_image_statistics`** — input: immagine (+eventuale regione); output:
-  min, max, media, deviazione standard. **Calcolo: `numpy`/`astropy.stats`**,
-  mai l'IA.
-- **`image_operation`** (H5) — input: due immagini/parametri, operazione da
-  elenco chiuso; output: nuova immagine. **Calcolo: `numpy`/`scipy`.**
-- **`cutout`** — input: immagine + centro/lato; output: FITS con WCS.
-
-L'IA può scegliere i parametri e spiegare il risultato; non produce mai il
-numero mostrato.
+Non applicabile in questo file: gli strumenti per l'IA del modulo sono
+descritti in `32-ia-registro-strumenti.md` (D11-9, spostamento eseguito il
+2026-10-10). Finché il 32 non esiste, l'elenco da riportarvi (nomi
+provvisori: `load_image_info`, `get_image_statistics`, `image_operation`,
+`cutout`) è annotato nella riga del 32 in `panoramica.md` §4. Vale sempre la
+regola d'oro n. 1: l'IA sceglie i parametri e spiega, i numeri vengono dalle
+funzioni di §7.
 
 ## 12. Test di accettazione
 
@@ -501,6 +539,8 @@ numero mostrato.
 | T27 | Calibrazione nel commento (H6) | PNG e JPEG generati con `Pillow` con un'intestazione WCS nel commento, e un `.hhh` | WCS uguale a quella costruita dallo stesso testo con `astropy.wcs` | ricalcolo con Astropy |
 | T28 | Più HDU (D11-4) | file MEF sintetico con due HDU immagine e una tabella | `list_image_hdus` elenca le due immagini; `load_image` senza `hdu` → `HDU_CHOICE_REQUIRED`; con `hdu` apre quella giusta (confronto con `astropy.io.fits`) | test di unità |
 | T29 | Assi degeneri e cubi | immagine a 4 assi con due assi di lunghezza 1; cubo 3 × N × M con 3 assi utili | la prima si apre in 2-D con WCS celeste uguale a quello di `astropy.wcs` (parte celeste) e assi tolti dichiarati; il cubo → `CUBE_NOT_SUPPORTED` | ricalcolo con Astropy |
+| T32 | Commento contro `.hhh` | PNG con WCS nel commento e `.hhh` con lo stesso WCS, poi con `CRVAL1` diverso, poi non valido | vale sempre il commento (WCS uguale a quello costruito dal commento con `astropy.wcs`); nessun `HHH_WCS_DIFFERS` con lo stesso WCS; avviso che cita `CRVAL1` (e non `CRVAL2`) con WCS diverso; avviso anche con `.hhh` non valido | ricalcolo con Astropy |
+| T33 | Tetto di memoria (A10) | soglie piccole configurate nel test; ogni operazione sull'immagine intera; immagine in `memmap` oltre il tetto | `MEMORY_LIMIT_EXCEEDED` con la stima della tabella di §3 e il tetto; nessun dato caricato; taglio piccolo e `save_fits` sotto il tetto riescono; con le soglie di default le stesse operazioni riescono | test di unità |
 | T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
@@ -513,9 +553,9 @@ numero mostrato.
   in `02-convenzioni.md` DC6; applicata in §6/§9 qui sopra.
 - **D11-2 — Libreria di ricampionamento (B7): DECISA il 2026-10-09 (decisione
   del proprietario sulla checklist del livello 1).** **`reproject`**
-  (pacchetto affiliato ad Astropy): metodi pixel più vicino e bilineare come
-  Aladin, più un metodo che conserva il flusso (Aladin non lo garantisce, sez.
-  5.17). **Da verificare prima del codice:** licenza e installazione su macOS.
+  (pacchetto affiliato ad Astropy): metodi pixel più vicino e bilineare, più
+  un metodo che conserva il flusso, utile quando i valori servono a misure
+  successive. Licenza e installazione verificate il 2026-10-10 (P7).
 - **D11-3 — Cache su disco: DECISA il 2026-10-04 (parte valori).** Limite di
   default **5 GB**, **configurabile** dall'utente, con **eliminazione dei
   dati meno usati** (estensione di A7). **Motivazione:** A7 richiede un limite
@@ -525,8 +565,10 @@ numero mostrato.
   e `60-distribuzione-dmg.md`.
 - **D11-4 — HDU multiple: DECISA il 2026-10-09 (decisione del proprietario
   sulla checklist del livello 1).** si aprono **tutte le HDU immagine** del
-  file, con scelta dell'utente (file a più estensioni MEF, come in Aladin,
-  sez. 8.1); i cubi restano a `23-analisi-cubi-di-dati.md`.
+  file (file a più estensioni MEF), con scelta dell'utente: un MEF contiene
+  spesso più immagini scientifiche (es. rivelatori diversi) e sceglierne una
+  in silenzio sarebbe un'assunzione; i cubi restano a
+  `23-analisi-cubi-di-dati.md`.
 - **D11-5 — Palette predefinite (B6): DECISA il 2026-10-09, CORRETTA il
   2026-10-10 (decisione del proprietario, regola d'oro n. 8).** Non si
   riproducono le palette di Aladin: si offrono palette scientifiche da fonti
@@ -552,8 +594,17 @@ numero mostrato.
   1 GB, anteprima ≤ 4096 pixel); qualità del ricampionamento = copertura di
   `reproject` + percentuale; fattore unico di `rgb_diff`; calibrazione di
   JPEG/PNG solo in lettura; esportazione della vista nel `41`; gli strumenti
-  per l'IA di §11 vanno in `32-ia-registro-strumenti.md` (il testo di §11 si
-  aggiorna con il 32). Applicate in §3, §6–§8, §10, §12.
+  per l'IA di §11 vanno in `32-ia-registro-strumenti.md` (**spostamento
+  eseguito il 2026-10-10**: §11 rimanda al 32, elenco annotato in
+  `panoramica.md` §4). Applicate in §3, §6–§8, §10, §11, §12.
+- **D11-10 — Decisioni del 2026-10-10 dopo il codice (proprietario):**
+  confermate le scelte di P1–P7 (righe dal basso, RGB a 2 immagini con B =
+  media, `gamma` dopo la funzione di trasferimento, pixel non finiti
+  trasparenti, convoluzione con bordo dichiarato, specchiature rifiutate con
+  SIP/TPD, operazioni solo sulla stessa griglia); commento contro `.hhh`:
+  vale il commento, con l'avviso `HHH_WCS_DIFFERS` se i WCS sono diversi;
+  tetto di memoria A10 prima delle operazioni sull'immagine intera
+  (`MEMORY_LIMIT_EXCEEDED`). Applicate in §3, §9, §10, §12 (T32, T33).
 
 ## 14. Registro modifiche
 
@@ -579,3 +630,4 @@ numero mostrato.
 | 2026-10-10 | Claude Code | **P6, verifiche e decisioni del proprietario:** astropy 8.0.1 rifiuta il `memmap` con `BZERO`/`BSCALE`/`BLANK` → per quei file non compressi tra 1 e 4 GB due livelli (decisione del proprietario); `section` con `memmap=False` legge le regioni senza caricare il file (verificato su dati semplici, con scala, uint16 e compressi). Immagini a due livelli: anteprima solo per il display, centroide e taglio sui pixel originali per regione, H5/contorni/`save_fits` → `PREVIEW_NOT_MEASURABLE` (decisione del proprietario). §3 regole precise, §7 `LargeImageLimits`, `read_region`, `memory_bytes`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P7, verifiche e decisioni del proprietario:** `reproject` 0.21.0 verificato (BSD-3, wheel per macOS arm64, dipendenze permissive); RGB con parametri di display espliciti per componente, B = media delle due componenti a 8 bit con 2 immagini; `rgb_diff` con B = 0; metodo di ricampionamento obbligatorio; `reproject` = lista sulla stessa griglia; lunghezze d'onda come parametro opzionale (§3, §7). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Codice completo** in `src/astrotwo/core/images_fits.py` (P1–P7, un commit per parte): tutto il §7, test T1–T31 in `tests/core/test_images_fits.py` superati (progetto: 197 di default, 200 con la rete). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario dopo il codice** (autorizzazione esplicita a modificare il file approvato): confermate le scelte di P1–P7 (D11-10); avviso `HHH_WCS_DIFFERS` quando commento e `.hhh` hanno WCS diversi (criterio: parole chiave normalizzate da `WCS.to_header`); tetto di memoria A10 con stima prima delle operazioni sull'immagine intera e del taglio, errore `MEMORY_LIMIT_EXCEEDED` (tabella delle stime in §3); §11 spostato nel 32 (D11-9); regola d'oro n. 8: tolti i motivi "come Aladin" (§2, ricampionamento esplicito, righe dal basso, mosaico senza correzione del fondo, D11-2, D11-4). Codice e test T32–T33 in `images_fits.py` / `test_images_fits.py`. Stato `approvato` invariato. |

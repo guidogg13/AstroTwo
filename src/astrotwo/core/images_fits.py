@@ -643,6 +643,40 @@ def _raster_array(image) -> tuple[np.ndarray, bool, list[tuple[str, str]]]:
     return rgb, True, notes
 
 
+def _raster_calibration(header: fits.Header, source_kind: str, nx: int, ny: int) -> tuple[WcsSolution | None, list[tuple[str, str]]]:
+    """WCS dal testo del commento o del ``.hhh``, o ``None`` con il motivo dello scarto."""
+    if not header:
+        return None, [("WCS_MISSING", f"calibrazione ({source_kind}) scartata: non è un'intestazione FITS valida")]
+    if (header.get("NAXIS1"), header.get("NAXIS2")) != (nx, ny):
+        return None, [(
+            "WCS_MISSING",
+            f"calibrazione ({source_kind}) scartata: NAXIS1/NAXIS2 = {header.get('NAXIS1')}/{header.get('NAXIS2')}, "
+            f"immagine {nx}×{ny}",
+        )]
+    solution, wcs_notes = _image_wcs(header, {1, 2})
+    if solution is None:
+        return None, [(code, f"calibrazione ({source_kind}) scartata: {msg}") for code, msg in wcs_notes]
+    return solution, []
+
+
+def _wcs_keywords(solution: WcsSolution | None) -> dict[str, object]:
+    if solution is None:
+        return {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        header = solution.wcs.to_header(relax=True)
+    return {key: header[key] for key in header if key not in ("COMMENT", "HISTORY", "")}
+
+
+def _wcs_differences(a: WcsSolution | None, b: WcsSolution | None) -> str:
+    """Differenze tra due WCS (parole chiave normalizzate da ``WCS.to_header``); stringa vuota se uguali."""
+    if (a is None) != (b is None):
+        return "uno solo dei due è una calibrazione valida"
+    ka, kb = _wcs_keywords(a), _wcs_keywords(b)
+    keys = sorted(k for k in set(ka) | set(kb) if ka.get(k) != kb.get(k))
+    return ", ".join(keys)
+
+
 def _load_raster(text: str, path: str, fmt: str, allow_hhh: bool = True) -> FitsImage:
     retrieved_at = datetime.now(UTC)
     try:
@@ -664,36 +698,34 @@ def _load_raster(text: str, path: str, fmt: str, allow_hhh: bool = True) -> Fits
 
     header, source_kind = fits.Header(), None
     hhh = Path(path).with_suffix(".hhh")
+    hhh_text = None
+    if fmt in ("jpeg", "png") and allow_hhh and hhh.exists():
+        try:
+            hhh_text = hhh.read_text("latin-1")
+        except OSError as exc:
+            notes.append(("WCS_MISSING", f"{hhh.name} non leggibile: {exc}"))
     if fmt in ("jpeg", "png"):
         if comment is not None:
             header, source_kind = (_header_from_text(comment) or fits.Header()), "comment"
-            if allow_hhh and hhh.exists():
+            if hhh_text is not None:
                 notes.append(("HHH_IGNORED", f"{hhh.name} ignorato: vale la calibrazione nel commento del file"))
-        elif allow_hhh and hhh.exists():
-            try:
-                header, source_kind = (_header_from_text(hhh.read_text("latin-1")) or fits.Header()), "hhh"
-            except OSError as exc:
-                notes.append(("WCS_MISSING", f"{hhh.name} non leggibile: {exc}"))
+        elif hhh_text is not None:
+            header, source_kind = (_header_from_text(hhh_text) or fits.Header()), "hhh"
 
     solution = None
     if source_kind is not None:
-        if not header:
-            notes.append(("WCS_MISSING", f"calibrazione ({source_kind}) scartata: non è un'intestazione FITS valida"))
+        solution, calibration_notes = _raster_calibration(header, source_kind, nx, ny)
+        notes.extend(calibration_notes)
+        if solution is None:
             source_kind = None
-        elif (header.get("NAXIS1"), header.get("NAXIS2")) != (nx, ny):
-            notes.append((
-                "WCS_MISSING",
-                f"calibrazione ({source_kind}) scartata: NAXIS1/NAXIS2 = {header.get('NAXIS1')}/{header.get('NAXIS2')}, "
-                f"immagine {nx}×{ny}",
-            ))
-            source_kind = None
-        else:
-            solution, wcs_notes = _image_wcs(header, {1, 2})
-            if solution is None:
-                notes.extend((code, f"calibrazione ({source_kind}) scartata: {msg}") for code, msg in wcs_notes)
-                source_kind = None
     else:
         notes.append(("WCS_MISSING", "nessuna calibrazione astrometrica: immagine come griglia di pixel"))
+    if comment is not None and hhh_text is not None:
+        # Vale il commento; se il .hhh ignorato descrive un WCS diverso, lo si dice (decisione del 2026-10-10).
+        other, _ = _raster_calibration(_header_from_text(hhh_text) or fits.Header(), "hhh", nx, ny)
+        differing = _wcs_differences(solution, other)
+        if differing:
+            notes.append(("HHH_WCS_DIFFERS", f"{hhh.name} descrive un WCS diverso da quello del commento (usato): {differing}"))
 
     return FitsImage(
         data=data,
@@ -848,7 +880,9 @@ def set_display(image, vmin: float, vmax: float, gamma: float = 1.0, palette: st
         raise ValueError("serve vmin < vmax, entrambi finiti")
     if not (math.isfinite(gamma) and gamma > 0):
         raise ValueError("gamma deve essere positivo")
-    data = np.array(getattr(image, "data", image), dtype=np.float64)  # copia: l'originale non si tocca
+    source = getattr(image, "data", image)
+    _check_memory("visualizzazione", int(np.size(source)) * _MEMORY_BYTES_PER_PIXEL["set_display"], image)
+    data = np.array(source, dtype=np.float64)  # copia: l'originale non si tocca
     normalized = np.full(data.shape, np.nan)
     finite = np.isfinite(data)
     normalized[finite] = ManualInterval(vmin, vmax)(data[finite], clip=True)
@@ -967,6 +1001,39 @@ def _refuse_preview(image: FitsImage, what: str) -> None:
         )
 
 
+#: Byte per pixel stimati per le operazioni sull'immagine intera (§3): array
+#: ``float64`` presenti insieme (operandi, risultato, copie di lavoro) × 8 byte.
+_FLOAT64 = 8
+_MEMORY_BYTES_PER_PIXEL = {
+    "image_operation_image": 3 * _FLOAT64,  # a, b, risultato
+    "image_operation": 2 * _FLOAT64,  # a, risultato (costante, normalizzazione, specchiature)
+    "convolve": 3 * _FLOAT64,  # a, risultato, copia di lavoro di astropy.convolution
+    "contours": 2 * _FLOAT64,  # copia float64 con maschera, strutture di contourpy
+    "set_display": 4 * _FLOAT64,  # per piano: copia, intervallo, funzione di trasferimento, valori e colori
+}
+
+
+def _pixels(shape) -> int:
+    return int(np.prod(shape, dtype=np.int64))
+
+
+def _check_memory(what: str, needed: int, *images) -> None:
+    """Rifiuta l'operazione se la memoria stimata supera il tetto A10 (``memory_bytes``).
+
+    Il tetto è il più piccolo tra quelli delle immagini coinvolte (default se assente).
+    """
+    caps = [im.limits.memory_bytes for im in images if getattr(im, "limits", None) is not None]
+    cap = min(caps) if caps else LargeImageLimits().memory_bytes
+    if needed > cap:
+        raise ImagesFitsError(
+            "MEMORY_LIMIT_EXCEEDED",
+            f"{what}: servono circa {needed} byte, oltre il tetto di {cap} byte (A10); "
+            "usare un taglio, una regione o soglie più alte",
+            needed_bytes=needed,
+            limit_bytes=cap,
+        )
+
+
 def cutout(image: FitsImage, center, size) -> FitsImage:
     """Taglio con WCS coerente (B8) con ``astropy.nddata.Cutout2D``.
 
@@ -994,18 +1061,20 @@ def cutout(image: FitsImage, center, size) -> FitsImage:
     else:
         plane = image.data[0] if image.color else image.data
     try:
-        cut = Cutout2D(plane, position, size, wcs=w, mode="trim", copy=not image.is_preview)
+        cut = Cutout2D(plane, position, size, wcs=w, mode="trim", copy=False)  # copia dopo il controllo della memoria
     except NoOverlapError as exc:
         raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio del tutto fuori dall'immagine ({described})") from exc
     except ValueError as exc:
         raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio non valido ({described}): {exc}") from exc
+    planes = 3 if image.color else 1
+    _check_memory("taglio", _pixels(cut.shape) * planes * image.data.dtype.itemsize, image)
     if image.is_preview:
         rows, cols = cut.slices_original
         data = image.read_region(cols.start, cols.stop, rows.start, rows.stop)
     elif image.color:
         data = np.stack([p[cut.slices_original].copy() for p in image.data])
     else:
-        data = cut.data
+        data = np.array(cut.data)
     notes = []
     if tuple(cut.shape) != tuple(cut.shape_input):
         notes.append(("CUTOUT_TRIMMED", f"taglio ridotto all'intersezione con l'immagine: {cut.shape} invece di {cut.shape_input}"))
@@ -1058,6 +1127,13 @@ def image_operation(a: FitsImage, b, op: str) -> FitsImage:
     _refuse_preview(a, f"operazione {op}")
     if isinstance(b, FitsImage):
         _refuse_preview(b, f"operazione {op}")
+    if op == "convolve":
+        per_pixel = _MEMORY_BYTES_PER_PIXEL["convolve"]
+    elif op in _ARITHMETIC and isinstance(b, FitsImage):
+        per_pixel = _MEMORY_BYTES_PER_PIXEL["image_operation_image"]
+    else:
+        per_pixel = _MEMORY_BYTES_PER_PIXEL["image_operation"]
+    _check_memory(f"operazione {op}", _pixels(a.data.shape) * per_pixel, a, *([b] if isinstance(b, FitsImage) else []))
     data = np.asarray(a.data, dtype=np.float64)
     w = a.wcs.wcs if a.wcs is not None else None
     notes: list[tuple[str, str]] = []
@@ -1137,6 +1213,7 @@ def contours(image: FitsImage, levels) -> Contours:
     if image.color:
         raise ImagesFitsError("OPERATION_UNSUPPORTED", "contorni su un'immagine a colori: serve un'immagine monocroma")
     _refuse_preview(image, "contorni")
+    _check_memory("contorni", _pixels(image.data.shape) * _MEMORY_BYTES_PER_PIXEL["contours"], image)
     values = tuple(float(v) for v in np.atleast_1d(levels))
     z = np.ma.masked_invalid(np.asarray(image.data, dtype=np.float64))
     generator = contourpy.contour_generator(z=z, line_type=contourpy.LineType.Separate)
@@ -1147,6 +1224,8 @@ def contours(image: FitsImage, levels) -> Contours:
 def save_fits(image: FitsImage, path, overwrite: bool = False) -> Path:
     """Salva l'immagine come FITS con WCS e provenienza (A2ORIGIN, A2DATE, HISTORY)."""
     _refuse_preview(image, "salvataggio FITS")
+    # Dati in RAM più la copia nell'ordine di byte del FITS (big-endian) scritta da astropy.
+    _check_memory("salvataggio FITS", _pixels(image.data.shape) * image.data.dtype.itemsize * 2, image)
     w = image.wcs.wcs if image.wcs is not None else None
     header = _header_with_wcs(image.header, w, image.data.shape)
     header["A2ORIGIN"] = (str(image.origin), "origine")  # valori lunghi: convenzione CONTINUE (FITS 4.0)
@@ -1181,7 +1260,7 @@ def _reproject_function(method: str):
     )
 
 
-def _resampling_input(image: FitsImage, what: str) -> tuple[np.ndarray, WCS]:
+def _check_resampling_input(image: FitsImage, what: str) -> None:
     if not isinstance(image, FitsImage):
         raise TypeError(f"{what}: serve un FitsImage")
     if image.color:
@@ -1189,7 +1268,18 @@ def _resampling_input(image: FitsImage, what: str) -> tuple[np.ndarray, WCS]:
     if image.wcs is None:
         raise ImagesFitsError("WCS_MISSING", f"{what}: il ricampionamento richiede la calibrazione ({image.origin})")
     _refuse_preview(image, what)
+
+
+def _resampling_input(image: FitsImage) -> tuple[np.ndarray, WCS]:
     return np.asarray(image.data, dtype=np.float64), image.wcs.wcs
+
+
+def _resampling_memory(images, reference: FitsImage, what: str, extra_reference_arrays: int = 0) -> None:
+    """Copie float64 degli ingressi, più risultato e copertura di ciascuno sulla griglia di riferimento."""
+    reference_pixels = _pixels(_reference_grid(reference)[1])
+    needed = sum(_pixels(im.data.shape) for im in images) * _FLOAT64
+    needed += (2 * len(images) + extra_reference_arrays) * reference_pixels * _FLOAT64
+    _check_memory(what, needed, *images, reference)
 
 
 def _reference_grid(reference: FitsImage) -> tuple[WcsSolution, tuple[int, int]]:
@@ -1234,7 +1324,9 @@ def _on_reference(image: FitsImage, data: np.ndarray, reference: FitsImage, step
 def resample_to_reference(image: FitsImage, reference: FitsImage, method: str) -> Resampled:
     """Ricampiona sulla griglia del riferimento (B7) con ``reproject``; metodo obbligatorio."""
     function, kwargs = _reproject_function(method)
-    data, wcs = _resampling_input(image, "ricampionamento")
+    _check_resampling_input(image, "ricampionamento")
+    _resampling_memory([image], reference, "ricampionamento")
+    data, wcs = _resampling_input(image)
     ref_wcs, shape = _reference_grid(reference)
     out, footprint = function((data, wcs), ref_wcs.wcs, shape_out=shape, **kwargs)
     coverage = 100.0 * float(np.count_nonzero(footprint > 0)) / footprint.size
@@ -1292,6 +1384,10 @@ def rgb_composite(images, reference: FitsImage | None = None, mode: str = "rgb",
         order = list(np.argsort(-wavelengths.to_value(u.m, equivalencies=u.spectral())))
         images = [images[i] for i in order]
     reference = _smallest_pixel(images) if reference is None else reference
+    for im in images:
+        _check_resampling_input(im, "RGB")
+    # Più i piani di presentazione: intervallo e funzione di trasferimento per componente.
+    _resampling_memory(images, reference, "RGB", extra_reference_arrays=2)
     resampled = reproject(images, reference, "nearest")
     covered = np.all([r.footprint > 0 for r in resampled], axis=0)
     shape = resampled[0].image.data.shape
@@ -1352,7 +1448,11 @@ def mosaic(images, reference: FitsImage, method: str) -> Resampled:
     units = {im.bunit or None for im in images}
     if len(units) > 1:
         raise ImagesFitsError("UNIT_MISMATCH", f"mosaico: unità diverse {sorted(map(str, units))}")
-    inputs = [_resampling_input(im, "mosaico") for im in images]
+    for im in images:
+        _check_resampling_input(im, "mosaico")
+    # Per ogni ingresso: risultato e copertura; in più somma e conteggio della media.
+    _resampling_memory(images, reference, "mosaico", extra_reference_arrays=2)
+    inputs = [_resampling_input(im) for im in images]
     ref_wcs, shape = _reference_grid(reference)
     out, footprint = reproject_and_coadd(
         inputs, ref_wcs.wcs, shape_out=shape, reproject_function=function, combine_function="mean",

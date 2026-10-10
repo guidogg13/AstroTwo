@@ -280,7 +280,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | **IA (livello 3)** | | | |
 | `30-ia-adattatore-provider.md` | Adattatore per provider IA | 3 | non esiste |
 | `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS | 3 | non esiste |
-| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA | 3 | non esiste |
+| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA. **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS) | 3 | non esiste |
 | `33-ia-query-adql.md` | Costruzione ed esecuzione di query ADQL | 3 | non esiste |
 | `34-ia-verifica-risultati.md` | Verifica indipendente dei risultati dell'IA | 3 | non esiste |
 | `35-ia-assistente-chat.md` | Assistente conversazionale | 3 | non esiste |
