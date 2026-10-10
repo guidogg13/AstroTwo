@@ -24,6 +24,7 @@ from astropy.table import Table
 from astropy.time import Time
 
 import astrotwo
+import astrotwo.core.vo_protocols as vo
 from astrotwo.core.coordinates_wcs import SkyFrame
 from astrotwo.core.cache import NetworkTimeouts, SharedCache
 from astrotwo.core.catalogs import CatalogsError, read_table
@@ -38,6 +39,8 @@ from astrotwo.core.vo_protocols import (
     download_table,
     read_idha,
     sia_search,
+    simbad_pointer,
+    vizier_photometry,
     ssa_load,
     ssa_search,
     export_table,
@@ -845,3 +848,102 @@ def test_t16_idha_unsafe_xml(tmp_path):
     with pytest.raises(VoProtocolsError) as err:
         read_idha(path)
     assert err.value.code == "XML_UNSAFE"
+
+
+# =============================================================================
+# P6 — Puntatore Simbad e fotometria VizieR (T13, T14)
+# =============================================================================
+
+
+def simbad_table(rows):
+    t = Table(rows=rows, names=("main_id", "ra", "dec", "otype", "nbref"), dtype=(str, float, float, str, int))
+    t["ra"].unit = t["dec"].unit = u.deg
+    return t
+
+
+def test_t13_simbad_pointer(monkeypatch, cache):
+    calls = []
+
+    def fake(ra, dec, radius_deg, timeouts):
+        calls.append((ra, dec, radius_deg))
+        return simbad_table([("A", 10.0, 20.0, "Star", 12), ("B", 10.001, 20.0, "QSO", 340)]), "https://simbad/tap"
+
+    monkeypatch.setattr(vo, "_query_simbad_region", fake)
+    center = SkyCoord(10 * u.deg, 20 * u.deg)
+    result = simbad_pointer(center, 30 * u.arcsec, cache=cache)
+    obj = result.object
+    assert obj.main_id == "B" and obj.nbref == 340 and obj.otype == "QSO" and result.candidates == 2
+    expected = SkyCoord(10 * u.deg, 20 * u.deg).separation(SkyCoord(10.001 * u.deg, 20 * u.deg))  # astropy
+    assert obj.separation.to_value(u.arcsec) == pytest.approx(expected.arcsec, rel=1e-12)
+    assert obj.coords.frame_name == "icrs" and obj.coords.epoch == Time("J2000.0")
+    assert "SIMBAD" in result.source and result.request.url == "https://simbad/tap" and not result.request.from_cache
+    assert calls[0][2] == pytest.approx((30 * u.arcsec).to_value(u.deg))
+    again = simbad_pointer(center, 30 * u.arcsec, cache=cache)
+    assert again.request.from_cache and again.object.main_id == "B" and len(calls) == 1
+
+
+def test_simbad_pointer_tie_and_empty(monkeypatch, cache):
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (simbad_table(
+        [("lontano", 10.002, 20.0, "Star", 50), ("vicino", 10.0005, 20.0, "Star", 50), ("poco", 10.0, 20.0, "G", 3)]),
+        "https://simbad/tap"))
+    result = simbad_pointer(SkyCoord(10 * u.deg, 20 * u.deg), 30 * u.arcsec, cache=cache)
+    assert result.object.main_id == "vicino" and "SIMBAD_TIE" in dict(result.warnings)
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (simbad_table([]), "https://simbad/tap"))
+    empty = simbad_pointer(SkyCoord(11 * u.deg, 20 * u.deg), 30 * u.arcsec, cache=cache)
+    assert empty.object is None and "SIMBAD_NO_OBJECT" in dict(empty.warnings)
+    with pytest.raises(TypeError):
+        simbad_pointer(SkyCoord(11 * u.deg, 20 * u.deg), 30, cache=cache)  # raggio sempre esplicito, con unità
+
+
+SED = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE>
+<COOSYS ID="J2000" system="eq_FK5" equinox="J2000"/>
+<TIMESYS ID="time_1" refposition="BARYCENTER" timeorigin="0.000000" timescale="TCB"/>
+<TABLE name="allVizieR">
+<FIELD name="_RAJ2000" ucd="pos.eq.ra" ref="J2000" datatype="double" unit="deg"/>
+<FIELD name="_DEJ2000" ucd="pos.eq.dec" ref="J2000" datatype="double" unit="deg"/>
+<FIELD name="_tabname" ucd="meta.table" datatype="char" arraysize="32*"/>
+<FIELD name="_ID" ucd="meta.id" datatype="char" arraysize="128*"/>
+<FIELD name="_time" ucd="time.epoch" ref="time_1" datatype="double" unit="d"/>
+<FIELD ID="sed_freq" name="_sed_freq" ucd="em.freq" unit="GHz" datatype="double"/>
+<FIELD ID="sed_flux" name="_sed_flux" ucd="phot.flux.density" unit="Jy" datatype="float"/>
+<FIELD ID="sed_eflux" name="_sed_eflux" ucd="stat.error;phot.flux.density" unit="Jy" datatype="float"/>
+<FIELD ID="sed_filter" name="_sed_filter" ucd="meta.id;instr.filter" datatype="char" arraysize="*"/>
+<DATA><TABLEDATA>
+<TR><TD>10.0</TD><TD>+20.0</TD><TD>II/246/out</TD><TD>2MASS=1</TD><TD></TD><TD>136.89e+3</TD><TD>1.5</TD><TD>0.03</TD><TD>2MASS:Ks</TD></TR>
+<TR><TD>10.0</TD><TD>+20.0</TD><TD>I/355/gaiadr3</TD><TD>Source=2</TD><TD>2457389.0</TD><TD>445.46e+3</TD><TD>2.5</TD><TD></TD><TD>GAIA/GAIA3:G</TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+
+def test_t14_vizier_photometry(service, cache, monkeypatch):
+    service.routes["/sed"] = votable_route(SED)
+    monkeypatch.setattr(vo, "VIZIER_PHOTOMETRY_URL", service.url + "/sed")
+    result = vizier_photometry(SkyCoord(10 * u.deg, 20 * u.deg), 2 * u.arcsec, cache=cache)
+    params = service.requests[-1]["params"]
+    assert params == {"-c": "10.00000000 +20.00000000", "-c.rs": "2"}
+    expected = parse_votable(io.BytesIO(SED.encode())).get_first_table().to_table(use_names_over_ids=True)
+    table = result.table.table
+    assert np.array_equal(table["_sed_freq"], expected["_sed_freq"]) and table["_sed_freq"].unit == u.GHz
+    assert np.array_equal(table["_sed_flux"], expected["_sed_flux"]) and table["_sed_flux"].unit == u.Jy
+    assert [str(v) for v in table["_tabname"]] == ["II/246/out", "I/355/gaiadr3"]  # catalogo d'origine
+    assert bool(table["_time"].mask[0]) and table["_time"][1] == 2457389.0  # data solo quando presente
+    assert table["_time"].meta["timesys"]["timescale"] == "TCB"
+    assert result.request.protocol == "vizier-photometry" and result.table.body == "celestial"
+    with pytest.raises(ValueError):
+        vizier_photometry(SkyCoord(10 * u.deg, 20 * u.deg), 31 * u.arcsec, cache=cache)
+    service.close()
+    with pytest.raises(VoProtocolsError) as err:
+        vizier_photometry(SkyCoord(11 * u.deg, 20 * u.deg), 2 * u.arcsec, cache=cache,
+                          timeouts=NetworkTimeouts(connect=0.5, read=0.5))
+    assert err.value.code == "NET_TIMEOUT"
+
+
+@pytest.mark.network
+def test_t13_t14_network(cache):
+    vega = SkyCoord(279.2347 * u.deg, 38.7837 * u.deg)
+    pointer = simbad_pointer(vega, 30 * u.arcsec, cache=cache)
+    assert pointer.object is not None and pointer.object.nbref is not None and pointer.candidates >= 1
+    photometry = vizier_photometry(vega, 1.5 * u.arcsec, cache=cache)
+    assert photometry.table.rows > 0 and photometry.table.table["_sed_flux"].unit == u.Jy

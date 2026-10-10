@@ -59,6 +59,12 @@ __all__ = [
     "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
     "AdqlCheck",
+    "SIMBAD_COORDINATES_NOTE",
+    "SimbadObject",
+    "SimbadPointer",
+    "VIZIER_PHOTOMETRY_URL",
+    "simbad_pointer",
+    "vizier_photometry",
     "Spectrum",
     "read_idha",
     "sia_search",
@@ -1256,3 +1262,158 @@ def ssa_load(candidate, index: int | None = None, *, format: str | None = None, 
                     columns={"spectral": spectral, "flux": flux, "flux_error": error}, format=table.format,
                     origin=url, retrieved_at=response.retrieved_at, from_cache=response.from_cache, body=body,
                     request=_record("ssa-spectrum", "ssa_load", arguments, response, len(out)), warnings=notes)
+
+
+# --------------------------------------------------------------------------
+# P6 — Puntatore Simbad e fotometria VizieR (H17)
+# --------------------------------------------------------------------------
+
+#: Coordinate di SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD, come nel modulo 10).
+SIMBAD_COORDINATES_NOTE = "coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD)"
+#: Servizio fotometrico di VizieR (verificato il 2026-10-10 sulla documentazione del CDS e in linea).
+VIZIER_PHOTOMETRY_URL = "https://vizier.cds.unistra.fr/viz-bin/sed"
+_VIZIER_MAX_RADIUS = 30 * u.arcsec  # limite dichiarato dalla documentazione del servizio
+_SIMBAD_FIELDS = ("otype", "nbref")  # nbref = "number of references" (colonne della tabella basic di SIMBAD)
+
+
+@dataclass(frozen=True)
+class SimbadObject:
+    """Oggetto SIMBAD scelto dal puntatore (magnitudine: D14-12, da decidere)."""
+
+    main_id: str
+    otype: str | None
+    coords: SkyFrame
+    nbref: int | None
+    separation: u.Quantity
+
+
+@dataclass(frozen=True)
+class SimbadPointer:
+    """Esito del puntatore: oggetto più citato nel raggio (o nessuno), con fonte, data e avvisi."""
+
+    object: SimbadObject | None
+    candidates: int
+    source: str
+    request: RequestRecord
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def _query_simbad_region(ra: float, dec: float, radius_deg: float, timeouts: NetworkTimeouts) -> tuple[Table, str]:
+    """Interroga SIMBAD con ``astroquery`` (sessione con i timeout comuni del modulo 10); (tabella, URL TAP)."""
+    from astrotwo.core.coordinates_wcs import _simbad_with_timeouts  # unico punto con il campo interno di astroquery
+
+    simbad = _simbad_with_timeouts(timeouts)
+    simbad.add_votable_fields(*_SIMBAD_FIELDS)
+    center = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
+    return simbad.query_region(center, radius=radius_deg * u.deg), simbad.tap.baseurl
+
+
+def _table_bytes(table: Table) -> bytes:
+    from astropy.io.votable import from_table
+
+    buffer = io.BytesIO()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from_table(table).to_xml(buffer)
+    return buffer.getvalue()
+
+
+def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh: bool = False,
+                   timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> SimbadPointer:
+    """Oggetto SIMBAD più citato nel raggio; a pari citazioni il più vicino, dichiarato (D14-9 punto 15).
+
+    ``radius`` è sempre esplicito: lo passa l'interfaccia (41), che ne decide il default (D14-9 punto 2).
+    """
+    ra, dec = _icrs_degrees(center)
+    r = _radius_degrees(radius)
+    params = {"ra_deg": f"{ra!r}", "dec_deg": f"{dec!r}", "radius_deg": f"{r!r}", "fields": ",".join(_SIMBAD_FIELDS)}
+    canonical = _canonical(params)
+    cache_obj = SharedCache() if cache is None else cache
+    rows = cache_obj.table(_CACHE_MODULE, _QUERY_TABLE, _QUERY_COLUMNS)
+    key = _cache_key("simbad", "astroquery", "simbad:query_region", canonical)
+    cached = rows.get(key)
+    notes: tuple = ()
+    if cached is not None and not refresh:
+        response = _Response(cached.data["payload"], cached.data["url"], "astroquery", canonical,
+                             cached.retrieved_at, True, (("FROM_CACHE", f"copia in cache del {_iso(cached.retrieved_at)}"),))
+    else:
+        try:
+            table, url = _query_simbad_region(ra, dec, r, timeouts)
+        except (requests.exceptions.RequestException, pyvo.dal.DALServiceError, OSError) as exc:
+            if cached is None:
+                raise _net_error("SIMBAD", exc, timeouts) from exc
+            response = _Response(cached.data["payload"], cached.data["url"], "astroquery", canonical,
+                                 cached.retrieved_at, True,
+                                 (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache"),))
+        else:
+            response = _Response(_table_bytes(table), url, "astroquery", canonical, datetime.now(UTC), False)
+            try:
+                rows.put(key, {"protocol": "simbad", "url": url, "params": json.dumps(canonical),
+                               "payload": response.payload}, origin=url, retrieved_at=response.retrieved_at)
+            except CacheError as exc:
+                notes += ((exc.code, exc.message),)
+    found = _read_payload(response).table
+    notes = response.notes + notes
+    arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"}}
+    record = _record("simbad", "simbad_pointer", arguments, response, len(found))
+    source = f"SIMBAD (CDS) via astroquery; {SIMBAD_COORDINATES_NOTE}"
+    if len(found) == 0:
+        return SimbadPointer(None, 0, source, record,
+                             notes + (("SIMBAD_NO_OBJECT", f"nessun oggetto SIMBAD entro {r * 3600:g} arcsec"),))
+    ra_col = (found["ra"].quantity if found["ra"].unit is not None else None)
+    if ra_col is None or found["dec"].unit is None:
+        raise VoProtocolsError("SERVICE_ERROR", "SIMBAD: coordinate senza unità nella risposta")
+    from astropy.coordinates import angular_separation
+
+    sep = angular_separation(ra * u.deg, dec * u.deg, ra_col, found["dec"].quantity).to(u.arcsec)
+    nbref = np.ma.masked_invalid(np.ma.asarray(found["nbref"], dtype=float))
+    valid = ~np.ma.getmaskarray(nbref)
+    if valid.any():
+        best = nbref[valid].max()
+        tied = np.flatnonzero(valid & (np.ma.filled(nbref, -1) == best))
+    else:
+        tied = np.arange(len(found))
+        notes += (("SIMBAD_NBREF_MISSING", "numero di citazioni assente per tutti gli oggetti: scelto il più vicino"),)
+    order = sorted(tied, key=lambda k: (float(sep[k].value), str(found["main_id"][k])))
+    choice = order[0]
+    if len(tied) > 1:
+        notes += (("SIMBAD_TIE", f"{len(tied)} oggetti con lo stesso numero di citazioni "
+                   f"({'—' if not valid.any() else int(best)}): scelto il più vicino al centro, "
+                   f"{found['main_id'][choice]} a {sep[choice].value:.3f} arcsec"),)
+    row = found[choice]
+    coords = SkyFrame.from_lonlat(float(ra_col[choice].to_value(u.deg)) * u.deg,
+                                  float(found["dec"].quantity[choice].to_value(u.deg)) * u.deg, "icrs",
+                                  epoch=Time("J2000.0"))
+    otype = None if np.ma.is_masked(row["otype"]) else str(row["otype"])
+    obj = SimbadObject(main_id=str(row["main_id"]), otype=otype, coords=coords,
+                       nbref=None if not valid[choice] else int(nbref[choice]), separation=sep[choice])
+    return SimbadPointer(obj, len(found), source, record, notes)
+
+
+def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limits: TableLimits | None = None,
+                      cache: SharedCache | None = None, refresh: bool = False,
+                      timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Misure di flusso del servizio fotometrico di VizieR attorno a una posizione (H17); SED nel 20.
+
+    Parametri del servizio: ``-c`` (posizione in gradi) e ``-c.rs`` (raggio in arcsec, al massimo 30″).
+    Ogni punto ha frequenza (``_sed_freq``), flusso ed errore (``_sed_flux``, ``_sed_eflux``), filtro,
+    catalogo d'origine (``_tabname``) e, se presente, data (``_time``, con il ``TIMESYS`` del servizio).
+    """
+    limits = _check_max_rows(max_rows, limits)
+    ra, dec = _icrs_degrees(center)
+    r = _radius_degrees(radius)
+    if r * u.deg > _VIZIER_MAX_RADIUS:
+        raise ValueError(f"radius: il servizio fotometrico di VizieR accetta al massimo {_VIZIER_MAX_RADIUS} "
+                         "(nessuna riduzione silenziosa)")
+    params = {"-c": f"{ra:.8f} {dec:+.8f}", "-c.rs": f"{(r * u.deg).to_value(u.arcsec):.6g}"}
+    response = _http("vizier-photometry", VIZIER_PHOTOMETRY_URL, params, cache=cache, refresh=refresh,
+                     timeouts=timeouts, accept_error_body=True)
+    parsed = _parse_results(response, pyvo.dal.DALResults)
+    arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"},
+                 "max_rows": max_rows}
+    result = _finish("vizier-photometry", "vizier_photometry", arguments, response, parsed, max_rows=max_rows,
+                     limits=limits, cache=cache)
+    missing = [c for c in ("_sed_freq", "_sed_flux", "_tabname") if c not in result.table.colnames]
+    if missing:
+        raise VoProtocolsError("VOTABLE_INVALID", f"{VIZIER_PHOTOMETRY_URL}: risposta senza le colonne {missing}")
+    return result

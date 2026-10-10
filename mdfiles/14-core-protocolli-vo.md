@@ -167,7 +167,19 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   posizione o alla posizione Simbad, restituendo la tabella delle misure di
   flusso con frequenza o lunghezza d'onda, unità, catalogo d'origine e data
   quando presente. Il client è quello HTTP diretto già usato nel 12 (D12-4);
-  interfaccia del servizio **da verificare prima del codice**. La
+  interfaccia del servizio **da verificare prima del codice**. **Esito della
+  verifica (2026-10-10, P6):** documentazione del CDS
+  (`vizier/sed/doc`) e servizio in linea `https://vizier.cds.unistra.fr/viz-bin/sed`:
+  parametri `-c` (posizione) e `-c.rs` (raggio in arcsec, **al massimo 30
+  arcsec** secondo la documentazione: oltre, rifiuto, nessuna riduzione
+  silenziosa); risposta VOTable con `_sed_freq` (GHz), `_sed_flux` e
+  `_sed_eflux` (Jy), `_sed_filter`, catalogo d'origine `_tabname`, data
+  `_time` (JD, `TIMESYS` TCB baricentrico) quando presente, posizione
+  `_RAJ2000`/`_DEJ2000` (FK5 J2000). Client: la sessione `requests` di P2
+  (il 12 non è ancora scritto). **Campo delle citazioni in `astroquery.simbad`
+  (verificato il 2026-10-10 con `Simbad.list_columns`):** `nbref` della
+  tabella `basic` ("number of references"), aggiunto con
+  `add_votable_fields`. La
   costruzione della SED è del modulo 20 (deciso il 2026-10-08).
 - **Equivalente di VOApp/VOObserver (H19):** per i programmi non Python lo
   scambio passa da SAMP (questo modulo); per i programmi Python dall'API del
@@ -528,6 +540,17 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   nessun uso della calibrazione della lista. **Raccomandazione:** (a), con
   un'autorizzazione a modificare l'11. **Fermo solo questo punto** (seconda
   metà di T11).
+- **D14-12 — Magnitudine dell'oggetto del puntatore Simbad: DA DECIDERE
+  (aperta il 2026-10-10, Gruppo 3).** §3 e §6 chiedono "la magnitudine"
+  dell'oggetto, senza dire quale banda: SIMBAD conserva i flussi in molte
+  bande (tabella `flux`), nessuna è "la" magnitudine. Opzioni: (a) **tutte
+  le magnitudini disponibili**, ciascuna con banda, errore e riferimento
+  bibliografico; (b) una banda scelta dall'utente (parametro obbligatorio);
+  (c) una banda fissa (es. V), dichiarata nel risultato. **Raccomandazione:**
+  (a), perché non sceglie nulla al posto dell'utente e il 41 può mostrare la
+  banda che preferisce. **Fermo solo questo punto:** `simbad_pointer`
+  restituisce identificativo, tipo, coordinate, numero di citazioni e
+  distanza, senza magnitudine.
 
 ## 14. Registro modifiche
 
@@ -555,3 +578,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P3 scritta** (`cone_search`, `tap_query` sincrona e asincrona, `validate_adql`, `AdqlCheck`, `DEFAULT_ASYNC_TIMEOUT`; test T3, T4, T20, cone search e TAP asincrona su servizi simulati, T2 di rete sul cone search pubblico di Simbad): parametri costruiti con `pyvo` (`SCSQuery`, `TAPQuery`, `AsyncTAPJob`), stato della risposta letto da `pyvo` (`QUERY_STATUS`, `OVERFLOW`; per SCS 1.03 anche `INFO` `Error`); servizio che rifiuta la query TAP → `ADQL_INVALID` con il messaggio del servizio (HTTP 5xx → `SERVICE_ERROR`); suggerimento dell'asincrona su timeout di lettura o messaggio di durata; lavoro asincrono interrotto (`ABORT`) oltre l'attesa massima ed eliminato alla fine; voci dell'elenco dei server come `catalog` in P4. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P4 scritta** (`ServerRegistry`, `ServerEntry`, `BUILTIN_SERVERS`, `PROTOCOLS`, `RegistrySearch`, `DataLinkClient`, `DataLinks`, `ServiceDescriptor`, `ServiceParam`, `DataProduct`; `VoResult.descriptors`; parametro `servers` di `cone_search` e `tap_query`; test T17, T18, T19 su servizi simulati e T18 di rete): verifiche DataLink e URL dei server (esiti in D14-3 e D14-4); ricerca nel registro con l'ADQL RegTAP costruito da `pyvo` ed eseguito con `tap_query` (stessa cache e stesso registro); `call_service` con i parametri riferiti a colonne, poi quelli dati, poi i valori fissi, vuoti non inviati (testo originale dei valori letto con `defusedxml`, perché `astropy` rende zeri un `value=""` numerico). **Da verificare:** il registro di default di `pyvo` (`http://reg.g-vo.org/tap`) risponde "Request Denied" (HTML, HTTP 403) alla query RegTAP da questa rete e non ha HTTPS valido; il test di rete usa `https://dc.g-vo.org/tap`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P5 scritta** (`sia_search` SIA 1 e SIA 2, `read_idha`, `ssa_search`, `ssa_load`, `Spectrum`; test T9–T12, T15, T16, `SIA_NO_RESULT`, `SIA_INVALID`, `SSA_NO_RESULT`): parametri costruiti con `pyvo`; SIA 1 con `SIZE` = 2 × raggio (lato del quadrato che contiene il cerchio), SSA con `SIZE` = diametro = 2 × raggio; SIA 2 con banda convertita in metri e tempo convertito in **UTC** prima dell'MJD (SIA 2.0 e DALI: MJD sulla scala UTC; verificato sul testo della raccomandazione), parametri ripetuti (es. `POS`) inviati tutti; spettri: VOTable dagli `utype` dello Spectrum DM (`…Data.SpectralAxis.Value`, `…Data.FluxAxis.Value`, `…Accuracy.StatError`), FITS anche dagli UCD (`em.wl`/`em.freq`/`em.energy`/`em.wavenumber`, `phot.flux*`), una sola colonna per asse e unità obbligatoria, FITS con una riga di colonne vettoriali svolto in una riga per campione; corpo dello spettro = corpo della lista dei candidati, `BODY_UNKNOWN` se caricato da solo URL. Nel 13 si conservano `utype` (VOTable) e `TUCDn`/`TUTYPn` (FITS). Nuova decisione aperta **D14-11** (calibrazione della lista nell'11; seconda metà di T11 ferma). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P6 scritta** (`simbad_pointer`, `SimbadPointer`, `SimbadObject`, `vizier_photometry`, `VIZIER_PHOTOMETRY_URL`; test T13, T14, pari citazioni, nessun oggetto, test di rete su Vega): verifiche in §3 (servizio fotometrico) e campo `nbref`; SIMBAD interrogato con `astroquery` (`query_region` con `otype` e `nbref`) tramite la sessione con i timeout comuni del 10 (`_simbad_with_timeouts`, unico punto con il campo interno di astroquery), risposta salvata nella cache del 14 come VOTable e letta con `read_table`; coordinate ICRS J2000 dichiarate come nel 10; distanza con `astropy.coordinates.angular_separation`; a pari citazioni il più vicino (`SIMBAD_TIE`), a pari distanza l'identificativo in ordine alfabetico; senza `nbref` il più vicino (`SIMBAD_NBREF_MISSING`); nessun oggetto → `SIMBAD_NO_OBJECT`. Nuova decisione aperta **D14-12** (magnitudine del puntatore). Stato `approvato` invariato. |
