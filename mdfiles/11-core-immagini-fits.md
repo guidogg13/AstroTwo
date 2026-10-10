@@ -13,6 +13,25 @@ alterare i valori dei pixel memorizzati.
 - **Lettura FITS:** aprire immagini FITS locali (primarie e, se previsto,
   più HDU), leggere header, WCS, unità dei pixel e lineari; rilevare dati
   corrotti o non supportati.
+  - **HDU immagine (decisione del proprietario del 2026-10-10):** è
+    un'immagine una HDU con **esattamente 2 assi di lunghezza > 1**; gli assi
+    di lunghezza 1 (frequenti nelle immagini radio a 4 assi) si tolgono dai
+    dati e dal WCS, dichiarandolo nel risultato. Una HDU con 3 o più assi
+    utili è un cubo: errore `CUBE_NOT_SUPPORTED`, che rimanda a
+    `23-analisi-cubi-di-dati.md` (il caso FITS RGB è in P2).
+  - **Più HDU immagine (D11-4, precisata il 2026-10-10):** `load_image`
+    apre la HDU indicata dal parametro `hdu`; se il file ha una sola HDU
+    immagine la apre anche senza parametro; se ne ha più di una e `hdu` non è
+    indicata, errore `HDU_CHOICE_REQUIRED` con l'elenco delle HDU (indice,
+    nome, dimensioni), che l'interfaccia mostra per la scelta
+    dell'utente; lo stesso elenco lo dà `list_image_hdus`.
+  - **Provenienza dei file locali:** origine = percorso assoluto del file,
+    data = momento della lettura (UTC), più la data di modifica del file.
+  - **Costanti dei pixel:** `BZERO`, `BSCALE`, `BLANK` e `BUNIT` si leggono
+    dall'intestazione originale prima che `astropy.io.fits` applichi la
+    scala; i dati in memoria sono i valori fisici nel tipo prodotto da
+    `astropy.io.fits`, portati all'ordine di byte della macchina (FITS è
+    big-endian; tipo e valori non cambiano).
 - **Lettura da rete:** aprire immagini da URL (B2) e immagini in formati non
   FITS come JPEG/PNG (B9), con timeout e gestione degli errori espliciti.
 - **Scala di visualizzazione:** regolare luminosità e contrasto (B3),
@@ -183,8 +202,12 @@ alterare i valori dei pixel memorizzati.
 - **`FitsImage`** (classe): rappresenta un'immagine con array, header, WCS,
   unità; metodi descrittivi per leggere header, chiedere il campo di vista,
   produrre un taglio, produrre una copia con operazione (H5).
-- **`load_image(source)`** — carica da file, URL o formato non FITS; restituisce
-  `FitsImage` o errore; dichiara origine e data.
+- **`load_image(source, hdu=None)`** — carica da file, URL o formato non
+  FITS; restituisce `FitsImage` o errore; dichiara origine e data; con più
+  HDU immagine serve `hdu` (indice o nome), altrimenti
+  `HDU_CHOICE_REQUIRED`.
+- **`list_image_hdus(source)`** — elenco delle HDU immagine del file
+  (indice, nome, dimensioni, compressione), per la scelta dell'utente.
 - **`set_display(image, vmin, vmax, gamma, palette)`** — calcola i parametri di
   visualizzazione (non modifica l'originale): funzione di trasferimento e
   palette dagli elenchi chiusi di §3; restituisce il piano di presentazione
@@ -277,6 +300,9 @@ alterare i valori dei pixel memorizzati.
 | Operazione tra immagini di dimensioni/unità diverse | rifiuto con descrizione del conflitto | `IMAGE_SHAPE_MISMATCH` / `UNIT_MISMATCH` |
 | Cache piena oltre il limite | eliminazione dei dati meno usati (dichiarata in log) o errore se il limite non consente | `CACHE_FULL` |
 | Valori non finiti nei pixel (NaN) | gestiti nel display senza propagarli alle misure | avviso `NONFINITE_PIXELS` |
+| Più HDU immagine e `hdu` non indicata | nessuna immagine aperta; errore con l'elenco delle HDU per la scelta | `HDU_CHOICE_REQUIRED` |
+| HDU indicata inesistente o non immagine | rifiuto con l'elenco delle HDU immagine | `HDU_NOT_IMAGE` |
+| HDU con 3 o più assi di lunghezza > 1 | rifiuto: i cubi sono del `23` | `CUBE_NOT_SUPPORTED` |
 | Compressione FITS non supportata dalla libreria | nessuna immagine aperta, errore con il tipo di compressione | `COMPRESSION_UNSUPPORTED` |
 | RGB con meno di 2 o più di 3 immagini, o immagini non monocrome | rifiuto con il numero e il tipo ricevuti | `RGB_INPUT_INVALID` |
 | RGB o mosaico con un'immagine senza WCS | rifiuto: il ricampionamento richiede la calibrazione | `WCS_MISSING` |
@@ -332,6 +358,8 @@ numero mostrato.
 | T25 | Strategie per dimensione (A10) | soglie configurate piccole nel test, file sintetici non compressi e compressi | strategia scelta secondo le regole di §3; soglie scritte nel risultato | test di unità |
 | T26 | Salvataggio FITS | `save_fits` su un taglio, poi rilettura | dati e WCS uguali, origine e data nell'intestazione | confronto con `astropy.io.fits` |
 | T27 | Calibrazione nel commento (H6) | PNG e JPEG generati con `Pillow` con un'intestazione WCS nel commento, e un `.hhh` | WCS uguale a quella costruita dallo stesso testo con `astropy.wcs` | ricalcolo con Astropy |
+| T28 | Più HDU (D11-4) | file MEF sintetico con due HDU immagine e una tabella | `list_image_hdus` elenca le due immagini; `load_image` senza `hdu` → `HDU_CHOICE_REQUIRED`; con `hdu` apre quella giusta (confronto con `astropy.io.fits`) | test di unità |
+| T29 | Assi degeneri e cubi | immagine a 4 assi con due assi di lunghezza 1; cubo 3 × N × M con 3 assi utili | la prima si apre in 2-D con WCS celeste uguale a quello di `astropy.wcs` (parte celeste) e assi tolti dichiarati; il cubo → `CUBE_NOT_SUPPORTED` | ricalcolo con Astropy |
 
 ## 13. Decisioni aperte
 
@@ -401,3 +429,4 @@ numero mostrato.
 | 2026-10-09 | Claude Code | **D11-7 DECISA** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): fondo cielo del centroide = mediana con sigma clipping in una corona attorno alla stella; `star_centroid` con raggi della corona obbligatori (§3, §7), `astropy.stats` (§8), casi limite (§10), test T16–T19 (§12). Codice di `star_centroid` scritto in `src/astrotwo/core/images_fits.py` (solo questa funzione). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | Centroide **confermato** dal proprietario (D11-7 e parametri); nuova **D11-8** (valori di default dei raggi della corona, Gruppo 3, da fissare con 20 e 41). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare §3, §6–§8, §10, §12, §13): D11-5 corretta (palette scientifiche da `matplotlib`, non quelle di Aladin, regola d'oro n. 8); funzioni di trasferimento di `astropy.visualization`; elenco chiuso H5 con specchiature che aggiornano il WCS (normalizzazione da verificare con la sez. 5.18 prima di P5); `contourpy`; soglie A10 per le immagini; qualità del ricampionamento; fattore unico di `rgb_diff`; calibrazione di JPEG/PNG solo in lettura, formato da standard pubblici prima di P2; `save_fits` nel §7, vista esportata dal 41; strumenti IA nel 32 (D11-9, §11 non modificato). Nuovi errori `OPERATION_UNSUPPORTED`, `DISPLAY_OPTION_UNKNOWN`; test T20–T27. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Precisazioni del proprietario prima del codice di P1:** HDU immagine = 2 assi di lunghezza > 1 (assi degeneri tolti e dichiarati, cubi → `CUBE_NOT_SUPPORTED`); più HDU immagine → parametro `hdu` di `load_image`, altrimenti `HDU_CHOICE_REQUIRED`; nuova `list_image_hdus`; provenienza dei file locali; costanti dei pixel lette prima della scala (§3, §7, §10 con `HDU_NOT_IMAGE`, §12 T28–T29). Verifica: HCOMPRESS, RICE, GZIP, PLIO e `.gz` supportati da `astropy.io.fits` 8.0.1. Stato `approvato` invariato. |
