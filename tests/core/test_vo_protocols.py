@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import threading
+import time as _time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -16,6 +17,7 @@ import astropy.units as u
 import numpy as np
 import pytest
 import pyvo
+import pyvo.samp as pyvo_samp
 from astropy.coordinates import SkyCoord
 from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
@@ -33,6 +35,8 @@ from astrotwo.core.vo_protocols import (
     VOTABLE_VERSION,
     BUILTIN_SERVERS,
     DataLinkClient,
+    SampHub,
+    SampSelection,
     ServerRegistry,
     VoProtocolsError,
     cone_search,
@@ -947,3 +951,118 @@ def test_t13_t14_network(cache):
     assert pointer.object is not None and pointer.object.nbref is not None and pointer.candidates >= 1
     photometry = vizier_photometry(vega, 1.5 * u.arcsec, cache=cache)
     assert photometry.table.rows > 0 and photometry.table.table["_sed_flux"].unit == u.Jy
+
+
+# =============================================================================
+# P7 — SAMP con un hub locale nei test (T7, T8)
+# =============================================================================
+
+
+def wait_for(condition, timeout=10.0):
+    deadline = _time.monotonic() + timeout
+    while _time.monotonic() < deadline:
+        if condition():
+            return True
+        _time.sleep(0.05)
+    return False
+
+
+@pytest.fixture
+def samp_home(monkeypatch):
+    # Cartella home temporanea (conftest): il file di blocco dell'hub (~/.samp) non tocca quello vero.
+    monkeypatch.delenv("SAMP_HUB", raising=False)
+
+
+@pytest.fixture
+def local_hub(samp_home):
+    hub = pyvo_samp.SAMPHubServer(web_profile=False)
+    hub.start(wait=False)
+    yield hub
+    hub.stop()
+
+
+@pytest.fixture
+def peer(local_hub):
+    """Client simulato (al posto di TOPCAT, DS9…): registra i messaggi ricevuti."""
+    client = pyvo_samp.SAMPIntegratedClient(name="Simulato")
+    client.connect()
+    received = []
+    for mtype in ("table.load.votable", "table.select.rowList", "coord.pointAt.sky"):
+        client.bind_receive_notification(mtype, lambda *args: received.append(args))
+    client.received = received
+    yield client
+    client.disconnect()
+
+
+def test_t7_samp_send_table(peer, catalog):
+    with SampHub() as samp:
+        assert samp.connected and not samp.own_hub  # hub già attivo: nessun hub proprio
+        names = {c.name for c in samp.clients()}
+        assert names == {"Simulato"}
+        sent = samp.send_table(catalog, table_id="t1", name="stelle")
+        assert sent.recipients == (peer.get_public_id(),)
+        assert wait_for(lambda: peer.received)
+        params = peer.received[0][4]
+        assert peer.received[0][3] == "table.load.votable" and params["table-id"] == "t1"
+        path = urllib.parse.unquote(urllib.parse.urlsplit(params["url"]).path)
+        got = parse_votable(path).get_first_table().to_table(use_names_over_ids=True)  # come lo legge il client
+        for name in ("RA", "DE", "Vmag"):
+            assert np.array_equal(np.asarray(got[name]), np.asarray(catalog.table[name])) and got[name].unit == catalog.table[name].unit
+
+
+def test_t8_samp_selection_and_point(peer, catalog, tmp_path):
+    with SampHub() as samp:
+        tables, selections, points = [], [], []
+        samp.on_table(lambda table, table_id, sender: tables.append((table, table_id, sender)))
+        samp.on_selection(lambda sel, sender: selections.append(sel))
+        samp.on_point(lambda pos, sender: points.append(pos))
+        selection = SampSelection("t1", "file:///tmp/t.xml", (0, 2))
+        samp.send_selection(selection)
+        center = SkyCoord(120 * u.deg, 30 * u.deg, frame="galactic")
+        samp.send_point(center)
+        assert wait_for(lambda: len(peer.received) == 2)
+        by_type = {m[3]: m[4] for m in peer.received}
+        assert by_type["table.select.rowList"] == {"table-id": "t1", "url": "file:///tmp/t.xml", "row-list": ["0", "2"]}
+        icrs = center.icrs  # ricalcolo con astropy
+        assert float(by_type["coord.pointAt.sky"]["ra"]) == pytest.approx(icrs.ra.deg, abs=1e-9)
+        assert float(by_type["coord.pointAt.sky"]["dec"]) == pytest.approx(icrs.dec.deg, abs=1e-9)
+        # ricezione: il client simulato invia gli stessi tre tipi ad AstroTwo
+        me = [c for c in peer.get_registered_clients() if c not in ("cli#hub", peer.get_public_id())][0]
+        peer.notify(me, {"samp.mtype": "table.select.rowList",
+                         "samp.params": {"table-id": "t1", "url": "file:///tmp/t.xml", "row-list": ["0", "2"]}})
+        peer.notify(me, {"samp.mtype": "coord.pointAt.sky", "samp.params": {"ra": "10.5", "dec": "-3.25"}})
+        path = tmp_path / "dal_client.xml"
+        path.write_text(votable_text(2), encoding="utf-8")
+        peer.notify(me, {"samp.mtype": "table.load.votable",
+                         "samp.params": {"url": path.as_uri(), "table-id": "x9", "name": "dal client"}})
+        assert wait_for(lambda: selections and points and tables)
+        assert selections[0] == selection
+        assert (points[0].lon.to_value(u.deg)[()], points[0].lat.to_value(u.deg)[()]) == (10.5, -3.25)
+        assert points[0].frame_name == "icrs"
+        table, table_id, _ = tables[0]
+        expected = parse_votable(str(path)).get_first_table().to_table(use_names_over_ids=True)
+        assert table_id == "x9" and np.array_equal(table.table["RA"], expected["RA"]) and table.positions is not None
+
+
+def test_samp_own_hub_and_errors(samp_home, catalog, monkeypatch):
+    with SampHub() as samp:
+        assert samp.own_hub and samp._hub._web_profile is False  # hub proprio, profilo web disattivato
+        assert samp.clients() == ()
+        with pytest.raises(VoProtocolsError) as err:
+            samp.send_table(catalog, table_id="t1")
+        assert err.value.code == "SAMP_NO_PEER"
+        with pytest.raises(VoProtocolsError) as err:
+            samp.send_message("image.load.fits", {"url": "file:///x.fits"})
+        assert err.value.code == "SAMP_UNSUPPORTED_TYPE" and "coord.pointAt.sky" in err.value.message
+    assert not samp.connected
+    with pytest.raises(VoProtocolsError) as err:
+        samp.send_point(SkyCoord(1 * u.deg, 2 * u.deg))
+    assert err.value.code == "SAMP_UNAVAILABLE"
+
+    def fail(self, wait=False):
+        raise OSError("porta non disponibile")
+
+    monkeypatch.setattr(pyvo_samp.SAMPHubServer, "start", fail)
+    with pytest.raises(VoProtocolsError) as err:
+        SampHub().connect()
+    assert err.value.code == "SAMP_UNAVAILABLE"

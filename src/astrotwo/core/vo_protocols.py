@@ -59,6 +59,11 @@ __all__ = [
     "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
     "AdqlCheck",
+    "SAMP_MTYPES",
+    "SampClient",
+    "SampHub",
+    "SampSelection",
+    "SampSendResult",
     "SIMBAD_COORDINATES_NOTE",
     "SimbadObject",
     "SimbadPointer",
@@ -1417,3 +1422,221 @@ def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limit
     if missing:
         raise VoProtocolsError("VOTABLE_INVALID", f"{VIZIER_PHOTOMETRY_URL}: risposta senza le colonne {missing}")
     return result
+
+
+# --------------------------------------------------------------------------
+# P7 — SAMP con pyvo.samp (H14, G3; D14-2, D14-9 punti 1 e 10)
+# --------------------------------------------------------------------------
+
+#: Messaggi SAMP supportati (D14-9 punto 10): tabelle, selezioni e puntamenti.
+SAMP_MTYPES: tuple[str, ...] = ("table.load.votable", "table.select.rowList", "coord.pointAt.sky")
+
+
+@dataclass(frozen=True)
+class SampClient:
+    """Programma collegato all'hub (identificativo pubblico e nome dichiarato)."""
+
+    id: str
+    name: str | None
+
+
+@dataclass(frozen=True)
+class SampSendResult:
+    """Esito di un invio: tipo di messaggio e destinatari raggiunti."""
+
+    mtype: str
+    recipients: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SampSelection:
+    """Selezione ricevuta o da inviare: tabella (identificativo e URL) e righe (indici da 0)."""
+
+    table_id: str
+    url: str
+    rows: tuple[int, ...]
+
+
+class SampHub:
+    """Collegamento SAMP: hub già attivo se presente, altrimenti hub proprio (profilo web disattivato).
+
+    Riceve i tre tipi di ``SAMP_MTYPES`` con le funzioni registrate da ``on_table``, ``on_selection``
+    e ``on_point``; l'interfaccia (es. "invia la selezione") è di ``42-ui-pannello-cataloghi.md``.
+    """
+
+    def __init__(self, *, name: str = "AstroTwo", web_profile: bool = False) -> None:
+        self.name = name
+        self.web_profile = web_profile
+        self.own_hub = False
+        self._hub = None
+        self._client = None
+        self._tmpdir: tempfile.TemporaryDirectory | None = None
+        self._handlers: dict[str, object] = {}
+
+    # -- collegamento ---------------------------------------------------------
+
+    @property
+    def connected(self) -> bool:
+        return self._client is not None and self._client.is_connected
+
+    def connect(self) -> SampHub:
+        """Si collega all'hub attivo; se non c'è ne avvia uno proprio; altrimenti ``SAMP_UNAVAILABLE``."""
+        from pyvo.samp import SAMPHubError, SAMPHubServer, SAMPIntegratedClient
+
+        if self.connected:
+            return self
+        client = SAMPIntegratedClient(name=self.name, description=f"AstroTwo {astrotwo.__version__}",
+                                      metadata={"samp.name": self.name})
+        try:
+            client.connect()
+        except (SAMPHubError, OSError):
+            try:
+                hub = SAMPHubServer(web_profile=self.web_profile, label=self.name)
+                hub.start(wait=False)
+                client.connect()
+            except Exception as exc:
+                raise VoProtocolsError("SAMP_UNAVAILABLE", f"nessun hub SAMP attivo e avvio del proprio non riuscito "
+                                       f"({exc}); le altre funzioni VO restano disponibili") from exc
+            self._hub, self.own_hub = hub, True
+        self._client = client
+        for mtype, function in (("table.load.votable", self._receive_table),
+                                ("table.select.rowList", self._receive_selection),
+                                ("coord.pointAt.sky", self._receive_point)):
+            client.bind_receive_notification(mtype, function)
+            client.bind_receive_call(mtype, function)
+        return self
+
+    def disconnect(self) -> None:
+        if self._client is not None and self._client.is_connected:
+            self._client.disconnect()
+        self._client = None
+        if self._hub is not None:
+            self._hub.stop()
+        self._hub, self.own_hub = None, False
+        if self._tmpdir is not None:
+            self._tmpdir.cleanup()
+            self._tmpdir = None
+
+    def __enter__(self) -> SampHub:
+        return self.connect()
+
+    def __exit__(self, *exc) -> None:
+        self.disconnect()
+
+    def _require(self):
+        if not self.connected:
+            raise VoProtocolsError("SAMP_UNAVAILABLE", "non collegato a un hub SAMP: chiamare connect()")
+        return self._client
+
+    def clients(self) -> tuple[SampClient, ...]:
+        """Programmi collegati (escluso AstroTwo e l'hub)."""
+        client = self._require()
+        out = []
+        for cid in client.get_registered_clients():
+            if cid == "cli#hub":
+                continue
+            name = client.get_metadata(cid).get("samp.name")
+            out.append(SampClient(id=cid, name=None if name is None else str(name)))
+        return tuple(out)
+
+    # -- invio ----------------------------------------------------------------
+
+    def send_message(self, mtype: str, params: dict, recipient: str | None = None) -> SampSendResult:
+        """Invia uno dei tipi supportati; altri tipi → ``SAMP_UNSUPPORTED_TYPE``; nessun destinatario → ``SAMP_NO_PEER``."""
+        if mtype not in SAMP_MTYPES:
+            raise VoProtocolsError("SAMP_UNSUPPORTED_TYPE",
+                                   f"tipo {mtype!r} non supportato; supportati: {', '.join(SAMP_MTYPES)}")
+        client = self._require()
+        subscribed = set(client.get_subscribed_clients(mtype)) - {client.get_public_id()}
+        if recipient is not None:
+            if recipient not in subscribed:
+                raise VoProtocolsError("SAMP_NO_PEER", f"{recipient!r} non è collegato o non accetta {mtype}")
+            targets = [recipient]
+        else:
+            targets = sorted(subscribed)
+        if not targets:
+            raise VoProtocolsError("SAMP_NO_PEER", f"nessun programma collegato accetta {mtype}")
+        message = {"samp.mtype": mtype, "samp.params": {k: v for k, v in params.items()}}
+        for target in targets:
+            client.notify(target, message)
+        return SampSendResult(mtype=mtype, recipients=tuple(targets))
+
+    def send_table(self, table: CatalogTable, *, table_id: str, name: str | None = None,
+                   recipient: str | None = None) -> SampSendResult:
+        """``table.load.votable``: la tabella si scrive in un VOTable temporaneo con provenienza (P1)."""
+        self._require()
+        if self._tmpdir is None:
+            self._tmpdir = tempfile.TemporaryDirectory(prefix="astrotwo-samp-")
+        path = export_table(table, Path(self._tmpdir.name) / f"{len(os.listdir(self._tmpdir.name))}.xml", "votable")
+        params = {"url": path.resolve().as_uri(), "table-id": table_id, "name": name or table_id}
+        return self.send_message("table.load.votable", params, recipient)
+
+    def send_selection(self, selection: SampSelection, recipient: str | None = None) -> SampSendResult:
+        """``table.select.rowList``: righe con indice da 0, come chiede il messaggio SAMP."""
+        rows = [str(int(k)) for k in selection.rows]
+        params = {"table-id": selection.table_id, "url": selection.url, "row-list": rows}
+        return self.send_message("table.select.rowList", params, recipient)
+
+    def send_point(self, center, recipient: str | None = None) -> SampSendResult:
+        """``coord.pointAt.sky``: posizione in gradi ICRS (conversione del modulo 10)."""
+        ra, dec = _icrs_degrees(center)
+        return self.send_message("coord.pointAt.sky", {"ra": repr(ra), "dec": repr(dec)}, recipient)
+
+    # -- ricezione ------------------------------------------------------------
+
+    def on_table(self, function) -> None:
+        """``function(table: CatalogTable, table_id, sender)`` per ogni tabella ricevuta."""
+        self._handlers["table.load.votable"] = function
+
+    def on_selection(self, function) -> None:
+        """``function(selection: SampSelection, sender)`` per ogni selezione ricevuta."""
+        self._handlers["table.select.rowList"] = function
+
+    def on_point(self, function) -> None:
+        """``function(position: SkyFrame, sender)`` per ogni puntamento ricevuto (ICRS, epoca non dichiarata)."""
+        self._handlers["coord.pointAt.sky"] = function
+
+    def _reply(self, msg_id, error: Exception | None) -> None:
+        if msg_id is None or self._client is None:
+            return
+        from pyvo.samp import SAMP_STATUS_ERROR, SAMP_STATUS_OK
+
+        if error is None:
+            self._client.reply(msg_id, {"samp.status": SAMP_STATUS_OK, "samp.result": {}})
+        else:
+            self._client.reply(msg_id, {"samp.status": SAMP_STATUS_ERROR,
+                                        "samp.error": {"samp.errortxt": str(error)}})
+
+    def _dispatch(self, mtype: str, msg_id, build) -> None:
+        handler = self._handlers.get(mtype)
+        try:
+            if handler is None:
+                raise VoProtocolsError("SAMP_UNSUPPORTED_TYPE", f"nessuna funzione registrata per {mtype}")
+            handler(*build())
+        except Exception as exc:  # l'errore torna al mittente, il collegamento resta attivo
+            self._reply(msg_id, exc)
+            return
+        self._reply(msg_id, None)
+
+    def _receive_table(self, private_key, sender_id, msg_id, mtype, params, extra) -> None:
+        def build():
+            url = str(params["url"])
+            if url.startswith("file:"):
+                from urllib.parse import unquote, urlsplit
+                table = read_votable(unquote(urlsplit(url).path))
+            else:
+                table = download_table(url).table
+            return table, str(params.get("table-id", "")), sender_id
+        self._dispatch(mtype, msg_id, build)
+
+    def _receive_selection(self, private_key, sender_id, msg_id, mtype, params, extra) -> None:
+        def build():
+            rows = tuple(int(k) for k in params["row-list"])
+            return SampSelection(str(params["table-id"]), str(params["url"]), rows), sender_id
+        self._dispatch(mtype, msg_id, build)
+
+    def _receive_point(self, private_key, sender_id, msg_id, mtype, params, extra) -> None:
+        def build():
+            position = SkyFrame.from_lonlat(float(params["ra"]) * u.deg, float(params["dec"]) * u.deg, "icrs")
+            return position, sender_id
+        self._dispatch(mtype, msg_id, build)
