@@ -15,21 +15,27 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import astropy.units as u
 import numpy as np
 import pytest
+import pyvo
+from astropy.coordinates import SkyCoord
 from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
 from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
 
 import astrotwo
+from astrotwo.core.coordinates_wcs import SkyFrame
 from astrotwo.core.cache import NetworkTimeouts, SharedCache
 from astrotwo.core.catalogs import CatalogsError, read_table
 from astrotwo.core.vo_protocols import (
     DEFAULT_MAX_ROWS,
     VOTABLE_VERSION,
     VoProtocolsError,
+    cone_search,
     download_table,
     export_table,
     read_votable,
+    tap_query,
+    validate_adql,
     write_votable,
 )
 
@@ -182,11 +188,13 @@ class FakeService:
                 service.requests.append(request)
                 route = service.routes.get(parsed.path)
                 if route is None:
-                    status, ctype, payload = 404, "text/plain", b"not found"
+                    status, ctype, payload, extra = 404, "text/plain", b"not found", []
                 else:
-                    status, ctype, payload = route(request)
+                    status, ctype, payload, *extra = route(request)
                     payload = payload.encode() if isinstance(payload, str) else payload
                 self.send_response(status)
+                for name, value in (extra[0] if extra else {}).items():
+                    self.send_header(name, value)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
@@ -197,6 +205,9 @@ class FakeService:
 
             def do_POST(self):
                 self._serve("POST")
+
+            def do_DELETE(self):
+                self._serve("DELETE")
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -300,3 +311,203 @@ def test_failed_reading_is_not_cached(service, cache):
 
 def test_default_max_rows():
     assert DEFAULT_MAX_ROWS == 100_000
+
+
+# =============================================================================
+# P3 — Cone search, TAP/ADQL, validate_adql (T2, T3, T4, T20)
+# =============================================================================
+
+
+def test_cone_search_simulated(service, cache):
+    service.routes["/scs"] = votable_route(votable_text(5))
+    center = SkyFrame.from_lonlat(120.0 * u.deg, 30.0 * u.deg, "galactic")
+    result = cone_search(center, 10 * u.arcsec, service.url + "/scs", cache=cache)
+    params = service.requests[-1]["params"]
+    expected = SkyCoord(120.0 * u.deg, 30.0 * u.deg, frame="galactic").icrs  # ricalcolo con astropy
+    assert np.isclose(float(params["RA"]), expected.ra.deg, rtol=0, atol=1e-9)
+    assert np.isclose(float(params["DEC"]), expected.dec.deg, rtol=0, atol=1e-9)
+    assert np.isclose(float(params["SR"]), (10 * u.arcsec).to_value(u.deg), rtol=1e-12)
+    assert result.table.rows == 5 and not result.truncated and result.request.protocol == "scs"
+    assert result.request.arguments["center"]["frame"] == "icrs" and result.request.rows == 5
+
+
+def test_cone_search_truncation_and_errors(service, cache):
+    service.routes["/scs"] = votable_route(votable_text(8))
+    center = SkyCoord(10 * u.deg, -3 * u.deg, frame="icrs")
+    result = cone_search(center, 1 * u.arcmin, service.url + "/scs", max_rows=3, cache=cache)
+    assert result.truncated and result.table.rows == 3 and result.request.rows == 3
+    assert "ricevute 8 righe" in dict(result.warnings)["ROW_LIMIT_EXCEEDED"]
+    for bad in (0, 1_000_001, 2.5, True):
+        with pytest.raises(VoProtocolsError) as err:
+            cone_search(center, 1 * u.arcmin, service.url + "/scs", max_rows=bad, cache=cache)
+        assert err.value.code == "MAX_ROWS_INVALID"
+    with pytest.raises(TypeError):
+        cone_search(center, 0.01, service.url + "/scs", cache=cache)  # raggio senza unità
+    with pytest.raises(VoProtocolsError) as err:
+        cone_search(center, 1 * u.arcmin, "I/239/hip_main", cache=cache)
+    assert err.value.code == "SERVER_UNKNOWN"
+    # SCS 1.03: l'errore è un INFO di nome "Error".
+    service.routes["/scs"] = votable_route(votable_text(1).replace(
+        '<INFO name="QUERY_STATUS" value="OK"/>', '<INFO name="Error" value="RA fuori intervallo"/>'))
+    with pytest.raises(VoProtocolsError) as err:
+        cone_search(center, 1 * u.arcmin, service.url + "/scs", cache=cache, refresh=True)
+    assert err.value.code == "SERVICE_ERROR"
+
+
+def tap_sync_route(total):
+    def route(request):
+        maxrec = int(request["params"].get("MAXREC", total))
+        status = "OVERFLOW" if total > maxrec else "OK"
+        return 200, "application/x-votable+xml", votable_text(min(total, maxrec), status=status)
+    return route
+
+
+def test_t3_tap_truncation(service, cache):
+    service.routes["/tap/sync"] = tap_sync_route(50)
+    result = tap_query(service.url + "/tap", "SELECT * FROM stelle", max_rows=7, cache=cache)
+    params = service.requests[-1]["params"]
+    assert params["MAXREC"] == "7" and params["QUERY"] == "SELECT * FROM stelle" and params["LANG"] == "ADQL"
+    assert params["REQUEST"] == "doQuery" and service.requests[-1]["method"] == "POST"
+    assert result.truncated and result.table.rows == 7 == result.max_rows
+    assert "OVERFLOW" in dict(result.warnings)["ROW_LIMIT_EXCEEDED"]
+    full = tap_query(service.url + "/tap", "SELECT * FROM stelle", cache=cache)
+    assert not full.truncated and full.table.rows == 50 and "ROW_LIMIT_EXCEEDED" not in dict(full.warnings)
+
+
+def test_t4_invalid_adql_no_network(service, cache):
+    service.routes["/tap/sync"] = tap_sync_route(5)
+    for adql in ("", "DELETE FROM t", "SELECT * FROM t WHERE a = 'x", "SELECT COUNT(* FROM t"):
+        with pytest.raises(VoProtocolsError) as err:
+            tap_query(service.url + "/tap", adql, cache=cache)
+        assert err.value.code == "ADQL_INVALID"
+    assert service.requests == []  # nessuna chiamata di rete inutile
+
+
+def test_tap_service_error_reported(service, cache):
+    error = votable_text(0, status="ERROR").replace(
+        '<INFO name="QUERY_STATUS" value="ERROR"/>',
+        '<INFO name="QUERY_STATUS" value="ERROR">Table stelle_x does not exist</INFO>')
+    service.routes["/tap/sync"] = lambda r: (400, "application/x-votable+xml", error)
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle_x", cache=cache)
+    assert err.value.code == "ADQL_INVALID" and "does not exist" in err.value.message
+    timeout = error.replace("Table stelle_x does not exist", "Query execution time limit exceeded")
+    service.routes["/tap/sync"] = lambda r: (200, "application/x-votable+xml", timeout)
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle", cache=cache)
+    assert "mode='async'" in err.value.message
+    service.routes["/tap/sync"] = lambda r: (500, "text/plain", "boom")
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle", cache=cache)
+    assert err.value.code == "SERVICE_ERROR"
+
+
+def test_tap_sync_timeout_suggests_async(service, cache):
+    def slow(request):
+        import time
+        time.sleep(1.0)
+        return 200, "application/x-votable+xml", votable_text(1)
+    service.routes["/tap/sync"] = slow
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle", cache=cache,
+                  timeouts=NetworkTimeouts(connect=1.0, read=0.2))
+    assert err.value.code == "NET_TIMEOUT" and "mode='async'" in err.value.message
+
+
+UWS_JOB = """<?xml version="1.0" encoding="UTF-8"?>
+<uws:job xmlns:uws="http://www.ivoa.net/xml/UWS/v1.0" xmlns:xlink="http://www.w3.org/1999/xlink"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.1">
+<uws:jobId>1</uws:jobId>
+<uws:runId xsi:nil="true"/><uws:ownerId xsi:nil="true"/>
+<uws:phase>{phase}</uws:phase>
+<uws:quote xsi:nil="true"/><uws:startTime xsi:nil="true"/><uws:endTime xsi:nil="true"/>
+<uws:executionDuration>0</uws:executionDuration>
+<uws:destruction xsi:nil="true"/>
+<uws:parameters/>
+<uws:results>{results}</uws:results>
+{error}
+</uws:job>
+"""
+
+
+def uws_service(service, phases, total=4):
+    """Lavoro UWS simulato: ``phases`` = fasi restituite dopo RUN (l'ultima si ripete)."""
+    state = {"phase": "PENDING", "after_run": list(phases)}
+
+    def job(request):
+        if request["method"] == "DELETE":
+            return 200, "text/plain", ""
+        if state["phase"] != "PENDING" and len(state["after_run"]) > 1:
+            state["phase"] = state["after_run"].pop(0)
+        elif state["phase"] != "PENDING":
+            state["phase"] = state["after_run"][0]
+        results = (f'<uws:result id="result" xlink:href="{service.url}/tap/async/1/results/result"/>'
+                   if state["phase"] == "COMPLETED" else "")
+        error = ('<uws:errorSummary type="fatal"><uws:message>syntax error at FROMM</uws:message>'
+                 '</uws:errorSummary>' if state["phase"] == "ERROR" else "")
+        return 200, "text/xml", UWS_JOB.format(phase=state["phase"], results=results, error=error)
+
+    def phase(request):
+        state["phase"] = "QUEUED" if request["params"].get("PHASE") == "RUN" else "ABORTED"
+        state.setdefault("posted", []).append(request["params"].get("PHASE"))
+        return 303, "text/plain", "", {"Location": f"{service.url}/tap/async/1"}
+
+    service.routes["/tap/async"] = lambda r: (303, "text/plain", "", {"Location": f"{service.url}/tap/async/1"})
+    service.routes["/tap/async/1"] = job
+    service.routes["/tap/async/1/phase"] = phase
+    service.routes["/tap/async/1/results/result"] = votable_route(votable_text(total))
+    return state
+
+
+def test_tap_async(service, cache):
+    state = uws_service(service, ["EXECUTING", "COMPLETED"])
+    result = tap_query(service.url + "/tap", "SELECT * FROM stelle", mode="async", max_rows=10, cache=cache)
+    expected = parse_votable(io.BytesIO(votable_text(4).encode())).get_first_table().to_table()
+    assert result.table.rows == len(expected) and state["posted"] == ["RUN"]
+    created = [r for r in service.requests if r["path"] == "/tap/async" and r["method"] == "POST"][0]
+    assert created["params"]["MAXREC"] == "10" and created["params"]["QUERY"] == "SELECT * FROM stelle"
+    assert any(r["method"] == "DELETE" for r in service.requests)  # lavoro eliminato
+    assert result.request.arguments["mode"] == "async" and result.request.url == service.url + "/tap/async"
+    again = tap_query(service.url + "/tap", "SELECT * FROM stelle", mode="async", max_rows=10, cache=cache)
+    assert again.request.from_cache
+
+
+def test_tap_async_timeout_and_error(service, cache):
+    state = uws_service(service, ["EXECUTING"])
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle", mode="async", async_timeout=0.5, cache=cache)
+    assert err.value.code == "NET_TIMEOUT" and "0.5 s" in err.value.message and state["posted"] == ["RUN", "ABORT"]
+    uws_service(service, ["ERROR"])
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle", mode="async", cache=cache, refresh=True)
+    assert err.value.code == "ADQL_INVALID" and "FROMM" in err.value.message
+
+
+def test_t20_validate_adql():
+    cases = {
+        "": (False, 0),
+        "   ": (False, 0),
+        "  UPDATE t SET a=1": (False, 2),
+        "select a from t": (True, None),
+        "SELECT a FROM t WHERE b = 'it''s'": (True, None),
+        'SELECT "my col" FROM t': (True, None),
+        "SELECT a FROM t WHERE b = 'x": (False, 26),
+        'SELECT "a FROM t': (False, 7),
+        "SELECT COUNT(*) FROM t WHERE (a > 1": (False, 29),
+        "SELECT a) FROM t": (False, 8),
+        "SELECT a FROM t WHERE b = '(' ": (True, None),
+        "SELECTED FROM t": (False, 0),
+    }
+    for adql, (valid, position) in cases.items():
+        check = validate_adql(adql)
+        assert (check.valid, check.position) == (valid, position), adql
+
+
+@pytest.mark.network
+def test_t2_cone_search_network(cache):
+    # Servizio SCS pubblico (Simbad, CDS); atteso ricalcolato con pyvo contro lo stesso servizio.
+    url = "https://simbad.cds.unistra.fr/cone/"
+    center = SkyCoord(83.8221 * u.deg, -5.3911 * u.deg, frame="icrs")
+    result = cone_search(center, 10 * u.arcsec, url, cache=cache)
+    expected = pyvo.dal.SCSService(url).search(center, 10 * u.arcsec)
+    assert result.table.rows == len(expected) and result.request.rows == len(expected)

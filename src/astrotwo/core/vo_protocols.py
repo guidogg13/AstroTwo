@@ -19,7 +19,9 @@ import dataclasses
 import io
 import json
 import os
+import re
 import tempfile
+import time
 import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,11 +31,16 @@ import astropy
 import numpy as np
 from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
+import astropy.units as u
+import pyvo
 import requests
+from astropy.coordinates import SkyCoord
+from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
 
 import astrotwo
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
+from astrotwo.core.coordinates_wcs import SkyFrame
 from astrotwo.core.catalogs import (
     CatalogsError,
     CatalogTable,
@@ -46,9 +53,14 @@ from astrotwo.core.catalogs import (
 __all__ = [
     "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
+    "AdqlCheck",
+    "DEFAULT_ASYNC_TIMEOUT",
     "RequestRecord",
     "VoResult",
+    "cone_search",
     "download_table",
+    "tap_query",
+    "validate_adql",
     "VOTABLE_VERSION",
     "VoProtocolsError",
     "export_table",
@@ -390,3 +402,244 @@ def download_table(url: str, *, table: int | None = None, format: str | None = N
     arguments = {"url": url, "table": table, "format": format}
     return VoResult(table=result, request=_record("download", "download_table", arguments, response, result.rows),
                     warnings=notes)
+
+
+# --------------------------------------------------------------------------
+# P3 — Cone search, TAP/ADQL, validate_adql
+# --------------------------------------------------------------------------
+
+#: Attesa massima complessiva delle interrogazioni TAP asincrone, in secondi (D14-9 punto 8).
+DEFAULT_ASYNC_TIMEOUT = 600.0
+_ASYNC_HINT = " — per le interrogazioni lunghe usare tap_query(..., mode='async')"
+_DURATION_WORDS = re.compile(r"time ?out|timed out|time limit|execution ?duration|too long|exceed", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class AdqlCheck:
+    """Esito dei controlli minimi lato client (D14-9 punto 4); l'esito del servizio prevale."""
+
+    valid: bool
+    message: str
+    position: int | None = None
+
+
+def validate_adql(adql: str) -> AdqlCheck:
+    """Controlli minimi: non vuota, inizia con SELECT, virgolette chiuse, parentesi bilanciate."""
+    if not isinstance(adql, str) or not adql.strip():
+        return AdqlCheck(False, "ADQL vuota", 0)
+    start = len(adql) - len(adql.lstrip())
+    if not re.match(r"select\b", adql[start:], re.IGNORECASE):
+        return AdqlCheck(False, "l'ADQL deve iniziare con SELECT", start)
+    quote, quote_at, opened = None, None, []
+    k = start
+    while k < len(adql):
+        ch = adql[k]
+        if quote is not None:
+            if ch == quote:
+                if adql[k + 1:k + 2] == quote:  # virgoletta raddoppiata dentro il testo
+                    k += 2
+                    continue
+                quote = None
+        elif ch in ("'", '"'):
+            quote, quote_at = ch, k
+        elif ch == "(":
+            opened.append(k)
+        elif ch == ")":
+            if not opened:
+                return AdqlCheck(False, "parentesi chiusa senza apertura", k)
+            opened.pop()
+        k += 1
+    if quote is not None:
+        return AdqlCheck(False, f"virgoletta {quote} non chiusa", quote_at)
+    if opened:
+        return AdqlCheck(False, "parentesi aperta non chiusa", opened[-1])
+    return AdqlCheck(True, "controlli minimi superati (la validazione vera è del servizio)")
+
+
+def _check_max_rows(max_rows, limits: TableLimits | None) -> TableLimits:
+    limits = TableLimits() if limits is None else limits
+    if isinstance(max_rows, bool) or not isinstance(max_rows, int) or not 1 <= max_rows <= limits.max_rows:
+        raise VoProtocolsError("MAX_ROWS_INVALID",
+                               f"max_rows = {max_rows!r}: ammessi gli interi da 1 a {limits.max_rows} "
+                               "(tetto di righe del modulo 13)")
+    return limits
+
+
+def _service_url(service: str, protocol: str) -> str:
+    """URL esplicito, oppure voce dell'elenco dei server (P4) con il protocollo richiesto."""
+    if isinstance(service, str) and service.startswith(("http://", "https://")):
+        return service.rstrip("/") if protocol == "tap" else service
+    raise VoProtocolsError("SERVER_UNKNOWN", f"{service!r}: serve un URL {protocol} (elenco dei server in P4)")
+
+
+def _icrs_degrees(center) -> tuple[float, float]:
+    """Centro in gradi ICRS: la conversione è del modulo 10 (``SkyFrame.to``)."""
+    if isinstance(center, SkyCoord):
+        center = SkyFrame(center)
+    if not isinstance(center, SkyFrame):
+        raise TypeError("center deve essere uno SkyFrame del modulo 10 o un SkyCoord (frame e unità dichiarati)")
+    icrs = center if center.frame_name == "icrs" else center.to("icrs")
+    lon, lat = np.atleast_1d(icrs.lon.to_value(u.deg)), np.atleast_1d(icrs.lat.to_value(u.deg))
+    if lon.size != 1:
+        raise ValueError("center deve essere una sola posizione")
+    return float(lon[0]), float(lat[0])
+
+
+def _radius_degrees(radius) -> float:
+    if not isinstance(radius, u.Quantity) or radius.unit.physical_type != "angle":
+        raise TypeError("radius deve essere un angolo con unità (es. 10 * u.arcsec)")
+    value = float(radius.to_value(u.deg))
+    if not (np.isfinite(value) and value > 0):
+        raise ValueError("radius deve essere positivo e finito")
+    return value
+
+
+def _parse_results(response: _Response, results_class, *, hint: str = ""):
+    """Interpreta lo stato della risposta con ``pyvo`` (``QUERY_STATUS``); errore del servizio riportato."""
+    http_status = dict(response.notes).get("HTTP_STATUS")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            votable = parse_votable(io.BytesIO(response.payload), verify="ignore")
+            return results_class(votable, url=response.url)
+    except pyvo.dal.DALQueryError as exc:
+        message = str(exc)
+        extra = hint if hint and _DURATION_WORDS.search(message) else ""
+        if http_status is not None and http_status.startswith("5"):
+            raise VoProtocolsError("SERVICE_ERROR", f"{response.url}: HTTP {http_status}: {message}{extra}",
+                                   url=response.url) from exc
+        raise VoProtocolsError("ADQL_INVALID" if results_class is pyvo.dal.TAPResults else "SERVICE_ERROR",
+                               f"{response.url}: il servizio ha rifiutato la richiesta: {message}{extra}",
+                               url=response.url, service_message=message) from exc
+    except Exception as exc:
+        if http_status is not None:
+            raise VoProtocolsError("SERVICE_ERROR", f"{response.url}: risposta HTTP {http_status} senza VOTable",
+                                   url=response.url) from exc
+        raise VoProtocolsError("VOTABLE_INVALID", f"{response.url}: risposta non leggibile come VOTable ({exc})",
+                               url=response.url) from exc
+
+
+def _limited(result: CatalogTable, max_rows: int, service_overflow: bool) -> tuple[CatalogTable, tuple, bool]:
+    """Dichiara sempre il superamento di ``max_rows`` (``ROW_LIMIT_EXCEEDED``), mai una riduzione silenziosa."""
+    received = result.rows
+    if received > max_rows:
+        cut = dataclasses.replace(result, table=result.table[:max_rows],
+                                  history=result.history + (f"prime {max_rows} righe di {received} ricevute",))
+        return cut, (("ROW_LIMIT_EXCEEDED", f"ricevute {received} righe, restituite le prime {max_rows} "
+                      f"(max_rows = {max_rows})"),), True
+    if service_overflow:
+        return result, (("ROW_LIMIT_EXCEEDED", f"il servizio ha troncato il risultato a {received} righe "
+                         f"(max_rows = {max_rows}, stato OVERFLOW)"),), True
+    return result, (), False
+
+
+def _finish(protocol: str, command: str, arguments: dict, response: _Response, results, *, max_rows: int,
+            limits: TableLimits, cache: SharedCache | None) -> VoResult:
+    result = _read_payload(response, limits=limits)
+    overflow = getattr(results, "query_status", None) == "OVERFLOW"
+    result, row_notes, truncated = _limited(result, max_rows, overflow)
+    notes = response.notes + row_notes + _store(response, protocol, cache)
+    notes = tuple(n for n in notes if n[0] != "HTTP_STATUS")
+    return VoResult(table=result, request=_record(protocol, command, arguments, response, result.rows),
+                    warnings=notes, truncated=truncated, max_rows=max_rows)
+
+
+def cone_search(center, radius, catalog: str, *, max_rows: int = DEFAULT_MAX_ROWS,
+                limits: TableLimits | None = None, cache: SharedCache | None = None, refresh: bool = False,
+                timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Cone search (SCS): ``catalog`` è una voce dell'elenco dei server o un URL SCS (D14-9 punto 6)."""
+    limits = _check_max_rows(max_rows, limits)
+    url = _service_url(catalog, "scs")
+    ra, dec = _icrs_degrees(center)
+    sr = _radius_degrees(radius)
+    query = pyvo.dal.scs.SCSQuery(url, (ra, dec), sr)
+    response = _http("scs", url, dict(query), cache=cache, refresh=refresh, timeouts=timeouts,
+                     accept_error_body=True)
+    results = _parse_results(response, pyvo.dal.SCSResults)
+    arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": sr, "unit": "deg"},
+                 "catalog": catalog, "max_rows": max_rows}
+    return _finish("scs", "cone_search", arguments, response, results, max_rows=max_rows, limits=limits, cache=cache)
+
+
+def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: str = "sync",
+              async_timeout: float = DEFAULT_ASYNC_TIMEOUT, limits: TableLimits | None = None,
+              cache: SharedCache | None = None, refresh: bool = False,
+              timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Esegue ADQL su un servizio TAP: sincrona di default, asincrona su richiesta (D14-9 punto 8)."""
+    check = validate_adql(adql)
+    if not check.valid:  # nessuna chiamata di rete inutile (T4)
+        raise VoProtocolsError("ADQL_INVALID", f"{check.message} (carattere {check.position})",
+                               position=check.position)
+    limits = _check_max_rows(max_rows, limits)
+    if mode not in ("sync", "async"):
+        raise ValueError("mode deve essere 'sync' o 'async'")
+    if not (isinstance(async_timeout, (int, float)) and async_timeout > 0):
+        raise ValueError("async_timeout deve essere un numero di secondi positivo")
+    base = _service_url(url, "tap")
+    arguments = {"url": url, "adql": adql, "max_rows": max_rows, "mode": mode}
+    if mode == "sync":
+        query = pyvo.dal.tap.TAPQuery(base, adql, mode="sync", maxrec=max_rows)
+        response = _http("tap", query.queryurl, dict(query), method="POST", cache=cache, refresh=refresh,
+                         timeouts=timeouts, accept_error_body=True, hint=_ASYNC_HINT)
+    else:
+        arguments["async_timeout"] = async_timeout
+        response = _tap_async(base, adql, max_rows, async_timeout, cache=cache, refresh=refresh, timeouts=timeouts)
+    results = _parse_results(response, pyvo.dal.TAPResults, hint=_ASYNC_HINT if mode == "sync" else "")
+    return _finish("tap", "tap_query", arguments, response, results, max_rows=max_rows, limits=limits, cache=cache)
+
+
+def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cache, refresh,
+               timeouts: NetworkTimeouts) -> _Response:
+    """Lavoro UWS con ``pyvo``: attesa massima complessiva ``async_timeout`` s, poi interruzione."""
+    params = dict(pyvo.dal.tap.TAPQuery(base, adql, mode="async", maxrec=max_rows))
+    url = f"{base}/async"
+    canonical = _canonical(params)
+    cache = SharedCache() if cache is None else cache
+    rows = cache.table(_CACHE_MODULE, _QUERY_TABLE, _QUERY_COLUMNS)
+    cached = rows.get(_cache_key("tap", "POST", url, canonical))
+    if cached is not None and not refresh:
+        return _Response(cached.data["payload"], url, "POST", canonical, cached.retrieved_at, True,
+                         (("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
+                           f"{_iso(cached.retrieved_at)}"),))
+    deadline = time.monotonic() + async_timeout
+    session = _Session(timeouts)
+    try:
+        job = pyvo.dal.AsyncTAPJob.create(base, adql, maxrec=max_rows, session=session)
+        try:
+            job.run()
+            interval = 0.2
+            while (phase := job.phase) not in ("COMPLETED", "ERROR", "ABORTED"):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    job.abort()
+                    raise VoProtocolsError("NET_TIMEOUT", f"{url}: attesa massima di {async_timeout:g} s superata "
+                                           f"(fase {phase}); lavoro interrotto", url=url)
+                time.sleep(min(interval, remaining))
+                interval = min(interval * 1.5, 10.0)
+            if phase != "COMPLETED":
+                try:
+                    job.raise_if_error()
+                except pyvo.dal.DALQueryError as exc:
+                    raise VoProtocolsError("ADQL_INVALID", f"{url}: il servizio ha rifiutato la richiesta: {exc}",
+                                           url=url, service_message=str(exc)) from exc
+                raise VoProtocolsError("SERVICE_ERROR", f"{url}: lavoro terminato in fase {phase}", url=url)
+            response = session.get(job.result_uri)
+            _check_http(response, url)
+            if not response.ok:
+                raise VoProtocolsError("SERVICE_ERROR", f"{job.result_uri}: risposta HTTP {response.status_code}",
+                                       url=url)
+            payload = response.content
+        finally:
+            try:
+                job.delete()
+            except (pyvo.dal.DALServiceError, requests.exceptions.RequestException):
+                pass  # il servizio elimina comunque i lavori scaduti
+    except (requests.exceptions.RequestException, pyvo.dal.DALServiceError) as exc:
+        if cached is not None:
+            return _Response(cached.data["payload"], url, "POST", canonical, cached.retrieved_at, True,
+                             (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
+                               f"{_iso(cached.retrieved_at)}"),))
+        raise _net_error(url, exc, timeouts) from exc
+    finally:
+        session.close()
+    return _Response(payload, url, "POST", canonical, datetime.now(UTC), False)
