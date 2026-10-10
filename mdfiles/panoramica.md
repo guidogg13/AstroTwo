@@ -23,9 +23,11 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
   `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
   test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
-  sotto). **Modulo 13 in corso: P1 scritta** (`catalogs.py`); P2, P4, P5
-  ferme sulle decisioni D13-14, D13-10, D13-12; P3 da fare; P6 dopo il 14.
-  Test: **213 superati di default, 216 con la rete (3 test di rete), 0
+  sotto). **Modulo 13 in corso** (`catalogs.py`): P1, P2, P3 scritte; P4
+  senza `calculated_column` (attende D13-15); P5 senza `time_filter`
+  (attende D13-16); P6 dopo il 14. Nel 10 aggiunte `proper_motion_only` e
+  `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
+  Test: **247 superati di default, 251 con la rete (4 test di rete), 0
   saltati, 0 falliti** (2026-10-10).
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
@@ -382,6 +384,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Regola d'oro n. 8 (validazione) | **Confrontare i risultati con Aladin è validazione, non copia** (AP1 resta); tolti i motivi "come Aladin" anche nel 10 (`choose_grid_spacing`, DSS1) e nel 17 (D17-6); `*.pdf` nel `.gitignore` | 2026-10-10 | decisione del proprietario, `CLAUDE.md`, `10`, `17` | nessun motivo "come Aladin" resta nei file approvati |
 | 13 (divisione) | Sei parti (P6 dopo il 14); VOTable locali con `astropy.io.votable`; una sola cache delle interrogazioni, nel 14; grammatica formale di `search` (testo che non distingue maiuscole e minuscole per default); regole di disegno; **D13-4** 1 milione di righe + limite delle operazioni 4 GB (A10 per i cataloghi); **D13-8** tabella delle funzioni in `catalogs.py`; colonne di posizione solo da UCD/metadati, suggerimenti dal nome da confermare; parallasse mancante → solo moto proprio, righe marcate; unità non valide con avviso; CSV/TSV/BSV con errore se ambiguo; `inplace` nel report; bin e scala obbligatori; §11 nel 32 | 2026-10-10 | decisione del proprietario, `13` §3/§13 (D13-9) | aperte D13-10…D13-14 |
 
+| D13-10…D13-14 | `skydist` con `astropy.coordinates` nel 13, unica implementazione anche per il 17; colonna DataLink in P6; propagazione **solo moto proprio** come opzione esplicita del 10, righe senza moto proprio **mascherate e contate**, colonne originali intatte; sottoinsiemi salvati in un **VOTable scelto dall'utente** con provenienza (mai nella cache); ASTRORES: sessagesimali convertiti con il 10 (testo conservato), `#id(...)` accettato con avviso, `LINK` in P6, test su file nostri più l'esempio pubblico in rete | 2026-10-10 | decisione del proprietario, `13` §13, `10`, `17` | aperte D13-14b, D13-15, D13-16 |
+| Scelte minori di P1 (13) | `table` con `TABLE_CHOICE_REQUIRED`; unità angolare richiesta in `confirm_position_columns`; `TableLimits` separato, unificato dalla preferenza del 40 | 2026-10-10 | decisione del proprietario, `13` §3 | confermate |
+
 ## 6. Decisioni aperte
 
 Ogni decisione qui ha una voce corrispondente nel file `.md` pertinente.
@@ -434,10 +439,9 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 ## 7. Prossimi passi
 
 0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **modulo
-   13 in corso** (6 parti approvate il 2026-10-10): P1 scritta; in attesa del
-   proprietario D13-14 (ASTRORES, blocca P2), D13-10 (`skydist`, blocca P4),
-   D13-12 (propagazione senza parallasse, blocca P5), D13-11 e D13-13; poi
-   P3, P2, P4, P5; P6 dopo il 14. Regola d'oro n. 8 applicata in tutti i
+   13 in corso**: P1–P3 scritte, P4 e P5 quasi complete; il proprietario
+   decide D13-15 (`calculated_column`), D13-16 (`time_filter`) e D13-14b
+   (UCD1 negli ASTRORES); P6 dopo il 14. Regola d'oro n. 8 applicata in tutti i
    file approvati (11–19, 10 e 17 il 2026-10-10). Aperte anche: D10-9 (con
    il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -462,8 +466,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (22): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 18); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (20): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 16); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -500,3 +504,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | **Modulo 11 scritto in 7 parti** (P1 lettura FITS/HDU, P2 JPEG/PNG/GIF e FITS RGB, P3 rete e cache, P4 visualizzazione, P5 taglio/operazioni/contorni/salvataggio, P6 immagini grandi, P7 ricampionamento/RGB/mosaico), un commit per parte, con le verifiche prima di ciascuna (HCOMPRESS, Pillow, documentazione pubblica della calibrazione, matplotlib e palette, manuale sez. 5.18 per la normalizzazione, contourpy, `memmap`/`section` di astropy, reproject) e le precisazioni del proprietario registrate nell'11. Modulo 10: campo interno di astroquery isolato in `_simbad_with_timeouts`. Test: 197 superati di default, 200 con la rete. `04`, 10 e 11 completi. Aperte **19** (invariate). Stati invariati: approvato 14, bozza 5, non esiste 23, totale 42. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 11, 12, 13, 14, 15, 18, 19, che restano `approvato`): 11 — scelte di P1–P7 confermate (D11-10), avviso `HHH_WCS_DIFFERS`, tetto di memoria A10 con `MEMORY_LIMIT_EXCEEDED` (codice e test T32–T33), §11 spostato nel 32 (elenco nella riga del 32, §4); regola d'oro n. 8 — D12-1 senza Hipsgen, D12-3, D13-1, D13-3, D14-3, D14-4, raggio obbligatorio nel 15, D15-1, D15-4, D15-5, D18-2 (solo FITS e VOUnit), T16 del 18, D19-5. Nessun PDF del manuale di Aladin nella cartella né nella storia git (punto C: nulla da fare). Test: 200 di default, 203 con la rete. Prossimo modulo: 13. Aperte invariate **19**. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 01, 10, 11, 13, 17 e `CLAUDE.md`): D11-11 (limite delle operazioni 4 GB separato da A10, `set_display` a blocchi in `float32`, test T34); `01` §7 (strumenti IA nel 32); regola d'oro n. 8 nel 10 e nel 17 e distinzione validazione/copia in `CLAUDE.md`; `*.pdf` nel `.gitignore`. **Modulo 13:** specifica aggiornata (D13-4, D13-8, D13-9; nuove aperte D13-10…D13-14); **P1 scritta e testata**; P2 ferma su D13-14 (esempio ASTRORES del CDS incoerente con la DTD). Test: 213 di default, 216 con la rete. Aperte **22**. |
+| 2026-10-10 | Claude Code | **Modulo 13, P2–P5** (decisioni D13-10…D13-14 applicate in 10, 13, 17): P2 lettore ASTRORES (`defusedxml`, `parse_sexagesimal` nuova nel 10); P3 `search` e regole di disegno; P4 senza `calculated_column` (nuova D13-15: numeri accanto a colonne con unità); P5 senza `time_filter` (nuova D13-16); nel 10 `proper_motion_only` (T24) e `parse_sexagesimal` (T25). Verifica: nessuna tabella ufficiale IVOA UCD1 → UCD1+ → nuova D13-14b. Un commit per parte. Test: 247 di default, 251 con la rete. Aperte **20**. |
