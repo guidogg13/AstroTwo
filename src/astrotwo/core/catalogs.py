@@ -29,9 +29,10 @@ from astropy.coordinates import angular_separation
 from astropy.io.votable import from_table as votable_from_table
 from astropy.io.votable import parse as parse_votable
 from astropy.io.votable.tree import CooSys, Info
-from astropy.table import Table
+from astropy.table import MaskedColumn, Table
+from astropy.time import Time
 
-from astrotwo.core.coordinates_wcs import supported_frames
+from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, propagate_position, supported_frames
 
 __all__ = [
     "CONSTANTS",
@@ -46,6 +47,8 @@ __all__ = [
     "PlotStyle",
     "SizeScale",
     "PositionColumns",
+    "Propagation",
+    "ProperMotionArrows",
     "PositionSuggestion",
     "TABLE_FORMATS",
     "TableInfo",
@@ -53,6 +56,8 @@ __all__ = [
     "confirm_position_columns",
     "detect_table_format",
     "list_tables",
+    "propagate",
+    "proper_motion_arrows",
     "column_statistics",
     "histogram",
     "read_table",
@@ -1207,3 +1212,190 @@ def record_view(table: CatalogTable, index: int) -> list[dict[str, object]]:
                     "unit_unrecognized": column.meta.get("unit_unrecognized"), "ucd": column.meta.get("ucd"),
                     "missing": missing})
     return out
+
+
+# --------------------------------------------------------------------------
+# P5 — epoca e moto proprio (calcolo: modulo 10). Il filtro temporale
+# (time_filter) attende la decisione D13-16.
+# --------------------------------------------------------------------------
+
+_PM_UNIT = u.mas / u.yr
+
+
+@dataclass(frozen=True, eq=False)
+class Propagation:
+    """Nuova tabella con ``<lon>_prop``, ``<lat>_prop``, ``<lon>_prop_mode`` e il report (§3)."""
+
+    table: CatalogTable
+    target_epoch: Time
+    source_epoch: str  # epoca di origine e sua fonte
+    pm_ra_includes_cosdec: bool
+    counts: dict[str, int]  # righe per modo: full, pm_only, missing
+    notes: tuple[str, ...]
+
+
+@dataclass(frozen=True, eq=False)
+class ProperMotionArrows:
+    """Frecce del moto proprio: dalla posizione all'epoca della tabella a quella dopo ``scale`` anni."""
+
+    lon_start: np.ndarray
+    lat_start: np.ndarray
+    lon_end: np.ndarray  # mascherato (NaN) per le righe senza moto proprio
+    lat_end: np.ndarray
+    mode: np.ndarray
+    scale: u.Quantity
+    counts: dict[str, int]
+    notes: tuple[str, ...]
+
+
+def _quantity_column(table: Table, name: str, unit, what: str):
+    if name not in table.colnames:
+        raise CatalogsError("PROPER_MOTION_MISSING" if what.startswith("moto") else "COLUMN_TYPE_UNSUPPORTED",
+                            f"{what}: colonna {name!r} inesistente")
+    column = table[name]
+    if not _numeric_kind(column):
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"{what}: colonna {name!r} non numerica")
+    if column.unit is None or not column.unit.is_equivalent(unit):
+        raise CatalogsError("UNIT_INCOMPATIBLE", f"{what}: colonna {name!r} in unità {column.unit}, serve {unit}")
+    values = np.asarray(getattr(column, "data", column), dtype=np.float64)
+    valid = _valid_mask(column) & np.isfinite(values)
+    return (values * column.unit).to(unit), valid
+
+
+def _source_epochs(table: CatalogTable, source_epoch) -> tuple[np.ndarray, str]:
+    """Epoca di origine per riga: colonna con UCD ``time.epoch``, COOSYS o parametro; mai assunta."""
+    t = table.table
+    columns = [n for n in t.colnames if "time.epoch" in _ucd_words(t[n].meta.get("ucd"))]
+    coosys_epoch = table.positions.epoch if table.positions is not None else None
+    from_metadata = bool(columns) or coosys_epoch is not None
+    if from_metadata and source_epoch is not None:
+        raise CatalogsError("EPOCH_INVALID", "l'epoca di origine è già nei metadati: source_epoch non si usa")
+    if len(columns) > 1:
+        raise CatalogsError("EPOCH_INVALID", f"più colonne con UCD time.epoch {columns}: nessuna scelta")
+    if columns:
+        name = columns[0]
+        column = t[name]
+        if column.unit is None or not column.unit.is_equivalent(u.yr):
+            raise CatalogsError("EPOCH_INVALID", f"colonna d'epoca {name!r} in unità {column.unit}: servono anni "
+                                "giuliani; altrimenti source_epoch")
+        values = np.asarray(getattr(column, "data", column), dtype=np.float64) * column.unit
+        out = np.array([None if not ok else float(v) for v, ok in
+                        zip(values.to_value(u.yr), _valid_mask(column) & np.isfinite(values.value), strict=True)],
+                       dtype=object)
+        return out, f"colonna {name!r} (UCD time.epoch, anni giuliani)"
+    if coosys_epoch is not None:
+        return np.full(len(t), coosys_epoch, dtype=object), f"COOSYS (epoca {coosys_epoch})"
+    if source_epoch is None:
+        raise CatalogsError("EPOCH_INVALID", "epoca di origine non nei metadati: indicare source_epoch (mai assunta)")
+    return np.full(len(t), source_epoch, dtype=object), f"parametro source_epoch ({source_epoch})"
+
+
+def _move(table: CatalogTable, target, *, pm_ra, pm_dec, pm_ra_includes_cosdec, parallax, radial_velocity,
+          source_epoch, years=None):
+    """Calcolo comune di propagate e delle frecce: gruppi di righe con la stessa epoca e lo stesso modo."""
+    if not isinstance(pm_ra_includes_cosdec, bool):
+        raise CatalogsError("PROPER_MOTION_MISSING", "pm_ra_includes_cosdec obbligatorio (True o False): mai assunto")
+    pos = table.positions
+    if pos is None:
+        raise CatalogsError("NO_COORD_COLUMNS", "nessuna colonna di posizione: confermarle prima")
+    if pos.frame is None:
+        raise CatalogsError("FRAME_UNKNOWN", "sistema delle colonne di posizione non dichiarato")
+    t = table.table
+    lon, lon_ok = _quantity_column(t, pos.lon, u.deg, "posizione")
+    lat, lat_ok = _quantity_column(t, pos.lat, u.deg, "posizione")
+    pmra, pmra_ok = _quantity_column(t, pm_ra, _PM_UNIT, "moto proprio")
+    pmde, pmde_ok = _quantity_column(t, pm_dec, _PM_UNIT, "moto proprio")
+    plx_ok = np.zeros(len(t), dtype=bool)
+    if parallax is not None:
+        plx, plx_ok = _quantity_column(t, parallax, u.mas, "parallasse")
+        plx_ok &= plx.value > 0
+    rv_ok = np.zeros(len(t), dtype=bool)
+    if radial_velocity is not None:
+        rv, rv_ok = _quantity_column(t, radial_velocity, u.km / u.s, "velocità radiale")
+    epochs, epoch_source = _source_epochs(table, source_epoch)
+    if not pm_ra_includes_cosdec:
+        pmra = pmra * np.cos(lat)  # moto proprio in RA portato a pm_ra·cos δ, dichiarato
+    present = lon_ok & lat_ok & pmra_ok & pmde_ok & np.array([e is not None for e in epochs])
+    mode = np.where(~present, "missing", np.where(plx_ok, "full", "pm_only")).astype(object)
+    end_lon, end_lat = np.full(len(t), np.nan), np.full(len(t), np.nan)
+    notes: list[str] = []
+    target_time = None
+    groups: dict[tuple, list[int]] = {}
+    for k in np.flatnonzero(present):
+        key = (str(epochs[k]), mode[k], bool(rv_ok[k]) if mode[k] == "full" else False)
+        groups.setdefault(key, []).append(int(k))
+    for (epoch_key, row_mode, with_rv), rows in groups.items():
+        idx = np.array(rows)
+        try:
+            start = SkyFrame.from_lonlat(lon[idx], lat[idx], pos.frame, equinox=pos.equinox,
+                                         epoch=epochs[idx[0]])
+            group_target = target if years is None else start.epoch + years
+            kwargs = dict(pm_ra_cosdec=pmra[idx], pm_dec=pmde[idx], target_epoch=group_target)
+            if row_mode == "full":
+                kwargs["parallax"] = plx[idx]
+                kwargs["radial_velocity"] = rv[idx] if with_rv else None
+            else:
+                kwargs.update(parallax=None, proper_motion_only=True)
+            moved = propagate_position(start, **kwargs)
+        except CoordinatesWcsError as exc:
+            raise CatalogsError(exc.code, f"propagazione: {exc.message}") from exc
+        end_lon[idx] = moved.position.lon.to_value(u.deg)
+        end_lat[idx] = moved.position.lat.to_value(u.deg)
+        target_time = moved.target_epoch if years is None else target_time
+        notes.extend(f"[{row_mode}, epoca {epoch_key}] {n}" for n in moved.notes if
+                     f"[{row_mode}, epoca {epoch_key}] {n}" not in notes)
+    counts = {m: int(np.count_nonzero(mode == m)) for m in ("full", "pm_only", "missing")}
+    if not pm_ra_includes_cosdec:
+        notes.append("moto proprio in RA senza cos δ nella colonna: moltiplicato per cos δ della posizione")
+    return lon, lat, end_lon, end_lat, mode, counts, epoch_source, target_time, notes
+
+
+def propagate(table: CatalogTable, epoch, *, pm_ra: str, pm_dec: str, pm_ra_includes_cosdec, parallax=None,
+              radial_velocity=None, source_epoch=None) -> Propagation:
+    """Posizioni all'epoca richiesta (D9, P5) con il modulo 10; nuove colonne, originali intatte."""
+    pos = table.positions
+    if pos is None:
+        raise CatalogsError("NO_COORD_COLUMNS", "nessuna colonna di posizione: confermarle prima")
+    names = (f"{pos.lon}_prop", f"{pos.lat}_prop", f"{pos.lon}_prop_mode")
+    existing = [n for n in names if n in table.table.colnames]
+    if existing:
+        raise CatalogsError("COLUMN_NAME_EXISTS", f"colonne già presenti: {existing}")
+    if epoch is None:
+        raise CatalogsError("EPOCH_INVALID", "epoca di arrivo obbligatoria")
+    lon, lat, end_lon, end_lat, mode, counts, source, target, notes = _move(
+        table, epoch, pm_ra=pm_ra, pm_dec=pm_dec, pm_ra_includes_cosdec=pm_ra_includes_cosdec, parallax=parallax,
+        radial_velocity=radial_velocity, source_epoch=source_epoch)
+    if target is None:
+        target = SkyFrame.from_lonlat(0 * u.deg, 0 * u.deg, "icrs", epoch=epoch).epoch  # solo per dichiararla
+    new = table.table.copy()
+    missing = mode == "missing"
+    for name, values, original in ((names[0], end_lon, pos.lon), (names[1], end_lat, pos.lat)):
+        column = MaskedColumn((values * u.deg).to_value(table.table[original].unit), mask=missing,
+                              unit=table.table[original].unit)
+        column.meta["epoch"] = target.isot + f" ({target.scale})"
+        new[name] = column
+    new[names[2]] = mode.astype(str)
+    warnings_ = list(table.warnings)
+    if counts["missing"]:
+        warnings_.append(("PROPER_MOTION_ROW_MISSING", f"{counts['missing']} righe senza moto proprio (o posizione o "
+                          "epoca): posizione propagata mancante, mai moto proprio nullo assunto"))
+    step = (f"propagazione a {target.isot} ({target.scale}) da {source}; cos δ "
+            f"{'incluso' if pm_ra_includes_cosdec else 'non incluso'}; righe full {counts['full']}, "
+            f"pm_only {counts['pm_only']}, missing {counts['missing']}")
+    result = dataclasses.replace(table, table=new, warnings=tuple(warnings_), history=table.history + (step,))
+    return Propagation(table=result, target_epoch=target, source_epoch=source,
+                       pm_ra_includes_cosdec=pm_ra_includes_cosdec, counts=counts, notes=tuple(notes))
+
+
+def proper_motion_arrows(table: CatalogTable, scale, *, pm_ra: str, pm_dec: str, pm_ra_includes_cosdec,
+                         parallax=None, radial_velocity=None, source_epoch=None) -> ProperMotionArrows:
+    """Dati delle frecce del moto proprio (D10): ``scale`` anni obbligatorio; il disegno è della UI."""
+    if not isinstance(scale, u.Quantity) or not scale.unit.is_equivalent(u.yr) or not np.isfinite(scale.value) \
+            or scale.value == 0:
+        raise CatalogsError("EPOCH_INVALID", "scale obbligatoria: un intervallo di tempo non nullo (es. 1000 * u.yr)")
+    lon, lat, end_lon, end_lat, mode, counts, source, _, notes = _move(
+        table, None, pm_ra=pm_ra, pm_dec=pm_dec, pm_ra_includes_cosdec=pm_ra_includes_cosdec, parallax=parallax,
+        radial_velocity=radial_velocity, source_epoch=source_epoch, years=scale.to(u.yr))
+    return ProperMotionArrows(lon_start=lon.to_value(u.deg), lat_start=lat.to_value(u.deg), lon_end=end_lon,
+                              lat_end=end_lat, mode=mode.astype(str), scale=scale.to(u.yr), counts=counts,
+                              notes=tuple(notes) + (f"epoca di origine da {source}",))

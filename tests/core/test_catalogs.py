@@ -463,3 +463,130 @@ def test_t29_skydist_and_function_table():
     assert np.array_equal(FUNCTIONS["max"][1](x, 0.3, x[::-1]), np.maximum(np.maximum(x, 0.3), x[::-1]))
     assert FUNCTIONS["log"][1](100.0) == 2.0 and FUNCTIONS["dist"][1](0, 0, 3, 4) == 5.0
     assert CONSTANTS == {"pi": np.pi, "e": np.e}
+
+
+# =============================================================================
+# P5 — propagazione e frecce del moto proprio (T3, T7, T23)
+# =============================================================================
+
+import warnings
+
+from astropy.coordinates import Distance, SkyCoord
+from astropy.time import Time
+
+from astrotwo.core.catalogs import propagate, proper_motion_arrows
+
+
+def motion_table(tmp_path, n=100, seed=3, with_epoch_column=False):
+    rng = np.random.default_rng(seed)
+    t = Table()
+    t["RA"] = rng.uniform(0, 359, n) * u.deg
+    t["DE"] = rng.uniform(-80, 80, n) * u.deg
+    t["pmRA"] = rng.normal(0, 200, n) * u.mas / u.yr  # include cos δ
+    t["pmDE"] = rng.normal(0, 200, n) * u.mas / u.yr
+    t["plx"] = rng.uniform(1, 50, n) * u.mas
+    t["RA"].meta["ucd"] = "pos.eq.ra;meta.main"
+    t["DE"].meta["ucd"] = "pos.eq.dec;meta.main"
+    if with_epoch_column:
+        t["ep"] = np.full(n, 2016.0) * u.yr
+        t["ep"].meta["ucd"] = "meta.ref;time.epoch"
+    path = tmp_path / "cat.csv"
+    path.write_text("x,y\n1,2\n")
+    cat = dataclasses.replace(read_table(path), table=t)
+    return confirm_position_columns(cat, "RA", "DE", "icrs")
+
+
+def expected_positions(t, rows, target, epoch, with_parallax=True):
+    kwargs = dict(ra=t["RA"][rows], dec=t["DE"][rows], pm_ra_cosdec=t["pmRA"][rows], pm_dec=t["pmDE"][rows],
+                  obstime=epoch, frame="icrs")
+    if with_parallax:
+        kwargs["distance"] = Distance(parallax=t["plx"][rows])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return SkyCoord(**kwargs).apply_space_motion(new_obstime=target)
+
+
+def test_t3_propagation_matches_astropy(tmp_path):
+    cat = motion_table(tmp_path)
+    target = Time(2026.0, format="jyear", scale="tt")
+    result = propagate(cat, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, parallax="plx",
+                       source_epoch=2016.0)
+    t = cat.table
+    expected = expected_positions(t, slice(None), target, Time(2016.0, format="jyear", scale="tt"))
+    got = SkyCoord(result.table.table["RA_prop"], result.table.table["DE_prop"], frame="icrs")
+    assert np.max(got.separation(expected).deg) < 1e-9
+    assert result.counts == {"full": 100, "pm_only": 0, "missing": 0}
+    assert set(result.table.table["RA_prop_mode"]) == {"full"} and "parametro source_epoch" in result.source_epoch
+    assert np.array_equal(result.table.table["RA"], t["RA"]) and "RA_prop" not in t.colnames  # originali intatte
+    with pytest.raises(CatalogsError) as info:
+        propagate(result.table, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, source_epoch=2016.0)
+    assert info.value.code == "COLUMN_NAME_EXISTS"
+
+
+def test_t3_epoch_from_metadata_and_cosdec(tmp_path):
+    cat = motion_table(tmp_path, n=5, with_epoch_column=True)
+    target = Time(2030.0, format="jyear", scale="tt")
+    result = propagate(cat, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, parallax="plx")
+    assert "time.epoch" in result.source_epoch
+    with pytest.raises(CatalogsError) as info:  # epoca nei metadati e parametro: nessuna scelta silenziosa
+        propagate(cat, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, source_epoch=2000.0)
+    assert info.value.code == "EPOCH_INVALID"
+    plain = motion_table(tmp_path, n=5)
+    for kwargs in (dict(pm_ra_includes_cosdec=True), dict(pm_ra_includes_cosdec=None, source_epoch=2016.0)):
+        with pytest.raises(CatalogsError) as info:
+            propagate(plain, target, pm_ra="pmRA", pm_dec="pmDE", **kwargs)
+        assert info.value.code in ("EPOCH_INVALID", "PROPER_MOTION_MISSING")
+    # Moto proprio in RA senza cos δ: moltiplicato per cos δ, dichiarato.
+    t = plain.table.copy()
+    t["pmRA"] = t["pmRA"] / np.cos(np.deg2rad(np.asarray(t["DE"])))
+    no_cos = dataclasses.replace(plain, table=t)
+    a = propagate(no_cos, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=False, source_epoch=2016.0)
+    b = propagate(plain, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, source_epoch=2016.0)
+    assert np.allclose(a.table.table["RA_prop"], b.table.table["RA_prop"], rtol=0, atol=1e-12)
+    assert any("cos δ" in n for n in a.notes)
+
+
+def test_t7_proper_motion_columns_missing(tmp_path):
+    cat = motion_table(tmp_path, n=3)
+    with pytest.raises(CatalogsError) as info:
+        propagate(cat, 2030.0, pm_ra="nessuna", pm_dec="pmDE", pm_ra_includes_cosdec=True, source_epoch=2016.0)
+    assert info.value.code == "PROPER_MOTION_MISSING"
+
+
+def test_t23_missing_parallax_and_proper_motion(tmp_path):
+    cat = motion_table(tmp_path, n=6)
+    t = cat.table
+    t["plx"] = MaskedColumn(t["plx"].value, mask=[False, True, False, False, False, False], unit=u.mas)
+    t["plx"][2] = -1.5  # parallasse negativa
+    t["pmDE"] = MaskedColumn(t["pmDE"].value, mask=[False, False, False, True, False, False], unit=u.mas / u.yr)
+    t["pmRA"][4] = np.nan  # moto proprio non finito
+    target = Time(2026.0, format="jyear", scale="tt")
+    epoch = Time(2016.0, format="jyear", scale="tt")
+    result = propagate(cat, target, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, parallax="plx",
+                       source_epoch=2016.0)
+    out = result.table.table
+    assert list(out["RA_prop_mode"]) == ["full", "pm_only", "pm_only", "missing", "missing", "full"]
+    assert result.counts == {"full": 2, "pm_only": 2, "missing": 2} and len(out) == 6  # nessuna riga esclusa
+    assert list(out["RA_prop"].mask) == [False, False, False, True, True, False]
+    pm_only = expected_positions(t, [1, 2], target, epoch, with_parallax=False)
+    got = SkyCoord(out["RA_prop"][[1, 2]], out["DE_prop"][[1, 2]], frame="icrs")
+    assert np.max(got.separation(pm_only).deg) < 1e-12
+    assert "PROPER_MOTION_ROW_MISSING" in dict(result.table.warnings)
+    assert any("solo moto proprio" in n for n in result.notes)
+    assert bool(t["pmDE"].mask[3]) and np.isnan(t["pmRA"][4])  # colonne originali intatte
+
+
+def test_proper_motion_arrows(tmp_path):
+    cat = motion_table(tmp_path, n=4)
+    arrows = proper_motion_arrows(cat, 1000 * u.yr, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True,
+                                  source_epoch=2016.0)
+    epoch = Time(2016.0, format="jyear", scale="tt")
+    expected = expected_positions(cat.table, slice(None), epoch + 1000 * u.yr, epoch, with_parallax=False)
+    got = SkyCoord(arrows.lon_end * u.deg, arrows.lat_end * u.deg, frame="icrs")
+    assert np.max(got.separation(expected).deg) < 1e-12 and set(arrows.mode) == {"pm_only"}
+    assert np.array_equal(arrows.lon_start, np.asarray(cat.table["RA"]))
+    for scale in (None, 1000, 0 * u.yr, 3 * u.m):
+        with pytest.raises(CatalogsError) as info:
+            proper_motion_arrows(cat, scale, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True,
+                                 source_epoch=2016.0)
+        assert info.value.code == "EPOCH_INVALID"

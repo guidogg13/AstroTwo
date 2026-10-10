@@ -213,7 +213,11 @@ suo VOTable.
   - **Epoca di origine (decisione del proprietario del 2026-10-10):** dalla
     colonna con UCD `time.epoch` (un'epoca per riga) o dall'epoca del
     `COOSYS`; altrimenti parametro obbligatorio; **mai assunta** (D10-2);
-    scala di tempo sempre dichiarata (DC1).
+    scala di tempo sempre dichiarata (DC1). Precisazioni (2026-10-10, P5):
+    la colonna d'epoca dev'essere in anni (anni giuliani, letti con la
+    regola del modulo 10); con l'epoca nei metadati il parametro
+    `source_epoch` non si usa (passarlo → `EPOCH_INVALID`, nessuna scelta
+    silenziosa); più colonne `time.epoch` → `EPOCH_INVALID`.
   - **Moto proprio in ascensione retta:** se include il fattore cos δ va
     **dichiarato** (metadati della colonna o parametro
     `pm_ra_includes_cosdec`, senza default); mai assunto.
@@ -222,7 +226,8 @@ suo VOTable.
     moto proprio, senza effetti prospettici**, marcate riga per riga, con il
     loro conteggio nel risultato. Il calcolo è del modulo 10
     (`propagate_position(..., proper_motion_only=True)`, D13-12).
-  - **Righe senza moto proprio** (valore mancante in una delle due colonne):
+  - **Righe senza moto proprio** (valore mancante o non finito in una delle
+    due colonne; stesso trattamento per posizione o epoca mancanti):
     nella posizione propagata diventano **valore mancante marcato**, con
     conteggio nel risultato; **non si assume un moto proprio nullo**
     (D13-12).
@@ -236,7 +241,10 @@ suo VOTable.
     (e la sua fonte), epoca di arrivo, uso del cos δ, conteggi per modo e le
     note del modulo 10.
   - **Frecce del moto proprio:** dalla posizione all'epoca della tabella
-    alla posizione propagata di `scale` anni (**parametro obbligatorio**).
+    alla posizione propagata di `scale` anni (**parametro obbligatorio**,
+    un intervallo di tempo con unità, non nullo), con le stesse regole di
+    `propagate` per parallasse e righe mancanti.
+  - **Filtro temporale (`time_filter`): il codice attende D13-16.**
 - **Filtro temporale e cursore epoca (H3, P5):** selezionare i record per
   epoca di osservazione e spostare l'epoca di visualizzazione (con i moduli
   10 e 41). **Epoca di default decisa con D13-2 (2026-10-04):** l'epoca di
@@ -374,8 +382,10 @@ suo VOTable.
   velocità radiale per nome; epoca di origine dai metadati (§3) o
   `source_epoch`; restituisce la nuova tabella con le colonne propagate e il
   report (§3); **calcolo: modulo 10 / Astropy**.
-- **`proper_motion_arrows(table, scale)`** — dati per le frecce del moto
-  proprio (D10, P5); `scale` in anni, obbligatoria; il disegno è della UI.
+- **`proper_motion_arrows(table, scale, *, pm_ra, pm_dec,
+  pm_ra_includes_cosdec, parallax=None, radial_velocity=None,
+  source_epoch=None)`** — dati per le frecce del moto proprio (D10, P5);
+  `scale` intervallo di tempo obbligatorio; il disegno è della UI.
 - **`calculated_column(table, name, expression, unit=None, ucd=None,
   decimals=None, inplace=False)`** / **`subset(table, selection,
   inplace=False)`** — colonne calcolate e sottoinsiemi (H8, P4);
@@ -637,6 +647,18 @@ sono verificati da `34-ia-verifica-risultati.md`.
   sé, quindi `sin` e `sind` di una colonna in gradi danno lo stesso
   risultato) e regola di `round` (oggi `numpy.round`, metà al pari).
 
+- **D13-16 — Filtro temporale `time_filter` (H3; da decidere, Gruppo 3;
+  blocca `time_filter` di P5):** la specifica dice solo "selezione per
+  epoca osservativa". Da decidere: (1) quale colonna — indicata
+  dall'utente, oppure ricavata dall'UCD (`time.epoch;obs`, `time.start`,
+  `time.end`…) e con quali regole se ce ne sono più d'una; (2) come si
+  leggono i valori — formato (MJD, JD, anni, ISO 8601) e scala di tempo dal
+  `TIMESYS` del VOTable quando c'è, altrimenti dichiarati dall'utente (mai
+  assunti, DC1); (3) come si dà l'intervallo (inizio e fine come `Time`
+  con scala, estremi inclusi o no). Raccomandazione: colonna indicata
+  dall'utente, formato e scala da `TIMESYS` o parametri obbligatori,
+  intervallo chiuso `[inizio, fine]` di `Time`.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -657,3 +679,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario D13-10…D13-14** (autorizzazione esplicita a modificare il file approvato): `skydist` con `astropy.coordinates` nella tabella delle funzioni, usato anche dal 17; colonna DataLink e `LINK` ASTRORES in P6; propagazione senza parallasse con l'opzione `proper_motion_only` del 10, righe senza moto proprio mascherate e contate, colonne `_prop` e `_prop_mode` (§3, §7); sottoinsiemi salvati in un VOTable scelto dall'utente (`save_subset`); lettore ASTRORES secondo la DTD con i punti a, c, d, e; nuovi avvisi `ASTRORES_TYPE_MISMATCH`, `ASTRORES_NONCONFORMING_REF`, `PROPER_MOTION_ROW_MISSING`; T6, T15, T23 riscritti, nuovi T28–T29. **Verifica:** nessuna tabella ufficiale IVOA UCD1 → UCD1+ trovata → nuova **D13-14b** (da decidere, blocca P2). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P3 scritta** (`search`, `PlotRule`, `SizeScale`, `set_plot_rules`; test T2, T17–T20): precisati in §3 l'intervallo invertito della dimensione (`size_min` > `size_max`) e che un record senza valore per la dimensione non passa alla regola successiva. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P4 scritta tranne `calculated_column`** (`FUNCTIONS`, `CONSTANTS`, `skydist`, `subset`, `save_subset`, `column_statistics`, `histogram`, `xy_plot`, `record_view`; test T5, T6, T25, T26, T29 per `skydist`): verificato con astropy 8.0.1 che un numero scritto è adimensionale (`${mag} - 0.12` → errore di unità) → nuova **D13-15** (da decidere); nuovi `FILE_EXISTS` e avviso `INPLACE` (§10); deviazione standard con `ddof = 0` dichiarato. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P5 scritta tranne `time_filter`** (`propagate`, `proper_motion_arrows`; test T3, T7, T23 e frecce): epoca in anni giuliani, `source_epoch` vietato se l'epoca è nei metadati, righe con posizione o epoca mancante trattate come `missing` (§3, §7). `time_filter` attende la nuova **D13-16** (da decidere). Stato `approvato` invariato. |
