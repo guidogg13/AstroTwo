@@ -1268,7 +1268,7 @@ def choose_grid_spacing(
     obstime=None,
     target_lines: int = 5,
 ) -> GridSpacing:
-    """Passo automatico della griglia in base al campo visibile (come Aladin).
+    """Passo automatico della griglia in base al campo visibile (leggibile a ogni ingrandimento).
 
     Per ogni asse: il più piccolo valore tondo ≥ estensione / ``target_lines``
     (elenchi :data:`GRID_STEPS_TIME` per l'ascensione retta dei frame

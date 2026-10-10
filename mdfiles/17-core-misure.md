@@ -257,8 +257,12 @@ arrivano solo da questi strumenti e vengono poi verificati da
   (nearest / linear) e passo di default.
 - **D17-6 — Tag "distanza con profilo" (H11): DECISA il 2026-10-09 (decisione
   del proprietario sulla checklist del livello 1).** **distanza + profilo di
-  intensità lungo il segmento + grafico esportabile**, come lo strumento
-  "dist" di Aladin (manuale ed. giugno 2022, sez. 5.1.5 e 5.1.8).
+  intensità lungo il segmento + grafico esportabile**. **Motivazione
+  (nostra, 2026-10-10):** il profilo lungo un segmento è il modo diretto per
+  misurare estensione e separazione di strutture (bordi, getti, coppie di
+  sorgenti) insieme alla loro distanza; il grafico esportabile con i valori
+  rende la misura riusabile e riproducibile fuori dall'applicazione. La
+  funzione copre la riga H11 di `03-parita-aladin.md` (parità).
 
 ## 14. Registro modifiche
 
@@ -272,3 +276,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §10, §12 per F1 (misura automatica della distanza tra due sorgenti di catalogo selezionate, con epoca mai assunta e stesso `body`). Nessuna nuova decisione dei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): offset angolari e calcolo inverso (posizione da distanza + angolo di posizione) spostati qui dalla calcolatrice delle coordinate del 10 — §3, §5, §6, §7 (`angular_offsets`, `apply_offsets`, `offset_position`), §10 (`OFFSET_INVALID`), §11, §12 (T13–T15). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D17-6 con motivazione nostra al posto di "come lo strumento dist di Aladin". Stato `approvato` invariato. |

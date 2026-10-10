@@ -35,7 +35,8 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   `compute_grid_lines` — meridiani e paralleli a passo dichiarato, come
   tratti di coordinate pixel dentro l'immagine (il disegno resta nel `41`);
   il passo si dà in modo esplicito oppure si sceglie in automatico con
-  `choose_grid_spacing` in base al campo visibile, come fa Aladin;
+  `choose_grid_spacing` in base al campo visibile, così la griglia resta
+  leggibile a ogni ingrandimento senza che l'utente scelga il passo;
   **scelta della proiezione del campo** con `choose_projection` — `TAN` per i
   campi piccoli, `AIT` per i campi grandi, con la soglia che è la decisione
   D10-9, da decidere con il `41` (D10-8, decisa il 2026-10-09).
@@ -84,7 +85,9 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   esplicite in ingresso e in uscita come da `02-convenzioni.md`.
 - **Calibrazioni storiche (H25, sez. 8.2 del manuale di Aladin, ed. giugno 2022):**
   oltre alle soluzioni WCS standard si riconoscono le soluzioni astrometriche
-  storiche delle lastre (metodo DSS1), come fa Aladin. Il supporto in
+  storiche delle lastre (metodo DSS1): molte lastre digitalizzate degli
+  archivi hanno solo questa calibrazione e senza di essa resterebbero prive
+  di coordinate. Il supporto in
   `astropy.wcs` è **da verificare prima del codice**; se manca, la scelta di
   come trattarle diventa una decisione da registrare. **Verificato il
   2026-10-09:** con astropy 8.0.1 (WCSLIB 8.6) un'intestazione DSS1 con
@@ -206,7 +209,7 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   numpy). Nessun disegno (`41`). Se i due passi sono omessi li sceglie
   `choose_grid_spacing`; se ne è dato uno solo, errore.
 - **`choose_grid_spacing(...)`** — passo automatico della griglia in base al
-  campo visibile, come Aladin: parametri: WCS, dimensioni dell'immagine,
+  campo visibile: parametri: WCS, dimensioni dell'immagine,
   frame della griglia (con epoca se il frame la richiede), numero di linee
   desiderate per asse; misura l'estensione in longitudine e in latitudine
   del campo nel frame della griglia (360° in longitudine se un polo è nel
@@ -268,8 +271,12 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
   0.2 s, 0.5 s, 1 s, 2 s, 5 s, 10 s, 15 s, 30 s, 1 m, 2 m, 5 m, 10 m, 15 m,
   30 m, 1 h, 2 h, 3 h, 4 h, 6 h (1 s = 15″). Se l'estensione richiede più
   del valore massimo, si usa il massimo. Elenchi e numero di linee:
-  **confermati dal proprietario il 2026-10-09**; coincidenza con Aladin **da
-  verificare con AP1** (validazione finale della parità).
+  **confermati dal proprietario il 2026-10-09**. **Motivazione (nostra):**
+  poche linee per asse (5) non coprono l'immagine e lasciano spazio alle
+  etichette; i valori tondi (1, 2, 5 per decade e le suddivisioni
+  sessagesimali 15, 30, 45) danno etichette brevi e facili da leggere in
+  gradi o in ore. Il confronto dei risultati con Aladin resta **da fare con
+  AP1** (validazione finale della parità: confronto, non copia).
 - **Interpretazioni confermate dal proprietario il 2026-10-09:**
   `wcs_from_header` accetta anche le proiezioni di WCSLIB fuori dall'elenco
   D10-4 (l'elenco limita calibrazione e scelta della proiezione, non la
@@ -456,3 +463,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-09 | Claude Code | `resolve_name`: politica **prima la cache** con `refresh=True` (decisione del proprietario), timeout comuni di `04`, epoca J2000 delle coordinate SIMBAD dichiarata (§3, §7). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | **`resolve_name` scritto** con la cache comune di `04` (prima la cache, `refresh`, timeout 10 s / 60 s sulla sessione HTTP di SIMBAD, unità lette dalle colonne SIMBAD): tutto il §7 è ora nel codice. T5 non più saltato (simulato di default, reale con il marcatore `network`). Test del modulo: 75 superati di default + 3 di rete. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Verifica dei timeout di SIMBAD** (richiesta del proprietario): l'impostazione pubblica `conf.timeout` di `astroquery.simbad` **non basta** — è il limite di esecuzione lato server delle query asincrone, non un timeout HTTP; inoltre `query_object` legge sempre `hardlimit` tramite la sessione interna di astroquery (anche con `get_query_payload=True`), quindi neppure l'esecuzione con `pyvo` e sessione pubblica evita una richiesta senza timeout. Il campo interno `_session` resta, **isolato nella sola funzione `_simbad_with_timeouts`** con un commento che spiega il motivo; il test `test_t5_timeouts_reach_the_http_session` controlla che i timeout arrivino a ogni richiesta. Test: 106 superati con la rete. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): tolti i "come Aladin" usati come motivo — `choose_grid_spacing` (§3, §7, §9, con motivazione nostra degli elenchi di valori tondi e delle 5 linee) e calibrazioni storiche DSS1 (§3, motivazione: lastre d'archivio calibrate solo così); resta il confronto finale con AP1, che è validazione e non copia. Docstring di `choose_grid_spacing` in `coordinates_wcs.py` allineata. Stato `approvato` invariato. |
