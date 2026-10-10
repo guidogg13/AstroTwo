@@ -48,9 +48,13 @@ from astropy.visualization import (
     SquaredStretch,
 )
 from astropy.wcs import WCS, FITSFixedWarning
+from astropy.wcs.utils import proj_plane_pixel_scales
 import PIL
+import reproject as reproject_lib
 import requests
 from PIL import Image, UnidentifiedImageError
+from reproject import reproject_exact, reproject_interp
+from reproject.mosaicking import reproject_and_coadd
 from scipy import ndimage
 
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
@@ -71,6 +75,13 @@ __all__ = [
     "DisplayPlane",
     "OPERATIONS",
     "LargeImageLimits",
+    "RESAMPLING_METHODS",
+    "Resampled",
+    "RgbComposite",
+    "mosaic",
+    "reproject",
+    "resample_to_reference",
+    "rgb_composite",
     "open_large_image",
     "Contours",
     "contours",
@@ -1146,6 +1157,214 @@ def save_fits(image: FitsImage, path, overwrite: bool = False) -> Path:
     target = Path(path)
     fits.PrimaryHDU(data=image.data, header=header).writeto(target, overwrite=overwrite)
     return target
+
+
+# --------------------------------------------------------------------------
+# P7 — Ricampionamento, RGB e mosaico (reproject, D11-2)
+# --------------------------------------------------------------------------
+
+#: Metodi di ricampionamento (obbligatori, senza default).
+RESAMPLING_METHODS: tuple[str, ...] = ("nearest", "bilinear", "flux")
+_REPROJECT_PROVENANCE = f"reproject {reproject_lib.__version__}"
+
+
+def _reproject_function(method: str):
+    """(funzione di reproject, argomenti) per il metodo richiesto."""
+    if method == "nearest":
+        return reproject_interp, {"order": "nearest-neighbor"}
+    if method == "bilinear":
+        return reproject_interp, {"order": "bilinear"}
+    if method == "flux":
+        return reproject_exact, {}
+    raise ImagesFitsError(
+        "OPERATION_UNSUPPORTED", f"metodo di ricampionamento {method!r} non previsto; metodi: {', '.join(RESAMPLING_METHODS)}"
+    )
+
+
+def _resampling_input(image: FitsImage, what: str) -> tuple[np.ndarray, WCS]:
+    if not isinstance(image, FitsImage):
+        raise TypeError(f"{what}: serve un FitsImage")
+    if image.color:
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"{what}: serve un'immagine monocroma")
+    if image.wcs is None:
+        raise ImagesFitsError("WCS_MISSING", f"{what}: il ricampionamento richiede la calibrazione ({image.origin})")
+    _refuse_preview(image, what)
+    return np.asarray(image.data, dtype=np.float64), image.wcs.wcs
+
+
+def _reference_grid(reference: FitsImage) -> tuple[WcsSolution, tuple[int, int]]:
+    if not isinstance(reference, FitsImage) or reference.wcs is None:
+        raise ImagesFitsError("WCS_MISSING", "il riferimento deve essere un'immagine con WCS")
+    return reference.wcs, reference.shape
+
+
+@dataclass(frozen=True, eq=False)
+class Resampled:
+    """Immagine ricampionata e qualità: mappa di copertura e percentuale di pixel coperti."""
+
+    image: FitsImage
+    footprint: np.ndarray
+    coverage_percent: float
+    method: str
+    provenance: str = field(default=_REPROJECT_PROVENANCE)
+
+
+def _on_reference(image: FitsImage, data: np.ndarray, reference: FitsImage, step: str, notes=()) -> FitsImage:
+    ref_wcs, shape = _reference_grid(reference)
+    header = _header_with_wcs(image.header, ref_wcs.wcs, data.shape)
+    if image.bunit:
+        header["BUNIT"] = image.bunit
+    return dataclasses.replace(
+        image,
+        data=data,
+        header=header,
+        wcs=dataclasses.replace(ref_wcs, pixel_shape=(shape[1], shape[0])),
+        compression=None,
+        warnings=image.warnings + tuple(notes),
+        history=image.history + (step,),
+        strategy="memory",
+        strategy_reason=None,
+        preview_step=None,
+        full_shape=None,
+        raw_ndim=2,
+        dropped_axes=(),
+    )
+
+
+def resample_to_reference(image: FitsImage, reference: FitsImage, method: str) -> Resampled:
+    """Ricampiona sulla griglia del riferimento (B7) con ``reproject``; metodo obbligatorio."""
+    function, kwargs = _reproject_function(method)
+    data, wcs = _resampling_input(image, "ricampionamento")
+    ref_wcs, shape = _reference_grid(reference)
+    out, footprint = function((data, wcs), ref_wcs.wcs, shape_out=shape, **kwargs)
+    coverage = 100.0 * float(np.count_nonzero(footprint > 0)) / footprint.size
+    step = f"ricampionamento ({method}, reproject) sulla griglia di {reference.origin}: copertura {coverage:.3f} %"
+    return Resampled(
+        image=_on_reference(image, out, reference, step),
+        footprint=footprint,
+        coverage_percent=coverage,
+        method=method,
+    )
+
+
+def reproject(images, reference: FitsImage, method: str) -> list[Resampled]:
+    """Ricampiona più immagini sulla stessa griglia di riferimento."""
+    return [resample_to_reference(image, reference, method) for image in images]
+
+
+@dataclass(frozen=True, eq=False)
+class RgbComposite:
+    """Immagine a colori di sola presentazione (B11): piani R, G, B a 8 bit sul riferimento."""
+
+    planes: np.ndarray  # 3 × righe × colonne, uint8
+    wcs: WcsSolution
+    mode: str
+    components: tuple[str | None, str | None, str | None]  # origine dell'immagine in R, G, B
+    display: tuple[tuple[float, float, str], ...] | None
+    scale: float | None  # rgb_diff: fattore unico 255 / max|differenza|
+    coverage: np.ndarray  # True dove tutte le componenti coprono il pixel
+    reference_origin: str
+    method: str = "nearest"
+    provenance: str = field(default=f"{_REPROJECT_PROVENANCE}; astropy {astropy.__version__} (astropy.visualization)")
+
+
+def _smallest_pixel(images) -> FitsImage:
+    scales = [float(np.mean(proj_plane_pixel_scales(im.wcs.wcs))) for im in images]
+    return images[int(np.argmin(scales))]
+
+
+def rgb_composite(images, reference: FitsImage | None = None, mode: str = "rgb", display=None, wavelengths=None) -> RgbComposite:
+    """Immagine a colori da 2 o 3 immagini monocrome (``rgb``) o differenza (``rgb_diff``)."""
+    images = list(images)
+    if mode not in ("rgb", "rgb_diff"):
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"modalità {mode!r}: ammesse 'rgb' e 'rgb_diff'")
+    if not 2 <= len(images) <= 3 or (mode == "rgb_diff" and len(images) != 2):
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"{len(images)} immagini per {mode}: servono 2 o 3 (2 per rgb_diff)")
+    for im in images:
+        if not isinstance(im, FitsImage) or im.color:
+            raise ImagesFitsError("RGB_INPUT_INVALID", "servono immagini monocrome (FitsImage)")
+        if im.wcs is None:
+            raise ImagesFitsError("WCS_MISSING", f"RGB: {im.origin} non ha WCS, il ricampionamento richiede la calibrazione")
+    order = list(range(len(images)))
+    if wavelengths is not None:
+        if not isinstance(wavelengths, u.Quantity) or len(wavelengths) != len(images):
+            raise ImagesFitsError("RGB_INPUT_INVALID", "wavelengths: una lunghezza d'onda (Quantity) per immagine")
+        order = list(np.argsort(-wavelengths.to_value(u.m, equivalencies=u.spectral())))
+        images = [images[i] for i in order]
+    reference = _smallest_pixel(images) if reference is None else reference
+    resampled = reproject(images, reference, "nearest")
+    covered = np.all([r.footprint > 0 for r in resampled], axis=0)
+    shape = resampled[0].image.data.shape
+    planes = np.zeros((3,) + shape, dtype=np.uint8)
+    scale = None
+    used_display = None
+    if mode == "rgb":
+        if display is None or len(display) != len(images):
+            raise ImagesFitsError("RGB_INPUT_INVALID", "rgb: servono (vmin, vmax, funzione di trasferimento) per ogni componente")
+        if wavelengths is not None:
+            display = [display[i] for i in order]
+        used_display = []
+        for k, (r, params) in enumerate(zip(resampled, display, strict=True)):
+            vmin, vmax, stretch = float(params[0]), float(params[1]), _check_display_option(params[2], STRETCHES, "funzione di trasferimento")
+            if not (math.isfinite(vmin) and math.isfinite(vmax) and vmin < vmax):
+                raise ValueError("serve vmin < vmax, entrambi finiti")
+            values = r.image.data
+            normalized = np.full(values.shape, np.nan)
+            finite = np.isfinite(values)
+            normalized[finite] = ManualInterval(vmin, vmax)(values[finite], clip=True)
+            stretched = _apply_stretch(normalized, stretch, 1.0)
+            planes[k] = np.where(np.isfinite(stretched), np.round(stretched * 255.0), 0.0).astype(np.uint8)
+            used_display.append((vmin, vmax, stretch))
+        if len(images) == 2:
+            planes[2] = np.round((planes[0].astype(np.float64) + planes[1]) / 2.0).astype(np.uint8)
+        used_display = tuple(used_display)
+    else:
+        a, b = resampled[0].image, resampled[1].image
+        if (images[0].bunit or None) != (images[1].bunit or None):
+            raise ImagesFitsError("UNIT_MISMATCH", f"rgb_diff: unità diverse {images[0].bunit!r} e {images[1].bunit!r}")
+        diff = a.data - b.data
+        finite = np.isfinite(diff)
+        peak = float(np.max(np.abs(diff[finite]))) if np.any(finite) else 0.0
+        if peak > 0.0:
+            scale = 255.0 / peak
+            planes[0] = np.where(finite, np.round(np.clip(diff, 0.0, None) * scale), 0.0).astype(np.uint8)
+            planes[1] = np.where(finite, np.round(np.clip(-diff, 0.0, None) * scale), 0.0).astype(np.uint8)
+    planes[:, ~covered] = 0
+    origins = [im.origin for im in images] + [None] * (3 - len(images))
+    return RgbComposite(
+        planes=planes,
+        wcs=resampled[0].image.wcs,
+        mode=mode,
+        components=tuple(origins),  # type: ignore[arg-type]
+        display=used_display,
+        scale=scale,
+        coverage=covered,
+        reference_origin=reference.origin,
+    )
+
+
+def mosaic(images, reference: FitsImage, method: str) -> Resampled:
+    """Mosaico nella griglia del riferimento: media nelle sovrapposizioni, nessuna correzione del fondo."""
+    function, kwargs = _reproject_function(method)
+    images = list(images)
+    if not images:
+        raise ValueError("servono immagini per il mosaico")
+    units = {im.bunit or None for im in images}
+    if len(units) > 1:
+        raise ImagesFitsError("UNIT_MISMATCH", f"mosaico: unità diverse {sorted(map(str, units))}")
+    inputs = [_resampling_input(im, "mosaico") for im in images]
+    ref_wcs, shape = _reference_grid(reference)
+    out, footprint = reproject_and_coadd(
+        inputs, ref_wcs.wcs, shape_out=shape, reproject_function=function, combine_function="mean",
+        match_background=False, **kwargs,
+    )
+    coverage = 100.0 * float(np.count_nonzero(footprint > 0)) / footprint.size
+    step = (
+        f"mosaico di {len(images)} immagini ({method}, reproject_and_coadd, media, nessuna correzione del fondo) "
+        f"sulla griglia di {reference.origin}"
+    )
+    return Resampled(image=_on_reference(images[0], out, reference, step), footprint=footprint,
+                     coverage_percent=coverage, method=method)
 
 
 def pixel_scaling(image: FitsImage) -> PixelScaling:

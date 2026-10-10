@@ -948,3 +948,144 @@ def test_t25_limits_validation():
     with pytest.raises(ValueError):
         LargeImageLimits(memory_bytes=10, two_level_bytes=5)
     assert LargeImageLimits() == LargeImageLimits(10**9, 4 * 10**9, 10**9, 4096)
+
+
+# =============================================================================
+# P7 — Ricampionamento, RGB, mosaico (T12, T13, T14, T21, T22, T23)
+# =============================================================================
+
+from reproject import reproject_exact as ref_exact
+from reproject import reproject_interp as ref_interp
+from reproject.mosaicking import reproject_and_coadd as ref_coadd
+
+from astrotwo.core.images_fits import RESAMPLING_METHODS, mosaic, reproject, resample_to_reference, rgb_composite
+
+
+def sky_image(tmp_path, name, crval=(150.0, 2.0), scale=1e-3, nx=40, ny=30, rot=0.0, seed=0, unit="Jy"):
+    c, s = np.cos(np.radians(rot)), np.sin(np.radians(rot))
+    w = WCS(naxis=2)
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    w.wcs.crval = list(crval)
+    w.wcs.crpix = [nx / 2 + 0.5, ny / 2 + 0.5]
+    w.wcs.cd = [[-scale * c, scale * s], [scale * s, scale * c]]
+    w.wcs.radesys = "ICRS"
+    header = w.to_header()
+    header["BUNIT"] = unit
+    data = np.random.default_rng(seed).gamma(3.0, 20.0, (ny, nx)).astype(np.float32)
+    return load_image(write_fits(tmp_path / name, data, header))
+
+
+def expected_component(values, vmin, vmax, stretch):
+    out = np.zeros(values.shape)
+    finite = np.isfinite(values)
+    norm = viz.ManualInterval(vmin, vmax)(values[finite], clip=True)
+    st = {"linear": viz.LinearStretch, "sqrt": viz.SqrtStretch, "log": viz.LogStretch}[stretch]()
+    out[finite] = np.round(st(norm, clip=True) * 255.0)
+    return out.astype(np.uint8)
+
+
+def test_t23_resample_quality(tmp_path):
+    reference = sky_image(tmp_path, "ref.fits")
+    # Immagine spostata di metà campo in RA: copre circa metà del riferimento.
+    shifted = sky_image(tmp_path, "half.fits", crval=(150.0 - 20e-3 / np.cos(np.radians(2.0)), 2.0), seed=1)
+    for method in RESAMPLING_METHODS:
+        result = resample_to_reference(shifted, reference, method)
+        function = {"nearest": lambda *a, **k: ref_interp(*a, order="nearest-neighbor", **k),
+                    "bilinear": lambda *a, **k: ref_interp(*a, order="bilinear", **k),
+                    "flux": ref_exact}[method]
+        expected, footprint = function((shifted.data.astype(np.float64), shifted.wcs.wcs), reference.wcs.wcs,
+                                       shape_out=reference.shape)
+        assert np.array_equal(result.footprint, footprint)
+        assert np.allclose(result.image.data, expected, equal_nan=True, rtol=0, atol=0)
+        assert result.coverage_percent == pytest.approx(100.0 * np.count_nonzero(footprint > 0) / footprint.size)
+        assert 30.0 < result.coverage_percent < 70.0 and result.method == method
+        assert "ricampionamento" in result.image.history[-1]
+    with pytest.raises(TypeError):
+        resample_to_reference(shifted, reference)  # metodo obbligatorio, nessun default
+    with pytest.raises(ImagesFitsError) as info:
+        resample_to_reference(shifted, reference, "cubic")
+    assert info.value.code == "OPERATION_UNSUPPORTED"
+    assert len(reproject([shifted, reference], reference, "nearest")) == 2
+
+
+def test_t12_rgb_three_images_on_smallest_pixel(tmp_path):
+    images = [sky_image(tmp_path, f"b{i}.fits", scale=s, rot=r, seed=i)
+              for i, (s, r) in enumerate([(1.2e-3, 10.0), (0.9e-3, -5.0), (1.5e-3, 0.0)])]
+    display = [(0.0, 150.0, "linear"), (10.0, 200.0, "sqrt"), (0.0, 120.0, "log")]
+    rgb = rgb_composite(images, mode="rgb", display=display)
+    assert rgb.reference_origin == images[1].origin  # pixel angolare più piccolo
+    reference = images[1]
+    for k, (image, (vmin, vmax, stretch)) in enumerate(zip(images, display, strict=True)):
+        values, footprint = ref_interp((image.data.astype(np.float64), image.wcs.wcs), reference.wcs.wcs,
+                                       shape_out=reference.shape, order="nearest-neighbor")
+        expected = expected_component(values, vmin, vmax, stretch)
+        expected[~rgb.coverage] = 0
+        assert np.array_equal(rgb.planes[k], expected), k
+    assert rgb.planes.dtype == np.uint8 and rgb.components == tuple(im.origin for im in images)
+    assert rgb.display == tuple(display) and rgb.method == "nearest"
+
+
+def test_t13_rgb_two_images_third_is_mean(tmp_path):
+    a = sky_image(tmp_path, "a.fits", seed=3)
+    b = sky_image(tmp_path, "b.fits", seed=4, rot=3.0)
+    rgb = rgb_composite([a, b], display=[(0, 150, "linear"), (0, 150, "linear")])
+    expected_b = np.round((rgb.planes[0].astype(np.float64) + rgb.planes[1]) / 2.0).astype(np.uint8)
+    assert np.array_equal(rgb.planes[2], expected_b) and rgb.components[2] is None
+
+
+@pytest.mark.parametrize("swap", [False, True])
+def test_t14_t22_rgb_diff_single_scale(tmp_path, swap):
+    base = sky_image(tmp_path, "base.fits", seed=5)
+    data = base.data.astype(np.float64).copy()
+    data[:15] += 40.0   # differenze positive di ampiezza 40
+    data[15:] -= 90.0   # differenze negative di ampiezza 90
+    other = load_image(write_fits(tmp_path / "other.fits", data.astype(np.float32), base.header))
+    first, second = (other, base) if not swap else (base, other)
+    rgb = rgb_composite([first, second], reference=base, mode="rgb_diff")
+    diff = first.data.astype(np.float64) - second.data.astype(np.float64)
+    scale = 255.0 / np.max(np.abs(diff))
+    assert rgb.scale == pytest.approx(scale, rel=1e-12)
+    assert np.array_equal(rgb.planes[0], np.round(np.clip(diff, 0, None) * scale).astype(np.uint8))
+    assert np.array_equal(rgb.planes[1], np.round(np.clip(-diff, 0, None) * scale).astype(np.uint8))
+    assert not np.any(rgb.planes[2])  # B = 0
+    assert rgb.planes.max() == 255  # un solo fattore: la differenza più grande arriva a 255
+
+
+def test_rgb_wavelength_order_and_errors(tmp_path):
+    a, b, c = (sky_image(tmp_path, f"w{i}.fits", seed=10 + i) for i in range(3))
+    display = [(0, 100, "linear"), (0, 200, "linear"), (0, 300, "linear")]
+    rgb = rgb_composite([a, b, c], reference=a, display=display, wavelengths=[500, 2200, 1250] * u.nm)
+    assert rgb.components == (b.origin, c.origin, a.origin)  # la lunghezza d'onda più lunga in R
+    assert rgb.display == ((0.0, 200.0, "linear"), (0.0, 300.0, "linear"), (0.0, 100.0, "linear"))
+    nowcs = load_image(write_fits(tmp_path / "nw.fits", np.ones((30, 40), np.float32)))
+    cases = [([a], dict(display=display[:1]), "RGB_INPUT_INVALID"),
+             ([a, b, c, a], dict(display=display + display[:1]), "RGB_INPUT_INVALID"),
+             ([a, b, c], dict(mode="rgb_diff"), "RGB_INPUT_INVALID"),
+             ([a, b], dict(), "RGB_INPUT_INVALID"),  # parametri di display mancanti
+             ([a, nowcs], dict(display=display[:2]), "WCS_MISSING")]
+    for images, kwargs, code in cases:
+        with pytest.raises(ImagesFitsError) as info:
+            rgb_composite(images, **kwargs)
+        assert info.value.code == code
+    other_unit = sky_image(tmp_path, "u.fits", unit="MJy/sr")
+    with pytest.raises(ImagesFitsError) as info:
+        rgb_composite([a, other_unit], mode="rgb_diff")
+    assert info.value.code == "UNIT_MISMATCH"
+
+
+@pytest.mark.parametrize("method", RESAMPLING_METHODS)
+def test_t21_mosaic_matches_reproject_and_coadd(tmp_path, method):
+    left = sky_image(tmp_path, "l.fits", crval=(150.0 - 12e-3, 2.0), seed=20)
+    right = sky_image(tmp_path, "r.fits", crval=(150.0 + 12e-3, 2.0), seed=21, rot=7.0)
+    reference = sky_image(tmp_path, "grid.fits", nx=70, ny=40, scale=1e-3, seed=22)
+    result = mosaic([left, right], reference, method)
+    function = {"nearest": lambda *a, **k: ref_interp(*a, order="nearest-neighbor", **k),
+                "bilinear": lambda *a, **k: ref_interp(*a, order="bilinear", **k),
+                "flux": ref_exact}[method]
+    expected, footprint = ref_coadd(
+        [(im.data.astype(np.float64), im.wcs.wcs) for im in (left, right)], reference.wcs.wcs,
+        shape_out=reference.shape, reproject_function=function, combine_function="mean", match_background=False,
+    )
+    assert np.allclose(result.image.data, expected, equal_nan=True, rtol=0, atol=0)
+    assert np.array_equal(result.footprint, footprint) and result.method == method
+    assert "nessuna correzione del fondo" in result.image.history[-1]

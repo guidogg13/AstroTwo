@@ -247,6 +247,25 @@ alterare i valori dei pixel memorizzati.
   componenti**, scritto nel risultato (decisione del proprietario del
   2026-10-10). Il risultato è un **nuovo piano di sola
   presentazione**: nessun valore fisico viene mescolato.
+  - **Precisazioni del proprietario (2026-10-10):** in modalità `rgb` ogni
+    componente si porta su 0–255 con **parametri espliciti** (vmin, vmax e
+    funzione di trasferimento dell'elenco di §3, come `set_display`),
+    senza default; con 2 immagini, che vanno in R e G, la **terza
+    componente (B)** è la media delle due componenti a 8 bit
+    (arrotondata). In `rgb_diff` la differenza è prima immagine − seconda,
+    dopo il ricampionamento e con le stesse unità; positivi in R, negativi
+    (in valore assoluto) in G, con il fattore unico 255 / max |differenza|;
+    **B = 0**. Le lunghezze d'onda per l'ordine delle componenti arrivano da
+    un parametro opzionale (`wavelengths`): la più lunga va in R; senza,
+    vale l'ordine dato (nessuna parola chiave indovinata). Il ricampionamento
+    dell'RGB usa il pixel più vicino; i pixel di riferimento non coperti da
+    una componente valgono 0 e sono segnati nella maschera di copertura.
+  - **Metodo di ricampionamento** di `resample_to_reference`, `reproject` e
+    `mosaic`: **obbligatorio, senza default** (`nearest`, `bilinear` con
+    `reproject_interp`; `flux` con `reproject_exact`, che conserva il
+    flusso come dichiarato da `reproject`), scritto nel risultato. La
+    percentuale di pixel coperti conta i pixel del riferimento con
+    copertura > 0.
 - **Mosaico e sequenza animata (B11, sez. 5.16):** mosaico nella griglia
   dell'immagine di riferimento con **media** nelle zone sovrapposte e senza
   correzione del fondo (come Aladin, dichiarato nel risultato); cubo come
@@ -315,12 +334,14 @@ alterare i valori dei pixel memorizzati.
   `histeq`) e palette dagli elenchi chiusi di §3; restituisce il piano di
   presentazione (`float32` in [0, 1] e colori RGBA a 8 bit) con i parametri
   usati, senza toccare l'array dell'immagine.
-- **`resample_to_reference(image, reference)`** — ricampiona su una soluzione
-  astrometrica di riferimento (B7); restituisce nuova immagine + qualità
-  (mappa di copertura di `reproject` + percentuale di pixel coperti).
-- **`reproject(...)`** / **`blend(planes, opacities)`** — composizioni
-  multibanda (B11) e sovrapposizioni con alpha (B5): `blend` compone piani
-  RGBA della stessa griglia con l'operatore "over" (§3).
+- **`resample_to_reference(image, reference, method)`** — ricampiona su una
+  soluzione astrometrica di riferimento (B7); restituisce nuova immagine +
+  qualità (mappa di copertura di `reproject` + percentuale di pixel coperti).
+- **`reproject(images, reference, method)`** — ricampiona più immagini sulla
+  stessa griglia di riferimento (base comune di RGB, mosaico e
+  sovrapposizione); **`blend(planes, opacities)`** — sovrapposizioni con
+  alpha (B5): compone piani RGBA della stessa griglia con l'operatore
+  "over" (§3).
 - **`cutout(image, center, size)`** — taglio con WCS coerente.
 - **`image_operation(a, b, op)`** — aritmetica/convoluzione/normalizzazione/
   specchiatura (H5); `op` dall'elenco chiuso di §3; `b` è un'immagine, una
@@ -358,10 +379,16 @@ alterare i valori dei pixel memorizzati.
 - **`FitsImage.read_region(x0, x1, y0, y1)`** — pixel originali della
   regione `[y0:y1, x0:x1]` (convenzione numpy), qualunque sia la strategia;
   **`FitsImage.memory_bytes`** — memoria occupata dai dati in RAM.
-- **`rgb_composite(images, reference, mode)`** — immagine a colori da 2 o 3
-  immagini (`mode` = `rgb` o `rgb_diff`), con ricampionamento sul
-  riferimento; restituisce un nuovo piano di presentazione.
-- **`mosaic(images, reference)`** — mosaico con media nelle sovrapposizioni.
+- **`rgb_composite(images, reference=None, mode="rgb", display=None,
+  wavelengths=None)`** — immagine a colori da 2 o 3 immagini (`mode` = `rgb`
+  o `rgb_diff`), con ricampionamento sul riferimento (di default l'immagine
+  con il pixel angolare più piccolo); `display` = (vmin, vmax, funzione di
+  trasferimento) per ogni componente in `rgb`; restituisce un nuovo piano di
+  presentazione con origine delle componenti, parametri, fattore di scala
+  (`rgb_diff`) e maschera di copertura.
+- **`mosaic(images, reference, method)`** — mosaico nella griglia del
+  riferimento con media nelle sovrapposizioni (`reproject_and_coadd`), senza
+  correzione del fondo.
 - **`pixel_scaling(image)`** — restituisce `BZERO`, `BSCALE`, `BLANK` e unità
   dei pixel (per il modulo 18).
 
@@ -550,3 +577,4 @@ numero mostrato.
 | 2026-10-10 | Claude Code | **P4, verifiche:** `matplotlib` 3.11.2 (licenza PSF-like) e `contourpy` 1.4.0 (BSD-3) installati; le palette scelte sono tutte distribuite con la licenza di `matplotlib` (tolta la menzione CC0, non riscontrata nella distribuzione); tutte le funzioni di trasferimento sono in `astropy.visualization`. §3/§7: dettagli di `set_display` (parametro `stretch`, `gamma` come `PowerStretch` dopo la funzione di trasferimento, non finiti trasparenti, immagini a colori) e di `blend` (operatore "over"); §12 T24 precisato, nuovo T31. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P5, verifiche:** normalizzazione = divisione per la media (manuale di Aladin ed. giugno 2022, sez. 5.18, letta solo per la definizione della funzione); `contourpy` 1.4.0 BSD-3; astropy non inverte gli assi di un WCS → specchiature con aggiornamento della parte lineare (Paper I), WCS con distorsioni rifiutati. §3: convoluzione con i default di astropy dichiarati, stessa griglia per le operazioni tra immagini (in Aladin ricampionamento automatico), taglio con `Cutout2D` e intersezione dichiarata, parole chiave di provenienza di `save_fits`; §7 `to_sky` dei contorni. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P6, verifiche e decisioni del proprietario:** astropy 8.0.1 rifiuta il `memmap` con `BZERO`/`BSCALE`/`BLANK` → per quei file non compressi tra 1 e 4 GB due livelli (decisione del proprietario); `section` con `memmap=False` legge le regioni senza caricare il file (verificato su dati semplici, con scala, uint16 e compressi). Immagini a due livelli: anteprima solo per il display, centroide e taglio sui pixel originali per regione, H5/contorni/`save_fits` → `PREVIEW_NOT_MEASURABLE` (decisione del proprietario). §3 regole precise, §7 `LargeImageLimits`, `read_region`, `memory_bytes`. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P7, verifiche e decisioni del proprietario:** `reproject` 0.21.0 verificato (BSD-3, wheel per macOS arm64, dipendenze permissive); RGB con parametri di display espliciti per componente, B = media delle due componenti a 8 bit con 2 immagini; `rgb_diff` con B = 0; metodo di ricampionamento obbligatorio; `reproject` = lista sulla stessa griglia; lunghezze d'onda come parametro opzionale (§3, §7). Stato `approvato` invariato. |
