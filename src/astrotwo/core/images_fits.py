@@ -70,6 +70,8 @@ __all__ = [
     "SUPPORTED_FORMATS",
     "DisplayPlane",
     "OPERATIONS",
+    "LargeImageLimits",
+    "open_large_image",
     "Contours",
     "contours",
     "cutout",
@@ -144,6 +146,25 @@ class PixelScaling:
     bunit: str | None
 
 
+@dataclass(frozen=True)
+class LargeImageLimits:
+    """Soglie delle strategie per dimensione (A10 per le immagini, decisa il 2026-10-10).
+
+    In byte (1 GB = 10⁹ byte) e in pixel; configurabili e scritte nel risultato.
+    """
+
+    memory_bytes: int = 1_000_000_000
+    two_level_bytes: int = 4_000_000_000
+    compressed_bytes: int = 1_000_000_000
+    preview_max_side: int = 4096
+
+    def __post_init__(self) -> None:
+        if min(self.memory_bytes, self.two_level_bytes, self.compressed_bytes, self.preview_max_side) <= 0:
+            raise ValueError("le soglie devono essere positive")
+        if self.two_level_bytes < self.memory_bytes:
+            raise ValueError("two_level_bytes non può essere minore di memory_bytes")
+
+
 @dataclass(frozen=True, eq=False)
 class FitsImage:
     """Immagine con dati, intestazione originale, WCS, unità e provenienza.
@@ -173,12 +194,50 @@ class FitsImage:
     calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG
     from_cache: bool = False  # True: copia servita dalla cache comune (04), con origine e data del download
     history: tuple[str, ...] = ()  # operazioni applicate (taglio, H5), per la riproducibilità
+    strategy: str = "memory"  # "memory", "memmap" o "two_level" (H27, A10)
+    strategy_reason: str | None = None
+    limits: LargeImageLimits | None = None
+    preview_step: int | None = None  # due livelli: data è l'anteprima a questo passo
+    full_shape: tuple[int, int] | None = None  # due livelli: (righe, colonne) dell'originale
+    raw_ndim: int = 2  # numero di assi della HDU nel file (per la lettura per regione)
     provenance: str = field(default=_FITS_PROVENANCE)
 
     @property
     def shape(self) -> tuple[int, int]:
-        """(righe, colonne) dell'immagine; per le immagini a colori, di un piano."""
+        """(righe, colonne) dell'immagine originale; per le immagini a colori, di un piano."""
+        if self.full_shape is not None:
+            return self.full_shape
         return tuple(self.data.shape[-2:])  # type: ignore[return-value]
+
+    @property
+    def is_preview(self) -> bool:
+        """True se ``data`` è l'anteprima a bassa risoluzione (due livelli): mai per le misure."""
+        return self.strategy == "two_level"
+
+    @property
+    def memory_bytes(self) -> int:
+        """Byte dei dati tenuti in RAM (0 per il ``memmap``: letti dal disco su richiesta)."""
+        return 0 if self.strategy == "memmap" else int(self.data.nbytes)
+
+    def read_region(self, x0: int, x1: int, y0: int, y1: int) -> np.ndarray:
+        """Pixel originali della regione ``[y0:y1, x0:x1]`` (convenzione numpy).
+
+        Con i due livelli si leggono dal file con ``section`` di ``astropy.io.fits``.
+        """
+        if self.color:
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", "read_region: immagine a colori, solo presentazione")
+        ny, nx = self.shape
+        bounds = [int(v) for v in (x0, x1, y0, y1)]
+        if not (0 <= bounds[0] < bounds[1] <= nx and 0 <= bounds[2] < bounds[3] <= ny):
+            raise ImagesFitsError(
+                "CUTOUT_OUT_OF_RANGE", f"regione x {x0}:{x1}, y {y0}:{y1} fuori dall'immagine {nx}×{ny}"
+            )
+        x0, x1, y0, y1 = bounds
+        if not self.is_preview:
+            return np.array(self.data[y0:y1, x0:x1])
+        with fits.open(self.origin, memmap=False) as hdul:
+            region = np.array(hdul[self.hdu_index].section[_section_key(self.raw_ndim, self.dropped_axes, slice(y0, y1), slice(x0, x1))])
+        return region.astype(region.dtype.newbyteorder("=")) if not region.dtype.isnative else region
 
     @property
     def has_wcs(self) -> bool:
@@ -403,41 +462,85 @@ def load_image(
     return _load_path(text, path, hdu, rgb, allow_hhh=True)
 
 
-def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool) -> FitsImage:
+def _section_key(raw_ndim: int, dropped: tuple[int, ...], rows, cols) -> tuple:
+    """Chiave per ``section``: 0 sugli assi FITS di lunghezza 1, ``rows``/``cols`` sugli altri."""
+    key, spatial = [], [rows, cols]
+    for k in range(raw_ndim):
+        key.append(0 if (raw_ndim - k) in dropped else spatial.pop(0))
+    return tuple(key)
+
+
+def _choose_strategy(header: fits.Header, raw_shape: tuple[int, ...], compressed: bool, limits: LargeImageLimits):
+    """Strategia per dimensione (§3): (strategia, motivo, byte dei dati decompressi)."""
+    nbytes = int(np.prod(raw_shape, dtype=np.int64)) * abs(int(header.get("BITPIX", 8))) // 8
+    if compressed:
+        if nbytes <= limits.compressed_bytes:
+            return "memory", None, nbytes
+        return "two_level", f"file compresso di {nbytes} byte decompressi, oltre {limits.compressed_bytes}", nbytes
+    if nbytes <= limits.memory_bytes:
+        return "memory", None, nbytes
+    if nbytes <= limits.two_level_bytes:
+        scaled = [k for k in ("BZERO", "BSCALE", "BLANK") if k in header]
+        if scaled:
+            return "two_level", f"{nbytes} byte: memmap impossibile con {', '.join(scaled)} (astropy.io.fits)", nbytes
+        return "memmap", f"{nbytes} byte, oltre {limits.memory_bytes}: letti dal disco su richiesta", nbytes
+    return "two_level", f"{nbytes} byte, oltre {limits.two_level_bytes}", nbytes
+
+
+def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool, limits: LargeImageLimits | None = None) -> FitsImage:
     fmt = detect_format(path)
     if fmt in ("jpeg", "png", "gif"):
         return _load_raster(text, path, fmt, allow_hhh=allow_hhh)
+    limits = LargeImageLimits() if limits is None else limits
     retrieved_at = datetime.now(UTC)
+    preview_step = None
     with _open_fits(path) as hdul:
         index = _select_rgb_hdu(hdul, hdu, path) if rgb else _select_hdu(hdul, hdu, path)
         chosen = hdul[index]
         header = chosen.header.copy()  # prima di leggere i dati: BZERO/BSCALE originali
         compression = _compression(chosen)
+        raw_shape = tuple(chosen.shape)
+        name = chosen.name
+        if rgb:
+            strategy, reason = "memory", None
+        else:
+            strategy, reason, _ = _choose_strategy(header, raw_shape, compression is not None or fmt == "fits-gzip", limits)
+        dropped = tuple(len(raw_shape) - k for k, n in enumerate(raw_shape) if n == 1)
+        useful = tuple(n for n in raw_shape if n > 1)
         try:
-            data = np.array(chosen.data)
+            if strategy == "memory":
+                data = np.array(chosen.data)
+            elif strategy == "two_level":
+                preview_step = max(1, math.ceil(max(useful) / limits.preview_max_side))
+                step = slice(None, None, preview_step)
+                data = np.array(chosen.section[_section_key(len(raw_shape), dropped, step, step)])
         except Exception as exc:
             if compression is not None:
                 raise ImagesFitsError(
                     "COMPRESSION_UNSUPPORTED", f"{path}: compressione {compression} non leggibile ({exc})"
                 ) from exc
             raise ImagesFitsError("FITS_UNREADABLE", f"{path}: dati non leggibili ({exc})", path=path) from exc
-        name = chosen.name
-    ndim = data.ndim
-    dropped = tuple(ndim - k for k, n in enumerate(data.shape) if n == 1)
-    kept = {ndim - k for k, n in enumerate(data.shape) if n > 1}
-    data = data.reshape(tuple(n for n in data.shape if n > 1))
-    if not data.dtype.isnative:
+    if strategy == "memmap":
+        with fits.open(path, memmap=True) as mapped:
+            data = mapped[index].data  # resta mappata dopo la chiusura del file
+    kept = {len(raw_shape) - k for k, n in enumerate(raw_shape) if n > 1}
+    if strategy != "two_level":
+        data = data.reshape(useful)
+    if not data.dtype.isnative and strategy != "memmap":
         # Stesso tipo e stessi valori, nell'ordine di byte della macchina
-        # (FITS è big-endian): evita conversioni lente nelle librerie.
+        # (FITS è big-endian): evita conversioni lente nelle librerie. Il
+        # memmap resta nell'ordine del file per non copiare i dati.
         data = data.astype(data.dtype.newbyteorder("="))
     notes: list[tuple[str, str]] = []
+    if strategy != "memory":
+        notes.append(("STRATEGY", f"{strategy}: {reason}"))
     if dropped:
         notes.append(("AXES_DROPPED", f"assi FITS di lunghezza 1 tolti: {sorted(dropped)}"))
     if rgb:
         kept = {1, 2}  # i due assi spaziali; il terzo sono i piani R, G, B
     solution, wcs_notes = _image_wcs(header, kept)
     notes.extend(wcs_notes)
-    if np.issubdtype(data.dtype, np.floating) and not np.all(np.isfinite(data)):
+    if strategy != "memmap" and np.issubdtype(data.dtype, np.floating) and not np.all(np.isfinite(data)):
         notes.append(("NONFINITE_PIXELS", "pixel non finiti (NaN/inf): esclusi da display e misure, mai sostituiti"))
     bunit = header.get("BUNIT")
     modified = datetime.fromtimestamp(os.path.getmtime(path), tz=UTC)
@@ -458,7 +561,24 @@ def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool) -> FitsIma
         dropped_axes=dropped,
         warnings=tuple(notes),
         color=rgb,
+        strategy=strategy,
+        strategy_reason=reason,
+        limits=limits,
+        preview_step=preview_step,
+        full_shape=useful if strategy == "two_level" else None,
+        raw_ndim=len(raw_shape),
     )
+
+
+def open_large_image(source, hdu=None, limits: LargeImageLimits | None = None) -> FitsImage:
+    """Apre un'immagine FITS locale con la strategia per dimensione (H27, A10)."""
+    text = os.fspath(source) if not isinstance(source, str) else source
+    if text.startswith(("http://", "https://")):
+        raise ValueError("open_large_image lavora sui file locali; per gli URL usare load_image")
+    path = str(Path(text).expanduser().resolve())
+    if detect_format(path) in ("jpeg", "png", "gif"):
+        return _load_raster(text, path, detect_format(path))
+    return _load_path(text, path, hdu, False, True, LargeImageLimits() if limits is None else limits)
 
 
 # --------------------------------------------------------------------------
@@ -818,7 +938,22 @@ def _derived(image: FitsImage, data: np.ndarray, wcs: WCS | None, step: str, not
         compression=None,
         warnings=image.warnings + tuple(notes),
         history=image.history + (step,),
+        strategy="memory",
+        strategy_reason=None,
+        preview_step=None,
+        full_shape=None,
+        raw_ndim=data.ndim,
+        dropped_axes=(),
     )
+
+
+def _refuse_preview(image: FitsImage, what: str) -> None:
+    if getattr(image, "is_preview", False):
+        raise ImagesFitsError(
+            "PREVIEW_NOT_MEASURABLE",
+            f"{what}: l'immagine è aperta a due livelli e i dati in memoria sono solo l'anteprima "
+            f"(passo {image.preview_step}); usare read_region o un taglio sui pixel originali",
+        )
 
 
 def cutout(image: FitsImage, center, size) -> FitsImage:
@@ -841,14 +976,25 @@ def cutout(image: FitsImage, center, size) -> FitsImage:
         raise TypeError("center deve essere uno SkyFrame o una PixelPosition (convenzione dichiarata)")
     if isinstance(size, u.Quantity) and size.unit.is_equivalent(u.deg) and w is None:
         raise ImagesFitsError("WCS_MISSING", "lato in unità angolari: l'immagine non ha WCS")
-    plane = image.data[0] if image.color else image.data
+    if image.is_preview:
+        # Geometria su un array virtuale delle dimensioni dell'originale (nessuna memoria),
+        # dati letti dal file per la sola regione del taglio.
+        plane = np.broadcast_to(np.zeros((), dtype=image.data.dtype), image.shape)
+    else:
+        plane = image.data[0] if image.color else image.data
     try:
-        cut = Cutout2D(plane, position, size, wcs=w, mode="trim", copy=True)
+        cut = Cutout2D(plane, position, size, wcs=w, mode="trim", copy=not image.is_preview)
     except NoOverlapError as exc:
         raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio del tutto fuori dall'immagine ({described})") from exc
     except ValueError as exc:
         raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio non valido ({described}): {exc}") from exc
-    data = np.stack([p[cut.slices_original].copy() for p in image.data]) if image.color else cut.data
+    if image.is_preview:
+        rows, cols = cut.slices_original
+        data = image.read_region(cols.start, cols.stop, rows.start, rows.stop)
+    elif image.color:
+        data = np.stack([p[cut.slices_original].copy() for p in image.data])
+    else:
+        data = cut.data
     notes = []
     if tuple(cut.shape) != tuple(cut.shape_input):
         notes.append(("CUTOUT_TRIMMED", f"taglio ridotto all'intersezione con l'immagine: {cut.shape} invece di {cut.shape_input}"))
@@ -898,6 +1044,9 @@ def image_operation(a: FitsImage, b, op: str) -> FitsImage:
         raise ImagesFitsError("OPERATION_UNSUPPORTED", f"operazione {op!r} non prevista; elenco: {', '.join(OPERATIONS)}")
     if a.color:
         raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione")
+    _refuse_preview(a, f"operazione {op}")
+    if isinstance(b, FitsImage):
+        _refuse_preview(b, f"operazione {op}")
     data = np.asarray(a.data, dtype=np.float64)
     w = a.wcs.wcs if a.wcs is not None else None
     notes: list[tuple[str, str]] = []
@@ -976,6 +1125,7 @@ def contours(image: FitsImage, levels) -> Contours:
     """Isofote (H7) con ``contourpy``; ``levels`` nelle unità dell'immagine."""
     if image.color:
         raise ImagesFitsError("OPERATION_UNSUPPORTED", "contorni su un'immagine a colori: serve un'immagine monocroma")
+    _refuse_preview(image, "contorni")
     values = tuple(float(v) for v in np.atleast_1d(levels))
     z = np.ma.masked_invalid(np.asarray(image.data, dtype=np.float64))
     generator = contourpy.contour_generator(z=z, line_type=contourpy.LineType.Separate)
@@ -985,6 +1135,7 @@ def contours(image: FitsImage, levels) -> Contours:
 
 def save_fits(image: FitsImage, path, overwrite: bool = False) -> Path:
     """Salva l'immagine come FITS con WCS e provenienza (A2ORIGIN, A2DATE, HISTORY)."""
+    _refuse_preview(image, "salvataggio FITS")
     w = image.wcs.wcs if image.wcs is not None else None
     header = _header_with_wcs(image.header, w, image.data.shape)
     header["A2ORIGIN"] = (str(image.origin), "origine")  # valori lunghi: convenzione CONTINUE (FITS 4.0)
@@ -1039,6 +1190,27 @@ def _image_array(image) -> np.ndarray:
     return array
 
 
+def _star_centroid_by_region(image: FitsImage, position, box_size, annulus_inner, annulus_outer) -> StarCentroid:
+    """Centroide di un'immagine a due livelli: pixel originali della sola regione che serve."""
+    px, py = (float(v) for v in position)
+    r_out = float(annulus_outer)
+    half = int(box_size) // 2 if isinstance(box_size, int) and not isinstance(box_size, bool) else 0
+    cx, cy = int(round(px)), int(round(py))
+    bx0 = min(cx - half, math.floor(px - r_out))
+    bx1 = max(cx + half, math.ceil(px + r_out))
+    by0 = min(cy - half, math.floor(py - r_out))
+    by1 = max(cy + half, math.ceil(py + r_out))
+    ny, nx = image.shape
+    if bx0 < 0 or by0 < 0 or bx1 > nx - 1 or by1 > ny - 1:
+        raise ImagesFitsError(
+            "CENTROID_OUT_OF_IMAGE", f"finestra o corona fuori dall'immagine {nx}×{ny}", window=(bx0, bx1, by0, by1), shape=(nx, ny)
+        )
+    region = image.read_region(bx0, bx1 + 1, by0, by1 + 1)
+    local = star_centroid(region, (px - bx0, py - by0), box_size, annulus_inner, annulus_outer)
+    x0, x1, y0, y1 = local.window
+    return dataclasses.replace(local, x=local.x + bx0, y=local.y + by0, window=(x0 + bx0, x1 + bx0, y0 + by0, y1 + by0))
+
+
 def star_centroid(image, position, box_size: int, annulus_inner: float, annulus_outer: float) -> StarCentroid:
     """Baricentro pesato sull'intensità dopo la sottrazione del fondo (D11-7).
 
@@ -1050,6 +1222,8 @@ def star_centroid(image, position, box_size: int, annulus_inner: float, annulus_
     - baricentro con ``scipy.ndimage.center_of_mass`` su finestra − fondo,
       in ``float64``.
     """
+    if getattr(image, "is_preview", False):
+        return _star_centroid_by_region(image, position, box_size, annulus_inner, annulus_outer)
     data = _image_array(image)
     if isinstance(box_size, bool) or not isinstance(box_size, int) or box_size < 3 or box_size % 2 == 0:
         raise ValueError("box_size deve essere un intero dispari ≥ 3")

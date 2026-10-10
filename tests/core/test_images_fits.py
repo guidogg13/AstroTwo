@@ -856,3 +856,95 @@ def test_t26_save_fits_roundtrip(tmp_path):
     assert np.max(reread.pixel_to_world(xs, ys).separation(cut.wcs.wcs.pixel_to_world(xs, ys)).deg) < 1e-12
     with pytest.raises(OSError):
         save_fits(cut, target)  # niente sovrascrittura implicita
+
+
+# =============================================================================
+# P6 — Immagini grandi (T11, T25). Soglie piccole configurate nel test.
+# =============================================================================
+
+from astrotwo.core.images_fits import LargeImageLimits, open_large_image
+
+SMALL = LargeImageLimits(memory_bytes=10_000, two_level_bytes=50_000, compressed_bytes=10_000, preview_max_side=16)
+
+
+def star_field(ny, nx, dtype=np.float32):
+    yy, xx = np.mgrid[:ny, :nx]
+    image = 100.0 + 5000.0 * np.exp(-((xx - nx * 0.43) ** 2 + (yy - ny * 0.57) ** 2) / (2 * 1.8**2))
+    image = image + np.random.default_rng(11).normal(0, 2.0, image.shape)
+    return image.astype(dtype)
+
+
+def test_t25_strategy_rules(tmp_path):
+    small = write_fits(tmp_path / "small.fits", np.zeros((40, 50), np.float32))  # 8000 byte
+    mapped = write_fits(tmp_path / "mapped.fits", star_field(60, 100))  # 24000 byte, senza scala
+    scaled = write_fits(tmp_path / "scaled.fits", np.ones((100, 150), np.uint16))  # 30000 byte, BZERO
+    big = write_fits(tmp_path / "big.fits", star_field(100, 200))  # 80000 byte
+    comp = tmp_path / "comp.fits"
+    fits.HDUList([fits.PrimaryHDU(), fits.CompImageHDU(np.ones((60, 100), np.int16), compression_type="RICE_1")]).writeto(comp)
+    expected = {small: "memory", mapped: "memmap", scaled: "two_level", big: "two_level", comp: "two_level"}
+    for path, strategy in expected.items():
+        image = open_large_image(path, limits=SMALL)
+        assert image.strategy == strategy, (path.name, image.strategy)
+        assert image.limits == SMALL
+    assert "BZERO" in open_large_image(scaled, limits=SMALL).strategy_reason
+    assert open_large_image(comp, limits=LargeImageLimits(compressed_bytes=20_000, memory_bytes=10_000,
+                                                          two_level_bytes=50_000)).strategy == "memory"
+    assert load_image(small).strategy == "memory"  # soglie di default: 1 GB
+
+
+def test_t25_memmap_reads_from_disk(tmp_path):
+    path = write_fits(tmp_path / "mapped.fits", star_field(60, 100))
+    image = open_large_image(path, limits=SMALL)
+    with fits.open(path, memmap=False) as hdul:
+        expected = hdul[0].data
+    assert image.memory_bytes == 0 and image.shape == (60, 100) and not image.is_preview
+    assert np.array_equal(image.data, expected)
+    assert np.array_equal(image.read_region(10, 20, 5, 9), expected[5:9, 10:20])
+
+
+def test_t11_two_levels_preview_and_original_pixels(tmp_path):
+    path = write_fits(tmp_path / "big.fits", star_field(100, 200))
+    image = open_large_image(path, limits=SMALL)
+    with fits.open(path, memmap=False) as hdul:
+        full = hdul[0].data
+    step = -(-200 // 16)  # passo intero più piccolo che rispetta 16 pixel sul lato lungo
+    assert image.is_preview and image.preview_step == step and image.shape == (100, 200)
+    assert max(image.data.shape) <= 16 and np.array_equal(image.data, full[::step, ::step])
+    assert image.memory_bytes == image.data.nbytes
+    # Misura su un pixel = valore del pixel originale (letto con section, non dall'anteprima).
+    assert image.read_region(137, 138, 61, 62)[0, 0] == full[61, 137]
+    assert np.array_equal(image.read_region(0, 200, 98, 100), full[98:100, :])
+    # Il display usa l'anteprima.
+    assert set_display(image, 0, 6000).values.shape == image.data.shape
+
+
+def test_t11_measurements_never_use_the_preview(tmp_path):
+    path = write_fits(tmp_path / "big.fits", star_field(100, 200), wcs_header(nx=200, ny=100))
+    preview = open_large_image(path, limits=SMALL)
+    full = load_image(path)  # soglie di default: tutto in memoria
+    start = (86.0, 57.0)
+    a = star_centroid(preview, start, 11, 8.0, 14.0)
+    b = star_centroid(full, start, 11, 8.0, 14.0)
+    assert (a.x, a.y, a.window, a.background) == (b.x, b.y, b.window, b.background)
+    center = convert_pixel_convention(100.0, 50.0, "numpy", "numpy")
+    cut_preview, cut_full = cutout(preview, center, (21, 31)), cutout(full, center, (21, 31))
+    assert np.array_equal(cut_preview.data, cut_full.data) and cut_preview.strategy == "memory"
+    xs, ys = np.array([0.0, 30.0]), np.array([0.0, 20.0])
+    sep = cut_preview.wcs.wcs.pixel_to_world(xs, ys).separation(cut_full.wcs.wcs.pixel_to_world(xs, ys)).deg
+    assert np.max(sep) == 0.0
+    for call in (lambda: image_operation(preview, 2.0, "mul"), lambda: contours(preview, [500.0]),
+                 lambda: save_fits(preview, tmp_path / "x.fits")):
+        with pytest.raises(ImagesFitsError) as info:
+            call()
+        assert info.value.code == "PREVIEW_NOT_MEASURABLE"
+    with pytest.raises(ImagesFitsError) as info:
+        preview.read_region(190, 210, 0, 5)
+    assert info.value.code == "CUTOUT_OUT_OF_RANGE"
+
+
+def test_t25_limits_validation():
+    with pytest.raises(ValueError):
+        LargeImageLimits(memory_bytes=0)
+    with pytest.raises(ValueError):
+        LargeImageLimits(memory_bytes=10, two_level_bytes=5)
+    assert LargeImageLimits() == LargeImageLimits(10**9, 4 * 10**9, 10**9, 4096)

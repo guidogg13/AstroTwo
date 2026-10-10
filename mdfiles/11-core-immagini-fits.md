@@ -217,6 +217,25 @@ alterare i valori dei pixel memorizzati.
   intero, il più piccolo che rispetta il limite). Valori configurabili e
   scritti nel risultato (1 GB = 10⁹ byte, come in `04-cache.md`). Il modulo
   espone la memoria usata (mostrata da `40-ui-finestra-principale.md`).
+  - **Regole precise (decisioni del proprietario del 2026-10-10):** la
+    dimensione è quella dei dati decompressi (righe × colonne × byte per
+    pixel). File compressi (a riquadri o `.gz`): in memoria fino a 1 GB,
+    altrimenti due livelli. File non compressi: in memoria fino a 1 GB; tra
+    1 e 4 GB `memmap`, **ma** se l'intestazione ha `BZERO`, `BSCALE` o
+    `BLANK` `astropy.io.fits` rifiuta il `memmap` (verificato con astropy
+    8.0.1) e si usano i due livelli, con il motivo scritto nel risultato;
+    oltre 4 GB due livelli. `load_image` applica da sé queste regole ai file
+    FITS locali oltre il limite della memoria.
+  - **Lettura per regione:** i pixel originali di una regione si leggono con
+    `section` di `astropy.io.fits` (senza caricare il resto del file, con la
+    scala applicata dalla libreria; verificato per dati semplici, con scala,
+    interi senza segno e compressi).
+  - **Immagini a due livelli nel resto del modulo:** l'anteprima è solo di
+    presentazione (`set_display` la usa); il centroide e il taglio leggono i
+    pixel originali della regione che serve; le operazioni sull'intera
+    immagine (H5, contorni) e `save_fits` danno `PREVIEW_NOT_MEASURABLE`.
+    Il pixel `(x, y)` dell'anteprima corrisponde al pixel `(x · passo,
+    y · passo)` dell'originale.
 - **Immagini a colori RGB e differenza di colori (B11, sez. 5.15):** immagine
   a colori da **2 o 3** immagini monocrome. Le immagini si ricampionano
   sull'immagine di riferimento (per default quella con il pixel angolare più
@@ -329,9 +348,16 @@ alterare i valori dei pixel memorizzati.
 - **`detect_format(source)`** — riconosce la natura del file dal contenuto
   (FITS, FITS compresso, JPEG, PNG, GIF); restituisce il formato o
   `FORMAT_UNSUPPORTED`.
-- **`open_large_image(source)`** — apre un'immagine scegliendo la strategia
-  per dimensione (H27); restituisce un `FitsImage` con vista a bassa
-  risoluzione marcata e accesso all'alta risoluzione per regione.
+- **`open_large_image(source, hdu=None, limits=LargeImageLimits())`** — apre
+  un'immagine FITS locale scegliendo la strategia per dimensione (H27,
+  A10); restituisce un `FitsImage` con strategia, motivo e soglie usate,
+  vista a bassa risoluzione marcata (due livelli) e accesso all'alta
+  risoluzione per regione (`FitsImage.read_region`).
+- **`LargeImageLimits`** (struttura) — soglie configurabili: memoria 1 GB,
+  due livelli 4 GB, compressi 1 GB, lato massimo dell'anteprima 4096 pixel.
+- **`FitsImage.read_region(x0, x1, y0, y1)`** — pixel originali della
+  regione `[y0:y1, x0:x1]` (convenzione numpy), qualunque sia la strategia;
+  **`FitsImage.memory_bytes`** — memoria occupata dai dati in RAM.
 - **`rgb_composite(images, reference, mode)`** — immagine a colori da 2 o 3
   immagini (`mode` = `rgb` o `rgb_diff`), con ricampionamento sul
   riferimento; restituisce un nuovo piano di presentazione.
@@ -523,3 +549,4 @@ numero mostrato.
 | 2026-10-10 | Claude Code | **P3, decisione del proprietario:** immagini da URL con **prima la cache** (come `resolve_name`), `refresh=True`, copia in cache se la rete manca, timeout comuni di `04`, nessun dato parziale (§3, §7). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P4, verifiche:** `matplotlib` 3.11.2 (licenza PSF-like) e `contourpy` 1.4.0 (BSD-3) installati; le palette scelte sono tutte distribuite con la licenza di `matplotlib` (tolta la menzione CC0, non riscontrata nella distribuzione); tutte le funzioni di trasferimento sono in `astropy.visualization`. §3/§7: dettagli di `set_display` (parametro `stretch`, `gamma` come `PowerStretch` dopo la funzione di trasferimento, non finiti trasparenti, immagini a colori) e di `blend` (operatore "over"); §12 T24 precisato, nuovo T31. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P5, verifiche:** normalizzazione = divisione per la media (manuale di Aladin ed. giugno 2022, sez. 5.18, letta solo per la definizione della funzione); `contourpy` 1.4.0 BSD-3; astropy non inverte gli assi di un WCS → specchiature con aggiornamento della parte lineare (Paper I), WCS con distorsioni rifiutati. §3: convoluzione con i default di astropy dichiarati, stessa griglia per le operazioni tra immagini (in Aladin ricampionamento automatico), taglio con `Cutout2D` e intersezione dichiarata, parole chiave di provenienza di `save_fits`; §7 `to_sky` dei contorni. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P6, verifiche e decisioni del proprietario:** astropy 8.0.1 rifiuta il `memmap` con `BZERO`/`BSCALE`/`BLANK` → per quei file non compressi tra 1 e 4 GB due livelli (decisione del proprietario); `section` con `memmap=False` legge le regioni senza caricare il file (verificato su dati semplici, con scala, uint16 e compressi). Immagini a due livelli: anteprima solo per il display, centroide e taglio sui pixel originali per regione, H5/contorni/`save_fits` → `PREVIEW_NOT_MEASURABLE` (decisione del proprietario). §3 regole precise, §7 `LargeImageLimits`, `read_region`, `memory_bytes`. Stato `approvato` invariato. |
