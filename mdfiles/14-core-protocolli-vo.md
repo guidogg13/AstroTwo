@@ -11,23 +11,99 @@ riproducibile.
 
 ## 3. Cosa fa
 
+**Divisione del codice (decisione del proprietario del 2026-10-10):** sette
+parti, in quest'ordine, ciascuna con verifiche, codice, test di tutto il
+progetto e commit — **P1** lettura/scrittura VOTable ed esportazione CSV,
+VOTable, FITS con provenienza (T1, T5); **P2** base di rete: timeout comuni
+di `04`, registro delle richieste, cache delle interrogazioni,
+`download_table` (T6); **P3** cone search, TAP/ADQL (righe massime,
+interrogazioni lunghe), `validate_adql` (T2, T3, T4); **P4** elenco dei
+server (D14-4), ricerca nel registro VO, DataLink (D14-3) (T17–T19);
+**P5** immagini SIA/SIA2, IDHA, spettri SSA (T9–T12, T15, T16); **P6**
+puntatore Simbad e fotometria VizieR (H17) (T13, T14); **P7** SAMP (T7,
+T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
+
+**Regole comuni (decisioni del proprietario del 2026-10-10, D14-9):**
+
+- **Un solo lettore di tabelle:** ogni tabella ricevuta dalla rete o letta
+  da file si legge con `read_table` del `13` (anche i VOTable); il 14 si
+  occupa solo della rete, dei protocolli e della scrittura. Il risultato è
+  una `CatalogTable` del 13 con origine = URL della richiesta e data di
+  scaricamento.
+- **Registro delle richieste (riproducibilità, regola d'oro n. 6):** ogni
+  richiesta di rete produce un `RequestRecord` con protocollo, funzione
+  chiamata e suoi argomenti, URL effettivo del servizio, parametri inviati,
+  data e ora (UTC), numero di righe ricevute e provenienza dalla cache; con
+  la funzione e gli argomenti registrati la richiesta si riesegue identica.
+- **Cache delle interrogazioni (una sola, qui; D14-9 punto 7):** prima la
+  cache, `refresh=True` per rifare la richiesta (stessa regola di
+  `resolve_name` del 10 e delle immagini da URL dell'11). Chiave =
+  protocollo, URL del servizio e parametri della richiesta. Si salvano solo
+  le risposte riuscite, come byte della risposta in una tabella SQLite del
+  modulo dentro `SharedCache` (`04-cache.md`). Se la rete non risponde e la
+  risposta è in cache, si usa la copia dichiarandola; altrimenti
+  `NET_TIMEOUT`.
+- **Righe massime (D14-5, decisa il 2026-10-10):** `max_rows` di default
+  **100 000**, configurabile da 1 fino al tetto di righe del `13`
+  (`TableLimits.max_rows`, 1 000 000 di default); fuori intervallo
+  `MAX_ROWS_INVALID`. Il superamento è **sempre dichiarato** con l'avviso
+  `ROW_LIMIT_EXCEEDED` (righe restituite e, quando il servizio lo dice,
+  troncamento lato servizio); mai una riduzione silenziosa.
+- **Credenziali:** nel livello 1 solo servizi pubblici senza
+  autenticazione (il livello 1 non può dipendere dal `31`); un servizio che
+  chiede autenticazione dà `AUTH_REQUIRED`.
+
 - **VOTable (E5):** leggere e scrivere VOTable conservando nomi, unità,
   metadati e risorse; rifiutare i file malformati con errore esplicito.
+  `read_votable` usa `read_table` del 13 e accetta solo VOTable
+  (`VOTABLE_INVALID` con la posizione del problema per un file malformato o
+  di altro formato).
 - **Cone search (E1):** interrogare un catalogo in un raggio attorno a un
   punto; centro e raggio con unità; risultato come tabella con provenienza.
+  Il parametro `catalog` è **una voce dell'elenco dei server** (protocollo
+  cone search) **oppure un URL di servizio SCS esplicito**; gli
+  identificativi VizieR (es. `I/239/hip_main`) non si accettano qui:
+  passano da TAP VizieR in P6 del 13. Righe oltre `max_rows`: tabella
+  ridotta alle prime `max_rows` righe ricevute, con `ROW_LIMIT_EXCEEDED` e il
+  numero di righe ricevute.
 - **TAP / ADQL (E2):** eseguire query ADQL sui servizi TAP; gestione di
   sintassi errata, timeout, limiti di righe e stati lunghi della query.
   La costruzione/validazione assistita della query è di `33-ia-query-adql.md`,
-  qui vive l'esecuzione deterministica.
+  qui vive l'esecuzione deterministica. **Modalità (D14-9):** sincrona di
+  default; asincrona su richiesta (`mode="async"`), con **attesa massima
+  complessiva di 600 s, configurabile**, oltre la quale il lavoro si
+  interrompe (`NET_TIMEOUT`); se il servizio rifiuta o interrompe la
+  sincrona per durata, l'errore suggerisce la modalità asincrona.
+  `max_rows` va al servizio come `MAXREC`; il troncamento dichiarato dal
+  servizio (`OVERFLOW`) dà `ROW_LIMIT_EXCEEDED`.
+- **`validate_adql` (D14-9):** solo **controlli minimi** lato client —
+  testo non vuoto, inizia con `SELECT` (maiuscole o minuscole), virgolette
+  semplici e doppie chiuse, parentesi bilanciate (fuori dalle virgolette);
+  altrimenti `ADQL_INVALID` con la posizione, senza chiamate di rete. La
+  validazione vera è quella del servizio, che prevale.
 - **Download tabelle (D3) ed export (D13):** scaricare tabelle da URL e
   salvare tabelle in CSV, VOTable e FITS con intestazione che riporta origine,
-  data e versione dello schema.
+  data e versione dello schema. **Provenienza nei file esportati (D14-9):**
+  origine e data della tabella, operazioni registrate, data
+  dell'esportazione, **versione di AstroTwo e versione del formato**:
+  VOTable scritto in versione **1.4** con `INFO`; FITS con parole chiave
+  dell'intestazione; **CSV con righe di commento `#` all'inizio**. Le unità
+  nel CSV: vedi D14-10 (da decidere).
 - **Schede server (H10):** gestire i collegamenti a servizi esterni con un
   **elenco di server nostro**, tratto dai servizi pubblici del VO (D14-4,
   corretta il 2026-10-10), più i server personali dell'utente; le immagini
-  HiPS restano in `12-core-hips.md`.
+  HiPS restano in `12-core-hips.md`. La ricerca nel registro VO usa
+  `pyvo.registry` (protocollo RegTAP). I server personali sono voci con gli
+  stessi campi, tenute da `ServerRegistry`; il loro salvataggio nelle
+  preferenze è di `40-ui-finestra-principale.md`.
 - **DataLink (H8, parte VO):** leggere e risolvere i link di DataLink
-  associati alle tabelle (da verificare la copertura esatta: §13).
+  associati alle tabelle, con i descrittori di servizio (D14-3); versione
+  dello standard supportata da `pyvo` verificata prima del codice di P4.
+  **Colonna DataLink (per P6 del 13, D14-9 punto 14):** è quella citata da
+  un **descrittore di servizio DataLink** del VOTable (risorsa `meta` con
+  `standardID` DataLink e parametro `ID` riferito a una colonna), oppure la
+  colonna con **content-type
+  `application/x-votable+xml;content=datalink`**.
 - **SAMP (H14, G3):** interoperabilità con altri strumenti (TOPCAT, DS9,
   SPLAT, CASSIS e simili): AstroTwo **si collega a un hub SAMP già attivo se
   presente, altrimenti avvia il proprio hub** (D14-2, decisa il 2026-10-04).
@@ -38,7 +114,13 @@ riproducibile.
   client connessi e stato dei collegamenti. Incluso per decisione del
   proprietario (2026-10-04): in Aladin la funzione "apertura in strumenti
   esterni" (G3) non è documentata come SAMP in tutti i dettagli, ma la parità
-  con Aladin è il minimo. **L'interfaccia utente** (es. comando "invia la
+  con Aladin è il minimo. **Libreria e messaggi (D14-9):** `pyvo.samp`
+  (`astropy.samp` è deprecato da astropy 8.0); solo i messaggi standard
+  **`table.load.votable`**, **`table.select.rowList`** e
+  **`coord.pointAt.sky`**; ogni altro tipo → `SAMP_UNSUPPORTED_TYPE`.
+  **Profilo web disattivato** di default nell'hub avviato da AstroTwo, per
+  sicurezza (accesso dai browser solo con opzione esplicita).
+  **L'interfaccia utente** (es. comando "invia la
   selezione") **vive in `42-ui-pannello-cataloghi.md`**, che chiama
   `SampHub`.
 - **Spettri SSA (E4):** ricerca e caricamento di spettri dai servizi VO con
@@ -49,6 +131,10 @@ riproducibile.
   del proprietario (2026-10-04): la riga E4 non era confermata dalla
   documentazione di Aladin, ma la parità con Aladin è il minimo — parte
   tecnica decisa il 2026-10-09: SSA 1.1 con `pyvo` (§13-D14-6).
+  **Formati degli spettri (D14-9):** VOTable secondo lo **Spectrum Data
+  Model IVOA** (assi riconosciuti dagli `utype` del modello) e **FITS
+  tabellari con colonne riconosciute da UCD o `utype`**; tutto il resto
+  `SSA_INVALID`. Nessuna dipendenza nuova (niente `specutils`).
   **L'analisi degli spettri** (dereddening, misure di linea) **vive in
   `21-analisi-spettroscopia.md`**, che riceve lo spettro caricato qui.
 - **Cache delle interrogazioni (A7):** i risultati delle query si conservano
@@ -64,14 +150,19 @@ riproducibile.
   caricamento delle immagini è di `11-core-immagini-fits.md`, che usa la
   calibrazione della lista quando l'immagine non ne ha una propria. Il
   formato storico IDHA (alternativa a SIA supportata da Aladin per
-  compatibilità) si legge con un lettore nel modulo basato su
-  **`defusedxml`** (D14-8, decisa il 2026-10-09), testato su file di esempio
-  del CDS; senza documentazione o esempi, solo errore.
+  compatibilità): **nessuna documentazione pubblica trovata** (D14-9 punto
+  13, 2026-10-10), quindi **solo l'errore `IDHA_UNREADABLE`**; il file si
+  apre comunque con `defusedxml` prima di rifiutarlo, così che un XML
+  pericoloso dia `XML_UNSAFE` (D14-8).
 - **Puntatori Simbad e VizieR, parte VO (H17, sez. 5.10):** interrogazione
-  di **Simbad** per posizione con raggio pari a 1/20 del campo (passato dal
-  41) con `astroquery.simbad`, restituendo identificativo, magnitudine, tipo,
+  di **Simbad** per posizione con **raggio sempre esplicito, passato
+  dall'interfaccia (41)**, che ne decide il default; nessun valore preso dal
+  manuale di Aladin (regola d'oro n. 8; D14-9). Con `astroquery.simbad`,
+  restituendo identificativo, magnitudine, tipo,
   coordinate e numero di riferimenti bibliografici dell'oggetto più citato
-  (campo bibliografico **da verificare** nell'interfaccia di Simbad);
+  (campo bibliografico **da verificare** nell'interfaccia di Simbad); **più
+  oggetti con lo stesso numero di citazioni: vince il più vicino al
+  centro**, e il risultato lo dichiara;
   interrogazione del **servizio fotometrico di VizieR** attorno a una
   posizione o alla posizione Simbad, restituendo la tabella delle misure di
   flusso con frequenza o lunghezza d'onda, unità, catalogo d'origine e data
@@ -97,8 +188,10 @@ riproducibile.
 - Non fa il cross-match: `15-core-crossmatch.md`.
 - Non gestisce i MOC: `16-core-moc.md`.
 - Non disegna né visualizza: la UI (41/42) mostra ciò che questo modulo restituisce.
-- Non conserva chiavi API: le credenziali, se servono, arrivano solo dal
-  Portachiavi (`31-ia-chiavi-portachiavi.md`).
+- Non conserva chiavi API e, nel livello 1, non usa servizi con
+  autenticazione (D14-9 punto 12): il livello 1 non può dipendere dal `31`.
+- Non legge i file IDHA: nessuna documentazione pubblica (D14-9 punto 13).
+- Non decide il raggio di default del puntatore Simbad: lo passa il `41`.
 
 ## 5. Livello e dipendenze
 
@@ -137,46 +230,82 @@ riproducibile.
 
 ## 7. Interfaccia pubblica
 
-- **`read_votable(path)`** / **`write_votable(table, path)`** — I/O VOTable.
-- **`cone_search(center, radius, catalog)`** — richiesta con unità; restituisce
-  tabella + URL della fonte + timestamp.
-- **`tap_query(url, adql, max_rows)`** — esecuzione ADQL; restituisce tabella o
-  stato di errore con il messaggio del servizio.
-- **`validate_adql(adql)`** — controllo sintattico lato client (l'esito
-  definitivo è quello del servizio).
-- **`download_table(url)`** / **`export_table(table, path, format)`** — I/O da
-  rete e di esportazione (D13).
-- **`ServerRegistry`** (classe) — schede server H10: elenco e metadati dei
-  servizi configurati.
-- **`DataLinkClient`** — lettura e risoluzione dei link DataLink (H8).
-- **`SampHub`** (classe) — hub SAMP (H14, G3, D14-2 decisa): **si collega a un
-  hub già attivo se presente, altrimenti avvia il proprio**; pubblica e riceve
-  **tabelle, selezioni e puntamenti** da e verso altri programmi (TOPCAT, DS9
-  e simili); elenco client connessi e stato dei collegamenti; **le immagini
-  sono un'estensione prevista** fuori dal primo perimetro; l'interfaccia
-  utente è in `42-ui-pannello-cataloghi.md`.
-- **`ssa_search(criteria)`** (E4) — ricerca spettri su servizio SSA: centro o
-  oggetto + raggio con unità; restituisce l'elenco dei candidati con
-  metadati e provenienza.
-- **`ssa_load(sp_id)`** (E4) — caricamento dello spettro scelto: assi, unità,
-  metadati e provenienza; restituisce la tabella dello spettro a
-  `21-analisi-spettroscopia.md`.
-- **Cache:** nessuna classe propria (CA4): i risultati si salvano con
-  `SharedCache` di `04-cache.md`.
-- **`sia_search(criteria, version)`** (H23) — ricerca SIA o SIA2 con `pyvo`;
-  restituisce la lista di immagini con provenienza.
-- **`simbad_pointer(position, radius)`** (H17) — oggetto Simbad più citato
-  nel raggio, con fonte e data.
-- **`vizier_photometry(position, radius)`** (H17) — misure di flusso dal
-  servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
+Codice in `src/astrotwo/core/vo_protocols.py` (tabella di `02` §3). Ogni
+funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
+`refresh` (default `False`) e `timeouts` (`NETWORK_TIMEOUTS` di `04`).
+
+- **`VoProtocolsError`** — errore con identificatore di §10.
+- **`RequestRecord`** (struttura, P2) — protocollo, funzione e argomenti,
+  URL, parametri, data (UTC), righe, `from_cache`; `as_dict()` per la
+  registrazione (regola d'oro n. 6).
+- **`VoResult`** (struttura, P2) — `table` (`CatalogTable` del 13),
+  `request` (`RequestRecord`), avvisi (es. `ROW_LIMIT_EXCEEDED`,
+  `FROM_CACHE`), `truncated`, `max_rows`.
+- **`read_votable(path, *, table=None)`** / **`write_votable(table, path,
+  overwrite=False)`** (P1) — I/O VOTable; la lettura passa da `read_table`
+  del 13 (D14-9 punto 5); la scrittura è `export_table(..., "votable")`.
+- **`export_table(table, path, format, overwrite=False)`** (P1, D13) —
+  `format` in `csv`, `votable`, `fits`; provenienza come in §3; file
+  esistente senza `overwrite=True` → `FILE_EXISTS`.
+- **`download_table(url, *, table=None, format=None, ...)`** (P2) — scarica
+  una tabella da URL e la legge con `read_table` del 13; restituisce
+  `VoResult`.
+- **`cone_search(center, radius, catalog, *, max_rows=100_000, ...)`** (P3)
+  — `center` posizione celeste (`SkyCoord`/`SkyFrame` del 10, convertita in
+  ICRS dal 10), `radius` angolo con unità, `catalog` voce dell'elenco dei
+  server o URL SCS; restituisce `VoResult`.
+- **`tap_query(url, adql, *, max_rows=100_000, mode="sync",
+  async_timeout=600 s, ...)`** (P3) — esecuzione ADQL; restituisce
+  `VoResult` o errore con il messaggio del servizio; `url` è un URL TAP o
+  una voce TAP dell'elenco dei server.
+- **`validate_adql(adql)`** (P3) — controlli minimi di §3; restituisce
+  l'esito (valido, messaggio, posizione); `tap_query` lo chiama prima
+  dell'invio.
+- **`ServerRegistry`** (classe, P4) — schede server H10: elenco nostro
+  (`builtin`), server personali (`add_personal`, `remove_personal`),
+  `get(id)`, `find(protocol=None, provider=None)`, `search_registry(
+  keywords, servicetype)` nel registro VO; voce `ServerEntry` con `id`,
+  nome, ente, protocollo, URL, fonte dell'URL (pagina ufficiale dell'ente)
+  e data di verifica.
+- **`DataLinkClient`** (P4) — `links(source)` (URL DataLink o riga con
+  colonna DataLink): tabella dei link (semantica, URL, content-type,
+  descrizione, descrittore di servizio); `service_descriptors(...)`;
+  `call_service(descriptor, params)` per le elaborazioni lato server (D14-3).
+- **`sia_search(center, radius, *, version, service, band=None,
+  time=None, max_rows=100_000, ...)`** (P5, H23) — `version` `1` (SIA) o `2`
+  (SIA2); `band` intervallo di lunghezze d'onda con unità e `time`
+  intervallo di `Time` con scala dichiarata (solo SIA2); restituisce
+  `VoResult` con la lista di immagini.
+- **`read_idha(path)`** (P5) — apre il file con `defusedxml` e lo
+  rifiuta: `XML_UNSAFE` o `IDHA_UNREADABLE` (D14-9 punto 13).
+- **`ssa_search(center, radius, *, service, max_rows=100_000, ...)`** (P5,
+  E4) — ricerca spettri SSA 1.1; restituisce `VoResult` con i candidati.
+- **`ssa_load(candidate, ...)`** (P5, E4) — `candidate` è una riga del
+  risultato di `ssa_search` (o l'URL di accesso con il formato dichiarato);
+  restituisce lo spettro (`Spectrum`: tabella con asse spettrale e flusso
+  con unità, metadati, provenienza) per il `21`.
+- **`simbad_pointer(center, radius, ...)`** (P6, H17) — `radius`
+  obbligatorio, passato dal 41; oggetto Simbad più citato nel raggio
+  (a pari citazioni il più vicino, dichiarato), con fonte e data.
+- **`vizier_photometry(center, radius, ...)`** (P6, H17) — misure di flusso
+  dal servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
+- **`SampHub`** (classe, P7) — hub SAMP (H14, G3, D14-2 decisa) con
+  `pyvo.samp`: **si collega a un hub già attivo se presente, altrimenti
+  avvia il proprio** (profilo web disattivato salvo opzione esplicita);
+  `send_table`, `send_selection`, `send_point`, ricezione degli stessi tre
+  tipi con funzioni dell'utente, `clients()` e stato dei collegamenti; **le
+  immagini sono un'estensione prevista** fuori dal primo perimetro;
+  l'interfaccia utente è in `42-ui-pannello-cataloghi.md`.
+- **Cache:** nessuna classe propria (CA4): le risposte si salvano nella
+  tabella SQLite del modulo dentro `SharedCache` di `04-cache.md`.
 
 ## 8. Librerie e standard di riferimento
 
 | Libreria / standard | Uso nel modulo | Motivazione |
 |---|---|---|
 | `astropy.io.votable` | lettura/scrittura VOTable | implementazione di riferimento |
-| `pyvo` (**scelto con D14-1** per TAP e DataLink) | client TAP, DataLink | libreria VO consolidata IVOA; **licenza da riverificare prima di approvare il 14** |
-| `astropy.samp` (per SAMP, **da verificare**) | hub e client SAMP | nella libreria Astropy; copertura e idoneità da verificare con D14-1 |
+| `pyvo` 1.9.1 (**scelto con D14-1**; BSD-3, verificato il 2026-10-10) | client SCS, TAP, SIA, SIA2, SSA, DataLink/SODA, registro VO | libreria VO consolidata IVOA |
+| `pyvo.samp` (D14-1 aggiornata il 2026-10-10) | hub e client SAMP | `astropy.samp` è deprecato da astropy 8.0; `pyvo.samp` è la stessa implementazione mantenuta in `pyvo` (BSD-3) |
 | `astroquery` | alcuni servizi (es. cone search via CDS) | integrazione consolidata |
 | `astropy.table` | tabelle in uscita | unità e metadati |
 | Protocolli IVOA (VOTable, TAP, DataLink, SAMP, SSA) | standard di scambio | standard della comunità |
@@ -184,7 +313,8 @@ riproducibile.
 | `pyvo` (D14-1) | ricerche SIA e SIA2 (H23) | stessa libreria VO già scelta |
 | `astroquery.simbad` | puntatore Simbad (H17) | servizio CDS ufficiale, già usato dal modulo 10 |
 | Servizio fotometrico di VizieR (CDS) | misure di flusso per la SED (H17) | servizio pubblico che raccoglie in un'unica risposta le misure di flusso dei cataloghi di VizieR; interfaccia da verificare prima del codice |
-| `defusedxml` (D14-8) | lettore IDHA (H23) protetto contro file XML malevoli | parser XML sicuro per file non fidati; **licenza da verificare prima del codice** |
+| `defusedxml` 0.7.1 (D14-8; licenza PSF, già tra le dipendenze) | apertura sicura dei file IDHA prima del rifiuto (H23) | parser XML sicuro per file non fidati |
+| `requests` (già tra le dipendenze) | sessione HTTP con i timeout comuni di `04` | client HTTP consolidato, usato anche da `pyvo` |
 
 ## 9. Regole e vincoli
 
@@ -217,7 +347,7 @@ riproducibile.
 | VOTable malformato | nessun dato letto, errore con posizione del problema | `VOTABLE_INVALID` |
 | ADQL sintatticamente errata | rifiuto lato client con il messaggio, o errore del servizio riportato | `ADQL_INVALID` |
 | Servizio TAP non raggiungibile / timeout | errore di rete, nessun risultato parziale mostrato come valido | `NET_TIMEOUT` |
-| Query che supera il limite di righe | risultato troncato con avviso e conteggio dichiarato | `ROW_LIMIT_EXCEEDED` |
+| Query che supera il limite di righe | risultato troncato con avviso e conteggio dichiarato (avviso, non errore) | `ROW_LIMIT_EXCEEDED` |
 | Formato di esportazione non supportato | elenco dei formati | `EXPORT_FORMAT_UNSUPPORTED` |
 | Nessun hub SAMP disponibile (né attivo, né avviabile) | funzioni VO non-SAMP operative, avviso | `SAMP_UNAVAILABLE` |
 | Nessun client SAMP connesso | azione rifiutata con messaggio chiaro | `SAMP_NO_PEER` |
@@ -233,22 +363,24 @@ riproducibile.
 | Servizio fotometrico di VizieR non raggiungibile | errore di rete, nessun punto inventato | `NET_TIMEOUT` |
 | File IDHA non conforme, o lettore non disponibile per mancanza di documentazione ed esempi | rifiuto esplicito con la causa | `IDHA_UNREADABLE` |
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
+| File di destinazione già esistente senza `overwrite=True` | nessuna scrittura | `FILE_EXISTS` |
+| `max_rows` fuori da 1…tetto del 13 | rifiuto con l'intervallo ammesso | `MAX_ROWS_INVALID` |
+| Servizio che chiede autenticazione | rifiuto: nel livello 1 solo servizi pubblici | `AUTH_REQUIRED` |
+| Servizio raggiungibile che risponde con un errore (HTTP o `QUERY_STATUS = ERROR` non dovuto all'ADQL) | nessun risultato, messaggio del servizio riportato | `SERVICE_ERROR` |
+| Voce dell'elenco dei server inesistente o con protocollo diverso da quello richiesto | rifiuto con le voci ammesse | `SERVER_UNKNOWN` |
+| Spettro, immagine o risultato servito dalla cache | dato restituito con origine e data della copia | avviso `FROM_CACHE` |
 
 ## 11. Esposizione all'IA
 
-- **`cone_search`** — input: centro, raggio (con unità), catalogo; output:
-  tabella + provenienza. **Esecuzione: codice deterministico del modulo.**
-- **`tap_query`** — input: URL TAP, ADQL, `max_rows`; output: tabella o errore.
-- **`validate_adql`** — input: stringa ADQL; output: esito sintattico + messaggio.
-- **`describe_services`** — output: elenco server configurati (H10).
-- **`ssa_search`** / **`ssa_load`** (E4) — input: criteri di ricerca /
-  identificativo spettro; output: elenco candidati o spettro con
-  provenienza. **Esecuzione: codice deterministico del modulo**; l'analisi è
-  di `21-analisi-spettroscopia.md`.
-
-Regola: l'IA può comporre i parametri e spiegare l'esito, ma **non scrive
-numeri di risultato**: il contenuto della tabella viene solo dai servizi e dai
-calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
+Non applicabile in questo file: gli strumenti per l'IA si dichiarano in
+`32-ia-registro-strumenti.md` (`01-architettura.md` §7, decisione del
+proprietario del 2026-10-10, D14-9 punto 16). Finché il 32 non esiste,
+l'elenco da riportarvi (nomi provvisori: `cone_search`, `tap_query`,
+`validate_adql`, `describe_services` su `ServerRegistry`, `ssa_search`,
+`ssa_load`) è annotato nella riga del 32 in `panoramica.md` §4. Vale sempre
+la regola d'oro n. 1: l'IA compone i parametri e spiega l'esito, il
+contenuto delle tabelle viene solo dai servizi e dal codice di questo
+modulo ed è verificato da `34-ia-verifica-risultati.md`.
 
 ## 12. Test di accettazione
 
@@ -268,8 +400,13 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
 | T12 | SIA2 (H23) | ricerca SIA2 con banda e intervallo di tempo su un servizio simulato | parametri inviati secondo lo standard; tempo con scala dichiarata | servizio simulato |
 | T13 | Puntatore Simbad (H17) | `simbad_pointer` su una posizione con risposta simulata di due oggetti | restituito l'oggetto con più riferimenti, con fonte e data | servizio simulato |
 | T14 | Fotometria VizieR (H17) | `vizier_photometry` con risposta simulata | tabella con flusso, unità, frequenza o lunghezza d'onda e catalogo d'origine per ogni punto | servizio simulato |
-| T15 | IDHA (H23) | leggere un file IDHA di esempio del CDS | lista di immagini equivalente a quella SIA dello stesso servizio | confronto con la risposta SIA (file di esempio **da reperire**) |
+| T15 | IDHA (H23) | leggere un file XML ben formato (scritto nel test) con `read_idha` | `IDHA_UNREADABLE` con la causa (nessuna documentazione pubblica, D14-9 punto 13), nessun dato | test di unità |
 | T16 | XML malevolo (H23) | leggere un file IDHA con espansione di entità | `XML_UNSAFE`, nessun dato caricato | test di unità |
+| T17 | Elenco dei server (H10, D14-4) | leggere l'elenco nostro; aggiungere e togliere un server personale; cone search con una voce TAP | ogni voce con ente, protocollo, URL, fonte e data di verifica; personali aggiunti e tolti; protocollo sbagliato → `SERVER_UNKNOWN` | test di unità |
+| T18 | Registro VO (H10) | `search_registry` con parole chiave e tipo di servizio su un registro simulato | elenco di servizi con URL e protocollo; parametri inviati secondo RegTAP | servizio simulato (più un test di rete) |
+| T19 | DataLink (H8, D14-3) | `links` su un documento DataLink simulato con un descrittore di servizio; `call_service` | link con semantica, URL e content-type; chiamata con i parametri del descrittore | servizio simulato |
+| T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
+| T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
 
 ## 13. Decisioni aperte
 
@@ -279,6 +416,9 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
   fare da mock nei test (`61`) e riuso diretto da `33-ia-query-adql.md`;
   `astropy.samp` è già nell'ecosistema del progetto. **Le licenze si
   riverificano prima di approvare `14`.** Applicata in §8 qui sopra.
+  **AGGIORNATA il 2026-10-10 (decisione del proprietario):** SAMP con
+  **`pyvo.samp`**, non con `astropy.samp` (deprecato da astropy 8.0);
+  licenze verificate: `pyvo` 1.9.1 BSD-3, `astroquery` 0.4.11 BSD.
 - **D14-2 — Copertura SAMP (H14, G3): DECISA il 2026-10-04 (parte tecnica).**
   **Collegarsi a un hub SAMP già attivo se c'è, altrimenti avviarne uno
   proprio**; **primo perimetro: tabelle, selezioni e puntamenti**; **le
@@ -308,7 +448,10 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
   preferenze e la ricerca nel registro VO. Nessuna copia del selettore di
   Aladin. Elenco esatto e URL **da verificare prima del codice** sui siti
   degli enti.
-- **D14-5 — Limiti di riga predefiniti:** valore di `max_rows` di default.
+- **D14-5 — Limiti di riga predefiniti: DECISA il 2026-10-10 (decisione
+  del proprietario).** `max_rows` di default **100 000**, configurabile fino
+  al tetto del `13` (1 000 000); superamento sempre dichiarato con
+  `ROW_LIMIT_EXCEEDED`. Applicata in §3, §7, §10.
 - **D14-6 — Spettri SSA (E4): DECISA il 2026-10-09 (decisione del proprietario
   sulla checklist del livello 1).** inclusione decisa il 2026-10-04; parte
   tecnica: **SSA 1.1 con `pyvo.dal.SSAService`**, spettri in VOTable e FITS.
@@ -321,7 +464,39 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
   proprietario).** Come D13-7: lettore nel modulo con **`defusedxml`**,
   testato su file di esempio del CDS; senza documentazione o esempi, solo
   errore (`IDHA_UNREADABLE`). **Da verificare prima del codice:** licenza di
-  `defusedxml`, disponibilità di documentazione ed esempi IDHA.
+  `defusedxml`, disponibilità di documentazione ed esempi IDHA. **Esito
+  (2026-10-10):** `defusedxml` 0.7.1, licenza PSF; nessuna documentazione
+  pubblica IDHA trovata → solo `IDHA_UNREADABLE` (D14-9 punto 13).
+- **D14-9 — Decisioni del proprietario del 2026-10-10 sulla divisione in
+  parti:** (1) SAMP con `pyvo.samp` (D14-1); (2) raggio del puntatore Simbad
+  sempre esplicito, default deciso nel 41, nessun valore dal manuale di
+  Aladin; (3) D14-5 decisa; (4) `validate_adql` con soli controlli minimi;
+  (5) un solo lettore VOTable, `read_table` del 13; (6) `catalog` della cone
+  search = voce dell'elenco o URL SCS, identificativi VizieR via TAP in P6
+  del 13; (7) una sola cache delle interrogazioni, prima la cache,
+  `refresh=True`; (8) TAP sincrona di default, asincrona su richiesta con
+  attesa massima 600 s configurabile, suggerimento dell'asincrona; (9) file
+  esportati con versione di AstroTwo e del formato, CSV con commenti `#`;
+  (10) SAMP solo `table.load.votable`, `table.select.rowList`,
+  `coord.pointAt.sky`, profilo web disattivato di default; (11) spettri SSA
+  in VOTable Spectrum DM e FITS tabellari con UCD/`utype`, niente
+  `specutils`; (12) solo servizi pubblici senza autenticazione nel livello
+  1; (13) IDHA: solo `IDHA_UNREADABLE`, T15 riscritto; (14) colonna DataLink
+  da descrittore di servizio o content-type DataLink; (15) Simbad a pari
+  citazioni: il più vicino, dichiarato; (16) §11 nel 32. Applicate in §3,
+  §4, §7, §8, §10–§12.
+- **D14-10 — Unità delle colonne nel CSV esportato: DA DECIDERE (aperta il
+  2026-10-10, Gruppo 3).** T5 chiede "valori e unità equivalenti nei tre
+  casi", ma un CSV non ha un posto standard per le unità, e D14-9 punto 9
+  mette nei commenti `#` solo la provenienza. Opzioni: (a) unità in una
+  riga di commento `#` (informativa: `read_table` del 13 non la rilegge);
+  (b) **ECSV** di `astropy` (CSV con intestazione in commenti `#`, che
+  conserva unità, UCD e metadati e si rilegge; il 13 dovrebbe riconoscerlo
+  dalla riga `# %ECSV`); (c) nessuna unità nel CSV, T5 confronta solo i
+  valori per il CSV. **Raccomandazione:** (b), perché è un formato
+  consolidato che rilegge le unità senza convenzioni nostre. **Fermo solo
+  questo punto:** il CSV si esporta con la provenienza e i valori, senza
+  unità; T5 per il CSV confronta i valori.
 
 ## 14. Registro modifiche
 
@@ -343,3 +518,5 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `QueryCache`, risultati nella cache comune `SharedCache`, timeout comuni 10 s / 60 s. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D14-4 corretta — elenco di server nostro dai servizi pubblici del VO (CDS, ESA, NASA/MAST e simili) più server personali, al posto del selettore di Aladin (§3, §13); D14-3 e §8 (servizio fotometrico di VizieR) con motivazione nostra al posto di "come in Aladin" / "usato da Aladin". Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti (D14-9)** (autorizzazione esplicita a modificare il file approvato): sette parti P1–P7 (§3); SAMP con `pyvo.samp` (D14-1 aggiornata, §8); raggio Simbad esplicito dal 41; D14-5 decisa (100 000 righe, fino al tetto del 13); `validate_adql` minima; un solo lettore (`read_table` del 13); `catalog` della cone search; una sola cache delle interrogazioni (prima la cache, `refresh`); TAP sincrona/asincrona con attesa di 600 s; provenienza dei file esportati; tre messaggi SAMP e profilo web disattivato; formati degli spettri SSA; solo servizi pubblici; IDHA solo errore (T15 riscritto, riga H23 di `03`); colonna DataLink; Simbad a pari citazioni; §11 nel 32. §7 riscritto con le firme; nuovi errori `FILE_EXISTS`, `MAX_ROWS_INVALID`, `AUTH_REQUIRED`, `SERVICE_ERROR`, `SERVER_UNKNOWN`, avviso `FROM_CACHE` (§10); nuovi T17–T21 (§12). Nuova decisione aperta **D14-10** (unità nel CSV, Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P1 scritta** (`src/astrotwo/core/vo_protocols.py`: `read_votable`, `write_votable`, `export_table`, `VoProtocolsError`; test T1, T5 e casi d'errore in `tests/core/test_vo_protocols.py`): provenienza con le stesse chiavi nei tre formati (`A2VERS`, `A2FORMAT`, `A2ORIGIN`, `A2DATE`, `A2EXPORT`, `A2HIST`, `A2BODY`, `A2POS`: `INFO` nel VOTable 1.4, parole chiave e `HISTORY` nel FITS, righe `#` nel CSV); UCD nel FITS come `TUCDn`; testi a lunghezza variabile resi a larghezza fissa nel FITS; scrittore VOTable condiviso con `save_subset` del 13. Unità nel CSV ferme su D14-10. Stato `approvato` invariato. |

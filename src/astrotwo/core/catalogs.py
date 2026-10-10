@@ -102,7 +102,9 @@ class CatalogsError(Exception):
 #: Formati riconosciuti (H22); ``format`` esplicito accetta solo i testi.
 TABLE_FORMATS: tuple[str, ...] = ("votable", "fits", "csv", "tsv", "bsv", "ipac", "sextractor", "astrores")
 _TEXT_FORMATS: tuple[str, ...] = ("csv", "tsv", "bsv", "ipac", "sextractor")
-_ASCII_READERS = {"csv": dict(format="csv"), "tsv": dict(format="tab"), "bsv": dict(format="basic", delimiter=" "),
+# Le righe che iniziano con "#" sono commenti nei testi delimitati (§3), anche per astropy.
+_ASCII_READERS = {"csv": dict(format="csv", comment="#"), "tsv": dict(format="tab", comment="#"),
+                  "bsv": dict(format="basic", delimiter=" ", comment="#"),
                   "ipac": dict(format="ipac"), "sextractor": dict(format="sextractor")}
 _SNIFF_LINES = 20
 _PROVENANCE = f"astropy {astropy.__version__} (astropy.io.votable, astropy.io.fits, astropy.io.ascii)"
@@ -1310,13 +1312,11 @@ _FRAME_TO_COOSYS = {"icrs": "ICRS", "fk5": "eq_FK5", "fk4": "eq_FK4", "galactic"
                     "supergalactic": "supergalactic"}
 
 
-def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -> Path:
-    """Salva il sottoinsieme in un VOTable scelto dall'utente, con provenienza (D13-13); mai nella cache."""
-    target = Path(os.fspath(path)).expanduser()
-    if target.exists() and not overwrite:
-        raise CatalogsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True")
-    mask = _selection_mask(table, selection)
-    part = table.table[mask]
+def _catalog_votable(table: CatalogTable, part: Table):
+    """VOTable di ``part`` con UCD e ``COOSYS`` delle colonne di posizione di ``table``.
+
+    Usato da ``save_subset`` e dall'esportazione del modulo 14 (un solo scrittore).
+    """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         vot = votable_from_table(part)
@@ -1337,6 +1337,18 @@ def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -
                 field_.ref = "a2_coosys"
     elif pos is not None:
         notes.append(f"sistema {pos.frame!r} senza COOSYS standard: colonne di posizione non marcate nel file")
+    return vot, notes
+
+
+def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -> Path:
+    """Salva il sottoinsieme in un VOTable scelto dall'utente, con provenienza (D13-13); mai nella cache."""
+    target = Path(os.fspath(path)).expanduser()
+    if target.exists() and not overwrite:
+        raise CatalogsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True")
+    mask = _selection_mask(table, selection)
+    vot, notes = _catalog_votable(table, table.table[mask])
+    resource = vot.resources[0]
+    pos = table.positions
     saved_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     info = {
         "A2ORIGIN": table.origin,
