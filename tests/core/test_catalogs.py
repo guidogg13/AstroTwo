@@ -6,6 +6,9 @@ File di prova generati nel test; gli attesi sono ricalcolati con
 
 from __future__ import annotations
 
+import dataclasses as _dataclasses
+import io
+
 import astropy.units as u
 import numpy as np
 import pytest
@@ -14,12 +17,17 @@ from astropy.io import fits
 from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
 
+import astrotwo.core.vo_protocols as vo
 from astrotwo.core.catalogs import (
+    FIXED_COLLECTIONS,
     CatalogsError,
     TableLimits,
     confirm_position_columns,
+    datalink_column,
     detect_table_format,
     list_tables,
+    load_catalog,
+    load_table,
     read_table,
     suggest_position_columns,
 )
@@ -876,3 +884,101 @@ def test_votable_binary_without_nrows(tmp_path):
     with pytest.raises(CatalogsError) as err:
         read_table(path, limits=TableLimits(max_rows=2))
     assert err.value.code == "TABLE_TOO_LARGE"
+
+
+# =============================================================================
+# P6 — Cataloghi da servizio e da URL, colonna DataLink (tramite il modulo 14)
+# =============================================================================
+
+
+def votable_route(text, status=200):
+    return lambda request: (status, "application/x-votable+xml", text)
+
+
+def test_load_table_from_url(service, cache, tmp_path):
+    text = VOTABLE.format(system="ICRS", equinox="", second="")
+    service.routes["/cat.xml"] = votable_route(text)
+    cat = load_table(service.url + "/cat.xml", cache=cache)
+    expected = parse_votable(io.BytesIO(text.encode())).get_first_table().to_table(use_names_over_ids=True)
+    assert cat.colnames == expected.colnames and cat.rows == len(expected)
+    assert cat.origin == service.url + "/cat.xml" and cat.request.protocol == "download" and not cat.request.from_cache
+    assert cat.positions is not None and cat.body == "celestial"
+    again = load_table(service.url + "/cat.xml", cache=cache)
+    assert again.request.from_cache and any(code == "FROM_CACHE" for code, _ in again.warnings)
+    local = load_table(write_votable(tmp_path / "loc.xml"))  # file locale: come read_table
+    assert local.request is None and local.rows == 3
+
+
+def test_load_catalog_vizier_tap(service, cache, monkeypatch):
+    def tap(request):
+        query = request["params"]["QUERY"]
+        if '"II/246/out"' in query:
+            maxrec = int(request["params"]["MAXREC"])
+            text = VOTABLE.format(system="ICRS", equinox="", second="")
+            if maxrec < 3:  # il servizio tronca e lo dichiara
+                rows = text.split("<TR>")
+                text = "<TR>".join(rows[:maxrec + 1]) + "</TABLEDATA></DATA>\n</TABLE>\n</RESOURCE>\n</VOTABLE>\n"
+                text = text.replace("<RESOURCE>", '<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OVERFLOW"/>', 1)
+            return 200, "application/x-votable+xml", text
+        error = ('<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">'
+                 '<RESOURCE type="results"><INFO name="QUERY_STATUS" value="ERROR">Unknown table</INFO>'
+                 '</RESOURCE></VOTABLE>')
+        return 400, "application/x-votable+xml", error
+
+    service.routes["/viz/sync"] = tap
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    cat = load_catalog("II/246/out", cache=cache)
+    assert service.requests[-1]["params"]["QUERY"] == 'SELECT * FROM "II/246/out"' and cat.rows == 3
+    assert cat.request.protocol == "tap" and cat.history == ("catalogo II/246/out da cds-vizier-tap",)
+    cut = load_catalog("II/246/out", max_rows=2, cache=cache)
+    assert cut.rows == 2 and "ROW_LIMIT_EXCEEDED" in dict(cut.warnings)
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("XX/999/none", cache=cache)
+    assert err.value.code == "CATALOG_UNKNOWN" and "Unknown table" in err.value.message
+    with pytest.raises(CatalogsError) as err:
+        load_catalog('I/239" OR 1=1', cache=cache)
+    assert err.value.code == "CATALOG_UNKNOWN"
+    assert [c.id for c in FIXED_COLLECTIONS] == ["simbad", "I/355/gaiadr3", "II/246/out"]
+
+
+DATALINK_RESULT = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results">
+<TABLE>
+<FIELD name="obs_publisher_did" ID="pubdid" datatype="char" arraysize="*" ucd="meta.ref.ivoid"/>
+<FIELD name="access_url" datatype="char" arraysize="*" ucd="meta.ref.url"/>
+<FIELD name="access_format" datatype="char" arraysize="*" ucd="meta.code.mime"/>
+<DATA><TABLEDATA>
+<TR><TD>ivo://x?1</TD><TD>http://x/dl?ID=1</TD><TD>application/x-votable+xml;content=datalink</TD></TR>
+<TR><TD>ivo://x?2</TD><TD>http://x/2.fits</TD><TD>image/fits</TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE>
+{descriptor}
+</VOTABLE>
+"""
+DESCRIPTOR = """<RESOURCE type="meta" utype="adhoc:service" ID="dl">
+<PARAM name="standardID" datatype="char" arraysize="*" value="ivo://ivoa.net/std/DataLink#links-1.1"/>
+<PARAM name="accessURL" datatype="char" arraysize="*" value="http://x/dl"/>
+<GROUP name="inputParams"><PARAM name="ID" datatype="char" arraysize="*" value="" ref="pubdid"/></GROUP>
+</RESOURCE>"""
+
+
+def test_datalink_column(tmp_path):
+    with_descriptor = tmp_path / "d.xml"
+    with_descriptor.write_text(DATALINK_RESULT.format(descriptor=DESCRIPTOR), encoding="utf-8")
+    found = datalink_column(load_table(with_descriptor))
+    assert found.column == "obs_publisher_did" and found.source == "descriptor"
+    assert found.descriptor.access_url == "http://x/dl"
+    by_type = tmp_path / "t.xml"
+    by_type.write_text(DATALINK_RESULT.format(descriptor=""), encoding="utf-8")
+    found = datalink_column(load_table(by_type))
+    assert found.column == "access_url" and found.source == "content_type" and found.format_column == "access_format"
+    assert list(found.rows) == [True, False]
+    assert datalink_column(read_table(write_votable(tmp_path / "plain.xml"))) is None
+
+
+@pytest.mark.network
+def test_load_catalog_network(cache):
+    cat = load_catalog("II/246/out", max_rows=5, cache=cache)
+    assert cat.rows == 5 and "ROW_LIMIT_EXCEEDED" in dict(cat.warnings) and cat.request.from_cache is False

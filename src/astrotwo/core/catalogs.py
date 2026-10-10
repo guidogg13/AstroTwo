@@ -45,6 +45,12 @@ from astrotwo.core.coordinates_wcs import (
 
 __all__ = [
     "CONSTANTS",
+    "DataLinkColumn",
+    "FIXED_COLLECTIONS",
+    "FixedCollection",
+    "datalink_column",
+    "load_catalog",
+    "load_table",
     "CatalogTable",
     "CatalogsError",
     "ColumnStatistics",
@@ -174,6 +180,8 @@ class CatalogTable:
     warnings: tuple[tuple[str, str], ...] = ()
     history: tuple[str, ...] = ()
     provenance: str = field(default=_PROVENANCE)
+    request: object | None = None  # RequestRecord del modulo 14 per i dati da rete (P6), altrimenti None
+    descriptors: tuple = ()  # descrittori di servizio del VOTable (ServiceDescriptor del 14, P6)
 
     @property
     def rows(self) -> int:
@@ -717,8 +725,9 @@ def _astrores_rows(table_el, n_fields: int, path: str) -> list[list[str | None]]
     if data is None:
         return []
     if data.find("LINK") is not None:
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati in un LINK esterno: lettura tramite il modulo 14 "
-                            "(P6), non ancora disponibile")
+        # D13-17 (da decidere): la DTD non dice in che formato sono i dati puntati dal LINK.
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati in un LINK esterno: formato dei dati collegati "
+                            "non definito dalla DTD (D13-17, da decidere)")
     csv = data.find("CSV")
     if csv is not None:
         colsep = csv.get("colsep") or "\t"
@@ -1938,3 +1947,123 @@ def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, tim
     mask = valid & (times >= start) & (times <= end)
     return TimeSelection(mask=np.asarray(mask, dtype=bool), column=column, time_format=fmt, scale=used_scale,
                          source=source, excluded_missing=int(np.count_nonzero(~valid)))
+
+
+
+# --------------------------------------------------------------------------
+# P6 — Cataloghi da servizio e da URL, colonna DataLink (tramite il modulo 14)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FixedCollection:
+    """Collezione del gruppo fisso (D13-3): servizio TAP dell'elenco del 14 e tabella."""
+
+    id: str
+    title: str
+    server: str  # voce dell'elenco dei server del modulo 14
+    table: str  # nome della tabella nel servizio TAP
+
+
+#: Gruppo fisso (D13-3), identificativi verificati il 2026-10-10 sui servizi del CDS (MocServer, TAPVizieR,
+#: colonne di SIMBAD); l'albero dinamico ordinato per popolarità attende D13-18.
+FIXED_COLLECTIONS: tuple[FixedCollection, ...] = (
+    FixedCollection("simbad", "SIMBAD (oggetti, tabella basic)", "cds-simbad-tap", "basic"),
+    FixedCollection("I/355/gaiadr3", "Gaia DR3 Part 1. Main source (Gaia Collaboration, 2022)", "cds-vizier-tap",
+                    "I/355/gaiadr3"),
+    FixedCollection("II/246/out", "2MASS All-Sky Catalog of Point Sources (Cutri+ 2003)", "cds-vizier-tap",
+                    "II/246/out"),
+)
+_CATALOG_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+/-]*$")
+
+
+def _from_vo_result(result) -> CatalogTable:
+    """``CatalogTable`` del risultato del 14 con la richiesta registrata, i descrittori e gli avvisi."""
+    table = result.table
+    return dataclasses.replace(table, request=result.request, descriptors=result.descriptors,
+                               warnings=tuple(result.warnings) + table.warnings)
+
+
+def load_table(source, *, table=None, format=None, limits: TableLimits | None = None, cache=None,
+               refresh: bool = False, timeouts=None) -> CatalogTable:
+    """Come ``read_table``; un URL (D3) passa da ``download_table`` del modulo 14 (prima la cache)."""
+    from astrotwo.core import vo_protocols as vo
+
+    text = os.fspath(source)
+    if not text.startswith(("http://", "https://")):
+        result = read_table(text, table=table, format=format, limits=limits)
+        if result.format == "votable":
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                payload = Path(result.origin).read_bytes()
+                descriptors = vo._descriptors(parse_votable(result.origin, verify="ignore"), payload)
+            result = dataclasses.replace(result, descriptors=descriptors)
+        return result
+    kwargs = {} if timeouts is None else {"timeouts": timeouts}
+    return _from_vo_result(vo.download_table(text, table=table, format=format, limits=limits, cache=cache,
+                                             refresh=refresh, **kwargs))
+
+
+def load_catalog(catalog_id: str, *, max_rows: int | None = None, limits: TableLimits | None = None, cache=None,
+                 refresh: bool = False, timeouts=None) -> CatalogTable:
+    """Catalogo per identificatore (D1): VizieR (es. ``"II/246/out"``) tramite TAP VizieR del 14, o una
+    voce del gruppo fisso (``FIXED_COLLECTIONS``); righe oltre ``max_rows`` → ``ROW_LIMIT_EXCEEDED`` dichiarato."""
+    from astrotwo.core import vo_protocols as vo
+
+    if not isinstance(catalog_id, str) or not _CATALOG_ID.match(catalog_id):
+        raise CatalogsError("CATALOG_UNKNOWN", f"identificativo di catalogo non valido: {catalog_id!r}")
+    fixed = {c.id: c for c in FIXED_COLLECTIONS}
+    server, name = (fixed[catalog_id].server, fixed[catalog_id].table) if catalog_id in fixed \
+        else ("cds-vizier-tap", catalog_id)
+    kwargs = {} if timeouts is None else {"timeouts": timeouts}
+    try:
+        result = vo.tap_query(server, f'SELECT * FROM "{name}"',
+                              max_rows=vo.DEFAULT_MAX_ROWS if max_rows is None else max_rows,
+                              limits=limits, cache=cache, refresh=refresh, **kwargs)
+    except vo.VoProtocolsError as exc:
+        if exc.code == "ADQL_INVALID":  # il servizio rifiuta la tabella: catalogo sconosciuto
+            raise CatalogsError("CATALOG_UNKNOWN", f"catalogo {catalog_id!r} non trovato su {server}: "
+                                f"{exc.details.get('service_message', exc.message)}") from exc
+        raise
+    return dataclasses.replace(_from_vo_result(result), history=(f"catalogo {catalog_id} da {server}",))
+
+
+_DATALINK_MIME = "application/x-votable+xml;content=datalink"
+
+
+@dataclass(frozen=True)
+class DataLinkColumn:
+    """Colonna DataLink riconosciuta (D14-9 punto 14): la risoluzione dei link è del modulo 14."""
+
+    column: str
+    source: str  # "descriptor" (descrittore di servizio DataLink) o "content_type"
+    descriptor: object | None = None  # ServiceDescriptor del 14
+    format_column: str | None = None
+    rows: np.ndarray | None = None  # righe con content-type DataLink (solo per "content_type")
+
+
+def _single(table: Table, ucd_word: str, name: str) -> str | None:
+    by_ucd = [n for n in table.colnames if (table[n].meta.get("ucd") or "").split(";")[0].strip() == ucd_word]
+    if len(by_ucd) == 1:
+        return by_ucd[0]
+    return name if not by_ucd and name in table.colnames else None
+
+
+def datalink_column(table: CatalogTable) -> DataLinkColumn | None:
+    """Colonna DataLink: quella citata da un descrittore di servizio DataLink del VOTable, oppure la colonna
+    degli URL di accesso (UCD ``meta.ref.url``) le cui righe dichiarano, nella colonna del formato (UCD
+    ``meta.code.mime``), il content-type DataLink; nessuna → ``None``."""
+    for desc in table.descriptors:
+        if getattr(desc, "is_datalink", False):
+            columns = [p.ref_column for p in desc.params if p.ref_column in table.table.colnames]
+            if len(columns) == 1:
+                return DataLinkColumn(columns[0], "descriptor", descriptor=desc)
+    data = table.table
+    fmt, url = _single(data, "meta.code.mime", "access_format"), _single(data, "meta.ref.url", "access_url")
+    if fmt is None or url is None:
+        return None
+    values = np.array([str(v).replace(" ", "").lower() for v in data[fmt]])
+    mask = ~np.ma.getmaskarray(data[fmt]) & (values == _DATALINK_MIME)
+    if not mask.any():
+        return None
+    return DataLinkColumn(url, "content_type", format_column=fmt, rows=mask)

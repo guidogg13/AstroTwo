@@ -408,8 +408,31 @@ suo VOTable.
   P2).
 - **`list_tables(source)`** — tabelle del file (indice, nome, righe,
   colonne), per la scelta dell'utente.
-- **`load_catalog(catalog_id)`** / **`load_table(source)`** (P6) — come
-  `read_table`, anche da servizio e da URL tramite il modulo 14.
+- **`load_catalog(catalog_id, *, max_rows=None, limits=None, cache=None,
+  refresh=False, timeouts=None)`** (P6) — catalogo VizieR per identificativo
+  (es. `"II/246/out"`) con `SELECT * FROM "<id>"` su TAP VizieR tramite
+  `tap_query` del 14 (D14-9 punto 6), o una voce di `FIXED_COLLECTIONS`;
+  `max_rows` di default quello del 14 (100 000), troncamento dichiarato con
+  `ROW_LIMIT_EXCEEDED`; identificativo non valido o rifiutato dal servizio →
+  `CATALOG_UNKNOWN`.
+- **`load_table(source, *, table=None, format=None, limits=None, cache=None,
+  refresh=False, timeouts=None)`** (P6) — come `read_table` per un file
+  locale (con i descrittori di servizio del VOTable); un URL passa da
+  `download_table` del 14 (prima la cache).
+- **`CatalogTable.request`** / **`CatalogTable.descriptors`** (P6) —
+  richiesta registrata dal 14 (`RequestRecord`) per i dati da rete e
+  descrittori di servizio del VOTable.
+- **`FIXED_COLLECTIONS`** (P6, D13-3) — gruppo fisso: `simbad` (tabella
+  `basic` del TAP di SIMBAD), `I/355/gaiadr3` (Gaia DR3), `II/246/out`
+  (2MASS), ognuno con la voce TAP dell'elenco del 14.
+- **`datalink_column(table)`** (P6, D13-11, D14-9 punto 14) — colonna
+  DataLink: quella citata da un descrittore di servizio DataLink del
+  VOTable; altrimenti la colonna degli URL di accesso (UCD `meta.ref.url`,
+  o `access_url`) le cui righe dichiarano nella colonna del formato (UCD
+  `meta.code.mime`, o `access_format`) il content-type
+  `application/x-votable+xml;content=datalink` (forma di ObsCore), con la
+  maschera delle righe; nessuna → `None`. La risoluzione dei link è del 14
+  (`DataLinkClient`).
 - **`suggest_position_columns(table)`** — candidate dal nome, ognuna marcata
   come suggerimento, con il motivo; **`confirm_position_columns(table, lon,
   lat, frame, equinox=None)`** — nuova `CatalogTable` con le colonne
@@ -605,7 +628,11 @@ sono verificati da `34-ia-verifica-risultati.md`.
   proprietario sulla checklist del livello 1).** **albero dinamico delle
   collezioni ordinato per popolarità**, con un piccolo gruppo fisso: Simbad,
   Gaia, 2MASS (identificativi esatti **da verificare prima del codice di
-  P6**). **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
+  P6**). **Esito delle verifiche (2026-10-10, P6):** identificativi del
+  gruppo fisso verificati sui servizi del CDS — `I/355/gaiadr3` (Gaia DR3
+  Part 1, MocServer e TAPVizieR), `II/246/out` (2MASS PSC, MocServer e
+  TAPVizieR, interrogabile con il nome diretto), SIMBAD = tabella `basic` del
+  suo TAP; il criterio di popolarità: vedi D13-18 (aperta). **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
   cambiano nel tempo, quindi l'albero si legge dal servizio invece di una
   tabella mantenuta a mano; l'ordine per popolarità mette in alto i
   cataloghi più usati dalla comunità (criterio di popolarità: proprietà del
@@ -683,6 +710,34 @@ sono verificati da `34-ia-verifica-risultati.md`.
   proprietario).** Colonna indicata dall'utente; formato e scala dal
   `TIMESYS`, altrimenti parametri obbligatori; intervallo chiuso
   `[inizio, fine]`.
+- **D13-17 — Dati ASTRORES in un `LINK` esterno: DA DECIDERE (aperta il
+  2026-10-10, Gruppo 3).** La DTD (v0.9) ammette `DATA` con `LINK` ma non
+  dice in che formato siano i dati collegati (CSV? con quali separatori?
+  frammento XML?) e il link può essere `href`, `action` (come un modulo
+  HTML, con i campi "hidden" della risorsa) o `gref` (sistema GLU del CDS).
+  Opzioni: (a) solo `href`, dati letti come il `CSV` della DTD con i
+  separatori di default (tabulazione, a capo), scaricati con il 14; (b) come
+  (a) ma solo se `content-type` dichiara un testo separato (es.
+  `text/tab-separated-values`, `text/csv`); (c) nessuna lettura, resta
+  `ASTRORES_UNREADABLE`. **Raccomandazione:** (b), che non indovina il
+  formato. **Fermo solo questo punto** (resta `ASTRORES_UNREADABLE` con
+  rimando a D13-17).
+- **D13-18 — Albero delle collezioni e criterio di popolarità (D13-3): DA
+  DECIDERE (aperta il 2026-10-10, Gruppo 3).** L'unico servizio trovato che
+  elenca le collezioni di VizieR con una popolarità è il **MocServer** del
+  CDS (`https://alasky.cds.unistra.fr/MocServer/query`): ogni record ha la
+  proprietà `vizier_popularity` (es. 1000 per Gaia DR3, 320 per 2MASS),
+  **ma la pagina di documentazione del MocServer non la descrive** (verifica
+  del 2026-10-10), e il MocServer è anche il servizio dei MOC (16). Opzioni:
+  (a) albero dal MocServer (gerarchia degli identificativi VizieR, es.
+  `I/…`, `II/…`), ordinato per `vizier_popularity`, con il client nel 14
+  (voce dell'elenco dei server); (b) albero dal MocServer senza ordine per
+  popolarità (ordine degli identificativi); (c) albero da `TAP_SCHEMA` di
+  TAPVizieR (nessuna popolarità). **Raccomandazione:** (a), chiedendo al CDS
+  conferma del significato di `vizier_popularity` e dichiarando nel
+  risultato che l'ordine viene da quella proprietà. **Fermo solo l'albero
+  dinamico;** il gruppo fisso (`FIXED_COLLECTIONS`) e `load_catalog` sono
+  scritti.
 - **Scelte minori del 2026-10-10 confermate dal proprietario:** epoca di
   origine (parametro vietato se è nei metadati, colonna in anni giuliani);
   equinozio ed epoca ASTRORES numerici giuliani (FK5/ICRS) o besseliani
@@ -717,3 +772,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **Con P1 del 14** (autorizzazione esplicita a modificare il file approvato): le righe `#` dei testi delimitati (CSV, TSV, BSV) sono commenti anche nella lettura con `astropy.io.ascii`, come già nel riconoscimento di §3 (prima un CSV con commenti all'inizio non si leggeva); lo scrittore VOTable di `save_subset` (UCD e `COOSYS`) è condiviso con l'esportazione del 14. Comportamento di §3 invariato. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Con P4 del 14** (autorizzazione esplicita a modificare il file approvato): correzione — un VOTable senza l'attributo facoltativo `nrows` (dati `BINARY`, es. le risposte TAP del registro VO) dava un errore nel controllo del tetto di righe; ora le righe si contano dai dati letti. Nuovo test. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Con P5 del 14** (autorizzazione esplicita a modificare il file approvato): la lettura conserva nei metadati di colonna anche l'`utype` dei campi VOTable e gli UCD/utype delle tabelle FITS (parole chiave `TUCDn`, `TUTYPn`), che servono a riconoscere gli assi degli spettri SSA; nessun altro comportamento cambia. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P6 scritta tranne l'albero dinamico (D13-18) e il `LINK` ASTRORES (D13-17)** (autorizzazione esplicita a modificare il file approvato): `load_table` (file locale o URL tramite `download_table` del 14), `load_catalog` (TAP VizieR o gruppo fisso tramite `tap_query` del 14; `CATALOG_UNKNOWN`), `FIXED_COLLECTIONS` con identificativi verificati, `datalink_column` (descrittore DataLink o content-type DataLink nella colonna del formato, forma ObsCore), campi `request` e `descriptors` di `CatalogTable` (§7); test con servizi simulati e test di rete su 2MASS. Nuove decisioni aperte **D13-17** e **D13-18** (Gruppo 3). Stato `approvato` invariato. |
