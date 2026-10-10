@@ -14,17 +14,17 @@ funzioni avanzate, consegnata come file `.dmg`.
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
 tutti gli altri livelli restano in **FASE: SPECIFICHE**.
 
-- Stato del codice al 2026-10-09: base del progetto creata (`pyproject.toml`
-  con Python 3.12 e `uv`, `uv.lock`, `src/astrotwo/` con i sotto-pacchetti
-  `core`, `analysis`, `ai`, `ui`, `advanced`, `tests/` specchiato; dipendenze
-  del modulo 10: `astropy`, `astroquery`, `numpy`, `scipy`; `pytest`).
-  **Modulo 10 scritto** (`src/astrotwo/core/coordinates_wcs.py`) con tutto il
-  suo §7, compreso `resolve_name`; **cache comune scritta**
-  (`src/astrotwo/core/cache.py`, da `04-cache.md`); dell'11 è scritto solo
-  `star_centroid` (`src/astrotwo/core/images_fits.py`). Test: **103
-  superati di default, 0 saltati, 0 falliti; con la rete 106 superati**
-  (3 test di rete). Secondo la definizione di "fatto" di `CLAUDE.md`, `04`
-  e il modulo 10 risultano completi.
+- Stato del codice al 2026-10-10: base del progetto (`pyproject.toml` con
+  Python 3.12 e `uv`, `uv.lock`, `src/astrotwo/` con i sotto-pacchetti,
+  `tests/` specchiato). **Completi secondo la definizione di "fatto" di
+  `CLAUDE.md`: `04` (cache comune, `cache.py`), modulo 10
+  (`coordinates_wcs.py`) e modulo 11 (`images_fits.py`, scritto in 7 parti
+  P1–P7, un commit per parte).** Dipendenze dichiarate: `astropy`,
+  `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
+  `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
+  test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
+  sotto). Test: **197 superati di default, 200 con la rete (3 test di
+  rete), 0 saltati, 0 falliti.**
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
   MPL-2.0 per `certifi`). Gli obblighi LGPL per il `.dmg` vanno specificati
@@ -370,6 +370,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Cache (precisazioni) | Limite = **somma dei dati delle voci** (overhead di SQLite escluso); **5 GB = 5 × 10⁹ byte**; `resolve_name` con **prima la cache** (`refresh=True` per forzare SIMBAD) | 2026-10-09 | decisione del proprietario, `04-cache.md` §3, `10` §3 | applicate nel codice di `cache.py` e `resolve_name` |
 | Regola d'oro n. 8 | **AstroTwo è scritto da zero:** da Aladin non si prende niente (codice, tabelle di valori, file, immagini); il manuale dice solo quali funzioni servono; unica eccezione la lettura di file prodotti da Aladin | 2026-10-10 | decisione del proprietario, `CLAUDE.md` | collegata ad A11 (licenza) |
 | 11 (divisione) | Modulo 11 in 7 parti (P1 lettura FITS → P7 ricampionamento/RGB/mosaico); D11-5 corretta (palette `matplotlib`); funzioni di trasferimento di `astropy.visualization`; `contourpy`; elenco chiuso H5; A10 per le immagini; qualità = copertura `reproject`; fattore unico `rgb_diff`; vista esportata dal 41; strumenti IA nel 32 | 2026-10-10 | decisione del proprietario, `11` §3/§13 (D11-9) | normalizzazione H5 da verificare con il manuale prima di P5 |
+| 11 (P1–P7) | HDU immagine = 2 assi utili, più HDU → parametro `hdu` (`HDU_CHOICE_REQUIRED`); FITS RGB solo con `rgb=True`; calibrazione JPEG/PNG/`.hhh` da soli standard pubblici (JPEG `COM`, PNG `Comment`, FITS 4.0); immagini da URL con prima la cache; `memmap` impossibile con `BZERO`/`BSCALE`/`BLANK` → due livelli; due livelli: misure sui pixel originali per regione, altrimenti `PREVIEW_NOT_MEASURABLE`; RGB con parametri di display espliciti, B = media con 2 immagini, `rgb_diff` con B = 0; metodo di ricampionamento obbligatorio; `reproject` = lista sulla stessa griglia; lunghezze d'onda come parametro | 2026-10-10 | decisioni del proprietario durante P1–P7, `11` §3/§7 | modulo 11 completo |
 
 ## 6. Decisioni aperte
 
@@ -422,10 +423,12 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** il proprietario sceglie il
-   prossimo modulo del livello 1 da scrivere (11–19), uno alla volta, ciascuno
-   dopo le sue verifiche "da verificare prima del codice". Restano aperte
-   D10-9 (con il 41) e D11-8 (con 20 e 41).
+0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; il
+   proprietario sceglie il prossimo modulo (12–19), uno alla volta, con le
+   sue verifiche "da verificare prima del codice". Da rivedere: l'elenco dei
+   punti dei file approvati che prendono valori o strumenti da Aladin
+   (consegnato il 2026-10-10, regola d'oro n. 8). Aperte: D10-9 (con il 41),
+   D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -483,3 +486,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-09 | Claude Code | **Decisioni del proprietario:** nomi dei file Python in inglese (tabella in `02` §3); griglia automatica confermata (da verificare con AP1); centroide confermato e nuova D11-8; precisazioni della cache (limite sui dati, 5 × 10⁹ byte) e di `resolve_name` (prima la cache). **Codice:** `src/astrotwo/core/cache.py` (test T1–T8 di `04`) e `resolve_name` nel modulo 10 (T5 simulato + di rete); dipendenze dichiarate `requests` e `pyvo`; `tests/conftest.py` con home temporanea per tutti i test. Test: 103 superati di default, 106 con la rete, 0 saltati, 0 falliti. Primo commit `e029808`; secondo commit con questo lavoro. Aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). Stati invariati: approvato 14, bozza 5, non esiste 23, totale 42. |
 | 2026-10-10 | Claude Code | Modulo 10: verificato che `conf.timeout` di astroquery non applica i timeout HTTP di `04`; il campo interno `_session` resta isolato in `_simbad_with_timeouts` (registro del 10). Test: 106 superati con la rete. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario:** regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero); divisione dell'11 in 7 parti e decisioni collegate applicate nell'11 (D11-5 corretta, D11-9); **A11 — licenza di AstroTwo** aperta (Gruppo 2, blocca il 60) in `01`; A10 decisa per le immagini. Controllo dei file approvati per contenuti presi da Aladin: elenco consegnato al proprietario, nessuna correzione. Aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). Stati invariati. |
+| 2026-10-10 | Claude Code | **Modulo 11 scritto in 7 parti** (P1 lettura FITS/HDU, P2 JPEG/PNG/GIF e FITS RGB, P3 rete e cache, P4 visualizzazione, P5 taglio/operazioni/contorni/salvataggio, P6 immagini grandi, P7 ricampionamento/RGB/mosaico), un commit per parte, con le verifiche prima di ciascuna (HCOMPRESS, Pillow, documentazione pubblica della calibrazione, matplotlib e palette, manuale sez. 5.18 per la normalizzazione, contourpy, `memmap`/`section` di astropy, reproject) e le precisazioni del proprietario registrate nell'11. Modulo 10: campo interno di astroquery isolato in `_simbad_with_timeouts`. Test: 197 superati di default, 200 con la rete. `04`, 10 e 11 completi. Aperte **19** (invariate). Stati invariati: approvato 14, bozza 5, non esiste 23, totale 42. |

@@ -8,7 +8,10 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-10 — regola d'oro n. 8 (AstroTwo scritto da zero);
+**Ultimo aggiornamento:** 2026-10-10 — **modulo 11 completo** (7 parti, un commit per
+parte; test 197 di default, 200 con la rete); `04`, 10 e 11 completi. Aperte 19.
+Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-10 — regola d'oro n. 8 (AstroTwo scritto da zero);
 decisioni sull'11 (divisione in 7 parti); nuova A11 (licenza). Aperte 19 (Gruppo
 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). Riepilogo invariato: approvato 14, bozza 5,
 non esiste 23, totale 42.
