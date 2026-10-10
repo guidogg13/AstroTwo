@@ -47,7 +47,7 @@ AstroTwo applica regole più severe (§9).
    tramite `16-core-moc.md`, con il corpo dichiarato. Il supporto dei MOC
    planetari in `mocpy` e nello standard IVOA è **da verificare** (D19-7).
 6. **Immagini PDS.** Lettura delle immagini nel formato del Planetary Data
-   System elencato nella sez. 8.1 del manuale di Aladin; versioni del formato,
+   System (formato da leggere per la parità, riga H21); versioni del formato,
    letta **in questo modulo** (D19-2, decisa il 2026-10-08): **PDS4
    obbligatorio**; PDS3 solo se esiste una libreria consolidata; libreria e
    licenza da verificare (§13, D19-2b).
@@ -59,8 +59,9 @@ AstroTwo applica regole più severe (§9).
    diversi, non si sovrappongono** (`BODY_MISMATCH`). Un'eventuale forzatura
    da parte dell'utente è possibile **solo con un'opzione esplicita, citata nel
    risultato** (D19-4, decisa il 2026-10-08; stesso schema di D13-5).
-9. **Attivazione.** Come in Aladin, l'accesso ai dati planetari è un'opzione
-   delle preferenze (`40-ui-finestra-principale.md`); **disattivato per default** (D19-5, decisa il 2026-10-09).
+9. **Attivazione.** L'accesso ai dati planetari è un'opzione delle
+   preferenze (`40-ui-finestra-principale.md`); **disattivato per default**
+   (D19-5, decisa il 2026-10-09; motivazione nostra in §13).
 
 ## 4. Cosa NON fa
 
@@ -137,7 +138,7 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | EPN-TAP (standard IVOA) | interrogazioni ai servizi planetari | standard del Virtual Observatory planetario |
 | HiPS (standard IVOA) | superfici planetarie | stesso formato dei HiPS celesti; metadati del corpo **da verificare** nello standard |
 | MOC (standard IVOA) | coperture planetarie | supporto planetario **da verificare** (D19-7) |
-| Formato PDS (Planetary Data System) | immagini planetarie | elencato nella sez. 8.1 del manuale di Aladin |
+| Formato PDS (Planetary Data System) | immagini planetarie | formato standard degli archivi planetari della NASA |
 | `spiceypy` + kernel PCK generici della NAIF (D19-1) | conversioni di convenzione, costanti dei corpi | licenze e installazione **da verificare prima del codice** |
 | `pds4_tools` (PDS4), `pdr` da valutare (PDS3) (D19-2b) | lettura delle immagini PDS | licenze e installazione **da verificare prima del codice** |
 | `astropy.units` | unità di angoli e distanze | regola d'oro n. 4 |
@@ -234,8 +235,13 @@ corpo di un dato né calcola coordinate.
   citata nel risultato** (stesso schema di D13-5). Applicata in §3, §9, §10,
   §12.
 - **D19-5 — Valore predefinito dell'opzione: DECISA il 2026-10-09 (decisione
-  del proprietario sulla checklist del livello 1).** dati planetari
-  **disattivati per default**, come opzione in Aladin (sez. 5.21).
+  del proprietario sulla checklist del livello 1; motivazione riscritta il
+  2026-10-10, regola d'oro n. 8).** dati planetari **disattivati per
+  default**, attivabili nelle preferenze. **Motivazione (nostra):** la
+  maggior parte del lavoro è sul cielo; con l'opzione spenta l'elenco delle
+  collezioni mostra solo dati celesti e non si apre per errore un dato di un
+  altro corpo, che poi non si potrebbe sovrapporre (D19-4); chi lavora sui
+  pianeti la accende una volta.
 - **D19-6 — Corpi supportati inizialmente: DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** i corpi che hanno un HiPS nel
   MocServer e sono presenti nel kernel PCK; **Luna e Marte obbligatori** per i
@@ -254,3 +260,4 @@ corpo di un dato né calcola coordinate.
 | 2026-10-09 | Claude Code | **Decisioni del proprietario del 2026-10-08:** D19-2 (PDS letto qui, PDS4 obbligatorio, PDS3 solo con libreria consolidata; resta aperta D19-2b su libreria e licenza, Gruppo 2), D19-3 (campo `body` obbligatorio nei moduli 12, 13, 14, 16; `celestial` ricavato dal sistema di coordinate) e D19-4 (errore di default, forzabile con opzione esplicita citata nel risultato; nuovo avviso `BODY_MISMATCH_FORCED`, test T11). §3, §5, §6, §7, §8, §9, §10, §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **D19-1, D19-2b, D19-5, D19-6, D19-7 DECISE** (checklist del livello 1): `spiceypy` + kernel PCK della NAIF; `pds4_tools` (PDS4) e `pdr` da valutare (PDS3); dati planetari disattivati per default; corpi con HiPS nel MocServer e nel kernel PCK, Luna e Marte obbligatori per i test; MOC planetari da verificare, altrimenti estensione con `body`. Le verifiche di licenza e supporto restano vincoli prima del codice. §3, §8 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D19-5 (dati planetari disattivati per default) resta, con motivazione nostra al posto di "come in Aladin" (§3 punto 9, §13); formato PDS motivato come standard degli archivi planetari (§3, §8). Stato `approvato` invariato. |

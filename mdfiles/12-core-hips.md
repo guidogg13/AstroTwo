@@ -13,9 +13,9 @@ riquadro mostrato.
 - **Sfoglio dei survey HiPS (C1):** elencare i survey disponibili, permettere
   di attivarne uno e navigare (zoom/pan) con caricamento progressivo dei
   riquadri (tile).
-- **Survey predefiniti (C2):** mantenere un elenco di survey noti (DSS, SDSS,
-  Pan-STARRS, Gaia, ecc.); l'elenco esatto e le fonti sono da verificare con
-  la documentazione ufficiale di Aladin.
+- **Survey predefiniti (C2):** l'elenco dei survey è **dinamico**, letto dal
+  MocServer (H26, D12-3), così resta aggiornato senza una tabella mantenuta
+  a mano; il survey attivo all'avvio è **DSS2 a colori** (D12-3).
 - **Richiesta dei riquadri:** scaricare i tile necessari al campo visualizzato
   mantenendo la risoluzione appropriata, con timeout e ripiego se la rete
   manca.
@@ -28,7 +28,12 @@ riquadro mostrato.
   i dati di copertura appartengono a `16-core-moc.md`, questo modulo fornisce
   l'identità e la posizione del survey.
 - **Generazione di HiPS (H9):** creare un nuovo HiPS a partire da un set di
-  immagini, anche da riga di comando; procedura e libreria: da decidere (§13).
+  immagini, anche da riga di comando, secondo lo **standard pubblico IVOA
+  HiPS 1.0** (D12-1, corretta il 2026-10-10): ricampionamento dei tile con
+  `reproject` dove la libreria lo offre, **codice nostro** per il resto
+  (struttura delle cartelle e degli ordini, file `properties`, anteprima
+  `Allsky`, tile JPEG/PNG da quelli FITS); la copertura MOC del nuovo HiPS si
+  calcola con `16-core-moc.md`. Nessuno strumento esterno.
 - **Cataloghi HiPS progressivi, mappe e griglie HEALPix (H12):** servire
   cataloghi come livelli progressivi (caricamento per ordine HEALPix) e
   produrre/disegnare mappe e griglie HEALPix. **Confine deciso il 2026-10-04
@@ -119,8 +124,9 @@ riquadro mostrato.
   un campo. Calcolo deterministico su griglia HEALPix.
 - **Cache:** nessuna classe propria (CA4): i riquadri si salvano e si
   rileggono con `SharedCache` di `04-cache.md`.
-- **`build_hips(...)`** — generazione HiPS (H9) secondo D12-1 (decisa il
-  2026-10-09): libreria Python se disponibile, altrimenti Hipsgen esterno.
+- **`build_hips(...)`** — generazione HiPS (H9) secondo D12-1 (corretta il
+  2026-10-10): standard IVOA HiPS 1.0, `reproject` dove possibile, codice
+  nostro per il resto.
 - **`healpix_map(...)`** / **`healpix_grid(...)`** — mappe e griglie HEALPix
   (H12), delegando i calcoli HEALPix a `16-core-moc.md`.
 - **`cube_planes(survey)`** (H24) — numero e descrizione dei piani di un
@@ -133,7 +139,8 @@ riquadro mostrato.
 
 | Libreria / standard | Uso nel modulo | Motivazione |
 |---|---|---|
-| Specifica HiPS (CDS) | formato e URL dei riquadri | standard della comunità |
+| Standard IVOA HiPS 1.0 | formato e URL dei riquadri, generazione (H9) | standard pubblico della comunità |
+| `reproject` (D11-2, verificato con l'11) | ricampionamento delle immagini nei tile HEALPix per la generazione (H9) | già scelto dal progetto; copertura della generazione **da verificare prima del codice** |
 | `astroquery.hips2fits` (D12-4) | solo complemento per i ritagli FITS prodotti dal server; i tile si scaricano con il client diretto | vedi §13 |
 | `healpy` / `astropy-healpix` (via modulo 16) | griglie e ordini HEALPix | standard del dominio |
 | `requests` (o libreria HTTP già usata dal progetto) | richieste HTTP con timeout | pratica consolidata |
@@ -212,11 +219,12 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 
 ## 13. Decisioni aperte
 
-- **D12-1 — Generazione HiPS (H9): DECISA il 2026-10-09 (decisione del
-  proprietario sulla checklist del livello 1).** **libreria Python** se
-  `reproject` offre davvero la generazione di HiPS (**da verificare prima del
-  codice**); altrimenti **Hipsgen del CDS come strumento esterno
-  facoltativo**. Nessun ambiente Java dentro il `.dmg`.
+- **D12-1 — Generazione HiPS (H9): DECISA il 2026-10-09, CORRETTA il
+  2026-10-10 (decisione del proprietario, regola d'oro n. 8).** La generazione
+  segue lo **standard pubblico IVOA HiPS 1.0**, con **`reproject`** dove
+  possibile (quali passi copre: **da verificare prima del codice**) e
+  **codice nostro** per il resto; **nessun programma di Aladin** (Hipsgen
+  tolto), nessuno strumento esterno, nessun ambiente Java dentro il `.dmg`.
 - **D12-2 — Caricamento HiPS da ID/URL (C3): DECISA il 2026-10-04 — inclusa
   per decisione del proprietario** (parità con Aladin = minimo). La funzione è
   descritta in §3/§7 con errori in §10; restano solo verifiche tecniche su
@@ -224,8 +232,9 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 - **D12-3 — Survey predefiniti (C2): DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** **elenco dinamico dal
   MocServer** (riga H26 di `03-parita-aladin.md`), con **default DSS2 a
-  colori** come in Aladin; identificativo esatto **da verificare prima del
-  codice**.
+  colori**. **Motivazione (nostra, 2026-10-10):** copre il **cielo intero**
+  con dati **pubblici**, quindi ogni campo richiesto ha un'immagine di
+  sfondo; identificativo esatto **da verificare prima del codice**.
 - **D12-4 — Cliente HiPS: DECISA il 2026-10-09 (decisione del proprietario
   sulla checklist del livello 1).** **client HTTP diretto** secondo lo
   standard IVOA HiPS 1.0 (tile, proprietà, ordini); `astroquery.hips2fits`
@@ -249,3 +258,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per H24 (cubi HiPS), H26 (collezioni dal MocServer con copia locale; filtro spaziale nel 16; client `astroquery.mocserver`, interfaccia da verificare) e H27 (solo tile del campo; valore del pixel dal tile FITS). §8: riga `hips2fits` allineata a D12-4. Nessuna nuova decisione dei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §9 — tolta `HiPSCache`, riquadri nella cache comune `SharedCache`; tolto da "Usato da" l'`11` per la cache. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D12-1 corretta — generazione HiPS secondo lo standard IVOA HiPS 1.0, `reproject` dove possibile, codice nostro per il resto, Hipsgen tolto (§3, §7, §8, §13); D12-3 — DSS2 a colori resta, con motivazione nostra (cielo intero, dati pubblici); §3 C2 senza elenco preso da Aladin (elenco dinamico dal MocServer); §8 "Specifica HiPS (CDS)" → standard IVOA HiPS 1.0. Stato `approvato` invariato. |

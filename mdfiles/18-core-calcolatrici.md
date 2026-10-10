@@ -23,7 +23,8 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
    scritta dall'utente.
    - Operatori: `+`, `-`, `*`, `/`, `%` (modulo), `^` (potenza), parentesi;
      costanti `pi` ed `e`; numeri in notazione decimale ed esponenziale.
-   - Funzioni (stesso elenco di Aladin): `exp`, `ln`, `log` (base 10),
+   - Funzioni (elenco che copre quelle della calcolatrice di Aladin, parità
+     P11): `exp`, `ln`, `log` (base 10),
      `sqrt`, `ceil`, `floor`, `round`, `abs`, `min`, `max`; trigonometriche in
      **radianti** `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`;
      trigonometriche in **gradi** `sind`, `cosd`, `tand`, `asind`, `acosd`,
@@ -40,9 +41,10 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
    - L'espressione si **analizza con una grammatica chiusa** e non viene mai
      eseguita come codice Python (nessun `eval`). Analizzatore: modulo `ast`
      con elenco chiuso (D18-1, decisa il 2026-10-09).
-   - Come in Aladin, l'espressione si può scrivere preceduta o seguita da `=`
-     nel campo comandi; la compatibilità completa con la sintassi degli script
-     di Aladin dipende da A8 (rimandata dopo il livello 1).
+   - Nel campo comandi l'espressione si può scrivere preceduta o seguita da
+     `=`: il segno distingue un calcolo da un comando senza parole chiave in
+     più. La compatibilità con la sintassi degli script di Aladin dipende da
+     A8 (rimandata dopo il livello 1).
 2. **Convertitore di unità (sez. 5.7.2).** Converte un valore da un'unità a
    un'altra.
    - Le unità e i prefissi (da yocto a yotta) sono quelli di `astropy.units`,
@@ -53,10 +55,13 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
      data (convertita con la calcolatrice del tempo).
    - Equivalenze fisiche (es. lunghezza d'onda ↔ frequenza, temperature con
      zero spostato) **solo se richieste esplicitamente**; elenco: §13, D18-3.
-   - Le unità di Aladin che non esistono in `astropy.units` (es. `"MM/yy"`,
-     `"day"` come giorno del mese, alias come `al`, `Mgeo`) non sono
-     accettate tramite alias definiti in un'unica tabella (D18-2, decisa il
-     2026-10-09); la sintassi `convert … into …` si decide con A8.
+   - **Solo i formati standard di unità** (D18-2, corretta il 2026-10-10):
+     una stringa di unità si accetta se è valida nel formato **FITS** o, se
+     non lo è, nel formato **VOUnit** di `astropy.units`
+     (`Unit(s, format="fits")`, `Unit(s, format="vounit")`); il formato usato
+     è scritto nel risultato. Nessuna tabella di alias: le unità fuori da
+     questi due standard danno `UNIT_UNKNOWN`. La sintassi
+     `convert … into …` si decide con A8.
 3. **Calcolatrice dei pixel (sez. 5.7.3).**
    - Converte il valore **grezzo** di un pixel nel valore **fisico** con la
      regola dello standard FITS `valore = BZERO + BSCALE × grezzo`, e
@@ -137,7 +142,7 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
 |---|---|---|---|---|
 | in | `expression` | stringa | grammatica chiusa (§3, punto 1) | lunghezza massima: D18-5 |
 | in | `value` | float64, espressione, angolo sessagesimale o data | con unità di partenza esplicita | per il convertitore |
-| in | `from_unit`, `to_unit` | stringa | sintassi `astropy.units` | compatibilità Aladin: D18-2 |
+| in | `from_unit`, `to_unit` | stringa | formato FITS o VOUnit di `astropy.units` | D18-2 |
 | in | `equivalency` | enumerativo, facoltativo | nome dell'equivalenza | solo su richiesta esplicita (D18-3) |
 | in | `raw` / `physical` | float64 | unità dell'immagine (`BUNIT`) per il fisico | uno dei due |
 | in | `bzero`, `bscale`, `blank` | float64 | adimensionali, come da intestazione FITS | `bscale ≠ 0` |
@@ -188,8 +193,8 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | Modulo `ast` della libreria standard (D18-1) | analizzatore con elenco chiuso di nodi e nomi, nessun `eval` | nessuna dipendenza esterna, verificabile |
 | Standard FITS (BSCALE/BZERO/BLANK) | regola grezzo ↔ fisico | standard del dominio |
 
-La libreria di unità di VizieR usata da Aladin (nota 8 della sez. 5.7.2 del
-manuale) non viene adottata: AstroTwo usa `astropy.units` ovunque.
+AstroTwo usa `astropy.units` ovunque, con i soli formati standard FITS e
+VOUnit per le stringhe di unità (D18-2).
 
 ## 9. Regole e vincoli
 
@@ -275,7 +280,7 @@ elementare.
 | T13 | Coordinate | conversione ICRS → galattico di una posizione scelta dal tester | identica al risultato di `convert_coordinates` del modulo 10 | confronto diretto |
 | T14 | Epoca mancante | propagazione senza epoca di origine | `EPOCH_REQUIRED` | test di unità |
 | T15 | Tempo | `2000-01-01T12:00:00` in scala TT | JD 2451545.0 e anno giuliano 2000.0 (definizione di J2000.0); anno besseliano come calcolato da `astropy.time` | `astropy.time` |
-| T16 | Data in MJD | `2001-12-10T00:00:00` in scala UTC | MJD 52253.0 (esempio del manuale di Aladin, sez. 5.7.2) | `astropy.time` |
+| T16 | Data in MJD | `2024-02-29T18:00:00` in scala UTC (giorno bisestile, frazione di giorno) | MJD 60369.75, ricalcolato nel test con `astropy.time.Time(..., scale="utc").mjd` | `astropy.time` |
 | T17 | Scala mancante | data senza scala | `TIME_SCALE_REQUIRED` | test di unità |
 | T18 | Riproducibilità | rieseguire il comando registrato di T1–T16 | risultati identici | confronto con il registro del modulo 24 |
 
@@ -285,11 +290,14 @@ elementare.
   del proprietario sulla checklist del livello 1).** analizzatore sul modulo
   **`ast`** della libreria standard con **elenco chiuso** di nodi e nomi;
   nessuna dipendenza esterna; `^` tradotto in potenza.
-- **D18-2 — Compatibilità con le unità di Aladin: DECISA il 2026-10-09
-  (decisione del proprietario sulla checklist del livello 1).** **alias**
-  delle unità di Aladin definiti in **un'unica tabella** verso `astropy.units`
-  (elenco delle unità mancanti **da verificare prima del codice**); la
-  sintassi `convert … into …` si decide con A8.
+- **D18-2 — Formati delle unità: DECISA il 2026-10-09, CORRETTA il
+  2026-10-10 (decisione del proprietario, regola d'oro n. 8).** **Nessuna
+  tabella di alias di Aladin**: solo i formati standard di unità **FITS** e
+  **VOUnit** di `astropy.units`, con il formato usato scritto nel risultato;
+  le altre stringhe danno `UNIT_UNKNOWN`. **Motivazione:** sono gli standard
+  pubblici usati da FITS e dal Virtual Observatory, già implementati e
+  testati in `astropy.units`. La sintassi `convert … into …` si decide con
+  A8.
 - **D18-3 — Equivalenze offerte: DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** spettrale, densità di flusso
   spettrale, temperatura, parallasse ↔ distanza e Doppler (radio, ottico,
@@ -315,3 +323,4 @@ elementare.
 | 2026-10-09 | Claude Code | **D18-1…D18-4 DECISE** (checklist del livello 1): analizzatore `ast` con elenco chiuso; alias delle unità di Aladin in un'unica tabella (elenco da verificare); equivalenze spettrale, densità di flusso, temperatura, parallasse, Doppler su richiesta; magnitudine ↔ flusso solo nel 20. §3, §8 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): `coordinate_calculator` tolta dal 10; la calcolatrice delle coordinate usa `convert_coordinates`/`propagate_position` del 10 e `angular_offsets`/`apply_offsets`/`offset_position` del 17 (§3, §4, §5, §7, §11). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D18-2 corretta — niente tabella di alias di Aladin, solo i formati standard FITS e VOUnit di `astropy.units` (§3, §6, §8, §13); T16 con un esempio nostro (`2024-02-29T18:00:00` UTC → MJD 60369.75, ricalcolato con `astropy.time`) al posto di quello del manuale; `=` prima o dopo l'espressione con motivazione nostra. Stato `approvato` invariato. |

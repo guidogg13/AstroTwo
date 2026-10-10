@@ -23,11 +23,14 @@ sempre separate le regole di disegno dalle selezioni dei record.
     quale aspetto);
   - la **selezione dei record per espressione** è il comando **`search`**,
     che restituisce l'insieme dei record che soddisfano un'espressione.
-    **Sintassi decisa con D13-1 (2026-10-04):** stringa con **grammatica
-    ristretta basata su quella di Aladin**, validata prima dell'esecuzione —
-    testo con i jolly `?` e `*`; colonna con gli operatori `=`, `!=`, `<`,
-    `>`, `<=`, `>=`; valore assoluto `|colonna|`; prefissi `+` e `-` per
-    aggiungere o togliere il record dalla selezione.
+    **Sintassi decisa con D13-1 (2026-10-04, riscritta come nostra il
+    2026-10-10):** stringa con una **grammatica ristretta di AstroTwo**,
+    validata prima dell'esecuzione — testo con i jolly `?` e `*`; colonna
+    con gli operatori di confronto `=`, `!=`, `<`, `>`, `<=`, `>=` (quelli
+    usuali, comuni a ogni linguaggio di interrogazione); valore assoluto
+    `|colonna|`; prefissi `+` e `-` per aggiungere o togliere il record dalla
+    selezione. La grammatica completa (forma formale) si scrive qui prima del
+    codice di `search`.
 - **Propagazione delle posizioni (D9)** e **freccia del moto proprio (D10):**
   portare le posizioni a un'epoca richiesta e rappresentare il moto proprio;
   **epoca di origine letta dai metadati o richiesta, mai assunta** (D10-2),
@@ -58,9 +61,8 @@ sempre separate le regole di disegno dalle selezioni dei record.
   `astropy.io.fits`, **tranne ASTRORES**, letto da un lettore nel modulo con
   **`defusedxml`** (D13-7, decisa il 2026-10-09; protezione da file XML non
   fidati), testato su file di esempio del CDS; senza documentazione o esempi
-  disponibili, il formato dà solo errore. Limite di riferimento di Aladin: meno di
-  1 milione di sorgenti per tabella, coerente con l'obiettivo di
-  `01-architettura.md` §8.
+  disponibili, il formato dà solo errore. Obiettivo minimo di dimensione:
+  1 milione di sorgenti per tabella (`01-architettura.md` §8).
 - **Colonne calcolate (H8, sez. 5.13):** nuova colonna con **nome**
   obbligatorio e, facoltativi, **unità**, **UCD** e **numero di decimali**
   mostrati; espressione con riferimenti alle colonne nella forma
@@ -101,7 +103,7 @@ sempre separate le regole di disegno dalle selezioni dei record.
 |---|---|---|---|---|
 | in | `catalog_id` | stringa | id catalogo CDS | es. "I/239/hip_main" (esempio di formato, id da verificare) |
 | in | file / URL tabella | stringa | VOTable, CSV, FITS table | |
-| in | `expression` | stringa | espressione sui nomi colonna (comando `search`) | sintassi: grammatica ristretta alla Aladin, validata prima dell'esecuzione (D13-1) |
+| in | `expression` | stringa | espressione sui nomi colonna (comando `search`) | sintassi: grammatica ristretta di AstroTwo, validata prima dell'esecuzione (D13-1) |
 | in | `filter` | struttura regole | regole di disegno | non è una selezione |
 | in | `epoch` | epoca | anno giuliano o ISO 8601 | per propagazione/H3 |
 | in | moto proprio | float64 | mas/yr, mas | colonne del catalogo |
@@ -240,14 +242,17 @@ questi strumenti deterministici e poi verificati da
 
 ## 13. Decisioni aperte
 
-- **D13-1 — Sintassi delle espressioni `search`: DECISA il 2026-10-04.**
-  **Stringa con grammatica ristretta basata su quella di Aladin:** testo con i
-  jolly `?` e `*`; colonna con gli operatori `=`, `!=`, `<`, `>`, `<=`, `>=`;
-  valore assoluto `|colonna|`; prefissi `+` e `-` per aggiungere o togliere
-  dalla selezione; **validata prima dell'esecuzione** (`EXPRESSION_INVALID`).
-  **Motivazione:** fedeltà al comportamento "espressioni" di Aladin (D6) e un
-  solo validatore deterministico per UI, IA (§11) e pipeline. Applicata in
-  §3/§6/§7/§9 qui sopra.
+- **D13-1 — Sintassi delle espressioni `search`: DECISA il 2026-10-04,
+  RISCRITTA il 2026-10-10 (decisione del proprietario, regola d'oro n. 8).**
+  **Stringa con grammatica ristretta, descritta da zero come nostra:** testo
+  con i jolly `?` e `*`; colonna con gli operatori di confronto `=`, `!=`,
+  `<`, `>`, `<=`, `>=`; valore assoluto `|colonna|`; prefissi `+` e `-` per
+  aggiungere o togliere dalla selezione; **validata prima dell'esecuzione**
+  (`EXPRESSION_INVALID`). **Motivazione (nostra):** gli operatori di
+  confronto e i jolly sono quelli universali, che un astronomo già conosce;
+  una grammatica piccola e chiusa si valida per intero prima di eseguire
+  (nessuna esecuzione di codice) e dà un solo validatore deterministico per
+  UI, IA (§11) e pipeline. Applicata in §3/§6/§7/§9 qui sopra.
 - **D13-2 — Epoca di default per H3 (cursore epoca): DECISA il 2026-10-04,
   insieme a D10-2.** Epoca di ogni dato **letta dai metadati e mai assunta**;
   epoca di visualizzazione = epoca del dato mostrato (immagine: epoca
@@ -258,9 +263,15 @@ questi strumenti deterministici e poi verificati da
   n. 6). Applicata in §3/§9 qui sopra.
 - **D13-3 — Cataloghi predefiniti (D1): DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** **albero dinamico delle
-  collezioni ordinato per popolarità**, come Aladin (sez. 5.1.1), con un
-  piccolo gruppo fisso: Simbad, Gaia, 2MASS (identificativi esatti **da
-  verificare prima del codice**).
+  collezioni ordinato per popolarità**, con un piccolo gruppo fisso: Simbad,
+  Gaia, 2MASS (identificativi esatti **da verificare prima del codice**).
+  **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
+  cambiano nel tempo, quindi l'albero si legge dal servizio invece di una
+  tabella mantenuta a mano; l'ordine per popolarità mette in alto i
+  cataloghi più usati dalla comunità (criterio di popolarità: proprietà del
+  servizio, **da verificare prima del codice**); il gruppo fisso garantisce
+  l'accesso immediato ai riferimenti di base (oggetti nominati, astrometria
+  e fotometria su tutto il cielo).
 - **D13-4 — Limite di righe in memoria:** tetto massimo di righe caricate per
   tabella (con caricamento progressivo oltre il limite). Valore: da decidere.
 - **D13-5 — Comportamento delle operazioni in posto: DECISA il 2026-10-04.**
@@ -296,3 +307,4 @@ questi strumenti deterministici e poi verificati da
 | 2026-10-09 | Claude Code | **D13-7 DECISA** (decisione del proprietario): lettore ASTRORES con `defusedxml` (licenza da verificare), testato su esempi del CDS, altrimenti solo errore. §3, §7, §8, §10 (`ASTRORES_UNREADABLE`, `XML_UNSAFE`), §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `CatalogCache`, interrogazioni nelle tabelle del modulo dentro `SharedCache`. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D13-1 riscritta come grammatica nostra (operatori di confronto universali, motivazione nostra; tolto "basata su Aladin"; forma formale da scrivere prima del codice di `search`) in §3, §6, §13; D13-3 con motivazione nostra al posto di "come Aladin"; limite di riga riferito solo a `01` §8. Stato `approvato` invariato. |

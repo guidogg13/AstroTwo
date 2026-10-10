@@ -4,19 +4,24 @@
 
 ## 2. Scopo
 
-Incrociare due tabelle celesti con gli stessi due percorsi di Aladin (calcolo
-locale e servizio CDS), restituendo risultati riproducibili e con la
-dichiarazione esplicita dei criteri usati.
+Incrociare due tabelle celesti per due strade (calcolo locale e servizio
+CDS XMatch), restituendo risultati riproducibili e con la dichiarazione
+esplicita dei criteri usati.
 
 ## 3. Cosa fa
 
 - **Cross-match locale (tra due tabelle):** incrociare due tabelle già in
-  memoria, con le tre modalità verificate in Aladin:
-  - **tutte**: tutte le coppie entro la distanza massima;
-  - **migliore**: per ogni record della tabella A il candidato più vicino;
-  - **nessuna**: solo i record di A senza corrispondente in B (non appaiati).
-  Distanza massima predefinita: **4 arcsec** (valore verificato in Aladin);
-  modificabile dall'utente con unità esplicita.
+  memoria, con tre modalità:
+  - **tutte** (`all`): tutte le coppie entro la distanza massima;
+  - **migliore** (`best`): per ogni record della tabella A il candidato più
+    vicino;
+  - **nessuna** (`none`): solo i record di A senza corrispondente in B (non
+    appaiati).
+  **Distanza massima (raggio): obbligatoria, senza default** (decisione del
+  proprietario del 2026-10-10), con unità esplicita: il raggio giusto dipende
+  dalla precisione astrometrica dei due cataloghi, che solo l'utente conosce
+  per il suo caso; un valore implicito darebbe coppie diverse senza che
+  l'utente lo abbia scelto. Senza raggio: `MAX_SEP_INVALID`.
 - **Cross-match tramite servizio CDS:** stessa interfaccia, esecuzione remota
   sui servizi del CDS; parametri e risultato registrati per la riproducibilità.
 - **Report dei criteri:** ogni risultato riporta modalità, distanza massima,
@@ -37,8 +42,8 @@ dichiarazione esplicita dei criteri usati.
   associate se la loro **distanza normalizzata** con la **covarianza combinata**
   delle due ellissi (distanza di Mahalanobis) non supera una **soglia
   dichiarata in sigma** (D15-5, decisa il 2026-10-09). Il valore predefinito
-  della soglia è D15-6 (Gruppo 3). Il criterio usato da Aladin è **da
-  verificare**; se diverso, la differenza è dichiarata nel report.
+  della soglia è D15-6 (Gruppo 3). Il criterio è nostro e scritto per intero
+  nel report (formula, covarianza, soglia).
 - **Scelta delle colonne da conservare (E3):** per default tutte le colonne
   delle due tabelle, con suffissi `_tab1` e `_tab2` sui nomi in conflitto;
   l'utente può scegliere le colonne e i prefissi o suffissi. Nessuna
@@ -55,7 +60,7 @@ dichiarazione esplicita dei criteri usati.
 - Non esegue query ADQL né MOC (14 e 16).
 - Non decide quale catalogo usare (13).
 - Non propone soglie "intelligenti": la distanza massima è un parametro
-  dell'utente, con default 4 arcsec documentato.
+  obbligatorio dell'utente, senza default.
 - Non produce valori di probabilità statistica non richiesti dalla modalità
   scelta.
 
@@ -74,7 +79,7 @@ dichiarazione esplicita dei criteri usati.
 |---|---|---|---|---|
 | in | `table_a`, `table_b` | `astropy.table.Table` | con colonne coordinate | per il locale |
 | in | `mode` | enumerativo | `all` / `best` / `none` | modalità (tutte/migliore/nessuna) |
-| in | `max_sep` | float64 (`Quantity`) | default 4 arcsec | distanza massima |
+| in | `max_sep` | float64 (`Quantity`) | angolo con unità, **obbligatorio, senza default** | distanza massima |
 | in | `frame` | enumerativo | ICRS di default | sistema usato per il confronto |
 | in | `service_url` | stringa | URL servizio CDS | solo per il remoto |
 | out | coppie | tabella | indici A, indici B, separazione in arcsec | |
@@ -116,9 +121,9 @@ dichiarazione esplicita dei criteri usati.
 
 ## 9. Regole e vincoli
 
-- **Distanza massima predefinita: 4 arcsec** (verificata con la documentazione
-  di Aladin). **Modalità predefinita: `best`** (D15-1, decisa il 2026-10-09;
-  default di Aladin da verificare prima del codice).
+- **Distanza massima: obbligatoria, senza default** (decisione del
+  proprietario del 2026-10-10). **Modalità predefinita: `best`** (D15-1,
+  motivazione in §13).
 - Le separazioni sono calcolate da Astropy in `float64`; soglia espressa con
   unità.
 - Nessun incrocio è eseguito se i frame delle due tabelle non sono noti:
@@ -139,7 +144,7 @@ dichiarazione esplicita dei criteri usati.
 | Nessuna coppia entro la soglia | risultato vuoto con conteggio 0, non è un errore | esito `NO_MATCH` |
 | Tabella senza colonne coordinate | rifiuto prima del calcolo | `NO_COORD_COLUMNS` |
 | Frame sconosciuto per una tabella | errore che chiede il frame | `FRAME_UNKNOWN` |
-| Soglia non positiva o fuori range | rifiuto dell'input | `MAX_SEP_INVALID` |
+| Soglia mancante, senza unità angolare, non positiva o fuori range | rifiuto dell'input | `MAX_SEP_INVALID` |
 | Servizio CDS non raggiungibile | errore di rete; si propone di riprovare o usare il locale | `NET_TIMEOUT` |
 | Tabelle molto grandi (oltre 1 milione di righe, D15-3) | errore con il tetto dichiarato; proposta del servizio CDS o dell'elaborazione a blocchi; mai troncamento silenzioso | `TABLE_TOO_LARGE` |
 | Tabelle di corpi diversi (`body` diverso, D19-3) | incrocio rifiutato; forzabile solo con opzione esplicita citata nel report (D19-4) | `BODY_MISMATCH` |
@@ -177,14 +182,18 @@ coppie né le separazioni.
 | T11 | Ellisse non valida (E3) | asse minore maggiore dell'asse maggiore | `ERROR_ELLIPSE_INVALID` | test di unità |
 | T12 | Correlazione con ellissi (E3) | coppie sintetiche con ellissi note | associate solo le coppie con distanza di Mahalanobis (covarianza combinata) ≤ soglia; distanze riportate nel risultato | ricalcolo nel test con `numpy` (matrici di covarianza dalle ellissi) |
 | T13 | Suffissi e UCD (E3) | due tabelle con colonne omonime e UCD `pos.eq.ra`/`pos.eq.dec` | colonne in conflitto con `_tab1`/`_tab2`; colonne di posizione proposte dagli UCD; rinomine nel report | controllo del risultato |
+| T14 | Raggio obbligatorio | incrocio senza `max_sep`, con un numero senza unità, con un'unità non angolare | `MAX_SEP_INVALID` in tutti i casi, nessun incrocio eseguito | test di unità |
 
 ## 13. Decisioni aperte
 
 - **D15-1 — Modalità predefinita: DECISA il 2026-10-09 (decisione del
-  proprietario sulla checklist del livello 1).** **`best`** (sorgente più
-  vicina), la prima modalità di Aladin (sez. 5.11). **Da verificare prima del
-  codice:** il default effettivo di Aladin, da riportare nel report se
-  diverso.
+  proprietario sulla checklist del livello 1; motivazione riscritta il
+  2026-10-10, regola d'oro n. 8).** **`best`** (sorgente più vicina).
+  **Motivazione (nostra):** è il caso d'uso più comune — trovare per ogni
+  sorgente di A la sua controparte in B — e dà al più una riga per record di
+  A, quindi un risultato che si confronta direttamente con la tabella di
+  partenza senza altri filtri; le altre modalità restano a un parametro di
+  distanza e la modalità usata è sempre nel report.
 - **D15-2 — Libreria per il servizio CDS: DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** **`astroquery.xmatch`**,
   client ufficiale del servizio CDS XMatch; modalità supportate **da
@@ -196,14 +205,17 @@ coppie né le separazioni.
   silenzioso**.
 - **D15-4 — Probabilità di associazione: DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** **no nel livello 1**: solo
-  separazioni (ed ellissi, riga E3), come Aladin; una stima di probabilità con
-  metodo dichiarato potrà essere un modulo del livello 2.
+  separazioni (ed ellissi, riga E3). **Motivazione (nostra):** una
+  probabilità di associazione richiede un modello statistico (densità delle
+  sorgenti, distribuzione degli errori, ipotesi a priori) che è una scelta di
+  analisi; una stima con metodo dichiarato potrà essere un modulo del
+  livello 2.
 - **D15-5 — Criterio della correlazione con ellissi d'errore (E3): DECISA il
   2026-10-09 (decisione del proprietario).** **Distanza normalizzata con
   covarianza combinata** delle due ellissi (distanza di Mahalanobis), **soglia
   dichiarata in sigma**; valore predefinito della soglia in D15-6 (Gruppo 3).
-  Il criterio di Aladin è **da verificare** e l'eventuale differenza va
-  dichiarata nel report.
+  Criterio nostro, scritto per intero nel report (2026-10-10: tolto il
+  confronto con il criterio di Aladin, regola d'oro n. 8).
 - **D15-6 — Soglia predefinita della correlazione con ellissi:** valore in
   sigma usato quando l'utente non lo indica. Da fissare al momento del codice
   (Gruppo 3).
@@ -217,3 +229,4 @@ coppie né le separazioni.
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per E3 (correlazione per campo con `astropy.table.join`, correlazione con ellissi d'errore, scelta delle colonne con suffissi, corrispondenza tramite UCD). Nuova decisione del Gruppo 2 **D15-5** (criterio delle ellissi): il modulo resta in `bozza`. |
 | 2026-10-09 | Claude Code | **D15-5 DECISA** (decisione del proprietario): distanza di Mahalanobis con covarianza combinata e soglia in sigma; criterio di Aladin da verificare con differenza dichiarata. Nuova D15-6 (soglia predefinita, Gruppo 3). §3, §6, §7, §10, §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): distanza massima **obbligatoria, senza default** (tolto il default di 4 arcsec preso da Aladin) in §3, §4, §6, §9, §10 (`MAX_SEP_INVALID` anche se manca), nuovo test T14; modalità `best` con motivazione nostra (D15-1); D15-4 e D15-5 senza riferimenti ad Aladin; §2 e §3 senza "come Aladin". Stato `approvato` invariato. |

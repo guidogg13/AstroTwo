@@ -22,9 +22,10 @@ riproducibile.
 - **Download tabelle (D3) ed export (D13):** scaricare tabelle da URL e
   salvare tabelle in CSV, VOTable e FITS con intestazione che riporta origine,
   data e versione dello schema.
-- **Schede server (H10):** gestire i collegamenti a servizi esterni
-  (SkyView, Gaia, SkyBot, VO generica, server personali); le immagini HiPS
-  restano in `12-core-hips.md`.
+- **Schede server (H10):** gestire i collegamenti a servizi esterni con un
+  **elenco di server nostro**, tratto dai servizi pubblici del VO (D14-4,
+  corretta il 2026-10-10), più i server personali dell'utente; le immagini
+  HiPS restano in `12-core-hips.md`.
 - **DataLink (H8, parte VO):** leggere e risolvere i link di DataLink
   associati alle tabelle (da verificare la copertura esatta: §13).
 - **SAMP (H14, G3):** interoperabilità con altri strumenti (TOPCAT, DS9,
@@ -182,7 +183,7 @@ riproducibile.
 | `sqlite3` (tramite `04-cache.md`) | cache delle query (A7) | scelta A7 |
 | `pyvo` (D14-1) | ricerche SIA e SIA2 (H23) | stessa libreria VO già scelta |
 | `astroquery.simbad` | puntatore Simbad (H17) | servizio CDS ufficiale, già usato dal modulo 10 |
-| Servizio fotometrico di VizieR (CDS) | misure di flusso per la SED (H17) | servizio usato da Aladin; interfaccia da verificare prima del codice |
+| Servizio fotometrico di VizieR (CDS) | misure di flusso per la SED (H17) | servizio pubblico che raccoglie in un'unica risposta le misure di flusso dei cataloghi di VizieR; interfaccia da verificare prima del codice |
 | `defusedxml` (D14-8) | lettore IDHA (H23) protetto contro file XML malevoli | parser XML sicuro per file non fidati; **licenza da verificare prima del codice** |
 
 ## 9. Regole e vincoli
@@ -292,12 +293,21 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
   il 2026-10-08 (esiti SAMP nelle righe G3/H14 di `03-parita-aladin.md`).
 - **D14-3 — DataLink (H8): DECISA il 2026-10-09 (decisione del proprietario
   sulla checklist del livello 1).** DataLink **con descrittori di servizio**
-  (anche ritagli tramite moduli intermedi, come in Aladin, sez. 5.1.8), con
-  `pyvo`; versione dello standard **da verificare prima del codice**.
+  (anche ritagli e altre elaborazioni offerte dal servizio), con `pyvo`.
+  **Motivazione (nostra):** lo standard IVOA DataLink descrive con i
+  descrittori di servizio come chiamare queste elaborazioni lato server,
+  senza codice specifico per ciascun archivio; versione dello standard **da
+  verificare prima del codice**.
 - **D14-4 — Schede server (H10): DECISA il 2026-10-09 (decisione del
-  proprietario sulla checklist del livello 1).** le stesse schede del
-  **selettore di server di Aladin** (sez. 5.2), più i **server personali**
-  (sez. 5.2.4) salvati nelle preferenze.
+  proprietario sulla checklist del livello 1), CORRETTA il 2026-10-10
+  (decisione del proprietario, regola d'oro n. 8).** **Elenco di server
+  nostro**, costruito dai **servizi pubblici del VO**: CDS (Simbad, VizieR,
+  XMatch, MocServer), ESA (archivio Gaia, ESASky), NASA (MAST, IRSA,
+  HEASARC) e simili; ogni voce con protocollo (cone search, TAP, SIA, SSA),
+  URL e ente, dichiarati; più i **server personali** salvati nelle
+  preferenze e la ricerca nel registro VO. Nessuna copia del selettore di
+  Aladin. Elenco esatto e URL **da verificare prima del codice** sui siti
+  degli enti.
 - **D14-5 — Limiti di riga predefiniti:** valore di `max_rows` di default.
 - **D14-6 — Spettri SSA (E4): DECISA il 2026-10-09 (decisione del proprietario
   sulla checklist del livello 1).** inclusione decisa il 2026-10-04; parte
@@ -332,3 +342,4 @@ calcoli di questo modulo, e poi passa a `34-ia-verifica-risultati.md`.
 | 2026-10-09 | Claude Code | **D14-7 DECISA** (decisione del proprietario): nessun sistema di plugin nel livello 1, estensioni tramite l'API Python del 24 (parte "plugin" di H14 spostata nel 24). **D14-8 DECISA**: lettore IDHA con `defusedxml`, altrimenti solo errore. §3, §8, §10 (`IDHA_UNREADABLE`, `XML_UNSAFE`), §12, §13 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `QueryCache`, risultati nella cache comune `SharedCache`, timeout comuni 10 s / 60 s. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D14-4 corretta — elenco di server nostro dai servizi pubblici del VO (CDS, ESA, NASA/MAST e simili) più server personali, al posto del selettore di Aladin (§3, §13); D14-3 e §8 (servizio fotometrico di VizieR) con motivazione nostra al posto di "come in Aladin" / "usato da Aladin". Stato `approvato` invariato. |
