@@ -20,6 +20,7 @@ from pathlib import Path
 
 import astropy
 import astropy.units as u
+import numpy as np
 from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
 from astropy.io.votable import parse as parse_votable
@@ -30,6 +31,10 @@ from astrotwo.core.coordinates_wcs import supported_frames
 __all__ = [
     "CatalogTable",
     "CatalogsError",
+    "PLOT_SHAPES",
+    "PlotRule",
+    "PlotStyle",
+    "SizeScale",
     "PositionColumns",
     "PositionSuggestion",
     "TABLE_FORMATS",
@@ -39,6 +44,8 @@ __all__ = [
     "detect_table_format",
     "list_tables",
     "read_table",
+    "search",
+    "set_plot_rules",
     "suggest_position_columns",
 ]
 
@@ -588,3 +595,378 @@ def read_table(source, *, table=None, format=None, limits: TableLimits | None = 
         warnings=tuple(notes),
     )
 
+
+
+# --------------------------------------------------------------------------
+# P3 — search (grammatica di §3, D13-1) e regole di disegno (D4)
+# --------------------------------------------------------------------------
+
+_OPERATORS = ("!=", "<=", ">=", "=", "<", ">")
+_WORD_STOP = set(" \t\r\n()|&=!<>\"'")
+_NUMBER = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
+_COMPARE = {"=": np.equal, "!=": np.not_equal, "<": np.less, ">": np.greater, "<=": np.less_equal,
+            ">=": np.greater_equal}
+
+
+@dataclass(frozen=True)
+class _Token:
+    kind: str  # COL, WORD, STRING, OP, AND, OR, ABS, LPAREN, RPAREN, END
+    text: str
+    pos: int
+
+
+def _invalid(message: str, pos: int, expression: str) -> CatalogsError:
+    return CatalogsError("EXPRESSION_INVALID", f"{message} (carattere {pos}): {expression!r}", position=pos)
+
+
+def _tokenize(text: str, offset: int, expression: str) -> list[_Token]:
+    tokens: list[_Token] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        pos = offset + i
+        if c in " \t\r\n":
+            i += 1
+        elif text.startswith("${", i):
+            end = text.find("}", i + 2)
+            if end < 0:
+                raise _invalid("nome di colonna ${...} senza '}'", pos, expression)
+            tokens.append(_Token("COL", text[i + 2:end], pos))
+            i = end + 1
+        elif text.startswith("&&", i):
+            tokens.append(_Token("AND", "&&", pos))
+            i += 2
+        elif text.startswith("||", i):
+            tokens.append(_Token("OR", "||", pos))
+            i += 2
+        elif c == "|":
+            tokens.append(_Token("ABS", "|", pos))
+            i += 1
+        elif c in "()":
+            tokens.append(_Token("LPAREN" if c == "(" else "RPAREN", c, pos))
+            i += 1
+        elif any(text.startswith(op, i) for op in _OPERATORS):
+            op = next(op for op in _OPERATORS if text.startswith(op, i))
+            tokens.append(_Token("OP", op, pos))
+            i += len(op)
+        elif c in "\"'":
+            j, chars = i + 1, []
+            while j < n and text[j] != c:
+                if text[j] == "\\" and j + 1 < n and text[j + 1] == c:
+                    chars.append(c)
+                    j += 2
+                else:
+                    chars.append(text[j])
+                    j += 1
+            if j >= n:
+                raise _invalid("stringa senza virgolette di chiusura", pos, expression)
+            tokens.append(_Token("STRING", "".join(chars), pos))
+            i = j + 1
+        elif c in "&!":
+            raise _invalid(f"simbolo {c!r} non previsto", pos, expression)
+        else:
+            j = i
+            while j < n and text[j] not in _WORD_STOP:
+                j += 1
+            tokens.append(_Token("WORD", text[i:j], pos))
+            i = j
+    tokens.append(_Token("END", "", offset + n))
+    return tokens
+
+
+def _text_kind(column) -> bool:
+    kind = np.asarray(column).dtype.kind
+    return kind in "USO"
+
+
+def _numeric_kind(column) -> bool:
+    return np.asarray(column).dtype.kind in "iufb"
+
+
+def _valid_mask(column) -> np.ndarray:
+    mask = np.asarray(getattr(column, "mask", np.zeros(len(column), dtype=bool)), dtype=bool)
+    if mask.shape != (len(column),):
+        mask = np.zeros(len(column), dtype=bool) | np.broadcast_to(mask, (len(column),))
+    return ~mask
+
+
+def _text_values(column) -> np.ndarray:
+    data = np.asarray(getattr(column, "data", column))
+    if data.dtype.kind == "S":
+        data = np.char.decode(data, "latin-1")
+    return np.array([str(v).rstrip(" ") for v in data], dtype=object)
+
+
+def _pattern(text: str, case_sensitive: bool) -> re.Pattern:
+    parts, i = [], 0
+    while i < len(text):
+        c = text[i]
+        if c == "\\" and i + 1 < len(text) and text[i + 1] in "*?\\":
+            parts.append(re.escape(text[i + 1]))
+            i += 2
+            continue
+        parts.append(".*" if c == "*" else "." if c == "?" else re.escape(c))
+        i += 1
+    return re.compile("".join(parts), 0 if case_sensitive else re.IGNORECASE | re.DOTALL)
+
+
+def _match_text(column, pattern: re.Pattern) -> np.ndarray:
+    values = _text_values(column)
+    uniques, inverse = np.unique(values.astype(str), return_inverse=True)
+    hits = np.array([pattern.fullmatch(v) is not None for v in uniques], dtype=bool)
+    return hits[inverse.reshape(-1)] if len(values) else np.zeros(0, dtype=bool)
+
+
+class _Parser:
+    def __init__(self, tokens: list[_Token], table: Table, expression: str, case_sensitive: bool) -> None:
+        self.tokens, self.i, self.table = tokens, 0, table
+        self.expression, self.case_sensitive = expression, case_sensitive
+
+    def peek(self, k: int = 0) -> _Token:
+        return self.tokens[min(self.i + k, len(self.tokens) - 1)]
+
+    def take(self, kind: str) -> _Token:
+        tok = self.peek()
+        if tok.kind != kind:
+            raise _invalid(f"atteso {kind}, trovato {tok.text or 'fine'!r}", tok.pos, self.expression)
+        self.i += 1
+        return tok
+
+    def parse(self):
+        node = self.disjunction()
+        if self.peek().kind != "END":
+            raise _invalid(f"simbolo inatteso {self.peek().text!r}", self.peek().pos, self.expression)
+        return node
+
+    def disjunction(self):
+        node = self.conjunction()
+        while self.peek().kind == "OR":
+            self.i += 1
+            node = ("or", node, self.conjunction())
+        return node
+
+    def conjunction(self):
+        node = self.term()
+        while self.peek().kind == "AND":
+            self.i += 1
+            node = ("and", node, self.term())
+        return node
+
+    def column(self, tok: _Token) -> str:
+        if tok.text not in self.table.colnames:
+            raise _invalid(f"colonna {tok.text!r} inesistente", tok.pos, self.expression)
+        return tok.text
+
+    def term(self):
+        tok = self.peek()
+        if tok.kind == "LPAREN":
+            self.i += 1
+            node = self.disjunction()
+            self.take("RPAREN")
+            return node
+        if tok.kind == "ABS":
+            self.i += 1
+            name_tok = self.peek()
+            if name_tok.kind not in ("COL", "WORD"):
+                raise _invalid("dopo '|' serve una colonna", name_tok.pos, self.expression)
+            self.i += 1
+            self.take("ABS")
+            return self.comparison(self.column(name_tok), name_tok, absolute=True)
+        if tok.kind == "COL" or (tok.kind == "WORD" and self.peek(1).kind == "OP"):
+            self.i += 1
+            return self.comparison(self.column(tok), tok, absolute=False)
+        if tok.kind in ("WORD", "STRING"):
+            self.i += 1
+            if not any(_text_kind(self.table[c]) for c in self.table.colnames):
+                raise _invalid("testo da cercare, ma la tabella non ha colonne di testo", tok.pos, self.expression)
+            return ("text", _pattern(tok.text, self.case_sensitive))
+        raise _invalid(f"atteso un termine, trovato {tok.text or 'fine'!r}", tok.pos, self.expression)
+
+    def comparison(self, name: str, tok: _Token, absolute: bool):
+        op = self.take("OP")
+        value = self.peek()
+        if value.kind not in ("WORD", "STRING"):
+            raise _invalid("dopo l'operatore serve un valore", value.pos, self.expression)
+        self.i += 1
+        column = self.table[name]
+        if _numeric_kind(column):
+            if value.kind != "WORD" or not _NUMBER.match(value.text):
+                raise _invalid(f"colonna numerica {name!r}: serve un numero", value.pos, self.expression)
+            return ("num", name, op.text, float(value.text), absolute)
+        if _text_kind(column):
+            if absolute:
+                raise _invalid(f"|{name}|: il valore assoluto vale solo per le colonne numeriche", tok.pos,
+                               self.expression)
+            if op.text not in ("=", "!="):
+                raise _invalid(f"colonna di testo {name!r}: ammessi solo = e !=", op.pos, self.expression)
+            return ("str", name, op.text, _pattern(value.text, self.case_sensitive))
+        raise _invalid(f"colonna {name!r} di tipo {column.dtype} non confrontabile", tok.pos, self.expression)
+
+
+def _evaluate(node, table: Table) -> np.ndarray:
+    kind = node[0]
+    if kind == "and":
+        return _evaluate(node[1], table) & _evaluate(node[2], table)
+    if kind == "or":
+        return _evaluate(node[1], table) | _evaluate(node[2], table)
+    if kind == "num":
+        _, name, op, value, absolute = node
+        column = table[name]
+        data = np.asarray(getattr(column, "data", column), dtype=np.float64)
+        if absolute:
+            data = np.abs(data)
+        valid = _valid_mask(column) & np.isfinite(data)
+        with np.errstate(invalid="ignore"):
+            return np.asarray(_COMPARE[op](data, value), dtype=bool) & valid
+    if kind == "str":
+        _, name, op, pattern = node
+        column = table[name]
+        hit = _match_text(column, pattern)
+        return (hit if op == "=" else ~hit) & _valid_mask(column)
+    if kind == "text":
+        out = np.zeros(len(table), dtype=bool)
+        for name in table.colnames:
+            if _text_kind(table[name]):
+                out |= _match_text(table[name], node[1]) & _valid_mask(table[name])
+        return out
+    raise AssertionError(kind)
+
+
+def _parse_expression(table: Table, expression: str, case_sensitive: bool):
+    if not isinstance(expression, str):
+        raise CatalogsError("EXPRESSION_INVALID", "l'espressione deve essere una stringa", position=0)
+    stripped = expression.lstrip()
+    offset = len(expression) - len(stripped)
+    prefix = None
+    if stripped[:1] in ("+", "-"):
+        prefix, stripped, offset = stripped[0], stripped[1:], offset + 1
+    tokens = _tokenize(stripped, offset, expression)
+    if tokens[0].kind == "END":
+        raise _invalid("espressione vuota", offset, expression)
+    return prefix, _Parser(tokens, table, expression, case_sensitive).parse()
+
+
+def search(table: CatalogTable, expression: str, selection=None, case_sensitive: bool = False) -> np.ndarray:
+    """Maschera dei record che soddisfano l'espressione (D6, D13-1); validata per intero prima di eseguire."""
+    prefix, node = _parse_expression(table.table, expression, case_sensitive)
+    if prefix is not None:
+        if selection is None:
+            raise CatalogsError("EXPRESSION_INVALID", f"prefisso {prefix!r}: serve la selezione corrente (selection)",
+                                position=0)
+        selection = np.asarray(selection, dtype=bool)
+        if selection.shape != (len(table.table),):
+            raise CatalogsError("EXPRESSION_INVALID", f"selection: serve una maschera di {len(table.table)} valori",
+                                position=0)
+    found = _evaluate(node, table.table)
+    if prefix == "+":
+        return selection | found
+    if prefix == "-":
+        return selection & ~found
+    return found
+
+
+#: Forme ammesse per le regole di disegno (§3, D4).
+PLOT_SHAPES: tuple[str, ...] = ("circle", "square", "diamond", "triangle", "cross", "plus", "dot")
+_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+@dataclass(frozen=True)
+class SizeScale:
+    """Dimensione lineare in una colonna: ``vmin``→``size_min``, ``vmax``→``size_max`` (anche invertita)."""
+
+    column: str
+    vmin: float
+    vmax: float
+    size_min: float
+    size_max: float
+
+
+@dataclass(frozen=True)
+class PlotRule:
+    """Regola di disegno: a quali record (espressione di search, assente = tutti), forma, colore, dimensione."""
+
+    shape: str
+    color: str
+    size: float | SizeScale
+    selection: str | None = None
+
+
+@dataclass(frozen=True, eq=False)
+class PlotStyle:
+    """Esito delle regole per ogni record; la tabella non cambia."""
+
+    rule: np.ndarray  # indice della regola applicata, -1 se nessuna
+    shape: np.ndarray  # forma ("" se non disegnato)
+    color: np.ndarray  # colore ("" se non disegnato)
+    size: np.ndarray  # dimensione in pixel (NaN se non disegnato)
+    drawn: np.ndarray
+    counts: tuple[int, ...]  # record disegnati per regola
+    missing_size: tuple[int, ...]  # record selezionati ma senza valore per la dimensione, per regola
+    not_selected: int
+
+
+def _rule_invalid(k: int, message: str) -> CatalogsError:
+    return CatalogsError("PLOT_RULE_INVALID", f"regola {k}: {message}", rule=k)
+
+
+def _positive(value) -> bool:
+    return isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(value, bool) and \
+        np.isfinite(value) and value > 0
+
+
+def set_plot_rules(table: CatalogTable, rules) -> PlotStyle:
+    """Applica regole di disegno ordinate: ogni record prende la prima regola che lo seleziona (D4)."""
+    rules = list(rules)
+    n = len(table.table)
+    masks = []
+    for k, rule in enumerate(rules):
+        if not isinstance(rule, PlotRule):
+            raise _rule_invalid(k, "serve un PlotRule")
+        if rule.shape not in PLOT_SHAPES:
+            raise _rule_invalid(k, f"forma {rule.shape!r} fuori elenco ({', '.join(PLOT_SHAPES)})")
+        if not isinstance(rule.color, str) or not _COLOR.match(rule.color):
+            raise _rule_invalid(k, f"colore {rule.color!r}: serve #RRGGBB")
+        if isinstance(rule.size, SizeScale):
+            scale = rule.size
+            if scale.column not in table.table.colnames or not _numeric_kind(table.table[scale.column]):
+                raise _rule_invalid(k, f"dimensione: colonna numerica {scale.column!r} inesistente")
+            if not (np.isfinite(scale.vmin) and np.isfinite(scale.vmax) and scale.vmin < scale.vmax):
+                raise _rule_invalid(k, "dimensione: serve vmin < vmax, entrambi finiti")
+            if not (_positive(scale.size_min) and _positive(scale.size_max)):
+                raise _rule_invalid(k, "dimensione: size_min e size_max devono essere positivi")
+        elif not _positive(rule.size):
+            raise _rule_invalid(k, f"dimensione {rule.size!r}: serve un numero positivo o una SizeScale")
+        if rule.selection is None:
+            masks.append(np.ones(n, dtype=bool))
+        else:
+            prefix, node = _parse_expression(table.table, rule.selection, False)
+            if prefix is not None:
+                raise _rule_invalid(k, "la selezione di una regola non ammette i prefissi + e -")
+            masks.append(_evaluate(node, table.table))
+    applied = np.full(n, -1, dtype=int)
+    for k in range(len(rules) - 1, -1, -1):  # la prima regola che seleziona vince
+        applied[masks[k]] = k
+    shape = np.full(n, "", dtype=object)
+    color = np.full(n, "", dtype=object)
+    size = np.full(n, np.nan)
+    counts, missing = [], []
+    for k, rule in enumerate(rules):
+        rows = applied == k
+        if isinstance(rule.size, SizeScale):
+            scale = rule.size
+            column = table.table[scale.column]
+            values = np.asarray(getattr(column, "data", column), dtype=np.float64)
+            ok = rows & _valid_mask(column) & np.isfinite(values)
+            t = (np.clip(values[ok], scale.vmin, scale.vmax) - scale.vmin) / (scale.vmax - scale.vmin)
+            size[ok] = scale.size_min + t * (scale.size_max - scale.size_min)
+            missing.append(int(np.count_nonzero(rows & ~ok)))
+        else:
+            ok = rows
+            size[ok] = float(rule.size)
+            missing.append(0)
+        shape[ok] = rule.shape
+        color[ok] = rule.color
+        counts.append(int(np.count_nonzero(ok)))
+    return PlotStyle(rule=applied, shape=shape, color=color, size=size, drawn=np.isfinite(size),
+                     counts=tuple(counts), missing_size=tuple(missing),
+                     not_selected=int(np.count_nonzero(applied < 0)))

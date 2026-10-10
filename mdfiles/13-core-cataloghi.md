@@ -139,12 +139,14 @@ suo VOTable.
   `circle`, `square`, `diamond`, `triangle`, `cross`, `plus`, `dot` +
   **colore** `#RRGGBB` + **dimensione** in pixel, costante oppure funzione
   lineare di una colonna con intervallo esplicito (`column`, `vmin`, `vmax`,
-  `size_min`, `size_max`; valori fuori intervallo portati agli estremi). Le
+  `size_min`, `size_max`, entrambe positive; `size_min` > `size_max` è
+  ammesso, per i simboli più grandi alle magnitudini più piccole; valori
+  fuori intervallo portati agli estremi). Le
   regole sono ordinate: ogni record prende **la prima regola che lo
   seleziona**; i record senza regola non si disegnano; un record con il
   valore della colonna della dimensione mancante o non finito non si
-  disegna con quella regola (conteggio nel risultato). La tabella non
-  cambia.
+  disegna con quella regola e **non passa alla regola successiva**
+  (conteggio nel risultato). La tabella non cambia.
 - **Filtri e ricerca, due concetti separati (D6, corretto):**
   - i **filtri** decidono **come disegnare** le sorgenti (regole di disegno
     qui sopra);
@@ -630,3 +632,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P1 scritta** (`src/astrotwo/core/catalogs.py`, test T1, T8–T11, T21, T22, T24, T27): verifiche — astropy 8.0.1 espone UCD e riferimento al `COOSYS` di ogni campo, non la stringa originale dell'unità (§3 precisato); lettori `csv`, `tab`, `basic`, `ipac`, `sextractor` presenti; §3 precisato sulla stima prima della lettura dei testi. `confirm_position_columns` chiede `unit` angolare se le colonne non hanno unità (mai assunta). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P2, verifiche:** DTD ASTRORES pubblica (CDS, v0.9) ed esempio pubblico del CDS trovati; `defusedxml` 0.7.1 (licenza PSF, puro Python). L'esempio è incoerente con la DTD (coordinate sessagesimali in campi `F`, UCD1, `ref` non IDREF) e T15 non ha una VOTable equivalente: nuova decisione aperta **D13-14** (Gruppo 3); P2 ferma in attesa del proprietario. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario D13-10…D13-14** (autorizzazione esplicita a modificare il file approvato): `skydist` con `astropy.coordinates` nella tabella delle funzioni, usato anche dal 17; colonna DataLink e `LINK` ASTRORES in P6; propagazione senza parallasse con l'opzione `proper_motion_only` del 10, righe senza moto proprio mascherate e contate, colonne `_prop` e `_prop_mode` (§3, §7); sottoinsiemi salvati in un VOTable scelto dall'utente (`save_subset`); lettore ASTRORES secondo la DTD con i punti a, c, d, e; nuovi avvisi `ASTRORES_TYPE_MISMATCH`, `ASTRORES_NONCONFORMING_REF`, `PROPER_MOTION_ROW_MISSING`; T6, T15, T23 riscritti, nuovi T28–T29. **Verifica:** nessuna tabella ufficiale IVOA UCD1 → UCD1+ trovata → nuova **D13-14b** (da decidere, blocca P2). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P3 scritta** (`search`, `PlotRule`, `SizeScale`, `set_plot_rules`; test T2, T17–T20): precisati in §3 l'intervallo invertito della dimensione (`size_min` > `size_max`) e che un record senza valore per la dimensione non passa alla regola successiva. Stato `approvato` invariato. |

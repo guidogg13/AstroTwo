@@ -234,3 +234,131 @@ def test_t27_multiple_tables(tmp_path):
     with pytest.raises(CatalogsError) as info:
         read_table(fits_path, table=5)
     assert info.value.code == "TABLE_CHOICE_REQUIRED"
+
+
+# =============================================================================
+# P3 — search e regole di disegno (T2, T17–T20)
+# =============================================================================
+
+import dataclasses
+import re
+
+from astropy.table import MaskedColumn
+
+from astrotwo.core.catalogs import PlotRule, SizeScale, search, set_plot_rules
+
+
+def search_table(tmp_path):
+    t = Table()
+    t["name"] = ["M31", "m33", "NGC 224  ", "Vega", "M*1", "alpha Cen"]
+    t["mag"] = MaskedColumn([3.4, 5.7, np.nan, 0.03, -1.5, 9.0], mask=[False, False, False, False, False, True])
+    t["flag"] = [True, False, True, False, True, False]
+    t["B V"] = [0.1, -0.2, 0.3, -0.4, 0.5, -0.6]
+    t["note"] = MaskedColumn(["a", "b", "c", "d", "e", "f"], mask=[False, False, False, False, False, True])
+    path = tmp_path / "s.csv"
+    path.write_text("x,y\n1,2\n")
+    # Tabella costruita in memoria: maschere dei testi esatte (il VOTable non le conserva per i testi vuoti).
+    return dataclasses.replace(read_table(path), table=t)
+
+
+def expected_text(values, mask, regex, flags=re.IGNORECASE):
+    return np.array([(not m) and re.fullmatch(regex, str(v).rstrip(" "), flags) is not None
+                     for v, m in zip(values, mask, strict=True)])
+
+
+def test_t17_numeric_and_text_comparisons(tmp_path):
+    cat = search_table(tmp_path)
+    mag = np.asarray(cat.table["mag"].data, dtype=float)
+    valid = ~np.asarray(cat.table["mag"].mask) & np.isfinite(mag)
+    assert np.array_equal(search(cat, "mag < 4"), valid & (mag < 4))
+    assert np.array_equal(search(cat, "mag>=0.03"), valid & (mag >= 0.03))
+    assert np.array_equal(search(cat, "|mag| > 1"), valid & (np.abs(mag) > 1))
+    assert np.array_equal(search(cat, "mag != 3.4"), valid & (mag != 3.4))  # mancanti e NaN mai selezionati
+    assert np.array_equal(search(cat, "${B V} < 0"), np.asarray(cat.table["B V"]) < 0)
+    assert np.array_equal(search(cat, "flag = 1"), np.asarray(cat.table["flag"]))
+    names = list(cat.table["name"])
+    nomask = [False] * len(names)
+    assert np.array_equal(search(cat, "name = M3?"), expected_text(names, nomask, r"M3."))
+    assert np.array_equal(search(cat, "name = 'ngc *'"), expected_text(names, nomask, r"ngc .*"))  # spazi finali ignorati
+    assert np.array_equal(search(cat, r"name = M\*1"), expected_text(names, nomask, r"M\*1"))
+    assert np.array_equal(search(cat, "name != m*"), ~expected_text(names, nomask, r"m.*"))
+
+
+def test_t17_logic_precedence_and_free_text(tmp_path):
+    cat = search_table(tmp_path)
+    a, b, c = search(cat, "mag < 4"), search(cat, "flag = 1"), search(cat, "name = Vega")
+    assert np.array_equal(search(cat, "mag < 4 || flag = 1 && name = Vega"), a | (b & c))  # && prima di ||
+    assert np.array_equal(search(cat, "(mag < 4 || flag = 1) && name = Vega"), (a | b) & c)
+    # Testo da solo: almeno una colonna di testo corrisponde; i mancanti mai.
+    names, notes = list(cat.table["name"]), list(cat.table["note"])
+    expected = expected_text(names, [False] * 6, r"m.*") | expected_text(notes, list(cat.table["note"].mask), r"m.*")
+    assert np.array_equal(search(cat, "m*"), expected)
+    assert np.array_equal(search(cat, '"alpha cen"'), expected_text(names, [False] * 6, r"alpha cen"))
+
+
+@pytest.mark.parametrize("expression,position", [
+    ("", 0), ("mag <", 5), ("nessuna < 3", 0), ("mag < abc", 6), ("name < M3", 5), ("|name| = 3", 1),
+    ("(mag < 3", 8), ("mag < 3 &", 8), ("mag < 3 ! 2", 8), ("'aperta", 0), ("${mag < 3", 0), ("mag < 3)", 7),
+])
+def test_t17_invalid_expressions(tmp_path, expression, position):
+    cat = search_table(tmp_path)
+    with pytest.raises(CatalogsError) as info:
+        search(cat, expression)
+    assert info.value.code == "EXPRESSION_INVALID" and info.value.details["position"] == position
+
+
+def test_t18_case_sensitivity(tmp_path):
+    cat = search_table(tmp_path)
+    names = list(cat.table["name"])
+    assert np.array_equal(search(cat, "name = m3*"), expected_text(names, [False] * 6, r"m3.*"))
+    assert np.array_equal(search(cat, "name = m3*", case_sensitive=True),
+                          expected_text(names, [False] * 6, r"m3.*", flags=0))
+    assert search(cat, "name = m3*").sum() == 2 and search(cat, "name = m3*", case_sensitive=True).sum() == 1
+
+
+def test_t19_prefixes_and_missing_values(tmp_path):
+    cat = search_table(tmp_path)
+    current = np.array([True, False, False, False, False, True])
+    found = search(cat, "flag = 1")
+    assert np.array_equal(search(cat, "+flag = 1", selection=current), current | found)
+    assert np.array_equal(search(cat, " - flag = 1", selection=current), current & ~found)
+    for kwargs in (dict(), dict(selection=[True, False])):
+        with pytest.raises(CatalogsError) as info:
+            search(cat, "+flag = 1", **kwargs)
+        assert info.value.code == "EXPRESSION_INVALID"
+    assert not search(cat, "mag < 100")[[2, 5]].any()  # NaN e mascherato
+    assert not search(cat, "note != zzz")[5]
+
+
+def test_t2_rules_do_not_change_records_and_t20_rules(tmp_path):
+    cat = search_table(tmp_path)
+    before = cat.table.copy()
+    rules = [
+        PlotRule(shape="circle", color="#ff0000", size=SizeScale("mag", vmin=0.0, vmax=6.0, size_min=12.0, size_max=2.0),
+                 selection="flag = 1"),
+        PlotRule(shape="cross", color="#00FF00", size=4.0, selection="mag < 4"),
+    ]
+    style = set_plot_rules(cat, rules)
+    assert before.as_array().tobytes() == cat.table.as_array().tobytes()  # tabella invariata
+    flag = np.asarray(cat.table["flag"])
+    rule1 = search(cat, "mag < 4") & ~flag
+    assert np.array_equal(style.rule, np.where(flag, 0, np.where(rule1, 1, -1)))  # prima regola che seleziona
+    mag = np.asarray(cat.table["mag"].data, dtype=float)
+    ok0 = flag & np.isfinite(mag) & ~np.asarray(cat.table["mag"].mask)
+    expected = 12.0 + (np.clip(mag[ok0], 0, 6) - 0) / 6 * (2.0 - 12.0)  # intervallo invertito, estremi
+    assert np.allclose(style.size[ok0], expected, rtol=0, atol=1e-12)
+    assert style.missing_size == (1, 0) and np.isnan(style.size[2]) and not style.drawn[2]  # NaN: non disegnato
+    assert style.counts == (int(ok0.sum()), int(rule1.sum())) and style.not_selected == int((style.rule < 0).sum())
+    assert set(style.shape[style.drawn]) <= {"circle", "cross"} and style.color[3] == "#00FF00"
+    bad = [PlotRule(shape="star", color="#ff0000", size=3.0), PlotRule(shape="dot", color="red", size=3.0),
+           PlotRule(shape="dot", color="#ff0000", size=-1.0),
+           PlotRule(shape="dot", color="#ff0000", size=SizeScale("mag", 5.0, 1.0, 2.0, 4.0)),
+           PlotRule(shape="dot", color="#ff0000", size=SizeScale("name", 0.0, 1.0, 2.0, 4.0)),
+           PlotRule(shape="dot", color="#ff0000", size=3.0, selection="+mag < 3")]
+    for rule in bad:
+        with pytest.raises(CatalogsError) as info:
+            set_plot_rules(cat, [rule])
+        assert info.value.code == "PLOT_RULE_INVALID", rule
+    with pytest.raises(CatalogsError) as info:
+        set_plot_rules(cat, [PlotRule(shape="dot", color="#ff0000", size=3.0, selection="mag <")])
+    assert info.value.code == "EXPRESSION_INVALID"
