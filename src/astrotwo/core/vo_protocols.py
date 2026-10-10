@@ -15,9 +15,13 @@ rete, i protocolli e la scrittura.
 
 from __future__ import annotations
 
+import dataclasses
 import io
+import json
 import os
+import tempfile
 import warnings
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,9 +29,11 @@ import astropy
 import numpy as np
 from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
+import requests
 from astropy.table import Table
 
 import astrotwo
+from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
 from astrotwo.core.catalogs import (
     CatalogsError,
     CatalogTable,
@@ -38,7 +44,11 @@ from astrotwo.core.catalogs import (
 )
 
 __all__ = [
+    "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
+    "RequestRecord",
+    "VoResult",
+    "download_table",
     "VOTABLE_VERSION",
     "VoProtocolsError",
     "export_table",
@@ -186,3 +196,197 @@ def export_table(table: CatalogTable, path, format: str, overwrite: bool = False
     info = _provenance(table, format)
     {"votable": _write_votable_file, "fits": _write_fits_file, "csv": _write_csv_file}[format](table, target, info)
     return target
+
+
+# --------------------------------------------------------------------------
+# P2 — Base di rete: timeout comuni, registro delle richieste, cache
+# --------------------------------------------------------------------------
+
+_CACHE_MODULE = "14"
+_QUERY_TABLE = "query_results"
+_QUERY_COLUMNS = {"protocol": "TEXT", "url": "TEXT", "params": "TEXT", "payload": "BLOB"}
+#: Righe massime di default delle interrogazioni (D14-5).
+DEFAULT_MAX_ROWS = 100_000
+
+
+@dataclass(frozen=True)
+class RequestRecord:
+    """Richiesta di rete registrata: basta per rieseguirla (regola d'oro n. 6)."""
+
+    protocol: str
+    command: str
+    arguments: dict
+    url: str
+    method: str
+    params: tuple[tuple[str, str], ...]
+    retrieved_at: datetime
+    rows: int | None
+    from_cache: bool
+
+    def as_dict(self) -> dict:
+        return {
+            "protocol": self.protocol,
+            "command": self.command,
+            "arguments": dict(self.arguments),
+            "url": self.url,
+            "method": self.method,
+            "params": [list(p) for p in self.params],
+            "retrieved_at": _iso(self.retrieved_at),
+            "rows": self.rows,
+            "from_cache": self.from_cache,
+        }
+
+
+@dataclass(frozen=True)
+class VoResult:
+    """Tabella ricevuta (``CatalogTable`` del 13) con la richiesta registrata e gli avvisi."""
+
+    table: CatalogTable
+    request: RequestRecord
+    warnings: tuple[tuple[str, str], ...] = ()
+    truncated: bool = False
+    max_rows: int | None = None
+
+
+@dataclass(frozen=True)
+class _Response:
+    payload: bytes
+    url: str
+    method: str
+    params: tuple[tuple[str, str], ...]
+    retrieved_at: datetime
+    from_cache: bool
+    notes: tuple[tuple[str, str], ...] = field(default=())
+
+
+class _Session(requests.Session):
+    """Sessione HTTP con i timeout comuni di ``04-cache.md`` (CA1) su ogni richiesta."""
+
+    def __init__(self, timeouts: NetworkTimeouts) -> None:
+        super().__init__()
+        self.timeouts = timeouts.as_requests()
+        self.headers["User-Agent"] = f"AstroTwo/{astrotwo.__version__} {self.headers.get('User-Agent', '')}".strip()
+
+    def request(self, method, url, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.timeouts
+        return super().request(method, url, **kwargs)
+
+
+def _canonical(params) -> tuple[tuple[str, str], ...]:
+    return tuple(sorted((str(k), str(v)) for k, v in dict(params or {}).items()))
+
+
+def _cache_key(protocol: str, method: str, url: str, params: tuple[tuple[str, str], ...]) -> str:
+    return f"{protocol}:{method}:{url}?" + json.dumps(params, ensure_ascii=False, separators=(",", ":"))
+
+
+def _net_error(url: str, exc: Exception, timeouts: NetworkTimeouts, hint: str = "") -> VoProtocolsError:
+    return VoProtocolsError(
+        "NET_TIMEOUT",
+        f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, {timeouts.read:g} s lettura): "
+        f"{exc}{hint}",
+        url=url,
+    )
+
+
+def _check_http(response: requests.Response, url: str) -> None:
+    if response.status_code in (401, 403):
+        raise VoProtocolsError(
+            "AUTH_REQUIRED",
+            f"{url}: il servizio chiede autenticazione (HTTP {response.status_code}); nel livello 1 solo servizi "
+            "pubblici",
+            url=url,
+        )
+
+
+def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: SharedCache | None,
+          refresh: bool, timeouts: NetworkTimeouts, accept_error_body: bool = False,
+          hint: str = "") -> _Response:
+    """Richiesta con prima la cache (``refresh=True`` la rifà); salva in cache solo le risposte riuscite.
+
+    ``accept_error_body``: una risposta HTTP di errore con un corpo (es. VOTable con ``QUERY_STATUS``
+    ``ERROR``) si restituisce al chiamante, che ne legge il messaggio; non va mai in cache.
+    """
+    canonical = _canonical(params)
+    cache = SharedCache() if cache is None else cache
+    rows = cache.table(_CACHE_MODULE, _QUERY_TABLE, _QUERY_COLUMNS)
+    key = _cache_key(protocol, method, url, canonical)
+    cached = rows.get(key)
+    if cached is not None and not refresh:
+        return _Response(cached.data["payload"], url, method, canonical, cached.retrieved_at, True,
+                         (("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
+                           f"{_iso(cached.retrieved_at)}"),))
+    try:
+        with _Session(timeouts) as session:
+            if method == "POST":
+                response = session.post(url, data=dict(canonical))
+            else:
+                response = session.get(url, params=dict(canonical))
+            payload = response.content
+    except requests.exceptions.RequestException as exc:
+        if cached is not None:
+            return _Response(cached.data["payload"], url, method, canonical, cached.retrieved_at, True,
+                             (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
+                               f"{_iso(cached.retrieved_at)}"),))
+        raise _net_error(url, exc, timeouts, hint) from exc
+    _check_http(response, url)
+    retrieved_at = datetime.now(UTC)
+    if not response.ok:
+        if accept_error_body and payload:
+            return _Response(payload, url, method, canonical, retrieved_at, False, (("HTTP_STATUS", str(response.status_code)),))
+        raise VoProtocolsError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
+                               url=url, status=response.status_code)
+    return _Response(payload, url, method, canonical, retrieved_at, False)
+
+
+def _store(response: _Response, protocol: str, cache: SharedCache | None) -> tuple[tuple[str, str], ...]:
+    """Salva in cache una risposta riuscita appena scaricata; restituisce gli avvisi (es. ``CACHE_FULL``)."""
+    if response.from_cache:
+        return ()
+    cache = SharedCache() if cache is None else cache
+    rows = cache.table(_CACHE_MODULE, _QUERY_TABLE, _QUERY_COLUMNS)
+    key = _cache_key(protocol, response.method, response.url, response.params)
+    row = {"protocol": protocol, "url": response.url, "params": json.dumps(response.params, ensure_ascii=False),
+           "payload": response.payload}
+    origin = response.url + ("?" + "&".join(f"{k}={v}" for k, v in response.params) if response.params else "")
+    try:
+        rows.put(key, row, origin=origin, retrieved_at=response.retrieved_at)
+    except CacheError as exc:  # es. CACHE_FULL: il dato si usa comunque
+        return ((exc.code, exc.message),)
+    return ()
+
+
+def _read_payload(response: _Response, *, table=None, format=None, limits: TableLimits | None = None,
+                  origin: str | None = None) -> CatalogTable:
+    """Legge i byte ricevuti con ``read_table`` del 13 (un solo lettore) e mette la provenienza di rete."""
+    fd, tmp = tempfile.mkstemp(prefix="astrotwo-vo-")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(response.payload)
+        result = read_table(tmp, table=table, format=format, limits=limits)
+    finally:
+        os.unlink(tmp)
+    where = origin or response.url
+    return dataclasses.replace(result, source=where, origin=where, retrieved_at=response.retrieved_at,
+                               file_modified=None)
+
+
+def _record(protocol: str, command: str, arguments: dict, response: _Response, rows: int | None) -> RequestRecord:
+    return RequestRecord(protocol=protocol, command=command, arguments=arguments, url=response.url,
+                         method=response.method, params=response.params, retrieved_at=response.retrieved_at,
+                         rows=rows, from_cache=response.from_cache)
+
+
+def download_table(url: str, *, table: int | None = None, format: str | None = None,
+                   limits: TableLimits | None = None, cache: SharedCache | None = None, refresh: bool = False,
+                   timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Scarica una tabella da URL (D3) e la legge con ``read_table`` del 13; prima la cache."""
+    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        raise ValueError(f"URL non valido: {url!r} (serve http:// o https://)")
+    response = _http("download", url, cache=cache, refresh=refresh, timeouts=timeouts)
+    result = _read_payload(response, table=table, format=format, limits=limits)
+    notes = response.notes + _store(response, "download", cache)
+    arguments = {"url": url, "table": table, "format": format}
+    return VoResult(table=result, request=_record("download", "download_table", arguments, response, result.rows),
+                    warnings=notes)

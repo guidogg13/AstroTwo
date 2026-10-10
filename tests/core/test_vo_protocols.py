@@ -7,6 +7,11 @@ scritti a mano. I test che usano la rete vera hanno il marcatore ``network``.
 
 from __future__ import annotations
 
+import io
+import threading
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 import astropy.units as u
 import numpy as np
 import pytest
@@ -16,10 +21,13 @@ from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
 
 import astrotwo
+from astrotwo.core.cache import NetworkTimeouts, SharedCache
 from astrotwo.core.catalogs import CatalogsError, read_table
 from astrotwo.core.vo_protocols import (
+    DEFAULT_MAX_ROWS,
     VOTABLE_VERSION,
     VoProtocolsError,
+    download_table,
     export_table,
     read_votable,
     write_votable,
@@ -143,3 +151,152 @@ def test_votable_invalid(tmp_path):
     with pytest.raises(CatalogsError) as err:
         read_votable(tmp_path / "assente.xml")
     assert err.value.code == "TABLE_UNREADABLE"
+
+
+# =============================================================================
+# Servizi simulati: server HTTP locale (nessuna rete)
+# =============================================================================
+
+
+class FakeService:
+    """Server HTTP locale: ``routes[path] = funzione(richiesta) -> (stato, content-type, corpo)``."""
+
+    def __init__(self):
+        self.routes = {}
+        self.requests = []
+        service = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def _serve(self, method):
+                parsed = urllib.parse.urlsplit(self.path)
+                length = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(length) if length else b""
+                params = dict(urllib.parse.parse_qsl(parsed.query))
+                if method == "POST" and self.headers.get("Content-Type", "").startswith("application/x-www-form"):
+                    params.update(urllib.parse.parse_qsl(body.decode()))
+                request = {"method": method, "path": parsed.path, "params": params, "body": body,
+                           "headers": dict(self.headers)}
+                service.requests.append(request)
+                route = service.routes.get(parsed.path)
+                if route is None:
+                    status, ctype, payload = 404, "text/plain", b"not found"
+                else:
+                    status, ctype, payload = route(request)
+                    payload = payload.encode() if isinstance(payload, str) else payload
+                self.send_response(status)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_GET(self):
+                self._serve("GET")
+
+            def do_POST(self):
+                self._serve("POST")
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def hits(self, path):
+        return sum(1 for r in self.requests if r["path"] == path)
+
+
+@pytest.fixture
+def service():
+    fake = FakeService()
+    yield fake
+    fake.close()
+
+
+@pytest.fixture
+def cache(tmp_path):
+    with SharedCache(tmp_path / "cache") as shared:
+        yield shared
+
+
+def votable_route(text, status=200):
+    return lambda request: (status, "application/x-votable+xml", text)
+
+
+# =============================================================================
+# P2 — Base di rete: registro, cache, download_table (T6, T21)
+# =============================================================================
+
+
+def test_download_table_provenance(service, cache):
+    service.routes["/t.xml"] = votable_route(votable_text(4))
+    result = download_table(service.url + "/t.xml", cache=cache)
+    expected = parse_votable(io.BytesIO(votable_text(4).encode())).get_first_table().to_table()
+    assert result.table.rows == len(expected) == 4 and result.table.colnames == expected.colnames
+    assert result.table.origin == service.url + "/t.xml" and result.table.file_modified is None
+    assert result.table.positions is not None and result.table.body == "celestial"
+    record = result.request
+    assert record.protocol == "download" and record.command == "download_table" and record.rows == 4
+    assert record.url == service.url + "/t.xml" and record.method == "GET" and not record.from_cache
+    assert record.as_dict()["retrieved_at"].endswith("Z")
+    assert "AstroTwo/" in service.requests[0]["headers"]["User-Agent"]
+
+
+def test_t6_reproducibility(service, cache):
+    service.routes["/t.xml"] = votable_route(votable_text(3))
+    first = download_table(service.url + "/t.xml", cache=cache)
+    saved = first.request.as_dict()
+    # Riesecuzione dai soli dati registrati (funzione + argomenti), richiesta forzata al servizio.
+    command = {"download_table": download_table}[saved["command"]]
+    second = command(**saved["arguments"], cache=cache, refresh=True)
+    assert second.request.url == first.request.url and second.request.params == first.request.params
+    assert second.table.colnames == first.table.colnames and not second.request.from_cache
+    assert [str(c.dtype) for c in second.table.table.itercols()] == [str(c.dtype) for c in first.table.table.itercols()]
+    assert service.hits("/t.xml") == 2
+
+
+def test_t21_cache_first_refresh_offline(service, cache):
+    service.routes["/t.xml"] = votable_route(votable_text(3))
+    url = service.url + "/t.xml"
+    first = download_table(url, cache=cache)
+    second = download_table(url, cache=cache)
+    assert second.request.from_cache and second.request.retrieved_at == first.request.retrieved_at
+    assert any(code == "FROM_CACHE" for code, _ in second.warnings) and service.hits("/t.xml") == 1
+    third = download_table(url, cache=cache, refresh=True)
+    assert not third.request.from_cache and service.hits("/t.xml") == 2
+    service.close()
+    fourth = download_table(url, cache=cache, refresh=True, timeouts=NetworkTimeouts(connect=0.5, read=0.5))
+    assert fourth.request.from_cache and "rete non disponibile" in dict(fourth.warnings)["FROM_CACHE"]
+    assert np.array_equal(fourth.table.table["RA"], first.table.table["RA"])
+
+
+def test_network_errors(service, cache):
+    service.routes["/private"] = lambda r: (401, "text/plain", "auth")
+    with pytest.raises(VoProtocolsError) as err:
+        download_table(service.url + "/private", cache=cache)
+    assert err.value.code == "AUTH_REQUIRED"
+    with pytest.raises(VoProtocolsError) as err:
+        download_table(service.url + "/missing", cache=cache)
+    assert err.value.code == "SERVICE_ERROR" and "404" in err.value.message
+    url = service.url + "/t.xml"
+    service.close()
+    with pytest.raises(VoProtocolsError) as err:
+        download_table(url, cache=cache, timeouts=NetworkTimeouts(connect=0.5, read=0.5))
+    assert err.value.code == "NET_TIMEOUT" and "0.5 s" in err.value.message
+
+
+def test_failed_reading_is_not_cached(service, cache):
+    service.routes["/t.xml"] = lambda r: (200, "text/html", "<html><body>errore</body></html>")
+    with pytest.raises(CatalogsError):
+        download_table(service.url + "/t.xml", cache=cache)
+    service.routes["/t.xml"] = votable_route(votable_text(2))
+    assert download_table(service.url + "/t.xml", cache=cache).table.rows == 2
+
+
+def test_default_max_rows():
+    assert DEFAULT_MAX_ROWS == 100_000
