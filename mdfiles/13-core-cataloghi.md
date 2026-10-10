@@ -10,169 +10,358 @@ sempre separate le regole di disegno dalle selezioni dei record.
 
 ## 3. Cosa fa
 
-- **Caricamento cataloghi del CDS (D1):** aprire cataloghi noti (Hipparcos,
-  TYCHO-2, Gaia, 2MASS, ecc.) per identificatore; il trasferimento dei dati è
-  di `14-core-protocolli-vo.md`, qui si gestisce la tabella risultante.
-- **Caricamento tabelle da file locale (D2) e da URL (D3):** VOTable, CSV,
-  tabelle FITS; lettura dello schema, delle unità e dei nomi delle colonne.
-- **Plottaggio come definizione (D4):** regole per simbolo, colore e dimensione
-  in funzione delle colonne (es. magnitudine) — questo modulo produce le
-  regole; il disegno è di `42-ui-pannello-cataloghi.md`.
+**Divisione del codice (decisione del proprietario del 2026-10-10):** sei
+parti, un commit per parte — **P1** lettura da file locale, formati,
+colonne di posizione, limiti; **P2** ASTRORES; **P3** `search` e regole di
+disegno; **P4** colonne calcolate, sottoinsiemi, statistiche, istogramma,
+grafico x-y, vista a record; **P5** epoca, moto proprio, filtro temporale;
+**P6** cataloghi da servizio e da URL, albero delle collezioni, colonna
+DataLink — **dopo il codice del `14`**, perché usa la sua rete e il suo
+VOTable.
+
+- **Caricamento cataloghi del CDS (D1, P6):** aprire cataloghi noti
+  (Hipparcos, TYCHO-2, Gaia, 2MASS, ecc.) per identificatore; il
+  trasferimento dei dati è di `14-core-protocolli-vo.md`, qui si gestisce la
+  tabella risultante.
+- **Tabelle da file locale (D2, P1) e da URL (D3, P6):** VOTable, CSV,
+  tabelle FITS e gli altri formati di H22; lettura dello schema, delle unità,
+  dei nomi delle colonne e degli UCD. **I VOTable locali si leggono
+  direttamente con `astropy.io.votable`** (decisione del proprietario del
+  2026-10-10); da URL passano dal `14` (P6).
+  - **Più tabelle nello stesso file** (più `TABLE` in un VOTable, più HDU di
+    tabella in un FITS): come per le immagini (D11-4), con una sola tabella
+    si apre quella; con più tabelle serve il parametro `table` (indice),
+    altrimenti `TABLE_CHOICE_REQUIRED` con l'elenco (indice, nome, righe,
+    colonne), che dà anche `list_tables`.
+  - **Provenienza dei file locali:** origine = percorso assoluto, data =
+    momento della lettura (UTC), più la data di modifica del file.
+- **Formati delle tabelle (H22, sez. 8.1 del manuale di Aladin, ed. giugno
+  2022):** VOTable, tabelle FITS ASCII e binarie, CSV, TSV, **BSV** (valori
+  separati da spazi), **IPAC TBL**, **formato SExtractor** e **ASTRORES**
+  (predecessore di VOTable, letto per compatibilità). Tutti i formati si
+  leggono con `astropy.io.votable`, `astropy.io.ascii` e `astropy.io.fits`,
+  **tranne ASTRORES**, letto da un lettore nel modulo con **`defusedxml`**
+  (D13-7; protezione da file XML non fidati), testato su file di esempio del
+  CDS; senza documentazione o esempi disponibili, il formato dà solo errore.
+  - **Riconoscimento dal contenuto, non dall'estensione (decisione del
+    proprietario del 2026-10-10):** FITS = firma `SIMPLE  =` con almeno una
+    HDU di tabella; XML = radice `VOTABLE` (VOTable) o `ASTRO` (ASTRORES);
+    IPAC = intestazione con righe che iniziano con `\` o `|`; SExtractor =
+    righe d'intestazione `# 1 NOME`. Per i testi delimitati la regola si
+    applica alle prime 20 righe non vuote e non di commento (`#`): **TSV**
+    se tutte contengono una tabulazione e nessuna una virgola; **CSV** se
+    tutte contengono lo stesso numero (≥ 1) di virgole e nessuna una
+    tabulazione; **BSV** se nessuna contiene tabulazioni o virgole e tutte
+    hanno lo stesso numero (≥ 2) di campi separati da spazi; **in ogni altro
+    caso** errore `FORMAT_AMBIGUOUS`, che chiede il parametro `format`
+    (`csv`, `tsv`, `bsv`, `ipac`, `sextractor`). Con `format` esplicito il
+    riconoscimento non si fa e il formato usato è scritto nel risultato.
+- **Unità delle colonne (decisione del proprietario del 2026-10-10):** una
+  stringa di unità valida nei formati standard **FITS** o **VOUnit** di
+  `astropy.units` (come D18-2) dà l'unità della colonna; una stringa non
+  valida (es. `---` di VizieR) lascia la colonna **caricata con la stringa
+  originale e l'avviso `UNIT_UNRECOGNIZED`**, senza alcuna conversione; una
+  colonna senza unità è dichiarata adimensionale.
+- **Limiti (D13-4 e A10 per i cataloghi, decisi dal proprietario il
+  2026-10-10):** **tetto di 1 milione di righe per tabella, configurabile**
+  (`TableLimits.max_rows`), più la **stima della memoria** confrontata con il
+  **limite delle operazioni** (`TableLimits.operation_bytes`, **4 GB di
+  default, configurabile**: stesso valore e stesso significato del limite
+  delle operazioni dell'11, D11-11; l'interfaccia `40` li imposta con
+  un'unica preferenza). Oltre il tetto: `TABLE_TOO_LARGE`; oltre il limite
+  delle operazioni: `MEMORY_LIMIT_EXCEEDED`; **mai un troncamento
+  silenzioso, nessun caricamento progressivo nel livello 1**. Il controllo
+  si fa **prima di caricare** quando il file lo permette: FITS dalle parole
+  chiave dell'intestazione (`NAXIS2` e larghezza della riga); testi
+  delimitati, IPAC e SExtractor contando le righe di dati con una lettura in
+  sequenza che non conserva nulla; VOTable e ASTRORES (XML) con la
+  dimensione del file come stima della memoria prima della lettura e il
+  numero di righe controllato subito dopo. Stima della memoria di una
+  tabella: righe × somma dei byte per riga delle colonne (tipo della
+  colonna; testo = lunghezza massima × byte per carattere).
+- **Colonne di posizione e corpo (decisione del proprietario del
+  2026-10-10):** il nucleo ricava le colonne di posizione **solo da UCD e
+  metadati, mai dai nomi**: coppie `pos.eq.ra`/`pos.eq.dec`,
+  `pos.galactic.lon`/`pos.galactic.lat`, `pos.ecliptic.lon`/`pos.ecliptic.lat`
+  (con più coppie vale quella con `meta.main`; più coppie senza `meta.main`
+  → nessuna scelta, avviso); il sistema di riferimento dal `COOSYS` del
+  VOTable collegato alle colonne (sistema, equinozio, epoca) o, per le
+  coordinate galattiche, dall'UCD stesso; senza sistema dichiarato le
+  colonne sono note ma il sistema resta **sconosciuto** (le funzioni che lo
+  richiedono danno `FRAME_UNKNOWN`). **In più** `suggest_position_columns`
+  **suggerisce** colonne candidate **dal nome** (es. `ra`/`dec`,
+  `raj2000`/`dej2000`, `ra_icrs`/`de_icrs`, `glon`/`glat`, `elon`/`elat`,
+  senza distinguere maiuscole e minuscole), ciascuna **marcata come
+  suggerimento**, con il sistema eventualmente indicato dal nome come sola
+  ipotesi: l'interfaccia le propone, l'utente conferma con
+  `confirm_position_columns` (colonne e sistema espliciti; la conferma è
+  scritta nella provenienza). **Senza UCD né conferma:**
+  `NO_COORD_COLUMNS` (avviso al caricamento; errore per le funzioni di
+  posizione) e `body` non ricavabile (`BODY_UNKNOWN`). **Corpo:** `celestial`
+  quando le colonne di posizione sono celesti (UCD `pos.eq`, `pos.galactic`,
+  `pos.ecliptic`, o conferma con un sistema celeste); coordinate planetarie
+  (UCD `pos.bodyrc`) secondo `19-core-dati-planetari.md`, finché il 19 non
+  c'è solo con `body` dichiarato dall'utente, altrimenti `BODY_UNKNOWN`.
+- **Plottaggio come definizione (D4, P3):** regole per simbolo, colore e
+  dimensione in funzione delle colonne — questo modulo produce le regole e
+  il loro esito per ogni record; il disegno è di
+  `42-ui-pannello-cataloghi.md`. **Regola (decisione del proprietario del
+  2026-10-10):** un'espressione di `search` (senza prefisso) che dice a
+  quali record si applica (assente = tutti) + **forma** dall'elenco chiuso
+  `circle`, `square`, `diamond`, `triangle`, `cross`, `plus`, `dot` +
+  **colore** `#RRGGBB` + **dimensione** in pixel, costante oppure funzione
+  lineare di una colonna con intervallo esplicito (`column`, `vmin`, `vmax`,
+  `size_min`, `size_max`; valori fuori intervallo portati agli estremi). Le
+  regole sono ordinate: ogni record prende **la prima regola che lo
+  seleziona**; i record senza regola non si disegnano; un record con il
+  valore della colonna della dimensione mancante o non finito non si
+  disegna con quella regola (conteggio nel risultato). La tabella non
+  cambia.
 - **Filtri e ricerca, due concetti separati (D6, corretto):**
-  - i **filtri** decidono **come disegnare** le sorgenti (quali record e con
-    quale aspetto);
+  - i **filtri** decidono **come disegnare** le sorgenti (regole di disegno
+    qui sopra);
   - la **selezione dei record per espressione** è il comando **`search`**,
     che restituisce l'insieme dei record che soddisfano un'espressione.
-    **Sintassi decisa con D13-1 (2026-10-04, riscritta come nostra il
-    2026-10-10):** stringa con una **grammatica ristretta di AstroTwo**,
-    validata prima dell'esecuzione — testo con i jolly `?` e `*`; colonna
-    con gli operatori di confronto `=`, `!=`, `<`, `>`, `<=`, `>=` (quelli
-    usuali, comuni a ogni linguaggio di interrogazione); valore assoluto
-    `|colonna|`; prefissi `+` e `-` per aggiungere o togliere il record dalla
-    selezione. La grammatica completa (forma formale) si scrive qui prima del
-    codice di `search`.
-- **Propagazione delle posizioni (D9)** e **freccia del moto proprio (D10):**
-  portare le posizioni a un'epoca richiesta e rappresentare il moto proprio;
-  **epoca di origine letta dai metadati o richiesta, mai assunta** (D10-2),
-  moto proprio ed epoca sempre dichiarati nel risultato (calcolo: modulo
-  10/Astropy).
-- **Strumenti di tabella avanzati (H8):** colonne calcolate, sottoinsiemi,
-  grafico x-y, istogramma delle colonne, vista a record, descrizione delle
-  colonne; **DataLink: la colonna vive qui, la risoluzione dei link è di
-  `14-core-protocolli-vo.md`** (confine deciso con D13-6 il 2026-10-04).
-- **Filtro temporale e cursore epoca (H3):** selezionare i record per epoca di
-  osservazione e spostare l'epoca di visualizzazione (con i moduli 10 e 41).
-  **Epoca di default decisa con D13-2 (2026-10-04):** l'epoca di ogni dato si
-  legge dai suoi metadati e **non si assume mai**; epoca di visualizzazione =
-  epoca del dato mostrato (per le immagini: epoca dell'immagine se nota,
-  altrimenti J2000; per i cataloghi: la **propria epoca di riferimento**);
-  **l'epoca usata è sempre scritta nel risultato**.
-- **Cache delle interrogazioni (A7):** le interrogazioni ai cataloghi
-  (risultati di query, cone search, sottoinsiemi salvati) si conservano nelle
-  tabelle SQLite di questo modulo dentro la **cache comune di `04-cache.md`**
-  (limite unico di 5 GB, rimozione dei dati meno usati, origine e data di
-  scaricamento per ogni voce servita dalla cache); nessuna cache propria (CA4).
-- **Formati delle tabelle (H22, sez. 8.1 del manuale di Aladin, ed. giugno 2022):**
-  VOTable (lettura tramite `14-core-protocolli-vo.md`), tabelle FITS ASCII e
-  binarie, CSV, TSV, **BSV** (valori separati da spazi), **IPAC TBL**,
-  **formato SExtractor** e **ASTRORES** (predecessore di VOTable, letto per
-  compatibilità). La natura del file si riconosce dal contenuto, non
-  dall'estensione. Tutti i formati si leggono con `astropy.io.ascii` e
-  `astropy.io.fits`, **tranne ASTRORES**, letto da un lettore nel modulo con
-  **`defusedxml`** (D13-7, decisa il 2026-10-09; protezione da file XML non
-  fidati), testato su file di esempio del CDS; senza documentazione o esempi
-  disponibili, il formato dà solo errore. Obiettivo minimo di dimensione:
-  1 milione di sorgenti per tabella (`01-architettura.md` §8).
-- **Colonne calcolate (H8, sez. 5.13):** nuova colonna con **nome**
+  - **Grammatica di `search` (D13-1; forma formale scritta il 2026-10-10,
+    decisione del proprietario):**
+
+    ```
+    espressione  = [ prefisso ] , disgiunzione ;
+    prefisso     = "+" | "-" ;                 (solo come primo carattere)
+    disgiunzione = congiunzione , { "||" , congiunzione } ;
+    congiunzione = termine , { "&&" , termine } ;
+    termine      = "(" , disgiunzione , ")" | confronto | testo ;
+    confronto    = operando , operatore , valore ;
+    operando     = colonna | "|" , colonna , "|" ;
+    colonna      = "${" , nome , "}" | parola ;
+    operatore    = "=" | "!=" | "<=" | ">=" | "<" | ">" ;
+    valore       = numero | stringa | parola ;
+    testo        = stringa | parola ;
+    stringa      = '"' , { carattere | '\"' | '\\' } , '"'
+                 | "'" , { carattere | "\'" | '\\' } , "'" ;
+    parola       = carattere-parola , { carattere-parola } ;
+    numero       = [ "+" | "-" ] , cifre , [ "." , cifre ] , [ ( "e" | "E" ) , [ "+" | "-" ] , cifre ]
+                 | [ "+" | "-" ] , "." , cifre , [ esponente ] ;
+    ```
+
+    `carattere-parola` = ogni carattere tranne gli spazi e `( ) | & = ! < > " '`;
+    `nome` = ogni carattere tranne `}`. Gli spazi tra i simboli sono
+    liberi. **Precedenza:** `&&` prima di `||`; le parentesi la cambiano.
+    **Significato:**
+    - una **colonna** scritta come `parola` deve essere il nome esatto di
+      una colonna (maiuscole e minuscole contano); `${…}` serve per i nomi
+      con spazi o simboli; colonna inesistente → `EXPRESSION_INVALID`;
+    - **confronto numerico** (colonne numeriche e booleane, queste ultime
+      come 0/1): il valore deve essere un `numero`, **nell'unità della
+      colonna** (nessuna unità nell'espressione); `=` è l'uguaglianza
+      esatta; `|colonna|` è il valore assoluto e vale solo per le colonne
+      numeriche;
+    - **confronto di testo** (colonne di testo): solo `=` e `!=` (gli altri
+      operatori → `EXPRESSION_INVALID`); il valore è un modello con i jolly
+      `*` (qualsiasi sequenza, anche vuota) e `?` (un carattere), `\*` e
+      `\?` per i caratteri stessi; il modello deve coprire **tutto** il
+      valore della cella, di cui si ignorano gli spazi finali (riempimento
+      dei testi FITS);
+    - **testo da solo** (`testo` senza operatore): il record è selezionato
+      se **almeno una colonna di testo** corrisponde al modello;
+    - **maiuscole e minuscole:** nel testo con i jolly **non contano per
+      default** (decisione del proprietario del 2026-10-10); l'opzione
+      `case_sensitive=True` le fa contare;
+    - **valori mancanti** (mascherati) **e non finiti** (NaN): mai
+      selezionati, da nessun confronto (neppure `!=`) né dal testo;
+    - **prefissi** `+` e `-`: aggiungono i record trovati alla selezione
+      corrente (`+`) o li tolgono (`-`); la selezione corrente si passa
+      come parametro `selection` (una maschera booleana per record) ed è
+      **obbligatoria** con un prefisso (altrimenti `EXPRESSION_INVALID`);
+      senza prefisso il risultato è il solo insieme trovato;
+    - espressione vuota o non conforme → `EXPRESSION_INVALID` con la
+      posizione (carattere) dell'errore; l'espressione è **validata per
+      intero prima dell'esecuzione** e non è mai eseguita come codice.
+- **Propagazione delle posizioni (D9, P5)** e **freccia del moto proprio
+  (D10, P5):** portare le posizioni a un'epoca richiesta e rappresentare il
+  moto proprio; calcolo: modulo 10/Astropy.
+  - **Epoca di origine (decisione del proprietario del 2026-10-10):** dalla
+    colonna con UCD `time.epoch` (un'epoca per riga) o dall'epoca del
+    `COOSYS`; altrimenti parametro obbligatorio; **mai assunta** (D10-2);
+    scala di tempo sempre dichiarata (DC1).
+  - **Moto proprio in ascensione retta:** se include il fattore cos δ va
+    **dichiarato** (metadati della colonna o parametro
+    `pm_ra_includes_cosdec`, senza default); mai assunto.
+  - **Parallasse mancante o non positiva (decisione del proprietario del
+    2026-10-10):** le righe **non si escludono**: si propagano **solo con il
+    moto proprio, senza effetti prospettici**, marcate riga per riga, con il
+    loro conteggio nel risultato. Dove si calcola: D13-12 (da decidere).
+  - **Frecce del moto proprio:** dalla posizione all'epoca della tabella
+    alla posizione propagata di `scale` anni (**parametro obbligatorio**).
+- **Filtro temporale e cursore epoca (H3, P5):** selezionare i record per
+  epoca di osservazione e spostare l'epoca di visualizzazione (con i moduli
+  10 e 41). **Epoca di default decisa con D13-2 (2026-10-04):** l'epoca di
+  ogni dato si legge dai suoi metadati e **non si assume mai**; epoca di
+  visualizzazione = epoca del dato mostrato (per le immagini: epoca
+  dell'immagine se nota, altrimenti J2000; per i cataloghi: la **propria
+  epoca di riferimento**); **l'epoca usata è sempre scritta nel risultato**.
+- **Strumenti di tabella avanzati (H8, P4):** colonne calcolate,
+  sottoinsiemi, grafico x-y, istogramma delle colonne (**bin obbligatori**:
+  numero o bordi espliciti), vista a record, descrizione delle colonne,
+  **statistiche di una colonna** (minimo, massimo, media, deviazione
+  standard, conteggio dei valori validi e dei mancanti); **DataLink: la
+  colonna vive qui, la risoluzione dei link è di `14-core-protocolli-vo.md`**
+  (confine deciso con D13-6 il 2026-10-04; riconoscimento della colonna:
+  D13-11, da decidere).
+- **Colonne calcolate (H8, sez. 5.13, P4):** nuova colonna con **nome**
   obbligatorio e, facoltativi, **unità**, **UCD** e **numero di decimali**
   mostrati; espressione con riferimenti alle colonne nella forma
   `${nome_colonna}`, con gli operatori e le funzioni della calcolatrice
   algebrica di `18-core-calcolatrici.md` (stesso elenco e stessa tecnica a
-  elenco chiuso, D18-1; nessuna esecuzione di codice). Calcolo vettoriale in
-  `float64` con `numpy`; se le colonne hanno unità, il calcolo passa da
-  `astropy.units` e unità incompatibili danno errore. La colonna è marcata
-  come calcolata, con l'espressione come provenienza, ed è salvata con le
-  altre; l'operazione è non distruttiva (D13-5). Dove vive nel codice la
-  tabella condivisa delle funzioni (senza creare una dipendenza circolare tra
-  13 e 18): D13-8, Gruppo 3.
+  elenco chiuso, D18-1; nessuna esecuzione di codice). **La tabella delle
+  funzioni vive in `catalogs.py` e il 18 la importa** (D13-8, decisa il
+  2026-10-10: il 18 dipende già dal 13, nessuna dipendenza circolare).
+  Calcolo vettoriale in `float64` con `numpy`; se le colonne hanno unità, il
+  calcolo passa da `astropy.units` e unità incompatibili danno errore. La
+  colonna è marcata come calcolata, con l'espressione come provenienza, ed
+  è salvata con le altre.
+- **Operazioni non distruttive (D13-5; precisazione del proprietario del
+  2026-10-10):** `calculated_column` e `subset` restituiscono una **nuova**
+  tabella; con `inplace=True` modificano quella data e **il report lo
+  cita**.
+- **Cache (A7; decisione del proprietario del 2026-10-10):** **una sola
+  cache delle interrogazioni, nel `14`**; il 13 conserva solo i
+  **sottoinsiemi salvati** (dove: D13-13, da decidere). Nessuna cache
+  propria (CA4).
 
 ## 4. Cosa NON fa
 
 - Non comunica con la rete: query, cone search e download sono di
   `14-core-protocolli-vo.md`; il cross-match è di `15-core-crossmatch.md`.
+- Non conserva in cache i risultati delle interrogazioni: è del `14`.
 - Non disegna: le tabelle e i simboli li rende la UI (41/42).
 - Non esporta i file: l'esportazione è di `14-core-protocolli-vo.md` (D13).
 - Non calcola coordinate: propagazione e moto proprio passano per il modulo 10.
+- Non ricava le colonne di posizione dai nomi: dai nomi le **suggerisce** e
+  basta.
 - Non produce curve di luce: restano `22-analisi-curve-di-luce.md`.
 - Non crea MOC: `16-core-moc.md`.
 
 ## 5. Livello e dipendenze
 
 - **Livello:** 1
-- **Dipende da:** `04-cache.md` (cache comune A7),
-  `10-core-coordinate-wcs.md` (propagazione, moto proprio,
-  coordinate di ricerca), `14-core-protocolli-vo.md` (download e VOTable).
+- **Dipende da:** `04-cache.md` (cache comune A7, sottoinsiemi salvati),
+  `10-core-coordinate-wcs.md` (propagazione, moto proprio, coordinate di
+  ricerca), `14-core-protocolli-vo.md` (download e servizi; solo P6).
 - **Usato da:** `15-core-crossmatch.md`, `16-core-moc.md`,
-  `18-core-calcolatrici.md`, `19-core-dati-planetari.md`,
-  `20-analisi-fotometria.md`, `42-ui-pannello-cataloghi.md`,
-  `41-ui-visualizzatore-cielo.md`, `33-ia-query-adql.md`.
+  `18-core-calcolatrici.md` (anche la tabella delle funzioni, D13-8),
+  `19-core-dati-planetari.md`, `20-analisi-fotometria.md`,
+  `42-ui-pannello-cataloghi.md`, `41-ui-visualizzatore-cielo.md`,
+  `33-ia-query-adql.md`.
 
 ## 6. Input e output
 
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
-| in | `catalog_id` | stringa | id catalogo CDS | es. "I/239/hip_main" (esempio di formato, id da verificare) |
-| in | file / URL tabella | stringa | VOTable, CSV, FITS table | |
-| in | `expression` | stringa | espressione sui nomi colonna (comando `search`) | sintassi: grammatica ristretta di AstroTwo, validata prima dell'esecuzione (D13-1) |
-| in | `filter` | struttura regole | regole di disegno | non è una selezione |
-| in | `epoch` | epoca | anno giuliano o ISO 8601 | per propagazione/H3 |
-| in | moto proprio | float64 | mas/yr, mas | colonne del catalogo |
-| out | tabella | `astropy.table.Table` | colonne con unità e nomi | |
-| out | `body` | stringa | `celestial` o nome IAU del corpo | obbligatorio (D19-3): ricavato dal sistema di coordinate delle colonne di posizione o dai metadati planetari, mai assunto |
-| out | selezione | indici booleani | — | record soddisfacenti |
-| out | cache | record SQLite | origine, data, query, dimensione | A7 |
-| in | file tabella | percorso o URL | VOTable, FITS, CSV, TSV, BSV, IPAC TBL, SExtractor, ASTRORES | natura riconosciuta dal contenuto (H22) |
+| in | `catalog_id` | stringa | id catalogo CDS | es. "I/239/hip_main" (esempio di formato, id da verificare); P6 |
+| in | file tabella | percorso (URL in P6) | VOTable, FITS, CSV, TSV, BSV, IPAC TBL, SExtractor, ASTRORES | natura riconosciuta dal contenuto (H22) o `format` esplicito |
+| in | `table` | intero ≥ 0 | indice della tabella nel file | obbligatorio con più tabelle |
+| in | `limits` | `TableLimits` | righe, byte | 1 milione di righe, 4 GB |
+| in | `expression` | stringa | grammatica di §3 (comando `search`) | validata prima dell'esecuzione (D13-1) |
+| in | `selection` | maschera booleana | una per record | obbligatoria con i prefissi `+`/`-` |
+| in | `case_sensitive` | booleano | default `False` | testo con i jolly |
+| in | regole di disegno | lista di `PlotRule` | §3 | non è una selezione |
+| in | colonne di posizione confermate | 2 nomi + sistema (+ equinozio) | — | conferma dell'utente |
+| in | `epoch` | epoca | anno giuliano o ISO 8601 con scala | per propagazione/H3 |
+| in | moto proprio | float64 | mas/yr, mas | colonne del catalogo; cos δ dichiarato |
+| out | tabella | `CatalogTable` (`astropy.table.Table` + metadati) | colonne con unità, UCD e nomi | con provenienza, posizioni, `body`, avvisi |
+| out | `body` | stringa o assente | `celestial` o nome IAU del corpo | obbligatorio (D19-3): mai assunto; assente → `BODY_UNKNOWN` |
+| out | suggerimenti di posizione | lista | coppie di colonne, sistema ipotizzato, motivo | marcati "suggerimento" |
+| out | selezione | maschera booleana | — | record soddisfacenti |
+| out | esito delle regole di disegno | array per record | indice della regola, forma, colore, dimensione | tabella invariata |
 | in | colonna calcolata | nome + espressione + unità, UCD, decimali facoltativi | espressione con `${nome}` | H8 |
 | out | colonna calcolata | colonna `float64` con unità, UCD, decimali e provenienza (espressione) | unità dichiarata o derivata | H8 |
+| out | statistiche di una colonna | struttura | min, max, media, deviazione standard, conteggi | unità della colonna |
 
 ## 7. Interfaccia pubblica
 
-- **`CatalogTable`** (classe): tabella con schema, unità e provenienza;
-  metodi descrittivi: descrivi colonne, calcola colonna, crea sottoinsieme,
-  vista a record.
-- **`load_catalog(catalog_id)`** / **`load_table(source)`** — caricamento; la
-  rete è gestita dal modulo 14.
-- **`search(table, expression)`** — selezione dei record per espressione
-  (D6); l'espressione è **validata prima dell'esecuzione** con la grammatica
-  ristretta di §3 (D13-1), altrimenti `EXPRESSION_INVALID`; restituisce
-  indici/record, non cambia il disegno.
-- **`set_plot_rules(table, rules)`** — regole di disegno (D4), separate dalla
-  selezione.
-- **`propagate(table, epoch)`** — posizioni all'epoca richiesta (D9);
-  **calcolo: modulo 10 / Astropy**.
+- **`CatalogTable`** (classe): tabella (`astropy.table.Table`) con schema,
+  unità, UCD, provenienza (origine, data di lettura, data di modifica del
+  file, formato, indice della tabella), colonne di posizione
+  (`PositionColumns` o assente), `body`, avvisi, storia delle operazioni,
+  limiti usati; `describe_columns()` (nome, tipo, unità o stringa non
+  riconosciuta, UCD, descrizione).
+- **`TableLimits`** (struttura) — `max_rows` (1 000 000) e `operation_bytes`
+  (4 × 10⁹), configurabili.
+- **`read_table(source, *, table=None, format=None, limits=TableLimits())`**
+  (H22, P1) — file locale: riconosce il formato dal contenuto (o usa
+  `format`), controlla i limiti prima di caricare, legge unità, UCD,
+  colonne di posizione e corpo; ASTRORES con il lettore `defusedxml` (D13-7,
+  P2).
+- **`list_tables(source)`** — tabelle del file (indice, nome, righe,
+  colonne), per la scelta dell'utente.
+- **`load_catalog(catalog_id)`** / **`load_table(source)`** (P6) — come
+  `read_table`, anche da servizio e da URL tramite il modulo 14.
+- **`suggest_position_columns(table)`** — candidate dal nome, ognuna marcata
+  come suggerimento, con il motivo; **`confirm_position_columns(table, lon,
+  lat, frame, equinox=None)`** — nuova `CatalogTable` con le colonne
+  confermate dall'utente (scritto nella provenienza) e il corpo ricavato.
+- **`search(table, expression, selection=None, case_sensitive=False)`** —
+  selezione dei record per espressione (D6); l'espressione è **validata
+  prima dell'esecuzione** con la grammatica di §3 (D13-1), altrimenti
+  `EXPRESSION_INVALID`; restituisce una maschera booleana, non cambia il
+  disegno.
+- **`PlotRule`** (struttura) e **`set_plot_rules(table, rules)`** — regole
+  di disegno (D4), separate dalla selezione; restituisce per ogni record la
+  regola applicata e forma, colore e dimensione, con i conteggi.
+- **`propagate(table, epoch, ...)`** — posizioni all'epoca richiesta (D9,
+  P5); **calcolo: modulo 10 / Astropy**.
 - **`proper_motion_arrows(table, scale)`** — dati per le frecce del moto
-  proprio (D10); il disegno è della UI.
-- **`calculated_column(table, name, expression, unit, ucd, decimals)`** / **`subset(table, ...)`**
-  — colonne calcolate e sottoinsiemi (H8); **calcolo: `numpy`/`astropy`**.
-- **`histogram(column)`** / **`xy_plot(x, y)`** — dati per istogramma e
-  grafico x-y (H8): il calcolo numerico è del modulo, il disegno della UI.
-- **`time_filter(table, range)`** (H3) — selezione per epoca osservativa.
-- **Cache:** nessuna classe propria (CA4): le interrogazioni si salvano nelle
-  tabelle del modulo con `SharedCache` di `04-cache.md`.
-- **`read_table(source)`** (H22) — riconosce il formato dal contenuto e
-  carica la tabella con unità e provenienza; ASTRORES con il lettore `defusedxml` (D13-7).
+  proprio (D10, P5); `scale` in anni, obbligatoria; il disegno è della UI.
+- **`calculated_column(table, name, expression, unit=None, ucd=None,
+  decimals=None, inplace=False)`** / **`subset(table, selection,
+  inplace=False)`** — colonne calcolate e sottoinsiemi (H8, P4);
+  **calcolo: `numpy`/`astropy`**.
+- **`column_statistics(table, column)`** (P4) — minimo, massimo, media,
+  deviazione standard, numero di valori validi e mancanti, con unità.
+- **`histogram(table, column, bins)`** / **`xy_plot(table, x, y)`** — dati
+  per istogramma (bin obbligatori) e grafico x-y (H8, P4): il calcolo
+  numerico è del modulo, il disegno della UI.
+- **`record_view(table, index)`** (P4) — tutti i valori di un record con
+  unità e UCD.
+- **`time_filter(table, range)`** (H3, P5) — selezione per epoca osservativa.
+- **Cache:** nessuna classe propria (CA4); le interrogazioni sono in cache
+  nel 14.
 
 ## 8. Librerie e standard di riferimento
 
 | Libreria / standard | Uso nel modulo | Motivazione |
 |---|---|---|
 | `astropy.table` | rappresentazione delle tabelle con unità | standard del dominio |
-| `astropy.io.votable` / `pyvo` (via modulo 14) | lettura dei formati VO | standard VO |
-| `numpy` | espressioni su colonne, istogrammi, grafici dati | consolidato |
-| `sqlite3` (tramite `04-cache.md`) | cache delle interrogazioni (A7) | persistenza semplice e interrogabile |
-| `astropy.units` | unità delle colonne | unità esplicite sempre |
+| `astropy.io.votable` | lettura dei VOTable locali (UCD, `COOSYS`) | standard VO; da URL tramite il 14 |
+| `astropy.io.fits` | tabelle FITS ASCII e binarie | standard FITS |
 | `astropy.io.ascii` | lettura di CSV, TSV, BSV, IPAC TBL e formato SExtractor (H22) | lettori consolidati della comunità |
-| `defusedxml` (D13-7) | lettore ASTRORES (H22) protetto contro file XML malevoli | parser XML sicuro per file non fidati; **licenza da verificare prima del codice** |
+| `numpy` | espressioni su colonne, istogrammi, grafici dati | consolidato |
+| `astropy.units` | unità delle colonne (formati FITS e VOUnit) | unità esplicite sempre |
+| `sqlite3` (tramite `04-cache.md`) | sottoinsiemi salvati (se D13-13 lo conferma) | persistenza semplice e interrogabile |
+| `defusedxml` (D13-7) | lettore ASTRORES (H22) protetto contro file XML malevoli | parser XML sicuro per file non fidati; **licenza da verificare prima del codice di P2** |
 
 ## 9. Regole e vincoli
 
 - **Filtri ≠ selezioni:** confondere i due è un errore di progettazione
   (correzione D6 di `03-parita-aladin.md`); le API li tengono separati.
 - Unità e nomi delle colonne conservati dal sorgente; una colonna senza unità
-  è dichiarata "unitless" e non convertita silenziosamente.
+  è dichiarata adimensionale e non convertita silenziosamente; un'unità non
+  riconosciuta resta come stringa, con avviso.
+- Le colonne di posizione vengono da UCD e metadati o dalla conferma
+  dell'utente; **mai dai nomi**.
 - La propagazione delle posizioni usa solo il modulo 10; **epoca di origine e
   moto proprio si leggono dai metadati o sono richiesti, mai assunti**
   (D10-2/D13-2); ogni catalogo dichiara la **propria epoca di riferimento**;
   l'epoca usata è sempre scritta nel risultato.
-- La cache SQLite registra query, data e origine; nessun dato è servito
-  senza provenienza (A7).
+- Nessuna tabella oltre il tetto di righe o il limite delle operazioni:
+  errore prima di caricare, mai un troncamento silenzioso.
 - Le espressioni `search` sono valutate in codice deterministico (non da un
-  modello linguistico) e **validate prima dell'esecuzione** con la grammatica
-  ristretta decisa (D13-1): testo con `?`/`*`, operatori `=`, `!=`, `<`, `>`,
-  `<=`, `>=`, valore assoluto `|colonna|`, prefissi `+`/`-`.
+  modello linguistico) e **validate per intero prima dell'esecuzione** con
+  la grammatica di §3 (D13-1).
 - **Operazioni sulle tabelle (D13-5, decisa il 2026-10-04):** sempre **non
-  distruttive**; la modifica in posto (`in-place`) solo con **flag esplicito
-  citato nel report** — nessuna perdita di dati silenziosa, piena
+  distruttive**; la modifica in posto (`inplace=True`) solo con **flag
+  esplicito citato nel report** — nessuna perdita di dati silenziosa, piena
   riproducibilità.
 
 - **Corpo di riferimento (`body`, D19-3 decisa il 2026-10-08):** ogni tabella porta
@@ -190,15 +379,22 @@ sempre separate le regole di disegno dalle selezioni dei record.
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
 | Catalogo sconosciuto | errore con riferimento all'id | `CATALOG_UNKNOWN` |
-| Tabella senza colonne coordinate | caricamento riuscito, funzioni di posizione disabilitate con avviso | `NO_COORD_COLUMNS` |
-| Espressione `search` sintatticamente errata | rifiuto con la posizione dell'errore nell'espressione | `EXPRESSION_INVALID` |
+| File assente o non leggibile | nessuna tabella aperta, errore con il percorso | `TABLE_UNREADABLE` |
+| Tabella senza colonne di posizione da UCD/metadati né confermate | caricamento riuscito con avviso; le funzioni di posizione danno errore | `NO_COORD_COLUMNS` |
+| Colonne di posizione senza sistema di riferimento dichiarato | funzioni che lo richiedono rifiutate | `FRAME_UNKNOWN` |
+| Più tabelle nel file e `table` non indicato | nessuna tabella aperta; errore con l'elenco | `TABLE_CHOICE_REQUIRED` |
+| `table` inesistente | rifiuto con l'elenco delle tabelle | `TABLE_CHOICE_REQUIRED` |
+| Testo delimitato non classificabile con la regola di §3 | nessuna tabella aperta; si chiede `format` | `FORMAT_AMBIGUOUS` |
+| Formato di tabella non riconosciuto | elenco dei formati supportati | `FORMAT_UNSUPPORTED` |
+| Righe oltre il tetto (`max_rows`) | nessuna tabella aperta, errore con righe e tetto | `TABLE_TOO_LARGE` |
+| Memoria stimata oltre il limite delle operazioni | nessun dato caricato, errore con stima e limite | `MEMORY_LIMIT_EXCEEDED` |
+| Unità di colonna non valida in FITS/VOUnit | colonna caricata con la stringa originale, nessuna conversione | avviso `UNIT_UNRECOGNIZED` |
+| Espressione `search` non conforme alla grammatica | rifiuto con la posizione dell'errore nell'espressione | `EXPRESSION_INVALID` |
+| Regola di disegno non valida (forma o colore fuori elenco, intervallo della dimensione non valido) | rifiuto con il campo non valido | `PLOT_RULE_INVALID` |
 | Mancano le colonne di moto proprio per la propagazione | errore che indica le colonne mancanti | `PROPER_MOTION_MISSING` |
 | Epoca richiesta non valida | rifiuto dell'input | `EPOCH_INVALID` |
-| Cache SQLite non scrivibile o corrotta | la cache viene ricreata/ignorata con avviso; il dato è riletto dal sorgente | `CACHE_UNAVAILABLE` |
-| Cache oltre il limite | rimozione dei record meno usati, registrata | `CACHE_FULL` |
 | Tipo colonna non supportato per un'operazione | errore con tipo atteso e trovato | `COLUMN_TYPE_UNSUPPORTED` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
-| Formato di tabella non riconosciuto | elenco dei formati supportati | `FORMAT_UNSUPPORTED` |
 | File ASTRORES non conforme, o lettore non disponibile per mancanza di documentazione ed esempi | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
 | Espressione di colonna non valida o colonna citata inesistente | rifiuto con la posizione dell'errore o il nome mancante | `COLUMN_EXPRESSION_INVALID` |
@@ -207,52 +403,62 @@ sempre separate le regole di disegno dalle selezioni dei record.
 
 ## 11. Esposizione all'IA
 
-- **`describe_table`** — output: schema, unità, numero di righe, provenienza.
-- **`search`** — input: tabella + espressione; output: record/indici.
-  **Calcolo: motore di espressioni del modulo (numpy/astropy), mai l'IA.**
-- **`get_column_statistics`** — input: colonna; output: min, max, media,
-  deviazione standard, conteggio. **Calcolo: `numpy`/`astropy.stats`.**
-- **`propagate`** — input: tabella + epoca; output: posizioni propagate.
-  **Calcolo: modulo 10 / Astropy.**
-
-L'IA scrive la richiesta e spiega il risultato; i numeri vengono sempre da
-questi strumenti deterministici e poi verificati da
-`34-ia-verifica-risultati.md`.
+Non applicabile in questo file: gli strumenti per l'IA si dichiarano in
+`32-ia-registro-strumenti.md` (`01-architettura.md` §7, decisione del
+proprietario del 2026-10-10). Finché il 32 non esiste, l'elenco da
+riportarvi (nomi provvisori: `describe_table`, `search`,
+`get_column_statistics` su `column_statistics`, `propagate`) è annotato
+nella riga del 32 in `panoramica.md` §4. Vale sempre la regola d'oro n. 1:
+l'IA scrive la richiesta e spiega, i numeri vengono dalle funzioni di §7 e
+sono verificati da `34-ia-verifica-risultati.md`.
 
 ## 12. Test di accettazione
 
 | # | Descrizione | Passi | Atteso | Verifica |
 |---|---|---|---|---|
-| T1 | Caricamento VOTable | caricare un VOTable di prova | nomi colonne, unità e numero righe coincidono con quelli letti direttamente con `astropy.io.votable` nel test | ricalcolo con Astropy |
-| T2 | `search` vs filtri | applicare un filtro di disegno ed eseguire una `search` | il filtro non cambia i record della tabella; la `search` restituisce solo i record che soddisfano l'espressione (confronto con `numpy` ricalcolato nel test) | confronto con `numpy` |
+| T1 | Caricamento VOTable | caricare un VOTable di prova | nomi colonne, unità, UCD e numero righe coincidono con quelli letti direttamente con `astropy.io.votable` nel test | ricalcolo con Astropy |
+| T2 | `search` vs filtri | applicare regole di disegno ed eseguire una `search` | le regole non cambiano i record della tabella; la `search` restituisce solo i record che soddisfano l'espressione (confronto con `numpy` ricalcolato nel test) | confronto con `numpy` |
 | T3 | Propagazione | propagare 100 posizioni con moto proprio dichiarato a un'epoca +10 anni | coincidenza con `SkyCoord.apply_space_motion` ricalcolato nel test (tolleranza 1e-9 gradi) | ricalcolo con Astropy |
-| T4 | Colonna calcolata | calcolare una colonna `mag_bright = mag < 10` (esempio) su una tabella di prova | risultato coincidente con `numpy` ricalcolato nel test | confronto con `numpy` |
-| T5 | Istogramma | istogramma di una colonna con bin noti | conteggi coincidenti con `numpy.histogram` ricalcolato nel test | ricalcolo con NumPy |
-| T6 | Cache SQLite con provenienza | eseguire due volte la stessa interrogazione | seconda lettura dalla cache con origine e data valorizzate e invariate | lettura record SQLite |
+| T4 | Colonna calcolata | calcolare `mag_corr = ${mag} - 0.12` su una tabella di prova | risultato coincidente con `numpy` ricalcolato nel test, unità `mag` | confronto con `numpy` |
+| T5 | Istogramma | istogramma di una colonna con bin noti; senza bin | conteggi coincidenti con `numpy.histogram` ricalcolato nel test; senza bin → errore | ricalcolo con NumPy |
+| T6 | Sottoinsiemi salvati | salvare un sottoinsieme e rileggerlo | stessi record, con origine e data | secondo D13-13 |
 | T7 | Moto proprio mancante | chiedere la propagazione senza colonne di moto proprio | `PROPER_MOTION_MISSING`, nessun valore inventato | test di unità |
 | T8 | IPAC TBL (H22) | leggere un file IPAC di prova | colonne, unità e valori uguali a quelli letti con `astropy.io.ascii` (formato `ipac`) | confronto con `astropy.io.ascii` |
 | T9 | SExtractor (H22) | leggere un catalogo SExtractor di prova | colonne e valori uguali a `astropy.io.ascii` (formato `sextractor`) | confronto con `astropy.io.ascii` |
 | T10 | BSV (H22) | leggere una tabella separata da spazi | colonne e valori uguali a `astropy.io.ascii` con separatore spazio | confronto con `astropy.io.ascii` |
-| T11 | Riconoscimento dal contenuto (H22) | una VOTable con estensione `.csv` | letta come VOTable | test di unità |
+| T11 | Riconoscimento dal contenuto (H22) | una VOTable con estensione `.csv`, un FITS con estensione `.txt`, CSV/TSV/BSV senza estensione, un testo ambiguo | formato riconosciuto dal contenuto; il testo ambiguo → `FORMAT_AMBIGUOUS`; con `format` esplicito si legge | test di unità |
 | T12 | Colonna calcolata (H8) | colonne `B` e `V` in magnitudini; nuova colonna `B-V` con espressione `${B} - ${V}`, UCD e 3 decimali | valori = `B - V` calcolati con `numpy`; UCD, decimali e provenienza registrati; tabella originale invariata | ricalcolo con `numpy` |
 | T13 | Espressione non valida (H8) | espressione con una colonna inesistente o con un nome non previsto | `COLUMN_EXPRESSION_INVALID`, nulla eseguito | test di unità |
 | T14 | Unità incompatibili (H8) | somma di una colonna in gradi e una in magnitudini | `UNIT_INCOMPATIBLE` | test di unità |
 | T15 | ASTRORES (H22) | leggere un file ASTRORES di esempio del CDS | colonne, unità e valori coerenti con la VOTable equivalente dello stesso catalogo | confronto con la VOTable (file di esempio **da reperire**) |
 | T16 | XML malevolo (H22) | leggere un file ASTRORES con espansione di entità | `XML_UNSAFE`, nessun dato caricato | test di unità |
+| T17 | Grammatica di `search` | ogni costrutto di §3 (confronti numerici e di testo, `|colonna|`, `${nome}`, `&&`/`||` con parentesi e precedenza, testo da solo su tutte le colonne di testo, jolly ed escape, spazi finali) ed espressioni non conformi | maschere uguali a quelle ricalcolate nel test con `numpy` e `re`; errori `EXPRESSION_INVALID` con la posizione | ricalcolo con `numpy` |
+| T18 | Maiuscole e minuscole | testo con i jolly con e senza `case_sensitive=True` | per default non contano; con l'opzione contano | test di unità |
+| T19 | Prefissi e valori mancanti | `+` e `-` su una selezione data; prefisso senza selezione; colonne con valori mascherati e NaN | unione e differenza corrette; senza selezione `EXPRESSION_INVALID`; mancanti mai selezionati (anche con `!=`) | confronto con `numpy` |
+| T20 | Regole di disegno | due regole sovrapposte, dimensione da colonna con valori fuori intervallo e mancanti, regola non valida | prima regola che seleziona; dimensioni lineari portate agli estremi; mancanti non disegnati e contati; tabella invariata; `PLOT_RULE_INVALID` | ricalcolo con `numpy` |
+| T21 | Limiti | tetto di righe e limite delle operazioni piccoli nel test, file FITS, CSV e VOTable | `TABLE_TOO_LARGE` e `MEMORY_LIMIT_EXCEEDED` prima di caricare (FITS e testi) o subito dopo la lettura (VOTable); nessun troncamento | test di unità |
+| T22 | Colonne di posizione | VOTable con UCD e `COOSYS`; CSV con colonne `RAJ2000`/`DEJ2000` | dal VOTable colonne, sistema e `body = celestial`; dal CSV solo suggerimenti marcati, `NO_COORD_COLUMNS` e `BODY_UNKNOWN` finché l'utente non conferma; dopo la conferma colonne, sistema e corpo, conferma nella provenienza | test di unità |
+| T23 | Parallasse mancante o non positiva | tabella con righe senza parallasse e con parallasse negativa | nessuna riga esclusa; quelle righe propagate solo con il moto proprio, marcate, conteggio nel risultato; valori uguali ad Astropy senza distanza | ricalcolo con Astropy |
+| T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
+| T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
+| T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
+| T27 | Più tabelle | VOTable con due `TABLE`, FITS con due HDU di tabella | senza `table` → `TABLE_CHOICE_REQUIRED` con l'elenco; con `table` la tabella giusta; `list_tables` | confronto con Astropy |
 
 ## 13. Decisioni aperte
 
 - **D13-1 — Sintassi delle espressioni `search`: DECISA il 2026-10-04,
-  RISCRITTA il 2026-10-10 (decisione del proprietario, regola d'oro n. 8).**
-  **Stringa con grammatica ristretta, descritta da zero come nostra:** testo
-  con i jolly `?` e `*`; colonna con gli operatori di confronto `=`, `!=`,
-  `<`, `>`, `<=`, `>=`; valore assoluto `|colonna|`; prefissi `+` e `-` per
-  aggiungere o togliere dalla selezione; **validata prima dell'esecuzione**
-  (`EXPRESSION_INVALID`). **Motivazione (nostra):** gli operatori di
-  confronto e i jolly sono quelli universali, che un astronomo già conosce;
-  una grammatica piccola e chiusa si valida per intero prima di eseguire
-  (nessuna esecuzione di codice) e dà un solo validatore deterministico per
-  UI, IA (§11) e pipeline. Applicata in §3/§6/§7/§9 qui sopra.
+  RISCRITTA il 2026-10-10 (decisione del proprietario, regola d'oro n. 8),
+  FORMA FORMALE il 2026-10-10.** **Stringa con grammatica ristretta,
+  descritta da zero come nostra** (grammatica e significato in §3): testo
+  con i jolly `?` e `*`, che **non distingue maiuscole e minuscole per
+  default** (opzione `case_sensitive`); colonna con gli operatori di
+  confronto `=`, `!=`, `<`, `>`, `<=`, `>=`; valore assoluto `|colonna|`;
+  `&&`, `||` e parentesi; prefissi `+` e `-` sulla selezione corrente;
+  **validata prima dell'esecuzione** (`EXPRESSION_INVALID`).
+  **Motivazione (nostra):** gli operatori di confronto e i jolly sono quelli
+  universali, che un astronomo già conosce; una grammatica piccola e chiusa
+  si valida per intero prima di eseguire (nessuna esecuzione di codice) e dà
+  un solo validatore deterministico per UI, IA e pipeline.
 - **D13-2 — Epoca di default per H3 (cursore epoca): DECISA il 2026-10-04,
   insieme a D10-2.** Epoca di ogni dato **letta dai metadati e mai assunta**;
   epoca di visualizzazione = epoca del dato mostrato (immagine: epoca
@@ -264,21 +470,24 @@ questi strumenti deterministici e poi verificati da
 - **D13-3 — Cataloghi predefiniti (D1): DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** **albero dinamico delle
   collezioni ordinato per popolarità**, con un piccolo gruppo fisso: Simbad,
-  Gaia, 2MASS (identificativi esatti **da verificare prima del codice**).
-  **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
+  Gaia, 2MASS (identificativi esatti **da verificare prima del codice di
+  P6**). **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
   cambiano nel tempo, quindi l'albero si legge dal servizio invece di una
   tabella mantenuta a mano; l'ordine per popolarità mette in alto i
   cataloghi più usati dalla comunità (criterio di popolarità: proprietà del
-  servizio, **da verificare prima del codice**); il gruppo fisso garantisce
-  l'accesso immediato ai riferimenti di base (oggetti nominati, astrometria
-  e fotometria su tutto il cielo).
-- **D13-4 — Limite di righe in memoria:** tetto massimo di righe caricate per
-  tabella (con caricamento progressivo oltre il limite). Valore: da decidere.
+  servizio, **da verificare prima del codice di P6**); il gruppo fisso
+  garantisce l'accesso immediato ai riferimenti di base (oggetti nominati,
+  astrometria e fotometria su tutto il cielo).
+- **D13-4 — Limite di righe in memoria: DECISA il 2026-10-10 (decisione del
+  proprietario).** **1 milione di righe per tabella, configurabile**, più la
+  stima della memoria con il **limite delle operazioni** (4 GB, come
+  D11-11); oltre, errore esplicito, nessun caricamento progressivo nel
+  livello 1. Chiude anche A10 per i cataloghi. Applicata in §3, §7, §10.
 - **D13-5 — Comportamento delle operazioni in posto: DECISA il 2026-10-04.**
   Operazioni **sempre non distruttive**; modifica `in-place` solo con **flag
   esplicito citato nel report**. **Motivazione:** nessuna perdita di dati,
   riproducibilità (regola d'oro n. 6) e coerenza con `15`, `16`, `17` che
-  dichiarano di non modificare la sorgente. Applicata in §9 qui sopra.
+  dichiarano di non modificare la sorgente. Applicata in §3, §9 qui sopra.
 - **D13-6 — Colonne di DataLink: DECISA il 2026-10-04.** **Colonna nel 13,
   risoluzione dei link nel `14-core-protocolli-vo.md`.** **Motivazione:**
   nessuna duplicazione di client VO, coerente con D14-3 e con il perimetro
@@ -287,12 +496,45 @@ questi strumenti deterministici e poi verificati da
   proprietario).** Lettore nel modulo con **`defusedxml`** (non il parser XML
   della libreria standard, per sicurezza su file non fidati), testato su file
   di esempio del CDS; senza documentazione o esempi, solo errore
-  (`ASTRORES_UNREADABLE`). **Da verificare prima del codice:** licenza di
-  `defusedxml`, disponibilità di documentazione ed esempi ASTRORES.
-- **D13-8 — Posizione della tabella delle funzioni condivisa con il 18:**
-  dove tenere nel codice l'elenco unico di operatori e funzioni usato da
-  colonne calcolate (13) e calcolatrice algebrica (18) senza dipendenza
-  circolare. Da fissare al momento del codice (Gruppo 3).
+  (`ASTRORES_UNREADABLE`). **Da verificare prima del codice di P2:** licenza
+  di `defusedxml`, disponibilità di documentazione ed esempi ASTRORES.
+- **D13-8 — Posizione della tabella delle funzioni condivisa con il 18:
+  DECISA il 2026-10-10 (decisione del proprietario).** In `catalogs.py`; il
+  18 la importa (il 18 dipende già dal 13, nessuna dipendenza circolare).
+- **D13-9 — Decisioni del 2026-10-10 sulla divisione in parti
+  (proprietario):** sei parti, P6 dopo il 14; una sola cache delle
+  interrogazioni, nel 14; grammatica di `search` con il testo che non
+  distingue maiuscole e minuscole per default; regole di disegno; T4
+  aritmetico; tetto di righe e limite delle operazioni; colonne di
+  posizione solo da UCD e metadati, con suggerimenti dal nome da confermare;
+  epoca e cos δ dichiarati; parallasse mancante o non positiva → solo moto
+  proprio, righe marcate; unità non valide con avviso; riconoscimento
+  CSV/TSV/BSV con errore se ambiguo; `inplace` citato nel report; bin e
+  scala obbligatori; §11 nel 32; statistiche di una colonna nel §7.
+  Applicate in §3–§12.
+- **D13-10 — `skydist` nelle colonne calcolate (P4):** l'elenco delle
+  funzioni del 18 comprende `skydist`, che nel 18 richiama `angular_distance`
+  del `17`, non ancora scritto; il 13 non dipende dal 17. Da decidere
+  (Gruppo 3): `skydist` nella tabella con il calcolo di
+  `astropy.coordinates` (poi usato anche dal 17), oppure fuori dalle
+  colonne calcolate finché il 17 non esiste.
+- **D13-11 — Riconoscimento della colonna DataLink (P4 o P6):** quale
+  colonna è "la colonna DataLink" (descrittore di servizio del VOTable che la
+  cita, o UCD/tipo di contenuto) dipende dal formato DataLink letto dal 14.
+  Da decidere (Gruppo 3); proposta: spostarla in P6, dopo il 14.
+- **D13-12 — Dove si calcola la propagazione senza parallasse (P5):**
+  `propagate_position` del 10 oggi rifiuta la parallasse mancante o non
+  positiva; il 13 non calcola coordinate. Da decidere (Gruppo 3): estendere
+  il 10 con una propagazione esplicita "solo moto proprio" (astropy senza
+  distanza, ERFA `pmsafe` con distanza di ripiego, quindi senza effetti
+  prospettici), marcata nel risultato; e cosa fare delle righe **senza
+  moto proprio** (posizione invariata e marcata, oppure valore mancante e
+  marcato).
+- **D13-13 — Dove si conservano i sottoinsiemi salvati:** nella cache
+  comune (`04`) una voce può essere eliminata per far spazio (dati meno
+  usati), quindi un sottoinsieme "salvato" potrebbe sparire. Da decidere
+  (Gruppo 3): cache comune, oppure file di sessione del `24` (D17-3), che
+  registra le operazioni e non scade.
 
 ## 14. Registro modifiche
 
@@ -308,3 +550,4 @@ questi strumenti deterministici e poi verificati da
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `CatalogCache`, interrogazioni nelle tabelle del modulo dentro `SharedCache`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D13-1 riscritta come grammatica nostra (operatori di confronto universali, motivazione nostra; tolto "basata su Aladin"; forma formale da scrivere prima del codice di `search`) in §3, §6, §13; D13-3 con motivazione nostra al posto di "come Aladin"; limite di riga riferito solo a `01` §8. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare il file approvato): sei parti (P6 dopo il 14); VOTable locali con `astropy.io.votable`; più tabelle con `table`/`TABLE_CHOICE_REQUIRED` (come D11-4); riconoscimento dei formati con la regola CSV/TSV/BSV e `FORMAT_AMBIGUOUS`; unità non valide con `UNIT_UNRECOGNIZED`; D13-4 deciso (1 milione di righe, limite delle operazioni 4 GB, A10 per i cataloghi); colonne di posizione solo da UCD e metadati, suggerimenti dal nome da confermare; grammatica formale di `search` (testo che non distingue maiuscole e minuscole per default); regole di disegno; epoca e cos δ dichiarati; parallasse mancante → solo moto proprio, righe marcate; `inplace` citato nel report; bin e scala obbligatori; `column_statistics` e `record_view` nel §7; una sola cache delle interrogazioni nel 14; D13-8 deciso (tabella delle funzioni in `catalogs.py`); §11 nel 32; T4 aritmetico, nuovi T17–T27, T6 per i sottoinsiemi salvati. Nuove decisioni aperte del Gruppo 3: D13-10 (`skydist`), D13-11 (colonna DataLink), D13-12 (propagazione senza parallasse nel 10, righe senza moto proprio), D13-13 (dove si salvano i sottoinsiemi). Stato `approvato` invariato. |
