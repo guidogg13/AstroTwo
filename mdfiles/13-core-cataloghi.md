@@ -58,7 +58,10 @@ VOTable.
     riconoscimento non si fa e il formato usato è scritto nel risultato.
 - **Unità delle colonne (decisione del proprietario del 2026-10-10):** una
   stringa di unità valida nei formati standard **FITS** o **VOUnit** di
-  `astropy.units` (come D18-2) dà l'unità della colonna; una stringa non
+  `astropy.units` (come D18-2) dà l'unità della colonna (la stringa è quella
+  fornita dal lettore della libreria: per i VOTable astropy non conserva il
+  testo originale e dà la propria lettura, o il testo stesso se non lo
+  riconosce — verificato con astropy 8.0.1); una stringa non
   valida (es. `---` di VizieR) lascia la colonna **caricata con la stringa
   originale e l'avviso `UNIT_UNRECOGNIZED`**, senza alcuna conversione; una
   colonna senza unità è dichiarata adimensionale.
@@ -73,12 +76,13 @@ VOTable.
   silenzioso, nessun caricamento progressivo nel livello 1**. Il controllo
   si fa **prima di caricare** quando il file lo permette: FITS dalle parole
   chiave dell'intestazione (`NAXIS2` e larghezza della riga); testi
-  delimitati, IPAC e SExtractor contando le righe di dati con una lettura in
-  sequenza che non conserva nulla; VOTable e ASTRORES (XML) con la
-  dimensione del file come stima della memoria prima della lettura e il
-  numero di righe controllato subito dopo. Stima della memoria di una
-  tabella: righe × somma dei byte per riga delle colonne (tipo della
-  colonna; testo = lunghezza massima × byte per carattere).
+  delimitati, IPAC e SExtractor contando righe e colonne con una lettura in
+  sequenza che non conserva nulla (stima: righe × colonne × 8 byte, i
+  numeri in `float64`, più la dimensione del file per i testi); VOTable e
+  ASTRORES (XML) con la dimensione del file come stima prima della lettura e
+  il numero di righe dichiarato controllato subito dopo il parsing. **Dopo
+  ogni lettura** si ricontrollano righe e memoria esatte della tabella
+  (somma dei byte delle colonne).
 - **Colonne di posizione e corpo (decisione del proprietario del
   2026-10-10):** il nucleo ricava le colonne di posizione **solo da UCD e
   metadati, mai dai nomi**: coppie `pos.eq.ra`/`pos.eq.dec`,
@@ -551,3 +555,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §8 — tolta `CatalogCache`, interrogazioni nelle tabelle del modulo dentro `SharedCache`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D13-1 riscritta come grammatica nostra (operatori di confronto universali, motivazione nostra; tolto "basata su Aladin"; forma formale da scrivere prima del codice di `search`) in §3, §6, §13; D13-3 con motivazione nostra al posto di "come Aladin"; limite di riga riferito solo a `01` §8. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare il file approvato): sei parti (P6 dopo il 14); VOTable locali con `astropy.io.votable`; più tabelle con `table`/`TABLE_CHOICE_REQUIRED` (come D11-4); riconoscimento dei formati con la regola CSV/TSV/BSV e `FORMAT_AMBIGUOUS`; unità non valide con `UNIT_UNRECOGNIZED`; D13-4 deciso (1 milione di righe, limite delle operazioni 4 GB, A10 per i cataloghi); colonne di posizione solo da UCD e metadati, suggerimenti dal nome da confermare; grammatica formale di `search` (testo che non distingue maiuscole e minuscole per default); regole di disegno; epoca e cos δ dichiarati; parallasse mancante → solo moto proprio, righe marcate; `inplace` citato nel report; bin e scala obbligatori; `column_statistics` e `record_view` nel §7; una sola cache delle interrogazioni nel 14; D13-8 deciso (tabella delle funzioni in `catalogs.py`); §11 nel 32; T4 aritmetico, nuovi T17–T27, T6 per i sottoinsiemi salvati. Nuove decisioni aperte del Gruppo 3: D13-10 (`skydist`), D13-11 (colonna DataLink), D13-12 (propagazione senza parallasse nel 10, righe senza moto proprio), D13-13 (dove si salvano i sottoinsiemi). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P1 scritta** (`src/astrotwo/core/catalogs.py`, test T1, T8–T11, T21, T22, T24, T27): verifiche — astropy 8.0.1 espone UCD e riferimento al `COOSYS` di ogni campo, non la stringa originale dell'unità (§3 precisato); lettori `csv`, `tab`, `basic`, `ipac`, `sextractor` presenti; §3 precisato sulla stima prima della lettura dei testi. `confirm_position_columns` chiede `unit` angolare se le colonne non hanno unità (mai assunta). Stato `approvato` invariato. |
