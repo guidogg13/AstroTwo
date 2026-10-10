@@ -18,6 +18,7 @@ import dataclasses
 import gzip
 import math
 import os
+import re
 import tempfile
 import warnings
 import zlib
@@ -27,10 +28,14 @@ from pathlib import Path
 
 import astropy
 import astropy.units as u
+import contourpy
 import matplotlib
 import numpy as np
 import scipy
+from astropy.convolution import Kernel2D
+from astropy.convolution import convolve as astropy_convolve
 from astropy.io import fits
+from astropy.nddata import Cutout2D, NoOverlapError
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import (
     AsinhStretch,
@@ -49,13 +54,27 @@ from PIL import Image, UnidentifiedImageError
 from scipy import ndimage
 
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
-from astrotwo.core.coordinates_wcs import CoordinatesWcsError, WcsSolution, pixel_to_sky, wcs_from_header
+from astrotwo.core.coordinates_wcs import (
+    CoordinatesWcsError,
+    PixelPosition,
+    SkyFrame,
+    WcsSolution,
+    convert_pixel_convention,
+    pixel_to_sky,
+    wcs_from_header,
+)
 
 __all__ = [
     "PALETTES",
     "STRETCHES",
     "SUPPORTED_FORMATS",
     "DisplayPlane",
+    "OPERATIONS",
+    "Contours",
+    "contours",
+    "cutout",
+    "image_operation",
+    "save_fits",
     "blend",
     "set_display",
     "FitsImage",
@@ -153,6 +172,7 @@ class FitsImage:
     frames: int | None = None  # fotogrammi del file (GIF animate)
     calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG
     from_cache: bool = False  # True: copia servita dalla cache comune (04), con origine e data del download
+    history: tuple[str, ...] = ()  # operazioni applicate (taglio, H5), per la riproducibilità
     provenance: str = field(default=_FITS_PROVENANCE)
 
     @property
@@ -167,6 +187,14 @@ class FitsImage:
     def header_value(self, key: str, default=None):
         """Valore di una parola chiave dell'intestazione originale."""
         return self.header.get(key, default)
+
+    def cutout(self, center, size) -> FitsImage:
+        """Taglio con WCS coerente (vedi :func:`cutout`)."""
+        return cutout(self, center, size)
+
+    def with_operation(self, op: str, operand=None) -> FitsImage:
+        """Copia con un'operazione H5 (vedi :func:`image_operation`)."""
+        return image_operation(self, operand, op)
 
     def field_of_view(self) -> tuple[u.Quantity, u.Quantity] | None:
         """Larghezza e altezza angolari tra i bordi opposti, ai punti medi (modulo 10).
@@ -740,6 +768,233 @@ def blend(planes, opacities) -> np.ndarray:
         alpha = a + (1.0 - a) * alpha
     rgb = np.divide(color, alpha[..., None], out=np.zeros_like(color), where=alpha[..., None] > 0)
     return np.dstack([np.round(rgb * 255.0), np.round(alpha * 255.0)]).astype(np.uint8)
+
+
+# --------------------------------------------------------------------------
+# P5 — Taglio, operazioni H5, contorni, salvataggio FITS
+# --------------------------------------------------------------------------
+
+#: Elenco chiuso delle operazioni H5 (§3).
+OPERATIONS: tuple[str, ...] = ("add", "sub", "mul", "div", "convolve", "normalize", "flip_x", "flip_y")
+_ARITHMETIC = {"add": np.add, "sub": np.subtract, "mul": np.multiply, "div": np.divide}
+_WCS_KEY = re.compile(
+    r"^(WCSAXES|CTYPE\d|CRPIX\d|CRVAL\d|CDELT\d|CUNIT\d|CROTA\d|CD\d_\d|PC\d_\d|PV\d_\d+|PS\d_\d+"
+    r"|LONPOLE|LATPOLE|RADESYS|RADECSYS|EQUINOX|[AB]P?_\d+_\d+|[AB]P?_ORDER)$"
+)
+
+
+def _header_with_wcs(header: fits.Header, wcs: WCS | None, shape: tuple[int, ...]) -> fits.Header:
+    """Intestazione con le parole chiave WCS sostituite e le dimensioni aggiornate."""
+    out = fits.Header([card for card in header.cards if not _WCS_KEY.match(card.keyword)])
+    for key in ("BZERO", "BSCALE", "BLANK"):
+        out.remove(key, ignore_missing=True, remove_all=True)  # i dati sono già valori fisici
+    out["NAXIS"] = len(shape)
+    for k, n in enumerate(reversed(shape), start=1):
+        out[f"NAXIS{k}"] = n
+    if wcs is not None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            out.update(wcs.to_header(relax=True))
+    return out
+
+
+def _derived(image: FitsImage, data: np.ndarray, wcs: WCS | None, step: str, notes=(), bunit=...) -> FitsImage:
+    solution = None
+    if wcs is not None and image.wcs is not None:
+        solution = dataclasses.replace(image.wcs, wcs=wcs, pixel_shape=(data.shape[-1], data.shape[-2]))
+    new_bunit = image.bunit if bunit is ... else bunit
+    header = _header_with_wcs(image.header, wcs, data.shape)
+    if new_bunit:
+        header["BUNIT"] = new_bunit
+    else:
+        header.remove("BUNIT", ignore_missing=True)
+    return dataclasses.replace(
+        image,
+        data=data,
+        header=header,
+        wcs=solution,
+        bunit=new_bunit,
+        unit=_parse_unit(new_bunit),
+        compression=None,
+        warnings=image.warnings + tuple(notes),
+        history=image.history + (step,),
+    )
+
+
+def cutout(image: FitsImage, center, size) -> FitsImage:
+    """Taglio con WCS coerente (B8) con ``astropy.nddata.Cutout2D``.
+
+    ``center``: ``SkyFrame`` (serve il WCS) o ``PixelPosition`` (convenzione
+    dichiarata); ``size``: angolo (serve il WCS), pixel interi o ``(alto, largo)``.
+    """
+    w = image.wcs.wcs if image.wcs is not None else None
+    if isinstance(center, SkyFrame):
+        if w is None:
+            raise ImagesFitsError("WCS_MISSING", "taglio con centro in coordinate celesti: l'immagine non ha WCS")
+        position = center.coord if center.coord.isscalar else center.coord[0]
+        described = f"centro {position.to_string('decimal', precision=8)} ({center.frame_name})"
+    elif isinstance(center, PixelPosition):
+        px = convert_pixel_convention(center.x, center.y, center.convention, "numpy")
+        position = (float(px.x), float(px.y))
+        described = f"centro pixel numpy ({position[0]:g}, {position[1]:g})"
+    else:
+        raise TypeError("center deve essere uno SkyFrame o una PixelPosition (convenzione dichiarata)")
+    if isinstance(size, u.Quantity) and size.unit.is_equivalent(u.deg) and w is None:
+        raise ImagesFitsError("WCS_MISSING", "lato in unità angolari: l'immagine non ha WCS")
+    plane = image.data[0] if image.color else image.data
+    try:
+        cut = Cutout2D(plane, position, size, wcs=w, mode="trim", copy=True)
+    except NoOverlapError as exc:
+        raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio del tutto fuori dall'immagine ({described})") from exc
+    except ValueError as exc:
+        raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio non valido ({described}): {exc}") from exc
+    data = np.stack([p[cut.slices_original].copy() for p in image.data]) if image.color else cut.data
+    notes = []
+    if tuple(cut.shape) != tuple(cut.shape_input):
+        notes.append(("CUTOUT_TRIMMED", f"taglio ridotto all'intersezione con l'immagine: {cut.shape} invece di {cut.shape_input}"))
+    x0, y0 = cut.origin_original
+    return _derived(image, data, cut.wcs, f"cutout: {described}, origine pixel numpy ({x0}, {y0}), forma {cut.shape}", notes)
+
+
+def _same_grid(a: FitsImage, b: FitsImage) -> None:
+    if a.data.shape != b.data.shape:
+        raise ImagesFitsError("IMAGE_SHAPE_MISMATCH", f"dimensioni diverse {a.data.shape} e {b.data.shape}: ricampionare prima (P7)")
+    if (a.wcs is None) != (b.wcs is None) or (a.wcs is not None and not a.wcs.wcs.wcs.compare(b.wcs.wcs.wcs, tolerance=1e-12)):
+        raise ImagesFitsError("IMAGE_SHAPE_MISMATCH", "griglie (WCS) diverse: ricampionare prima (P7)")
+
+
+def _flip_wcs(w: WCS, axis_fits: int, n: int) -> WCS:
+    """WCS dopo la specchiatura dell'asse FITS ``axis_fits`` (1 o 2) lungo ``n`` pixel.
+
+    Parte lineare secondo FITS WCS (Paper I): CRPIX → n + 1 − CRPIX e segno
+    cambiato della colonna della matrice CD (o PC). Con distorsioni: rifiuto.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        keys = list(w.to_header(relax=True).keys())
+    wcslib_distortion = any(k.startswith(("DP", "DQ", "CPDIS", "CQDIS")) for k in keys)
+    if w.has_distortion or w.sip is not None or wcslib_distortion:
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", "specchiatura di un WCS con distorsioni (SIP, TPD, tabelle) non supportata")
+    flipped = w.deepcopy()
+    k = axis_fits - 1
+    crpix = flipped.wcs.crpix.copy()
+    crpix[k] = n + 1 - crpix[k]
+    flipped.wcs.crpix = crpix
+    if flipped.wcs.has_cd():
+        cd = flipped.wcs.cd.copy()
+        cd[:, k] *= -1
+        flipped.wcs.cd = cd
+    else:
+        pc = flipped.wcs.get_pc().copy()
+        pc[:, k] *= -1
+        flipped.wcs.pc = pc
+    flipped.wcs.set()
+    return flipped
+
+
+def image_operation(a: FitsImage, b, op: str) -> FitsImage:
+    """Operazione H5 dall'elenco chiuso; restituisce sempre una nuova immagine (``float64``)."""
+    if op not in OPERATIONS:
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", f"operazione {op!r} non prevista; elenco: {', '.join(OPERATIONS)}")
+    if a.color:
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione")
+    data = np.asarray(a.data, dtype=np.float64)
+    w = a.wcs.wcs if a.wcs is not None else None
+    notes: list[tuple[str, str]] = []
+    bunit = ...
+    if op in _ARITHMETIC:
+        if isinstance(b, FitsImage):
+            if b.color:
+                raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione")
+            _same_grid(a, b)
+            if op in ("add", "sub") and (a.bunit or None) != (b.bunit or None):
+                raise ImagesFitsError("UNIT_MISMATCH", f"unità diverse: {a.bunit!r} e {b.bunit!r}")
+            if op in ("mul", "div"):
+                if a.unit is not None and b.unit is not None:
+                    bunit = (a.unit * b.unit if op == "mul" else a.unit / b.unit).to_string("fits") or None
+                else:
+                    bunit = None
+                    if a.bunit or b.bunit:
+                        notes.append(("UNIT_UNKNOWN", f"unità del risultato non determinabile da {a.bunit!r} e {b.bunit!r}"))
+            other = np.asarray(b.data, dtype=np.float64)
+            step = f"{op} con l'immagine {b.origin} (HDU {b.hdu_index})"
+        elif isinstance(b, (int, float, np.integer, np.floating)) and not isinstance(b, bool):
+            other = float(b)
+            step = f"{op} con la costante {other!r}"
+        else:
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"{op}: serve un'immagine o una costante")
+        with np.errstate(divide="ignore", invalid="ignore"):
+            result = _ARITHMETIC[op](data, other)
+    elif op == "convolve":
+        if not isinstance(b, Kernel2D):
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", "convolve: serve un kernel di astropy.convolution (Kernel2D)")
+        result = astropy_convolve(data, b)
+        step = f"convolve con {type(b).__name__} {b.array.shape} (astropy, default: bordo 0, NaN interpolati, kernel normalizzato)"
+    elif op == "normalize":
+        if b is not None:
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", "normalize non ha operandi")
+        mean = float(np.nanmean(data)) if np.any(np.isfinite(data)) else float("nan")
+        if not math.isfinite(mean) or mean == 0.0:
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"normalizzazione non definita: media dei pixel finiti = {mean!r}")
+        result = data / mean
+        step = f"normalize: divisione per la media dei pixel finiti {mean!r}"
+        bunit = None
+    else:  # specchiature
+        if b is not None:
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"{op} non ha operandi")
+        axis = 1 if op == "flip_x" else 0
+        result = np.flip(data, axis=axis).copy()
+        if w is not None:
+            w = _flip_wcs(w, axis_fits=1 if op == "flip_x" else 2, n=data.shape[axis])
+        step = f"{op}: specchiatura {'orizzontale' if op == 'flip_x' else 'verticale'}, WCS aggiornato"
+    if not np.all(np.isfinite(result)) and np.all(np.isfinite(data)):
+        notes.append(("NONFINITE_PIXELS", f"{op}: il risultato ha pixel non finiti (es. divisione per zero)"))
+    return _derived(a, result, w, step, notes, bunit=bunit)
+
+
+@dataclass(frozen=True)
+class Contours:
+    """Isofote (H7): per ogni livello, le curve in pixel (convenzione numpy)."""
+
+    levels: tuple[float, ...]
+    bunit: str | None
+    curves: tuple[tuple[np.ndarray, ...], ...]  # curves[i][j]: array (N, 2) di (x, y)
+    convention: str = "numpy"
+    provenance: str = field(default=f"contourpy {contourpy.__version__}")
+
+    def to_sky(self, image: FitsImage) -> tuple[tuple[SkyFrame, ...], ...]:
+        """Le stesse curve in coordinate celesti, con il WCS dell'immagine (modulo 10)."""
+        if image.wcs is None:
+            raise ImagesFitsError("WCS_MISSING", "contorni in coordinate celesti: l'immagine non ha WCS")
+        return tuple(
+            tuple(pixel_to_sky(image.wcs, c[:, 0], c[:, 1], convention="numpy").coords for c in level)
+            for level in self.curves
+        )
+
+
+def contours(image: FitsImage, levels) -> Contours:
+    """Isofote (H7) con ``contourpy``; ``levels`` nelle unità dell'immagine."""
+    if image.color:
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", "contorni su un'immagine a colori: serve un'immagine monocroma")
+    values = tuple(float(v) for v in np.atleast_1d(levels))
+    z = np.ma.masked_invalid(np.asarray(image.data, dtype=np.float64))
+    generator = contourpy.contour_generator(z=z, line_type=contourpy.LineType.Separate)
+    curves = tuple(tuple(np.asarray(c, dtype=np.float64) for c in generator.lines(v)) for v in values)
+    return Contours(levels=values, bunit=image.bunit, curves=curves)
+
+
+def save_fits(image: FitsImage, path, overwrite: bool = False) -> Path:
+    """Salva l'immagine come FITS con WCS e provenienza (A2ORIGIN, A2DATE, HISTORY)."""
+    w = image.wcs.wcs if image.wcs is not None else None
+    header = _header_with_wcs(image.header, w, image.data.shape)
+    header["A2ORIGIN"] = (str(image.origin), "origine")  # valori lunghi: convenzione CONTINUE (FITS 4.0)
+    header["A2DATE"] = (image.retrieved_at.astimezone(UTC).isoformat().replace("+00:00", "Z"), "data UTC")
+    header.add_history(f"AstroTwo: origine {image.origin}")
+    for step in image.history:
+        header.add_history(f"AstroTwo: {step}")
+    target = Path(path)
+    fits.PrimaryHDU(data=image.data, header=header).writeto(target, overwrite=overwrite)
+    return target
 
 
 def pixel_scaling(image: FitsImage) -> PixelScaling:

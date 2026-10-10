@@ -81,7 +81,10 @@ alterare i valori dei pixel memorizzati.
     con l'operatore "over" di Porter e Duff (1984): colore = α·sopra +
     (1 − α)·sotto, con l'opacità α di ciascun piano in [0, 1].
 - **Taglio (cutout):** estrarre una sottoparte di un'immagine con WCS coerente
-  (B8).
+  (B8), con `astropy.nddata.Cutout2D`; centro in coordinate celesti (serve il
+  WCS) o in pixel (convenzione dichiarata), lato in unità angolari (serve il
+  WCS) o in pixel. Taglio in parte fuori dall'immagine → si restituisce
+  l'intersezione, dichiarata; del tutto fuori → `CUTOUT_OUT_OF_RANGE`.
 - **Ricampionamento e allineamento:** ricampionare un'immagine sulla soluzione
   astrometrica di un'altra e fare il "match" delle viste (B7). Non esiste
   "align" in Aladin: la funzione è il ricampionamento sulla soluzione
@@ -95,11 +98,23 @@ alterare i valori dei pixel memorizzati.
   costanti** — le stesse quattro operazioni con un numero; (3)
   **convoluzione** con un kernel di `astropy.convolution` (oggetto
   `Kernel2D`, es. `Gaussian2DKernel`, `Box2DKernel`, `Tophat2DKernel`),
-  calcolata con `astropy.convolution.convolve`; (4) **normalizzazione** —
-  definizione esatta **da verificare con il manuale (sez. 5.18) prima del
-  codice di P5**; (5) **specchiature** orizzontale e verticale, che
+  calcolata con `astropy.convolution.convolve` con i suoi valori di default
+  (bordo riempito con 0, pixel non finiti interpolati, kernel normalizzato),
+  scritti nel risultato; (4) **normalizzazione** — divisione per la media dei
+  pixel finiti, così che i valori siano distribuiti attorno a 1
+  (verificato il 2026-10-10 con il manuale di Aladin, ed. giugno 2022, sez.
+  5.18: «normalisation … par division préalable par la moyenne»); media
+  nulla o non finita → errore; (5) **specchiature** orizzontale e verticale, che
   **aggiornano anche il WCS** (il cielo resta agganciato agli stessi pixel
-  fisici). Ogni operazione produce un **nuovo** oggetto, calcolato in
+  fisici): astropy non inverte gli assi di un WCS, quindi si aggiorna la
+  parte lineare secondo lo standard FITS WCS (Paper I) — `CRPIX` riflesso
+  (`n + 1 − CRPIX`) e segno cambiato della colonna corrispondente della
+  matrice `CD` o `PC`; un WCS con distorsioni (SIP, TPD, tabelle) non si
+  specchia: errore `OPERATION_UNSUPPORTED`. Le operazioni tra immagini
+  richiedono la **stessa griglia** (stesse dimensioni e, se c'è, stesso
+  WCS): altrimenti si ricampiona prima con P7 (in Aladin il ricampionamento
+  della seconda immagine è automatico; qui è esplicito); per somma e
+  differenza servono le stesse unità. Ogni operazione produce un **nuovo** oggetto, calcolato in
   `float64`, mai la modifica silenziosa dell'originale. Il passaggio a
   `float32` per il display non è un'operazione H5: è di `set_display`.
 - **Contorni / isofote (H7):** calcolare le linee di livello di intensità
@@ -130,7 +145,9 @@ alterare i valori dei pixel memorizzati.
   (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s):
   il modulo non ha una cache propria (CA4).
 - **Esportazione:** salvare tagli e immagini come FITS con WCS e
-  provenienza (`save_fits`). L'esportazione **della vista** come immagine è
+  provenienza (`save_fits`): origine e data di scaricamento si scrivono
+  nelle parole chiave `A2ORIGIN` e `A2DATE` (ISO 8601, UTC) e in una riga
+  `HISTORY`; le immagini a colori si salvano come FITS a 3 piani. L'esportazione **della vista** come immagine è
   del `41-ui-visualizzatore-cielo.md` (decisione del proprietario del
   2026-10-10).
 - **Formati e compressioni (H22, sez. 8.1 del manuale di Aladin, ed. giugno 2022):**
@@ -293,7 +310,8 @@ alterare i valori dei pixel memorizzati.
 - **`save_fits(image, path)`** — salva un'immagine o un taglio come FITS con
   WCS e provenienza (origine, data) nell'intestazione.
 - **`contours(image, levels)`** — isofote (H7) con `contourpy`; `levels` in
-  unità dell'immagine; restituisce le curve in pixel (convenzione numpy).
+  unità dell'immagine; restituisce le curve in pixel (convenzione numpy),
+  con il metodo `to_sky(image)` per averle in coordinate celesti (modulo 10).
 - **`star_centroid(image, position, box_size, annulus_inner, annulus_outer)`**
   — baricentro pesato sull'intensità, dopo la sottrazione del fondo (D11-7),
   nella finestra quadrata di lato `box_size` pixel (intero dispari ≥ 3)
@@ -504,3 +522,4 @@ numero mostrato.
 | 2026-10-10 | Claude Code | **P2, decisioni del proprietario e verifiche:** `Pillow` 12.3.0 verificata (licenza MIT-CMU, wheel per macOS arm64, JPEG/PNG/GIF attivi); documentazione pubblica di Aladin sulla calibrazione solo parziale (pagina man) → lettore su soli standard pubblici (JPEG `COM`, PNG `Comment`, FITS 4.0 per `.hhh`), approvato; FITS RGB solo con `rgb=True`. Scritti in §3 anche l'orientamento dei pixel (righe dal basso, da verificare con AP1), la precedenza del commento sul `.hhh` e i modi di colore; §7 `load_image(..., rgb=False)`; §10 `IMAGE_UNREADABLE`; §12 T30. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P3, decisione del proprietario:** immagini da URL con **prima la cache** (come `resolve_name`), `refresh=True`, copia in cache se la rete manca, timeout comuni di `04`, nessun dato parziale (§3, §7). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P4, verifiche:** `matplotlib` 3.11.2 (licenza PSF-like) e `contourpy` 1.4.0 (BSD-3) installati; le palette scelte sono tutte distribuite con la licenza di `matplotlib` (tolta la menzione CC0, non riscontrata nella distribuzione); tutte le funzioni di trasferimento sono in `astropy.visualization`. §3/§7: dettagli di `set_display` (parametro `stretch`, `gamma` come `PowerStretch` dopo la funzione di trasferimento, non finiti trasparenti, immagini a colori) e di `blend` (operatore "over"); §12 T24 precisato, nuovo T31. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P5, verifiche:** normalizzazione = divisione per la media (manuale di Aladin ed. giugno 2022, sez. 5.18, letta solo per la definizione della funzione); `contourpy` 1.4.0 BSD-3; astropy non inverte gli assi di un WCS → specchiature con aggiornamento della parte lineare (Paper I), WCS con distorsioni rifiutati. §3: convoluzione con i default di astropy dichiarati, stessa griglia per le operazioni tra immagini (in Aladin ricampionamento automatico), taglio con `Cutout2D` e intersezione dichiarata, parole chiave di provenienza di `save_fits`; §7 `to_sky` dei contorni. Stato `approvato` invariato. |

@@ -668,3 +668,191 @@ def test_t31_blend_over_operator():
     with pytest.raises(ImagesFitsError) as info:
         blend([bottom, top[:5]], [1.0, 0.5])
     assert info.value.code == "IMAGE_SHAPE_MISMATCH"
+
+
+# =============================================================================
+# P5 — Taglio, operazioni H5, contorni, salvataggio (T3, T4, T5, T20, T26)
+# =============================================================================
+
+import contourpy
+from astropy.convolution import Box2DKernel, Gaussian2DKernel
+from astropy.convolution import convolve as astropy_convolve_ref
+from astropy.utils.data import get_pkg_data_filename
+
+from astrotwo.core.coordinates_wcs import SkyFrame, convert_pixel_convention, wcs_from_header
+from astrotwo.core.images_fits import OPERATIONS, contours, cutout, image_operation, save_fits
+
+
+def rotated_wcs_image(tmp_path, name="rot.fits", nx=60, ny=40, value=None):
+    w = WCS(naxis=2)
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    w.wcs.crval = [150.0, 2.0]
+    w.wcs.crpix = [25.3, 17.8]
+    w.wcs.cd = [[-9e-4, 3e-4], [2e-4, 1.1e-3]]
+    w.wcs.radesys = "ICRS"
+    data = (np.arange(nx * ny, dtype=np.float32).reshape(ny, nx) if value is None
+            else np.full((ny, nx), value, dtype=np.float32))
+    header = w.to_header()
+    header["BUNIT"] = "ADU"
+    return load_image(write_fits(tmp_path / name, data, header))
+
+
+def test_t3_cutout_corners_keep_sky_coordinates(tmp_path):
+    image = rotated_wcs_image(tmp_path)
+    center = convert_pixel_convention(30.0, 20.0, "numpy", "numpy")
+    cut = cutout(image, center, (11, 15))
+    assert cut.shape == (11, 15) and cut.history and "cutout" in cut.history[-1]
+    original = WCS(fits.getheader(tmp_path / "rot.fits"))
+    x0, y0 = 30 - 7, 20 - 5  # origine del taglio nell'originale (pixel numpy)
+    xs, ys = np.array([0.0, 14.0, 0.0, 14.0]), np.array([0.0, 0.0, 10.0, 10.0])
+    ra, dec = original.all_pix2world(xs + x0, ys + y0, 0)
+    back_x, back_y = cut.wcs.wcs.world_to_pixel(SkyCoord(ra, dec, unit="deg"))
+    assert np.max(np.hypot(back_x - xs, back_y - ys)) < 1e-6
+    assert np.array_equal(cut.data, image.data[y0:y0 + 11, x0:x0 + 15])
+    # Centro celeste e lato angolare.
+    sky_center = SkyFrame(coord=original.pixel_to_world(30.0, 20.0))
+    sky_cut = cutout(image, sky_center, 0.01 * u.deg)
+    assert sky_cut.shape[0] > 5 and sky_cut.wcs is not None
+
+
+def test_t3_cutout_trimmed_and_outside(tmp_path):
+    image = rotated_wcs_image(tmp_path)
+    edge = cutout(image, convert_pixel_convention(2.0, 2.0, "numpy", "numpy"), (9, 9))
+    assert edge.shape == (7, 7) and "CUTOUT_TRIMMED" in [c for c, _ in edge.warnings]
+    with pytest.raises(ImagesFitsError) as info:
+        cutout(image, convert_pixel_convention(500.0, 500.0, "numpy", "numpy"), (5, 5))
+    assert info.value.code == "CUTOUT_OUT_OF_RANGE"
+    nowcs = load_image(write_fits(tmp_path / "nw.fits", np.ones((10, 10), dtype=np.float32)))
+    with pytest.raises(ImagesFitsError) as info:
+        cutout(nowcs, convert_pixel_convention(5.0, 5.0, "numpy", "numpy"), 3 * u.arcsec)
+    assert info.value.code == "WCS_MISSING"
+
+
+def test_t4_arithmetic(tmp_path):
+    ones = rotated_wcs_image(tmp_path, "a.fits", value=1.0)
+    twos = rotated_wcs_image(tmp_path, "b.fits", value=2.0)
+    before = (ones.data.copy(), twos.data.copy())
+    total = image_operation(ones, twos, "add")
+    assert np.array_equal(total.data, np.full(ones.data.shape, 3.0)) and total.data.dtype == np.float64
+    assert np.array_equal(ones.data, before[0]) and np.array_equal(twos.data, before[1])  # input intatti
+    assert np.array_equal(image_operation(twos, ones, "sub").data, np.ones(ones.data.shape))
+    assert np.array_equal(image_operation(twos, 4, "mul").data, np.full(ones.data.shape, 8.0))
+    # "ADU" non è un'unità FITS riconosciuta da astropy: unità del prodotto non determinabile, dichiarato.
+    product = image_operation(twos, twos, "mul")
+    assert product.bunit is None and "UNIT_UNKNOWN" in [c for c, _ in product.warnings]
+    jy = load_image(write_fits(tmp_path / "jy.fits", twos.data, _header_with_unit(twos, "Jy")))
+    expected_unit = (u.Unit("Jy", format="fits") ** 2).to_string("fits")
+    assert image_operation(jy, jy, "mul").bunit == expected_unit
+    divided = image_operation(ones, 0.0, "div")
+    assert np.all(np.isinf(divided.data)) and "NONFINITE_PIXELS" in [c for c, _ in divided.warnings]
+
+
+def test_t4_grid_unit_and_operation_errors(tmp_path):
+    a = rotated_wcs_image(tmp_path, "a.fits")
+    smaller = rotated_wcs_image(tmp_path, "s.fits", nx=30)
+    for b, code in [(smaller, "IMAGE_SHAPE_MISMATCH")]:
+        with pytest.raises(ImagesFitsError) as info:
+            image_operation(a, b, "add")
+        assert info.value.code == code
+    other_unit = load_image(write_fits(tmp_path / "u.fits", a.data, _header_with_unit(a, "Jy")))
+    with pytest.raises(ImagesFitsError) as info:
+        image_operation(a, other_unit, "add")
+    assert info.value.code == "UNIT_MISMATCH"
+    for op, operand in [("rotate", None), ("convolve", 3), ("add", "x"), ("normalize", 2)]:
+        with pytest.raises(ImagesFitsError) as info:
+            image_operation(a, operand, op)
+        assert info.value.code == "OPERATION_UNSUPPORTED"
+    assert set(OPERATIONS) == {"add", "sub", "mul", "div", "convolve", "normalize", "flip_x", "flip_y"}
+
+
+def _header_with_unit(image, unit):
+    header = fits.Header(image.header)
+    header["BUNIT"] = unit
+    return header
+
+
+def test_t5_convolution_matches_scipy(tmp_path):
+    yy, xx = np.mgrid[:20, :30]
+    gradient = (2.0 * xx + 3.0 * yy).astype(np.float64)
+    image = load_image(write_fits(tmp_path / "g.fits", gradient))
+    kernel = Box2DKernel(3)  # media 3×3, normalizzata
+    result = image_operation(image, kernel, "convolve")
+    # Bordo riempito con 0 (default di astropy) = mode "constant", cval 0 di SciPy.
+    expected = ndimage.convolve(gradient, kernel.array, mode="constant", cval=0.0)
+    assert np.allclose(result.data, expected, rtol=0, atol=1e-12)
+    gauss = image_operation(image, Gaussian2DKernel(1.5), "convolve")
+    assert np.allclose(gauss.data, astropy_convolve_ref(gradient, Gaussian2DKernel(1.5)), rtol=0, atol=0)
+
+
+def test_h5_normalize_divides_by_mean(tmp_path):
+    data = np.random.default_rng(5).normal(40, 3, (10, 12))
+    data[2, 3] = np.nan
+    image = load_image(write_fits(tmp_path / "n.fits", data))
+    result = image_operation(image, None, "normalize")
+    assert np.allclose(result.data, data / np.nanmean(data), equal_nan=True, rtol=0, atol=0)
+    assert result.bunit is None and "media" in result.history[-1]
+    zero = load_image(write_fits(tmp_path / "z.fits", np.array([[1.0, -1.0], [1.0, -1.0]])))
+    with pytest.raises(ImagesFitsError) as info:
+        image_operation(zero, None, "normalize")
+    assert info.value.code == "OPERATION_UNSUPPORTED"
+
+
+@pytest.mark.parametrize("op,axis", [("flip_x", 1), ("flip_y", 0)])
+def test_t20_flips_update_wcs(tmp_path, op, axis):
+    image = rotated_wcs_image(tmp_path)
+    flipped = image_operation(image, None, op)
+    assert np.array_equal(flipped.data, np.flip(image.data.astype(np.float64), axis=axis))
+    ny, nx = image.shape
+    xs, ys = np.meshgrid(np.arange(nx, dtype=float), np.arange(ny, dtype=float))
+    xs, ys = xs.ravel(), ys.ravel()
+    fx, fy = (nx - 1 - xs, ys) if op == "flip_x" else (xs, ny - 1 - ys)
+    original = WCS(fits.getheader(tmp_path / "rot.fits"))
+    sep = original.pixel_to_world(xs, ys).separation(flipped.wcs.wcs.pixel_to_world(fx, fy)).deg
+    assert np.max(sep) < 1e-9  # stesso cielo per lo stesso pixel fisico
+    twice = image_operation(flipped, None, op)
+    assert np.array_equal(twice.data, image.data.astype(np.float64))
+
+
+def test_t20_flip_rejected_with_distortion(tmp_path):
+    path = get_pkg_data_filename("data/dss.14.29.56-62.41.05.fits.gz", package="astropy.wcs.tests")
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.simplefilter("ignore")
+        image = load_image(path)
+    assert image.wcs is not None
+    with pytest.raises(ImagesFitsError) as info:
+        image_operation(image, None, "flip_x")
+    assert info.value.code == "OPERATION_UNSUPPORTED"
+
+
+def test_h7_contours_match_contourpy(tmp_path):
+    yy, xx = np.mgrid[:40, :50]
+    data = np.exp(-((xx - 24.3) ** 2 + (yy - 19.7) ** 2) / 60.0) * 100.0
+    image = rotated_wcs_image(tmp_path, nx=50, ny=40)
+    image = load_image(write_fits(tmp_path / "c.fits", data, image.header))
+    result = contours(image, [10.0, 50.0])
+    generator = contourpy.contour_generator(z=data, line_type=contourpy.LineType.Separate)
+    for level, curves in zip([10.0, 50.0], result.curves, strict=True):
+        expected = generator.lines(level)
+        assert len(curves) == len(expected)
+        for got, exp in zip(curves, expected, strict=True):
+            assert np.allclose(got, exp, rtol=0, atol=0)
+    sky = result.to_sky(image)
+    ra, dec = WCS(image.header).all_pix2world(result.curves[0][0][:, 0], result.curves[0][0][:, 1], 0)
+    assert np.max(sky[0][0].coord.separation(SkyCoord(ra, dec, unit="deg")).deg) < 1e-12
+
+
+def test_t26_save_fits_roundtrip(tmp_path):
+    image = rotated_wcs_image(tmp_path)
+    cut = cutout(image, convert_pixel_convention(30.0, 20.0, "numpy", "numpy"), (11, 15))
+    target = save_fits(cut, tmp_path / "taglio.fits")
+    with fits.open(target) as hdul:
+        header, data = hdul[0].header, hdul[0].data
+    assert np.array_equal(data, cut.data)
+    assert header["A2ORIGIN"] == str(image.origin) and header["A2DATE"].endswith("Z")
+    assert any("cutout" in str(h) for h in header["HISTORY"])
+    reread = WCS(header)
+    xs, ys = np.array([0.0, 14.0]), np.array([0.0, 10.0])
+    assert np.max(reread.pixel_to_world(xs, ys).separation(cut.wcs.wcs.pixel_to_world(xs, ys)).deg) < 1e-12
+    with pytest.raises(OSError):
+        save_fits(cut, target)  # niente sovrascrittura implicita
