@@ -8,7 +8,14 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-10 — **modulo 11 completo** (7 parti, un commit per
+**Ultimo aggiornamento:** 2026-10-10 — decisioni del proprietario applicate a 11, 12,
+13, 14, 15, 18, 19 (restano `approvato`): nell'11 avviso `HHH_WCS_DIFFERS`, tetto di
+memoria A10 (`MEMORY_LIMIT_EXCEEDED`), §11 nel 32; regola d'oro n. 8 (Hipsgen tolto,
+grammatica di `search` nostra, server VO nostri, raggio del cross-match obbligatorio,
+unità solo FITS/VOUnit, motivazioni nostre). Test 200 di default, 203 con la rete.
+Prossimo modulo: 13. Aperte 19. Riepilogo invariato: approvato 14, bozza 5, non
+esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-10 — **modulo 11 completo** (7 parti, un commit per
 parte; test 197 di default, 200 con la rete); `04`, 10 e 11 completi. Aperte 19.
 Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
 Prima di questo aggiornamento: 2026-10-10 — regola d'oro n. 8 (AstroTwo scritto da zero);

@@ -23,8 +23,8 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
   `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
   test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
-  sotto). Test: **197 superati di default, 200 con la rete (3 test di
-  rete), 0 saltati, 0 falliti.**
+  sotto). Test: **200 superati di default, 203 con la rete (3 test di
+  rete), 0 saltati, 0 falliti** (2026-10-10, dopo T32–T33 dell'11).
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
   MPL-2.0 per `certifi`). Gli obblighi LGPL per il `.dmg` vanno specificati
@@ -338,7 +338,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D11-6 | `Pillow` per JPEG, PNG e GIF | 2026-10-09 | decisione del proprietario, `11-core-immagini-fits.md` §13 | licenza da verificare prima del codice |
 | D13-7 / D14-8 | Lettori ASTRORES (13) e IDHA (14) con **`defusedxml`**, testati su esempi del CDS; senza documentazione o esempi, solo errore | 2026-10-09 | decisione del proprietario, `13` e `14` §13 | sicurezza su file XML non fidati; licenza da verificare |
 | D14-7 | **Nessun sistema di plugin nel livello 1**; estensioni tramite l'API Python del 24 (parte "plugin" di H14 spostata nel 24) | 2026-10-09 | decisione del proprietario, `14` §13, `03` H14 | |
-| D15-5 | Correlazione con ellissi: distanza di Mahalanobis con covarianza combinata, soglia in sigma (default D15-6, Gruppo 3) | 2026-10-09 | decisione del proprietario, `15` §13 | criterio di Aladin da verificare, differenza dichiarata |
+| D15-5 | Correlazione con ellissi: distanza di Mahalanobis con covarianza combinata, soglia in sigma (default D15-6, Gruppo 3) | 2026-10-09 | decisione del proprietario, `15` §13 | criterio nostro, scritto nel report (confronto con Aladin tolto il 2026-10-10) |
 | Test | Framework dei test **`pytest`** (anticipato da 61) | 2026-10-09 | decisione del proprietario, `01` §4, `02` §8 | dettagli in `61-strategia-test.md` |
 | Approvazione livello 1 | **01, 02, 03 e 10–19 tutti `approvato`** | 2026-10-09 | decisione e regola del proprietario | livelli in fase codice: nessuno |
 | D10-2 + D13-2 | Epoca di ogni dato **letta dai suoi metadati e mai assunta**; epoca di visualizzazione = epoca dell'immagine se nota, altrimenti **J2000**; **epoca usata sempre scritta nel risultato**; ogni catalogo ha la **propria epoca di riferimento** | 2026-10-04 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 e `13-core-cataloghi.md` §13 | regola scritta anche in `02-convenzioni.md` DC2 (§5); riproducibilità (regola d'oro n. 6) |
@@ -347,7 +347,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D11-1 | **Tipo nativo del file in memoria; ogni calcolo in `float64`; `float32` solo per la visualizzazione** | 2026-10-04 | decisione del proprietario, `11-core-immagini-fits.md` §13 | regola scritta anche in `02-convenzioni.md` DC6 (§6) |
 | D11-3 | Limite cache su disco **5 GB di default, configurabile**, con eliminazione dei dati meno usati | 2026-10-04 | decisione del proprietario, `11-core-immagini-fits.md` §13 | estensione di A7; interfaccia di configurazione in `40`/`60` |
 | D12-5 + D16-5 | **Calcoli HEALPix nel 16, servizio dei tile nel 12** (stesso confine in entrambi i file) | 2026-10-04 | decisione del proprietario, `12-core-hips.md` e `16-core-moc.md` §13 | nessuna logica HEALPix duplicata, un solo confine dichiarato |
-| D13-1 | **Stringa con grammatica ristretta alla Aladin** per `search` (jolly `?`/`*`; operatori `=`, `!=`, `<`, `>`, `<=`, `>=`; valore assoluto; prefissi `+`/`-` per aggiungere/togliere), **validata prima dell'esecuzione** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | un solo validatore deterministico per UI, IA e pipeline |
+| D13-1 | **Stringa con grammatica ristretta, nostra** (riscritta il 2026-10-10, regola d'oro n. 8) per `search` (jolly `?`/`*`; operatori `=`, `!=`, `<`, `>`, `<=`, `>=`; valore assoluto; prefissi `+`/`-` per aggiungere/togliere), **validata prima dell'esecuzione** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | un solo validatore deterministico per UI, IA e pipeline |
 | D13-5 | Operazioni sulle tabelle **sempre non distruttive**; in-place solo con **flag esplicito citato nel report** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | coerenza con 15/16/17 e con la riproducibilità |
 | D13-6 | **Colonna DataLink nel 13, risoluzione dei link nel 14** | 2026-10-04 | decisione del proprietario, `13-core-cataloghi.md` §13 | nessuna duplicazione di client VO |
 | D14-1 | **`pyvo` per TAP e DataLink**; per SAMP si **valuta `astropy.samp` (da verificare)**; **licenze da riverificare prima di approvare il 14** | 2026-10-04 | decisione del proprietario, `14-core-protocolli-vo.md` §13 | stack VO IVOA, un solo punto da mockare nei test |
@@ -371,6 +371,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Regola d'oro n. 8 | **AstroTwo è scritto da zero:** da Aladin non si prende niente (codice, tabelle di valori, file, immagini); il manuale dice solo quali funzioni servono; unica eccezione la lettura di file prodotti da Aladin | 2026-10-10 | decisione del proprietario, `CLAUDE.md` | collegata ad A11 (licenza) |
 | 11 (divisione) | Modulo 11 in 7 parti (P1 lettura FITS → P7 ricampionamento/RGB/mosaico); D11-5 corretta (palette `matplotlib`); funzioni di trasferimento di `astropy.visualization`; `contourpy`; elenco chiuso H5; A10 per le immagini; qualità = copertura `reproject`; fattore unico `rgb_diff`; vista esportata dal 41; strumenti IA nel 32 | 2026-10-10 | decisione del proprietario, `11` §3/§13 (D11-9) | normalizzazione H5 da verificare con il manuale prima di P5 |
 | 11 (P1–P7) | HDU immagine = 2 assi utili, più HDU → parametro `hdu` (`HDU_CHOICE_REQUIRED`); FITS RGB solo con `rgb=True`; calibrazione JPEG/PNG/`.hhh` da soli standard pubblici (JPEG `COM`, PNG `Comment`, FITS 4.0); immagini da URL con prima la cache; `memmap` impossibile con `BZERO`/`BSCALE`/`BLANK` → due livelli; due livelli: misure sui pixel originali per regione, altrimenti `PREVIEW_NOT_MEASURABLE`; RGB con parametri di display espliciti, B = media con 2 immagini, `rgb_diff` con B = 0; metodo di ricampionamento obbligatorio; `reproject` = lista sulla stessa griglia; lunghezze d'onda come parametro | 2026-10-10 | decisioni del proprietario durante P1–P7, `11` §3/§7 | modulo 11 completo |
+
+| 11 (dopo il codice) | Confermate le scelte di P1–P7 (D11-10); commento contro `.hhh`: vale il commento, avviso `HHH_WCS_DIFFERS` se i WCS sono diversi; **stima della memoria** prima delle operazioni sull'immagine intera e del taglio, oltre il tetto A10 `MEMORY_LIMIT_EXCEEDED`; §11 dell'11 spostato nel 32 (D11-9) | 2026-10-10 | decisione del proprietario, `11` §3/§10/§13 | test T32–T33; criterio di confronto dei WCS e tabella delle stime scritti nell'11 §3 |
+| Regola d'oro n. 8 (applicazione) | Nei file 11–15, 18, 19: D12-1 generazione HiPS da standard IVOA HiPS 1.0 (`reproject` + codice nostro, **Hipsgen tolto**); D12-3 DSS2 a colori motivato da noi; D13-1 grammatica nostra; D13-3, D14-3, D19-5 con motivazione nostra; D14-4 **elenco di server nostro** dai servizi pubblici del VO; 15 **raggio obbligatorio senza default**, `best` motivata da noi; D18-2 **solo formati FITS e VOUnit** di `astropy.units`; T16 del 18 con esempio nostro | 2026-10-10 | decisione del proprietario, §13 dei file | restano motivi "come Aladin" nei file non autorizzati 10 e 17 (elenco consegnato al proprietario) |
 
 ## 6. Decisioni aperte
 
@@ -423,12 +426,13 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; il
-   proprietario sceglie il prossimo modulo (12–19), uno alla volta, con le
-   sue verifiche "da verificare prima del codice". Da rivedere: l'elenco dei
-   punti dei file approvati che prendono valori o strumenti da Aladin
-   (consegnato il 2026-10-10, regola d'oro n. 8). Aperte: D10-9 (con il 41),
-   D11-8 (con 20 e 41), A11 licenza (blocca il 60).
+0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **prossimo
+   modulo: 13** (scelto dal proprietario il 2026-10-10): divisione in parti,
+   verifiche e punti ambigui proposti, in attesa dell'ok del proprietario.
+   Regola d'oro n. 8 applicata il 2026-10-10 in 11–15, 18, 19; restano da
+   decidere i motivi "come Aladin" nei file 10 (`choose_grid_spacing`,
+   calibrazioni DSS1) e 17 (D17-6), non coperti dall'autorizzazione. Aperte:
+   D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -487,3 +491,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | Modulo 10: verificato che `conf.timeout` di astroquery non applica i timeout HTTP di `04`; il campo interno `_session` resta isolato in `_simbad_with_timeouts` (registro del 10). Test: 106 superati con la rete. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario:** regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero); divisione dell'11 in 7 parti e decisioni collegate applicate nell'11 (D11-5 corretta, D11-9); **A11 — licenza di AstroTwo** aperta (Gruppo 2, blocca il 60) in `01`; A10 decisa per le immagini. Controllo dei file approvati per contenuti presi da Aladin: elenco consegnato al proprietario, nessuna correzione. Aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). Stati invariati. |
 | 2026-10-10 | Claude Code | **Modulo 11 scritto in 7 parti** (P1 lettura FITS/HDU, P2 JPEG/PNG/GIF e FITS RGB, P3 rete e cache, P4 visualizzazione, P5 taglio/operazioni/contorni/salvataggio, P6 immagini grandi, P7 ricampionamento/RGB/mosaico), un commit per parte, con le verifiche prima di ciascuna (HCOMPRESS, Pillow, documentazione pubblica della calibrazione, matplotlib e palette, manuale sez. 5.18 per la normalizzazione, contourpy, `memmap`/`section` di astropy, reproject) e le precisazioni del proprietario registrate nell'11. Modulo 10: campo interno di astroquery isolato in `_simbad_with_timeouts`. Test: 197 superati di default, 200 con la rete. `04`, 10 e 11 completi. Aperte **19** (invariate). Stati invariati: approvato 14, bozza 5, non esiste 23, totale 42. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 11, 12, 13, 14, 15, 18, 19, che restano `approvato`): 11 — scelte di P1–P7 confermate (D11-10), avviso `HHH_WCS_DIFFERS`, tetto di memoria A10 con `MEMORY_LIMIT_EXCEEDED` (codice e test T32–T33), §11 spostato nel 32 (elenco nella riga del 32, §4); regola d'oro n. 8 — D12-1 senza Hipsgen, D12-3, D13-1, D13-3, D14-3, D14-4, raggio obbligatorio nel 15, D15-1, D15-4, D15-5, D18-2 (solo FITS e VOUnit), T16 del 18, D19-5. Nessun PDF del manuale di Aladin nella cartella né nella storia git (punto C: nulla da fare). Test: 200 di default, 203 con la rete. Prossimo modulo: 13. Aperte invariate **19**. |
