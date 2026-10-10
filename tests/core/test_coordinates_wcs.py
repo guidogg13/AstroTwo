@@ -788,3 +788,31 @@ def test_header_defaults_are_declared():
     del header["RADESYS"]
     solution = wcs_from_header(header)
     assert any("RADESYS assente" in fix for fix in solution.fixes)
+
+
+def test_t24_proper_motion_only_propagation():
+    # Opzione esplicita "solo moto proprio" (D13-12 del 13): astropy senza distanza,
+    # nessun effetto prospettico, risultato marcato.
+    pos = SkyFrame.from_lonlat(BARNARD["ra"], BARNARD["dec"], "icrs", epoch=GAIA_EPOCH)
+    target = Time(2026.0, format="jyear", scale="tcb")
+    out = propagate_position(pos, pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"],
+                             parallax=None, target_epoch=target, proper_motion_only=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        expected = SkyCoord(ra=BARNARD["ra"], dec=BARNARD["dec"], pm_ra_cosdec=BARNARD["pm_ra_cosdec"],
+                            pm_dec=BARNARD["pm_dec"], obstime=GAIA_EPOCH, frame="icrs").apply_space_motion(
+                                new_obstime=target)
+    assert out.position.coord.separation(expected).deg < 1e-12
+    assert out.proper_motion_only and any("solo moto proprio" in n for n in out.notes)
+    full = propagate_position(pos, pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"],
+                              parallax=BARNARD["parallax"], target_epoch=target)
+    assert not full.proper_motion_only
+    for kwargs in (dict(parallax=BARNARD["parallax"]), dict(parallax=None, radial_velocity=BARNARD["radial_velocity"])):
+        with pytest.raises(CoordinatesWcsError) as info:
+            propagate_position(pos, pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"],
+                               target_epoch=target, proper_motion_only=True, **kwargs)
+        assert info.value.code == "PROPAGATION_MODE_CONFLICT"
+    with pytest.raises(CoordinatesWcsError) as info:  # senza l'opzione la parallasse resta obbligatoria
+        propagate_position(pos, pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"],
+                           parallax=None, target_epoch=target)
+    assert info.value.code == "EPOCH_REQUIRED"

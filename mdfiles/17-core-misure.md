@@ -115,7 +115,12 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 ## 7. Interfaccia pubblica
 
 - **`angular_distance(p1, p2, unit)`** — separazione angolare.
-  **Calcolo: `astropy.coordinates.angular_separation` (o `SkyCoord.separation`).**
+  **Calcolo: la funzione `skydist` della tabella delle funzioni di
+  `13-core-cataloghi.md` (`catalogs.py`), che usa
+  `astropy.coordinates.angular_separation`** (decisione del proprietario del
+  2026-10-10, D13-10 del 13): **una sola implementazione**, nessun
+  duplicato; il 17 converte le posizioni nel frame del primo punto e
+  chiama quella.
 - **`position_angle(p1, p2)`** — angolo di posizione tra due punti (o tra gli
   estremi di una linea/segmento), da nord verso est, nel frame dichiarato;
   errore `PA_UNDEFINED` se i punti coincidono o la direzione non è determinata
@@ -277,3 +282,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): offset angolari e calcolo inverso (posizione da distanza + angolo di posizione) spostati qui dalla calcolatrice delle coordinate del 10 — §3, §5, §6, §7 (`angular_offsets`, `apply_offsets`, `offset_position`), §10 (`OFFSET_INVALID`), §11, §12 (T13–T15). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D17-6 con motivazione nostra al posto di "come lo strumento dist di Aladin". Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **D13-10** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `angular_distance` usa l'implementazione unica di `skydist` del 13 (`astropy.coordinates.angular_separation`), nessun duplicato. Stato `approvato` invariato. |

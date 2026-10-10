@@ -13,11 +13,12 @@ sempre separate le regole di disegno dalle selezioni dei record.
 **Divisione del codice (decisione del proprietario del 2026-10-10):** sei
 parti, un commit per parte — **P1** lettura da file locale, formati,
 colonne di posizione, limiti; **P2** ASTRORES; **P3** `search` e regole di
-disegno; **P4** colonne calcolate, sottoinsiemi, statistiche, istogramma,
-grafico x-y, vista a record; **P5** epoca, moto proprio, filtro temporale;
-**P6** cataloghi da servizio e da URL, albero delle collezioni, colonna
-DataLink — **dopo il codice del `14`**, perché usa la sua rete e il suo
-VOTable.
+disegno; **P4** colonne calcolate, sottoinsiemi (anche salvati su file),
+statistiche, istogramma, grafico x-y, vista a record; **P5** epoca, moto
+proprio, filtro temporale; **P6** cataloghi da servizio e da URL, albero
+delle collezioni, colonna DataLink (D13-11), dati ASTRORES in un `LINK`
+esterno (D13-14) — **dopo il codice del `14`**, perché usa la sua rete e il
+suo VOTable.
 
 - **Caricamento cataloghi del CDS (D1, P6):** aprire cataloghi noti
   (Hipparcos, TYCHO-2, Gaia, 2MASS, ecc.) per identificatore; il
@@ -41,8 +42,31 @@ VOTable.
   (predecessore di VOTable, letto per compatibilità). Tutti i formati si
   leggono con `astropy.io.votable`, `astropy.io.ascii` e `astropy.io.fits`,
   **tranne ASTRORES**, letto da un lettore nel modulo con **`defusedxml`**
-  (D13-7; protezione da file XML non fidati), testato su file di esempio del
-  CDS; senza documentazione o esempi disponibili, il formato dà solo errore.
+  (D13-7; protezione da file XML non fidati).
+  - **Lettore ASTRORES (D13-14, decisa dal proprietario il 2026-10-10,
+    tranne il punto b):** segue la **DTD pubblica del CDS** (`astrores.dtd`
+    v0.9, 17-04-2000): radice `ASTRO`; `DEFINITIONS`/`COOSYS` (anche dentro
+    `RESOURCE` e `TABLE`); `RESOURCE` e `TABLE` (più tabelle → `table`, come
+    sopra); `FIELD` con `ID`, `name`, `unit`, `ucd`, `datatype` (`F`, `D`,
+    `E` → `float64`; `I` → intero; `L` → booleano; `A` → testo), `width`,
+    `precision`, `format`, `ref`; il nome della colonna è il `NAME` del
+    campo, altrimenti `name`, altrimenti `ID`; dati in `CSV` (`colsep`,
+    default tabulazione; `recsep`, default a capo; `headlines` righe da
+    saltare) o in `TABLEDATA`/`ROW`/`CELL`; celle vuote = valori mancanti.
+    (a) Un campo dichiarato numerico in gradi (`F`/`D`/`E` con unità `deg`)
+    i cui dati sono **sessagesimali** si converte in gradi con il modulo 10
+    (`astropy.coordinates.Angle`: ore per l'ascensione retta, gradi per la
+    declinazione, secondo l'UCD della posizione), si conserva **anche la
+    colonna di testo originale** (`<nome>_text`) e si dà l'avviso
+    `ASTRORES_TYPE_MISMATCH` (tipo dichiarato diverso dai dati); un campo
+    numerico con dati non numerici e non sessagesimali → testo con lo
+    stesso avviso. (b) UCD1 → UCD1+: **da decidere** (D13-14b). (c) Un
+    `ref` scritto `#id(...)` o `#id($...)` (forma non conforme alla DTD, che
+    vuole un IDREF) si accetta con l'avviso `ASTRORES_NONCONFORMING_REF`.
+    (d) `DATA` con `LINK` esterno: lettura tramite il 14 in P6; fino ad
+    allora `ASTRORES_UNREADABLE` esplicito. (e) Test su file nostri scritti
+    dalla DTD, più l'esempio pubblico del CDS letto in un test di rete,
+    **senza copiarlo nel repository**.
   - **Riconoscimento dal contenuto, non dall'estensione (decisione del
     proprietario del 2026-10-10):** FITS = firma `SIMPLE  =` con almeno una
     HDU di tabella; XML = radice `VOTABLE` (VOTable) o `ASTRO` (ASTRORES);
@@ -194,7 +218,21 @@ VOTable.
   - **Parallasse mancante o non positiva (decisione del proprietario del
     2026-10-10):** le righe **non si escludono**: si propagano **solo con il
     moto proprio, senza effetti prospettici**, marcate riga per riga, con il
-    loro conteggio nel risultato. Dove si calcola: D13-12 (da decidere).
+    loro conteggio nel risultato. Il calcolo è del modulo 10
+    (`propagate_position(..., proper_motion_only=True)`, D13-12).
+  - **Righe senza moto proprio** (valore mancante in una delle due colonne):
+    nella posizione propagata diventano **valore mancante marcato**, con
+    conteggio nel risultato; **non si assume un moto proprio nullo**
+    (D13-12).
+  - **Risultato di `propagate`:** una **nuova** tabella con due colonne
+    aggiunte, `<lon>_prop` e `<lat>_prop` (stesse unità delle originali,
+    epoca di arrivo nei metadati della colonna), e una colonna
+    `<lon>_prop_mode` con il modo di ogni riga: `full` (moto proprio e
+    parallasse), `pm_only` (solo moto proprio), `missing` (nessun moto
+    proprio: posizione mascherata); le colonne originali restano intatte;
+    nomi già presenti → `COLUMN_NAME_EXISTS`. Il report dà epoca di origine
+    (e la sua fonte), epoca di arrivo, uso del cos δ, conteggi per modo e le
+    note del modulo 10.
   - **Frecce del moto proprio:** dalla posizione all'epoca della tabella
     alla posizione propagata di `scale` anni (**parametro obbligatorio**).
 - **Filtro temporale e cursore epoca (H3, P5):** selezionare i record per
@@ -211,7 +249,7 @@ VOTable.
   standard, conteggio dei valori validi e dei mancanti); **DataLink: la
   colonna vive qui, la risoluzione dei link è di `14-core-protocolli-vo.md`**
   (confine deciso con D13-6 il 2026-10-04; riconoscimento della colonna:
-  D13-11, da decidere).
+  in **P6**, dopo il 14, D13-11).
 - **Colonne calcolate (H8, sez. 5.13, P4):** nuova colonna con **nome**
   obbligatorio e, facoltativi, **unità**, **UCD** e **numero di decimali**
   mostrati; espressione con riferimenti alle colonne nella forma
@@ -220,6 +258,10 @@ VOTable.
   elenco chiuso, D18-1; nessuna esecuzione di codice). **La tabella delle
   funzioni vive in `catalogs.py` e il 18 la importa** (D13-8, decisa il
   2026-10-10: il 18 dipende già dal 13, nessuna dipendenza circolare).
+  **`skydist(ra1, dec1, ra2, dec2)`** (gradi in ingresso e in uscita) si
+  calcola qui con `astropy.coordinates.angular_separation`; il 17
+  (`angular_distance`) usa **questa stessa implementazione**, nessun
+  duplicato (D13-10, decisa il 2026-10-10).
   Calcolo vettoriale in `float64` con `numpy`; se le colonne hanno unità, il
   calcolo passa da `astropy.units` e unità incompatibili danno errore. La
   colonna è marcata come calcolata, con l'espressione come provenienza, ed
@@ -229,9 +271,14 @@ VOTable.
   tabella; con `inplace=True` modificano quella data e **il report lo
   cita**.
 - **Cache (A7; decisione del proprietario del 2026-10-10):** **una sola
-  cache delle interrogazioni, nel `14`**; il 13 conserva solo i
-  **sottoinsiemi salvati** (dove: D13-13, da decidere). Nessuna cache
-  propria (CA4).
+  cache delle interrogazioni, nel `14`**; nessuna cache propria (CA4).
+- **Sottoinsiemi salvati (D13-13, decisa il 2026-10-10):** **non** nella
+  cache (che può eliminarli): si salvano in un **file scelto dall'utente**,
+  in **VOTable con provenienza** (origine e data della tabella di partenza,
+  operazioni, selezione usata, data del salvataggio come `INFO`; UCD e
+  `COOSYS` delle colonne di posizione conservati, così il file riletto con
+  `read_table` ha le stesse posizioni). La sessione del `24`, quando
+  esisterà, conterrà solo il riferimento al file (D17-3).
 
 ## 4. Cosa NON fa
 
@@ -313,14 +360,21 @@ VOTable.
 - **`PlotRule`** (struttura) e **`set_plot_rules(table, rules)`** — regole
   di disegno (D4), separate dalla selezione; restituisce per ogni record la
   regola applicata e forma, colore e dimensione, con i conteggi.
-- **`propagate(table, epoch, ...)`** — posizioni all'epoca richiesta (D9,
-  P5); **calcolo: modulo 10 / Astropy**.
+- **`propagate(table, epoch, *, pm_ra, pm_dec, pm_ra_includes_cosdec,
+  parallax=None, radial_velocity=None, source_epoch=None)`** — posizioni
+  all'epoca richiesta (D9, P5); colonne di moto proprio, parallasse e
+  velocità radiale per nome; epoca di origine dai metadati (§3) o
+  `source_epoch`; restituisce la nuova tabella con le colonne propagate e il
+  report (§3); **calcolo: modulo 10 / Astropy**.
 - **`proper_motion_arrows(table, scale)`** — dati per le frecce del moto
   proprio (D10, P5); `scale` in anni, obbligatoria; il disegno è della UI.
 - **`calculated_column(table, name, expression, unit=None, ucd=None,
   decimals=None, inplace=False)`** / **`subset(table, selection,
   inplace=False)`** — colonne calcolate e sottoinsiemi (H8, P4);
   **calcolo: `numpy`/`astropy`**.
+- **`save_subset(table, selection, path)`** (P4, D13-13) — salva il
+  sottoinsieme in un VOTable scelto dall'utente, con provenienza; si
+  rilegge con `read_table`.
 - **`column_statistics(table, column)`** (P4) — minimo, massimo, media,
   deviazione standard, numero di valori validi e mancanti, con unità.
 - **`histogram(table, column, bins)`** / **`xy_plot(table, x, y)`** — dati
@@ -399,7 +453,10 @@ VOTable.
 | Epoca richiesta non valida | rifiuto dell'input | `EPOCH_INVALID` |
 | Tipo colonna non supportato per un'operazione | errore con tipo atteso e trovato | `COLUMN_TYPE_UNSUPPORTED` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
-| File ASTRORES non conforme, o lettore non disponibile per mancanza di documentazione ed esempi | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
+| File ASTRORES non conforme alla DTD, o con i dati in un `LINK` esterno (fino a P6) | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
+| ASTRORES: dati diversi dal tipo dichiarato (es. sessagesimali in un campo `F` in gradi) | conversione in gradi con il modulo 10 e colonna di testo conservata, oppure testo | avviso `ASTRORES_TYPE_MISMATCH` |
+| ASTRORES: `ref` scritto `#id(...)` | riferimento accettato | avviso `ASTRORES_NONCONFORMING_REF` |
+| Riga senza moto proprio nella propagazione | posizione propagata mascherata, riga marcata `missing`, conteggio | avviso `PROPER_MOTION_ROW_MISSING` |
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
 | Espressione di colonna non valida o colonna citata inesistente | rifiuto con la posizione dell'errore o il nome mancante | `COLUMN_EXPRESSION_INVALID` |
 | Nome della nuova colonna già presente | rifiuto, nessuna sovrascrittura silenziosa | `COLUMN_NAME_EXISTS` |
@@ -425,7 +482,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T3 | Propagazione | propagare 100 posizioni con moto proprio dichiarato a un'epoca +10 anni | coincidenza con `SkyCoord.apply_space_motion` ricalcolato nel test (tolleranza 1e-9 gradi) | ricalcolo con Astropy |
 | T4 | Colonna calcolata | calcolare `mag_corr = ${mag} - 0.12` su una tabella di prova | risultato coincidente con `numpy` ricalcolato nel test, unità `mag` | confronto con `numpy` |
 | T5 | Istogramma | istogramma di una colonna con bin noti; senza bin | conteggi coincidenti con `numpy.histogram` ricalcolato nel test; senza bin → errore | ricalcolo con NumPy |
-| T6 | Sottoinsiemi salvati | salvare un sottoinsieme e rileggerlo | stessi record, con origine e data | secondo D13-13 |
+| T6 | Sottoinsiemi salvati | `save_subset` su un file scelto nel test, poi `read_table` | stessi record e valori; provenienza (origine, data, selezione) negli `INFO`; colonne di posizione e sistema ritrovati; nessuna voce nella cache | confronto con `astropy.io.votable` |
 | T7 | Moto proprio mancante | chiedere la propagazione senza colonne di moto proprio | `PROPER_MOTION_MISSING`, nessun valore inventato | test di unità |
 | T8 | IPAC TBL (H22) | leggere un file IPAC di prova | colonne, unità e valori uguali a quelli letti con `astropy.io.ascii` (formato `ipac`) | confronto con `astropy.io.ascii` |
 | T9 | SExtractor (H22) | leggere un catalogo SExtractor di prova | colonne e valori uguali a `astropy.io.ascii` (formato `sextractor`) | confronto con `astropy.io.ascii` |
@@ -434,7 +491,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T12 | Colonna calcolata (H8) | colonne `B` e `V` in magnitudini; nuova colonna `B-V` con espressione `${B} - ${V}`, UCD e 3 decimali | valori = `B - V` calcolati con `numpy`; UCD, decimali e provenienza registrati; tabella originale invariata | ricalcolo con `numpy` |
 | T13 | Espressione non valida (H8) | espressione con una colonna inesistente o con un nome non previsto | `COLUMN_EXPRESSION_INVALID`, nulla eseguito | test di unità |
 | T14 | Unità incompatibili (H8) | somma di una colonna in gradi e una in magnitudini | `UNIT_INCOMPATIBLE` | test di unità |
-| T15 | ASTRORES (H22) | leggere un file ASTRORES di esempio del CDS | colonne, unità e valori coerenti con la VOTable equivalente dello stesso catalogo | confronto con la VOTable (file di esempio **da reperire**) |
+| T15 | ASTRORES (H22) | file nostri scritti dalla DTD (`CSV` con `colsep`/`headlines`, `TABLEDATA`, più tabelle, valori mancanti, `LINK`); test di rete: l'esempio pubblico del CDS scaricato nel test (non copiato nel repository) | colonne, unità, tipi e valori uguali a quelli scritti nel test; `LINK` → `ASTRORES_UNREADABLE`; l'esempio pubblico si legge con gli avvisi previsti | confronto con i valori del test |
 | T16 | XML malevolo (H22) | leggere un file ASTRORES con espansione di entità | `XML_UNSAFE`, nessun dato caricato | test di unità |
 | T17 | Grammatica di `search` | ogni costrutto di §3 (confronti numerici e di testo, `|colonna|`, `${nome}`, `&&`/`||` con parentesi e precedenza, testo da solo su tutte le colonne di testo, jolly ed escape, spazi finali) ed espressioni non conformi | maschere uguali a quelle ricalcolate nel test con `numpy` e `re`; errori `EXPRESSION_INVALID` con la posizione | ricalcolo con `numpy` |
 | T18 | Maiuscole e minuscole | testo con i jolly con e senza `case_sensitive=True` | per default non contano; con l'opzione contano | test di unità |
@@ -442,7 +499,9 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T20 | Regole di disegno | due regole sovrapposte, dimensione da colonna con valori fuori intervallo e mancanti, regola non valida | prima regola che seleziona; dimensioni lineari portate agli estremi; mancanti non disegnati e contati; tabella invariata; `PLOT_RULE_INVALID` | ricalcolo con `numpy` |
 | T21 | Limiti | tetto di righe e limite delle operazioni piccoli nel test, file FITS, CSV e VOTable | `TABLE_TOO_LARGE` e `MEMORY_LIMIT_EXCEEDED` prima di caricare (FITS e testi) o subito dopo la lettura (VOTable); nessun troncamento | test di unità |
 | T22 | Colonne di posizione | VOTable con UCD e `COOSYS`; CSV con colonne `RAJ2000`/`DEJ2000` | dal VOTable colonne, sistema e `body = celestial`; dal CSV solo suggerimenti marcati, `NO_COORD_COLUMNS` e `BODY_UNKNOWN` finché l'utente non conferma; dopo la conferma colonne, sistema e corpo, conferma nella provenienza | test di unità |
-| T23 | Parallasse mancante o non positiva | tabella con righe senza parallasse e con parallasse negativa | nessuna riga esclusa; quelle righe propagate solo con il moto proprio, marcate, conteggio nel risultato; valori uguali ad Astropy senza distanza | ricalcolo con Astropy |
+| T23 | Parallasse e moto proprio mancanti | tabella con righe senza parallasse, con parallasse negativa e senza moto proprio | nessuna riga esclusa; righe senza parallasse valida propagate solo con il moto proprio (`pm_only`), valori uguali ad Astropy senza distanza; righe senza moto proprio mascherate (`missing`); conteggi nel report; colonne originali intatte | ricalcolo con Astropy |
+| T28 | ASTRORES non conforme | campo `F` in gradi con dati sessagesimali; `ref` `#id(...)` | colonna in gradi uguale ad `astropy.coordinates.Angle` (ore per RA, gradi per Dec), colonna `_text` conservata, `ASTRORES_TYPE_MISMATCH`; `ref` accettato con `ASTRORES_NONCONFORMING_REF` | ricalcolo con Astropy |
+| T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
 | T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
@@ -516,53 +575,42 @@ sono verificati da `34-ia-verifica-risultati.md`.
   CSV/TSV/BSV con errore se ambiguo; `inplace` citato nel report; bin e
   scala obbligatori; §11 nel 32; statistiche di una colonna nel §7.
   Applicate in §3–§12.
-- **D13-10 — `skydist` nelle colonne calcolate (P4):** l'elenco delle
-  funzioni del 18 comprende `skydist`, che nel 18 richiama `angular_distance`
-  del `17`, non ancora scritto; il 13 non dipende dal 17. Da decidere
-  (Gruppo 3): `skydist` nella tabella con il calcolo di
-  `astropy.coordinates` (poi usato anche dal 17), oppure fuori dalle
-  colonne calcolate finché il 17 non esiste.
-- **D13-11 — Riconoscimento della colonna DataLink (P4 o P6):** quale
-  colonna è "la colonna DataLink" (descrittore di servizio del VOTable che la
-  cita, o UCD/tipo di contenuto) dipende dal formato DataLink letto dal 14.
-  Da decidere (Gruppo 3); proposta: spostarla in P6, dopo il 14.
-- **D13-12 — Dove si calcola la propagazione senza parallasse (P5):**
-  `propagate_position` del 10 oggi rifiuta la parallasse mancante o non
-  positiva; il 13 non calcola coordinate. Da decidere (Gruppo 3): estendere
-  il 10 con una propagazione esplicita "solo moto proprio" (astropy senza
-  distanza, ERFA `pmsafe` con distanza di ripiego, quindi senza effetti
-  prospettici), marcata nel risultato; e cosa fare delle righe **senza
-  moto proprio** (posizione invariata e marcata, oppure valore mancante e
-  marcato).
-- **D13-13 — Dove si conservano i sottoinsiemi salvati:** nella cache
-  comune (`04`) una voce può essere eliminata per far spazio (dati meno
-  usati), quindi un sottoinsieme "salvato" potrebbe sparire. Da decidere
-  (Gruppo 3): cache comune, oppure file di sessione del `24` (D17-3), che
-  registra le operazioni e non scade.
-- **D13-14 — Lettura ASTRORES (P2), dopo le verifiche del 2026-10-10:**
-  verificato che la **DTD è pubblica** (CDS, `astrores.dtd` versione 0.9 del
-  17-04-2000, pagina `vizier.cds.unistra.fr/vizier/doc/astrores.htx`: radice
-  `ASTRO`, `DEFINITIONS`/`COOSYS`, `RESOURCE`, `TABLE`, `FIELD` con
-  `datatype` F/I/D/E/A/L, `width`, `precision`, `format`, `ucd`, `ref`; dati
-  in `CSV` con `colsep` (default tabulazione), `recsep`, `headlines`, oppure
-  `TABLEDATA`/`ROW`/`CELL`, oppure `LINK` esterno) e che c'è **un esempio
-  pubblico** (`vizier.cds.unistra.fr/catstd/astrores.xml`, estratto
-  ipotetico del GSC1.2). `defusedxml` 0.7.1: licenza PSF, puro Python.
-  **Da decidere (Gruppo 3) prima del codice di P2:** (a) l'esempio dichiara
-  RA/Dec `datatype="F"` in gradi ma i dati sono **sessagesimali**
-  (`00 13 00.93`), con l'attributo `format` di presentazione: leggere quelle
-  colonne come testo con avviso, oppure convertirle in gradi con il modulo
-  10 quando `format` lo indica; (b) gli UCD sono **UCD1** (`POS_EQ_RA`,
-  `POS_EQ_DE`), non UCD1+: riconoscere le colonne di posizione anche dagli
-  UCD1 (tabella di corrispondenza ufficiale IVOA UCD1 → UCD1+), oppure solo
-  con la conferma dell'utente; (c) i `ref` dell'esempio (`#id(myJ2000)`,
-  `#id($myJ2000)`) non sono IDREF come vuole la DTD: accettare la forma
-  `#id(...)`, oppure ignorare il riferimento (sistema sconosciuto);
-  (d) `DATA` con `LINK` esterno: errore (nessuna rete nel 13) o lettura
-  tramite il 14 in P6; (e) **T15** chiede il confronto con la VOTable
-  equivalente dello stesso catalogo, che per l'esempio (ipotetico) non
-  esiste: test su file nostri scritti dalla DTD, più l'esempio pubblico
-  letto in un test di rete (senza copiarlo nel repository).
+- **D13-10 — `skydist` nelle colonne calcolate: DECISA il 2026-10-10
+  (decisione del proprietario).** Si calcola ora con
+  `astropy.coordinates.angular_separation` nella tabella delle funzioni del
+  13; il 17 usa la stessa implementazione (scritto nel 17).
+- **D13-11 — Colonna DataLink: DECISA il 2026-10-10 (decisione del
+  proprietario).** Spostata in P6, dopo il 14.
+- **D13-12 — Propagazione senza parallasse: DECISA il 2026-10-10 (decisione
+  del proprietario).** Opzione esplicita `proper_motion_only` di
+  `propagate_position` nel 10 (astropy senza distanza, nessun effetto
+  prospettico, risultato marcato); righe senza moto proprio → valore
+  mancante marcato con conteggio, mai moto proprio nullo assunto; colonne
+  originali intatte.
+- **D13-13 — Sottoinsiemi salvati: DECISA il 2026-10-10 (decisione del
+  proprietario).** In un file scelto dall'utente, VOTable con provenienza;
+  mai nella cache; la sessione del 24 conterrà solo il riferimento al file
+  (D17-3).
+- **D13-14 — Lettura ASTRORES: DECISA il 2026-10-10 (decisione del
+  proprietario), tranne il punto b.** (a) sessagesimali in campi in gradi
+  convertiti con il modulo 10, colonna di testo conservata, avviso; (c)
+  `#id(...)` accettato con avviso; (d) `LINK` esterno tramite il 14 in P6,
+  fino ad allora errore; (e) test su file nostri dalla DTD più l'esempio
+  pubblico in un test di rete, senza copiarlo. Verifiche: DTD pubblica del
+  CDS (v0.9), esempio pubblico, `defusedxml` 0.7.1 (licenza PSF, puro
+  Python).
+- **D13-14b — UCD1 → UCD1+ (da decidere, Gruppo 3; blocca P2):** il
+  proprietario ha deciso di usare la tabella ufficiale IVOA di traduzione,
+  ma la verifica del 2026-10-10 non l'ha trovata: la raccomandazione IVOA
+  sugli UCD (REC 2005-08-12) dà la traduzione solo per le colonne di
+  posizione equatoriali (§3.1 e appendice A: `POS_EQ_RA_MAIN` →
+  `pos.eq.ra;meta.main`, `POS_EQ_DEC_MAIN` → `pos.eq.dec;meta.main`, e le
+  forme senza `_MAIN`); il CDS offre un servizio interattivo "translate"
+  che dà la corrispondenza "di default", non un file né uno standard.
+  L'esempio pubblico ASTRORES usa inoltre `POS_EQ_DE` (non `POS_EQ_DEC`).
+  Opzioni: tradurre solo le parole scritte nella raccomandazione IVOA;
+  usare il servizio del CDS tramite il 14 (P6); oppure solo la conferma
+  dell'utente.
 
 ## 14. Registro modifiche
 
@@ -581,3 +629,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare il file approvato): sei parti (P6 dopo il 14); VOTable locali con `astropy.io.votable`; più tabelle con `table`/`TABLE_CHOICE_REQUIRED` (come D11-4); riconoscimento dei formati con la regola CSV/TSV/BSV e `FORMAT_AMBIGUOUS`; unità non valide con `UNIT_UNRECOGNIZED`; D13-4 deciso (1 milione di righe, limite delle operazioni 4 GB, A10 per i cataloghi); colonne di posizione solo da UCD e metadati, suggerimenti dal nome da confermare; grammatica formale di `search` (testo che non distingue maiuscole e minuscole per default); regole di disegno; epoca e cos δ dichiarati; parallasse mancante → solo moto proprio, righe marcate; `inplace` citato nel report; bin e scala obbligatori; `column_statistics` e `record_view` nel §7; una sola cache delle interrogazioni nel 14; D13-8 deciso (tabella delle funzioni in `catalogs.py`); §11 nel 32; T4 aritmetico, nuovi T17–T27, T6 per i sottoinsiemi salvati. Nuove decisioni aperte del Gruppo 3: D13-10 (`skydist`), D13-11 (colonna DataLink), D13-12 (propagazione senza parallasse nel 10, righe senza moto proprio), D13-13 (dove si salvano i sottoinsiemi). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P1 scritta** (`src/astrotwo/core/catalogs.py`, test T1, T8–T11, T21, T22, T24, T27): verifiche — astropy 8.0.1 espone UCD e riferimento al `COOSYS` di ogni campo, non la stringa originale dell'unità (§3 precisato); lettori `csv`, `tab`, `basic`, `ipac`, `sextractor` presenti; §3 precisato sulla stima prima della lettura dei testi. `confirm_position_columns` chiede `unit` angolare se le colonne non hanno unità (mai assunta). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P2, verifiche:** DTD ASTRORES pubblica (CDS, v0.9) ed esempio pubblico del CDS trovati; `defusedxml` 0.7.1 (licenza PSF, puro Python). L'esempio è incoerente con la DTD (coordinate sessagesimali in campi `F`, UCD1, `ref` non IDREF) e T15 non ha una VOTable equivalente: nuova decisione aperta **D13-14** (Gruppo 3); P2 ferma in attesa del proprietario. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario D13-10…D13-14** (autorizzazione esplicita a modificare il file approvato): `skydist` con `astropy.coordinates` nella tabella delle funzioni, usato anche dal 17; colonna DataLink e `LINK` ASTRORES in P6; propagazione senza parallasse con l'opzione `proper_motion_only` del 10, righe senza moto proprio mascherate e contate, colonne `_prop` e `_prop_mode` (§3, §7); sottoinsiemi salvati in un VOTable scelto dall'utente (`save_subset`); lettore ASTRORES secondo la DTD con i punti a, c, d, e; nuovi avvisi `ASTRORES_TYPE_MISMATCH`, `ASTRORES_NONCONFORMING_REF`, `PROPER_MOTION_ROW_MISSING`; T6, T15, T23 riscritti, nuovi T28–T29. **Verifica:** nessuna tabella ufficiale IVOA UCD1 → UCD1+ trovata → nuova **D13-14b** (da decidere, blocca P2). Stato `approvato` invariato. |

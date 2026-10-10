@@ -191,7 +191,15 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   coordinate pixel sono sempre in convenzione numpy.
 - **`propagate_position(...)`** — propaga una posizione a un'epoca target con
   moto proprio e parallasse; restituisce posizione all'epoca richiesta e
-  dichiara l'epoca usata.
+  dichiara l'epoca usata. **Opzione esplicita `proper_motion_only=True`
+  (decisione del proprietario del 2026-10-10, D13-12 del 13):** propagazione
+  **solo con il moto proprio**, senza parallasse né velocità radiale (se
+  passate: `PROPAGATION_MODE_CONFLICT`) e quindi **senza effetti
+  prospettici**: `SkyCoord` senza distanza e `apply_space_motion` di
+  astropy (ERFA `pmsafe` usa una distanza di ripiego e lo segnala: l'avviso
+  si riporta nel risultato); il risultato è **marcato**
+  (`PropagatedPosition.proper_motion_only = True` e nota esplicita). Per
+  default (`False`) parallasse obbligatoria e positiva come prima.
 - **`astrometric_calibration(...)`** — determina/rifinisce la soluzione
   astrometrica (H6) con uno dei tre metodi di D10-1: **parametri** (posizione
   e pixel di riferimento, scala, rotazione, proiezione, verso
@@ -312,6 +320,7 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 | Header senza WCS o WCS incoerente (matrice di scala singolare, andata e ritorno al centro oltre 1e-6 pixel, matrice CD tutta nulla — che WCSLIB sostituirebbe in silenzio con l'identità) | la WCS non viene costruita; l'immagine si apre solo come griglia di pixel | `WCS_MISSING` / `WCS_INVALID` |
 | Conversione a un frame sconosciuto | errore con elenco dei frame supportati | `FRAME_UNSUPPORTED` |
 | Epoca mancante dove richiesta (es. propagazione) | errore che chiede l'epoca: **l'epoca non si assume mai** (D10-2) | `EPOCH_REQUIRED` |
+| `proper_motion_only=True` con parallasse o velocità radiale | rifiuto: le due modalità non si mescolano | `PROPAGATION_MODE_CONFLICT` |
 | Fuori campo (pixel → cielo) | valore restituito con avviso "fuori dal campo" | `OUT_OF_FIELD` |
 | Convenzione pixel diversa da `fits` o `numpy`, o mancante | rifiuto: la convenzione non si assume | `PIXEL_CONVENTION_UNKNOWN` |
 | Intestazione con soluzione storica (DSS1) non supportata dalla libreria | nessuna WCS costruita, l'immagine si apre come griglia di pixel con avviso che indica il tipo di soluzione | `WCS_LEGACY_UNSUPPORTED` |
@@ -364,6 +373,7 @@ propone i parametri e interpreta il risultato.
 | T20 | Scelta della proiezione | `choose_projection` con campo sotto e sopra la soglia data dal test | `TAN` e `AIT` | test di unità |
 | T21 | Unità ed epoche obbligatorie | coordinate senza unità; `fk5` senza equinozio | `COORD_UNIT_MISSING`; `EPOCH_REQUIRED` | test di unità |
 | T23 | Passo automatico della griglia | `choose_grid_spacing` su un campo `TAN` di 2°, su un campo piccolo, con un polo nel campo e in galattico | per ogni asse il più piccolo valore tondo ≥ estensione / linee, con l'estensione ricalcolata nel test con `astropy.wcs`; campo più piccolo → passo non maggiore; polo → estensione 360°; `compute_grid_lines` senza passi usa questi | ricalcolo con `astropy.wcs` + elenchi di §9 |
+| T24 | Propagazione solo con moto proprio | `propagate_position(..., parallax=None, proper_motion_only=True)` su posizioni con moto proprio noto; poi con una parallasse passata | posizioni uguali ad `apply_space_motion` di `SkyCoord` senza distanza (ricalcolo nel test, 1e-12 gradi); risultato marcato con nota; con parallasse `PROPAGATION_MODE_CONFLICT`; senza l'opzione la parallasse mancante resta un errore | ricalcolo con Astropy |
 | T22 | Fuori campo | `pixel_to_sky` su un pixel fuori dall'immagine | valore restituito con avviso `OUT_OF_FIELD` | test di unità |
 
 ## 13. Decisioni aperte
@@ -464,3 +474,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-09 | Claude Code | **`resolve_name` scritto** con la cache comune di `04` (prima la cache, `refresh`, timeout 10 s / 60 s sulla sessione HTTP di SIMBAD, unità lette dalle colonne SIMBAD): tutto il §7 è ora nel codice. T5 non più saltato (simulato di default, reale con il marcatore `network`). Test del modulo: 75 superati di default + 3 di rete. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Verifica dei timeout di SIMBAD** (richiesta del proprietario): l'impostazione pubblica `conf.timeout` di `astroquery.simbad` **non basta** — è il limite di esecuzione lato server delle query asincrone, non un timeout HTTP; inoltre `query_object` legge sempre `hardlimit` tramite la sessione interna di astroquery (anche con `get_query_payload=True`), quindi neppure l'esecuzione con `pyvo` e sessione pubblica evita una richiesta senza timeout. Il campo interno `_session` resta, **isolato nella sola funzione `_simbad_with_timeouts`** con un commento che spiega il motivo; il test `test_t5_timeouts_reach_the_http_session` controlla che i timeout arrivino a ogni richiesta. Test: 106 superati con la rete. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): tolti i "come Aladin" usati come motivo — `choose_grid_spacing` (§3, §7, §9, con motivazione nostra degli elenchi di valori tondi e delle 5 linee) e calibrazioni storiche DSS1 (§3, motivazione: lastre d'archivio calibrate solo così); resta il confronto finale con AP1, che è validazione e non copia. Docstring di `choose_grid_spacing` in `coordinates_wcs.py` allineata. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **D13-12** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `propagate_position` con l'opzione esplicita `proper_motion_only` (astropy senza distanza, nessun effetto prospettico, risultato marcato); nuovo errore `PROPAGATION_MODE_CONFLICT` (§10), test T24 (§12). Stato `approvato` invariato. |

@@ -533,6 +533,7 @@ class PropagatedPosition:
     radial_velocity: u.Quantity | None
     notes: tuple[str, ...]
     provenance: str = _PROVENANCE
+    proper_motion_only: bool = False  # True: senza parallasse, nessun effetto prospettico (D13-12)
 
 
 def propagate_position(
@@ -543,17 +544,29 @@ def propagate_position(
     parallax,
     target_epoch,
     radial_velocity=None,
+    proper_motion_only: bool = False,
 ) -> PropagatedPosition:
     """Propaga una posizione all'epoca richiesta con ``SkyCoord.apply_space_motion``.
 
     Epoca di origine (``position.epoch``), moto proprio e parallasse sono
-    obbligatori: mancano → ``EPOCH_REQUIRED`` (D10-2).
+    obbligatori: mancano → ``EPOCH_REQUIRED`` (D10-2). Con l'opzione esplicita
+    ``proper_motion_only=True`` (D13-12) si propaga solo con il moto proprio,
+    senza parallasse né velocità radiale: nessun effetto prospettico, risultato
+    marcato.
     """
     if position.epoch is None:
         raise CoordinatesWcsError(
             "EPOCH_REQUIRED", "epoca di origine della posizione non nota: l'epoca non si assume mai"
         )
-    for name, value in (("pm_ra_cosdec", pm_ra_cosdec), ("pm_dec", pm_dec), ("parallax", parallax)):
+    if proper_motion_only and (parallax is not None or radial_velocity is not None):
+        raise CoordinatesWcsError(
+            "PROPAGATION_MODE_CONFLICT",
+            "proper_motion_only=True non usa parallasse né velocità radiale: non passarle",
+        )
+    required = (("pm_ra_cosdec", pm_ra_cosdec), ("pm_dec", pm_dec))
+    if not proper_motion_only:
+        required += (("parallax", parallax),)
+    for name, value in required:
         if value is None:
             raise CoordinatesWcsError("EPOCH_REQUIRED", f"{name} mancante: serve per la propagazione")
         if not isinstance(value, u.Quantity):
@@ -561,7 +574,7 @@ def propagate_position(
     if target_epoch is None:
         raise CoordinatesWcsError("EPOCH_REQUIRED", "epoca di arrivo mancante")
     target = _to_epoch(target_epoch, "target_epoch")
-    if np.any(parallax <= 0 * u.mas):
+    if not proper_motion_only and np.any(parallax <= 0 * u.mas):
         raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "parallasse non positiva: distanza non definita")
     frame = position.coord.frame
     if "ra" not in frame.representation_component_names:
@@ -574,16 +587,22 @@ def propagate_position(
         dec=position.coord.spherical.lat,
         pm_ra_cosdec=pm_ra_cosdec,
         pm_dec=pm_dec,
-        distance=parallax.to(u.pc, equivalencies=u.parallax()),
         obstime=position.epoch,
         frame=frame.replicate_without_data(),
     )
     notes = []
-    if radial_velocity is not None:
+    if proper_motion_only:
+        notes.append(
+            "solo moto proprio (opzione esplicita): nessuna parallasse né velocità radiale, "
+            "nessun effetto prospettico; ERFA (pmsafe) usa una distanza di ripiego"
+        )
+    elif radial_velocity is not None:
+        kwargs["distance"] = parallax.to(u.pc, equivalencies=u.parallax())
         if not isinstance(radial_velocity, u.Quantity):
             raise CoordinatesWcsError("COORD_UNIT_MISSING", "radial_velocity senza unità")
         kwargs["radial_velocity"] = radial_velocity
     else:
+        kwargs["distance"] = parallax.to(u.pc, equivalencies=u.parallax())
         notes.append(
             "velocità radiale non fornita: ERFA la tratta come 0 km/s (effetto prospettico radiale non applicato)"
         )
@@ -598,6 +617,7 @@ def propagate_position(
         target_epoch=target,
         radial_velocity=radial_velocity,
         notes=tuple(notes),
+        proper_motion_only=proper_motion_only,
     )
 
 
