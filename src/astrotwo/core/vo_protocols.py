@@ -34,7 +34,11 @@ from astropy.io import fits
 import astropy.units as u
 import pyvo
 import requests
+from astropy.time import Time
+from defusedxml import DefusedXmlException
+from defusedxml.ElementTree import ParseError as XmlParseError
 from defusedxml.ElementTree import fromstring as safe_fromstring
+from defusedxml.ElementTree import parse as safe_parse
 from astropy.coordinates import SkyCoord
 from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
@@ -55,6 +59,11 @@ __all__ = [
     "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
     "AdqlCheck",
+    "Spectrum",
+    "read_idha",
+    "sia_search",
+    "ssa_load",
+    "ssa_search",
     "BUILTIN_SERVERS",
     "DataLinkClient",
     "DataLinks",
@@ -298,7 +307,12 @@ class _Session(requests.Session):
 
 
 def _canonical(params) -> tuple[tuple[str, str], ...]:
-    return tuple(sorted((str(k), str(v)) for k, v in dict(params or {}).items()))
+    """Parametri ordinati; un valore lista (es. ``POS`` ripetuto in SIA2) dà una coppia per elemento."""
+    pairs = []
+    for key, value in dict(params or {}).items():
+        for item in (value if isinstance(value, (list, tuple)) else [value]):
+            pairs.append((str(key), str(item)))
+    return tuple(sorted(pairs))
 
 
 def _cache_key(protocol: str, method: str, url: str, params: tuple[tuple[str, str], ...]) -> str:
@@ -344,9 +358,9 @@ def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: S
     try:
         with _Session(timeouts) as session:
             if method == "POST":
-                response = session.post(url, data=dict(canonical))
+                response = session.post(url, data=list(canonical))
             else:
-                response = session.get(url, params=dict(canonical))
+                response = session.get(url, params=list(canonical))
             payload = response.content
     except requests.exceptions.RequestException as exc:
         if cached is not None:
@@ -1001,3 +1015,244 @@ class DataLinkClient:
                            request=_record("datalink-service", "DataLinkClient.call_service", arguments, response,
                                            None),
                            warnings=notes)
+
+
+# --------------------------------------------------------------------------
+# P5 — Immagini SIA/SIA2 (H23), IDHA, spettri SSA (E4)
+# --------------------------------------------------------------------------
+
+
+def _no_result(result: VoResult, code: str, what: str) -> VoResult:
+    """Esito vuoto: avviso, non errore (§10)."""
+    if result.table.rows:
+        return result
+    return dataclasses.replace(result, warnings=result.warnings + ((code, f"nessun{what} per i criteri dati"),))
+
+
+def _time_interval(time) -> tuple[Time, Time]:
+    if not (isinstance(time, (tuple, list)) and len(time) == 2 and all(isinstance(t, Time) for t in time)):
+        raise TypeError("time deve essere una coppia (inizio, fine) di astropy.time.Time con scala dichiarata")
+    start, end = time
+    if start > end:
+        raise ValueError("time: inizio dopo la fine")
+    # SIA 2.0 (DALI): MJD in giorni sulla scala UTC; la conversione di scala è di astropy.time.
+    return start.utc, end.utc
+
+
+def _band_interval(band) -> u.Quantity:
+    if not (isinstance(band, u.Quantity) and band.shape == (2,)):
+        raise TypeError("band deve essere una Quantity di due valori (es. [400, 700] * u.nm)")
+    try:
+        meters = band.to(u.m, equivalencies=u.spectral())  # SIA 2.0: lunghezza d'onda osservata in metri
+    except u.UnitConversionError as exc:
+        raise TypeError(f"band: unità non spettrale ({band.unit})") from exc
+    return np.sort(meters)
+
+
+def sia_search(center, radius, *, version: int, service: str, band=None, time=None,
+               max_rows: int = DEFAULT_MAX_ROWS, servers: ServerRegistry | None = None,
+               limits: TableLimits | None = None, cache: SharedCache | None = None, refresh: bool = False,
+               timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Lista di immagini SIA (``version=1``) o SIA2 (``version=2``) con ``pyvo``; vuota → ``SIA_NO_RESULT``."""
+    if version not in (1, 2):
+        raise ValueError("version deve essere 1 (SIA) o 2 (SIA2)")
+    if version == 1 and (band is not None or time is not None):
+        raise ValueError("band e time sono parametri di SIA2 (version=2)")
+    limits = _check_max_rows(max_rows, limits)
+    protocol = "sia" if version == 1 else "sia2"
+    url = _service_url(service, protocol, servers)
+    ra, dec = _icrs_degrees(center)
+    r = _radius_degrees(radius)
+    arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"},
+                 "version": version, "service": service, "max_rows": max_rows}
+    if version == 1:
+        # SIA 1: regione quadrata di lato SIZE; il lato 2 × raggio contiene tutto il cerchio richiesto.
+        query = pyvo.dal.sia.SIAQuery(url, (ra, dec), 2 * r * u.deg)
+        query["MAXREC"] = max_rows
+        results_class = pyvo.dal.SIAResults
+    else:
+        kwargs = {}
+        if band is not None:
+            kwargs["band"] = tuple(_band_interval(band))
+            arguments["band"] = {"min_m": float(kwargs["band"][0].value), "max_m": float(kwargs["band"][1].value)}
+        if time is not None:
+            start, end = _time_interval(time)
+            kwargs["time"] = (start, end)
+            arguments["time"] = {"start_mjd_utc": float(start.mjd), "end_mjd_utc": float(end.mjd)}
+        query = pyvo.dal.sia2.SIA2Query(url, pos=(ra * u.deg, dec * u.deg, r * u.deg), maxrec=max_rows, **kwargs)
+        results_class = pyvo.dal.SIA2Results
+    response = _http(protocol, url, dict(query), cache=cache, refresh=refresh, timeouts=timeouts,
+                     accept_error_body=True)
+    try:
+        parsed = _parse_results(response, results_class)
+    except VoProtocolsError as exc:
+        if exc.code == "VOTABLE_INVALID":
+            raise VoProtocolsError("SIA_INVALID", exc.message, url=url) from exc
+        raise
+    result = _finish(protocol, "sia_search", arguments, response, parsed, max_rows=max_rows, limits=limits,
+                     cache=cache)
+    return _no_result(result, "SIA_NO_RESULT", "a immagine")
+
+
+def read_idha(path) -> None:
+    """IDHA: nessuna documentazione pubblica (D14-9 punto 13); il file si apre in modo sicuro e si rifiuta."""
+    text = os.fspath(path)
+    try:
+        safe_parse(text)
+    except DefusedXmlException as exc:
+        raise VoProtocolsError("XML_UNSAFE", f"{text}: costrutto XML pericoloso ({type(exc).__name__}); "
+                               "nessun dato caricato", path=text) from exc
+    except (XmlParseError, OSError) as exc:
+        raise VoProtocolsError("IDHA_UNREADABLE", f"{text}: file non leggibile come XML ({exc})", path=text) from exc
+    raise VoProtocolsError("IDHA_UNREADABLE", f"{text}: formato IDHA non leggibile: nessuna documentazione pubblica "
+                           "del formato (D14-9 punto 13); usare SIA o SIA2", path=text)
+
+
+def ssa_search(center, radius, *, service: str, max_rows: int = DEFAULT_MAX_ROWS,
+               servers: ServerRegistry | None = None, limits: TableLimits | None = None,
+               cache: SharedCache | None = None, refresh: bool = False,
+               timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Ricerca di spettri SSA 1.1 con ``pyvo`` (``SIZE`` = diametro = 2 × raggio); vuota → ``SSA_NO_RESULT``."""
+    limits = _check_max_rows(max_rows, limits)
+    url = _service_url(service, "ssa", servers)
+    ra, dec = _icrs_degrees(center)
+    r = _radius_degrees(radius)
+    query = pyvo.dal.ssa.SSAQuery(url, (ra, dec), diameter=2 * r * u.deg)
+    query["MAXREC"] = max_rows
+    response = _http("ssa", url, dict(query), cache=cache, refresh=refresh, timeouts=timeouts, accept_error_body=True)
+    parsed = _parse_results(response, pyvo.dal.SSAResults)
+    arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"},
+                 "service": service, "max_rows": max_rows}
+    result = _finish("ssa", "ssa_search", arguments, response, parsed, max_rows=max_rows, limits=limits, cache=cache)
+    return _no_result(result, "SSA_NO_RESULT", "o spettro")
+
+
+@dataclass(frozen=True)
+class Spectrum:
+    """Spettro caricato (E4): asse spettrale e flusso con unità, metadati e provenienza; analisi nel 21."""
+
+    table: Table  # colonne "spectral", "flux" ed eventualmente "flux_error"
+    spectral_kind: str  # "wavelength", "frequency", "energy" o "wavenumber"
+    columns: dict  # colonne d'origine usate per ogni asse
+    format: str  # "votable" (Spectrum DM) o "fits"
+    origin: str
+    retrieved_at: datetime
+    from_cache: bool
+    body: str | None
+    request: RequestRecord
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+_SPECTRAL_UCDS = {"em.wl": "wavelength", "em.freq": "frequency", "em.energy": "energy", "em.wavenumber": "wavenumber"}
+_UTYPE_SPECTRAL = "data.spectralaxis.value"
+_UTYPE_FLUX = "data.fluxaxis.value"
+_UTYPE_ERROR = "data.fluxaxis.accuracy.staterror"
+
+
+def _first_word(ucd: str | None) -> str:
+    return (ucd or "").split(";")[0].strip().lower()
+
+
+def _by_utype(table: Table, suffix: str) -> str | None:
+    found = [n for n in table.colnames if str(table[n].meta.get("utype", "")).lower().endswith(suffix)]
+    return found[0] if len(found) == 1 else None
+
+
+def _by_ucd(table: Table, accept) -> list[str]:
+    return [n for n in table.colnames if accept(_first_word(table[n].meta.get("ucd")))]
+
+
+def _spectral_kind(table: Table, name: str) -> str:
+    word = _first_word(table[name].meta.get("ucd"))
+    if word in _SPECTRAL_UCDS:
+        return _SPECTRAL_UCDS[word]
+    unit = table[name].unit
+    for kind, target in (("wavelength", u.m), ("frequency", u.Hz), ("energy", u.J), ("wavenumber", 1 / u.m)):
+        if unit is not None and unit.is_equivalent(target):
+            return kind
+    return "unknown"
+
+
+def _flatten_single_row(table: Table) -> Table:
+    """FITS con una riga di colonne vettoriali (serializzazione diffusa degli spettri): una riga per campione."""
+    if len(table) != 1 or not any(table[n].ndim > 1 for n in table.colnames):
+        return table
+    out = Table()
+    for name in table.colnames:
+        col = table[name]
+        if col.ndim > 1:
+            out[name] = np.asarray(col[0])
+            out[name].unit, out[name].meta = col.unit, dict(col.meta)
+    return out
+
+
+def _spectrum_columns(table: Table, fmt: str, origin: str) -> tuple[str, str, str | None]:
+    """Asse spettrale, flusso ed errore: utype dello Spectrum DM, poi (FITS) UCD; altrimenti ``SSA_INVALID``."""
+    spectral, flux, error = _by_utype(table, _UTYPE_SPECTRAL), _by_utype(table, _UTYPE_FLUX), _by_utype(table, _UTYPE_ERROR)
+    if fmt == "fits":
+        if spectral is None:
+            found = _by_ucd(table, lambda w: w in _SPECTRAL_UCDS)
+            spectral = found[0] if len(found) == 1 else None
+        if flux is None:
+            found = _by_ucd(table, lambda w: w.startswith("phot.flux"))
+            flux = found[0] if len(found) == 1 else None
+        if error is None:
+            found = [n for n in table.colnames if _first_word(table[n].meta.get("ucd")) == "stat.error"
+                     and "phot.flux" in str(table[n].meta.get("ucd", "")).lower()]
+            error = found[0] if len(found) == 1 else None
+    if spectral is None or flux is None:
+        how = "utype dello Spectrum DM" + (" o UCD (em.*, phot.flux*)" if fmt == "fits" else "")
+        raise VoProtocolsError("SSA_INVALID", f"{origin}: asse spettrale o flusso non riconoscibili ({how}, una sola "
+                               f"colonna per asse); colonne: {', '.join(table.colnames)}", url=origin)
+    for name in (spectral, flux):
+        if table[name].unit is None:
+            raise VoProtocolsError("SSA_INVALID", f"{origin}: colonna {name!r} senza unità valida", url=origin)
+    return spectral, flux, error
+
+
+def ssa_load(candidate, index: int | None = None, *, format: str | None = None, cache: SharedCache | None = None,
+             refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> Spectrum:
+    """Carica lo spettro di un candidato di ``ssa_search`` (``candidate`` = risultato, ``index`` = riga)
+    oppure da un URL di accesso; VOTable (Spectrum DM) o FITS tabellare, altrimenti ``SSA_INVALID``."""
+    body = None
+    if isinstance(candidate, VoResult):
+        if index is None:
+            raise ValueError("con un risultato di ssa_search serve index (la riga del candidato)")
+        rows = candidate.table.table
+        acref = _by_utype(rows, "access.reference") or next(iter(_by_ucd(rows, lambda w: w == "meta.ref.url")), None)
+        if acref is None:
+            raise VoProtocolsError("SSA_INVALID", "il risultato di ssa_search non ha la colonna di accesso "
+                                   "(utype ssa:Access.Reference o UCD meta.ref.url)")
+        url = str(rows[acref][index])
+        fmt_col = _by_utype(rows, "access.format")
+        declared = str(rows[fmt_col][index]) if fmt_col is not None else None
+        body = candidate.table.body
+    else:
+        url, declared = candidate, format
+    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        raise ValueError(f"URL di accesso non valido: {url!r}")
+    response = _http("ssa-spectrum", url, cache=cache, refresh=refresh, timeouts=timeouts)
+    try:
+        table = _read_payload(response)
+    except CatalogsError as exc:
+        raise VoProtocolsError("SSA_INVALID", f"{url}: spettro non leggibile ({exc.message})", url=url) from exc
+    if table.format not in ("votable", "fits"):
+        raise VoProtocolsError("SSA_INVALID", f"{url}: formato {table.format} (ammessi VOTable Spectrum DM e FITS)",
+                               url=url)
+    data = _flatten_single_row(table.table)
+    spectral, flux, error = _spectrum_columns(data, table.format, url)
+    out = Table()
+    out["spectral"] = data[spectral]
+    out["flux"] = data[flux]
+    if error is not None:
+        out["flux_error"] = data[error]
+    notes = response.notes + _store(response, "ssa-spectrum", cache)
+    if body is None:
+        notes += (("BODY_UNKNOWN", "corpo non ricavabile: spettro caricato da URL senza il candidato di ssa_search"),)
+    if declared and table.format not in declared.lower() and not (table.format == "votable" and "xml" in declared):
+        notes += (("FORMAT_DECLARED", f"formato dichiarato {declared!r}, riconosciuto dal contenuto: {table.format}"),)
+    arguments = {"url": url, "format": declared}
+    return Spectrum(table=out, spectral_kind=_spectral_kind(data, spectral),
+                    columns={"spectral": spectral, "flux": flux, "flux_error": error}, format=table.format,
+                    origin=url, retrieved_at=response.retrieved_at, from_cache=response.from_cache, body=body,
+                    request=_record("ssa-spectrum", "ssa_load", arguments, response, len(out)), warnings=notes)

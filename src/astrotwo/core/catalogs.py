@@ -548,6 +548,8 @@ def _read_votable(path: str, table, limits: TableLimits):
                 result[name].meta["ref"] = f.ref
             if f.ucd:
                 result[name].meta["ucd"] = f.ucd
+            if f.utype:
+                result[name].meta["utype"] = f.utype
     coosys = {c.ID: c for c in vot.iter_coosys() if c.ID}
     timesys = {t.ID: t for t in vot.iter_timesys() if t.ID}
     for name in result.colnames:
@@ -570,6 +572,12 @@ def _read_fits(path: str, table, limits: TableLimits):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = Table.read(hdul[info.index])
+        # UCD e utype delle colonne (parole chiave TUCDn e TUTYPn, convenzione diffusa nei FITS del VO).
+        for k, name in enumerate(result.colnames, start=1):
+            for keyword, meta in (("TUCD", "ucd"), ("TUTYP", "utype")):
+                value = header.get(f"{keyword}{k}")
+                if isinstance(value, str) and value.strip():
+                    result[name].meta[meta] = value.strip()
     return result, info, {}
 
 

@@ -515,6 +515,19 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   consolidato che rilegge le unità senza convenzioni nostre. **Fermo solo
   questo punto:** il CSV si esporta con la provenienza e i valori, senza
   unità; T5 per il CSV confronta i valori.
+- **D14-11 — Calibrazione della lista SIA usata dall'11: DA DECIDERE (aperta
+  il 2026-10-10, Gruppo 3).** §3 e T11 chiedono che l'immagine sia
+  "caricata dall'11 con la calibrazione della lista quando non ne ha una
+  propria", ma l'11 (approvato e completo) non ha un'interfaccia per una
+  calibrazione esterna, e questo lavoro non può toccare l'11. Oggi la lista
+  SIA conserva le colonne di calibrazione del servizio (per SIA 1 gli UCD
+  `VOX:WCS_*`); SIA 2 (ObsCore) non ha colonne WCS. Opzioni: (a) il 14
+  costruisce dalle colonne `VOX:WCS_*` un'intestazione WCS (con il modulo
+  10) e l'11 riceve un parametro facoltativo per usarla, dichiarato nel
+  risultato; (b) solo SIA 1 e solo su richiesta esplicita dell'utente; (c)
+  nessun uso della calibrazione della lista. **Raccomandazione:** (a), con
+  un'autorizzazione a modificare l'11. **Fermo solo questo punto** (seconda
+  metà di T11).
 
 ## 14. Registro modifiche
 
@@ -541,3 +554,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P2 scritta** (`RequestRecord`, `VoResult`, `download_table`, `DEFAULT_MAX_ROWS`; test T6, T21 e casi d'errore con un servizio HTTP simulato locale): sessione `requests` con i timeout comuni di `04` e `User-Agent` di AstroTwo; prima la cache, `refresh=True`, copia in cache dichiarata (`FROM_CACHE`) se la rete non risponde; in cache solo le risposte lette con successo (tabella SQLite `query_results` del modulo 14: protocollo, URL, parametri, byte della risposta); HTTP 401/403 → `AUTH_REQUIRED`, altri errori HTTP → `SERVICE_ERROR`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P3 scritta** (`cone_search`, `tap_query` sincrona e asincrona, `validate_adql`, `AdqlCheck`, `DEFAULT_ASYNC_TIMEOUT`; test T3, T4, T20, cone search e TAP asincrona su servizi simulati, T2 di rete sul cone search pubblico di Simbad): parametri costruiti con `pyvo` (`SCSQuery`, `TAPQuery`, `AsyncTAPJob`), stato della risposta letto da `pyvo` (`QUERY_STATUS`, `OVERFLOW`; per SCS 1.03 anche `INFO` `Error`); servizio che rifiuta la query TAP → `ADQL_INVALID` con il messaggio del servizio (HTTP 5xx → `SERVICE_ERROR`); suggerimento dell'asincrona su timeout di lettura o messaggio di durata; lavoro asincrono interrotto (`ABORT`) oltre l'attesa massima ed eliminato alla fine; voci dell'elenco dei server come `catalog` in P4. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P4 scritta** (`ServerRegistry`, `ServerEntry`, `BUILTIN_SERVERS`, `PROTOCOLS`, `RegistrySearch`, `DataLinkClient`, `DataLinks`, `ServiceDescriptor`, `ServiceParam`, `DataProduct`; `VoResult.descriptors`; parametro `servers` di `cone_search` e `tap_query`; test T17, T18, T19 su servizi simulati e T18 di rete): verifiche DataLink e URL dei server (esiti in D14-3 e D14-4); ricerca nel registro con l'ADQL RegTAP costruito da `pyvo` ed eseguito con `tap_query` (stessa cache e stesso registro); `call_service` con i parametri riferiti a colonne, poi quelli dati, poi i valori fissi, vuoti non inviati (testo originale dei valori letto con `defusedxml`, perché `astropy` rende zeri un `value=""` numerico). **Da verificare:** il registro di default di `pyvo` (`http://reg.g-vo.org/tap`) risponde "Request Denied" (HTML, HTTP 403) alla query RegTAP da questa rete e non ha HTTPS valido; il test di rete usa `https://dc.g-vo.org/tap`. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P5 scritta** (`sia_search` SIA 1 e SIA 2, `read_idha`, `ssa_search`, `ssa_load`, `Spectrum`; test T9–T12, T15, T16, `SIA_NO_RESULT`, `SIA_INVALID`, `SSA_NO_RESULT`): parametri costruiti con `pyvo`; SIA 1 con `SIZE` = 2 × raggio (lato del quadrato che contiene il cerchio), SSA con `SIZE` = diametro = 2 × raggio; SIA 2 con banda convertita in metri e tempo convertito in **UTC** prima dell'MJD (SIA 2.0 e DALI: MJD sulla scala UTC; verificato sul testo della raccomandazione), parametri ripetuti (es. `POS`) inviati tutti; spettri: VOTable dagli `utype` dello Spectrum DM (`…Data.SpectralAxis.Value`, `…Data.FluxAxis.Value`, `…Accuracy.StatError`), FITS anche dagli UCD (`em.wl`/`em.freq`/`em.energy`/`em.wavenumber`, `phot.flux*`), una sola colonna per asse e unità obbligatoria, FITS con una riga di colonne vettoriali svolto in una riga per campione; corpo dello spettro = corpo della lista dei candidati, `BODY_UNKNOWN` se caricato da solo URL. Nel 13 si conservano `utype` (VOTable) e `TUCDn`/`TUTYPn` (FITS). Nuova decisione aperta **D14-11** (calibrazione della lista nell'11; seconda metà di T11 ferma). Stato `approvato` invariato. |

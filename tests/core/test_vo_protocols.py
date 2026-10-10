@@ -21,6 +21,7 @@ from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
 from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
+from astropy.time import Time
 
 import astrotwo
 from astrotwo.core.coordinates_wcs import SkyFrame
@@ -35,6 +36,10 @@ from astrotwo.core.vo_protocols import (
     VoProtocolsError,
     cone_search,
     download_table,
+    read_idha,
+    sia_search,
+    ssa_load,
+    ssa_search,
     export_table,
     read_votable,
     tap_query,
@@ -651,3 +656,192 @@ def test_t18_registry_network(cache):
     found = ServerRegistry().search_registry(["gaia"], "tap", max_rows=200, registry_url="https://dc.g-vo.org/tap",
                                              cache=cache)
     assert found.services and all(s.protocol == "tap" and s.url.startswith("http") for s in found.services)
+
+
+# =============================================================================
+# P5 — SIA/SIA2, IDHA, SSA (T9–T12, T15, T16)
+# =============================================================================
+
+SIA1 = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>
+<TABLE>
+<FIELD name="title" datatype="char" arraysize="*" ucd="VOX:Image_Title"/>
+<FIELD name="ra" datatype="double" unit="deg" ucd="POS_EQ_RA_MAIN"/>
+<FIELD name="dec" datatype="double" unit="deg" ucd="POS_EQ_DEC_MAIN"/>
+<FIELD name="format" datatype="char" arraysize="*" ucd="VOX:Image_Format"/>
+<FIELD name="url" datatype="char" arraysize="*" ucd="VOX:Image_AccessReference"/>
+<FIELD name="crpix" datatype="double" arraysize="2" ucd="VOX:WCS_CoordRefPixel"/>
+<FIELD name="crval" datatype="double" arraysize="2" unit="deg" ucd="VOX:WCS_CoordRefValue"/>
+<DATA><TABLEDATA>
+{rows}
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+
+def sia1_text(n):
+    rows = "".join(f"<TR><TD>img{k}</TD><TD>{10 + k}</TD><TD>20</TD><TD>image/fits</TD>"
+                   f"<TD>http://example.org/img{k}.fits</TD><TD>50 50</TD><TD>{10 + k} 20</TD></TR>" for k in range(n))
+    return SIA1.format(rows=rows)
+
+
+def test_t11_sia(service, cache):
+    service.routes["/sia"] = votable_route(sia1_text(2))
+    center = SkyCoord(10 * u.deg, 20 * u.deg)
+    result = sia_search(center, 0.1 * u.deg, version=1, service=service.url + "/sia", cache=cache)
+    params = service.requests[-1]["params"]
+    assert params["POS"] == "10.0,20.0" and float(params["SIZE"]) == pytest.approx(0.2)  # lato = 2 × raggio
+    expected = pyvo.dal.SIAResults(parse_votable(io.BytesIO(sia1_text(2).encode())))  # ricalcolo con pyvo
+    assert result.table.rows == len(expected) == 2
+    assert [str(v) for v in result.table.table["url"]] == [r.acref for r in expected]
+    assert [str(v) for v in result.table.table["format"]] == [r.format for r in expected]
+    assert list(result.table.table["crval"][1]) == [11.0, 20.0]  # calibrazione della lista conservata
+    assert result.request.protocol == "sia" and result.table.origin == service.url + "/sia"
+    service.routes["/sia"] = votable_route(sia1_text(0))
+    empty = sia_search(center, 0.1 * u.deg, version=1, service=service.url + "/sia", cache=cache, refresh=True)
+    assert empty.table.rows == 0 and "SIA_NO_RESULT" in dict(empty.warnings)
+    service.routes["/sia"] = lambda r: (200, "text/xml", "<VOTABLE><RESOURCE>")
+    with pytest.raises(VoProtocolsError) as err:
+        sia_search(center, 0.1 * u.deg, version=1, service=service.url + "/sia", cache=cache, refresh=True)
+    assert err.value.code == "SIA_INVALID"
+    with pytest.raises(ValueError):
+        sia_search(center, 0.1 * u.deg, version=1, service=service.url + "/sia", band=[1, 2] * u.m)
+
+
+def test_t12_sia2_band_time(service, cache):
+    service.routes["/sia2"] = votable_route(sia1_text(1))
+    start, end = Time("2020-01-01T00:00:00", scale="tt"), Time("2020-02-01T00:00:00", scale="tt")
+    sia_search(SkyCoord(10 * u.deg, 20 * u.deg), 6 * u.arcmin, version=2, service=service.url + "/sia2",
+               band=[700, 400] * u.nm, time=(start, end), max_rows=9, cache=cache)
+    params = service.requests[-1]["params"]
+    ra, dec, r = (float(v) for v in params["POS"].split()[1:])
+    assert params["POS"].startswith("CIRCLE") and (ra, dec) == (10.0, 20.0) and r == pytest.approx(0.1)
+    band = [float(v) for v in params["BAND"].split()]
+    assert band == pytest.approx([(400 * u.nm).to_value(u.m), (700 * u.nm).to_value(u.m)])  # metri (SIA 2.0)
+    t0, t1 = (float(v) for v in params["TIME"].split())
+    assert t0 == pytest.approx(start.utc.mjd, abs=1e-9) and t1 == pytest.approx(end.utc.mjd, abs=1e-9)  # UTC
+    assert t0 != pytest.approx(start.mjd, abs=1e-6)  # la scala TT è stata convertita, non ignorata
+    assert params["MAXREC"] == "9"
+    with pytest.raises(TypeError):
+        sia_search(SkyCoord(10 * u.deg, 20 * u.deg), 6 * u.arcmin, version=2, service=service.url + "/sia2",
+                   time=(58000, 58001))
+    with pytest.raises(TypeError):
+        sia_search(SkyCoord(10 * u.deg, 20 * u.deg), 6 * u.arcmin, version=2, service=service.url + "/sia2",
+                   band=[1, 2] * u.s)
+
+
+SSA_RESULTS = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>
+<COOSYS ID="sys" system="ICRS"/>
+<TABLE>
+<FIELD name="title" datatype="char" arraysize="*" utype="ssa:DataID.Title"/>
+<FIELD name="ra" datatype="double" unit="deg" ucd="pos.eq.ra;meta.main" ref="sys"/>
+<FIELD name="dec" datatype="double" unit="deg" ucd="pos.eq.dec;meta.main" ref="sys"/>
+<FIELD name="acref" datatype="char" arraysize="*" ucd="meta.ref.url" utype="ssa:Access.Reference"/>
+<FIELD name="fmt" datatype="char" arraysize="*" utype="ssa:Access.Format"/>
+<DATA><TABLEDATA>
+<TR><TD>spettro VOTable</TD><TD>10</TD><TD>20</TD><TD>{url}/spec.xml</TD><TD>application/x-votable+xml</TD></TR>
+<TR><TD>spettro FITS</TD><TD>10</TD><TD>20</TD><TD>{url}/spec.fits</TD><TD>application/fits</TD></TR>
+<TR><TD>senza unità</TD><TD>10</TD><TD>20</TD><TD>{url}/bad.xml</TD><TD>application/x-votable+xml</TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+SPECTRUM = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE utype="spec:Spectrum"><TABLE utype="spec:Spectrum">
+<FIELD name="WAVE" datatype="double" {unit} ucd="em.wl" utype="spec:Spectrum.Data.SpectralAxis.Value"/>
+<FIELD name="FLUX" datatype="double" unit="erg/(s.cm**2.Angstrom)" ucd="phot.flux.density;em.wl"
+ utype="spec:Spectrum.Data.FluxAxis.Value"/>
+<FIELD name="ERR" datatype="double" unit="erg/(s.cm**2.Angstrom)"
+ utype="spec:Spectrum.Data.FluxAxis.Accuracy.StatError"/>
+<DATA><TABLEDATA>
+<TR><TD>4000.5</TD><TD>1.5e-15</TD><TD>1e-17</TD></TR>
+<TR><TD>4001.5</TD><TD>1.7e-15</TD><TD>2e-17</TD></TR>
+<TR><TD>4002.5</TD><TD>1.6e-15</TD><TD>1e-17</TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+
+def fits_spectrum():
+    t = Table({"lambda": np.array([[5000.0, 5001.0, 5002.0, 5003.0]]),
+               "f": np.array([[1.0, 2.0, 3.0, 4.0]])})  # una riga di colonne vettoriali
+    t["lambda"].unit, t["f"].unit = u.AA, u.Jy
+    hdu = fits.table_to_hdu(t)
+    hdu.header["TUCD1"], hdu.header["TUCD2"] = "em.wl", "phot.flux.density;em.wl"
+    buffer = io.BytesIO()
+    fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(buffer)
+    return buffer.getvalue()
+
+
+def ssa_service(service):
+    service.routes["/ssa"] = votable_route(SSA_RESULTS.format(url=service.url))
+    service.routes["/spec.xml"] = votable_route(SPECTRUM.format(unit='unit="Angstrom"'))
+    service.routes["/bad.xml"] = votable_route(SPECTRUM.format(unit=""))
+    service.routes["/spec.fits"] = lambda r: (200, "application/fits", fits_spectrum())
+
+
+def test_t9_ssa_search_and_load(service, cache):
+    ssa_service(service)
+    found = ssa_search(SkyCoord(10 * u.deg, 20 * u.deg), 5 * u.arcsec, service=service.url + "/ssa", cache=cache)
+    params = service.requests[-1]["params"]
+    assert params["POS"] == "10.0,20.0" and float(params["SIZE"]) == pytest.approx((10 * u.arcsec).to_value(u.deg))
+    assert params["REQUEST"] == "queryData" and found.table.rows == 3 and found.table.body == "celestial"
+    spec = ssa_load(found, 0, cache=cache)
+    expected = parse_votable(io.BytesIO(SPECTRUM.format(unit='unit="Angstrom"').encode())).get_first_table().to_table()
+    assert spec.format == "votable" and spec.spectral_kind == "wavelength" and spec.body == "celestial"
+    assert np.array_equal(spec.table["spectral"], expected["WAVE"]) and spec.table["spectral"].unit == u.AA
+    assert np.array_equal(spec.table["flux"], expected["FLUX"]) and spec.table["flux"].unit == expected["FLUX"].unit
+    assert np.array_equal(spec.table["flux_error"], expected["ERR"])
+    assert spec.origin == service.url + "/spec.xml" and spec.request.protocol == "ssa-spectrum"
+    fits_spec = ssa_load(found, 1, cache=cache)
+    expected_fits = Table.read(io.BytesIO(fits_spectrum()), hdu=1)
+    assert fits_spec.format == "fits" and fits_spec.columns == {"spectral": "lambda", "flux": "f", "flux_error": None}
+    assert np.array_equal(fits_spec.table["spectral"], expected_fits["lambda"][0])
+    assert fits_spec.table["flux"].unit == u.Jy and len(fits_spec.table) == 4
+    direct = ssa_load(service.url + "/spec.xml", cache=cache)
+    assert direct.body is None and "BODY_UNKNOWN" in dict(direct.warnings) and direct.from_cache
+
+
+def test_t10_ssa_invalid(service, cache):
+    ssa_service(service)
+    found = ssa_search(SkyCoord(10 * u.deg, 20 * u.deg), 5 * u.arcsec, service=service.url + "/ssa", cache=cache)
+    with pytest.raises(VoProtocolsError) as err:
+        ssa_load(found, 2, cache=cache)
+    assert err.value.code == "SSA_INVALID" and "WAVE" in err.value.message
+    service.routes["/plain.xml"] = votable_route(votable_text(3))  # tabella senza Spectrum DM
+    with pytest.raises(VoProtocolsError) as err:
+        ssa_load(service.url + "/plain.xml", cache=cache)
+    assert err.value.code == "SSA_INVALID"
+    service.routes["/spec.csv"] = lambda r: (200, "text/csv", "a,b\n1,2\n")
+    with pytest.raises(VoProtocolsError) as err:
+        ssa_load(service.url + "/spec.csv", cache=cache)
+    assert err.value.code == "SSA_INVALID"
+    service.routes["/ssa"] = votable_route(SSA_RESULTS.format(url=service.url).replace(
+        SSA_RESULTS.format(url=service.url)[SSA_RESULTS.format(url=service.url).index("<TR>"):
+                                            SSA_RESULTS.format(url=service.url).index("</TABLEDATA>")], ""))
+    empty = ssa_search(SkyCoord(10 * u.deg, 20 * u.deg), 5 * u.arcsec, service=service.url + "/ssa", cache=cache,
+                       refresh=True)
+    assert empty.table.rows == 0 and "SSA_NO_RESULT" in dict(empty.warnings)
+
+
+def test_t15_idha_unreadable(tmp_path):
+    path = tmp_path / "lista.xml"
+    path.write_text('<?xml version="1.0"?><IDHA><Image name="x"/></IDHA>', encoding="utf-8")
+    with pytest.raises(VoProtocolsError) as err:
+        read_idha(path)
+    assert err.value.code == "IDHA_UNREADABLE" and "documentazione" in err.value.message
+    broken = tmp_path / "rotto.xml"
+    broken.write_text("<IDHA><Image>", encoding="utf-8")
+    with pytest.raises(VoProtocolsError) as err:
+        read_idha(broken)
+    assert err.value.code == "IDHA_UNREADABLE"
+
+
+def test_t16_idha_unsafe_xml(tmp_path):
+    path = tmp_path / "bomba.xml"
+    path.write_text('<?xml version="1.0"?><!DOCTYPE l [<!ENTITY a "aaaa"><!ENTITY b "&a;&a;&a;">]>'
+                    "<IDHA>&b;</IDHA>", encoding="utf-8")
+    with pytest.raises(VoProtocolsError) as err:
+        read_idha(path)
+    assert err.value.code == "XML_UNSAFE"
