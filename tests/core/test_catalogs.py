@@ -590,3 +590,125 @@ def test_proper_motion_arrows(tmp_path):
             proper_motion_arrows(cat, scale, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True,
                                  source_epoch=2016.0)
         assert info.value.code == "EPOCH_INVALID"
+
+
+# =============================================================================
+# P2 — ASTRORES: file nostri scritti dalla DTD pubblica del CDS (T15, T16, T28);
+# l'esempio pubblico del CDS si legge solo in un test di rete, senza copiarlo.
+# =============================================================================
+
+ASTRORES = """<?xml version="1.0"?>
+<!DOCTYPE ASTRO SYSTEM "astrores.dtd">
+<ASTRO ID="prova">
+ <DEFINITIONS>
+  <COOSYS ID="eq" system="eq_FK5" equinox="2000." epoch="2000."/>
+ </DEFINITIONS>
+ <RESOURCE ID="r1">
+  <TABLE ID="t1">
+   <NAME>stelle</NAME>
+   <FIELD ID="ra" ref="{ref}" ucd="pos.eq.ra;meta.main" unit="deg" datatype="F" width="11">
+     <NAME>RA</NAME><DESCRIPTION>Ascensione retta</DESCRIPTION></FIELD>
+   <FIELD ID="de" ref="{ref}" ucd="pos.eq.dec;meta.main" unit="deg" datatype="F"><NAME>DE</NAME></FIELD>
+   <FIELD ID="mag" unit="mag" datatype="F"><NAME>Vmag</NAME></FIELD>
+   <FIELD ID="n" datatype="I"><NAME>N</NAME></FIELD>
+   <FIELD ID="ok" datatype="L"><NAME>OK</NAME></FIELD>
+   <FIELD ID="id" datatype="A"><NAME>Id</NAME></FIELD>
+   <DATA><CSV colsep="|" headlines="2"><![CDATA[
+RA|DE|Vmag|N|OK|Id
+deg|deg|mag|-|-|-
+{row1}
+{row2}
+]]></CSV></DATA>
+  </TABLE>
+  <TABLE ID="t2">
+   <FIELD name="x" datatype="D"/><FIELD name="y" datatype="A"/>
+   <DATA><TABLEDATA headlines="1"><ROW><CELL>x</CELL><CELL>y</CELL></ROW>
+   <ROW><CELL>1.5</CELL><CELL>uno</CELL></ROW><ROW><CELL></CELL><CELL>due</CELL></ROW></TABLEDATA></DATA>
+  </TABLE>
+ </RESOURCE>
+</ASTRO>
+"""
+ROW_DECIMAL = ("10.5|-3.25|11.2|7|T|a", "11.5|-4.25||8|F|bb")
+ROW_SEXAGESIMAL = ("00 13 00.93|+72 31 19.9|11.2|7|T|a", "12:30:15.5|-05:06:07||8|false|bb")
+
+
+def write_astrores(path, rows=ROW_DECIMAL, ref="eq"):
+    path.write_text(ASTRORES.format(row1=rows[0], row2=rows[1], ref=ref), encoding="utf-8")
+    return path
+
+
+def test_t15_astrores_from_dtd(tmp_path):
+    path = write_astrores(tmp_path / "in_realta_astrores.txt")
+    assert detect_table_format(path) == "astrores"
+    assert [(t.index, t.name, t.rows, t.columns) for t in list_tables(path)] == [(0, "stelle", 2, 6), (1, "t2", 2, 2)]
+    with pytest.raises(CatalogsError) as info:
+        read_table(path)
+    assert info.value.code == "TABLE_CHOICE_REQUIRED"
+    cat = read_table(path, table=0)
+    t = cat.table
+    assert cat.format == "astrores" and t.colnames == ["RA", "DE", "Vmag", "N", "OK", "Id"]
+    assert np.array_equal(t["RA"], [10.5, 11.5]) and t["RA"].unit == u.deg and t["RA"].dtype == np.float64
+    assert list(t["Vmag"].mask) == [False, True] and t["Vmag"][0] == 11.2
+    assert list(t["N"]) == [7, 8] and t["N"].dtype == np.int64 and list(t["OK"]) == [True, False]
+    assert list(t["Id"]) == ["a", "bb"] and t["RA"].description == "Ascensione retta"
+    # Equinozio ed epoca scritti come numeri: giuliani per FK5 (dichiarato nel lettore).
+    assert (cat.positions.lon, cat.positions.frame, cat.positions.equinox, cat.positions.epoch) == (
+        "RA", "fk5", "J2000", "J2000") and cat.body == "celestial"
+    second = read_table(path, table=1)
+    assert list(second.table["y"]) == ["uno", "due"] and list(second.table["x"].mask) == [False, True]
+
+
+def test_t15_astrores_link_and_errors(tmp_path):
+    linked = tmp_path / "link.xml"
+    linked.write_text('<?xml version="1.0"?><ASTRO><RESOURCE><TABLE><FIELD name="a" datatype="F"/>'
+                      '<DATA><LINK href="http://esempio.invalid/dati.csv"/></DATA></TABLE></RESOURCE></ASTRO>')
+    wrong = tmp_path / "righe.xml"
+    wrong.write_text('<?xml version="1.0"?><ASTRO><RESOURCE><TABLE><FIELD name="a"/><FIELD name="b"/>'
+                     '<DATA><CSV>1\t2\n3</CSV></DATA></TABLE></RESOURCE></ASTRO>')
+    for path in (linked, wrong):
+        with pytest.raises(CatalogsError) as info:
+            read_table(path)
+        assert info.value.code == "ASTRORES_UNREADABLE"
+    tabs = tmp_path / "tab.xml"  # colsep di default: tabulazione
+    tabs.write_text('<?xml version="1.0"?><ASTRO><RESOURCE><TABLE><FIELD name="a" datatype="I"/><FIELD name="b"/>'
+                    '<DATA><CSV>1\tuno\n2\tdue</CSV></DATA></TABLE></RESOURCE></ASTRO>')
+    assert list(read_table(tabs).table["b"]) == ["uno", "due"]
+
+
+def test_t16_astrores_entity_expansion(tmp_path):
+    path = tmp_path / "bomba.xml"
+    path.write_text('<?xml version="1.0"?><!DOCTYPE ASTRO [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;">]>'
+                    '<ASTRO><RESOURCE><TABLE><FIELD name="x"/><DATA><CSV>&b;</CSV></DATA></TABLE></RESOURCE></ASTRO>')
+    with pytest.raises(CatalogsError) as info:
+        read_table(path)
+    assert info.value.code == "XML_UNSAFE"
+
+
+def test_t28_astrores_sexagesimal_and_nonconforming_ref(tmp_path):
+    from astropy.coordinates import Angle
+
+    cat = read_table(write_astrores(tmp_path / "sex.xml", rows=ROW_SEXAGESIMAL, ref="#id(eq)"), table=0)
+    t = cat.table
+    assert np.array_equal(t["RA"], Angle(["00 13 00.93", "12:30:15.5"], unit=u.hourangle).deg)
+    assert np.array_equal(t["DE"], Angle(["+72 31 19.9", "-05:06:07"], unit=u.deg).deg)
+    assert list(t["RA_text"]) == ["00 13 00.93", "12:30:15.5"] and t["RA"].unit == u.deg
+    codes = [code for code, _ in cat.warnings]
+    assert codes.count("ASTRORES_TYPE_MISMATCH") == 2 and "ASTRORES_NONCONFORMING_REF" in codes
+    assert cat.positions.frame == "fk5"  # il riferimento #id(eq) è stato accettato
+    assert list(t["OK"]) == [True, False]
+
+
+@pytest.mark.network
+def test_t15_public_astrores_example(tmp_path):
+    # Esempio pubblico del CDS, scaricato nel test e mai copiato nel repository (D13-14 e).
+    import requests
+
+    response = requests.get("https://vizier.cds.unistra.fr/catstd/astrores.xml", timeout=(10, 60))
+    response.raise_for_status()
+    path = tmp_path / "astrores.xml"
+    path.write_bytes(response.content)
+    cat = read_table(path)
+    codes = [code for code, _ in cat.warnings]
+    assert cat.rows == 10 and "GSC-Id" in cat.colnames and "ASTRORES_NONCONFORMING_REF" in codes
+    assert "UCD1_NOT_TRANSLATED" in codes and cat.positions is None  # D13-14b ancora aperta
+    assert "ASTRORES_TYPE_MISMATCH" in codes  # RA/Dec sessagesimali in campi F

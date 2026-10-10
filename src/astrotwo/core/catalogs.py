@@ -31,8 +31,16 @@ from astropy.io.votable import parse as parse_votable
 from astropy.io.votable.tree import CooSys, Info
 from astropy.table import MaskedColumn, Table
 from astropy.time import Time
+from defusedxml import DefusedXmlException
+from defusedxml.ElementTree import parse as safe_parse_xml
 
-from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, propagate_position, supported_frames
+from astrotwo.core.coordinates_wcs import (
+    CoordinatesWcsError,
+    SkyFrame,
+    parse_sexagesimal,
+    propagate_position,
+    supported_frames,
+)
 
 __all__ = [
     "CONSTANTS",
@@ -510,7 +518,7 @@ def list_tables(source) -> tuple[TableInfo, ...]:
             return tuple(TableInfo(index=k, name=hdul[k].name, rows=int(hdul[k].header.get("NAXIS2", 0)),
                                    columns=int(hdul[k].header.get("TFIELDS", 0))) for k in _fits_tables(hdul))
     if fmt == "astrores":
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: lettore ASTRORES non ancora disponibile (P2)")
+        return tuple(_astrores_infos(_parse_astrores(path)))
     rows, columns = _count_text_rows(path, fmt)
     return (TableInfo(index=0, name="", rows=rows, columns=columns),)
 
@@ -584,13 +592,13 @@ def read_table(source, *, table=None, format=None, limits: TableLimits | None = 
     elif fmt == "fits":
         result, info, coosys = _read_fits(path, table, limits)
     elif fmt == "astrores":
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: lettore ASTRORES non ancora disponibile (P2)")
+        result, info, coosys, astrores_notes = _read_astrores(path, table, limits)
     else:
         result, info, coosys = _read_text(path, fmt, table, limits)
     # Dopo la lettura: righe e memoria esatte (per l'XML è il primo controllo esatto).
     _check_rows(len(result), limits, path)
     _check_memory(f"tabella {path}", _table_bytes(result), limits)
-    notes: list[tuple[str, str]] = []
+    notes: list[tuple[str, str]] = list(astrores_notes) if fmt == "astrores" else []
     if format is not None:
         notes.append(("FORMAT_DECLARED", f"formato {format} indicato dall'utente, nessun riconoscimento"))
     notes.extend(_normalize_units(result))
@@ -617,6 +625,198 @@ def read_table(source, *, table=None, format=None, limits: TableLimits | None = 
         warnings=tuple(notes),
     )
 
+
+
+# --------------------------------------------------------------------------
+# P2 — ASTRORES (DTD pubblica del CDS v0.9; D13-7, D13-14)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _CooSys:
+    """COOSYS di ASTRORES con gli stessi attributi di quello di astropy.io.votable."""
+
+    ID: str
+    system: str | None
+    equinox: str | None
+    epoch: str | None
+
+
+_ASTRORES_FLOAT = ("F", "D", "E")
+_REF_FORM = re.compile(r"^#id\(\$?([^)]*)\)$")
+
+
+def _astrores_year(value: str | None, system: str | None) -> str | None:
+    """Equinozio o epoca scritti come numero (es. ``2000.``): giuliani per FK5 e ICRS, besseliani per FK4."""
+    if value is None or not value.strip():
+        return None
+    text = value.strip()
+    if text[:1] in ("J", "B"):
+        return text
+    try:
+        year = float(text)
+    except ValueError:
+        return text
+    return f"{'B' if system == 'eq_FK4' else 'J'}{year:g}"
+
+
+def _astrores_text(element, tag: str) -> str | None:
+    child = element.find(tag)
+    return None if child is None or child.text is None else child.text.strip()
+
+
+def _parse_astrores(path: str):
+    try:
+        tree = safe_parse_xml(path)
+    except DefusedXmlException as exc:
+        raise CatalogsError("XML_UNSAFE", f"{path}: costrutto XML pericoloso ({type(exc).__name__}), nulla caricato",
+                            path=path) from exc
+    except Exception as exc:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: XML non leggibile ({exc})", path=path) from exc
+    root = tree.getroot()
+    if root.tag != "ASTRO":
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: radice {root.tag!r}, attesa ASTRO")
+    return root
+
+
+def _astrores_rows(table_el, n_fields: int, path: str) -> list[list[str | None]]:
+    data = table_el.find("DATA")
+    if data is None:
+        return []
+    if data.find("LINK") is not None:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati in un LINK esterno: lettura tramite il modulo 14 "
+                            "(P6), non ancora disponibile")
+    csv = data.find("CSV")
+    if csv is not None:
+        colsep = csv.get("colsep") or "\t"
+        recsep = csv.get("recsep") or "\n"
+        headlines = int(csv.get("headlines") or 0)
+        records = [r for r in (csv.text or "").split(recsep) if r.strip()][headlines:]
+        rows = [[cell.strip() for cell in record.split(colsep)] for record in records]
+    else:
+        tabledata = data.find("TABLEDATA")
+        if tabledata is None:
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: DATA senza CSV, TABLEDATA o LINK")
+        headlines = int(tabledata.get("headlines") or 0)
+        rows = [[(c.text or "").strip() for c in row.findall("CELL")] for row in tabledata.findall("ROW")][headlines:]
+    for k, row in enumerate(rows):
+        if len(row) != n_fields:
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: riga {k} con {len(row)} valori per {n_fields} campi")
+    return [[cell if cell != "" else None for cell in row] for row in rows]
+
+
+def _astrores_column(name: str, values: list[str | None], field_el, notes: list[tuple[str, str]], table: Table):
+    datatype = (field_el.get("datatype") or "A").upper()
+    unit = field_el.get("unit")
+    ucd = field_el.get("ucd")
+    missing = [v is None for v in values]
+    present = [v for v in values if v is not None]
+
+    def put(data, dtype=None):
+        column = MaskedColumn(data, mask=missing, dtype=dtype, name=name)
+        table[name] = column
+
+    if datatype in _ASTRORES_FLOAT or datatype == "I":
+        cast = float if datatype in _ASTRORES_FLOAT else int
+        try:
+            parsed = [cast(v) for v in present]
+            filled = iter(parsed)
+            put([next(filled) if not m else 0 for m in missing], np.float64 if cast is float else np.int64)
+        except ValueError:
+            words = _ucd_words(ucd)
+            hours = "pos.eq.ra" in words
+            degrees = "pos.eq.dec" in words
+            angular = unit is not None and _standard_unit(unit) is not None and _standard_unit(unit).is_equivalent(u.deg)
+            converted = None
+            if angular and (hours or degrees):
+                try:
+                    converted = parse_sexagesimal(present, hours=hours).to_value(_standard_unit(unit))
+                except CoordinatesWcsError:
+                    converted = None
+            put([v if v is not None else "" for v in values], str)
+            table[name + "_text"] = table[name]
+            if converted is not None:
+                filled = iter(converted)
+                put([next(filled) if not m else 0.0 for m in missing], np.float64)
+                notes.append(("ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato {datatype} ma i dati sono "
+                              f"sessagesimali; convertiti in gradi ({'ore' if hours else 'gradi'}) con il modulo 10, "
+                              f"testo originale in {name + '_text'!r}"))
+            else:
+                del table[name + "_text"]
+                notes.append(("ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato {datatype} ma i dati non sono "
+                              "numerici; letto come testo"))
+    elif datatype == "L":
+        mapping = {"t": True, "true": True, "1": True, "f": False, "false": False, "0": False}
+        if all(v.lower() in mapping for v in present):
+            filled = iter([mapping[v.lower()] for v in present])
+            put([next(filled) if not m else False for m in missing], bool)
+        else:
+            put([v if v is not None else "" for v in values], str)
+            notes.append(("ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato L ma i dati non sono booleani; testo"))
+    else:
+        put([v if v is not None else "" for v in values], str)
+    column = table[name]
+    if unit:
+        column.unit = u.Unit(unit, parse_strict="silent")  # validata poi come le altre (FITS o VOUnit)
+    if ucd:
+        column.meta["ucd"] = ucd
+    description = _astrores_text(field_el, "DESCRIPTION")
+    if description:
+        column.description = " ".join(description.split())
+
+
+def _astrores_infos(root) -> list[TableInfo]:
+    out = []
+    for k, table_el in enumerate(root.iter("TABLE")):
+        data = table_el.find("DATA")
+        rows = 0
+        if data is not None and data.find("TABLEDATA") is not None:
+            tabledata = data.find("TABLEDATA")
+            rows = max(0, len(tabledata.findall("ROW")) - int(tabledata.get("headlines") or 0))
+        elif data is not None and data.find("CSV") is not None:
+            csv = data.find("CSV")
+            rows = max(0, len([r for r in (csv.text or "").split(csv.get("recsep") or "\n") if r.strip()])
+                       - int(csv.get("headlines") or 0))
+        name = _astrores_text(table_el, "NAME") or table_el.get("ID") or ""
+        out.append(TableInfo(index=k, name=name, rows=rows, columns=len(table_el.findall("FIELD"))))
+    return out
+
+
+def _read_astrores(path: str, table, limits: TableLimits):
+    _check_memory(f"lettura di {path}", os.path.getsize(path), limits)  # stima prima della lettura (XML)
+    root = _parse_astrores(path)
+    info = _choose(_astrores_infos(root), table, path)
+    _check_rows(info.rows, limits, path)
+    table_el = list(root.iter("TABLE"))[info.index]
+    fields = table_el.findall("FIELD")
+    if not fields:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: tabella {info.index} senza FIELD")
+    rows = _astrores_rows(table_el, len(fields), path)
+    notes: list[tuple[str, str]] = []
+    result = Table()
+    for k, field_el in enumerate(fields):
+        name = _astrores_text(field_el, "NAME") or field_el.get("name") or field_el.get("ID") or f"col{k}"
+        if name in result.colnames:
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: due campi con lo stesso nome {name!r}")
+        _astrores_column(name, [row[k] for row in rows], field_el, notes, result)
+        ref = field_el.get("ref")
+        if ref:
+            match = _REF_FORM.match(ref)
+            if match:
+                notes.append(("ASTRORES_NONCONFORMING_REF", f"campo {name!r}: ref {ref!r} non è un IDREF (DTD): "
+                              f"accettato come {match.group(1)!r}"))
+                ref = match.group(1)
+            result[name].meta["ref"] = ref
+    coosys = {}
+    for el in root.iter("COOSYS"):
+        if el.get("ID"):
+            system = el.get("system") or "eq_FK5"  # default della DTD
+            coosys[el.get("ID")] = _CooSys(el.get("ID"), system, _astrores_year(el.get("equinox"), system),
+                                           _astrores_year(el.get("epoch"), system))
+    if any(w for n in result.colnames for w in [result[n].meta.get("ucd") or ""] if w and "." not in w):
+        notes.append(("UCD1_NOT_TRANSLATED", "UCD1 (vecchio vocabolario) non tradotti in UCD1+: decisione D13-14b "
+                      "aperta; colonne di posizione da confermare con confirm_position_columns"))
+    return result, info, coosys, notes
 
 
 # --------------------------------------------------------------------------

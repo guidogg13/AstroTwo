@@ -52,7 +52,14 @@ suo VOTable.
     `precision`, `format`, `ref`; il nome della colonna è il `NAME` del
     campo, altrimenti `name`, altrimenti `ID`; dati in `CSV` (`colsep`,
     default tabulazione; `recsep`, default a capo; `headlines` righe da
-    saltare) o in `TABLEDATA`/`ROW`/`CELL`; celle vuote = valori mancanti.
+    saltare, contate dopo aver tolto i record vuoti) o in
+    `TABLEDATA`/`ROW`/`CELL` (anche qui `headlines`); celle vuote = valori
+    mancanti; campo senza `datatype` = testo; booleani `T`/`F`, `true`/
+    `false`, `1`/`0`; due campi con lo stesso nome → `ASTRORES_UNREADABLE`;
+    `COOSYS` senza `system` = `eq_FK5` (default della DTD); equinozio ed
+    epoca scritti come numero (es. `2000.`) si leggono come anni
+    **giuliani** per FK5 e ICRS e **besseliani** per FK4 (convenzione dei
+    due sistemi), dichiarati come `J2000`/`B1950`.
     (a) Un campo dichiarato numerico in gradi (`F`/`D`/`E` con unità `deg`)
     i cui dati sono **sessagesimali** si converte in gradi con il modulo 10
     (`astropy.coordinates.Angle`: ore per l'ascensione retta, gradi per la
@@ -60,7 +67,13 @@ suo VOTable.
     colonna di testo originale** (`<nome>_text`) e si dà l'avviso
     `ASTRORES_TYPE_MISMATCH` (tipo dichiarato diverso dai dati); un campo
     numerico con dati non numerici e non sessagesimali → testo con lo
-    stesso avviso. (b) UCD1 → UCD1+: **da decidere** (D13-14b). (c) Un
+    stesso avviso; un campo sessagesimale senza UCD che dica ascensione
+    retta o declinazione resta testo con l'avviso (ore o gradi non si
+    indovinano). (b) UCD1 → UCD1+: **da decidere** (D13-14b); **fino alla
+    decisione** gli UCD1 restano come sono, con l'avviso
+    `UCD1_NOT_TRANSLATED`, e le colonne di posizione si confermano con
+    `confirm_position_columns` (comportamento provvisorio, il più
+    prudente). (c) Un
     `ref` scritto `#id(...)` o `#id($...)` (forma non conforme alla DTD, che
     vuole un IDREF) si accetta con l'avviso `ASTRORES_NONCONFORMING_REF`.
     (d) `DATA` con `LINK` esterno: lettura tramite il 14 in P6; fino ad
@@ -474,6 +487,7 @@ suo VOTable.
 | File ASTRORES non conforme alla DTD, o con i dati in un `LINK` esterno (fino a P6) | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
 | ASTRORES: dati diversi dal tipo dichiarato (es. sessagesimali in un campo `F` in gradi) | conversione in gradi con il modulo 10 e colonna di testo conservata, oppure testo | avviso `ASTRORES_TYPE_MISMATCH` |
 | ASTRORES: `ref` scritto `#id(...)` | riferimento accettato | avviso `ASTRORES_NONCONFORMING_REF` |
+| ASTRORES con UCD1 (fino a D13-14b) | UCD lasciati come sono, posizioni da confermare | avviso `UCD1_NOT_TRANSLATED` |
 | Riga senza moto proprio nella propagazione | posizione propagata mascherata, riga marcata `missing`, conteggio | avviso `PROPER_MOTION_ROW_MISSING` |
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
 | Espressione di colonna non valida o colonna citata inesistente | rifiuto con la posizione dell'errore o il nome mancante | `COLUMN_EXPRESSION_INVALID` |
@@ -680,3 +694,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P3 scritta** (`search`, `PlotRule`, `SizeScale`, `set_plot_rules`; test T2, T17–T20): precisati in §3 l'intervallo invertito della dimensione (`size_min` > `size_max`) e che un record senza valore per la dimensione non passa alla regola successiva. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P4 scritta tranne `calculated_column`** (`FUNCTIONS`, `CONSTANTS`, `skydist`, `subset`, `save_subset`, `column_statistics`, `histogram`, `xy_plot`, `record_view`; test T5, T6, T25, T26, T29 per `skydist`): verificato con astropy 8.0.1 che un numero scritto è adimensionale (`${mag} - 0.12` → errore di unità) → nuova **D13-15** (da decidere); nuovi `FILE_EXISTS` e avviso `INPLACE` (§10); deviazione standard con `ddof = 0` dichiarato. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P5 scritta tranne `time_filter`** (`propagate`, `proper_motion_arrows`; test T3, T7, T23 e frecce): epoca in anni giuliani, `source_epoch` vietato se l'epoca è nei metadati, righe con posizione o epoca mancante trattate come `missing` (§3, §7). `time_filter` attende la nuova **D13-16** (da decidere). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P2 scritta** (lettore ASTRORES con `defusedxml` 0.7.1, aggiunto a `pyproject.toml`; sessagesimali con la nuova `parse_sexagesimal` del 10; test T15, T16, T28 e test di rete sull'esempio pubblico del CDS, non copiato nel repository): regole precisate in §3 (righe d'intestazione, booleani, nomi duplicati, `COOSYS` di default, anni giuliani/besseliani); UCD1 non tradotti in attesa di D13-14b (`UCD1_NOT_TRANSLATED`, §10). Stato `approvato` invariato. |

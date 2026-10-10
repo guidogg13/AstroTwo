@@ -816,3 +816,18 @@ def test_t24_proper_motion_only_propagation():
         propagate_position(pos, pm_ra_cosdec=BARNARD["pm_ra_cosdec"], pm_dec=BARNARD["pm_dec"],
                            parallax=None, target_epoch=target)
     assert info.value.code == "EPOCH_REQUIRED"
+
+
+def test_t25_parse_sexagesimal():
+    from astropy.coordinates import Angle
+
+    from astrotwo.core.coordinates_wcs import parse_sexagesimal
+
+    ra = parse_sexagesimal(["00 13 00.93", "12:30:15.5"], hours=True)
+    dec = parse_sexagesimal(["+72 31 19.9", "-05:06:07"], hours=False)
+    assert type(ra) is u.Quantity and ra.unit == u.deg
+    assert np.array_equal(ra.value, Angle(["00 13 00.93", "12:30:15.5"], unit=u.hourangle).deg)
+    assert np.array_equal(dec.value, Angle(["+72 31 19.9", "-05:06:07"], unit=u.deg).deg)
+    with pytest.raises(CoordinatesWcsError) as info:
+        parse_sexagesimal(["non è un angolo"], hours=False)
+    assert info.value.code == "COORD_FORMAT_INVALID"

@@ -32,6 +32,7 @@ import numpy as np
 import pyvo
 import requests
 from astropy.coordinates import (
+    Angle,
     BaseCoordinateFrame,
     SkyCoord,
     frame_transform_graph,
@@ -67,6 +68,7 @@ __all__ = [
     "GRID_STEPS_TIME",
     "supported_frames",
     "convert_pixel_convention",
+    "parse_sexagesimal",
     "convert_coordinates",
     "resolve_name",
     "propagate_position",
@@ -516,6 +518,21 @@ def resolve_name(
     retrieved_at = datetime.now(UTC)
     table.put(key, values, origin=origin, retrieved_at=retrieved_at)
     return _name_result(clean, values, origin, retrieved_at, from_cache=False)
+
+
+def parse_sexagesimal(values, *, hours: bool) -> u.Quantity:
+    """Angoli sessagesimali scritti come testo (es. ``"00 13 00.93"``) in gradi.
+
+    ``hours=True`` per l'ascensione retta (ore), ``False`` per gli angoli in
+    gradi; calcolo con ``astropy.coordinates.Angle``. Testo non leggibile →
+    ``COORD_FORMAT_INVALID`` (nessun valore inventato).
+    """
+    texts = [str(v).strip() for v in np.atleast_1d(values)]
+    try:
+        angles = Angle(texts, unit=u.hourangle if hours else u.deg)
+    except (ValueError, TypeError) as exc:
+        raise CoordinatesWcsError("COORD_FORMAT_INVALID", f"angoli sessagesimali non leggibili: {exc}") from exc
+    return u.Quantity(angles.deg, u.deg)
 
 
 # --------------------------------------------------------------------------
