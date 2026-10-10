@@ -566,3 +566,105 @@ def test_t7_unreachable_and_http_errors(tmp_path, http_server):
                 load_image(url, cache=cache, timeouts=NetworkTimeouts(connect=1.0, read=1.0))
             assert info.value.code == "NET_TIMEOUT"
         assert cache.usage().total_bytes == 0
+
+
+# =============================================================================
+# P4 — Visualizzazione (T2, T24, T31)
+# =============================================================================
+
+import matplotlib
+from astropy import visualization as viz
+
+from astrotwo.core.images_fits import PALETTES, STRETCHES, blend, set_display
+
+
+def display_test_image(tmp_path):
+    data = np.random.default_rng(24).gamma(2.0, 50.0, (20, 30)).astype(np.float32)
+    data[3, 4] = np.nan
+    return load_image(write_fits(tmp_path / "disp.fits", data, wcs_header(nx=30, ny=20)))
+
+
+def test_t2_display_does_not_alter_data(tmp_path):
+    image = display_test_image(tmp_path)
+    before = image.data.tobytes()
+    for stretch in STRETCHES:
+        set_display(image, vmin=10.0, vmax=300.0, gamma=0.7, palette="viridis_r", stretch=stretch)
+    assert image.data.tobytes() == before and image.data.dtype == np.float32
+
+
+def _expected_values(data, vmin, vmax, stretch, gamma):
+    data = data.astype(np.float64)
+    finite = np.isfinite(data)
+    norm = viz.ManualInterval(vmin, vmax)(data[finite], clip=True)
+    classes = {"linear": viz.LinearStretch, "log": viz.LogStretch, "sqrt": viz.SqrtStretch,
+               "squared": viz.SquaredStretch, "asinh": viz.AsinhStretch}
+    st = viz.HistEqStretch(norm) if stretch == "histeq" else classes[stretch]()
+    out = st(norm, clip=True)
+    if gamma != 1.0:
+        out = viz.PowerStretch(gamma)(out, clip=True)
+    full = np.full(data.shape, np.nan)
+    full[finite] = out
+    return full
+
+
+@pytest.mark.parametrize("gamma", [1.0, 0.5])
+@pytest.mark.parametrize("stretch", STRETCHES)
+def test_t24_transfer_functions(tmp_path, stretch, gamma):
+    image = display_test_image(tmp_path)
+    plane = set_display(image, vmin=20.0, vmax=250.0, gamma=gamma, stretch=stretch)
+    expected = _expected_values(image.data, 20.0, 250.0, stretch, gamma)
+    assert plane.values.dtype == np.float32 and plane.stretch == stretch and plane.gamma == gamma
+    assert np.allclose(plane.values, expected.astype(np.float32), equal_nan=True, atol=0, rtol=0)
+    assert np.isnan(plane.values[3, 4]) and plane.rgba[3, 4, 3] == 0  # non finito: trasparente
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+def test_t24_palettes(tmp_path, palette):
+    image = display_test_image(tmp_path)
+    plane = set_display(image, vmin=0.0, vmax=400.0, palette=palette)
+    values = _expected_values(image.data, 0.0, 400.0, "linear", 1.0)
+    expected = matplotlib.colormaps[palette](np.where(np.isfinite(values), values, 0.0), bytes=True)
+    expected[~np.isfinite(values), 3] = 0
+    assert plane.palette == palette and np.array_equal(plane.rgba, expected)
+
+
+def test_t24_unknown_options_and_default_gray(tmp_path):
+    image = display_test_image(tmp_path)
+    assert set_display(image, 0, 1).palette == "gray"
+    for kwargs in (dict(palette="Stern"), dict(palette="rainbow"), dict(stretch="zscale")):
+        with pytest.raises(ImagesFitsError) as info:
+            set_display(image, 0, 1, **kwargs)
+        assert info.value.code == "DISPLAY_OPTION_UNKNOWN"
+    with pytest.raises(ValueError):
+        set_display(image, 5, 5)
+
+
+def test_t24_color_image_display(tmp_path):
+    path = tmp_path / "c.png"
+    PilImage.fromarray(gradient_rgb()).save(path)
+    image = load_image(path)
+    plane = set_display(image, vmin=0, vmax=255, stretch="sqrt")
+    expected = np.stack([_expected_values(p, 0, 255, "sqrt", 1.0) for p in image.data])
+    assert plane.palette is None and plane.values.shape == (3, 30, 40)
+    assert np.allclose(plane.values, expected.astype(np.float32), rtol=0, atol=0)
+    assert np.array_equal(plane.rgba[..., 0], np.round(expected[0] * 255).astype(np.uint8))
+    assert np.all(plane.rgba[..., 3] == 255)
+
+
+def test_t31_blend_over_operator():
+    rng = np.random.default_rng(31)
+    bottom = rng.integers(0, 256, (6, 7, 4), dtype=np.uint8)
+    bottom[..., 3] = 255
+    top = rng.integers(0, 256, (6, 7, 4), dtype=np.uint8)
+    out = blend([bottom, top], [1.0, 0.4])
+    # Porter e Duff, "over", con colore premoltiplicato, ricalcolato qui con numpy.
+    a_top = 0.4 * top[..., 3] / 255.0
+    color = a_top[..., None] * top[..., :3] / 255.0 + (1 - a_top[..., None]) * bottom[..., :3] / 255.0
+    alpha = a_top + (1 - a_top) * 1.0
+    expected_rgb = np.round(color / alpha[..., None] * 255.0).astype(np.uint8)
+    assert np.array_equal(out[..., :3], expected_rgb)
+    assert np.all(out[..., 3] == 255)
+    assert np.array_equal(blend([bottom], [1.0]), bottom)  # un solo piano opaco: invariato
+    with pytest.raises(ImagesFitsError) as info:
+        blend([bottom, top[:5]], [1.0, 0.5])
+    assert info.value.code == "IMAGE_SHAPE_MISMATCH"

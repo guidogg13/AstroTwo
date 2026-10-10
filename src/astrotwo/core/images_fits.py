@@ -27,10 +27,21 @@ from pathlib import Path
 
 import astropy
 import astropy.units as u
+import matplotlib
 import numpy as np
 import scipy
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
+from astropy.visualization import (
+    AsinhStretch,
+    HistEqStretch,
+    LinearStretch,
+    LogStretch,
+    ManualInterval,
+    PowerStretch,
+    SqrtStretch,
+    SquaredStretch,
+)
 from astropy.wcs import WCS, FITSFixedWarning
 import PIL
 import requests
@@ -41,7 +52,12 @@ from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, S
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, WcsSolution, pixel_to_sky, wcs_from_header
 
 __all__ = [
+    "PALETTES",
+    "STRETCHES",
     "SUPPORTED_FORMATS",
+    "DisplayPlane",
+    "blend",
+    "set_display",
     "FitsImage",
     "HduInfo",
     "ImagesFitsError",
@@ -598,6 +614,132 @@ def _load_url(url: str, hdu, rgb: bool, cache: SharedCache | None, refresh: bool
         from_cache=from_cache,
         warnings=tuple(notes) + image.warnings,
     )
+
+
+# --------------------------------------------------------------------------
+# P4 — Visualizzazione (solo presentazione: i dati non cambiano mai)
+# --------------------------------------------------------------------------
+
+_BASE_PALETTES = ("gray", "viridis", "plasma", "inferno", "magma", "cividis", "cubehelix", "afmhot", "coolwarm")
+#: Palette ammesse (D11-5 corretta): tabelle di ``matplotlib``, anche invertite.
+PALETTES: tuple[str, ...] = _BASE_PALETTES + tuple(f"{name}_r" for name in _BASE_PALETTES)
+#: Funzioni di trasferimento ammesse (``astropy.visualization``).
+STRETCHES: tuple[str, ...] = ("linear", "log", "sqrt", "squared", "asinh", "histeq")
+_STRETCH_CLASSES = {
+    "linear": LinearStretch,
+    "log": LogStretch,
+    "sqrt": SqrtStretch,
+    "squared": SquaredStretch,
+    "asinh": AsinhStretch,
+}
+
+
+@dataclass(frozen=True, eq=False)
+class DisplayPlane:
+    """Piano di presentazione: valori in [0, 1] (``float32``) e colori RGBA a 8 bit.
+
+    ``values`` ha la forma dei dati (``3 × righe × colonne`` per le immagini a
+    colori); ``rgba`` è ``righe × colonne × 4``; righe nello stesso ordine dei
+    dati (dal basso). I pixel non finiti hanno valore NaN e alfa 0.
+    """
+
+    values: np.ndarray
+    rgba: np.ndarray
+    vmin: float
+    vmax: float
+    gamma: float
+    stretch: str
+    palette: str | None
+    provenance: str = field(
+        default=f"astropy {astropy.__version__} (astropy.visualization), matplotlib {matplotlib.__version__} (palette)"
+    )
+
+
+def _check_display_option(value: str, allowed: tuple[str, ...], what: str) -> str:
+    if value not in allowed:
+        raise ImagesFitsError("DISPLAY_OPTION_UNKNOWN", f"{what} {value!r} non ammessa; ammesse: {', '.join(allowed)}")
+    return value
+
+
+def _apply_stretch(normalized: np.ndarray, name: str, gamma: float) -> np.ndarray:
+    finite = np.isfinite(normalized)
+    if name == "histeq":
+        stretch = HistEqStretch(normalized[finite])
+    else:
+        stretch = _STRETCH_CLASSES[name]()
+    out = np.full(normalized.shape, np.nan)
+    out[finite] = stretch(normalized[finite], clip=True)
+    if gamma != 1.0:
+        out[finite] = PowerStretch(gamma)(out[finite], clip=True)
+    return out
+
+
+def set_display(image, vmin: float, vmax: float, gamma: float = 1.0, palette: str = "gray", stretch: str = "linear") -> DisplayPlane:
+    """Piano di presentazione con intervallo, funzione di trasferimento, gamma e palette.
+
+    Non modifica mai ``image.data``: lavora su una copia in ``float64`` e
+    restituisce valori ``float32`` e colori (D11-1, §9 separazione display/dati).
+    """
+    _check_display_option(stretch, STRETCHES, "funzione di trasferimento")
+    color = bool(getattr(image, "color", False))
+    if not color:
+        _check_display_option(palette, PALETTES, "palette")
+    vmin, vmax, gamma = float(vmin), float(vmax), float(gamma)
+    if not (math.isfinite(vmin) and math.isfinite(vmax) and vmin < vmax):
+        raise ValueError("serve vmin < vmax, entrambi finiti")
+    if not (math.isfinite(gamma) and gamma > 0):
+        raise ValueError("gamma deve essere positivo")
+    data = np.array(getattr(image, "data", image), dtype=np.float64)  # copia: l'originale non si tocca
+    normalized = np.full(data.shape, np.nan)
+    finite = np.isfinite(data)
+    normalized[finite] = ManualInterval(vmin, vmax)(data[finite], clip=True)
+    if color:
+        values = np.stack([_apply_stretch(plane, stretch, gamma) for plane in normalized])
+        planes = np.where(np.isfinite(values), np.round(values * 255.0), 0.0).astype(np.uint8)
+        alpha = np.where(np.all(np.isfinite(values), axis=0), 255, 0).astype(np.uint8)
+        rgba = np.dstack([planes[0], planes[1], planes[2], alpha])
+        used_palette = None
+    else:
+        values = _apply_stretch(normalized, stretch, gamma)
+        rgba = matplotlib.colormaps[palette](np.where(np.isfinite(values), values, 0.0), bytes=True)
+        rgba[~np.isfinite(values), 3] = 0  # non finiti trasparenti, mai un valore inventato
+        used_palette = palette
+    return DisplayPlane(
+        values=values.astype(np.float32),
+        rgba=rgba,
+        vmin=vmin,
+        vmax=vmax,
+        gamma=gamma,
+        stretch=stretch,
+        palette=used_palette,
+    )
+
+
+def blend(planes, opacities) -> np.ndarray:
+    """Compone piani RGBA della stessa griglia dal basso verso l'alto (operatore "over").
+
+    ``planes``: array ``righe × colonne × 4`` (``uint8``) o ``DisplayPlane``;
+    ``opacities``: opacità di ciascun piano in [0, 1]. Restituisce RGBA ``uint8``.
+    """
+    arrays = [np.asarray(getattr(plane, "rgba", plane)) for plane in planes]
+    opacities = [float(a) for a in opacities]
+    if not arrays or len(arrays) != len(opacities):
+        raise ValueError("serve un'opacità per ciascun piano")
+    if any(not (0.0 <= a <= 1.0) for a in opacities):
+        raise ValueError("le opacità devono stare in [0, 1]")
+    shape = arrays[0].shape
+    if any(a.shape != shape or a.ndim != 3 or a.shape[2] != 4 for a in arrays):
+        raise ImagesFitsError(
+            "IMAGE_SHAPE_MISMATCH", f"piani di griglie diverse: {[a.shape for a in arrays]}; ricampionare prima (P7)"
+        )
+    color = np.zeros(shape[:2] + (3,))  # colore premoltiplicato per l'alfa
+    alpha = np.zeros(shape[:2])
+    for array, opacity in zip(arrays, opacities, strict=True):
+        a = opacity * array[..., 3].astype(np.float64) / 255.0
+        color = a[..., None] * (array[..., :3].astype(np.float64) / 255.0) + (1.0 - a[..., None]) * color
+        alpha = a + (1.0 - a) * alpha
+    rgb = np.divide(color, alpha[..., None], out=np.zeros_like(color), where=alpha[..., None] > 0)
+    return np.dstack([np.round(rgb * 255.0), np.round(alpha * 255.0)]).astype(np.uint8)
 
 
 def pixel_scaling(image: FitsImage) -> PixelScaling:

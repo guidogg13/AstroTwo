@@ -58,10 +58,28 @@ alterare i valori dei pixel memorizzati.
     da fonti con licenza libera, equivalenti per uso a quelle di Aladin, con
     **default `gray`**, ciascuna anche invertita (`_r`). Elenco e fonte (tutte
     distribuite con `matplotlib`): `gray` (scala di grigi); `viridis`,
-    `plasma`, `inferno`, `magma` (van der Walt e Smith, CC0); `cividis`
-    (Nuñez, Anderton e Renslow 2018, adatta ai daltonici); `cubehelix`
-    (Green 2011); `afmhot` (colori del corpo nero); `coolwarm` (Moreland
-    2009, divergente). Licenze **da verificare prima del codice di P4**.
+    `plasma`, `inferno`, `magma` (van der Walt e Smith); `cividis` (Nuñez,
+    Anderton e Renslow 2018, adatta ai daltonici); `cubehelix` (Green
+    2011); `afmhot` (colori del corpo nero); `coolwarm` (Moreland 2009,
+    divergente). **Licenza verificata il 2026-10-10:** con `matplotlib`
+    3.11.2 tutte queste tabelle sono distribuite con la licenza di
+    `matplotlib` (derivata dalla PSF, permissiva); i valori si leggono dalla
+    libreria (`matplotlib.colormaps`, con `bytes=True`), non si copiano.
+  - **Dettagli di `set_display` (P4):** il piano di presentazione è
+    `stretch(intervallo(dati))` con l'intervallo `vmin`–`vmax` di
+    `astropy.visualization.ManualInterval` e la funzione di trasferimento
+    scelta, ritagliato su [0, 1]; **`gamma`** è un'ulteriore potenza
+    `PowerStretch(gamma)` di `astropy.visualization` applicata dopo la
+    funzione di trasferimento (`gamma = 1` non cambia nulla); il risultato
+    è in `float32` (solo presentazione) e poi in colori RGBA a 8 bit con la
+    palette; i pixel non finiti diventano **trasparenti** (alfa 0), mai un
+    valore inventato; la disposizione delle righe è quella dei dati (dal
+    basso). Per le immagini a colori la funzione di trasferimento si
+    applica a ogni piano con lo stesso intervallo e la palette non si usa.
+  - **Sovrapposizione con trasparenza (B5, `blend`):** piani RGBA della
+    stessa griglia (ricampionati prima, P7), composti dal basso verso l'alto
+    con l'operatore "over" di Porter e Duff (1984): colore = α·sopra +
+    (1 − α)·sotto, con l'opacità α di ciascun piano in [0, 1].
 - **Taglio (cutout):** estrarre una sottoparte di un'immagine con WCS coerente
   (B8).
 - **Ricampionamento e allineamento:** ricampionare un'immagine sulla soluzione
@@ -255,15 +273,18 @@ alterare i valori dei pixel memorizzati.
   per JPEG/PNG legge la calibrazione dal commento o dal `.hhh`.
 - **`list_image_hdus(source)`** — elenco delle HDU immagine del file
   (indice, nome, dimensioni, compressione), per la scelta dell'utente.
-- **`set_display(image, vmin, vmax, gamma, palette)`** — calcola i parametri di
-  visualizzazione (non modifica l'originale): funzione di trasferimento e
-  palette dagli elenchi chiusi di §3; restituisce il piano di presentazione
-  (`float32`, poi colori) senza toccare l'array dell'immagine.
+- **`set_display(image, vmin, vmax, gamma, palette, stretch="linear")`** —
+  calcola i parametri di visualizzazione (non modifica l'originale):
+  funzione di trasferimento (`linear`, `log`, `sqrt`, `squared`, `asinh`,
+  `histeq`) e palette dagli elenchi chiusi di §3; restituisce il piano di
+  presentazione (`float32` in [0, 1] e colori RGBA a 8 bit) con i parametri
+  usati, senza toccare l'array dell'immagine.
 - **`resample_to_reference(image, reference)`** — ricampiona su una soluzione
   astrometrica di riferimento (B7); restituisce nuova immagine + qualità
   (mappa di copertura di `reproject` + percentuale di pixel coperti).
-- **`reproject(...)`** / **`blend(...)`** — composizioni multibanda (B11) e
-  sovrapposizioni con alpha (B5).
+- **`reproject(...)`** / **`blend(planes, opacities)`** — composizioni
+  multibanda (B11) e sovrapposizioni con alpha (B5): `blend` compone piani
+  RGBA della stessa griglia con l'operatore "over" (§3).
 - **`cutout(image, center, size)`** — taglio con WCS coerente.
 - **`image_operation(a, b, op)`** — aritmetica/convoluzione/normalizzazione/
   specchiatura (H5); `op` dall'elenco chiuso di §3; `b` è un'immagine, una
@@ -402,7 +423,8 @@ numero mostrato.
 | T21 | Mosaico (B11) | due immagini sintetiche sovrapposte, con WCS diverse | valori uguali a `reproject_and_coadd` con media, ricalcolato nel test | ricalcolo con `reproject` |
 | T22 | Fattore unico di `rgb_diff` | differenze positive e negative di ampiezza diversa | stessa scala per le due componenti, fattore scritto nel risultato | ricalcolo con `numpy` |
 | T23 | Qualità del ricampionamento | ricampionare un'immagine che copre metà del riferimento | mappa di copertura uguale a quella di `reproject`; percentuale ricalcolata nel test | ricalcolo con `reproject` |
-| T24 | Funzioni di trasferimento e palette | ogni funzione e palette dell'elenco | valori uguali a `astropy.visualization` e alle tabelle di `matplotlib`; nome fuori elenco → `DISPLAY_OPTION_UNKNOWN` | ricalcolo con le librerie |
+| T24 | Funzioni di trasferimento e palette | ogni funzione e palette dell'elenco, con e senza `gamma`, pixel non finiti | valori uguali a `astropy.visualization` e alle tabelle di `matplotlib`; non finiti trasparenti; nome fuori elenco → `DISPLAY_OPTION_UNKNOWN` | ricalcolo con le librerie |
+| T31 | Sovrapposizione (B5) | due piani RGBA con opacità note | colore uguale all'operatore "over" ricalcolato nel test; griglie diverse → `IMAGE_SHAPE_MISMATCH` | ricalcolo con `numpy` |
 | T25 | Strategie per dimensione (A10) | soglie configurate piccole nel test, file sintetici non compressi e compressi | strategia scelta secondo le regole di §3; soglie scritte nel risultato | test di unità |
 | T26 | Salvataggio FITS | `save_fits` su un taglio, poi rilettura | dati e WCS uguali, origine e data nell'intestazione | confronto con `astropy.io.fits` |
 | T27 | Calibrazione nel commento (H6) | PNG e JPEG generati con `Pillow` con un'intestazione WCS nel commento, e un `.hhh` | WCS uguale a quella costruita dallo stesso testo con `astropy.wcs` | ricalcolo con Astropy |
@@ -481,3 +503,4 @@ numero mostrato.
 | 2026-10-10 | Claude Code | **Precisazioni del proprietario prima del codice di P1:** HDU immagine = 2 assi di lunghezza > 1 (assi degeneri tolti e dichiarati, cubi → `CUBE_NOT_SUPPORTED`); più HDU immagine → parametro `hdu` di `load_image`, altrimenti `HDU_CHOICE_REQUIRED`; nuova `list_image_hdus`; provenienza dei file locali; costanti dei pixel lette prima della scala (§3, §7, §10 con `HDU_NOT_IMAGE`, §12 T28–T29). Verifica: HCOMPRESS, RICE, GZIP, PLIO e `.gz` supportati da `astropy.io.fits` 8.0.1. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P2, decisioni del proprietario e verifiche:** `Pillow` 12.3.0 verificata (licenza MIT-CMU, wheel per macOS arm64, JPEG/PNG/GIF attivi); documentazione pubblica di Aladin sulla calibrazione solo parziale (pagina man) → lettore su soli standard pubblici (JPEG `COM`, PNG `Comment`, FITS 4.0 per `.hhh`), approvato; FITS RGB solo con `rgb=True`. Scritti in §3 anche l'orientamento dei pixel (righe dal basso, da verificare con AP1), la precedenza del commento sul `.hhh` e i modi di colore; §7 `load_image(..., rgb=False)`; §10 `IMAGE_UNREADABLE`; §12 T30. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P3, decisione del proprietario:** immagini da URL con **prima la cache** (come `resolve_name`), `refresh=True`, copia in cache se la rete manca, timeout comuni di `04`, nessun dato parziale (§3, §7). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P4, verifiche:** `matplotlib` 3.11.2 (licenza PSF-like) e `contourpy` 1.4.0 (BSD-3) installati; le palette scelte sono tutte distribuite con la licenza di `matplotlib` (tolta la menzione CC0, non riscontrata nella distribuzione); tutte le funzioni di trasferimento sono in `astropy.visualization`. §3/§7: dettagli di `set_display` (parametro `stretch`, `gamma` come `PowerStretch` dopo la funzione di trasferimento, non finiti trasparenti, immagini a colori) e di `blend` (operatore "over"); §12 T24 precisato, nuovo T31. Stato `approvato` invariato. |
