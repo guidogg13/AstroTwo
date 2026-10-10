@@ -30,6 +30,8 @@ import scipy
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.wcs import WCS, FITSFixedWarning
+import PIL
+from PIL import Image, UnidentifiedImageError
 from scipy import ndimage
 
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, WcsSolution, pixel_to_sky, wcs_from_header
@@ -127,11 +129,15 @@ class FitsImage:
     compression: str | None = None
     dropped_axes: tuple[int, ...] = ()  # assi FITS (da 1) di lunghezza 1 tolti
     warnings: tuple[tuple[str, str], ...] = ()
+    color: bool = False  # True: data è 3 × righe × colonne (R, G, B), solo presentazione
+    frames: int | None = None  # fotogrammi del file (GIF animate)
+    calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG
     provenance: str = field(default=_FITS_PROVENANCE)
 
     @property
     def shape(self) -> tuple[int, int]:
-        return tuple(self.data.shape)  # type: ignore[return-value]
+        """(righe, colonne) dell'immagine; per le immagini a colori, di un piano."""
+        return tuple(self.data.shape[-2:])  # type: ignore[return-value]
 
     @property
     def has_wcs(self) -> bool:
@@ -249,6 +255,35 @@ def list_image_hdus(source) -> tuple[HduInfo, ...]:
     return tuple(images)
 
 
+def _rgb_hdus(hdul) -> list[int]:
+    out = []
+    for index, h in enumerate(hdul):
+        if _is_image_hdu(h):
+            shape = tuple(n for n in h.shape if n > 1)
+            if len(shape) == 3 and shape[0] == 3:
+                out.append(index)
+    return out
+
+
+def _select_rgb_hdu(hdul, hdu, path: str) -> int:
+    candidates = _rgb_hdus(hdul)
+    if hdu is None:
+        if len(candidates) == 1:
+            return candidates[0]
+        if not candidates:
+            raise ImagesFitsError("RGB_INPUT_INVALID", f"{path}: nessuna HDU con 3 piani per rgb=True")
+        raise ImagesFitsError(
+            "HDU_CHOICE_REQUIRED", f"{path}: {len(candidates)} HDU con 3 piani, indicare quale", hdus=candidates
+        )
+    try:
+        index = hdul.index_of(hdu)
+    except (KeyError, IndexError) as exc:
+        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} inesistente") from exc
+    if index not in candidates:
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"HDU {hdu!r}: rgb=True richiede esattamente 3 piani")
+    return index
+
+
 def _select_hdu(hdul, hdu, path: str) -> int:
     images, cubes = _image_hdus(hdul)
     listing = [(h.index, h.name, h.shape) for h in images]
@@ -296,11 +331,12 @@ def _parse_unit(bunit: str | None) -> u.UnitBase | None:
     return None if isinstance(unit, u.UnrecognizedUnit) else unit
 
 
-def load_image(source, hdu=None) -> FitsImage:
-    """Carica un'immagine e ne dichiara origine e data (P1: file FITS locali).
+def load_image(source, hdu=None, rgb: bool = False) -> FitsImage:
+    """Carica un'immagine e ne dichiara origine e data.
 
     Con più HDU immagine serve ``hdu`` (indice o nome), altrimenti
-    ``HDU_CHOICE_REQUIRED`` (D11-4).
+    ``HDU_CHOICE_REQUIRED`` (D11-4); ``rgb=True`` legge una HDU di 3 piani come
+    FITS RGB; JPEG/PNG/GIF si leggono con ``Pillow`` (P2).
     """
     text = os.fspath(source) if not isinstance(source, str) else source
     if text.startswith(("http://", "https://")):
@@ -308,10 +344,10 @@ def load_image(source, hdu=None) -> FitsImage:
     path = str(Path(text).expanduser().resolve())
     fmt = detect_format(path)
     if fmt in ("jpeg", "png", "gif"):
-        raise NotImplementedError(f"formato {fmt}: parte P2 del modulo 11, non ancora scritta")
+        return _load_raster(text, path, fmt)
     retrieved_at = datetime.now(UTC)
     with _open_fits(path) as hdul:
-        index = _select_hdu(hdul, hdu, path)
+        index = _select_rgb_hdu(hdul, hdu, path) if rgb else _select_hdu(hdul, hdu, path)
         chosen = hdul[index]
         header = chosen.header.copy()  # prima di leggere i dati: BZERO/BSCALE originali
         compression = _compression(chosen)
@@ -335,6 +371,8 @@ def load_image(source, hdu=None) -> FitsImage:
     notes: list[tuple[str, str]] = []
     if dropped:
         notes.append(("AXES_DROPPED", f"assi FITS di lunghezza 1 tolti: {sorted(dropped)}"))
+    if rgb:
+        kept = {1, 2}  # i due assi spaziali; il terzo sono i piani R, G, B
     solution, wcs_notes = _image_wcs(header, kept)
     notes.extend(wcs_notes)
     if np.issubdtype(data.dtype, np.floating) and not np.all(np.isfinite(data)):
@@ -357,6 +395,131 @@ def load_image(source, hdu=None) -> FitsImage:
         compression=compression,
         dropped_axes=dropped,
         warnings=tuple(notes),
+        color=rgb,
+    )
+
+
+# --------------------------------------------------------------------------
+# P2 — JPEG, PNG, GIF e calibrazione nel commento o nel file .hhh
+# --------------------------------------------------------------------------
+
+
+def _header_from_text(text: str) -> fits.Header | None:
+    """Intestazione FITS scritta come testo: schede da 80 caratteri attaccate o
+    separate da a capo (standard FITS 4.0, ``Header.fromstring``)."""
+    text = text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+    if not text.strip():
+        return None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if "\n" in text:
+                return fits.Header.fromstring(text, sep="\n")
+            return fits.Header.fromstring(text)
+    except Exception:
+        return None
+
+
+def _comment_text(image, fmt: str) -> str | None:
+    if fmt == "jpeg":
+        value = image.info.get("comment")  # segmento COM
+    elif fmt == "png":
+        value = image.info.get("Comment")  # blocco di testo con la parola chiave "Comment"
+    else:
+        return None
+    if value is None:
+        return None
+    return value.decode("latin-1") if isinstance(value, bytes) else str(value)
+
+
+def _raster_array(image) -> tuple[np.ndarray, bool, list[tuple[str, str]]]:
+    """Array dal file (righe dall'alto) secondo i modi di colore di §3."""
+    notes: list[tuple[str, str]] = []
+    mode = image.mode
+    if mode in ("RGBA", "LA", "PA") or (mode == "P" and "transparency" in image.info):
+        notes.append(("ALPHA_DROPPED", f"canale alfa del modo {mode} scartato"))
+    if mode == "1":
+        return np.array(image, dtype=np.uint8), False, notes
+    if mode in ("L", "I", "F") or mode.startswith("I;16"):
+        return np.array(image), False, notes
+    if mode == "LA":
+        return np.array(image.convert("L")), False, notes
+    rgb = np.array(image.convert("RGB"))
+    if mode in ("P", "PA") and np.array_equal(rgb[..., 0], rgb[..., 1]) and np.array_equal(rgb[..., 1], rgb[..., 2]):
+        return np.array(image.convert("L")), False, notes
+    return rgb, True, notes
+
+
+def _load_raster(text: str, path: str, fmt: str) -> FitsImage:
+    retrieved_at = datetime.now(UTC)
+    try:
+        with Image.open(path) as image:
+            frames = getattr(image, "n_frames", 1)
+            image.seek(0)
+            image.load()
+            raw, color, notes = _raster_array(image)
+            comment = _comment_text(image, fmt)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ImagesFitsError("IMAGE_UNREADABLE", f"{path}: immagine non decodificabile ({exc})", path=path) from exc
+    # Righe dal basso verso l'alto, come un FITS (convenzione dei pixel, §3).
+    data = raw[::-1].copy()
+    if color:
+        data = np.moveaxis(data, -1, 0).copy()
+    ny, nx = data.shape[-2:]
+    if frames > 1:
+        notes.append(("FRAMES", f"{frames} fotogrammi: letto il primo"))
+
+    header, source_kind = fits.Header(), None
+    hhh = Path(path).with_suffix(".hhh")
+    if fmt in ("jpeg", "png"):
+        if comment is not None:
+            header, source_kind = (_header_from_text(comment) or fits.Header()), "comment"
+            if hhh.exists():
+                notes.append(("HHH_IGNORED", f"{hhh.name} ignorato: vale la calibrazione nel commento del file"))
+        elif hhh.exists():
+            try:
+                header, source_kind = (_header_from_text(hhh.read_text("latin-1")) or fits.Header()), "hhh"
+            except OSError as exc:
+                notes.append(("WCS_MISSING", f"{hhh.name} non leggibile: {exc}"))
+
+    solution = None
+    if source_kind is not None:
+        if not header:
+            notes.append(("WCS_MISSING", f"calibrazione ({source_kind}) scartata: non è un'intestazione FITS valida"))
+            source_kind = None
+        elif (header.get("NAXIS1"), header.get("NAXIS2")) != (nx, ny):
+            notes.append((
+                "WCS_MISSING",
+                f"calibrazione ({source_kind}) scartata: NAXIS1/NAXIS2 = {header.get('NAXIS1')}/{header.get('NAXIS2')}, "
+                f"immagine {nx}×{ny}",
+            ))
+            source_kind = None
+        else:
+            solution, wcs_notes = _image_wcs(header, {1, 2})
+            if solution is None:
+                notes.extend((code, f"calibrazione ({source_kind}) scartata: {msg}") for code, msg in wcs_notes)
+                source_kind = None
+    else:
+        notes.append(("WCS_MISSING", "nessuna calibrazione astrometrica: immagine come griglia di pixel"))
+
+    return FitsImage(
+        data=data,
+        header=header if source_kind else fits.Header(),
+        wcs=solution,
+        bunit=None,
+        unit=None,
+        source=text,
+        origin=path,
+        retrieved_at=retrieved_at,
+        file_modified=datetime.fromtimestamp(os.path.getmtime(path), tz=UTC),
+        format=fmt,
+        hdu_index=0,
+        hdu_name="",
+        warnings=tuple(notes),
+        color=color,
+        frames=frames,
+        calibration_source=source_kind,
+        provenance=f"Pillow {PIL.__version__}; {_FITS_PROVENANCE}",
     )
 
 

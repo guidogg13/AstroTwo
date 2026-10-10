@@ -283,3 +283,174 @@ def test_p1_unreadable_and_nonfinite(tmp_path):
     image = load_image(write_fits(tmp_path / "nan.fits", data))
     assert "NONFINITE_PIXELS" in [code for code, _ in image.warnings]
     assert np.isnan(image.data[1, 2])  # mai sostituito
+
+
+# =============================================================================
+# P2 — JPEG, PNG, GIF, calibrazione (commento / .hhh) e FITS RGB
+# (T8 parte PNG, T10, T27, T30). File generati nei test con Pillow.
+# =============================================================================
+
+from PIL import Image as PilImage
+from PIL.PngImagePlugin import PngInfo
+
+
+def calibration_text(nx, ny, newline=False):
+    header = wcs_header(nx=nx, ny=ny)
+    header.insert(0, ("NAXIS2", ny))
+    header.insert(0, ("NAXIS1", nx))
+    header.insert(0, ("NAXIS", 2))
+    if newline:
+        return "\n".join(card.image.rstrip() for card in header.cards)
+    return header.tostring()  # schede da 80 caratteri attaccate
+
+
+def gradient_rgb(nx=40, ny=30):
+    yy, xx = np.mgrid[:ny, :nx]
+    return np.stack([xx * 6 % 256, yy * 8 % 256, (xx + yy) % 256], axis=-1).astype(np.uint8)
+
+
+def test_t8_png_recognized_from_content(tmp_path):
+    path = tmp_path / "in_realta_png.fits"
+    PilImage.fromarray(gradient_rgb()).save(path, format="PNG")
+    assert detect_format(path) == "png"
+    image = load_image(path)
+    assert image.format == "png" and image.color
+
+
+def test_t10_gif(tmp_path):
+    gray = (np.arange(30 * 40).reshape(30, 40) % 256).astype(np.uint8)
+    path = tmp_path / "gray.gif"
+    PilImage.fromarray(gray, mode="L").save(path)
+    image = load_image(path)
+    with PilImage.open(path) as pil:
+        expected = np.array(pil.convert("L"))  # tavolozza grigia → grigi (conversione di Pillow)
+    assert image.shape == expected.shape and not image.color
+    assert np.array_equal(image.data, expected[::-1])  # righe dal basso, come un FITS
+    color_path = tmp_path / "color.gif"
+    frames = [PilImage.fromarray(gradient_rgb()), PilImage.fromarray(gradient_rgb()[::-1].copy())]
+    frames[0].save(color_path, save_all=True, append_images=frames[1:])
+    colored = load_image(color_path)
+    with PilImage.open(color_path) as pil:
+        expected_rgb = np.array(pil.convert("RGB"))
+    assert colored.color and colored.frames == 2
+    assert np.array_equal(colored.data, np.moveaxis(expected_rgb[::-1], -1, 0))
+    assert "FRAMES" in [code for code, _ in colored.warnings]
+
+
+@pytest.mark.parametrize("fmt,newline", [("PNG", False), ("PNG", True), ("JPEG", False), ("JPEG", True)])
+def test_t27_calibration_in_comment(tmp_path, fmt, newline):
+    nx, ny = 40, 30
+    text = calibration_text(nx, ny, newline=newline)
+    path = tmp_path / f"cal.{fmt.lower()}"
+    pil = PilImage.fromarray(gradient_rgb(nx, ny))
+    if fmt == "PNG":
+        info = PngInfo()
+        info.add_text("Comment", text)
+        pil.save(path, pnginfo=info)
+    else:
+        pil.save(path, comment=text.encode("latin-1"), quality=95)
+    image = load_image(path)
+    assert image.calibration_source == "comment" and image.wcs is not None
+    expected = WCS(fits.Header.fromstring(text, sep="\n" if newline else ""))
+    xs, ys = np.array([0.0, 39.0, 17.5]), np.array([0.0, 29.0, 9.25])
+    # Pixel numpy (x, y) = pixel FITS (x + 1, y + 1) grazie all'ordine delle righe dal basso.
+    ra, dec = expected.all_pix2world(xs + 1, ys + 1, 1)
+    sep = image.wcs.wcs.pixel_to_world(xs, ys).separation(SkyCoord(ra, dec, unit="deg")).deg
+    assert np.max(sep) < 1e-12
+    with PilImage.open(path) as reread:
+        assert np.array_equal(image.data, np.moveaxis(np.array(reread.convert("RGB"))[::-1], -1, 0))
+
+
+def test_t27_calibration_in_hhh_and_precedence(tmp_path):
+    nx, ny = 40, 30
+    png = tmp_path / "foto.png"
+    PilImage.fromarray(gradient_rgb(nx, ny)).save(png)
+    (tmp_path / "foto.hhh").write_text(calibration_text(nx, ny), encoding="latin-1")
+    image = load_image(png)
+    assert image.calibration_source == "hhh" and image.wcs is not None
+    # Commento nel file e .hhh insieme: vale il commento, il .hhh è dichiarato ignorato.
+    info = PngInfo()
+    info.add_text("Comment", calibration_text(nx, ny, newline=True))
+    PilImage.fromarray(gradient_rgb(nx, ny)).save(png, pnginfo=info)
+    both = load_image(png)
+    assert both.calibration_source == "comment"
+    assert "HHH_IGNORED" in [code for code, _ in both.warnings]
+
+
+def test_t27_invalid_or_mismatched_calibration(tmp_path):
+    info = PngInfo()
+    info.add_text("Comment", "questo non e un header FITS")
+    bad = tmp_path / "bad.png"
+    PilImage.fromarray(gradient_rgb()).save(bad, pnginfo=info)
+    image = load_image(bad)
+    assert image.wcs is None and image.calibration_source is None
+    assert "WCS_MISSING" in [code for code, _ in image.warnings]
+    other = PngInfo()
+    other.add_text("Comment", calibration_text(99, 77))  # dimensioni di un'altra immagine
+    wrong = tmp_path / "wrong.png"
+    PilImage.fromarray(gradient_rgb(40, 30)).save(wrong, pnginfo=other)
+    image = load_image(wrong)
+    assert image.wcs is None and any("NAXIS1/NAXIS2" in msg for _, msg in image.warnings)
+    plain = tmp_path / "plain.png"
+    PilImage.fromarray(gradient_rgb()).save(plain)
+    assert load_image(plain).wcs is None
+
+
+def _source_image(mode):
+    rgb = gradient_rgb()
+    if mode == "I;16":
+        return PilImage.fromarray((np.arange(30 * 40).reshape(30, 40) * 50).astype(np.uint16))
+    if mode == "RGBA":
+        return PilImage.fromarray(np.dstack([rgb, np.full(rgb.shape[:2], 128, np.uint8)]), mode="RGBA")
+    return PilImage.fromarray(rgb).convert(mode)
+
+
+@pytest.mark.parametrize("mode", ["L", "I;16", "1", "RGBA", "LA"])
+def test_p2_color_modes(tmp_path, mode):
+    path = tmp_path / "img.png"
+    _source_image(mode).save(path)
+    image = load_image(path)
+    with PilImage.open(path) as pil:  # atteso: conversioni di Pillow descritte in §3
+        if pil.mode == "RGBA":
+            expected = np.moveaxis(np.array(pil.convert("RGB"))[::-1], -1, 0)
+        elif pil.mode == "LA":
+            expected = np.array(pil.convert("L"))[::-1]
+        elif pil.mode == "1":
+            expected = np.array(pil, dtype=np.uint8)[::-1]
+        else:
+            expected = np.array(pil)[::-1]
+        alpha = pil.mode in ("RGBA", "LA")
+    assert np.array_equal(image.data, expected)
+    assert image.color == (mode == "RGBA")
+    assert ("ALPHA_DROPPED" in [code for code, _ in image.warnings]) == alpha
+
+
+def test_p2_unreadable_image(tmp_path):
+    path = tmp_path / "rotta.png"
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 40)
+    with pytest.raises(ImagesFitsError) as info:
+        load_image(path)
+    assert info.value.code == "IMAGE_UNREADABLE"
+
+
+def test_t30_fits_rgb(tmp_path):
+    header = wcs_header(nx=12, ny=8)
+    planes = np.stack([np.full((8, 12), v, dtype=np.int16) for v in (10, 20, 30)])
+    path = write_fits(tmp_path / "rgb.fits", planes, header)
+    with pytest.raises(ImagesFitsError) as info:
+        load_image(path)
+    assert info.value.code == "CUBE_NOT_SUPPORTED"
+    image = load_image(path, rgb=True)
+    with fits.open(path) as hdul:
+        assert np.array_equal(image.data, hdul[0].data)
+    assert image.color and image.shape == (8, 12) and image.wcs is not None
+    expected = WCS(fits.getheader(path)).celestial
+    sep = image.wcs.wcs.pixel_to_world([0, 11], [0, 7]).separation(expected.pixel_to_world([0, 11], [0, 7])).deg
+    assert np.max(sep) < 1e-12
+    for n in (2, 4):
+        other = write_fits(tmp_path / f"p{n}.fits", np.zeros((n, 8, 12), dtype=np.int16), header)
+        with pytest.raises(ImagesFitsError) as info:
+            load_image(other, rgb=True)
+        assert info.value.code == "RGB_INPUT_INVALID"
+    with pytest.raises(ValueError):
+        star_centroid(image, (5, 4), 3, 1, 2)  # le immagini a colori non si misurano

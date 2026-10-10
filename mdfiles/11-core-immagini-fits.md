@@ -117,7 +117,44 @@ alterare i valori dei pixel memorizzati.
   n. 8, eccezione della lettura di file prodotti da Aladin). Il formato si
   descrive qui a partire da standard pubblici (intestazione FITS scritta come
   testo) **prima del codice di P2**; se non è documentato in modo pubblico,
-  P2 si ferma. I file di prova si generano nei test con `Pillow`. La **natura del file si riconosce dal
+  P2 si ferma. I file di prova si generano nei test con `Pillow`.
+  - **Formato letto (decisione del proprietario del 2026-10-10, solo
+    standard pubblici).** La documentazione pubblica di Aladin (pagina man,
+    comando `-mocgen`) dice solo "WCS header in the comment segment" per
+    JPEG/PNG e ".hhh = FITS header files without pixels"; non c'è una
+    specifica formale. Il lettore usa quindi soltanto standard pubblici:
+    **JPEG** = segmento di commento `COM` (standard JPEG, ISO/IEC 10918-1);
+    **PNG** = blocco di testo (`tEXt`, `zTXt` o `iTXt`) con la parola chiave
+    predefinita **`Comment`** (standard PNG, ISO/IEC 15948); **`.hhh`** = file
+    con lo stesso nome dell'immagine ed estensione `.hhh`, contenente
+    un'intestazione FITS come testo (standard FITS 4.0). In tutti i casi il
+    testo si accetta come schede FITS da 80 caratteri attaccate oppure
+    separate da a capo (`astropy.io.fits.Header.fromstring`). Se c'è il
+    commento nel file, vale quello e il `.hhh` si ignora (dichiarato); se il
+    testo non è un'intestazione FITS valida con WCS celeste, o i suoi
+    `NAXIS1`/`NAXIS2` non sono le dimensioni dell'immagine, l'immagine si
+    apre senza WCS con avviso `WCS_MISSING`.
+  - **Orientamento dei pixel:** JPEG, PNG e GIF memorizzano le righe
+    dall'alto verso il basso, il FITS dal basso verso l'alto. In memoria le
+    righe si mettono **dal basso verso l'alto** (la riga 0 dell'array è
+    l'ultima del file), così l'immagine ha la stessa disposizione di un FITS
+    e il WCS letto dal commento vale con la convenzione dei pixel FITS
+    (DC7). Coincidenza con il comportamento di Aladin **da verificare con
+    AP1**.
+  - **Modi di colore (`Pillow`):** grigi a 8, 16 o 32 bit e float → immagine
+    monocroma 2-D con i valori del file; bianco e nero (`1`) → 0/1 in 8
+    bit; tavolozza (`P`, tipica delle GIF) → grigi se la tavolozza è tutta
+    grigia, altrimenti RGB, con la conversione di `Pillow`; RGB → immagine a
+    colori; il canale alfa (`RGBA`, `LA`) si scarta, dichiarandolo; CMYK e
+    altri → RGB con la conversione di `Pillow`. GIF animate: si legge il
+    primo fotogramma, con il numero di fotogrammi nel risultato.
+- **Immagini a colori (JPEG/PNG/GIF a colori e FITS RGB):** si tengono come
+  array `3 × righe × colonne` (piani R, G, B) marcati `color`, **solo di
+  presentazione**: misure, centroide e operazioni H5 richiedono un'immagine
+  monocroma. Un **FITS RGB** è una HDU con 3 piani letta **solo su richiesta
+  esplicita** (`load_image(..., rgb=True)`, decisione del proprietario del
+  2026-10-10): senza la richiesta resta un cubo (`CUBE_NOT_SUPPORTED`);
+  nessuna convenzione si indovina. La **natura del file si riconosce dal
   contenuto** (firma del file), non dall'estensione. Libreria per JPEG, PNG e
   GIF: **`Pillow`** (D11-6, decisa il 2026-10-09; licenza da verificare
   prima del codice). Limite dichiarato da Aladin come riferimento:
@@ -202,10 +239,11 @@ alterare i valori dei pixel memorizzati.
 - **`FitsImage`** (classe): rappresenta un'immagine con array, header, WCS,
   unità; metodi descrittivi per leggere header, chiedere il campo di vista,
   produrre un taglio, produrre una copia con operazione (H5).
-- **`load_image(source, hdu=None)`** — carica da file, URL o formato non
-  FITS; restituisce `FitsImage` o errore; dichiara origine e data; con più
-  HDU immagine serve `hdu` (indice o nome), altrimenti
-  `HDU_CHOICE_REQUIRED`.
+- **`load_image(source, hdu=None, rgb=False)`** — carica da file, URL o
+  formato non FITS; restituisce `FitsImage` o errore; dichiara origine e
+  data; con più HDU immagine serve `hdu` (indice o nome), altrimenti
+  `HDU_CHOICE_REQUIRED`; `rgb=True` legge una HDU di 3 piani come FITS RGB;
+  per JPEG/PNG legge la calibrazione dal commento o dal `.hhh`.
 - **`list_image_hdus(source)`** — elenco delle HDU immagine del file
   (indice, nome, dimensioni, compressione), per la scelta dell'utente.
 - **`set_display(image, vmin, vmax, gamma, palette)`** — calcola i parametri di
@@ -304,7 +342,8 @@ alterare i valori dei pixel memorizzati.
 | HDU indicata inesistente o non immagine | rifiuto con l'elenco delle HDU immagine | `HDU_NOT_IMAGE` |
 | HDU con 3 o più assi di lunghezza > 1 | rifiuto: i cubi sono del `23` | `CUBE_NOT_SUPPORTED` |
 | Compressione FITS non supportata dalla libreria | nessuna immagine aperta, errore con il tipo di compressione | `COMPRESSION_UNSUPPORTED` |
-| RGB con meno di 2 o più di 3 immagini, o immagini non monocrome | rifiuto con il numero e il tipo ricevuti | `RGB_INPUT_INVALID` |
+| RGB con meno di 2 o più di 3 immagini, o immagini non monocrome; `rgb=True` su una HDU che non ha 3 piani | rifiuto con il numero e il tipo ricevuti | `RGB_INPUT_INVALID` |
+| Immagine JPEG/PNG/GIF non decodificabile | nessuna immagine aperta, errore con il percorso | `IMAGE_UNREADABLE` |
 | RGB o mosaico con un'immagine senza WCS | rifiuto: il ricampionamento richiede la calibrazione | `WCS_MISSING` |
 | Misura richiesta su una vista a bassa risoluzione | la misura usa i pixel originali; se non disponibili, errore | `PREVIEW_NOT_MEASURABLE` |
 | Operazione H5 fuori dall'elenco chiuso o operando del tipo sbagliato | rifiuto con l'elenco delle operazioni | `OPERATION_UNSUPPORTED` |
@@ -360,6 +399,7 @@ numero mostrato.
 | T27 | Calibrazione nel commento (H6) | PNG e JPEG generati con `Pillow` con un'intestazione WCS nel commento, e un `.hhh` | WCS uguale a quella costruita dallo stesso testo con `astropy.wcs` | ricalcolo con Astropy |
 | T28 | Più HDU (D11-4) | file MEF sintetico con due HDU immagine e una tabella | `list_image_hdus` elenca le due immagini; `load_image` senza `hdu` → `HDU_CHOICE_REQUIRED`; con `hdu` apre quella giusta (confronto con `astropy.io.fits`) | test di unità |
 | T29 | Assi degeneri e cubi | immagine a 4 assi con due assi di lunghezza 1; cubo 3 × N × M con 3 assi utili | la prima si apre in 2-D con WCS celeste uguale a quello di `astropy.wcs` (parte celeste) e assi tolti dichiarati; il cubo → `CUBE_NOT_SUPPORTED` | ricalcolo con Astropy |
+| T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
 
@@ -430,3 +470,4 @@ numero mostrato.
 | 2026-10-09 | Claude Code | Centroide **confermato** dal proprietario (D11-7 e parametri); nuova **D11-8** (valori di default dei raggi della corona, Gruppo 3, da fissare con 20 e 41). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare §3, §6–§8, §10, §12, §13): D11-5 corretta (palette scientifiche da `matplotlib`, non quelle di Aladin, regola d'oro n. 8); funzioni di trasferimento di `astropy.visualization`; elenco chiuso H5 con specchiature che aggiornano il WCS (normalizzazione da verificare con la sez. 5.18 prima di P5); `contourpy`; soglie A10 per le immagini; qualità del ricampionamento; fattore unico di `rgb_diff`; calibrazione di JPEG/PNG solo in lettura, formato da standard pubblici prima di P2; `save_fits` nel §7, vista esportata dal 41; strumenti IA nel 32 (D11-9, §11 non modificato). Nuovi errori `OPERATION_UNSUPPORTED`, `DISPLAY_OPTION_UNKNOWN`; test T20–T27. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Precisazioni del proprietario prima del codice di P1:** HDU immagine = 2 assi di lunghezza > 1 (assi degeneri tolti e dichiarati, cubi → `CUBE_NOT_SUPPORTED`); più HDU immagine → parametro `hdu` di `load_image`, altrimenti `HDU_CHOICE_REQUIRED`; nuova `list_image_hdus`; provenienza dei file locali; costanti dei pixel lette prima della scala (§3, §7, §10 con `HDU_NOT_IMAGE`, §12 T28–T29). Verifica: HCOMPRESS, RICE, GZIP, PLIO e `.gz` supportati da `astropy.io.fits` 8.0.1. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P2, decisioni del proprietario e verifiche:** `Pillow` 12.3.0 verificata (licenza MIT-CMU, wheel per macOS arm64, JPEG/PNG/GIF attivi); documentazione pubblica di Aladin sulla calibrazione solo parziale (pagina man) → lettore su soli standard pubblici (JPEG `COM`, PNG `Comment`, FITS 4.0 per `.hhh`), approvato; FITS RGB solo con `rgb=True`. Scritti in §3 anche l'orientamento dei pixel (righe dal basso, da verificare con AP1), la precedenza del commento sul `.hhh` e i modi di colore; §7 `load_image(..., rgb=False)`; §10 `IMAGE_UNREADABLE`; §12 T30. Stato `approvato` invariato. |
