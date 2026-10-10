@@ -37,7 +37,11 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-10, con il modulo 13 completo fino a P5: 17 aperte** — Gruppo 1: **0** ·
+**Dal 2026-10-10, con il modulo 14 scritto e P6 del 13: 21 aperte** — Gruppo 1: **0** ·
+Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **17** (decisa `D14-5`; nuove `D14-10`,
+`D14-11`, `D14-12`, `D13-17`, `D13-18`).
+
+Prima, sempre il 2026-10-10, con il modulo 13 completo fino a P5: 17 aperte — Gruppo 1: **0** ·
 Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **13** (decise `D13-14b`, `D13-15`,
 `D13-16`).
 
@@ -156,7 +160,7 @@ stata applicata nel testo.
 | 11 | `D13-2` | Con `D10-2`: epoca dai metadati e **mai assunta**; epoca di visualizzazione = epoca del dato mostrato; **epoca usata sempre scritta nel risultato** | `13-core-cataloghi.md` §13, `02-convenzioni.md` DC2 |
 | 12 | `D13-5` | Operazioni sulle tabelle **sempre non distruttive**; in-place solo con **flag esplicito citato nel report** | `13-core-cataloghi.md` §13 |
 | 13 | `D13-6` | **Colonna DataLink nel 13, risoluzione dei link nel 14** | `13-core-cataloghi.md` §13 |
-| 14 | `D14-1` | **`pyvo` per TAP e DataLink**; per SAMP si **valuta `astropy.samp` (da verificare)**; **licenze da riverificare prima di approvare il 14** | `14-core-protocolli-vo.md` §13, §8 |
+| 14 | `D14-1` | **`pyvo` per TAP e DataLink**; per SAMP si **valuta `astropy.samp` (da verificare)**; **licenze da riverificare prima di approvare il 14** — **aggiornata il 2026-10-10:** SAMP con **`pyvo.samp`** (`astropy.samp` deprecato da astropy 8.0); licenze verificate (`pyvo` BSD-3, `astroquery` BSD) | `14-core-protocolli-vo.md` §13, §8 |
 | 15 | `D14-2` | **Collegarsi a un hub SAMP già attivo se c'è, altrimenti avviarne uno proprio**; **primo perimetro: tabelle, selezioni, puntamenti**; **le immagini restano un'estensione prevista** | `14-core-protocolli-vo.md` §13, §3, §7 |
 | 16 | `D16-1` | **`mocpy`**; **licenza e installazione su macOS da verificare prima di approvare il 16** | `16-core-moc.md` §13, §8 |
 | 17 | `D16-2` | **MOC in cache in formato FITS standard IVOA**; **export anche JSON e testo** | `16-core-moc.md` §13 |
@@ -198,12 +202,11 @@ gruppi successivi, A8 dopo il livello 1).
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (13)
+## 5. GRUPPO 3 — rimandabili al momento del codice (17)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
-| `D14-5` | Qual è il valore di default di `max_rows` per le query? | `14-core-protocolli-vo.md` |
 | `D17-5` | Quale metodo di interpolazione (nearest/linear) e quale passo di default per i profili? | `17-core-misure.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
@@ -215,7 +218,11 @@ gruppi successivi, A8 dopo il livello 1).
 | `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
-
+| `D14-10` | Unità delle colonne nel CSV esportato: (a) riga di commento `#` informativa, (b) **ECSV** di astropy riconosciuto anche dal 13, (c) nessuna unità (T5 solo sui valori)? Raccomandazione: (b). Fermo solo questo punto | `14-core-protocolli-vo.md` §13 |
+| `D14-11` | Calibrazione della lista SIA usata dall'11 quando l'immagine non ne ha una: l'11 non ha l'interfaccia e questo lavoro non poteva toccarlo. (a) intestazione WCS dalle colonne `VOX:WCS_*` (SIA 1) + parametro facoltativo nell'11; (b) solo SIA 1 su richiesta; (c) nessun uso. Raccomandazione: (a), con autorizzazione a modificare l'11. Ferma la seconda metà di T11 | `14-core-protocolli-vo.md` §13 |
+| `D14-12` | Magnitudine dell'oggetto del puntatore Simbad (la specifica non dice quale banda): (a) tutte le bande disponibili, (b) banda scelta dall'utente, (c) banda fissa dichiarata? Raccomandazione: (a). Fermo solo questo punto | `14-core-protocolli-vo.md` §13 |
+| `D13-17` | Dati ASTRORES in un `LINK` esterno: la DTD non dice il formato dei dati collegati (e il link può essere `href`, `action` o `gref`). (a) solo `href`, letti come il `CSV` della DTD; (b) come (a) ma solo con `content-type` di testo separato; (c) nessuna lettura. Raccomandazione: (b). Fermo solo questo punto | `13-core-cataloghi.md` §13 |
+| `D13-18` | Albero delle collezioni ordinato per popolarità (D13-3): l'unica fonte trovata è la proprietà `vizier_popularity` del MocServer del CDS, non documentata. (a) albero dal MocServer ordinato per `vizier_popularity`, client nel 14; (b) senza ordine per popolarità; (c) da `TAP_SCHEMA` di TAPVizieR. Raccomandazione: (a), con conferma del CDS sul significato. Fermo solo l'albero dinamico | `13-core-cataloghi.md` §13 |
 ## 6. Note
 
 - Le decisioni chiuse non compaiono nei Gruppi 2 e 3: **D12-2** e **D17-1**
@@ -270,3 +277,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-10 | Claude Code | Decisioni del proprietario sul 13: **D13-4** (1 milione di righe, limite delle operazioni 4 GB) e **D13-8** (tabella delle funzioni in `catalogs.py`) decise; **A10** decisa anche per i cataloghi, resta per gli HiPS; **D11-11** (11) decisa. Nuove nel Gruppo 3: `D13-10` (`skydist`), `D13-11` (colonna DataLink), `D13-12` (propagazione senza parallasse), `D13-13` (sottoinsiemi salvati), `D13-14` (lettura ASTRORES). Conteggi: aperte **22** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 18). |
 | 2026-10-10 | Claude Code | Decise dal proprietario `D13-10` (`skydist` con astropy, usato anche dal 17), `D13-11` (DataLink in P6), `D13-12` (`proper_motion_only` nel 10; righe senza moto proprio mascherate), `D13-13` (sottoinsiemi in un VOTable scelto dall'utente), `D13-14` (lettura ASTRORES, punti a, c, d, e). Nuove nel Gruppo 3: `D13-14b`, `D13-15`, `D13-16`. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 16). |
 | 2026-10-10 | Claude Code | Decise dal proprietario `D13-14b` (solo gli UCD1 della raccomandazione IVOA), `D13-15` (numeri con l'unità della colonna in `+`, `-`, `%`, `min`, `max`), `D13-16` (`time_filter`). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 13). |
+| 2026-10-10 | Claude Code | Decisa dal proprietario `D14-5` (`max_rows` 100 000, fino al tetto del 13) e tolta dal Gruppo 3; `D14-1` aggiornata (SAMP con `pyvo.samp`). Nuove nel Gruppo 3, dal codice del 14 e di P6 del 13: `D14-10` (unità nel CSV), `D14-11` (calibrazione della lista SIA nell'11), `D14-12` (magnitudine del puntatore Simbad), `D13-17` (`LINK` ASTRORES), `D13-18` (albero delle collezioni e popolarità). Conteggi: aperte **21** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17). |

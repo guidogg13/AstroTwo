@@ -8,7 +8,11 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-10 — **modulo 13 completo fino a P5** (P6 dopo il 14);
+**Ultimo aggiornamento:** 2026-10-10 — **modulo 14 scritto (P1–P7) e P6 del 13**, tranne i
+pezzi fermi su D14-10, D14-11, D14-12, D13-17, D13-18 (nuove, Gruppo 3); D14-5 decisa; riga
+H23 di `03` annotata (IDHA). Test 293 di default, 301 con la rete. Aperte 21. Riepilogo
+invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-10 — **modulo 13 completo fino a P5** (P6 dopo il 14);
 D13-14b, D13-15, D13-16 decise. Test 253 di default, 257 con la rete. Aperte 17.
 Prossimo: modulo 14. Riepilogo invariato: approvato 14, bozza 5, non esiste 23,
 totale 42.
@@ -242,7 +246,7 @@ Dove si trovano le decisioni:
 | `11-core-immagini-fits.md` | Lettura, gestione e visualizzazione di immagini FITS | approvato |
 | `12-core-hips.md` | Servizio HiPS per immagini all-sky, incluso aggiungere un HiPS da ID/URL (C3) | approvato |
 | `13-core-cataloghi.md` | Cataloghi e tabelle: caricamento, plottaggio, filtri | approvato |
-| `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, SAMP (G3), spettri SSA (E4) | approvato |
+| `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, elenco dei server e registro VO, DataLink, SIA/SIA2, SAMP (G3), spettri SSA (E4), puntatori Simbad/VizieR | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi (cross-match) | approvato |
 | `16-core-moc.md` | Mappe di copertura MOC | approvato |
 | `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura | approvato |

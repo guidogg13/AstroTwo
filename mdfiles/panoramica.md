@@ -23,11 +23,15 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
   `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
   test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
-  sotto). **Modulo 13: P1–P5 complete** (`catalogs.py`); **P6 dopo il 14**
-  (servizi, URL, albero delle collezioni, DataLink, `LINK` ASTRORES,
-  traduzione UCD1 del CDS come opzione). Nel 10 aggiunte `proper_motion_only`
-  e `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
-  Test: **253 superati di default, 257 con la rete (4 test di rete), 0
+  sotto). **Modulo 14 (`vo_protocols.py`) scritto in 7 parti P1–P7, un
+  commit per parte, tranne tre pezzi fermi su decisioni aperte** (D14-10
+  unità nel CSV esportato, D14-11 calibrazione della lista SIA nell'11,
+  D14-12 magnitudine del puntatore Simbad). **Modulo 13: P1–P6 scritte,
+  tranne l'albero dinamico delle collezioni (D13-18) e il `LINK` ASTRORES
+  (D13-17)**; resta da valutare il servizio di traduzione UCD1 del CDS
+  come opzione (D13-14b). Nel 10 aggiunte `proper_motion_only` e
+  `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
+  Test: **293 superati di default, 301 con la rete (8 test di rete), 0
   saltati, 0 falliti** (2026-10-10).
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
@@ -327,6 +331,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | AM1 (H21) | **Nuovo modulo `19-core-dati-planetari.md`, livello 1** (dati planetari, riga H21 di `03-parita-aladin.md`) | 2026-10-08 | decisione del proprietario, §6 qui sotto | registrato con stato `non esiste` |
 | Prestazioni | **Obiettivo minimo: almeno 1 milione di sorgenti di catalogo con 1 GB di RAM** (manuale Aladin ed. giugno 2022, sez. 8.3) | 2026-10-08 | decisione del proprietario, `01-architettura.md` §8 | dettaglio dei test in `61-strategia-test.md` |
 | D10-4 (precisata) | Proiezioni = quelle del manuale Aladin ed. giugno 2022, sez. 5.14: `SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN`; un test per proiezione | 2026-10-08 | decisione del proprietario, `10-core-coordinate-wcs.md` §13 | da verificare: altre proiezioni oltre l'elenco del manuale e supporto `NCP` in `astropy.wcs` |
+| D14-5 | **`max_rows` di default 100 000**, configurabile fino al tetto del 13 (1 000 000); superamento sempre dichiarato con `ROW_LIMIT_EXCEEDED` | 2026-10-10 | decisione del proprietario, `14-core-protocolli-vo.md` §13 | |
+| D14-9 | **Decisioni sul modulo 14:** sette parti; SAMP con `pyvo.samp` (D14-1 aggiornata); raggio Simbad dal 41; `validate_adql` minima; un solo lettore (`read_table` del 13); `catalog` = voce dell'elenco o URL SCS; una sola cache delle interrogazioni (prima la cache, `refresh`); TAP sincrona/asincrona (600 s); provenienza nei file esportati; tre messaggi SAMP, profilo web disattivato; spettri Spectrum DM/FITS; solo servizi pubblici; IDHA solo errore; colonna DataLink; Simbad a pari citazioni il più vicino; §11 nel 32 | 2026-10-10 | decisione del proprietario, `14-core-protocolli-vo.md` §13 | riga H23 di `03` annotata (IDHA) |
 | DC7 | **Convenzione dei pixel:** FITS indice da 1, numpy indice da 0; `fits = numpy + 1` per asse, `array[y, x]`; uso interno numpy, conversione solo ai confini e in un solo punto (modulo 10) | 2026-10-08 | decisione del proprietario, `02-convenzioni.md` §6/§9 | origine H25 di `03-parita-aladin.md` |
 | H17 (SED) | La SED del puntatore VizieR si costruisce nel **modulo 20** (fotometria), ogni punto con origine dichiarata | 2026-10-08 | decisione del proprietario, `03-parita-aladin.md` H17 | |
 | H19 (VOApp) | Equivalente di VOApp/VOObserver = **API Python nel 24** (strada principale) + **SAMP nel 14** per gli altri programmi; nessuna interfaccia nuova | 2026-10-08 | decisione del proprietario, `03-parita-aladin.md` H19 | |
@@ -412,7 +418,10 @@ decise, le nuove D10-9 e D11-7 e le CA1–CA4 di `04-cache.md` → 22 aperte;
 con CA1–CA4 e D11-7 decise → 17; con la nuova D11-8 → 18; con la nuova
 **A11 — licenza di AstroTwo** → **19 aperte** (Gruppo 1 = 0, Gruppo 2 = 4: A2,
 A6, A9, A11 per `60`/`40`; Gruppo 3 = 15, con D10-9 da decidere con il 41,
-D11-8 con 20 e 41, A10 ormai solo per cataloghi e HiPS).
+D11-8 con 20 e 41, A10 ormai solo per cataloghi e HiPS). Il 2026-10-10, dopo
+il modulo 13 fino a P5: 17; **dopo il modulo 14 e P6 del 13: 21 aperte**
+(decisa D14-5; nuove D14-10, D14-11, D14-12, D13-17, D13-18 nel Gruppo 3:
+Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -441,9 +450,11 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 ## 7. Prossimi passi
 
 0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **modulo
-   13 completo fino a P5** (P6 dopo il 14); **prossimo modulo: 14**
-   (protocolli VO): divisione in parti, verifiche e punti ambigui proposti
-   il 2026-10-10, in attesa dell'ok del proprietario. Regola d'oro n. 8 applicata in tutti i
+   14 scritto (P1–P7) e P6 del 13 scritta**, tranne i pezzi fermi su D14-10,
+   D14-11, D14-12, D13-17, D13-18 (decisioni del proprietario attese); da
+   verificare il registro VO di default di `pyvo` (rifiutato da questa
+   rete); poi il prossimo modulo del livello 1 (12, 15, 16, 17, 18 o 19)
+   con divisione in parti, verifiche e punti ambigui da proporre. Regola d'oro n. 8 applicata in tutti i
    file approvati (11–19, 10 e 17 il 2026-10-10). Aperte anche: D10-9 (con
    il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -468,8 +479,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (17): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 13); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (21): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 17); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -508,3 +519,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 01, 10, 11, 13, 17 e `CLAUDE.md`): D11-11 (limite delle operazioni 4 GB separato da A10, `set_display` a blocchi in `float32`, test T34); `01` §7 (strumenti IA nel 32); regola d'oro n. 8 nel 10 e nel 17 e distinzione validazione/copia in `CLAUDE.md`; `*.pdf` nel `.gitignore`. **Modulo 13:** specifica aggiornata (D13-4, D13-8, D13-9; nuove aperte D13-10…D13-14); **P1 scritta e testata**; P2 ferma su D13-14 (esempio ASTRORES del CDS incoerente con la DTD). Test: 213 di default, 216 con la rete. Aperte **22**. |
 | 2026-10-10 | Claude Code | **Modulo 13, P2–P5** (decisioni D13-10…D13-14 applicate in 10, 13, 17): P2 lettore ASTRORES (`defusedxml`, `parse_sexagesimal` nuova nel 10); P3 `search` e regole di disegno; P4 senza `calculated_column` (nuova D13-15: numeri accanto a colonne con unità); P5 senza `time_filter` (nuova D13-16); nel 10 `proper_motion_only` (T24) e `parse_sexagesimal` (T25). Verifica: nessuna tabella ufficiale IVOA UCD1 → UCD1+ → nuova D13-14b. Un commit per parte. Test: 247 di default, 251 con la rete. Aperte **20**. |
 | 2026-10-10 | Claude Code | **Modulo 13 completo fino a P5:** D13-14b, D13-15, D13-16 applicate (traduzione UCD1, `calculated_column`, `time_filter`); P6 dopo il 14. Test: 253 di default, 257 con la rete. Aperte **17**. Prossimo: proposta di divisione del modulo 14. |
+| 2026-10-10 | Claude Code | **Modulo 14 scritto (P1–P7) e P6 del 13** (decisioni del proprietario D14-5 e D14-9 applicate in 14, 13 e nella riga H23 di `03`; strumenti IA del 14 annotati nella riga del 32): VOTable ed esportazione, rete con registro e cache, cone search e TAP, elenco dei server e registro VO, DataLink, SIA/SIA2, IDHA (solo errore), SSA, puntatore Simbad, fotometria VizieR, SAMP; nel 13 `load_table`, `load_catalog`, gruppo fisso, `datalink_column`, più correzioni (commenti `#` nei testi delimitati, VOTable senza `nrows`, `utype` e `TUCDn`). Fermi: D14-10, D14-11, D14-12, D13-17, D13-18 (nuove, Gruppo 3). Test: 293 di default, 301 con la rete. Aperte **21**. |
