@@ -362,3 +362,104 @@ def test_t2_rules_do_not_change_records_and_t20_rules(tmp_path):
     with pytest.raises(CatalogsError) as info:
         set_plot_rules(cat, [PlotRule(shape="dot", color="#ff0000", size=3.0, selection="mag <")])
     assert info.value.code == "EXPRESSION_INVALID"
+
+
+# =============================================================================
+# P4 — sottoinsiemi, salvataggio, statistiche, istogramma, x-y, vista a record,
+# tabella delle funzioni (T5, T6, T25, T26, T29 per skydist)
+# =============================================================================
+
+from astropy.coordinates import angular_separation
+
+from astrotwo.core.catalogs import (
+    CONSTANTS,
+    FUNCTIONS,
+    column_statistics,
+    histogram,
+    record_view,
+    save_subset,
+    skydist,
+    subset,
+    xy_plot,
+)
+
+
+def test_t5_histogram(tmp_path):
+    cat = search_table(tmp_path)
+    mag = np.asarray(cat.table["mag"].data, dtype=float)
+    valid = ~np.asarray(cat.table["mag"].mask) & np.isfinite(mag)
+    h = histogram(cat, "mag", bins=[-2.0, 0.0, 2.0, 6.0])
+    expected, edges = np.histogram(mag[valid], bins=[-2.0, 0.0, 2.0, 6.0])
+    assert np.array_equal(h.counts, expected) and np.array_equal(h.edges, edges) and h.excluded == 2
+    assert np.array_equal(histogram(cat, "mag", bins=3).counts, np.histogram(mag[valid], bins=3)[0])
+    for bins in (None, 0, -2, [1.0], [2.0, 1.0], 2.5, True):
+        with pytest.raises(CatalogsError) as info:
+            histogram(cat, "mag", bins=bins)
+        assert info.value.code == "COLUMN_TYPE_UNSUPPORTED", bins
+
+
+def test_t26_column_statistics(tmp_path):
+    cat = search_table(tmp_path)
+    mag = np.asarray(cat.table["mag"].data, dtype=float)
+    good = mag[~np.asarray(cat.table["mag"].mask) & np.isfinite(mag)]
+    stats = column_statistics(cat, "mag")
+    assert (stats.minimum, stats.maximum) == (good.min(), good.max())
+    assert stats.mean == good.mean() and stats.std == good.std() and stats.ddof == 0
+    assert (stats.valid, stats.missing) == (4, 2)
+    with pytest.raises(CatalogsError) as info:
+        column_statistics(cat, "name")
+    assert info.value.code == "COLUMN_TYPE_UNSUPPORTED"
+
+
+def test_t25_subset_new_or_inplace(tmp_path):
+    cat = search_table(tmp_path)
+    mask = search(cat, "flag = 1")
+    new = subset(cat, mask)
+    assert len(new.table) == mask.sum() and len(cat.table) == 6  # originale invariata
+    assert "sottoinsieme: 3 record su 6" in new.history[-1] and "INPLACE" not in dict(new.warnings)
+    same = subset(cat, mask, inplace=True)
+    assert same is cat and len(cat.table) == 3
+    assert "inplace=True" in cat.history[-1] and "INPLACE" in dict(cat.warnings)
+    with pytest.raises(CatalogsError):
+        subset(cat, [True])
+
+
+def test_t6_saved_subset_roundtrip(tmp_path):
+    cat = read_table(write_votable(tmp_path / "cat.xml", system="eq_FK5", equinox='equinox="J2000"'))
+    mask = np.array([True, False, True])
+    path = save_subset(cat, mask, tmp_path / "scelta.xml")
+    back = read_table(path)
+    assert back.rows == 2 and np.array_equal(back.table["RA"], cat.table["RA"][mask])
+    assert bool(back.table["Vmag"].mask[0]) is False and back.table["RA"].unit == u.deg
+    assert (back.positions.lon, back.positions.lat, back.positions.frame, back.positions.equinox) == (
+        "RA", "DE", "fk5", "J2000")
+    infos = {i.name: i.value for i in parse_votable(str(path)).iter_info()}
+    assert infos["A2ORIGIN"] == cat.origin and infos["A2SELECTED"] == "2 record su 3" and "A2SAVED" in infos
+    with pytest.raises(CatalogsError) as info:
+        save_subset(cat, mask, path)  # mai sovrascritto senza richiesta
+    assert info.value.code == "FILE_EXISTS"
+    assert save_subset(cat, mask, path, overwrite=True) == path
+
+
+def test_xy_plot_and_record_view(tmp_path):
+    cat = search_table(tmp_path)
+    xy = xy_plot(cat, "mag", "B V")
+    mag = np.asarray(cat.table["mag"].data, dtype=float)
+    assert np.array_equal(xy.valid, ~np.asarray(cat.table["mag"].mask) & np.isfinite(mag))
+    record = {r["name"]: r for r in record_view(cat, 5)}
+    assert record["mag"]["missing"] and record["mag"]["value"] is None and record["name"]["value"] == "alpha Cen"
+    with pytest.raises(CatalogsError):
+        record_view(cat, 6)
+
+
+def test_t29_skydist_and_function_table():
+    ra1, dec1 = np.array([10.0, 200.0, 0.0]), np.array([20.0, -30.0, 89.9])
+    expected = angular_separation(ra1 * u.deg, dec1 * u.deg, 10.0 * u.deg, 20.0 * u.deg).to_value(u.deg)
+    assert np.array_equal(skydist(ra1, dec1, 10.0, 20.0), expected)
+    assert FUNCTIONS["skydist"] == (4, skydist)
+    x = np.array([0.25, 0.5])
+    assert np.array_equal(FUNCTIONS["sind"][1](x * 360), np.sin(np.deg2rad(x * 360)))
+    assert np.array_equal(FUNCTIONS["atan2d"][1](1.0, -1.0), np.rad2deg(np.arctan2(1.0, -1.0)))
+    assert np.array_equal(FUNCTIONS["max"][1](x, 0.3, x[::-1]), np.maximum(np.maximum(x, 0.3), x[::-1]))
+    assert FUNCTIONS["log"][1](100.0) == 2.0 and FUNCTIONS["dist"][1](0, 0, 3, 4) == 5.0
+    assert CONSTANTS == {"pi": np.pi, "e": np.e}

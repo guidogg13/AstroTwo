@@ -11,6 +11,8 @@ strumenti di tabella; P5 epoca e moto proprio; P6 servizi e URL (dopo il 14).
 from __future__ import annotations
 
 import dataclasses
+import functools
+import math
 import os
 import re
 import warnings
@@ -23,14 +25,22 @@ import astropy.units as u
 import numpy as np
 from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
+from astropy.coordinates import angular_separation
+from astropy.io.votable import from_table as votable_from_table
 from astropy.io.votable import parse as parse_votable
+from astropy.io.votable.tree import CooSys, Info
 from astropy.table import Table
 
 from astrotwo.core.coordinates_wcs import supported_frames
 
 __all__ = [
+    "CONSTANTS",
     "CatalogTable",
     "CatalogsError",
+    "ColumnStatistics",
+    "FUNCTIONS",
+    "Histogram",
+    "XYData",
     "PLOT_SHAPES",
     "PlotRule",
     "PlotStyle",
@@ -43,7 +53,14 @@ __all__ = [
     "confirm_position_columns",
     "detect_table_format",
     "list_tables",
+    "column_statistics",
+    "histogram",
     "read_table",
+    "record_view",
+    "save_subset",
+    "skydist",
+    "subset",
+    "xy_plot",
     "search",
     "set_plot_rules",
     "suggest_position_columns",
@@ -970,3 +987,223 @@ def set_plot_rules(table: CatalogTable, rules) -> PlotStyle:
     return PlotStyle(rule=applied, shape=shape, color=color, size=size, drawn=np.isfinite(size),
                      counts=tuple(counts), missing_size=tuple(missing),
                      not_selected=int(np.count_nonzero(applied < 0)))
+
+
+# --------------------------------------------------------------------------
+# P4 — tabella delle funzioni (D13-8, D13-10), sottoinsiemi, statistiche,
+# istogramma, grafico x-y, vista a record. Le colonne calcolate attendono la
+# decisione sui numeri accanto a colonne con unità (D13-15).
+# --------------------------------------------------------------------------
+
+
+def skydist(ra1, dec1, ra2, dec2):
+    """Distanza sferica in gradi tra posizioni in gradi (D13-10): ``astropy.coordinates.angular_separation``.
+
+    Implementazione unica, usata anche dal modulo 17 (``angular_distance``).
+    """
+    values = [np.asarray(v, dtype=np.float64) * u.deg for v in (ra1, dec1, ra2, dec2)]
+    return angular_separation(*values).to_value(u.deg)
+
+
+def _sind(x):
+    return np.sin(np.deg2rad(x))
+
+
+#: Tabella delle funzioni condivisa con la calcolatrice del 18 (D13-8): nome → (numero di argomenti, funzione).
+#: Valori ``float64`` senza unità; trigonometriche senza ``d`` in radianti, con ``d`` in gradi.
+#: ``min``/``max`` accettano due o più argomenti (``None`` = variabile); ``round`` è ``numpy.round``.
+FUNCTIONS: dict[str, tuple[int | None, object]] = {
+    "exp": (1, np.exp),
+    "ln": (1, np.log),
+    "log": (1, np.log10),
+    "sqrt": (1, np.sqrt),
+    "ceil": (1, np.ceil),
+    "floor": (1, np.floor),
+    "round": (1, np.round),
+    "abs": (1, np.abs),
+    "min": (None, lambda *xs: functools.reduce(np.minimum, xs)),
+    "max": (None, lambda *xs: functools.reduce(np.maximum, xs)),
+    "sin": (1, np.sin),
+    "cos": (1, np.cos),
+    "tan": (1, np.tan),
+    "asin": (1, np.arcsin),
+    "acos": (1, np.arccos),
+    "atan": (1, np.arctan),
+    "atan2": (2, np.arctan2),
+    "sind": (1, _sind),
+    "cosd": (1, lambda x: np.cos(np.deg2rad(x))),
+    "tand": (1, lambda x: np.tan(np.deg2rad(x))),
+    "asind": (1, lambda x: np.rad2deg(np.arcsin(x))),
+    "acosd": (1, lambda x: np.rad2deg(np.arccos(x))),
+    "atand": (1, lambda x: np.rad2deg(np.arctan(x))),
+    "atan2d": (2, lambda y, x: np.rad2deg(np.arctan2(y, x))),
+    "sinh": (1, np.sinh),
+    "cosh": (1, np.cosh),
+    "tanh": (1, np.tanh),
+    "rad2deg": (1, np.rad2deg),
+    "deg2rad": (1, np.deg2rad),
+    "dist": (4, lambda x1, y1, x2, y2: np.hypot(np.subtract(x2, x1), np.subtract(y2, y1))),
+    "skydist": (4, skydist),
+}
+#: Costanti della calcolatrice (D18-1).
+CONSTANTS: dict[str, float] = {"pi": math.pi, "e": math.e}
+
+
+def _selection_mask(table: CatalogTable, selection) -> np.ndarray:
+    mask = np.asarray(selection)
+    if mask.dtype != bool or mask.shape != (len(table.table),):
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"selezione: serve una maschera booleana di {len(table.table)} valori")
+    return mask
+
+
+def subset(table: CatalogTable, selection, inplace: bool = False) -> CatalogTable:
+    """Sottoinsieme dei record selezionati: nuova tabella; con ``inplace=True`` modifica quella data (citato)."""
+    mask = _selection_mask(table, selection)
+    kept = int(np.count_nonzero(mask))
+    _check_memory("sottoinsieme", int(_table_bytes(table.table) * kept / max(len(table.table), 1)), table.limits)
+    step = f"sottoinsieme: {kept} record su {len(table.table)}"
+    if inplace:
+        table.table.remove_rows(np.flatnonzero(~mask))
+        note = ("INPLACE", f"{step}: tabella data modificata in posto (inplace=True)")
+        object.__setattr__(table, "history", table.history + (f"{step} (in posto, inplace=True)",))
+        object.__setattr__(table, "warnings", table.warnings + (note,))
+        return table
+    return dataclasses.replace(table, table=table.table[mask], history=table.history + (step,))
+
+
+_FRAME_TO_COOSYS = {"icrs": "ICRS", "fk5": "eq_FK5", "fk4": "eq_FK4", "galactic": "galactic",
+                    "supergalactic": "supergalactic"}
+
+
+def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -> Path:
+    """Salva il sottoinsieme in un VOTable scelto dall'utente, con provenienza (D13-13); mai nella cache."""
+    target = Path(os.fspath(path)).expanduser()
+    if target.exists() and not overwrite:
+        raise CatalogsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True")
+    mask = _selection_mask(table, selection)
+    part = table.table[mask]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        vot = votable_from_table(part)
+    resource = vot.resources[0]
+    vtable = vot.get_first_table()
+    for field_, name in zip(vtable.fields, part.colnames, strict=True):
+        ucd = part[name].meta.get("ucd")
+        if ucd:
+            field_.ucd = ucd
+    notes = []
+    pos = table.positions
+    if pos is not None and pos.frame in _FRAME_TO_COOSYS:
+        coosys = CooSys(ID="a2_coosys", system=_FRAME_TO_COOSYS[pos.frame],
+                        equinox=pos.equinox, epoch=pos.epoch)
+        resource.coordinate_systems.append(coosys)
+        for field_ in vtable.fields:
+            if field_.name in (pos.lon, pos.lat):
+                field_.ref = "a2_coosys"
+    elif pos is not None:
+        notes.append(f"sistema {pos.frame!r} senza COOSYS standard: colonne di posizione non marcate nel file")
+    saved_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    info = {
+        "A2ORIGIN": table.origin,
+        "A2DATE": table.retrieved_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "A2SAVED": saved_at,
+        "A2SELECTED": f"{int(mask.sum())} record su {len(table.table)}",
+        "A2HISTORY": " | ".join(table.history) or "nessuna operazione",
+    }
+    if pos is not None:
+        info["A2POSITIONS"] = f"{pos.lon}/{pos.lat}, frame {pos.frame}, fonte {pos.source}"
+    for note in notes:
+        info.setdefault("A2NOTE", note)
+    for name, value in info.items():
+        resource.infos.append(Info(name=name, value=str(value)))
+    vot.to_xml(str(target))
+    return target
+
+
+@dataclass(frozen=True)
+class ColumnStatistics:
+    """Statistiche dei valori validi (non mascherati e finiti) di una colonna."""
+
+    column: str
+    minimum: float | None
+    maximum: float | None
+    mean: float | None
+    std: float | None  # deviazione standard di numpy (ddof = 0), scritta nel risultato
+    valid: int
+    missing: int
+    unit: object
+    ddof: int = 0
+
+
+def _numeric_values(table: CatalogTable, name: str) -> tuple[np.ndarray, np.ndarray]:
+    if name not in table.table.colnames:
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} inesistente")
+    column = table.table[name]
+    if not _numeric_kind(column):
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {column.dtype}: serve una colonna numerica")
+    values = np.asarray(getattr(column, "data", column), dtype=np.float64)
+    return values, _valid_mask(column) & np.isfinite(values)
+
+
+def column_statistics(table: CatalogTable, column: str) -> ColumnStatistics:
+    """Minimo, massimo, media, deviazione standard e conteggi dei valori validi e mancanti."""
+    values, valid = _numeric_values(table, column)
+    good = values[valid]
+    stats = (float(good.min()), float(good.max()), float(good.mean()), float(good.std())) if good.size else (None,) * 4
+    return ColumnStatistics(column, *stats, valid=int(good.size), missing=int(values.size - good.size),
+                            unit=table.table[column].unit)
+
+
+@dataclass(frozen=True, eq=False)
+class Histogram:
+    counts: np.ndarray
+    edges: np.ndarray
+    unit: object
+    excluded: int  # valori mancanti o non finiti, non contati
+
+
+def histogram(table: CatalogTable, column: str, bins) -> Histogram:
+    """Istogramma dei valori validi con ``numpy.histogram``; ``bins`` obbligatorio (numero o bordi)."""
+    if bins is None:
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", "istogramma: bins obbligatorio (numero o bordi)")
+    values, valid = _numeric_values(table, column)
+    if np.ndim(bins) == 0:
+        if isinstance(bins, bool) or not isinstance(bins, (int, np.integer)) or bins <= 0:
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"bins {bins!r}: serve un intero positivo o bordi crescenti")
+    else:
+        edges = np.asarray(bins, dtype=np.float64)
+        if edges.size < 2 or not np.all(np.diff(edges) > 0):
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", "bins: bordi strettamente crescenti, almeno due")
+    counts, edges = np.histogram(values[valid], bins=bins)
+    return Histogram(counts=counts, edges=edges, unit=table.table[column].unit,
+                     excluded=int(values.size - np.count_nonzero(valid)))
+
+
+@dataclass(frozen=True, eq=False)
+class XYData:
+    x: np.ndarray
+    y: np.ndarray
+    valid: np.ndarray  # True dove entrambi i valori sono validi
+    x_unit: object
+    y_unit: object
+
+
+def xy_plot(table: CatalogTable, x: str, y: str) -> XYData:
+    """Dati del grafico x-y: valori ``float64`` e maschera dei punti validi; il disegno è della UI."""
+    xv, xok = _numeric_values(table, x)
+    yv, yok = _numeric_values(table, y)
+    return XYData(x=xv, y=yv, valid=xok & yok, x_unit=table.table[x].unit, y_unit=table.table[y].unit)
+
+
+def record_view(table: CatalogTable, index: int) -> list[dict[str, object]]:
+    """Tutti i valori di un record con unità, UCD e stato di mancante."""
+    if isinstance(index, bool) or not isinstance(index, (int, np.integer)) or not 0 <= index < len(table.table):
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"record {index!r} fuori da 0…{len(table.table) - 1}")
+    out = []
+    for name in table.table.colnames:
+        column = table.table[name]
+        missing = bool(np.asarray(getattr(column, "mask", np.zeros(len(column), dtype=bool)))[index])
+        out.append({"name": name, "value": None if missing else column[index], "unit": column.unit,
+                    "unit_unrecognized": column.meta.get("unit_unrecognized"), "ucd": column.meta.get("ucd"),
+                    "missing": missing})
+    return out

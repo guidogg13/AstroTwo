@@ -248,7 +248,8 @@ suo VOTable.
   sottoinsiemi, grafico x-y, istogramma delle colonne (**bin obbligatori**:
   numero o bordi espliciti), vista a record, descrizione delle colonne,
   **statistiche di una colonna** (minimo, massimo, media, deviazione
-  standard, conteggio dei valori validi e dei mancanti); **DataLink: la
+  standard di `numpy` con `ddof = 0`, scritto nel risultato, conteggio dei
+  valori validi e dei mancanti); **DataLink: la
   colonna vive qui, la risoluzione dei link è di `14-core-protocolli-vo.md`**
   (confine deciso con D13-6 il 2026-10-04; riconoscimento della colonna:
   in **P6**, dopo il 14, D13-11).
@@ -263,7 +264,12 @@ suo VOTable.
   **`skydist(ra1, dec1, ra2, dec2)`** (gradi in ingresso e in uscita) si
   calcola qui con `astropy.coordinates.angular_separation`; il 17
   (`angular_distance`) usa **questa stessa implementazione**, nessun
-  duplicato (D13-10, decisa il 2026-10-10).
+  duplicato (D13-10, decisa il 2026-10-10). La tabella (`FUNCTIONS`,
+  `CONSTANTS`) lavora su valori `float64` senza unità; `min` e `max`
+  accettano due o più argomenti; `round` è oggi `numpy.round` (metà al
+  pari), **da confermare** con D13-15. **Il codice di `calculated_column`
+  attende D13-15** (numeri scritti nell'espressione accanto a colonne con
+  unità).
   Calcolo vettoriale in `float64` con `numpy`; se le colonne hanno unità, il
   calcolo passa da `astropy.units` e unità incompatibili danno errore. La
   colonna è marcata come calcolata, con l'espressione come provenienza, ed
@@ -462,6 +468,8 @@ suo VOTable.
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
 | Espressione di colonna non valida o colonna citata inesistente | rifiuto con la posizione dell'errore o il nome mancante | `COLUMN_EXPRESSION_INVALID` |
 | Nome della nuova colonna già presente | rifiuto, nessuna sovrascrittura silenziosa | `COLUMN_NAME_EXISTS` |
+| `save_subset` su un file esistente senza `overwrite=True` | nessuna scrittura | `FILE_EXISTS` |
+| Operazione con `inplace=True` | tabella data modificata, citato nel report | avviso `INPLACE` |
 | Unità incompatibili nell'espressione | rifiuto con le due unità | `UNIT_INCOMPATIBLE` |
 
 ## 11. Esposizione all'IA
@@ -614,6 +622,21 @@ sono verificati da `34-ia-verifica-risultati.md`.
   usare il servizio del CDS tramite il 14 (P6); oppure solo la conferma
   dell'utente.
 
+- **D13-15 — Numeri scritti nelle colonne calcolate accanto a colonne con
+  unità (da decidere, Gruppo 3; blocca `calculated_column` di P4):** con
+  `astropy.units` (regola di §3) un numero scritto nell'espressione è
+  adimensionale, quindi `${mag} - 0.12` (l'esempio di T4) dà errore di unità
+  invece di una colonna in `mag`; lo stesso per `${ra} + 1` con `ra` in
+  gradi e per `%`. Opzioni: (a) numeri sempre adimensionali (astropy puro;
+  T4 cambia esempio); (b) in `+`, `-`, `%`, `min`, `max` il numero prende
+  l'unità dell'altro operando (come in `search`, dove il numero è
+  nell'unità della colonna), in `*`, `/`, `^` resta adimensionale, con
+  l'interpretazione scritta nel risultato; (c) una sintassi esplicita per
+  l'unità del numero (es. `0.12[mag]`). Da decidere insieme: comportamento
+  delle funzioni trigonometriche con colonne angolari (astropy converte da
+  sé, quindi `sin` e `sind` di una colonna in gradi danno lo stesso
+  risultato) e regola di `round` (oggi `numpy.round`, metà al pari).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -633,3 +656,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P2, verifiche:** DTD ASTRORES pubblica (CDS, v0.9) ed esempio pubblico del CDS trovati; `defusedxml` 0.7.1 (licenza PSF, puro Python). L'esempio è incoerente con la DTD (coordinate sessagesimali in campi `F`, UCD1, `ref` non IDREF) e T15 non ha una VOTable equivalente: nuova decisione aperta **D13-14** (Gruppo 3); P2 ferma in attesa del proprietario. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario D13-10…D13-14** (autorizzazione esplicita a modificare il file approvato): `skydist` con `astropy.coordinates` nella tabella delle funzioni, usato anche dal 17; colonna DataLink e `LINK` ASTRORES in P6; propagazione senza parallasse con l'opzione `proper_motion_only` del 10, righe senza moto proprio mascherate e contate, colonne `_prop` e `_prop_mode` (§3, §7); sottoinsiemi salvati in un VOTable scelto dall'utente (`save_subset`); lettore ASTRORES secondo la DTD con i punti a, c, d, e; nuovi avvisi `ASTRORES_TYPE_MISMATCH`, `ASTRORES_NONCONFORMING_REF`, `PROPER_MOTION_ROW_MISSING`; T6, T15, T23 riscritti, nuovi T28–T29. **Verifica:** nessuna tabella ufficiale IVOA UCD1 → UCD1+ trovata → nuova **D13-14b** (da decidere, blocca P2). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P3 scritta** (`search`, `PlotRule`, `SizeScale`, `set_plot_rules`; test T2, T17–T20): precisati in §3 l'intervallo invertito della dimensione (`size_min` > `size_max`) e che un record senza valore per la dimensione non passa alla regola successiva. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P4 scritta tranne `calculated_column`** (`FUNCTIONS`, `CONSTANTS`, `skydist`, `subset`, `save_subset`, `column_statistics`, `histogram`, `xy_plot`, `record_view`; test T5, T6, T25, T26, T29 per `skydist`): verificato con astropy 8.0.1 che un numero scritto è adimensionale (`${mag} - 0.12` → errore di unità) → nuova **D13-15** (da decidere); nuovi `FILE_EXISTS` e avviso `INPLACE` (§10); deviazione standard con `ddof = 0` dichiarato. Stato `approvato` invariato. |
