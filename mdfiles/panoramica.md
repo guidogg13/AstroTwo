@@ -23,11 +23,11 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
   `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
   test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
-  sotto). **Modulo 13 in corso** (`catalogs.py`): P1, P2, P3 scritte; P4
-  senza `calculated_column` (attende D13-15); P5 senza `time_filter`
-  (attende D13-16); P6 dopo il 14. Nel 10 aggiunte `proper_motion_only` e
-  `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
-  Test: **247 superati di default, 251 con la rete (4 test di rete), 0
+  sotto). **Modulo 13: P1–P5 complete** (`catalogs.py`); **P6 dopo il 14**
+  (servizi, URL, albero delle collezioni, DataLink, `LINK` ASTRORES,
+  traduzione UCD1 del CDS come opzione). Nel 10 aggiunte `proper_motion_only`
+  e `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
+  Test: **253 superati di default, 257 con la rete (4 test di rete), 0
   saltati, 0 falliti** (2026-10-10).
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
@@ -387,6 +387,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D13-10…D13-14 | `skydist` con `astropy.coordinates` nel 13, unica implementazione anche per il 17; colonna DataLink in P6; propagazione **solo moto proprio** come opzione esplicita del 10, righe senza moto proprio **mascherate e contate**, colonne originali intatte; sottoinsiemi salvati in un **VOTable scelto dall'utente** con provenienza (mai nella cache); ASTRORES: sessagesimali convertiti con il 10 (testo conservato), `#id(...)` accettato con avviso, `LINK` in P6, test su file nostri più l'esempio pubblico in rete | 2026-10-10 | decisione del proprietario, `13` §13, `10`, `17` | aperte D13-14b, D13-15, D13-16 |
 | Scelte minori di P1 (13) | `table` con `TABLE_CHOICE_REQUIRED`; unità angolare richiesta in `confirm_position_columns`; `TableLimits` separato, unificato dalla preferenza del 40 | 2026-10-10 | decisione del proprietario, `13` §3 | confermate |
 
+| D13-14b, D13-15, D13-16 | UCD1 tradotti solo se scritti nella raccomandazione IVOA (servizio CDS in P6, opzione esplicita); nelle colonne calcolate un numero scritto prende l'unità della colonna in `+`, `-`, `%`, `min`, `max`, `round` metà al pari; `time_filter` con colonna indicata, `TIMESYS` o parametri, intervallo chiuso; scelte minori confermate | 2026-10-10 | decisione del proprietario, `13` §13 | 13 completo fino a P5 |
+
 ## 6. Decisioni aperte
 
 Ogni decisione qui ha una voce corrispondente nel file `.md` pertinente.
@@ -439,9 +441,9 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 ## 7. Prossimi passi
 
 0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **modulo
-   13 in corso**: P1–P3 scritte, P4 e P5 quasi complete; il proprietario
-   decide D13-15 (`calculated_column`), D13-16 (`time_filter`) e D13-14b
-   (UCD1 negli ASTRORES); P6 dopo il 14. Regola d'oro n. 8 applicata in tutti i
+   13 completo fino a P5** (P6 dopo il 14); **prossimo modulo: 14**
+   (protocolli VO): divisione in parti, verifiche e punti ambigui proposti
+   il 2026-10-10, in attesa dell'ok del proprietario. Regola d'oro n. 8 applicata in tutti i
    file approvati (11–19, 10 e 17 il 2026-10-10). Aperte anche: D10-9 (con
    il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -466,8 +468,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (20): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 16); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (17): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 13); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -505,3 +507,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 11, 12, 13, 14, 15, 18, 19, che restano `approvato`): 11 — scelte di P1–P7 confermate (D11-10), avviso `HHH_WCS_DIFFERS`, tetto di memoria A10 con `MEMORY_LIMIT_EXCEEDED` (codice e test T32–T33), §11 spostato nel 32 (elenco nella riga del 32, §4); regola d'oro n. 8 — D12-1 senza Hipsgen, D12-3, D13-1, D13-3, D14-3, D14-4, raggio obbligatorio nel 15, D15-1, D15-4, D15-5, D18-2 (solo FITS e VOUnit), T16 del 18, D19-5. Nessun PDF del manuale di Aladin nella cartella né nella storia git (punto C: nulla da fare). Test: 200 di default, 203 con la rete. Prossimo modulo: 13. Aperte invariate **19**. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 01, 10, 11, 13, 17 e `CLAUDE.md`): D11-11 (limite delle operazioni 4 GB separato da A10, `set_display` a blocchi in `float32`, test T34); `01` §7 (strumenti IA nel 32); regola d'oro n. 8 nel 10 e nel 17 e distinzione validazione/copia in `CLAUDE.md`; `*.pdf` nel `.gitignore`. **Modulo 13:** specifica aggiornata (D13-4, D13-8, D13-9; nuove aperte D13-10…D13-14); **P1 scritta e testata**; P2 ferma su D13-14 (esempio ASTRORES del CDS incoerente con la DTD). Test: 213 di default, 216 con la rete. Aperte **22**. |
 | 2026-10-10 | Claude Code | **Modulo 13, P2–P5** (decisioni D13-10…D13-14 applicate in 10, 13, 17): P2 lettore ASTRORES (`defusedxml`, `parse_sexagesimal` nuova nel 10); P3 `search` e regole di disegno; P4 senza `calculated_column` (nuova D13-15: numeri accanto a colonne con unità); P5 senza `time_filter` (nuova D13-16); nel 10 `proper_motion_only` (T24) e `parse_sexagesimal` (T25). Verifica: nessuna tabella ufficiale IVOA UCD1 → UCD1+ → nuova D13-14b. Un commit per parte. Test: 247 di default, 251 con la rete. Aperte **20**. |
+| 2026-10-10 | Claude Code | **Modulo 13 completo fino a P5:** D13-14b, D13-15, D13-16 applicate (traduzione UCD1, `calculated_column`, `time_filter`); P6 dopo il 14. Test: 253 di default, 257 con la rete. Aperte **17**. Prossimo: proposta di divisione del modulo 14. |

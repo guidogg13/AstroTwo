@@ -37,7 +37,11 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-10, dopo P2–P5 del modulo 13: 20 aperte** — Gruppo 1: **0** ·
+**Dal 2026-10-10, con il modulo 13 completo fino a P5: 17 aperte** — Gruppo 1: **0** ·
+Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **13** (decise `D13-14b`, `D13-15`,
+`D13-16`).
+
+Prima, sempre il 2026-10-10, dopo P2–P5 del modulo 13: 20 aperte — Gruppo 1: **0** ·
 Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **16** (decise `D13-10`…`D13-14`
 tranne il punto b; nuove `D13-14b` UCD1 → UCD1+, `D13-15` numeri e unità nelle colonne
 calcolate, `D13-16` filtro temporale).
@@ -194,7 +198,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (16)
+## 5. GRUPPO 3 — rimandabili al momento del codice (13)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -208,9 +212,6 @@ gruppi successivi, A8 dopo il livello 1).
 | `D18-6` | Come leggere il valore grezzo di un pixel quando `astropy.io.fits` applica BSCALE/BZERO? | `18-core-calcolatrici.md` |
 | `A10` | Tetti di memoria per gli **HiPS** (coerenti con l'obiettivo di `01-architettura.md` §8)? Per le immagini e i cataloghi decisa il 2026-10-10 (valori nell'11 e nel 13) | `01-architettura.md` §8 (e `12`, `61`) |
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
-| `D13-14b` | UCD1 → UCD1+ negli ASTRORES: non esiste una tabella ufficiale IVOA (verificato il 2026-10-10); tradurre solo le parole scritte nella raccomandazione IVOA, usare il servizio del CDS tramite il 14, o solo la conferma dell'utente? (oggi: non tradotti, `UCD1_NOT_TRANSLATED`) | `13-core-cataloghi.md` §13 |
-| `D13-15` | Colonne calcolate: numeri scritti accanto a colonne con unità (adimensionali, unità dell'altro operando, o sintassi esplicita), trigonometriche con colonne angolari, regola di `round` (blocca `calculated_column`) | `13-core-cataloghi.md` §13 |
-| `D13-16` | Filtro temporale `time_filter`: quale colonna, formato e scala dei valori, forma dell'intervallo (blocca `time_filter`) | `13-core-cataloghi.md` §13 |
 | `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
@@ -268,3 +269,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-10 | Claude Code | Regola d'oro n. 8 applicata a decisioni già prese (nessuna riaperta): D12-1 (Hipsgen tolto), D12-3, D13-1 (riga 10 di §3 aggiornata), D13-3, D14-3, D14-4, D15-1, D15-4, D15-5, D18-2, D19-5 con motivazioni nostre nei file di origine; nel 15 il raggio del cross-match diventa obbligatorio. Nuova decisione del proprietario D11-10 (11, già decisa). Conteggi invariati: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). |
 | 2026-10-10 | Claude Code | Decisioni del proprietario sul 13: **D13-4** (1 milione di righe, limite delle operazioni 4 GB) e **D13-8** (tabella delle funzioni in `catalogs.py`) decise; **A10** decisa anche per i cataloghi, resta per gli HiPS; **D11-11** (11) decisa. Nuove nel Gruppo 3: `D13-10` (`skydist`), `D13-11` (colonna DataLink), `D13-12` (propagazione senza parallasse), `D13-13` (sottoinsiemi salvati), `D13-14` (lettura ASTRORES). Conteggi: aperte **22** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 18). |
 | 2026-10-10 | Claude Code | Decise dal proprietario `D13-10` (`skydist` con astropy, usato anche dal 17), `D13-11` (DataLink in P6), `D13-12` (`proper_motion_only` nel 10; righe senza moto proprio mascherate), `D13-13` (sottoinsiemi in un VOTable scelto dall'utente), `D13-14` (lettura ASTRORES, punti a, c, d, e). Nuove nel Gruppo 3: `D13-14b`, `D13-15`, `D13-16`. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 16). |
+| 2026-10-10 | Claude Code | Decise dal proprietario `D13-14b` (solo gli UCD1 della raccomandazione IVOA), `D13-15` (numeri con l'unità della colonna in `+`, `-`, `%`, `min`, `max`), `D13-16` (`time_filter`). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 13). |
