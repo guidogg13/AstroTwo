@@ -34,6 +34,14 @@ alterare i valori dei pixel memorizzati.
     big-endian; tipo e valori non cambiano).
 - **Lettura da rete:** aprire immagini da URL (B2) e immagini in formati non
   FITS come JPEG/PNG (B9), con timeout e gestione degli errori espliciti.
+  **Politica (decisione del proprietario del 2026-10-10, come
+  `resolve_name` del 10): prima la cache** — se l'URL è nella cache comune
+  di `04-cache.md`, si usa la copia, dichiarata tale con origine (l'URL) e
+  data del download, senza rete; `refresh=True` riscarica; se la rete non
+  risponde si usa la copia in cache se c'è (dichiarandolo), altrimenti
+  `NET_TIMEOUT`. Download con i timeout comuni (10 s connessione, 60 s
+  lettura); un download interrotto o con errore HTTP non lascia nulla in
+  cache né dati parziali. Per gli URL non si cerca il file `.hhh`.
 - **Scala di visualizzazione:** regolare luminosità e contrasto (B3),
   istogramma / CTF (B4), palette colori per immagini monocrome (B6),
   trasparenza e sovrapposizione tra layer di immagine (B5), coniugazione /
@@ -239,9 +247,10 @@ alterare i valori dei pixel memorizzati.
 - **`FitsImage`** (classe): rappresenta un'immagine con array, header, WCS,
   unità; metodi descrittivi per leggere header, chiedere il campo di vista,
   produrre un taglio, produrre una copia con operazione (H5).
-- **`load_image(source, hdu=None, rgb=False)`** — carica da file, URL o
-  formato non FITS; restituisce `FitsImage` o errore; dichiara origine e
-  data; con più HDU immagine serve `hdu` (indice o nome), altrimenti
+- **`load_image(source, hdu=None, rgb=False, cache=None, refresh=False,
+  timeouts=NETWORK_TIMEOUTS)`** — carica da file, URL o formato non FITS;
+  restituisce `FitsImage` o errore; dichiara origine e data (per gli URL
+  anche se la copia viene dalla cache); con più HDU immagine serve `hdu` (indice o nome), altrimenti
   `HDU_CHOICE_REQUIRED`; `rgb=True` legge una HDU di 3 piani come FITS RGB;
   per JPEG/PNG legge la calibrazione dal commento o dal `.hhh`.
 - **`list_image_hdus(source)`** — elenco delle HDU immagine del file
@@ -471,3 +480,4 @@ numero mostrato.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare §3, §6–§8, §10, §12, §13): D11-5 corretta (palette scientifiche da `matplotlib`, non quelle di Aladin, regola d'oro n. 8); funzioni di trasferimento di `astropy.visualization`; elenco chiuso H5 con specchiature che aggiornano il WCS (normalizzazione da verificare con la sez. 5.18 prima di P5); `contourpy`; soglie A10 per le immagini; qualità del ricampionamento; fattore unico di `rgb_diff`; calibrazione di JPEG/PNG solo in lettura, formato da standard pubblici prima di P2; `save_fits` nel §7, vista esportata dal 41; strumenti IA nel 32 (D11-9, §11 non modificato). Nuovi errori `OPERATION_UNSUPPORTED`, `DISPLAY_OPTION_UNKNOWN`; test T20–T27. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Precisazioni del proprietario prima del codice di P1:** HDU immagine = 2 assi di lunghezza > 1 (assi degeneri tolti e dichiarati, cubi → `CUBE_NOT_SUPPORTED`); più HDU immagine → parametro `hdu` di `load_image`, altrimenti `HDU_CHOICE_REQUIRED`; nuova `list_image_hdus`; provenienza dei file locali; costanti dei pixel lette prima della scala (§3, §7, §10 con `HDU_NOT_IMAGE`, §12 T28–T29). Verifica: HCOMPRESS, RICE, GZIP, PLIO e `.gz` supportati da `astropy.io.fits` 8.0.1. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P2, decisioni del proprietario e verifiche:** `Pillow` 12.3.0 verificata (licenza MIT-CMU, wheel per macOS arm64, JPEG/PNG/GIF attivi); documentazione pubblica di Aladin sulla calibrazione solo parziale (pagina man) → lettore su soli standard pubblici (JPEG `COM`, PNG `Comment`, FITS 4.0 per `.hhh`), approvato; FITS RGB solo con `rgb=True`. Scritti in §3 anche l'orientamento dei pixel (righe dal basso, da verificare con AP1), la precedenza del commento sul `.hhh` e i modi di colore; §7 `load_image(..., rgb=False)`; §10 `IMAGE_UNREADABLE`; §12 T30. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P3, decisione del proprietario:** immagini da URL con **prima la cache** (come `resolve_name`), `refresh=True`, copia in cache se la rete manca, timeout comuni di `04`, nessun dato parziale (§3, §7). Stato `approvato` invariato. |

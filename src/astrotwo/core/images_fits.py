@@ -14,9 +14,11 @@ DC7 di ``02-convenzioni.md``; calcoli in ``float64`` (DC6).
 
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import math
 import os
+import tempfile
 import warnings
 import zlib
 from dataclasses import dataclass, field
@@ -31,9 +33,11 @@ from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.wcs import WCS, FITSFixedWarning
 import PIL
+import requests
 from PIL import Image, UnidentifiedImageError
 from scipy import ndimage
 
+from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, WcsSolution, pixel_to_sky, wcs_from_header
 
 __all__ = [
@@ -132,6 +136,7 @@ class FitsImage:
     color: bool = False  # True: data è 3 × righe × colonne (R, G, B), solo presentazione
     frames: int | None = None  # fotogrammi del file (GIF animate)
     calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG
+    from_cache: bool = False  # True: copia servita dalla cache comune (04), con origine e data del download
     provenance: str = field(default=_FITS_PROVENANCE)
 
     @property
@@ -331,20 +336,33 @@ def _parse_unit(bunit: str | None) -> u.UnitBase | None:
     return None if isinstance(unit, u.UnrecognizedUnit) else unit
 
 
-def load_image(source, hdu=None, rgb: bool = False) -> FitsImage:
+def load_image(
+    source,
+    hdu=None,
+    rgb: bool = False,
+    *,
+    cache: SharedCache | None = None,
+    refresh: bool = False,
+    timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+) -> FitsImage:
     """Carica un'immagine e ne dichiara origine e data.
 
     Con più HDU immagine serve ``hdu`` (indice o nome), altrimenti
     ``HDU_CHOICE_REQUIRED`` (D11-4); ``rgb=True`` legge una HDU di 3 piani come
-    FITS RGB; JPEG/PNG/GIF si leggono con ``Pillow`` (P2).
+    FITS RGB; JPEG/PNG/GIF si leggono con ``Pillow`` (P2). Gli URL seguono la
+    politica "prima la cache" con la cache comune di ``04-cache.md`` (P3).
     """
     text = os.fspath(source) if not isinstance(source, str) else source
     if text.startswith(("http://", "https://")):
-        raise NotImplementedError("lettura da URL: parte P3 del modulo 11, non ancora scritta")
+        return _load_url(text, hdu, rgb, cache, refresh, timeouts)
     path = str(Path(text).expanduser().resolve())
+    return _load_path(text, path, hdu, rgb, allow_hhh=True)
+
+
+def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool) -> FitsImage:
     fmt = detect_format(path)
     if fmt in ("jpeg", "png", "gif"):
-        return _load_raster(text, path, fmt)
+        return _load_raster(text, path, fmt, allow_hhh=allow_hhh)
     retrieved_at = datetime.now(UTC)
     with _open_fits(path) as hdul:
         index = _select_rgb_hdu(hdul, hdu, path) if rgb else _select_hdu(hdul, hdu, path)
@@ -450,7 +468,7 @@ def _raster_array(image) -> tuple[np.ndarray, bool, list[tuple[str, str]]]:
     return rgb, True, notes
 
 
-def _load_raster(text: str, path: str, fmt: str) -> FitsImage:
+def _load_raster(text: str, path: str, fmt: str, allow_hhh: bool = True) -> FitsImage:
     retrieved_at = datetime.now(UTC)
     try:
         with Image.open(path) as image:
@@ -474,9 +492,9 @@ def _load_raster(text: str, path: str, fmt: str) -> FitsImage:
     if fmt in ("jpeg", "png"):
         if comment is not None:
             header, source_kind = (_header_from_text(comment) or fits.Header()), "comment"
-            if hhh.exists():
+            if allow_hhh and hhh.exists():
                 notes.append(("HHH_IGNORED", f"{hhh.name} ignorato: vale la calibrazione nel commento del file"))
-        elif hhh.exists():
+        elif allow_hhh and hhh.exists():
             try:
                 header, source_kind = (_header_from_text(hhh.read_text("latin-1")) or fits.Header()), "hhh"
             except OSError as exc:
@@ -520,6 +538,65 @@ def _load_raster(text: str, path: str, fmt: str) -> FitsImage:
         frames=frames,
         calibration_source=source_kind,
         provenance=f"Pillow {PIL.__version__}; {_FITS_PROVENANCE}",
+    )
+
+
+# --------------------------------------------------------------------------
+# P3 — Rete e cache (prima la cache, timeout comuni di 04-cache.md)
+# --------------------------------------------------------------------------
+
+_CACHE_MODULE = "11"
+
+
+def _download(url: str, timeouts: NetworkTimeouts) -> bytes:
+    """Scarica tutto il contenuto o niente (nessun dato parziale)."""
+    with requests.get(url, timeout=timeouts.as_requests(), stream=True) as response:
+        response.raise_for_status()
+        return b"".join(response.iter_content(chunk_size=1 << 16))
+
+
+def _load_url(url: str, hdu, rgb: bool, cache: SharedCache | None, refresh: bool, timeouts: NetworkTimeouts) -> FitsImage:
+    cache = SharedCache() if cache is None else cache
+    key = f"url:{url}"
+    cached = cache.get(_CACHE_MODULE, key)
+    notes: list[tuple[str, str]] = []
+    if cached is not None and not refresh:
+        payload, retrieved_at, from_cache = cached.data, cached.retrieved_at, True
+    else:
+        try:
+            payload = _download(url, timeouts)
+        except requests.exceptions.RequestException as exc:
+            if cached is None:
+                raise ImagesFitsError(
+                    "NET_TIMEOUT",
+                    f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
+                    f"{timeouts.read:g} s lettura): {exc}",
+                    url=url,
+                ) from exc
+            payload, retrieved_at, from_cache = cached.data, cached.retrieved_at, True
+            notes.append(("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache"))
+        else:
+            retrieved_at, from_cache = datetime.now(UTC), False
+            try:
+                cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
+            except CacheError as exc:  # es. CACHE_FULL: l'immagine si apre comunque
+                notes.append((exc.code, exc.message))
+    if from_cache and not notes:
+        notes.append(("FROM_CACHE", f"copia in cache dell'URL, scaricata il {retrieved_at.isoformat()}"))
+    fd, tmp = tempfile.mkstemp(prefix="astrotwo-url-")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        image = _load_path(url, tmp, hdu, rgb, allow_hhh=False)
+    finally:
+        os.unlink(tmp)
+    return dataclasses.replace(
+        image,
+        origin=url,
+        retrieved_at=retrieved_at,
+        file_modified=None,
+        from_cache=from_cache,
+        warnings=tuple(notes) + image.warnings,
     )
 
 

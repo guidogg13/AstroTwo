@@ -454,3 +454,115 @@ def test_t30_fits_rgb(tmp_path):
         assert info.value.code == "RGB_INPUT_INVALID"
     with pytest.raises(ValueError):
         star_centroid(image, (5, 4), 3, 1, 2)  # le immagini a colori non si misurano
+
+
+# =============================================================================
+# P3 — Rete e cache (T6, T7). Server HTTP locale simulato, nessuna rete esterna.
+# =============================================================================
+
+import functools
+import http.server
+import socket
+import threading
+import time
+
+from astrotwo.core.cache import NetworkTimeouts, SharedCache
+
+
+class _CountingHandler(http.server.SimpleHTTPRequestHandler):
+    requests_seen: list = []
+
+    def do_GET(self):  # noqa: N802 (nome imposto da http.server)
+        type(self).requests_seen.append(self.path)
+        super().do_GET()
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def http_server(tmp_path):
+    served = tmp_path / "www"
+    served.mkdir()
+    handler = functools.partial(type("H", (_CountingHandler,), {"requests_seen": []}), directory=str(served))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    yield served, base, handler.func, server
+    server.shutdown()
+    server.server_close()
+
+
+def test_t6_url_served_from_cache_with_provenance(tmp_path, http_server):
+    served, base, handler_cls, _ = http_server
+    data = np.arange(12, dtype=np.float32).reshape(3, 4)
+    write_fits(served / "img.fits", data, wcs_header(nx=4, ny=3))
+    url = f"{base}/img.fits"
+    with SharedCache(tmp_path / "cache") as cache:
+        first = load_image(url, cache=cache)
+        assert not first.from_cache and first.origin == url and np.array_equal(first.data, data)
+        entry = cache.get("11", f"url:{url}")
+        assert entry.origin == url and entry.retrieved_at == first.retrieved_at
+        assert cache.usage().by_module["11"] == (served / "img.fits").stat().st_size
+        second = load_image(url, cache=cache)  # dalla cache, senza rete
+        assert second.from_cache and second.retrieved_at == first.retrieved_at
+        assert np.array_equal(second.data, data) and len(handler_cls.requests_seen) == 1
+        assert "FROM_CACHE" in [code for code, _ in second.warnings]
+        third = load_image(url, cache=cache, refresh=True)
+        assert not third.from_cache and len(handler_cls.requests_seen) == 2
+
+
+def test_t6_cached_copy_used_when_network_is_down(tmp_path, http_server):
+    served, base, _, server = http_server
+    write_fits(served / "img.fits", np.ones((3, 4), dtype=np.int16))
+    url = f"{base}/img.fits"
+    with SharedCache(tmp_path / "cache") as cache:
+        load_image(url, cache=cache)
+        server.shutdown()
+        server.server_close()
+        stale = load_image(url, cache=cache, refresh=True, timeouts=NetworkTimeouts(connect=1.0, read=1.0))
+        assert stale.from_cache
+        assert any("rete non disponibile" in msg for code, msg in stale.warnings if code == "FROM_CACHE")
+
+
+def test_t6_png_from_url_ignores_hhh(tmp_path, http_server):
+    served, base, _, _ = http_server
+    PilImage.fromarray(gradient_rgb()).save(served / "foto.png")
+    (served / "foto.hhh").write_text(calibration_text(40, 30))
+    with SharedCache(tmp_path / "cache") as cache:
+        image = load_image(f"{base}/foto.png", cache=cache)
+    assert image.format == "png" and image.wcs is None and image.calibration_source is None
+
+
+def test_t7_timeout_on_unresponsive_server(tmp_path):
+    silent = socket.socket()
+    silent.bind(("127.0.0.1", 0))
+    silent.listen(1)  # accetta la connessione ma non risponde mai
+    url = f"http://127.0.0.1:{silent.getsockname()[1]}/img.fits"
+    timeouts = NetworkTimeouts(connect=1.0, read=0.5)
+    try:
+        with SharedCache(tmp_path / "cache") as cache:
+            start = time.monotonic()
+            with pytest.raises(ImagesFitsError) as info:
+                load_image(url, cache=cache, timeouts=timeouts)
+            elapsed = time.monotonic() - start
+            assert info.value.code == "NET_TIMEOUT" and "0.5 s lettura" in info.value.message
+            assert elapsed < timeouts.read + 2.0  # entro il timeout dichiarato (più margine)
+            assert cache.usage().total_bytes == 0  # nessun dato fasullo in cache
+    finally:
+        silent.close()
+
+
+def test_t7_unreachable_and_http_errors(tmp_path, http_server):
+    _, base, _, _ = http_server
+    closed = socket.socket()
+    closed.bind(("127.0.0.1", 0))
+    port = closed.getsockname()[1]
+    closed.close()  # porta chiusa: connessione rifiutata
+    with SharedCache(tmp_path / "cache") as cache:
+        for url in (f"http://127.0.0.1:{port}/x.fits", f"{base}/non_esiste.fits"):
+            with pytest.raises(ImagesFitsError) as info:
+                load_image(url, cache=cache, timeouts=NetworkTimeouts(connect=1.0, read=1.0))
+            assert info.value.code == "NET_TIMEOUT"
+        assert cache.usage().total_bytes == 0
