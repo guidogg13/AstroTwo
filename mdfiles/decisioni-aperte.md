@@ -37,7 +37,12 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-10, con la nuova `A11` (licenza): 19 aperte** — Gruppo 1: **0** ·
+**Dal 2026-10-10, dopo le decisioni sul modulo 13: 22 aperte** — Gruppo 1: **0** ·
+Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **18** (chiuse `D13-4` e `D13-8`;
+`A10` ora solo per gli HiPS; nuove `D13-10`…`D13-14`, che bloccano P2, P4, P5 e i
+sottoinsiemi salvati del 13).
+
+Prima, sempre il 2026-10-10, con la nuova `A11` (licenza): 19 aperte — Gruppo 1: **0** ·
 Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`, che bloccano solo `60` e `40`) · Gruppo 3:
 **15** (`A10` ora solo per cataloghi e HiPS).
 
@@ -184,12 +189,11 @@ gruppi successivi, A8 dopo il livello 1).
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (15)
+## 5. GRUPPO 3 — rimandabili al momento del codice (18)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
-| `D13-4` | Qual è il valore del limite di righe caricate in memoria per tabella? | `13-core-cataloghi.md` |
 | `D14-5` | Qual è il valore di default di `max_rows` per le query? | `14-core-protocolli-vo.md` |
 | `D17-5` | Quale metodo di interpolazione (nearest/linear) e quale passo di default per i profili? | `17-core-misure.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
@@ -197,9 +201,13 @@ gruppi successivi, A8 dopo il livello 1).
 | `AP4` | AstroTwo esegue gli script di Aladin o ha solo il proprio formato di pipeline? (rinvia ad `A8`: si decide insieme, dopo il livello 1) | `03-parita-aladin.md` §6 (e `24-analisi-pipeline-riproducibili.md`) |
 | `D18-5` | Limiti di lunghezza e annidamento delle espressioni (`CALC_TOO_COMPLEX`)? | `18-core-calcolatrici.md` |
 | `D18-6` | Come leggere il valore grezzo di un pixel quando `astropy.io.fits` applica BSCALE/BZERO? | `18-core-calcolatrici.md` |
-| `A10` | Tetti di memoria per **cataloghi e HiPS** (coerenti con l'obiettivo di `01-architettura.md` §8)? Per le immagini decisa il 2026-10-10 (valori nell'11) | `01-architettura.md` §8 (e `12`, `13`, `61`) |
+| `A10` | Tetti di memoria per gli **HiPS** (coerenti con l'obiettivo di `01-architettura.md` §8)? Per le immagini e i cataloghi decisa il 2026-10-10 (valori nell'11 e nel 13) | `01-architettura.md` §8 (e `12`, `61`) |
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
-| `D13-8` | Dove vive nel codice la tabella delle funzioni condivisa da colonne calcolate (13) e calcolatrice (18)? | `13-core-cataloghi.md` |
+| `D13-10` | `skydist` nelle colonne calcolate: calcolo con `astropy.coordinates` nella tabella del 13 (poi usato dal 17) o fuori finché il 17 non esiste? (blocca P4) | `13-core-cataloghi.md` §13 |
+| `D13-11` | Come si riconosce la colonna DataLink? Proposta: spostarla in P6, dopo il 14 | `13-core-cataloghi.md` §13 |
+| `D13-12` | Propagazione senza parallasse: estensione esplicita "solo moto proprio" del `propagate_position` del 10? E le righe senza moto proprio: posizione invariata marcata o valore mancante marcato? (blocca P5) | `13-core-cataloghi.md` §13 (e `10`) |
+| `D13-13` | Sottoinsiemi salvati: cache comune (può eliminarli) o file di sessione del 24? | `13-core-cataloghi.md` §13 |
+| `D13-14` | Lettura ASTRORES: coordinate sessagesimali in campi `F`, UCD1, `ref` `#id(...)`, `DATA` con `LINK`, test T15 senza VOTable equivalente (blocca P2) | `13-core-cataloghi.md` §13 |
 | `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
@@ -255,3 +263,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-09 | Claude Code | Nuova `D11-8` (default dei raggi della corona del centroide, Gruppo 3, da fissare con 20 e 41) su decisione del proprietario. Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). |
 | 2026-10-10 | Claude Code | Nuova `A11` — licenza di AstroTwo (Gruppo 2, blocca il 60), aperta dal proprietario; `A10` decisa per le immagini, resta per cataloghi e HiPS. Conteggi: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). |
 | 2026-10-10 | Claude Code | Regola d'oro n. 8 applicata a decisioni già prese (nessuna riaperta): D12-1 (Hipsgen tolto), D12-3, D13-1 (riga 10 di §3 aggiornata), D13-3, D14-3, D14-4, D15-1, D15-4, D15-5, D18-2, D19-5 con motivazioni nostre nei file di origine; nel 15 il raggio del cross-match diventa obbligatorio. Nuova decisione del proprietario D11-10 (11, già decisa). Conteggi invariati: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). |
+| 2026-10-10 | Claude Code | Decisioni del proprietario sul 13: **D13-4** (1 milione di righe, limite delle operazioni 4 GB) e **D13-8** (tabella delle funzioni in `catalogs.py`) decise; **A10** decisa anche per i cataloghi, resta per gli HiPS; **D11-11** (11) decisa. Nuove nel Gruppo 3: `D13-10` (`skydist`), `D13-11` (colonna DataLink), `D13-12` (propagazione senza parallasse), `D13-13` (sottoinsiemi salvati), `D13-14` (lettura ASTRORES). Conteggi: aperte **22** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 18). |

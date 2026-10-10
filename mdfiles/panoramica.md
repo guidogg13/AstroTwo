@@ -23,8 +23,10 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
   `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
   test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
-  sotto). Test: **200 superati di default, 203 con la rete (3 test di
-  rete), 0 saltati, 0 falliti** (2026-10-10, dopo T32–T33 dell'11).
+  sotto). **Modulo 13 in corso: P1 scritta** (`catalogs.py`); P2, P4, P5
+  ferme sulle decisioni D13-14, D13-10, D13-12; P3 da fare; P6 dopo il 14.
+  Test: **213 superati di default, 216 con la rete (3 test di rete), 0
+  saltati, 0 falliti** (2026-10-10).
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
   MPL-2.0 per `certifi`). Gli obblighi LGPL per il `.dmg` vanno specificati
@@ -280,7 +282,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | **IA (livello 3)** | | | |
 | `30-ia-adattatore-provider.md` | Adattatore per provider IA | 3 | non esiste |
 | `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS | 3 | non esiste |
-| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA. **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS) | 3 | non esiste |
+| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA. **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10) | 3 | non esiste |
 | `33-ia-query-adql.md` | Costruzione ed esecuzione di query ADQL | 3 | non esiste |
 | `34-ia-verifica-risultati.md` | Verifica indipendente dei risultati dell'IA | 3 | non esiste |
 | `35-ia-assistente-chat.md` | Assistente conversazionale | 3 | non esiste |
@@ -375,6 +377,11 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | 11 (dopo il codice) | Confermate le scelte di P1–P7 (D11-10); commento contro `.hhh`: vale il commento, avviso `HHH_WCS_DIFFERS` se i WCS sono diversi; **stima della memoria** prima delle operazioni sull'immagine intera e del taglio, oltre il tetto A10 `MEMORY_LIMIT_EXCEEDED`; §11 dell'11 spostato nel 32 (D11-9) | 2026-10-10 | decisione del proprietario, `11` §3/§10/§13 | test T32–T33; criterio di confronto dei WCS e tabella delle stime scritti nell'11 §3 |
 | Regola d'oro n. 8 (applicazione) | Nei file 11–15, 18, 19: D12-1 generazione HiPS da standard IVOA HiPS 1.0 (`reproject` + codice nostro, **Hipsgen tolto**); D12-3 DSS2 a colori motivato da noi; D13-1 grammatica nostra; D13-3, D14-3, D19-5 con motivazione nostra; D14-4 **elenco di server nostro** dai servizi pubblici del VO; 15 **raggio obbligatorio senza default**, `best` motivata da noi; D18-2 **solo formati FITS e VOUnit** di `astropy.units`; T16 del 18 con esempio nostro | 2026-10-10 | decisione del proprietario, §13 dei file | restano motivi "come Aladin" nei file non autorizzati 10 e 17 (elenco consegnato al proprietario) |
 
+| D11-11 | Limite delle operazioni **separato da A10**: 4 GB di default, configurabile, per `MEMORY_LIMIT_EXCEEDED`; `set_display` **a blocchi in `float32`** senza copia intera (un 6000 × 6000 si visualizza); criterio commento/`.hhh` confermato | 2026-10-10 | decisione del proprietario, `11` §3/§13 | test T33–T34 |
+| Strumenti IA | Gli strumenti per l'IA si dichiarano **nel 32**, non nel §11 dei moduli | 2026-10-10 | decisione del proprietario, `01` §7 | §11 di 11 e 13 rimandano al 32 |
+| Regola d'oro n. 8 (validazione) | **Confrontare i risultati con Aladin è validazione, non copia** (AP1 resta); tolti i motivi "come Aladin" anche nel 10 (`choose_grid_spacing`, DSS1) e nel 17 (D17-6); `*.pdf` nel `.gitignore` | 2026-10-10 | decisione del proprietario, `CLAUDE.md`, `10`, `17` | nessun motivo "come Aladin" resta nei file approvati |
+| 13 (divisione) | Sei parti (P6 dopo il 14); VOTable locali con `astropy.io.votable`; una sola cache delle interrogazioni, nel 14; grammatica formale di `search` (testo che non distingue maiuscole e minuscole per default); regole di disegno; **D13-4** 1 milione di righe + limite delle operazioni 4 GB (A10 per i cataloghi); **D13-8** tabella delle funzioni in `catalogs.py`; colonne di posizione solo da UCD/metadati, suggerimenti dal nome da confermare; parallasse mancante → solo moto proprio, righe marcate; unità non valide con avviso; CSV/TSV/BSV con errore se ambiguo; `inplace` nel report; bin e scala obbligatori; §11 nel 32 | 2026-10-10 | decisione del proprietario, `13` §3/§13 (D13-9) | aperte D13-10…D13-14 |
+
 ## 6. Decisioni aperte
 
 Ogni decisione qui ha una voce corrispondente nel file `.md` pertinente.
@@ -426,13 +433,13 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **prossimo
-   modulo: 13** (scelto dal proprietario il 2026-10-10): divisione in parti,
-   verifiche e punti ambigui proposti, in attesa dell'ok del proprietario.
-   Regola d'oro n. 8 applicata il 2026-10-10 in 11–15, 18, 19; restano da
-   decidere i motivi "come Aladin" nei file 10 (`choose_grid_spacing`,
-   calibrazioni DSS1) e 17 (D17-6), non coperti dall'autorizzazione. Aperte:
-   D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
+0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **modulo
+   13 in corso** (6 parti approvate il 2026-10-10): P1 scritta; in attesa del
+   proprietario D13-14 (ASTRORES, blocca P2), D13-10 (`skydist`, blocca P4),
+   D13-12 (propagazione senza parallasse, blocca P5), D13-11 e D13-13; poi
+   P3, P2, P4, P5; P6 dopo il 14. Regola d'oro n. 8 applicata in tutti i
+   file approvati (11–19, 10 e 17 il 2026-10-10). Aperte anche: D10-9 (con
+   il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -455,8 +462,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (19): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 15); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (22): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 18); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -492,3 +499,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario:** regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero); divisione dell'11 in 7 parti e decisioni collegate applicate nell'11 (D11-5 corretta, D11-9); **A11 — licenza di AstroTwo** aperta (Gruppo 2, blocca il 60) in `01`; A10 decisa per le immagini. Controllo dei file approvati per contenuti presi da Aladin: elenco consegnato al proprietario, nessuna correzione. Aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). Stati invariati. |
 | 2026-10-10 | Claude Code | **Modulo 11 scritto in 7 parti** (P1 lettura FITS/HDU, P2 JPEG/PNG/GIF e FITS RGB, P3 rete e cache, P4 visualizzazione, P5 taglio/operazioni/contorni/salvataggio, P6 immagini grandi, P7 ricampionamento/RGB/mosaico), un commit per parte, con le verifiche prima di ciascuna (HCOMPRESS, Pillow, documentazione pubblica della calibrazione, matplotlib e palette, manuale sez. 5.18 per la normalizzazione, contourpy, `memmap`/`section` di astropy, reproject) e le precisazioni del proprietario registrate nell'11. Modulo 10: campo interno di astroquery isolato in `_simbad_with_timeouts`. Test: 197 superati di default, 200 con la rete. `04`, 10 e 11 completi. Aperte **19** (invariate). Stati invariati: approvato 14, bozza 5, non esiste 23, totale 42. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 11, 12, 13, 14, 15, 18, 19, che restano `approvato`): 11 — scelte di P1–P7 confermate (D11-10), avviso `HHH_WCS_DIFFERS`, tetto di memoria A10 con `MEMORY_LIMIT_EXCEEDED` (codice e test T32–T33), §11 spostato nel 32 (elenco nella riga del 32, §4); regola d'oro n. 8 — D12-1 senza Hipsgen, D12-3, D13-1, D13-3, D14-3, D14-4, raggio obbligatorio nel 15, D15-1, D15-4, D15-5, D18-2 (solo FITS e VOUnit), T16 del 18, D19-5. Nessun PDF del manuale di Aladin nella cartella né nella storia git (punto C: nulla da fare). Test: 200 di default, 203 con la rete. Prossimo modulo: 13. Aperte invariate **19**. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario applicate** (autorizzazione a modificare 01, 10, 11, 13, 17 e `CLAUDE.md`): D11-11 (limite delle operazioni 4 GB separato da A10, `set_display` a blocchi in `float32`, test T34); `01` §7 (strumenti IA nel 32); regola d'oro n. 8 nel 10 e nel 17 e distinzione validazione/copia in `CLAUDE.md`; `*.pdf` nel `.gitignore`. **Modulo 13:** specifica aggiornata (D13-4, D13-8, D13-9; nuove aperte D13-10…D13-14); **P1 scritta e testata**; P2 ferma su D13-14 (esempio ASTRORES del CDS incoerente con la DTD). Test: 213 di default, 216 con la rete. Aperte **22**. |

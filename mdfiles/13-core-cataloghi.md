@@ -539,6 +539,30 @@ sono verificati da `34-ia-verifica-risultati.md`.
   usati), quindi un sottoinsieme "salvato" potrebbe sparire. Da decidere
   (Gruppo 3): cache comune, oppure file di sessione del `24` (D17-3), che
   registra le operazioni e non scade.
+- **D13-14 — Lettura ASTRORES (P2), dopo le verifiche del 2026-10-10:**
+  verificato che la **DTD è pubblica** (CDS, `astrores.dtd` versione 0.9 del
+  17-04-2000, pagina `vizier.cds.unistra.fr/vizier/doc/astrores.htx`: radice
+  `ASTRO`, `DEFINITIONS`/`COOSYS`, `RESOURCE`, `TABLE`, `FIELD` con
+  `datatype` F/I/D/E/A/L, `width`, `precision`, `format`, `ucd`, `ref`; dati
+  in `CSV` con `colsep` (default tabulazione), `recsep`, `headlines`, oppure
+  `TABLEDATA`/`ROW`/`CELL`, oppure `LINK` esterno) e che c'è **un esempio
+  pubblico** (`vizier.cds.unistra.fr/catstd/astrores.xml`, estratto
+  ipotetico del GSC1.2). `defusedxml` 0.7.1: licenza PSF, puro Python.
+  **Da decidere (Gruppo 3) prima del codice di P2:** (a) l'esempio dichiara
+  RA/Dec `datatype="F"` in gradi ma i dati sono **sessagesimali**
+  (`00 13 00.93`), con l'attributo `format` di presentazione: leggere quelle
+  colonne come testo con avviso, oppure convertirle in gradi con il modulo
+  10 quando `format` lo indica; (b) gli UCD sono **UCD1** (`POS_EQ_RA`,
+  `POS_EQ_DE`), non UCD1+: riconoscere le colonne di posizione anche dagli
+  UCD1 (tabella di corrispondenza ufficiale IVOA UCD1 → UCD1+), oppure solo
+  con la conferma dell'utente; (c) i `ref` dell'esempio (`#id(myJ2000)`,
+  `#id($myJ2000)`) non sono IDREF come vuole la DTD: accettare la forma
+  `#id(...)`, oppure ignorare il riferimento (sistema sconosciuto);
+  (d) `DATA` con `LINK` esterno: errore (nessuna rete nel 13) o lettura
+  tramite il 14 in P6; (e) **T15** chiede il confronto con la VOTable
+  equivalente dello stesso catalogo, che per l'esempio (ipotetico) non
+  esiste: test su file nostri scritti dalla DTD, più l'esempio pubblico
+  letto in un test di rete (senza copiarlo nel repository).
 
 ## 14. Registro modifiche
 
@@ -556,3 +580,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D13-1 riscritta come grammatica nostra (operatori di confronto universali, motivazione nostra; tolto "basata su Aladin"; forma formale da scrivere prima del codice di `search`) in §3, §6, §13; D13-3 con motivazione nostra al posto di "come Aladin"; limite di riga riferito solo a `01` §8. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare il file approvato): sei parti (P6 dopo il 14); VOTable locali con `astropy.io.votable`; più tabelle con `table`/`TABLE_CHOICE_REQUIRED` (come D11-4); riconoscimento dei formati con la regola CSV/TSV/BSV e `FORMAT_AMBIGUOUS`; unità non valide con `UNIT_UNRECOGNIZED`; D13-4 deciso (1 milione di righe, limite delle operazioni 4 GB, A10 per i cataloghi); colonne di posizione solo da UCD e metadati, suggerimenti dal nome da confermare; grammatica formale di `search` (testo che non distingue maiuscole e minuscole per default); regole di disegno; epoca e cos δ dichiarati; parallasse mancante → solo moto proprio, righe marcate; `inplace` citato nel report; bin e scala obbligatori; `column_statistics` e `record_view` nel §7; una sola cache delle interrogazioni nel 14; D13-8 deciso (tabella delle funzioni in `catalogs.py`); §11 nel 32; T4 aritmetico, nuovi T17–T27, T6 per i sottoinsiemi salvati. Nuove decisioni aperte del Gruppo 3: D13-10 (`skydist`), D13-11 (colonna DataLink), D13-12 (propagazione senza parallasse nel 10, righe senza moto proprio), D13-13 (dove si salvano i sottoinsiemi). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P1 scritta** (`src/astrotwo/core/catalogs.py`, test T1, T8–T11, T21, T22, T24, T27): verifiche — astropy 8.0.1 espone UCD e riferimento al `COOSYS` di ogni campo, non la stringa originale dell'unità (§3 precisato); lettori `csv`, `tab`, `basic`, `ipac`, `sextractor` presenti; §3 precisato sulla stima prima della lettura dei testi. `confirm_position_columns` chiede `unit` angolare se le colonne non hanno unità (mai assunta). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P2, verifiche:** DTD ASTRORES pubblica (CDS, v0.9) ed esempio pubblico del CDS trovati; `defusedxml` 0.7.1 (licenza PSF, puro Python). L'esempio è incoerente con la DTD (coordinate sessagesimali in campi `F`, UCD1, `ref` non IDREF) e T15 non ha una VOTable equivalente: nuova decisione aperta **D13-14** (Gruppo 3); P2 ferma in attesa del proprietario. Stato `approvato` invariato. |
