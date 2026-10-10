@@ -8,7 +8,11 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-09 — **codice della cache comune (`04`) e di
+**Ultimo aggiornamento:** 2026-10-10 — regola d'oro n. 8 (AstroTwo scritto da zero);
+decisioni sull'11 (divisione in 7 parti); nuova A11 (licenza). Aperte 19 (Gruppo
+1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). Riepilogo invariato: approvato 14, bozza 5,
+non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-09 — **codice della cache comune (`04`) e di
 `resolve_name` (modulo 10) scritto**; precisazioni di `04` (limite sui dati, 5 × 10⁹
 byte) e del `10` (prima la cache). Test: 103 superati di default, 106 con la rete.
 Aperte 18. Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
@@ -204,7 +208,7 @@ Dove si trovano le decisioni:
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (18: Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `decisioni-aperte.md` | Decisioni aperte (19: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 

@@ -37,7 +37,11 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-09, con la nuova `D11-8`: 18 aperte** — Gruppo 1: **0** · Gruppo 2:
+**Dal 2026-10-10, con la nuova `A11` (licenza): 19 aperte** — Gruppo 1: **0** ·
+Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`, che bloccano solo `60` e `40`) · Gruppo 3:
+**15** (`A10` ora solo per cataloghi e HiPS).
+
+Prima, sempre il 2026-10-09, con la nuova `D11-8`: 18 aperte — Gruppo 1: **0** · Gruppo 2:
 **3** (`A2`, `A6`, `A9`, che bloccano solo `60` e `40`) · Gruppo 3: **15** (`D10-9`
 si decide con il `41`; `D11-8` con `20` e `41`).
 
@@ -171,12 +175,13 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (3)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (4)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
+| `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
 ## 5. GRUPPO 3 — rimandabili al momento del codice (15)
@@ -192,7 +197,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `AP4` | AstroTwo esegue gli script di Aladin o ha solo il proprio formato di pipeline? (rinvia ad `A8`: si decide insieme, dopo il livello 1) | `03-parita-aladin.md` §6 (e `24-analisi-pipeline-riproducibili.md`) |
 | `D18-5` | Limiti di lunghezza e annidamento delle espressioni (`CALC_TOO_COMPLEX`)? | `18-core-calcolatrici.md` |
 | `D18-6` | Come leggere il valore grezzo di un pixel quando `astropy.io.fits` applica BSCALE/BZERO? | `18-core-calcolatrici.md` |
-| `A10` | Tetti di memoria per immagini, cataloghi e HiPS (coerenti con l'obiettivo di `01-architettura.md` §8)? | `01-architettura.md` §8 (e `11`, `12`, `13`, `61`) |
+| `A10` | Tetti di memoria per **cataloghi e HiPS** (coerenti con l'obiettivo di `01-architettura.md` §8)? Per le immagini decisa il 2026-10-10 (valori nell'11) | `01-architettura.md` §8 (e `12`, `13`, `61`) |
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
 | `D13-8` | Dove vive nel codice la tabella delle funzioni condivisa da colonne calcolate (13) e calcolatrice (18)? | `13-core-cataloghi.md` |
 | `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
@@ -248,3 +253,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-09 | Claude Code | **Decise dal proprietario `D10-7`** (partenza `TAN` + tre controlli; coerenza con l'RMS della `TAN`) e **`D10-8`** (griglia e scelta della proiezione nel 10, cache in `04-cache.md` con AM1 accettata, centroide nell'11, soluzioni come lista, offset e calcolo inverso nel 17) e tolte dal Gruppo 3; nuove `D10-9` e `D11-7` (Gruppo 3) e `CA1`–`CA4` di `04-cache.md` (Gruppo 2, bloccano l'approvazione del 04). Conteggi: aperte **22** (Gruppo 1 = 0, Gruppo 2 = 7, Gruppo 3 = 15). |
 | 2026-10-09 | Claude Code | **Decise dal proprietario** `CA1` (timeout 10 s / 60 s, configurabili), `CA2` (un solo limite di 5 GB), `CA3` (`src/astrotwo/core/cache.py`), `CA4` (nessuna cache propria nei moduli) — `04-cache.md` approvato — e `D11-7` (fondo = mediana con sigma clipping in una corona); tolte dai Gruppi 2 e 3. `D10-9` resta aperta, da decidere con il 41. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 14). |
 | 2026-10-09 | Claude Code | Nuova `D11-8` (default dei raggi della corona del centroide, Gruppo 3, da fissare con 20 e 41) su decisione del proprietario. Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). |
+| 2026-10-10 | Claude Code | Nuova `A11` — licenza di AstroTwo (Gruppo 2, blocca il 60), aperta dal proprietario; `A10` decisa per le immagini, resta per cataloghi e HiPS. Conteggi: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). |

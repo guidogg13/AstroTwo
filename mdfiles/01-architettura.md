@@ -106,7 +106,8 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 | A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): sì**, firma e notarizzazione con account Apple Developer **solo al momento della distribuzione**; blocca l'approvazione di `60-distribuzione-dmg.md` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
 | A9 | Lingua dell'interfaccia | solo inglese · solo italiano · entrambe (internazionalizzazione) | `40-ui-finestra-principale.md` | **orientamento (2026-10-09): inglese di base + italiano** con le traduzioni di Qt; blocca l'approvazione di `40-ui-finestra-principale.md` |
-| A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | da fissare al momento del codice (Gruppo 3) |
+| A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel; **cataloghi e HiPS: da fissare al momento del codice** (Gruppo 3) |
+| A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
 
 Fuori da questo file: **AP1** validazione finale della parità con Aladin
 (`03-parita-aladin.md`, rimandata) e **AM1** aggiunta/separazione di moduli
@@ -193,7 +194,13 @@ astrotwo/
   2026-10-09: PyInstaller + dmgbuild; si decide con l'approvazione di
   `60-distribuzione-dmg.md`, insieme ad A6.
 - **DA-07 — A10, Tetti di memoria:** valori per immagini, cataloghi e HiPS,
-  coerenti con l'obiettivo di §8; da fissare al momento del codice (Gruppo 3).
+  coerenti con l'obiettivo di §8; **per le immagini decisi il 2026-10-10**
+  (valori in `11-core-immagini-fits.md` §3); per cataloghi e HiPS da fissare
+  al momento del codice (Gruppo 3).
+- **DA-08 — A11, Licenza di AstroTwo:** da decidere (Gruppo 2); blocca
+  l'approvazione di `60-distribuzione-dmg.md`. Vincolo noto: WCSLIB (LGPL-3,
+  dentro astropy). Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
+  codice né dato preso da Aladin, che è GPL).
 - **DA-06 — A8, Compatibilità con lo scripting di Aladin:** rimandata a dopo il
   completamento del livello 1; la strada "scripting principale in Python" resta
   valida nel frattempo.
@@ -214,3 +221,4 @@ astrotwo/
 | 2026-10-09 | Claude Code | **Decisioni del proprietario (checklist del livello 1):** A2, A6, A9 non bloccano il livello 1 e passano come bloccanti dell'approvazione di `60` (A2, A6) e `40` (A9), con orientamento: A2 = PyInstaller + dmgbuild; A6 = sì, notarizzazione con account Apple Developer solo al momento della distribuzione; A9 = inglese di base + italiano con le traduzioni di Qt (§5, §9). Nuova **A10** (tetti di memoria, Gruppo 3) al posto del rinvio senza etichetta in §8. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | §4.2 (note): **framework dei test = `pytest`** (decisione del proprietario), anticipata da `61-strategia-test.md`. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario:** nuova decisione aperta **A11 — Licenza di AstroTwo** (Gruppo 2, blocca il 60, §5 e §9 DA-08); **A10 decisa per le immagini** (valori nell'11), resta aperta per cataloghi e HiPS. Nuova regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero, nulla preso da Aladin). Stato `approvato` invariato. |

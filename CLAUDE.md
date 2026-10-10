@@ -30,6 +30,7 @@ Principio P11: **la parità con Aladin è il minimo, non il traguardo.** Tutte l
 5. **Le API key non vanno mai in file, log o repository.** Solo nel Portachiavi di macOS.
 6. **Riproducibilità.** Ogni operazione dell'utente deve poter essere registrata e rieseguita (ogni azione dell'interfaccia = un comando registrato).
 7. **Il progetto è a livelli e deve funzionare sempre.** Livello 1 nucleo (pari ad Aladin), 2 analisi, 3 IA, 4 funzioni avanzate. Dipendenze solo verso il basso (`4 → 3 → 2 → 1`). Un livello non rompe mai quello sotto; senza IA l'app funziona ai livelli 1 e 2.
+8. **AstroTwo è scritto da zero.** Da Aladin non si prende niente: né codice, né tabelle di valori, né file, né immagini. Il manuale di Aladin serve solo a sapere **quali** funzioni deve avere AstroTwo (parità, P11), mai **come** implementarle. Implementazioni e valori vengono da codice nostro o da librerie scientifiche consolidate con licenza compatibile (regola d'oro n. 4). Unica eccezione: leggere file prodotti da Aladin, per compatibilità. (Regola del proprietario del 2026-10-10.)
 
 ## Come lavorare
 

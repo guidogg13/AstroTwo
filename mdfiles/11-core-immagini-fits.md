@@ -20,18 +20,48 @@ alterare i valori dei pixel memorizzati.
   trasparenza e sovrapposizione tra layer di immagine (B5), coniugazione /
   composizione multibanda (B11). Le regolazioni sono **solo di presentazione**:
   i pixel memorizzati e i valori usati per le misure non cambiano.
+  - **Funzioni di trasferimento (decisione del proprietario del
+    2026-10-10):** quelle di `astropy.visualization` — lineare
+    (`LinearStretch`), logaritmica (`LogStretch`), radice quadrata
+    (`SqrtStretch`), quadrato (`SquaredStretch`), arcoseno iperbolico
+    (`AsinhStretch`) ed equalizzazione dell'istogramma (`HistEqStretch`);
+    l'intervallo di visualizzazione è dato da `vmin`/`vmax`.
+  - **Palette (D11-5, corretta il 2026-10-10):** non si riproducono le
+    palette di Aladin (regola d'oro n. 8). Si offrono palette scientifiche
+    da fonti con licenza libera, equivalenti per uso a quelle di Aladin, con
+    **default `gray`**, ciascuna anche invertita (`_r`). Elenco e fonte (tutte
+    distribuite con `matplotlib`): `gray` (scala di grigi); `viridis`,
+    `plasma`, `inferno`, `magma` (van der Walt e Smith, CC0); `cividis`
+    (Nuñez, Anderton e Renslow 2018, adatta ai daltonici); `cubehelix`
+    (Green 2011); `afmhot` (colori del corpo nero); `coolwarm` (Moreland
+    2009, divergente). Licenze **da verificare prima del codice di P4**.
 - **Taglio (cutout):** estrarre una sottoparte di un'immagine con WCS coerente
   (B8).
 - **Ricampionamento e allineamento:** ricampionare un'immagine sulla soluzione
   astrometrica di un'altra e fare il "match" delle viste (B7). Non esiste
   "align" in Aladin: la funzione è il ricampionamento sulla soluzione
-  astrometrica.
-- **Operazioni su immagini (H5):** aritmetica tra immagini, convoluzione,
-  normalizzazione, cambio formato pixel (es. float64 → float32 per il
-  display), specchiatura. Ogni operazione produce un **nuovo** oggetto, mai
-  la modifica silenziosa dell'originale.
+  astrometrica. **Qualità** del ricampionamento (decisione del proprietario
+  del 2026-10-10): la **mappa di copertura** restituita da `reproject` e la
+  **percentuale di pixel coperti** dell'immagine di riferimento.
+- **Operazioni su immagini (H5) — elenco chiuso (decisione del proprietario
+  del 2026-10-10, funzioni scelte in base al manuale di Aladin, sez. 5.18):**
+  (1) **aritmetica tra immagini** — somma, differenza, prodotto, rapporto,
+  pixel per pixel, tra immagini con la stessa griglia; (2) **aritmetica con
+  costanti** — le stesse quattro operazioni con un numero; (3)
+  **convoluzione** con un kernel di `astropy.convolution` (oggetto
+  `Kernel2D`, es. `Gaussian2DKernel`, `Box2DKernel`, `Tophat2DKernel`),
+  calcolata con `astropy.convolution.convolve`; (4) **normalizzazione** —
+  definizione esatta **da verificare con il manuale (sez. 5.18) prima del
+  codice di P5**; (5) **specchiature** orizzontale e verticale, che
+  **aggiornano anche il WCS** (il cielo resta agganciato agli stessi pixel
+  fisici). Ogni operazione produce un **nuovo** oggetto, calcolato in
+  `float64`, mai la modifica silenziosa dell'originale. Il passaggio a
+  `float32` per il display non è un'operazione H5: è di `set_display`.
 - **Contorni / isofote (H7):** calcolare le linee di livello di intensità
-  sull'immagine.
+  sull'immagine con **`contourpy`** (decisione del proprietario del
+  2026-10-10; licenza da verificare prima del codice di P5); le linee sono
+  in coordinate pixel (convenzione numpy), con la conversione in coordinate
+  celesti tramite il modulo 10 su richiesta.
 - **Centroide per la calibrazione astrometrica (H6; D10-8 del
   `10-core-coordinate-wcs.md`, decisa il 2026-10-09):** dato un punto
   indicato dall'utente (pixel, convenzione numpy) e una finestra quadrata
@@ -54,13 +84,21 @@ alterare i valori dei pixel memorizzati.
   (D11-3 decisa il 2026-10-04). La cache è quella comune di `04-cache.md`
   (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s):
   il modulo non ha una cache propria (CA4).
-- **Esportazione:** salvare la vista come immagine e salvare tagli FITS.
+- **Esportazione:** salvare tagli e immagini come FITS con WCS e
+  provenienza (`save_fits`). L'esportazione **della vista** come immagine è
+  del `41-ui-visualizzatore-cielo.md` (decisione del proprietario del
+  2026-10-10).
 - **Formati e compressioni (H22, sez. 8.1 del manuale di Aladin, ed. giugno 2022):**
   FITS anche compressi (RICE, GZIP, **HCOMPRESS / HCOMP**, letti con le HDU
   compresse di `astropy.io.fits`; file `.gz`), file a più estensioni (MEF,
   D11-4), FITS RGB (tre piani di colore), JPEG, PNG e **GIF**. Per JPEG e PNG
   la calibrazione si legge dal segmento di commento o da un file `.hhh` con
-  lo stesso nome (H6, sez. 5.14). La **natura del file si riconosce dal
+  lo stesso nome (H6, sez. 5.14): **solo in lettura, per compatibilità con i
+  file esistenti** (decisione del proprietario del 2026-10-10; regola d'oro
+  n. 8, eccezione della lettura di file prodotti da Aladin). Il formato si
+  descrive qui a partire da standard pubblici (intestazione FITS scritta come
+  testo) **prima del codice di P2**; se non è documentato in modo pubblico,
+  P2 si ferma. I file di prova si generano nei test con `Pillow`. La **natura del file si riconosce dal
   contenuto** (firma del file), non dall'estensione. Libreria per JPEG, PNG e
   GIF: **`Pillow`** (D11-6, decisa il 2026-10-09; licenza da verificare
   prima del codice). Limite dichiarato da Aladin come riferimento:
@@ -72,7 +110,13 @@ alterare i valori dei pixel memorizzati.
   a bassa risoluzione ottenuta leggendo pixel a passo regolare dichiarato,
   poi l'alta risoluzione solo per la porzione visibile quando lo zoom lo
   permette. La bassa risoluzione è **solo di presentazione**: ogni misura usa
-  i pixel originali. Soglie tra le strategie: A10 (Gruppo 3). Il modulo
+  i pixel originali. **Soglie (A10 per le immagini, decisa dal proprietario
+  il 2026-10-10):** in memoria fino a **1 GB** di dati; oltre, `memmap` per i
+  file non compressi; **due livelli** oltre **4 GB**, oppure per i file
+  compressi oltre **1 GB** (la decompressione impedisce il `memmap`);
+  anteprima di **al massimo 4096 pixel sul lato lungo** (passo di lettura
+  intero, il più piccolo che rispetta il limite). Valori configurabili e
+  scritti nel risultato (1 GB = 10⁹ byte, come in `04-cache.md`). Il modulo
   espone la memoria usata (mostrata da `40-ui-finestra-principale.md`).
 - **Immagini a colori RGB e differenza di colori (B11, sez. 5.15):** immagine
   a colori da **2 o 3** immagini monocrome. Le immagini si ricampionano
@@ -81,7 +125,9 @@ alterare i valori dei pixel memorizzati.
   lunghezze d'onda sono note, si ordinano per lunghezza d'onda. Con 2 immagini
   la terza componente è la media delle altre due. **Differenza** (`RGBdiff`):
   le differenze positive vanno nella prima componente, quelle negative nella
-  seconda, normalizzate su 0–255. Il risultato è un **nuovo piano di sola
+  seconda, normalizzate su 0–255 con **un solo fattore di scala per le due
+  componenti**, scritto nel risultato (decisione del proprietario del
+  2026-10-10). Il risultato è un **nuovo piano di sola
   presentazione**: nessun valore fisico viene mescolato.
 - **Mosaico e sequenza animata (B11, sez. 5.16):** mosaico nella griglia
   dell'immagine di riferimento con **media** nelle zone sovrapposte e senza
@@ -122,11 +168,14 @@ alterare i valori dei pixel memorizzati.
 | in | immagini da combinarre | array | stesse unità o con fattore di scala dichiarato | operazioni H5 |
 | out | immagine in memoria | array nel **tipo nativo del file** (float32 o float64); display in float32 | pixel | con WCS; ogni calcolo in float64 (D11-1) |
 | out | cutout | FITS con WCS | pixel + header | |
-| out | contorni | list di curve | pixel o coordinate (dichiarare) | H7 |
+| out | contorni | list di curve | pixel (convenzione numpy) o coordinate celesti (dichiarato) | H7, `contourpy` |
+| in | funzione di trasferimento, palette | enumerativi | elenchi chiusi di §3 | solo presentazione |
+| in | operazione H5 | enumerativo + operandi | elenco chiuso di §3 | kernel come oggetto `astropy.convolution.Kernel2D` |
+| out | qualità del ricampionamento | mappa + percentuale | copertura 0–1 per pixel, % di pixel coperti | da `reproject` |
 | out | cache su disco | file immagine + metadati | origine, data di scaricamento, dimensione | A7, limite di default 5 GB |
 | in | immagini RGB | 2 o 3 `FitsImage` monocromi | stesse dimensioni non richieste (si ricampiona) | modalità `rgb` o `rgb_diff` |
-| out | immagine RGB | array 3 × 8 bit + WCS dell'immagine di riferimento | 0–255 per componente | solo presentazione; origine delle componenti dichiarata |
-| out | vista a bassa risoluzione | array + passo di lettura | pixel | marcata `preview`, mai usata per le misure |
+| out | immagine RGB | array 3 × 8 bit + WCS dell'immagine di riferimento | 0–255 per componente | solo presentazione; origine delle componenti dichiarata; per `rgb_diff` il fattore di scala unico |
+| out | vista a bassa risoluzione | array + passo di lettura | pixel | marcata `preview`, mai usata per le misure; strategia e soglie (A10) scritte nel risultato |
 | out | costanti dei pixel | `BZERO`, `BSCALE`, `BLANK`, `BUNIT` | come da intestazione FITS | per il modulo 18 |
 
 ## 7. Interfaccia pubblica
@@ -137,15 +186,23 @@ alterare i valori dei pixel memorizzati.
 - **`load_image(source)`** — carica da file, URL o formato non FITS; restituisce
   `FitsImage` o errore; dichiara origine e data.
 - **`set_display(image, vmin, vmax, gamma, palette)`** — calcola i parametri di
-  visualizzazione (non modifica l'originale).
+  visualizzazione (non modifica l'originale): funzione di trasferimento e
+  palette dagli elenchi chiusi di §3; restituisce il piano di presentazione
+  (`float32`, poi colori) senza toccare l'array dell'immagine.
 - **`resample_to_reference(image, reference)`** — ricampiona su una soluzione
-  astrometrica di riferimento (B7); restituisce nuova immagine + qualità.
+  astrometrica di riferimento (B7); restituisce nuova immagine + qualità
+  (mappa di copertura di `reproject` + percentuale di pixel coperti).
 - **`reproject(...)`** / **`blend(...)`** — composizioni multibanda (B11) e
   sovrapposizioni con alpha (B5).
 - **`cutout(image, center, size)`** — taglio con WCS coerente.
 - **`image_operation(a, b, op)`** — aritmetica/convoluzione/normalizzazione/
-  specchiatura (H5); `op` da un elenco chiuso.
-- **`contours(image, levels)`** — isofote (H7); `levels` in unità dell'immagine.
+  specchiatura (H5); `op` dall'elenco chiuso di §3; `b` è un'immagine, una
+  costante o un kernel secondo l'operazione; le specchiature aggiornano il
+  WCS.
+- **`save_fits(image, path)`** — salva un'immagine o un taglio come FITS con
+  WCS e provenienza (origine, data) nell'intestazione.
+- **`contours(image, levels)`** — isofote (H7) con `contourpy`; `levels` in
+  unità dell'immagine; restituisce le curve in pixel (convenzione numpy).
 - **`star_centroid(image, position, box_size, annulus_inner, annulus_outer)`**
   — baricentro pesato sull'intensità, dopo la sottrazione del fondo (D11-7),
   nella finestra quadrata di lato `box_size` pixel (intero dispari ≥ 3)
@@ -182,7 +239,11 @@ alterare i valori dei pixel memorizzati.
 | `numpy` | manipolazione array | base dell'ecosistema scientifico |
 | `scipy.ndimage` | convoluzione, ricampionamento semplice, baricentro del centroide (`center_of_mass`) | consolidato e testato |
 | `astropy.stats` | fondo cielo del centroide con `sigma_clipped_stats` (D11-7) | libreria di riferimento |
-| `reproject` (D11-2, decisa; licenza da verificare prima del codice) | ricampionamento tra proiezioni (B7) | pensato per questo scopo; vedi §13 |
+| `reproject` (D11-2, decisa; licenza da verificare prima del codice) | ricampionamento tra proiezioni (B7), mappa di copertura, mosaico (`reproject_and_coadd`) | pensato per questo scopo; vedi §13 |
+| `astropy.visualization` | funzioni di trasferimento e intervalli (B3, B4) | libreria di riferimento |
+| `astropy.convolution` | kernel e convoluzione (H5) | libreria di riferimento, gestisce i NaN |
+| `contourpy` (licenza da verificare prima del codice di P5) | contorni / isofote (H7) | libreria usata da `matplotlib` |
+| `matplotlib` (solo le tabelle delle palette; licenza da verificare prima del codice di P4) | palette di §3 (B6) | fonte con licenza libera delle palette scientifiche |
 | Standard FITS | formato di tagli ed export | formato del dominio |
 | `Pillow` (D11-6) | lettura di JPEG, PNG e GIF e del segmento di commento con la calibrazione | libreria di riferimento per questi formati; **licenza da verificare prima del codice** |
 
@@ -220,6 +281,9 @@ alterare i valori dei pixel memorizzati.
 | RGB con meno di 2 o più di 3 immagini, o immagini non monocrome | rifiuto con il numero e il tipo ricevuti | `RGB_INPUT_INVALID` |
 | RGB o mosaico con un'immagine senza WCS | rifiuto: il ricampionamento richiede la calibrazione | `WCS_MISSING` |
 | Misura richiesta su una vista a bassa risoluzione | la misura usa i pixel originali; se non disponibili, errore | `PREVIEW_NOT_MEASURABLE` |
+| Operazione H5 fuori dall'elenco chiuso o operando del tipo sbagliato | rifiuto con l'elenco delle operazioni | `OPERATION_UNSUPPORTED` |
+| Funzione di trasferimento o palette fuori dagli elenchi di §3 | rifiuto con l'elenco ammesso | `DISPLAY_OPTION_UNKNOWN` |
+| Calibrazione nel commento di JPEG/PNG o nel `.hhh` non leggibile | l'immagine si apre senza WCS, con avviso che cita la calibrazione scartata | `WCS_MISSING` |
 | Finestra o corona del centroide fuori dall'immagine | rifiuto con la finestra e i limiti dell'immagine | `CENTROID_OUT_OF_IMAGE` |
 | Centroide non definito (somma dei pesi ≤ 0 dopo la sottrazione del fondo, pixel non finiti nella finestra, nessun pixel finito nella corona) | nessuna posizione prodotta | `CENTROID_UNDEFINED` |
 
@@ -260,6 +324,14 @@ numero mostrato.
 | T17 | Centroide fuori immagine | finestra o corona che esce dal bordo | `CENTROID_OUT_OF_IMAGE` | test di unità |
 | T18 | Centroide non definito | finestra con un NaN; finestra senza stella (tutta fondo) con pesi a somma ≤ 0 | `CENTROID_UNDEFINED` | test di unità |
 | T19 | Fondo robusto | stella vicina dentro la corona | fondo stimato entro 3 deviazioni standard dal fondo vero (sigma clipping la esclude) | confronto con il fondo costante del test |
+| T20 | Specchiature e WCS (H5) | specchiare in orizzontale e in verticale un'immagine con WCS | pixel specchiati come `numpy.flip`; le coordinate celesti di ogni pixel fisico restano le stesse (ricalcolo con `astropy.wcs`, errore < 1e-9 gradi) | ricalcolo con NumPy e Astropy |
+| T21 | Mosaico (B11) | due immagini sintetiche sovrapposte, con WCS diverse | valori uguali a `reproject_and_coadd` con media, ricalcolato nel test | ricalcolo con `reproject` |
+| T22 | Fattore unico di `rgb_diff` | differenze positive e negative di ampiezza diversa | stessa scala per le due componenti, fattore scritto nel risultato | ricalcolo con `numpy` |
+| T23 | Qualità del ricampionamento | ricampionare un'immagine che copre metà del riferimento | mappa di copertura uguale a quella di `reproject`; percentuale ricalcolata nel test | ricalcolo con `reproject` |
+| T24 | Funzioni di trasferimento e palette | ogni funzione e palette dell'elenco | valori uguali a `astropy.visualization` e alle tabelle di `matplotlib`; nome fuori elenco → `DISPLAY_OPTION_UNKNOWN` | ricalcolo con le librerie |
+| T25 | Strategie per dimensione (A10) | soglie configurate piccole nel test, file sintetici non compressi e compressi | strategia scelta secondo le regole di §3; soglie scritte nel risultato | test di unità |
+| T26 | Salvataggio FITS | `save_fits` su un taglio, poi rilettura | dati e WCS uguali, origine e data nell'intestazione | confronto con `astropy.io.fits` |
+| T27 | Calibrazione nel commento (H6) | PNG e JPEG generati con `Pillow` con un'intestazione WCS nel commento, e un `.hhh` | WCS uguale a quella costruita dallo stesso testo con `astropy.wcs` | ricalcolo con Astropy |
 
 ## 13. Decisioni aperte
 
@@ -285,10 +357,11 @@ numero mostrato.
   sulla checklist del livello 1).** si aprono **tutte le HDU immagine** del
   file, con scelta dell'utente (file a più estensioni MEF, come in Aladin,
   sez. 8.1); i cubi restano a `23-analisi-cubi-di-dati.md`.
-- **D11-5 — Palette predefinite (B6): DECISA il 2026-10-09 (decisione del
-  proprietario sulla checklist del livello 1).** le **9 tabelle di colori di
-  Aladin** (sez. 5.5): Gray, BB, A, Stern, Rainbow, Eosb, Fire, Cubhlx, Polar,
-  anche invertite; **default Gray**.
+- **D11-5 — Palette predefinite (B6): DECISA il 2026-10-09, CORRETTA il
+  2026-10-10 (decisione del proprietario, regola d'oro n. 8).** Non si
+  riproducono le palette di Aladin: si offrono palette scientifiche da fonti
+  con licenza libera (`matplotlib`), equivalenti per uso, con **default
+  `gray`**; elenco e fonte in §3.
 - **D11-6 — Libreria per JPEG, PNG e GIF: DECISA il 2026-10-09 (decisione del
   proprietario).** **`Pillow`** per JPEG, PNG e GIF e per il segmento di
   commento con la calibrazione (H6). **Da verificare prima del codice:**
@@ -302,6 +375,15 @@ numero mostrato.
   (Gruppo 3) **insieme a `20-analisi-fotometria.md` e
   `41-ui-visualizzatore-cielo.md`** (decisione del proprietario del
   2026-10-09).
+- **D11-9 — Decisioni del 2026-10-10 sulla divisione in parti (proprietario):**
+  funzioni di trasferimento di `astropy.visualization`; contorni con
+  `contourpy`; elenco chiuso delle operazioni H5 con specchiature che
+  aggiornano il WCS; soglie A10 per le immagini (1 GB, 4 GB, compressi oltre
+  1 GB, anteprima ≤ 4096 pixel); qualità del ricampionamento = copertura di
+  `reproject` + percentuale; fattore unico di `rgb_diff`; calibrazione di
+  JPEG/PNG solo in lettura; esportazione della vista nel `41`; gli strumenti
+  per l'IA di §11 vanno in `32-ia-registro-strumenti.md` (il testo di §11 si
+  aggiorna con il 32). Applicate in §3, §6–§8, §10, §12.
 
 ## 14. Registro modifiche
 
@@ -318,3 +400,4 @@ numero mostrato.
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5 e §7 — tolta `ImageCache`, immagini e tagli nella cache comune `SharedCache`; tolta da §5 la dipendenza da `12` per la cache. Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | **D11-7 DECISA** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): fondo cielo del centroide = mediana con sigma clipping in una corona attorno alla stella; `star_centroid` con raggi della corona obbligatori (§3, §7), `astropy.stats` (§8), casi limite (§10), test T16–T19 (§12). Codice di `star_centroid` scritto in `src/astrotwo/core/images_fits.py` (solo questa funzione). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | Centroide **confermato** dal proprietario (D11-7 e parametri); nuova **D11-8** (valori di default dei raggi della corona, Gruppo 3, da fissare con 20 e 41). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario sulla divisione in parti** (autorizzazione esplicita a modificare §3, §6–§8, §10, §12, §13): D11-5 corretta (palette scientifiche da `matplotlib`, non quelle di Aladin, regola d'oro n. 8); funzioni di trasferimento di `astropy.visualization`; elenco chiuso H5 con specchiature che aggiornano il WCS (normalizzazione da verificare con la sez. 5.18 prima di P5); `contourpy`; soglie A10 per le immagini; qualità del ricampionamento; fattore unico di `rgb_diff`; calibrazione di JPEG/PNG solo in lettura, formato da standard pubblici prima di P2; `save_fits` nel §7, vista esportata dal 41; strumenti IA nel 32 (D11-9, §11 non modificato). Nuovi errori `OPERATION_UNSUPPORTED`, `DISPLAY_OPTION_UNKNOWN`; test T20–T27. Stato `approvato` invariato. |

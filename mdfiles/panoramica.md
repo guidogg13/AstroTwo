@@ -368,6 +368,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | 10 (interpretazioni) | Confermate: proiezioni WCSLIB fuori da D10-4 accettate in lettura; `obstime` esplicito per i frame che lo hanno; velocità radiale assente = 0 km/s dichiarata; `PV2_m` obbligatori per `ZPN` | 2026-10-09 | decisione del proprietario, `10` §9 | D10-9 resta aperta e si decide con il 41 |
 | Nomi Python | **Nomi dei file Python in inglese**: traduzione inglese del nome della specifica, `snake_case`; tabella per 04 e 10–19 in `02-convenzioni.md` §3 | 2026-10-09 | decisione del proprietario, `02` §3 | es. `11` → `images_fits.py`, `13` → `catalogs.py` |
 | Cache (precisazioni) | Limite = **somma dei dati delle voci** (overhead di SQLite escluso); **5 GB = 5 × 10⁹ byte**; `resolve_name` con **prima la cache** (`refresh=True` per forzare SIMBAD) | 2026-10-09 | decisione del proprietario, `04-cache.md` §3, `10` §3 | applicate nel codice di `cache.py` e `resolve_name` |
+| Regola d'oro n. 8 | **AstroTwo è scritto da zero:** da Aladin non si prende niente (codice, tabelle di valori, file, immagini); il manuale dice solo quali funzioni servono; unica eccezione la lettura di file prodotti da Aladin | 2026-10-10 | decisione del proprietario, `CLAUDE.md` | collegata ad A11 (licenza) |
+| 11 (divisione) | Modulo 11 in 7 parti (P1 lettura FITS → P7 ricampionamento/RGB/mosaico); D11-5 corretta (palette `matplotlib`); funzioni di trasferimento di `astropy.visualization`; `contourpy`; elenco chiuso H5; A10 per le immagini; qualità = copertura `reproject`; fattore unico `rgb_diff`; vista esportata dal 41; strumenti IA nel 32 | 2026-10-10 | decisione del proprietario, `11` §3/§13 (D11-9) | normalizzazione H5 da verificare con il manuale prima di P5 |
 
 ## 6. Decisioni aperte
 
@@ -389,9 +391,10 @@ livello 1 (14); con il completamento dei moduli 11–17 (20); con le decisioni
 su D11-6, D13-7, D14-7, D14-8, D15-5 → 16 aperte; con le verifiche del
 modulo 10 in fase codice (D10-7, D10-8) → 18 aperte; con D10-7 e D10-8
 decise, le nuove D10-9 e D11-7 e le CA1–CA4 di `04-cache.md` → 22 aperte;
-con CA1–CA4 e D11-7 decise → 17; con la nuova D11-8 → **18 aperte** (Gruppo
-1 = 0, Gruppo 2 = 3: A2, A6, A9 per `60`/`40`; Gruppo 3 = 15, con D10-9 da
-decidere con il 41 e D11-8 con 20 e 41).
+con CA1–CA4 e D11-7 decise → 17; con la nuova D11-8 → 18; con la nuova
+**A11 — licenza di AstroTwo** → **19 aperte** (Gruppo 1 = 0, Gruppo 2 = 4: A2,
+A6, A9, A11 per `60`/`40`; Gruppo 3 = 15, con D10-9 da decidere con il 41,
+D11-8 con 20 e 41, A10 ormai solo per cataloghi e HiPS).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -445,8 +448,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (18): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 3, Gruppo 3 = 15); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (19): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 15); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -479,3 +482,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-09 | Claude Code | **Decisioni del proprietario:** nomi dei file Python in inglese con tabella in `02` §3 (04 e 10–19); passo automatico della griglia confermato (da verificare con AP1); centroide confermato, nuova **D11-8** (default dei raggi della corona, da fissare con 20 e 41). Aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). Stati invariati. |
 | 2026-10-09 | Claude Code | **Decisioni del proprietario:** nomi dei file Python in inglese (tabella in `02` §3); griglia automatica confermata (da verificare con AP1); centroide confermato e nuova D11-8; precisazioni della cache (limite sui dati, 5 × 10⁹ byte) e di `resolve_name` (prima la cache). **Codice:** `src/astrotwo/core/cache.py` (test T1–T8 di `04`) e `resolve_name` nel modulo 10 (T5 simulato + di rete); dipendenze dichiarate `requests` e `pyvo`; `tests/conftest.py` con home temporanea per tutti i test. Test: 103 superati di default, 106 con la rete, 0 saltati, 0 falliti. Primo commit `e029808`; secondo commit con questo lavoro. Aperte **18** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 15). Stati invariati: approvato 14, bozza 5, non esiste 23, totale 42. |
 | 2026-10-10 | Claude Code | Modulo 10: verificato che `conf.timeout` di astroquery non applica i timeout HTTP di `04`; il campo interno `_session` resta isolato in `_simbad_with_timeouts` (registro del 10). Test: 106 superati con la rete. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario:** regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero); divisione dell'11 in 7 parti e decisioni collegate applicate nell'11 (D11-5 corretta, D11-9); **A11 — licenza di AstroTwo** aperta (Gruppo 2, blocca il 60) in `01`; A10 decisa per le immagini. Controllo dei file approvati per contenuti presi da Aladin: elenco consegnato al proprietario, nessuna correzione. Aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). Stati invariati. |
