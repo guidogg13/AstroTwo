@@ -383,16 +383,35 @@ class _TimeoutSession(requests.Session):
         return super().request(method, url, **kwargs)
 
 
-def _query_simbad(name: str, timeouts: NetworkTimeouts):
-    """Interroga SIMBAD (TAP) con ``astroquery``; restituisce (tabella, URL del servizio)."""
+def _simbad_with_timeouts(timeouts: NetworkTimeouts):
+    """``SimbadClass`` le cui richieste HTTP usano i timeout comuni di ``04-cache.md``.
+
+    **Unico punto del codice che usa un campo interno di astroquery**
+    (``_session``), verificato con astroquery 0.4.11 il 2026-10-10:
+
+    - ``conf.timeout`` di ``astroquery.simbad`` (pubblico) è il limite di
+      esecuzione lato server delle query asincrone, non un timeout HTTP;
+    - ``query_object`` legge sempre ``hardlimit`` dalle capacità del servizio
+      (anche con ``get_query_payload=True``) tramite la sessione interna, e le
+      query sincrone di pyvo non passano alcun timeout a ``requests``.
+
+    Per questo la sessione HTTP di astroquery si sostituisce con una che
+    applica i timeout a ogni richiesta. Se astroquery cambiasse questo campo,
+    il test ``test_t5_timeouts_reach_the_http_session`` fallirebbe.
+    """
     from astroquery.simbad import SimbadClass
 
     simbad = SimbadClass()
     session = _TimeoutSession(timeouts)
     session.headers.update(simbad._session.headers)  # stesso User-Agent di astroquery
     simbad._session = session
-    table = simbad.query_object(name)
-    return table, simbad.tap.baseurl
+    return simbad
+
+
+def _query_simbad(name: str, timeouts: NetworkTimeouts):
+    """Interroga SIMBAD (TAP) con ``astroquery``; restituisce (tabella, URL del servizio)."""
+    simbad = _simbad_with_timeouts(timeouts)
+    return simbad.query_object(name), simbad.tap.baseurl
 
 
 def _column_value(table, column: str, target_unit) -> float | None:
