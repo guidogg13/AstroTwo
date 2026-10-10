@@ -159,7 +159,7 @@ class PixelScaling:
 
 @dataclass(frozen=True)
 class LargeImageLimits:
-    """Soglie delle strategie per dimensione (A10 per le immagini, decisa il 2026-10-10).
+    """Soglie delle strategie per dimensione (A10, decisa il 2026-10-10) e limite delle operazioni (D11-11).
 
     In byte (1 GB = 10⁹ byte) e in pixel; configurabili e scritte nel risultato.
     """
@@ -168,9 +168,13 @@ class LargeImageLimits:
     two_level_bytes: int = 4_000_000_000
     compressed_bytes: int = 1_000_000_000
     preview_max_side: int = 4096
+    #: Limite delle operazioni (D11-11): memoria stimata oltre la quale un'operazione
+    #: sull'immagine intera dà MEMORY_LIMIT_EXCEEDED. Separato dalla strategia di caricamento.
+    operation_bytes: int = 4_000_000_000
 
     def __post_init__(self) -> None:
-        if min(self.memory_bytes, self.two_level_bytes, self.compressed_bytes, self.preview_max_side) <= 0:
+        limits = (self.memory_bytes, self.two_level_bytes, self.compressed_bytes, self.preview_max_side, self.operation_bytes)
+        if min(limits) <= 0:
             raise ValueError("le soglie devono essere positive")
         if self.two_level_bytes < self.memory_bytes:
             raise ValueError("two_level_bytes non può essere minore di memory_bytes")
@@ -852,12 +856,59 @@ def _check_display_option(value: str, allowed: tuple[str, ...], what: str) -> st
     return value
 
 
-def _apply_stretch(normalized: np.ndarray, name: str, gamma: float) -> np.ndarray:
+#: Pixel per blocco di set_display: la presentazione si calcola a blocchi di righe in float32 (DC6).
+_DISPLAY_BLOCK_PIXELS = 1 << 20
+
+
+def _row_blocks(ny: int, nx: int):
+    rows = max(1, _DISPLAY_BLOCK_PIXELS // max(nx, 1))
+    for start in range(0, ny, rows):
+        yield slice(start, min(start + rows, ny))
+
+
+def _normalized(block, interval: ManualInterval) -> np.ndarray:
+    """Valori del blocco portati su [0, 1] in float32; NaN dove il pixel non è finito."""
+    values = np.asarray(block, dtype=np.float32)
+    out = np.full(values.shape, np.nan, dtype=np.float32)
+    finite = np.isfinite(values)
+    out[finite] = interval(values[finite], clip=True)
+    return out
+
+
+def _stretch_block(normalized: np.ndarray, stretch, gamma: float) -> np.ndarray:
     finite = np.isfinite(normalized)
-    if name == "histeq":
-        stretch = HistEqStretch(normalized[finite])
-    else:
-        stretch = _STRETCH_CLASSES[name]()
+    out = np.full(normalized.shape, np.nan, dtype=np.float32)
+    out[finite] = stretch(normalized[finite], clip=True)
+    if gamma != 1.0:
+        out[finite] = PowerStretch(gamma)(out[finite], clip=True)
+    return out
+
+
+def _plane_stretch(plane, name: str, interval: ManualInterval):
+    """Funzione di trasferimento di un piano; l'equalizzazione usa la distribuzione di tutto il piano."""
+    if name != "histeq":
+        return _STRETCH_CLASSES[name]()
+    ny, nx = plane.shape
+    parts = []
+    for rows in _row_blocks(ny, nx):
+        block = _normalized(plane[rows], interval)
+        parts.append(block[np.isfinite(block)])
+    return HistEqStretch(np.concatenate(parts) if parts else np.empty(0, dtype=np.float32))
+
+
+def _display_bytes(shape: tuple[int, ...], stretch: str) -> int:
+    """Stima di set_display (§3): risultato (valori float32 e RGBA), copia per histeq, lavoro di un blocco."""
+    planes = shape[0] if len(shape) == 3 else 1
+    ny, nx = shape[-2:]
+    n = ny * nx
+    block = min(n, max(1, _DISPLAY_BLOCK_PIXELS // max(nx, 1)) * nx)
+    return (4 * planes + 4) * n + (8 * n if stretch == "histeq" else 0) + 16 * block
+
+
+def _apply_stretch(normalized: np.ndarray, name: str, gamma: float) -> np.ndarray:
+    """Funzione di trasferimento e gamma su un array già normalizzato (usata dall'RGB)."""
+    finite = np.isfinite(normalized)
+    stretch = HistEqStretch(normalized[finite]) if name == "histeq" else _STRETCH_CLASSES[name]()
     out = np.full(normalized.shape, np.nan)
     out[finite] = stretch(normalized[finite], clip=True)
     if gamma != 1.0:
@@ -868,8 +919,9 @@ def _apply_stretch(normalized: np.ndarray, name: str, gamma: float) -> np.ndarra
 def set_display(image, vmin: float, vmax: float, gamma: float = 1.0, palette: str = "gray", stretch: str = "linear") -> DisplayPlane:
     """Piano di presentazione con intervallo, funzione di trasferimento, gamma e palette.
 
-    Non modifica mai ``image.data``: lavora su una copia in ``float64`` e
-    restituisce valori ``float32`` e colori (D11-1, §9 separazione display/dati).
+    Non modifica mai ``image.data``: calcola a blocchi di righe in ``float32``
+    (DC6), senza copiare l'immagine intera, e restituisce valori ``float32`` e
+    colori (D11-1, §9 separazione display/dati).
     """
     _check_display_option(stretch, STRETCHES, "funzione di trasferimento")
     color = bool(getattr(image, "color", False))
@@ -881,24 +933,36 @@ def set_display(image, vmin: float, vmax: float, gamma: float = 1.0, palette: st
     if not (math.isfinite(gamma) and gamma > 0):
         raise ValueError("gamma deve essere positivo")
     source = getattr(image, "data", image)
-    _check_memory("visualizzazione", int(np.size(source)) * _MEMORY_BYTES_PER_PIXEL["set_display"], image)
-    data = np.array(source, dtype=np.float64)  # copia: l'originale non si tocca
-    normalized = np.full(data.shape, np.nan)
-    finite = np.isfinite(data)
-    normalized[finite] = ManualInterval(vmin, vmax)(data[finite], clip=True)
+    shape = tuple(np.shape(source))
+    _check_memory("visualizzazione", _display_bytes(shape, stretch), image)
+    interval = ManualInterval(vmin, vmax)
+    planes = [source[k] for k in range(shape[0])] if color else [source]
+    ny, nx = shape[-2:]
+    values = np.empty((len(planes), ny, nx), dtype=np.float32)
+    for k, plane in enumerate(planes):
+        transfer = _plane_stretch(plane, stretch, interval)
+        for rows in _row_blocks(ny, nx):
+            values[k, rows] = _stretch_block(_normalized(plane[rows], interval), transfer, gamma)
+    rgba = np.empty((ny, nx, 4), dtype=np.uint8)
     if color:
-        values = np.stack([_apply_stretch(plane, stretch, gamma) for plane in normalized])
-        planes = np.where(np.isfinite(values), np.round(values * 255.0), 0.0).astype(np.uint8)
-        alpha = np.where(np.all(np.isfinite(values), axis=0), 255, 0).astype(np.uint8)
-        rgba = np.dstack([planes[0], planes[1], planes[2], alpha])
+        for rows in _row_blocks(ny, nx):
+            block = values[:, rows]
+            finite = np.isfinite(block)
+            for k in range(3):
+                rgba[rows, :, k] = np.where(finite[k], np.round(block[k] * np.float32(255.0)), 0)
+            rgba[rows, :, 3] = np.where(np.all(finite, axis=0), 255, 0)
         used_palette = None
     else:
-        values = _apply_stretch(normalized, stretch, gamma)
-        rgba = matplotlib.colormaps[palette](np.where(np.isfinite(values), values, 0.0), bytes=True)
-        rgba[~np.isfinite(values), 3] = 0  # non finiti trasparenti, mai un valore inventato
+        values = values[0]
+        colormap = matplotlib.colormaps[palette]
+        for rows in _row_blocks(ny, nx):
+            block = values[rows]
+            finite = np.isfinite(block)
+            rgba[rows] = colormap(np.where(finite, block, np.float32(0.0)), bytes=True)
+            rgba[rows, :, 3][~finite] = 0  # non finiti trasparenti, mai un valore inventato
         used_palette = palette
     return DisplayPlane(
-        values=values.astype(np.float32),
+        values=values,
         rgba=rgba,
         vmin=vmin,
         vmax=vmax,
@@ -1009,7 +1073,6 @@ _MEMORY_BYTES_PER_PIXEL = {
     "image_operation": 2 * _FLOAT64,  # a, risultato (costante, normalizzazione, specchiature)
     "convolve": 3 * _FLOAT64,  # a, risultato, copia di lavoro di astropy.convolution
     "contours": 2 * _FLOAT64,  # copia float64 con maschera, strutture di contourpy
-    "set_display": 4 * _FLOAT64,  # per piano: copia, intervallo, funzione di trasferimento, valori e colori
 }
 
 
@@ -1018,16 +1081,16 @@ def _pixels(shape) -> int:
 
 
 def _check_memory(what: str, needed: int, *images) -> None:
-    """Rifiuta l'operazione se la memoria stimata supera il tetto A10 (``memory_bytes``).
+    """Rifiuta l'operazione se la memoria stimata supera il limite delle operazioni (D11-11).
 
     Il tetto è il più piccolo tra quelli delle immagini coinvolte (default se assente).
     """
-    caps = [im.limits.memory_bytes for im in images if getattr(im, "limits", None) is not None]
-    cap = min(caps) if caps else LargeImageLimits().memory_bytes
+    caps = [im.limits.operation_bytes for im in images if getattr(im, "limits", None) is not None]
+    cap = min(caps) if caps else LargeImageLimits().operation_bytes
     if needed > cap:
         raise ImagesFitsError(
             "MEMORY_LIMIT_EXCEEDED",
-            f"{what}: servono circa {needed} byte, oltre il tetto di {cap} byte (A10); "
+            f"{what}: servono circa {needed} byte, oltre il limite delle operazioni di {cap} byte (D11-11); "
             "usare un taglio, una regione o soglie più alte",
             needed_bytes=needed,
             limit_bytes=cap,

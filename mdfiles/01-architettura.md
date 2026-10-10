@@ -106,7 +106,7 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 | A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): sì**, firma e notarizzazione con account Apple Developer **solo al momento della distribuzione**; blocca l'approvazione di `60-distribuzione-dmg.md` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
 | A9 | Lingua dell'interfaccia | solo inglese · solo italiano · entrambe (internazionalizzazione) | `40-ui-finestra-principale.md` | **orientamento (2026-10-09): inglese di base + italiano** con le traduzioni di Qt; blocca l'approvazione di `40-ui-finestra-principale.md` |
-| A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel; **cataloghi e HiPS: da fissare al momento del codice** (Gruppo 3) |
+| A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS: da fissare al momento del codice** (Gruppo 3) |
 | A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
 
 Fuori da questo file: **AP1** validazione finale della parità con Aladin
@@ -140,10 +140,11 @@ astrotwo/
 
 ## 7. Come si collegano i livelli
 
-- **Registro strumenti (livello 3):** i moduli del livello 1 e 2 che espongono
-  funzioni all'IA lo dichiarano nel proprio file `.md`, sezione "Esposizione
-  all'IA". Il registro (`32-ia-registro-strumenti.md`) raccoglie queste
-  descrizioni; non ricalcola nulla.
+- **Registro strumenti (livello 3):** gli strumenti esposti all'IA si
+  dichiarano **nel `32-ia-registro-strumenti.md`**, non nel §11 dei moduli
+  (decisione del proprietario del 2026-10-10, da D11-9): il §11 di un modulo
+  rimanda al 32, che descrive per ogni strumento la funzione deterministica
+  del modulo chiamata; il registro non ricalcola nulla.
 - **Verifica risultati (livello 3):** ogni valore numerico prodotto su richiesta
   dell'IA passa da un calcolo deterministico del livello 1/2 e viene
   ri-verificato da `34-ia-verifica-risultati.md` prima di essere mostrato.
@@ -222,3 +223,4 @@ astrotwo/
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | §4.2 (note): **framework dei test = `pytest`** (decisione del proprietario), anticipata da `61-strategia-test.md`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario:** nuova decisione aperta **A11 — Licenza di AstroTwo** (Gruppo 2, blocca il 60, §5 e §9 DA-08); **A10 decisa per le immagini** (valori nell'11), resta aperta per cataloghi e HiPS. Nuova regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero, nulla preso da Aladin). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario** (autorizzazione esplicita a modificare il file approvato): §7 — gli strumenti per l'IA si dichiarano nel 32, non nel §11 dei moduli (da D11-9). A10 resta la strategia di caricamento delle immagini; il limite delle operazioni (4 GB) è separato, D11-11 nell'11. Stato `approvato` invariato. |

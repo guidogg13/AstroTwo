@@ -72,7 +72,12 @@ pixel memorizzati.
     `PowerStretch(gamma)` di `astropy.visualization` applicata dopo la
     funzione di trasferimento (`gamma = 1` non cambia nulla); il risultato
     è in `float32` (solo presentazione) e poi in colori RGBA a 8 bit con la
-    palette; i pixel non finiti diventano **trasparenti** (alfa 0), mai un
+    palette; **il calcolo è a blocchi di righe (al più 2²⁰ pixel per blocco)
+    interamente in `float32`** (DC6), senza copiare l'immagine intera
+    (decisione del proprietario del 2026-10-10: un'immagine 6000 × 6000 deve
+    visualizzarsi); l'unica eccezione è l'equalizzazione dell'istogramma
+    (`histeq`), che per definizione usa la distribuzione di tutto il piano:
+    si raccolgono i valori finiti normalizzati del piano in `float32`; i pixel non finiti diventano **trasparenti** (alfa 0), mai un
     valore inventato; la disposizione delle righe è quella dei dati (dal
     basso). Per le immagini a colori la funzione di trasferimento si
     applica a ogni piano con lo stesso intervallo e la palette non si usa.
@@ -280,15 +285,18 @@ pixel memorizzati.
   analisi e non va fatta in silenzio; senza correzione i valori restano
   quelli delle immagini ricampionate. Cubo come sequenza animata
   (scorrimento nel 41, analisi nel 23).
-- **Tetto di memoria per le operazioni sull'immagine intera (decisione del
-  proprietario del 2026-10-10):** prima di ogni operazione H5, dei contorni,
-  di `set_display`, di `save_fits`, del ricampionamento, dell'RGB, del
-  mosaico e del taglio si **stima la memoria necessaria**; se supera il
-  tetto in memoria di A10 (`LargeImageLimits.memory_bytes`, 1 GB di default;
-  con più immagini vale il più piccolo dei loro tetti) l'operazione **non
-  carica nulla** e dà `MEMORY_LIMIT_EXCEEDED`, con la stima e il tetto nel
-  messaggio. La stima conta gli array presenti insieme durante il calcolo
-  (`N` = pixel; 8 byte per ogni array `float64`):
+- **Limite delle operazioni (D11-11, decisione del proprietario del
+  2026-10-10), separato da A10:** A10 resta la **strategia di caricamento**
+  (in memoria fino a 1 GB, poi `memmap` o due livelli). Il **limite delle
+  operazioni** è un valore nuovo, **4 GB di default, configurabile**
+  (`LargeImageLimits.operation_bytes`): prima di ogni operazione H5, dei
+  contorni, di `set_display`, di `save_fits`, del ricampionamento, dell'RGB,
+  del mosaico e del taglio si **stima la memoria necessaria**; se supera il
+  limite (con più immagini vale il più piccolo dei loro limiti)
+  l'operazione **non carica nulla** e dà `MEMORY_LIMIT_EXCEEDED`, con la
+  stima e il limite nel messaggio. La stima conta gli array presenti insieme
+  durante il calcolo (`N` = pixel di un piano; 8 byte per ogni array
+  `float64`, 4 per `float32`):
 
   | Operazione | Stima (byte) |
   |---|---|
@@ -296,7 +304,7 @@ pixel memorizzati.
   | H5 con costante, normalizzazione, specchiature | 2 × 8 × `N` |
   | H5 convoluzione | 3 × 8 × `N` (operando, risultato, copia di lavoro di `astropy.convolution`) |
   | contorni | 2 × 8 × `N` (copia `float64` con maschera, strutture di `contourpy`) |
-  | `set_display` | 4 × 8 × `N` per piano (copia, intervallo, funzione di trasferimento, valori e colori) |
+  | `set_display` | (4 × piani + 4) × `N` (valori `float32` e RGBA) + 8 × `N` con `histeq` (valori raccolti e ordinati) + 16 × pixel di un blocco |
   | `save_fits` | 2 × byte per pixel × `N` (dati e copia nell'ordine di byte del FITS) |
   | ricampionamento | 8 × `N` dell'ingresso + 2 × 8 × `N` del riferimento (risultato e copertura) |
   | mosaico e RGB | 8 × Σ `N` degli ingressi + (2 × numero di ingressi + 2) × 8 × `N` del riferimento |
@@ -410,10 +418,10 @@ pixel memorizzati.
   A10); restituisce un `FitsImage` con strategia, motivo e soglie usate,
   vista a bassa risoluzione marcata (due livelli) e accesso all'alta
   risoluzione per regione (`FitsImage.read_region`).
-- **`LargeImageLimits`** (struttura) — soglie configurabili: memoria 1 GB
-  (anche tetto delle operazioni sull'immagine intera, `MEMORY_LIMIT_EXCEEDED`,
-  §3), due livelli 4 GB, compressi 1 GB, lato massimo dell'anteprima 4096
-  pixel.
+- **`LargeImageLimits`** (struttura) — soglie configurabili della strategia
+  di caricamento (A10): memoria 1 GB, due livelli 4 GB, compressi 1 GB, lato
+  massimo dell'anteprima 4096 pixel; più il **limite delle operazioni**
+  `operation_bytes`, 4 GB (D11-11, `MEMORY_LIMIT_EXCEEDED`, §3).
 - **`FitsImage.read_region(x0, x1, y0, y1)`** — pixel originali della
   regione `[y0:y1, x0:x1]` (convenzione numpy), qualunque sia la strategia;
   **`FitsImage.memory_bytes`** — memoria occupata dai dati in RAM.
@@ -464,8 +472,8 @@ pixel memorizzati.
   senza che origine e data siano note.
 - Le immagini caricate devono risultare con WCS o senza WCS dichiarato: non si
   indovina.
-- Nessuna operazione sull'immagine intera carica dati oltre il tetto di
-  memoria A10: prima la stima, poi il calcolo (§3).
+- Nessuna operazione sull'immagine intera carica dati oltre il limite delle
+  operazioni (D11-11, 4 GB di default): prima la stima, poi il calcolo (§3).
 
 ## 10. Casi limite ed errori
 
@@ -492,7 +500,7 @@ pixel memorizzati.
 | Calibrazione nel commento di JPEG/PNG o nel `.hhh` non leggibile | l'immagine si apre senza WCS, con avviso che cita la calibrazione scartata | `WCS_MISSING` |
 | Finestra o corona del centroide fuori dall'immagine | rifiuto con la finestra e i limiti dell'immagine | `CENTROID_OUT_OF_IMAGE` |
 | Centroide non definito (somma dei pesi ≤ 0 dopo la sottrazione del fondo, pixel non finiti nella finestra, nessun pixel finito nella corona) | nessuna posizione prodotta | `CENTROID_UNDEFINED` |
-| Memoria stimata di un'operazione oltre il tetto A10 | nessun dato caricato, errore con stima e tetto | `MEMORY_LIMIT_EXCEEDED` |
+| Memoria stimata di un'operazione oltre il limite delle operazioni (D11-11) | nessun dato caricato, errore con stima e tetto | `MEMORY_LIMIT_EXCEEDED` |
 | JPEG/PNG con commento e `.hhh` che descrivono WCS diversi | vale il commento; avviso con le parole chiave diverse | avviso `HHH_WCS_DIFFERS` |
 
 ## 11. Esposizione all'IA
@@ -540,7 +548,8 @@ funzioni di §7.
 | T28 | Più HDU (D11-4) | file MEF sintetico con due HDU immagine e una tabella | `list_image_hdus` elenca le due immagini; `load_image` senza `hdu` → `HDU_CHOICE_REQUIRED`; con `hdu` apre quella giusta (confronto con `astropy.io.fits`) | test di unità |
 | T29 | Assi degeneri e cubi | immagine a 4 assi con due assi di lunghezza 1; cubo 3 × N × M con 3 assi utili | la prima si apre in 2-D con WCS celeste uguale a quello di `astropy.wcs` (parte celeste) e assi tolti dichiarati; il cubo → `CUBE_NOT_SUPPORTED` | ricalcolo con Astropy |
 | T32 | Commento contro `.hhh` | PNG con WCS nel commento e `.hhh` con lo stesso WCS, poi con `CRVAL1` diverso, poi non valido | vale sempre il commento (WCS uguale a quello costruito dal commento con `astropy.wcs`); nessun `HHH_WCS_DIFFERS` con lo stesso WCS; avviso che cita `CRVAL1` (e non `CRVAL2`) con WCS diverso; avviso anche con `.hhh` non valido | ricalcolo con Astropy |
-| T33 | Tetto di memoria (A10) | soglie piccole configurate nel test; ogni operazione sull'immagine intera; immagine in `memmap` oltre il tetto | `MEMORY_LIMIT_EXCEEDED` con la stima della tabella di §3 e il tetto; nessun dato caricato; taglio piccolo e `save_fits` sotto il tetto riescono; con le soglie di default le stesse operazioni riescono | test di unità |
+| T33 | Limite delle operazioni (D11-11) | limite piccolo configurato nel test; ogni operazione sull'immagine intera; immagine in `memmap` | `MEMORY_LIMIT_EXCEEDED` con la stima della tabella di §3 e il limite; nessun dato caricato; taglio piccolo e `save_fits` sotto il limite riescono; con il limite di default le stesse operazioni riescono e l'immagine in `memmap` si visualizza (strategia A10 e limite separati) | test di unità |
+| T34 | Visualizzazione a blocchi in `float32` | `set_display` su un array 6000 × 6000 con il limite di default; `histeq` con blocchi piccoli | si visualizza; valori uguali ad `astropy.visualization` in `float32`; picco di memoria (misurato con `tracemalloc`) sotto 8 byte per pixel + 64 MB, cioè senza copia `float64` dell'immagine; `histeq` a blocchi uguale all'equalizzazione su tutto il piano | ricalcolo con Astropy, `tracemalloc` |
 | T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
@@ -603,8 +612,16 @@ funzioni di §7.
   trasparenti, convoluzione con bordo dichiarato, specchiature rifiutate con
   SIP/TPD, operazioni solo sulla stessa griglia); commento contro `.hhh`:
   vale il commento, con l'avviso `HHH_WCS_DIFFERS` se i WCS sono diversi;
-  tetto di memoria A10 prima delle operazioni sull'immagine intera
-  (`MEMORY_LIMIT_EXCEEDED`). Applicate in §3, §9, §10, §12 (T32, T33).
+  stima della memoria prima delle operazioni sull'immagine intera
+  (`MEMORY_LIMIT_EXCEEDED`, limite in D11-11). Applicate in §3, §9, §10,
+  §12 (T32, T33).
+- **D11-11 — Limite delle operazioni e visualizzazione: DECISA il 2026-10-10
+  (decisione del proprietario).** A10 resta la strategia di caricamento; il
+  limite delle operazioni è separato, **4 GB di default, configurabile**
+  (`operation_bytes`), usato dalla stima di `MEMORY_LIMIT_EXCEEDED`;
+  `set_display` si calcola **a blocchi in `float32`** (DC6) senza copia
+  intera, così un 6000 × 6000 si visualizza. Criterio commento/`.hhh`
+  confermato. Applicata in §3, §7, §9, §10, §12 (T33, T34).
 
 ## 14. Registro modifiche
 
@@ -631,3 +648,4 @@ funzioni di §7.
 | 2026-10-10 | Claude Code | **P7, verifiche e decisioni del proprietario:** `reproject` 0.21.0 verificato (BSD-3, wheel per macOS arm64, dipendenze permissive); RGB con parametri di display espliciti per componente, B = media delle due componenti a 8 bit con 2 immagini; `rgb_diff` con B = 0; metodo di ricampionamento obbligatorio; `reproject` = lista sulla stessa griglia; lunghezze d'onda come parametro opzionale (§3, §7). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Codice completo** in `src/astrotwo/core/images_fits.py` (P1–P7, un commit per parte): tutto il §7, test T1–T31 in `tests/core/test_images_fits.py` superati (progetto: 197 di default, 200 con la rete). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario dopo il codice** (autorizzazione esplicita a modificare il file approvato): confermate le scelte di P1–P7 (D11-10); avviso `HHH_WCS_DIFFERS` quando commento e `.hhh` hanno WCS diversi (criterio: parole chiave normalizzate da `WCS.to_header`); tetto di memoria A10 con stima prima delle operazioni sull'immagine intera e del taglio, errore `MEMORY_LIMIT_EXCEEDED` (tabella delle stime in §3); §11 spostato nel 32 (D11-9); regola d'oro n. 8: tolti i motivi "come Aladin" (§2, ricampionamento esplicito, righe dal basso, mosaico senza correzione del fondo, D11-2, D11-4). Codice e test T32–T33 in `images_fits.py` / `test_images_fits.py`. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **D11-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): limite delle operazioni separato da A10, 4 GB di default, configurabile (`LargeImageLimits.operation_bytes`); `set_display` a blocchi di righe in `float32` senza copia intera (eccezione dichiarata: `histeq` raccoglie i valori del piano); stima di `set_display` aggiornata in §3; criterio commento/`.hhh` confermato; test T33 aggiornato, nuovo T34 (6000 × 6000, picco di memoria con `tracemalloc`). Stato `approvato` invariato. |

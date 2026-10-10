@@ -1,10 +1,12 @@
-"""Test del centroide del modulo 11 (``mdfiles/11-core-immagini-fits.md`` §12, T16–T19).
+"""Test del modulo 11 (``mdfiles/11-core-immagini-fits.md`` §12, T1–T34).
 
-Solo ``star_centroid``: il resto del modulo 11 non è ancora scritto. Gli
-attesi sono ricalcolati nel test con ``astropy.stats`` e ``scipy.ndimage``.
+Gli attesi sono ricalcolati nel test con le librerie di riferimento
+(``astropy``, ``scipy``, ``reproject``, ``matplotlib``, ``Pillow``).
 """
 
 from __future__ import annotations
+
+import dataclasses
 
 import numpy as np
 import pytest
@@ -593,7 +595,7 @@ def test_t2_display_does_not_alter_data(tmp_path):
 
 
 def _expected_values(data, vmin, vmax, stretch, gamma):
-    data = data.astype(np.float64)
+    data = data.astype(np.float32)  # presentazione in float32 (DC6)
     finite = np.isfinite(data)
     norm = viz.ManualInterval(vmin, vmax)(data[finite], clip=True)
     classes = {"linear": viz.LinearStretch, "log": viz.LogStretch, "sqrt": viz.SqrtStretch,
@@ -602,7 +604,7 @@ def _expected_values(data, vmin, vmax, stretch, gamma):
     out = st(norm, clip=True)
     if gamma != 1.0:
         out = viz.PowerStretch(gamma)(out, clip=True)
-    full = np.full(data.shape, np.nan)
+    full = np.full(data.shape, np.nan, dtype=np.float32)
     full[finite] = out
     return full
 
@@ -647,7 +649,7 @@ def test_t24_color_image_display(tmp_path):
     expected = np.stack([_expected_values(p, 0, 255, "sqrt", 1.0) for p in image.data])
     assert plane.palette is None and plane.values.shape == (3, 30, 40)
     assert np.allclose(plane.values, expected.astype(np.float32), rtol=0, atol=0)
-    assert np.array_equal(plane.rgba[..., 0], np.round(expected[0] * 255).astype(np.uint8))
+    assert np.array_equal(plane.rgba[..., 0], np.round(expected[0] * np.float32(255)).astype(np.uint8))
     assert np.all(plane.rgba[..., 3] == 255)
 
 
@@ -1133,14 +1135,15 @@ def test_t32_comment_wins_and_different_hhh_is_reported(tmp_path):
     assert "HHH_WCS_DIFFERS" in dict(load_image(png).warnings)
 
 
-TINY = LargeImageLimits(memory_bytes=2_000, two_level_bytes=50_000, compressed_bytes=2_000, preview_max_side=16)
+TINY = LargeImageLimits(memory_bytes=2_000, two_level_bytes=50_000, compressed_bytes=2_000, preview_max_side=16,
+                        operation_bytes=2_000)
 
 
 def test_t33_memory_limit_before_whole_image_operations(tmp_path):
     header = wcs_header(nx=20, ny=10)
     a = open_large_image(write_fits(tmp_path / "a.fits", star_field(10, 20), header), limits=TINY)
     b = open_large_image(write_fits(tmp_path / "b.fits", star_field(10, 20), header), limits=TINY)
-    assert a.strategy == "memory"  # 800 byte di dati: sotto il tetto di 2000 byte
+    assert a.strategy == "memory"  # 800 byte di dati: sotto la soglia di 2000 byte
     pixels = 200
     calls = {
         "operazione add": (lambda: image_operation(a, b, "add"), pixels * 24),
@@ -1148,7 +1151,8 @@ def test_t33_memory_limit_before_whole_image_operations(tmp_path):
         "operazione convolve": (lambda: image_operation(a, Box2DKernel(3), "convolve"), pixels * 24),
         "operazione flip_x": (lambda: image_operation(a, None, "flip_x"), pixels * 16),
         "contorni": (lambda: contours(a, [500.0]), pixels * 16),
-        "visualizzazione": (lambda: set_display(a, 0, 6000), pixels * 32),
+        # (4 + 4) × N di risultato + 16 × N di lavoro del blocco (un solo blocco)
+        "visualizzazione": (lambda: set_display(a, 0, 6000), pixels * 8 + pixels * 16),
         "ricampionamento": (lambda: resample_to_reference(a, b, "nearest"), pixels * 8 + 2 * pixels * 8),
         "mosaico": (lambda: mosaic([a, b], b, "nearest"), 2 * pixels * 8 + 6 * pixels * 8),
         "RGB": (lambda: rgb_composite([a, b], display=[(0, 1, "linear")] * 2), 2 * pixels * 8 + 6 * pixels * 8),
@@ -1164,7 +1168,7 @@ def test_t33_memory_limit_before_whole_image_operations(tmp_path):
     # Taglio: solo i pixel del taglio contano.
     center = convert_pixel_convention(10.0, 5.0, "numpy", "numpy")
     assert cutout(a, center, (5, 5)).data.shape == (5, 5)
-    # Con le soglie di default (1 GB) le stesse operazioni riescono.
+    # Con il limite di default (4 GB) le stesse operazioni riescono.
     full = load_image(tmp_path / "a.fits")
     assert image_operation(full, load_image(tmp_path / "b.fits"), "add").data.shape == (10, 20)
 
@@ -1173,7 +1177,7 @@ def test_t33_memmap_image_refused_instead_of_loaded(tmp_path):
     # Immagine oltre il tetto in memoria, letta dal disco su richiesta: le operazioni
     # sull'immagine intera non la caricano, il taglio piccolo sì.
     path = write_fits(tmp_path / "mapped.fits", star_field(60, 100), wcs_header(nx=100, ny=60))
-    image = open_large_image(path, limits=SMALL)
+    image = open_large_image(path, limits=dataclasses.replace(SMALL, operation_bytes=10_000))
     assert image.strategy == "memmap"
     for call in (lambda: image_operation(image, 2.0, "mul"), lambda: save_fits(image, tmp_path / "x.fits"),
                  lambda: contours(image, [500.0]), lambda: set_display(image, 0, 6000)):
@@ -1184,5 +1188,44 @@ def test_t33_memmap_image_refused_instead_of_loaded(tmp_path):
     with pytest.raises(ImagesFitsError) as info:
         cutout(image, center, (60, 100))  # 24000 byte, oltre 10000
     assert info.value.code == "MEMORY_LIMIT_EXCEEDED"
+    # La strategia di caricamento (A10) e il limite delle operazioni sono separati:
+    # con il limite di default la stessa immagine in memmap si visualizza.
+    assert open_large_image(path, limits=SMALL).strategy == "memmap"
+    assert set_display(open_large_image(path, limits=SMALL), 0, 6000).values.shape == (60, 100)
     with fits.open(path, memmap=False) as hdul:
         assert np.array_equal(cutout(image, center, (11, 21)).data, hdul[0].data[25:36, 40:61])
+
+
+def test_t34_large_display_in_float32_blocks():
+    # 6000 × 6000 si visualizza con il limite di default, a blocchi in float32,
+    # senza copiare l'immagine intera in float64 (decisione del proprietario del 2026-10-10).
+    import tracemalloc
+
+    rng = np.random.default_rng(34)
+    data = rng.gamma(2.0, 50.0, (6000, 6000)).astype(np.float32)
+    data[17, 23] = np.nan
+    tracemalloc.start()
+    try:
+        plane = set_display(data, vmin=0.0, vmax=400.0, gamma=0.8, palette="viridis", stretch="asinh")
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    n = data.size
+    assert plane.values.shape == data.shape and plane.values.dtype == np.float32
+    # Risultato (4 + 4 byte per pixel) più un blocco: molto meno di una copia float64 (8 byte per pixel).
+    assert peak < 8 * n + 64 * (1 << 20), peak
+    rows = slice(2990, 3010)
+    expected = _expected_values(data[rows], 0.0, 400.0, "asinh", 0.8)
+    assert np.allclose(plane.values[rows], expected, equal_nan=True, rtol=0, atol=0)
+    assert np.isnan(plane.values[17, 23]) and plane.rgba[17, 23, 3] == 0
+
+
+def test_t34_histeq_uses_the_whole_plane_across_blocks(tmp_path, monkeypatch):
+    # Con blocchi piccoli il risultato resta quello dell'equalizzazione su tutto il piano.
+    import astrotwo.core.images_fits as module
+
+    monkeypatch.setattr(module, "_DISPLAY_BLOCK_PIXELS", 64)
+    image = display_test_image(tmp_path)
+    plane = set_display(image, vmin=20.0, vmax=250.0, stretch="histeq")
+    expected = _expected_values(image.data, 20.0, 250.0, "histeq", 1.0)
+    assert np.allclose(plane.values, expected, equal_nan=True, rtol=0, atol=0)
