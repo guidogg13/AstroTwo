@@ -710,5 +710,150 @@ def test_t15_public_astrores_example(tmp_path):
     cat = read_table(path)
     codes = [code for code, _ in cat.warnings]
     assert cat.rows == 10 and "GSC-Id" in cat.colnames and "ASTRORES_NONCONFORMING_REF" in codes
-    assert "UCD1_NOT_TRANSLATED" in codes and cat.positions is None  # D13-14b ancora aperta
+    # D13-14b: POS_EQ_RA tradotto (raccomandazione IVOA); POS_EQ_DE non c'è nella raccomandazione → non tradotto.
+    assert "UCD1_TRANSLATED" in codes and "UCD1_NOT_TRANSLATED" in codes and cat.positions is None
+    assert cat.table["RA(J2000)"].meta["ucd"] == "pos.eq.ra" and cat.table["RA(J2000)"].unit == u.deg
     assert "ASTRORES_TYPE_MISMATCH" in codes  # RA/Dec sessagesimali in campi F
+
+
+# =============================================================================
+# D13-14b, D13-15, D13-16: UCD1, colonne calcolate (T4, T12–T14, T29), filtro
+# temporale (T30)
+# =============================================================================
+
+from astropy.coordinates import Angle as _Angle
+
+from astrotwo.core.catalogs import UCD1_TRANSLATIONS, calculated_column, time_filter
+
+
+def test_t28_ucd1_translated_only_from_the_ivoa_recommendation(tmp_path):
+    rows = ("00 13 00.93|+72 31 19.9|11.2|7|T|a", "12:30:15.5|-05:06:07||8|false|bb")
+    text = ASTRORES.format(row1=rows[0], row2=rows[1], ref="eq")
+    text = text.replace('ucd="pos.eq.ra;meta.main"', 'ucd="POS_EQ_RA_MAIN"').replace(
+        'ucd="pos.eq.dec;meta.main"', 'ucd="POS_EQ_DEC_MAIN"').replace('<FIELD ID="mag" unit="mag"',
+                                                                       '<FIELD ID="mag" ucd="PHOT_JHN_V" unit="mag"')
+    path = tmp_path / "ucd1.xml"
+    path.write_text(text)
+    cat = read_table(path, table=0)
+    codes = [c for c, _ in cat.warnings]
+    assert cat.table["RA"].meta["ucd"] == "pos.eq.ra;meta.main" and cat.table["RA"].meta["ucd_original"] == "POS_EQ_RA_MAIN"
+    assert cat.positions.lon == "RA" and cat.positions.lat == "DE" and cat.body == "celestial"
+    assert np.array_equal(cat.table["RA"], _Angle(["00 13 00.93", "12:30:15.5"], unit=u.hourangle).deg)
+    assert codes.count("UCD1_TRANSLATED") == 2 and "UCD1_NOT_TRANSLATED" in codes  # PHOT_JHN_V non tradotto
+    assert cat.table["Vmag"].meta["ucd"] == "PHOT_JHN_V"
+    assert set(UCD1_TRANSLATIONS) == {"POS_EQ_RA_MAIN", "POS_EQ_RA", "POS_EQ_DEC_MAIN", "POS_EQ_DEC"}
+
+
+def calc_table(tmp_path):
+    t = Table()
+    t["mag"] = MaskedColumn([10.0, 11.0, 12.5], mask=[False, False, True], unit=u.mag)
+    t["B"] = [1.20, 0.80, 1.50] * u.mag
+    t["V"] = [0.70, 0.60, 1.10] * u.mag
+    t["ra"] = [10.0, 200.0, 359.0] * u.deg
+    t["dec"] = [20.0, -30.0, 5.0] * u.deg
+    t["x"] = [2.0, 4.0, 8.0]
+    t["note"] = ["a", "b", "c"]
+    path = tmp_path / "c.csv"
+    path.write_text("x,y\n1,2\n")
+    return dataclasses.replace(read_table(path), table=t)
+
+
+def test_t4_t12_calculated_columns(tmp_path):
+    cat = calc_table(tmp_path)
+    r = calculated_column(cat, "mag_corr", "${mag} - 0.12")
+    col = r.table["mag_corr"]
+    assert col.unit == u.mag and list(col.mask) == [False, False, True]  # mancante in ingresso → mancante
+    assert np.array_equal(col.data[:2], np.asarray(cat.table["mag"].data[:2]) - 0.12)
+    assert "mag_corr" not in cat.table.colnames  # originale invariata
+    bv = calculated_column(cat, "B-V", "${B} - ${V}", ucd="phot.color;em.opt.B;em.opt.V", decimals=3)
+    c = bv.table["B-V"]
+    assert np.array_equal(c.data, np.asarray(cat.table["B"]) - np.asarray(cat.table["V"]))
+    assert c.unit == u.mag and c.meta["ucd"] == "phot.color;em.opt.B;em.opt.V" and c.format == ".3f"
+    assert c.meta["calculated"] and c.meta["expression"] == "${B} - ${V}" and "B-V" in bv.history[-1]
+
+
+def test_d13_15_literals_units_and_functions(tmp_path):
+    cat = calc_table(tmp_path)
+    ra = np.asarray(cat.table["ra"])
+    cases = {
+        "${ra} % 15": (np.mod(ra, 15.0), u.deg),  # il numero prende l'unità della colonna
+        "max(${ra}, 100)": (np.maximum(ra, 100.0), u.deg),
+        "${ra} * 2": (ra * 2.0, u.deg),  # in * resta adimensionale
+        "${ra} / 2 + 1": (ra / 2.0 + 1.0, u.deg),
+        "${x} ^ 2 + pi": (np.asarray(cat.table["x"]) ** 2 + np.pi, None),
+        "sin(${ra})": (np.sin(np.deg2rad(ra)), u.dimensionless_unscaled),
+        "sind(${ra})": (np.sin(np.deg2rad(ra)), u.dimensionless_unscaled),  # su colonne angolari stesso risultato
+        "sin(${x})": (np.sin(np.asarray(cat.table["x"])), None),  # numeri: sin in radianti
+        "sind(${x})": (np.sin(np.deg2rad(np.asarray(cat.table["x"]))), None),  # sind in gradi
+        "round(${x} / 4)": (np.round(np.asarray(cat.table["x"]) / 4), None),  # metà al pari (numpy)
+    }
+    for expression, (expected, unit) in cases.items():
+        col = calculated_column(cat, "z", expression).table["z"]
+        assert np.allclose(col.data, expected, rtol=0, atol=1e-12), expression
+        assert (col.unit or None) == (unit if unit is not u.dimensionless_unscaled else col.unit), expression
+    assert calculated_column(cat, "z", "round(${x} / 4)").table["z"][0] == 0.0  # 0.5 → 0
+    assert calculated_column(cat, "z", "${ra}", unit="rad").table["z"].unit == u.rad
+
+
+def test_t13_t14_invalid_expressions(tmp_path):
+    cat = calc_table(tmp_path)
+    for expression, position in [("${nessuna} + 1", 0), ("${mag} +", 8), ("__import__('os')", 0), ("${x} ** 2", 5),
+                                 ("${x} < 2", 0), ("pippo(${x})", 0), ("dist(1, 2)", 0), ("${x} if 1 else 2", 0)]:
+        with pytest.raises(CatalogsError) as info:
+            calculated_column(cat, "z", expression)
+        assert info.value.code == "COLUMN_EXPRESSION_INVALID", expression
+        assert info.value.details["position"] == position, expression
+    for expression in ("${ra} + ${mag}", "exp(${ra})", "${ra} + ${x}"):
+        with pytest.raises(CatalogsError) as info:
+            calculated_column(cat, "z", expression)
+        assert info.value.code == "UNIT_INCOMPATIBLE", expression
+    with pytest.raises(CatalogsError) as info:
+        calculated_column(cat, "mag", "${x}")
+    assert info.value.code == "COLUMN_NAME_EXISTS"
+    with pytest.raises(CatalogsError) as info:
+        calculated_column(cat, "z", "${note} + 1")
+    assert info.value.code == "COLUMN_TYPE_UNSUPPORTED"
+
+
+def test_t29_skydist_in_calculated_column_and_inplace(tmp_path):
+    cat = calc_table(tmp_path)
+    r = calculated_column(cat, "d", "skydist(${ra}, ${dec}, 10, 20)")
+    expected = angular_separation(cat.table["ra"].quantity, cat.table["dec"].quantity, 10 * u.deg, 20 * u.deg)
+    assert np.array_equal(r.table["d"].data, expected.to_value(u.deg)) and r.table["d"].unit == u.deg
+    same = calculated_column(cat, "d", "${x} * 2", inplace=True)
+    assert same is cat and "d" in cat.table.colnames and "inplace=True" in cat.history[-1]
+
+
+TIMESYS_VOT = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3"><RESOURCE>
+<TIMESYS ID="t" timeorigin="MJD-origin" timescale="TDB" refposition="BARYCENTER"/>
+<TABLE><FIELD name="obs" ref="t" datatype="double" unit="d"/><FIELD name="iso" datatype="char" arraysize="*"/>
+<DATA><TABLEDATA>
+<TR><TD>58000.0</TD><TD>2017-09-04T00:00:00</TD></TR>
+<TR><TD>58010.0</TD><TD>2017-09-14T00:00:00</TD></TR>
+<TR><TD></TD><TD>2017-09-24T00:00:00</TD></TR>
+<TR><TD>58020.0</TD><TD>2017-09-24T00:00:00</TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+
+def test_t30_time_filter(tmp_path):
+    path = tmp_path / "t.xml"
+    path.write_text(TIMESYS_VOT)
+    cat = read_table(path)
+    start, end = Time(58000.0, format="mjd", scale="tdb"), Time(58010.0, format="mjd", scale="tdb")
+    sel = time_filter(cat, start, end, column="obs")
+    assert list(sel.mask) == [True, True, False, False]  # intervallo chiuso; mancante mai selezionato
+    assert sel.source == "TIMESYS" and sel.scale == "tdb" and sel.excluded_missing == 1
+    with pytest.raises(CatalogsError) as info:
+        time_filter(cat, start, end, column="obs", scale="utc")  # già nel TIMESYS
+    assert info.value.code == "EPOCH_INVALID"
+    with pytest.raises(CatalogsError) as info:
+        time_filter(cat, start, end, column="iso")  # nessun TIMESYS: formato e scala obbligatori
+    assert info.value.code == "EPOCH_INVALID"
+    iso = time_filter(cat, Time("2017-09-14T00:00:00", scale="utc"), Time("2017-09-24T00:00:00", scale="utc"),
+                      column="iso", time_format="isot", scale="utc")
+    assert list(iso.mask) == [False, True, True, True] and iso.source == "parametri"
+    with pytest.raises(CatalogsError) as info:
+        time_filter(cat, end, start, column="obs")
+    assert info.value.code == "EPOCH_INVALID"

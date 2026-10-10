@@ -69,11 +69,20 @@ suo VOTable.
     numerico con dati non numerici e non sessagesimali → testo con lo
     stesso avviso; un campo sessagesimale senza UCD che dica ascensione
     retta o declinazione resta testo con l'avviso (ore o gradi non si
-    indovinano). (b) UCD1 → UCD1+: **da decidere** (D13-14b); **fino alla
-    decisione** gli UCD1 restano come sono, con l'avviso
-    `UCD1_NOT_TRANSLATED`, e le colonne di posizione si confermano con
-    `confirm_position_columns` (comportamento provvisorio, il più
-    prudente). (c) Un
+    indovinano). (b) UCD1 → UCD1+ (D13-14b, decisa il 2026-10-10): si
+    traducono **solo le parole UCD1 scritte nella raccomandazione IVOA
+    sugli UCD** (REC 2005-08-12): `POS_EQ_RA_MAIN` → `pos.eq.ra;meta.main`,
+    `POS_EQ_RA` → `pos.eq.ra`, `POS_EQ_DEC_MAIN` → `pos.eq.dec;meta.main`,
+    `POS_EQ_DEC` → `pos.eq.dec` (§3.1 elenca le quattro parole e le
+    scompone in `POS_EQ_RA`, `POS_EQ_DEC` e `MAIN`; l'appendice A scrive
+    esplicitamente solo `POS_EQ_DEC_MAIN` = `pos.eq.dec;meta.main` e
+    `pos.eq.dec` per una sola declinazione), con l'avviso
+    `UCD1_TRANSLATED` e l'UCD originale conservato; **tutte le altre** restano
+    come sono, con `UCD1_NOT_TRANSLATED` e conferma dell'utente. Il servizio
+    di traduzione del CDS si valuta in P6 come opzione esplicita, dichiarata
+    nel risultato come "traduzione CDS". La traduzione avviene prima della
+    lettura dei dati, quindi decide anche ore o gradi per i sessagesimali.
+    (c) Un
     `ref` scritto `#id(...)` o `#id($...)` (forma non conforme alla DTD, che
     vuole un IDREF) si accetta con l'avviso `ASTRORES_NONCONFORMING_REF`.
     (d) `DATA` con `LINK` esterno: lettura tramite il 14 in P6; fino ad
@@ -257,7 +266,16 @@ suo VOTable.
     alla posizione propagata di `scale` anni (**parametro obbligatorio**,
     un intervallo di tempo con unità, non nullo), con le stesse regole di
     `propagate` per parallasse e righe mancanti.
-  - **Filtro temporale (`time_filter`): il codice attende D13-16.**
+  - **Filtro temporale `time_filter` (D13-16, decisa il 2026-10-10):**
+    colonna **indicata dall'utente**; formato e scala di tempo dal
+    **`TIMESYS`** del VOTable collegato alla colonna (`timeorigin`
+    `MJD-origin`, `JD-origin` o numero JD con valori in giorni; senza
+    `timeorigin`, valori in anni giuliani; scale TT, TDB, TCB, TCG, TAI, UTC,
+    UT), altrimenti **parametri obbligatori** `time_format` (formato di
+    `astropy.time`) e `scale`; con il `TIMESYS` i parametri non si passano;
+    intervallo **chiuso `[inizio, fine]`** di oggetti `Time`; valori mancanti
+    mai selezionati e contati; il risultato dichiara formato, scala e
+    fonte.
 - **Filtro temporale e cursore epoca (H3, P5):** selezionare i record per
   epoca di osservazione e spostare l'epoca di visualizzazione (con i moduli
   10 e 41). **Epoca di default decisa con D13-2 (2026-10-04):** l'epoca di
@@ -288,9 +306,24 @@ suo VOTable.
   duplicato (D13-10, decisa il 2026-10-10). La tabella (`FUNCTIONS`,
   `CONSTANTS`) lavora su valori `float64` senza unità; `min` e `max`
   accettano due o più argomenti; `round` è oggi `numpy.round` (metà al
-  pari), **da confermare** con D13-15. **Il codice di `calculated_column`
-  attende D13-15** (numeri scritti nell'espressione accanto a colonne con
-  unità).
+  pari, decisa con D13-15).
+  - **Numeri e unità (D13-15, decisa il 2026-10-10):** in `+`, `-`, `%`,
+    `min`, `max` un **numero scritto** (o un'espressione di soli numeri e
+    costanti) **prende l'unità dell'altro operando** (come in `search`);
+    in `*`, `/` e come esponente di `^` resta adimensionale. Così
+    `${mag} - 0.12` dà una colonna in `mag` (T4). `sin`/`sind`: su colonne
+    angolari stesso risultato (astropy converte l'angolo); su numeri senza
+    unità `sin` in radianti e `sind` in gradi, come nel 18. `skydist` dà
+    gradi.
+  - **Altre regole (2026-10-10):** espressione analizzata con `ast` a
+    elenco chiuso (operatori, funzioni di `FUNCTIONS`, costanti, numeri,
+    `${colonna}`; `**` non ammesso, la potenza è `^`), validata per intero
+    prima del calcolo; posizione dell'errore sul testo originale (fine
+    dell'espressione quando il parser non la indica); un valore mancante in
+    una colonna usata dà un valore mancante; colonne con unità non
+    riconosciuta → `UNIT_INCOMPATIBLE` (nessun calcolo con unità ignote);
+    `unit` facoltativa: converte il risultato o lo dichiara se è senza
+    unità; stima della memoria con il limite delle operazioni.
   Calcolo vettoriale in `float64` con `numpy`; se le colonne hanno unità, il
   calcolo passa da `astropy.units` e unità incompatibili danno errore. La
   colonna è marcata come calcolata, con l'espressione come provenienza, ed
@@ -413,7 +446,9 @@ suo VOTable.
   numerico è del modulo, il disegno della UI.
 - **`record_view(table, index)`** (P4) — tutti i valori di un record con
   unità e UCD.
-- **`time_filter(table, range)`** (H3, P5) — selezione per epoca osservativa.
+- **`time_filter(table, start, end, *, column, time_format=None,
+  scale=None)`** (H3, P5) — selezione per epoca osservativa (D13-16);
+  restituisce maschera, formato, scala, fonte e mancanti esclusi.
 - **Cache:** nessuna classe propria (CA4); le interrogazioni sono in cache
   nel 14.
 
@@ -487,7 +522,8 @@ suo VOTable.
 | File ASTRORES non conforme alla DTD, o con i dati in un `LINK` esterno (fino a P6) | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
 | ASTRORES: dati diversi dal tipo dichiarato (es. sessagesimali in un campo `F` in gradi) | conversione in gradi con il modulo 10 e colonna di testo conservata, oppure testo | avviso `ASTRORES_TYPE_MISMATCH` |
 | ASTRORES: `ref` scritto `#id(...)` | riferimento accettato | avviso `ASTRORES_NONCONFORMING_REF` |
-| ASTRORES con UCD1 (fino a D13-14b) | UCD lasciati come sono, posizioni da confermare | avviso `UCD1_NOT_TRANSLATED` |
+| ASTRORES con UCD1 della raccomandazione IVOA | tradotti, originale conservato | avviso `UCD1_TRANSLATED` |
+| ASTRORES con altri UCD1 | UCD lasciati come sono, posizioni da confermare | avviso `UCD1_NOT_TRANSLATED` |
 | Riga senza moto proprio nella propagazione | posizione propagata mascherata, riga marcata `missing`, conteggio | avviso `PROPER_MOTION_ROW_MISSING` |
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
 | Espressione di colonna non valida o colonna citata inesistente | rifiuto con la posizione dell'errore o il nome mancante | `COLUMN_EXPRESSION_INVALID` |
@@ -535,6 +571,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T22 | Colonne di posizione | VOTable con UCD e `COOSYS`; CSV con colonne `RAJ2000`/`DEJ2000` | dal VOTable colonne, sistema e `body = celestial`; dal CSV solo suggerimenti marcati, `NO_COORD_COLUMNS` e `BODY_UNKNOWN` finché l'utente non conferma; dopo la conferma colonne, sistema e corpo, conferma nella provenienza | test di unità |
 | T23 | Parallasse e moto proprio mancanti | tabella con righe senza parallasse, con parallasse negativa e senza moto proprio | nessuna riga esclusa; righe senza parallasse valida propagate solo con il moto proprio (`pm_only`), valori uguali ad Astropy senza distanza; righe senza moto proprio mascherate (`missing`); conteggi nel report; colonne originali intatte | ricalcolo con Astropy |
 | T28 | ASTRORES non conforme | campo `F` in gradi con dati sessagesimali; `ref` `#id(...)` | colonna in gradi uguale ad `astropy.coordinates.Angle` (ore per RA, gradi per Dec), colonna `_text` conservata, `ASTRORES_TYPE_MISMATCH`; `ref` accettato con `ASTRORES_NONCONFORMING_REF` | ricalcolo con Astropy |
+| T30 | Filtro temporale | VOTable con `TIMESYS` (MJD, TDB) e colonna ISO senza `TIMESYS`; intervallo `[inizio, fine]` | estremi inclusi, mancanti esclusi e contati; con `TIMESYS` parametri rifiutati; senza `TIMESYS` formato e scala obbligatori; inizio > fine → `EPOCH_INVALID` | confronto con `astropy.time` |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
@@ -633,45 +670,26 @@ sono verificati da `34-ia-verifica-risultati.md`.
   pubblico in un test di rete, senza copiarlo. Verifiche: DTD pubblica del
   CDS (v0.9), esempio pubblico, `defusedxml` 0.7.1 (licenza PSF, puro
   Python).
-- **D13-14b — UCD1 → UCD1+ (da decidere, Gruppo 3; blocca P2):** il
-  proprietario ha deciso di usare la tabella ufficiale IVOA di traduzione,
-  ma la verifica del 2026-10-10 non l'ha trovata: la raccomandazione IVOA
-  sugli UCD (REC 2005-08-12) dà la traduzione solo per le colonne di
-  posizione equatoriali (§3.1 e appendice A: `POS_EQ_RA_MAIN` →
-  `pos.eq.ra;meta.main`, `POS_EQ_DEC_MAIN` → `pos.eq.dec;meta.main`, e le
-  forme senza `_MAIN`); il CDS offre un servizio interattivo "translate"
-  che dà la corrispondenza "di default", non un file né uno standard.
-  L'esempio pubblico ASTRORES usa inoltre `POS_EQ_DE` (non `POS_EQ_DEC`).
-  Opzioni: tradurre solo le parole scritte nella raccomandazione IVOA;
-  usare il servizio del CDS tramite il 14 (P6); oppure solo la conferma
-  dell'utente.
-
-- **D13-15 — Numeri scritti nelle colonne calcolate accanto a colonne con
-  unità (da decidere, Gruppo 3; blocca `calculated_column` di P4):** con
-  `astropy.units` (regola di §3) un numero scritto nell'espressione è
-  adimensionale, quindi `${mag} - 0.12` (l'esempio di T4) dà errore di unità
-  invece di una colonna in `mag`; lo stesso per `${ra} + 1` con `ra` in
-  gradi e per `%`. Opzioni: (a) numeri sempre adimensionali (astropy puro;
-  T4 cambia esempio); (b) in `+`, `-`, `%`, `min`, `max` il numero prende
-  l'unità dell'altro operando (come in `search`, dove il numero è
-  nell'unità della colonna), in `*`, `/`, `^` resta adimensionale, con
-  l'interpretazione scritta nel risultato; (c) una sintassi esplicita per
-  l'unità del numero (es. `0.12[mag]`). Da decidere insieme: comportamento
-  delle funzioni trigonometriche con colonne angolari (astropy converte da
-  sé, quindi `sin` e `sind` di una colonna in gradi danno lo stesso
-  risultato) e regola di `round` (oggi `numpy.round`, metà al pari).
-
-- **D13-16 — Filtro temporale `time_filter` (H3; da decidere, Gruppo 3;
-  blocca `time_filter` di P5):** la specifica dice solo "selezione per
-  epoca osservativa". Da decidere: (1) quale colonna — indicata
-  dall'utente, oppure ricavata dall'UCD (`time.epoch;obs`, `time.start`,
-  `time.end`…) e con quali regole se ce ne sono più d'una; (2) come si
-  leggono i valori — formato (MJD, JD, anni, ISO 8601) e scala di tempo dal
-  `TIMESYS` del VOTable quando c'è, altrimenti dichiarati dall'utente (mai
-  assunti, DC1); (3) come si dà l'intervallo (inizio e fine come `Time`
-  con scala, estremi inclusi o no). Raccomandazione: colonna indicata
-  dall'utente, formato e scala da `TIMESYS` o parametri obbligatori,
-  intervallo chiuso `[inizio, fine]` di `Time`.
+- **D13-14b — UCD1 → UCD1+: DECISA il 2026-10-10 (decisione del
+  proprietario).** Solo le parole UCD1 scritte nella raccomandazione IVOA
+  sugli UCD (quattro, §3); le altre non tradotte con `UCD1_NOT_TRANSLATED`
+  e conferma dell'utente; servizio del CDS da valutare in P6 come opzione
+  esplicita ("traduzione CDS").
+- **D13-15 — Numeri e unità nelle colonne calcolate: DECISA il 2026-10-10
+  (decisione del proprietario).** In `+`, `-`, `%`, `min`, `max` il numero
+  prende l'unità della colonna; in `*` e `/` resta adimensionale; T4
+  invariato; `sin`/`sind` come in §3; `round` = metà al pari (`numpy`).
+- **D13-16 — Filtro temporale: DECISA il 2026-10-10 (decisione del
+  proprietario).** Colonna indicata dall'utente; formato e scala dal
+  `TIMESYS`, altrimenti parametri obbligatori; intervallo chiuso
+  `[inizio, fine]`.
+- **Scelte minori del 2026-10-10 confermate dal proprietario:** epoca di
+  origine (parametro vietato se è nei metadati, colonna in anni giuliani);
+  equinozio ed epoca ASTRORES numerici giuliani (FK5/ICRS) o besseliani
+  (FK4); colonne `_prop`/`_prop_mode`; `size_min` > `size_max` ammesso;
+  nessun passaggio alla regola successiva, con i record non disegnati per
+  dimensione mancante **contati nel risultato** delle regole
+  (`PlotStyle.missing_size`); `FILE_EXISTS` senza `overwrite=True`.
 
 ## 14. Registro modifiche
 
@@ -695,3 +713,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P4 scritta tranne `calculated_column`** (`FUNCTIONS`, `CONSTANTS`, `skydist`, `subset`, `save_subset`, `column_statistics`, `histogram`, `xy_plot`, `record_view`; test T5, T6, T25, T26, T29 per `skydist`): verificato con astropy 8.0.1 che un numero scritto è adimensionale (`${mag} - 0.12` → errore di unità) → nuova **D13-15** (da decidere); nuovi `FILE_EXISTS` e avviso `INPLACE` (§10); deviazione standard con `ddof = 0` dichiarato. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P5 scritta tranne `time_filter`** (`propagate`, `proper_motion_arrows`; test T3, T7, T23 e frecce): epoca in anni giuliani, `source_epoch` vietato se l'epoca è nei metadati, righe con posizione o epoca mancante trattate come `missing` (§3, §7). `time_filter` attende la nuova **D13-16** (da decidere). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P2 scritta** (lettore ASTRORES con `defusedxml` 0.7.1, aggiunto a `pyproject.toml`; sessagesimali con la nuova `parse_sexagesimal` del 10; test T15, T16, T28 e test di rete sull'esempio pubblico del CDS, non copiato nel repository): regole precisate in §3 (righe d'intestazione, booleani, nomi duplicati, `COOSYS` di default, anni giuliani/besseliani); UCD1 non tradotti in attesa di D13-14b (`UCD1_NOT_TRANSLATED`, §10). Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **Decisioni del proprietario D13-14b, D13-15, D13-16 e conferma delle scelte minori** (autorizzazione esplicita a modificare il file approvato): traduzione dei soli UCD1 della raccomandazione IVOA (`UCD1_TRANSLATED`); regola dei numeri e delle unità nelle colonne calcolate e `round` metà al pari; `time_filter` con colonna indicata, `TIMESYS` o parametri, intervallo chiuso. **Codice completo di P4 e P5** (`calculated_column`, `time_filter`) e di P2 (traduzione UCD1); test T4, T12–T14, T28, T29, T30 e test di rete aggiornato. Moduli P1–P5 completi; P6 dopo il 14. Stato `approvato` invariato. |

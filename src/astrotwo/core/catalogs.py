@@ -10,6 +10,7 @@ strumenti di tabella; P5 epoca e moto proprio; P6 servizi e URL (dopo il 14).
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import functools
 import math
@@ -54,6 +55,8 @@ __all__ = [
     "PlotRule",
     "PlotStyle",
     "SizeScale",
+    "TimeSelection",
+    "UCD1_TRANSLATIONS",
     "PositionColumns",
     "Propagation",
     "ProperMotionArrows",
@@ -66,6 +69,7 @@ __all__ = [
     "list_tables",
     "propagate",
     "proper_motion_arrows",
+    "calculated_column",
     "column_statistics",
     "histogram",
     "read_table",
@@ -77,6 +81,7 @@ __all__ = [
     "search",
     "set_plot_rules",
     "suggest_position_columns",
+    "time_filter",
 ]
 
 
@@ -540,6 +545,13 @@ def _read_votable(path: str, table, limits: TableLimits):
             if f.ucd:
                 result[name].meta["ucd"] = f.ucd
     coosys = {c.ID: c for c in vot.iter_coosys() if c.ID}
+    timesys = {t.ID: t for t in vot.iter_timesys() if t.ID}
+    for name in result.colnames:
+        ref = result[name].meta.get("ref")
+        if ref in timesys:
+            ts = timesys[ref]
+            result[name].meta["timesys"] = {"timeorigin": None if ts.timeorigin is None else str(ts.timeorigin),
+                                            "timescale": ts.timescale, "refposition": ts.refposition}
     return result, info, coosys
 
 
@@ -643,6 +655,15 @@ class _CooSys:
 
 
 _ASTRORES_FLOAT = ("F", "D", "E")
+#: UCD1 tradotti (D13-14b): solo le parole scritte nella raccomandazione IVOA sugli UCD (REC 2005-08-12, §3.1:
+#: POS_EQ_RA_MAIN, POS_EQ_RA, POS_EQ_DEC_MAIN, POS_EQ_DEC, scomposte in POS_EQ_RA, POS_EQ_DEC e MAIN;
+#: appendice A: POS_EQ_DEC_MAIN = pos.eq.dec;meta.main).
+UCD1_TRANSLATIONS: dict[str, str] = {
+    "POS_EQ_RA_MAIN": "pos.eq.ra;meta.main",
+    "POS_EQ_RA": "pos.eq.ra",
+    "POS_EQ_DEC_MAIN": "pos.eq.dec;meta.main",
+    "POS_EQ_DEC": "pos.eq.dec",
+}
 _REF_FORM = re.compile(r"^#id\(\$?([^)]*)\)$")
 
 
@@ -705,10 +726,10 @@ def _astrores_rows(table_el, n_fields: int, path: str) -> list[list[str | None]]
     return [[cell if cell != "" else None for cell in row] for row in rows]
 
 
-def _astrores_column(name: str, values: list[str | None], field_el, notes: list[tuple[str, str]], table: Table):
+def _astrores_column(name: str, values: list[str | None], field_el, notes: list[tuple[str, str]], table: Table,
+                     ucd: str | None):
     datatype = (field_el.get("datatype") or "A").upper()
     unit = field_el.get("unit")
-    ucd = field_el.get("ucd")
     missing = [v is None for v in values]
     present = [v for v in values if v is not None]
 
@@ -798,7 +819,14 @@ def _read_astrores(path: str, table, limits: TableLimits):
         name = _astrores_text(field_el, "NAME") or field_el.get("name") or field_el.get("ID") or f"col{k}"
         if name in result.colnames:
             raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: due campi con lo stesso nome {name!r}")
-        _astrores_column(name, [row[k] for row in rows], field_el, notes, result)
+        original_ucd = field_el.get("ucd")
+        ucd = UCD1_TRANSLATIONS.get((original_ucd or "").strip().upper(), original_ucd)
+        if ucd != original_ucd:
+            notes.append(("UCD1_TRANSLATED", f"campo {name!r}: UCD1 {original_ucd!r} tradotto in {ucd!r} "
+                          "(raccomandazione IVOA sugli UCD, §3.1 e appendice A)"))
+        _astrores_column(name, [row[k] for row in rows], field_el, notes, result, ucd)
+        if ucd != original_ucd:
+            result[name].meta["ucd_original"] = original_ucd
         ref = field_el.get("ref")
         if ref:
             match = _REF_FORM.match(ref)
@@ -813,9 +841,10 @@ def _read_astrores(path: str, table, limits: TableLimits):
             system = el.get("system") or "eq_FK5"  # default della DTD
             coosys[el.get("ID")] = _CooSys(el.get("ID"), system, _astrores_year(el.get("equinox"), system),
                                            _astrores_year(el.get("epoch"), system))
-    if any(w for n in result.colnames for w in [result[n].meta.get("ucd") or ""] if w and "." not in w):
-        notes.append(("UCD1_NOT_TRANSLATED", "UCD1 (vecchio vocabolario) non tradotti in UCD1+: decisione D13-14b "
-                      "aperta; colonne di posizione da confermare con confirm_position_columns"))
+    untranslated = [n for n in result.colnames if (result[n].meta.get("ucd") or "") and "." not in result[n].meta["ucd"]]
+    if untranslated:
+        notes.append(("UCD1_NOT_TRANSLATED", f"UCD1 fuori dalla raccomandazione IVOA, non tradotti (D13-14b) nei "
+                      f"campi {untranslated}: colonne di posizione da confermare con confirm_position_columns"))
     return result, info, coosys, notes
 
 
@@ -1206,7 +1235,8 @@ def skydist(ra1, dec1, ra2, dec2):
 
     Implementazione unica, usata anche dal modulo 17 (``angular_distance``).
     """
-    values = [np.asarray(v, dtype=np.float64) * u.deg for v in (ra1, dec1, ra2, dec2)]
+    values = [v.to(u.deg) if isinstance(v, u.Quantity) else np.asarray(v, dtype=np.float64) * u.deg
+              for v in (ra1, dec1, ra2, dec2)]
     return angular_separation(*values).to_value(u.deg)
 
 
@@ -1599,3 +1629,290 @@ def proper_motion_arrows(table: CatalogTable, scale, *, pm_ra: str, pm_dec: str,
     return ProperMotionArrows(lon_start=lon.to_value(u.deg), lat_start=lat.to_value(u.deg), lon_end=end_lon,
                               lat_end=end_lat, mode=mode.astype(str), scale=scale.to(u.yr), counts=counts,
                               notes=tuple(notes) + (f"epoca di origine da {source}",))
+
+
+# --------------------------------------------------------------------------
+# P4 — colonne calcolate (H8; D13-15): analizzatore ``ast`` a elenco chiuso
+# (D18-1), nessuna esecuzione di codice; ``^`` è la potenza.
+# --------------------------------------------------------------------------
+
+_BINARY = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.Mod: "%", ast.Pow: "^"}
+#: Operazioni in cui un numero scritto prende l'unità dell'altro operando (D13-15, come in search).
+_UNIT_FOLLOWING = ("+", "-", "%")
+
+
+@dataclass(frozen=True)
+class _Value:
+    """Valore intermedio: array (con o senza unità) e se viene solo da numeri scritti e costanti."""
+
+    data: object
+    literal: bool
+
+
+def _column_invalid(message: str, position: int, expression: str) -> CatalogsError:
+    return CatalogsError("COLUMN_EXPRESSION_INVALID", f"{message} (carattere {position}): {expression!r}",
+                         position=position)
+
+
+def _translate_expression(expression: str, table: Table) -> tuple[str, list[int], dict[str, str]]:
+    """Sostituisce ``${nome}`` con segnaposto e ``^`` con ``**``; mappa le posizioni sul testo originale."""
+    out: list[str] = []
+    origin: list[int] = []
+    names: dict[str, str] = {}
+    i = 0
+    while i < len(expression):
+        if expression.startswith("**", i):
+            raise _column_invalid("'**' non previsto: la potenza si scrive '^'", i, expression)
+        if expression.startswith("${", i):
+            end = expression.find("}", i + 2)
+            if end < 0:
+                raise _column_invalid("riferimento ${...} senza '}'", i, expression)
+            name = expression[i + 2:end]
+            if name not in table.colnames:
+                raise _column_invalid(f"colonna {name!r} inesistente", i, expression)
+            key = next((k for k, v in names.items() if v == name), f"_c{len(names)}")
+            names[key] = name
+            out.extend(key)
+            origin.extend([i] * len(key))
+            i = end + 1
+        elif expression[i] == "^":
+            out.extend("**")
+            origin.extend([i, i])
+            i += 1
+        else:
+            out.append(expression[i])
+            origin.append(i)
+            i += 1
+    return "".join(out), origin, names
+
+
+class _ColumnEvaluator:
+    def __init__(self, expression: str, text: str, origin: list[int], names: dict[str, str], table: Table) -> None:
+        self.expression, self.text, self.origin, self.names, self.table = expression, text, origin, names, table
+        self.used: set[str] = set()
+
+    def position(self, node) -> int:
+        offset = getattr(node, "col_offset", 0)
+        return self.origin[offset] if offset < len(self.origin) else len(self.expression)
+
+    def fail(self, message: str, node) -> CatalogsError:
+        return _column_invalid(message, self.position(node), self.expression)
+
+    def check(self, node) -> None:
+        """Validazione completa prima del calcolo: solo i nodi dell'elenco chiuso."""
+        if isinstance(node, ast.Expression):
+            return self.check(node.body)
+        if isinstance(node, ast.BinOp) and type(node.op) in _BINARY:
+            self.check(node.left)
+            return self.check(node.right)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            return self.check(node.operand)
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return None
+        if isinstance(node, ast.Name):
+            if node.id in self.names or node.id in CONSTANTS:
+                return None
+            raise self.fail(f"nome {node.id!r} non previsto (colonne come ${{nome}}; costanti {', '.join(CONSTANTS)})",
+                            node)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
+            if node.func.id not in FUNCTIONS:
+                raise self.fail(f"funzione {node.func.id!r} non prevista", node)
+            arity = FUNCTIONS[node.func.id][0]
+            if (arity is None and len(node.args) < 2) or (arity is not None and len(node.args) != arity):
+                raise self.fail(f"{node.func.id}: numero di argomenti errato", node)
+            for arg in node.args:
+                if isinstance(arg, ast.Starred):
+                    raise self.fail("argomenti con '*' non previsti", arg)
+                self.check(arg)
+            return None
+        raise self.fail(f"costrutto {type(node).__name__} non previsto", node)
+
+    def column(self, key: str) -> _Value:
+        name = self.names[key]
+        self.used.add(name)
+        column = self.table[name]
+        if not _numeric_kind(column):
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {column.dtype}: serve un numero")
+        if column.meta.get("unit_unrecognized"):
+            raise CatalogsError("UNIT_INCOMPATIBLE", f"colonna {name!r}: unità {column.meta['unit_unrecognized']!r} "
+                                "non riconosciuta, nessun calcolo con unità ignote")
+        data = np.asarray(getattr(column, "data", column), dtype=np.float64)
+        return _Value(data * column.unit if column.unit is not None else data, literal=False)
+
+    @staticmethod
+    def adopt(literal: _Value, other: _Value) -> _Value:
+        """Un numero scritto prende l'unità dell'altro operando (D13-15)."""
+        if literal.literal and not other.literal and isinstance(other.data, u.Quantity) \
+                and not isinstance(literal.data, u.Quantity):
+            return _Value(literal.data * other.data.unit, literal=True)
+        return literal
+
+    def evaluate(self, node) -> _Value:
+        if isinstance(node, ast.Expression):
+            return self.evaluate(node.body)
+        if isinstance(node, ast.Constant):
+            return _Value(float(node.value), literal=True)
+        if isinstance(node, ast.Name):
+            if node.id in CONSTANTS:
+                return _Value(CONSTANTS[node.id], literal=True)
+            return self.column(node.id)
+        if isinstance(node, ast.UnaryOp):
+            value = self.evaluate(node.operand)
+            return _Value(-value.data if isinstance(node.op, ast.USub) else value.data, value.literal)
+        if isinstance(node, ast.BinOp):
+            op = _BINARY[type(node.op)]
+            left, right = self.evaluate(node.left), self.evaluate(node.right)
+            if op in _UNIT_FOLLOWING:
+                left, right = self.adopt(left, right), self.adopt(right, left)
+            function = {"+": np.add, "-": np.subtract, "*": np.multiply, "/": np.divide, "%": np.mod,
+                        "^": np.power}[op]
+            with np.errstate(divide="ignore", invalid="ignore"):
+                return _Value(function(left.data, right.data), left.literal and right.literal)
+        if isinstance(node, ast.Call):
+            name = node.func.id
+            args = [self.evaluate(a) for a in node.args]
+            if name in ("min", "max"):
+                args = [functools.reduce(lambda acc, other: self.adopt(acc, other), args[:k] + args[k + 1:], a)
+                        for k, a in enumerate(args)]
+            with np.errstate(divide="ignore", invalid="ignore"):
+                result = FUNCTIONS[name][1](*[a.data for a in args])
+            if name == "skydist":
+                result = np.asarray(result, dtype=np.float64) * u.deg  # skydist: gradi
+            return _Value(result, all(a.literal for a in args))
+        raise AssertionError(type(node).__name__)
+
+
+def calculated_column(table: CatalogTable, name: str, expression: str, unit=None, ucd: str | None = None,
+                      decimals: int | None = None, inplace: bool = False) -> CatalogTable:
+    """Nuova colonna da un'espressione con ``${colonna}`` (H8): ``float64``, unità da ``astropy.units``."""
+    if not isinstance(name, str) or not name.strip():
+        raise CatalogsError("COLUMN_EXPRESSION_INVALID", "nome della colonna obbligatorio", position=0)
+    if name in table.table.colnames:
+        raise CatalogsError("COLUMN_NAME_EXISTS", f"colonna {name!r} già presente: nessuna sovrascrittura")
+    if decimals is not None and (isinstance(decimals, bool) or not isinstance(decimals, int) or decimals < 0):
+        raise CatalogsError("COLUMN_EXPRESSION_INVALID", f"decimals {decimals!r}: intero ≥ 0", position=0)
+    if not isinstance(expression, str) or not expression.strip():
+        raise CatalogsError("COLUMN_EXPRESSION_INVALID", "espressione vuota", position=0)
+    text, origin, names = _translate_expression(expression, table.table)
+    try:
+        tree = ast.parse(text.strip(), mode="eval")
+    except SyntaxError as exc:
+        # Il parser di Python non sempre indica dove (offset 0): allora l'errore è alla fine dell'espressione.
+        offset = (exc.offset or 0) - 1 + (len(text) - len(text.lstrip()))
+        position = origin[offset] if 0 <= offset < len(origin) and exc.offset else len(expression)
+        raise _column_invalid("sintassi non valida", position, expression) from exc
+    evaluator = _ColumnEvaluator(expression, text.strip(), origin[len(text) - len(text.lstrip()):], names, table.table)
+    evaluator.check(tree)
+    _check_memory(f"colonna calcolata {name!r}", len(table.table) * 8 * (len(names) + 2), table.limits)
+    try:
+        value = evaluator.evaluate(tree).data
+        if unit is not None:
+            target = u.Unit(unit)
+            value = value.to(target) if isinstance(value, u.Quantity) else value * target
+    except (u.UnitsError, u.UnitTypeError, u.UnitConversionError, TypeError, ValueError) as exc:
+        raise CatalogsError("UNIT_INCOMPATIBLE", f"colonna calcolata {name!r}: {exc}") from exc
+    values = np.broadcast_to(np.asarray(getattr(value, "value", value), dtype=np.float64), (len(table.table),))
+    missing = np.zeros(len(table.table), dtype=bool)
+    for used in evaluator.used:
+        missing |= ~_valid_mask(table.table[used])
+    column = MaskedColumn(values.copy(), mask=missing, name=name,
+                          unit=value.unit if isinstance(value, u.Quantity) else None)
+    column.meta.update({"calculated": True, "expression": expression})
+    if ucd:
+        column.meta["ucd"] = ucd
+    if decimals is not None:
+        column.format = f".{decimals}f"
+    step = f"colonna calcolata {name!r} = {expression}" + (f" [{column.unit}]" if column.unit is not None else "")
+    if inplace:
+        table.table[name] = column
+        object.__setattr__(table, "history", table.history + (f"{step} (in posto, inplace=True)",))
+        object.__setattr__(table, "warnings", table.warnings + (("INPLACE", f"{step}: tabella data modificata"),))
+        return table
+    new = table.table.copy()
+    new[name] = column
+    return dataclasses.replace(table, table=new, history=table.history + (step,))
+
+
+# --------------------------------------------------------------------------
+# P5 — filtro temporale (H3; D13-16)
+# --------------------------------------------------------------------------
+
+_TIMESCALES = {"TT": "tt", "TDB": "tdb", "TCB": "tcb", "TCG": "tcg", "TAI": "tai", "UTC": "utc", "UT": "ut1",
+               "UT1": "ut1"}
+
+
+@dataclass(frozen=True, eq=False)
+class TimeSelection:
+    """Record con epoca osservativa in ``[start, end]`` (intervallo chiuso), con formato e scala dichiarati."""
+
+    mask: np.ndarray
+    column: str
+    time_format: str
+    scale: str
+    source: str  # "TIMESYS" o "parametri"
+    excluded_missing: int
+
+
+def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, time_format: str | None = None,
+                scale: str | None = None) -> TimeSelection:
+    """Selezione per epoca osservativa (H3): colonna indicata dall'utente, formato e scala dal TIMESYS o dichiarati."""
+    if column not in table.table.colnames:
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {column!r} inesistente")
+    if not isinstance(start, Time) or not isinstance(end, Time):
+        raise CatalogsError("EPOCH_INVALID", "start ed end devono essere oggetti Time con scala dichiarata")
+    if start > end:
+        raise CatalogsError("EPOCH_INVALID", "intervallo vuoto: start > end")
+    col = table.table[column]
+    valid = _valid_mask(col)
+    timesys = col.meta.get("timesys")
+    if timesys is not None:
+        if time_format is not None or scale is not None:
+            raise CatalogsError("EPOCH_INVALID", "formato e scala sono già nel TIMESYS: non si passano")
+        astropy_scale = _TIMESCALES.get((timesys.get("timescale") or "").upper())
+        if astropy_scale is None:
+            raise CatalogsError("EPOCH_INVALID", f"scala {timesys.get('timescale')!r} del TIMESYS non supportata")
+        origin = timesys.get("timeorigin")
+        values = np.asarray(getattr(col, "data", col), dtype=np.float64)
+        if origin is not None:
+            jd0 = {"MJD-origin": 2400000.5, "JD-origin": 0.0}.get(origin)
+            if jd0 is None:
+                try:
+                    jd0 = float(origin)
+                except ValueError as exc:
+                    raise CatalogsError("EPOCH_INVALID", f"timeorigin {origin!r} non valido") from exc
+            if col.unit is None or not col.unit.is_equivalent(u.d):
+                raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: con timeorigin servono tempi con unità")
+            days = (values * col.unit).to_value(u.d)
+            times, fmt = Time(jd0 + np.where(valid & np.isfinite(days), days, 0.0), format="jd",
+                              scale=astropy_scale), f"jd (origine {origin})"
+        elif col.unit is not None and col.unit.is_equivalent(u.yr):
+            years = (values * col.unit).to_value(u.yr)
+            times, fmt = Time(np.where(valid & np.isfinite(years), years, 2000.0), format="jyear",
+                              scale=astropy_scale), "jyear"
+        else:
+            raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: TIMESYS senza timeorigin e valori non in anni")
+        valid &= np.isfinite(values)
+        source, used_scale = "TIMESYS", astropy_scale
+    else:
+        if time_format is None or scale is None:
+            raise CatalogsError("EPOCH_INVALID", f"colonna {column!r} senza TIMESYS: time_format e scale obbligatori "
+                                "(mai assunti)")
+        raw = np.asarray(getattr(col, "data", col))
+        if raw.dtype.kind in "iuf":
+            raw = raw.astype(np.float64)
+            valid &= np.isfinite(raw)
+            filler = raw[valid][0] if valid.any() else 0.0
+        else:
+            raw = np.array([str(v) for v in raw], dtype=str)
+            filler = raw[valid][0] if valid.any() else None
+        if not valid.any():
+            return TimeSelection(np.zeros(len(col), dtype=bool), column, time_format, scale, "parametri", len(col))
+        try:
+            times = Time(np.where(valid, raw, filler), format=time_format, scale=scale)
+        except (ValueError, TypeError) as exc:
+            raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: valori non leggibili come {time_format} "
+                                f"({exc})") from exc
+        fmt, source, used_scale = time_format, "parametri", scale
+    mask = valid & (times >= start) & (times <= end)
+    return TimeSelection(mask=np.asarray(mask, dtype=bool), column=column, time_format=fmt, scale=used_scale,
+                         source=source, excluded_missing=int(np.count_nonzero(~valid)))
