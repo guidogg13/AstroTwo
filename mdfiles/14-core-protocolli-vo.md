@@ -437,7 +437,14 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   **Motivazione (nostra):** lo standard IVOA DataLink descrive con i
   descrittori di servizio come chiamare queste elaborazioni lato server,
   senza codice specifico per ciascun archivio; versione dello standard **da
-  verificare prima del codice**.
+  verificare prima del codice**. **Esito della verifica (2026-10-10, P4):**
+  la documentazione di `pyvo` 1.9.1 non dichiara una versione; il codice
+  legge i campi del documento `{links}` di **DataLink 1.0** (`ID`,
+  `access_url`, `service_def`, `error_message`, `semantics`, `description`,
+  `content_type`, `content_length`) e riconosce i descrittori DataLink dal
+  prefisso `ivo://ivoa.net/std/datalink` (quindi anche gli identificativi
+  di DataLink 1.1); i campi aggiunti da DataLink 1.1 si leggono come
+  colonne della tabella. I SODA si riconoscono da `ivo://ivoa.net/std/SODA#sync-1`.
 - **D14-4 — Schede server (H10): DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1), CORRETTA il 2026-10-10
   (decisione del proprietario, regola d'oro n. 8).** **Elenco di server
@@ -447,7 +454,18 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   URL e ente, dichiarati; più i **server personali** salvati nelle
   preferenze e la ricerca nel registro VO. Nessuna copia del selettore di
   Aladin. Elenco esatto e URL **da verificare prima del codice** sui siti
-  degli enti.
+  degli enti. **Esito della verifica (2026-10-10, P4):** otto voci, ognuna
+  con l'URL letto sulla pagina ufficiale dell'ente (citata nella voce) e il
+  servizio provato in linea: CDS SIMBAD TAP, CDS VizieR TAP (TAPVizieR), ESA
+  archivio Gaia TAP, NASA/IPAC IRSA TAP, IRSA AllWISE cone search, IRSA
+  immagini SIA 2, NASA/GSFC HEASARC TAP, NASA/STScI MAST CAOM TAP.
+  **Escluse, da verificare:** ESASky TAP (servizio in linea, ma URL non
+  trovato sulle pagine ufficiali ESA), MAST CAOM SIA 2 (URL ufficiale, ma
+  nessuna risposta in 60 s il 2026-10-10), cone search di SIMBAD (in linea,
+  non documentato sulle pagine del CDS); XMatch e MocServer non sono servizi
+  dei protocolli dell'elenco (cone search, TAP, SIA, SSA) e restano ai moduli
+  15 e 16; nessun servizio SSA generale trovato (quelli di HEASARC chiedono
+  il nome di una tabella).
 - **D14-5 — Limiti di riga predefiniti: DECISA il 2026-10-10 (decisione
   del proprietario).** `max_rows` di default **100 000**, configurabile fino
   al tetto del `13` (1 000 000); superamento sempre dichiarato con
@@ -522,3 +540,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P1 scritta** (`src/astrotwo/core/vo_protocols.py`: `read_votable`, `write_votable`, `export_table`, `VoProtocolsError`; test T1, T5 e casi d'errore in `tests/core/test_vo_protocols.py`): provenienza con le stesse chiavi nei tre formati (`A2VERS`, `A2FORMAT`, `A2ORIGIN`, `A2DATE`, `A2EXPORT`, `A2HIST`, `A2BODY`, `A2POS`: `INFO` nel VOTable 1.4, parole chiave e `HISTORY` nel FITS, righe `#` nel CSV); UCD nel FITS come `TUCDn`; testi a lunghezza variabile resi a larghezza fissa nel FITS; scrittore VOTable condiviso con `save_subset` del 13. Unità nel CSV ferme su D14-10. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P2 scritta** (`RequestRecord`, `VoResult`, `download_table`, `DEFAULT_MAX_ROWS`; test T6, T21 e casi d'errore con un servizio HTTP simulato locale): sessione `requests` con i timeout comuni di `04` e `User-Agent` di AstroTwo; prima la cache, `refresh=True`, copia in cache dichiarata (`FROM_CACHE`) se la rete non risponde; in cache solo le risposte lette con successo (tabella SQLite `query_results` del modulo 14: protocollo, URL, parametri, byte della risposta); HTTP 401/403 → `AUTH_REQUIRED`, altri errori HTTP → `SERVICE_ERROR`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P3 scritta** (`cone_search`, `tap_query` sincrona e asincrona, `validate_adql`, `AdqlCheck`, `DEFAULT_ASYNC_TIMEOUT`; test T3, T4, T20, cone search e TAP asincrona su servizi simulati, T2 di rete sul cone search pubblico di Simbad): parametri costruiti con `pyvo` (`SCSQuery`, `TAPQuery`, `AsyncTAPJob`), stato della risposta letto da `pyvo` (`QUERY_STATUS`, `OVERFLOW`; per SCS 1.03 anche `INFO` `Error`); servizio che rifiuta la query TAP → `ADQL_INVALID` con il messaggio del servizio (HTTP 5xx → `SERVICE_ERROR`); suggerimento dell'asincrona su timeout di lettura o messaggio di durata; lavoro asincrono interrotto (`ABORT`) oltre l'attesa massima ed eliminato alla fine; voci dell'elenco dei server come `catalog` in P4. Stato `approvato` invariato. |
+| 2026-10-10 | Claude Code | **P4 scritta** (`ServerRegistry`, `ServerEntry`, `BUILTIN_SERVERS`, `PROTOCOLS`, `RegistrySearch`, `DataLinkClient`, `DataLinks`, `ServiceDescriptor`, `ServiceParam`, `DataProduct`; `VoResult.descriptors`; parametro `servers` di `cone_search` e `tap_query`; test T17, T18, T19 su servizi simulati e T18 di rete): verifiche DataLink e URL dei server (esiti in D14-3 e D14-4); ricerca nel registro con l'ADQL RegTAP costruito da `pyvo` ed eseguito con `tap_query` (stessa cache e stesso registro); `call_service` con i parametri riferiti a colonne, poi quelli dati, poi i valori fissi, vuoti non inviati (testo originale dei valori letto con `defusedxml`, perché `astropy` rende zeri un `value=""` numerico). **Da verificare:** il registro di default di `pyvo` (`http://reg.g-vo.org/tap`) risponde "Request Denied" (HTML, HTTP 403) alla query RegTAP da questa rete e non ha HTTPS valido; il test di rete usa `https://dc.g-vo.org/tap`. Stato `approvato` invariato. |

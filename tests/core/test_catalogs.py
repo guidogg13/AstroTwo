@@ -857,3 +857,22 @@ def test_t30_time_filter(tmp_path):
     with pytest.raises(CatalogsError) as info:
         time_filter(cat, end, start, column="obs")
     assert info.value.code == "EPOCH_INVALID"
+
+
+def test_votable_binary_without_nrows(tmp_path):
+    # Senza l'attributo facoltativo nrows, con dati BINARY, astropy dà nrows = None: le righe si contano dai dati letti
+    # (correzione del 2026-10-10, trovata con le risposte TAP del registro VO).
+    text_path = write_votable(tmp_path / "cat.xml")
+    vot = parse_votable(str(text_path))
+    path = tmp_path / "binary.xml"
+    vot.to_xml(str(path), tabledata_format="binary")
+    text = path.read_text(encoding="utf-8")
+    assert 'nrows="3"' in text
+    path.write_text(text.replace(' nrows="3"', ""), encoding="utf-8")  # nrows è facoltativo nello standard
+    expected = parse_votable(str(path)).get_first_table()
+    assert expected.nrows is None
+    cat = read_table(path, limits=TableLimits(max_rows=3))
+    assert cat.rows == len(expected.array) == 3
+    with pytest.raises(CatalogsError) as err:
+        read_table(path, limits=TableLimits(max_rows=2))
+    assert err.value.code == "TABLE_TOO_LARGE"

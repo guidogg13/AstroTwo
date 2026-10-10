@@ -34,6 +34,7 @@ from astropy.io import fits
 import astropy.units as u
 import pyvo
 import requests
+from defusedxml.ElementTree import fromstring as safe_fromstring
 from astropy.coordinates import SkyCoord
 from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
@@ -54,6 +55,16 @@ __all__ = [
     "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
     "AdqlCheck",
+    "BUILTIN_SERVERS",
+    "DataLinkClient",
+    "DataLinks",
+    "DataProduct",
+    "PROTOCOLS",
+    "RegistrySearch",
+    "ServerEntry",
+    "ServerRegistry",
+    "ServiceDescriptor",
+    "ServiceParam",
     "DEFAULT_ASYNC_TIMEOUT",
     "RequestRecord",
     "VoResult",
@@ -258,6 +269,7 @@ class VoResult:
     warnings: tuple[tuple[str, str], ...] = ()
     truncated: bool = False
     max_rows: int | None = None
+    descriptors: tuple[ServiceDescriptor, ...] = ()  # descrittori di servizio del VOTable (DataLink, SODA…)
 
 
 @dataclass(frozen=True)
@@ -400,8 +412,13 @@ def download_table(url: str, *, table: int | None = None, format: str | None = N
     result = _read_payload(response, table=table, format=format, limits=limits)
     notes = response.notes + _store(response, "download", cache)
     arguments = {"url": url, "table": table, "format": format}
+    descriptors = ()
+    if result.format == "votable":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            descriptors = _descriptors(parse_votable(io.BytesIO(response.payload), verify="ignore"), response.payload)
     return VoResult(table=result, request=_record("download", "download_table", arguments, response, result.rows),
-                    warnings=notes)
+                    warnings=notes, descriptors=descriptors)
 
 
 # --------------------------------------------------------------------------
@@ -465,11 +482,15 @@ def _check_max_rows(max_rows, limits: TableLimits | None) -> TableLimits:
     return limits
 
 
-def _service_url(service: str, protocol: str) -> str:
-    """URL esplicito, oppure voce dell'elenco dei server (P4) con il protocollo richiesto."""
+def _service_url(service: str, protocol: str, servers: ServerRegistry | None = None) -> str:
+    """URL esplicito, oppure voce dell'elenco dei server con il protocollo richiesto (D14-9 punto 6)."""
     if isinstance(service, str) and service.startswith(("http://", "https://")):
         return service.rstrip("/") if protocol == "tap" else service
-    raise VoProtocolsError("SERVER_UNKNOWN", f"{service!r}: serve un URL {protocol} (elenco dei server in P4)")
+    entry = (ServerRegistry() if servers is None else servers).get(service)
+    if entry.protocol != protocol:
+        raise VoProtocolsError("SERVER_UNKNOWN", f"la voce {service!r} è un servizio {entry.protocol}, non "
+                               f"{protocol}", server=service)
+    return entry.url.rstrip("/") if protocol == "tap" else entry.url
 
 
 def _icrs_degrees(center) -> tuple[float, float]:
@@ -501,7 +522,7 @@ def _parse_results(response: _Response, results_class, *, hint: str = ""):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             votable = parse_votable(io.BytesIO(response.payload), verify="ignore")
-            return results_class(votable, url=response.url)
+            return results_class(votable, url=response.url), votable
     except pyvo.dal.DALQueryError as exc:
         message = str(exc)
         extra = hint if hint and _DURATION_WORDS.search(message) else ""
@@ -533,23 +554,24 @@ def _limited(result: CatalogTable, max_rows: int, service_overflow: bool) -> tup
     return result, (), False
 
 
-def _finish(protocol: str, command: str, arguments: dict, response: _Response, results, *, max_rows: int,
+def _finish(protocol: str, command: str, arguments: dict, response: _Response, parsed, *, max_rows: int,
             limits: TableLimits, cache: SharedCache | None) -> VoResult:
+    results, votable = parsed
     result = _read_payload(response, limits=limits)
     overflow = getattr(results, "query_status", None) == "OVERFLOW"
     result, row_notes, truncated = _limited(result, max_rows, overflow)
     notes = response.notes + row_notes + _store(response, protocol, cache)
     notes = tuple(n for n in notes if n[0] != "HTTP_STATUS")
     return VoResult(table=result, request=_record(protocol, command, arguments, response, result.rows),
-                    warnings=notes, truncated=truncated, max_rows=max_rows)
+                    warnings=notes, truncated=truncated, max_rows=max_rows, descriptors=_descriptors(votable, response.payload))
 
 
 def cone_search(center, radius, catalog: str, *, max_rows: int = DEFAULT_MAX_ROWS,
-                limits: TableLimits | None = None, cache: SharedCache | None = None, refresh: bool = False,
+                servers: ServerRegistry | None = None, limits: TableLimits | None = None, cache: SharedCache | None = None, refresh: bool = False,
                 timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
     """Cone search (SCS): ``catalog`` è una voce dell'elenco dei server o un URL SCS (D14-9 punto 6)."""
     limits = _check_max_rows(max_rows, limits)
-    url = _service_url(catalog, "scs")
+    url = _service_url(catalog, "scs", servers)
     ra, dec = _icrs_degrees(center)
     sr = _radius_degrees(radius)
     query = pyvo.dal.scs.SCSQuery(url, (ra, dec), sr)
@@ -562,7 +584,8 @@ def cone_search(center, radius, catalog: str, *, max_rows: int = DEFAULT_MAX_ROW
 
 
 def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: str = "sync",
-              async_timeout: float = DEFAULT_ASYNC_TIMEOUT, limits: TableLimits | None = None,
+              async_timeout: float = DEFAULT_ASYNC_TIMEOUT, servers: ServerRegistry | None = None,
+              limits: TableLimits | None = None,
               cache: SharedCache | None = None, refresh: bool = False,
               timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
     """Esegue ADQL su un servizio TAP: sincrona di default, asincrona su richiesta (D14-9 punto 8)."""
@@ -575,7 +598,7 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
         raise ValueError("mode deve essere 'sync' o 'async'")
     if not (isinstance(async_timeout, (int, float)) and async_timeout > 0):
         raise ValueError("async_timeout deve essere un numero di secondi positivo")
-    base = _service_url(url, "tap")
+    base = _service_url(url, "tap", servers)
     arguments = {"url": url, "adql": adql, "max_rows": max_rows, "mode": mode}
     if mode == "sync":
         query = pyvo.dal.tap.TAPQuery(base, adql, mode="sync", maxrec=max_rows)
@@ -643,3 +666,338 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
     finally:
         session.close()
     return _Response(payload, url, "POST", canonical, datetime.now(UTC), False)
+
+
+# --------------------------------------------------------------------------
+# P4 — Elenco dei server (D14-4), registro VO, DataLink (D14-3)
+# --------------------------------------------------------------------------
+
+#: Protocolli delle voci dell'elenco dei server.
+PROTOCOLS: tuple[str, ...] = ("scs", "tap", "sia", "sia2", "ssa")
+_STANDARD_IDS = {
+    "scs": ("ivo://ivoa.net/std/conesearch",),
+    "tap": ("ivo://ivoa.net/std/tap",),
+    "sia": ("ivo://ivoa.net/std/sia",),
+    "sia2": ("ivo://ivoa.net/std/sia#query-2.",),
+    "ssa": ("ivo://ivoa.net/std/ssa",),
+}
+_VERIFIED = "2026-10-10"
+
+
+@dataclass(frozen=True)
+class ServerEntry:
+    """Voce dell'elenco dei server: protocollo, URL ed ente dichiarati, con la fonte dell'URL."""
+
+    id: str
+    name: str
+    provider: str
+    protocol: str
+    url: str
+    source: str  # pagina ufficiale dell'ente che riporta l'URL, o "personale"/"registro VO"
+    verified: str | None = None  # data della verifica sulla pagina ufficiale e del servizio in linea
+    personal: bool = False
+
+
+#: Elenco nostro (D14-4): ogni URL letto sulla pagina ufficiale dell'ente e provato in linea il 2026-10-10.
+BUILTIN_SERVERS: tuple[ServerEntry, ...] = (
+    ServerEntry("cds-simbad-tap", "SIMBAD", "CDS", "tap", "https://simbad.cds.unistra.fr/simbad/sim-tap",
+                "https://cds.unistra.fr/help/documentation/simbad-more/adql-simbad/", _VERIFIED),
+    ServerEntry("cds-vizier-tap", "VizieR (TAPVizieR)", "CDS", "tap", "https://tapvizier.cds.unistra.fr/TAPVizieR/tap",
+                "https://cds.unistra.fr/news/2013/01/15-tapvizier-is-available", _VERIFIED),
+    ServerEntry("esa-gaia-tap", "Archivio Gaia", "ESA", "tap", "https://gea.esac.esa.int/tap-server/tap",
+                "https://www.cosmos.esa.int/web/gaia-users/archive/programmatic-access", _VERIFIED),
+    ServerEntry("nasa-irsa-tap", "IRSA", "NASA/IPAC", "tap", "https://irsa.ipac.caltech.edu/TAP",
+                "https://irsa.ipac.caltech.edu/docs/program_interface/TAP.html", _VERIFIED),
+    ServerEntry("nasa-irsa-allwise-scs", "IRSA AllWISE (sorgenti)", "NASA/IPAC", "scs",
+                "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+                "https://irsa.ipac.caltech.edu/docs/program_interface/TAP.html", _VERIFIED),
+    ServerEntry("nasa-irsa-sia2", "IRSA immagini (SIA 2)", "NASA/IPAC", "sia2", "https://irsa.ipac.caltech.edu/SIA",
+                "https://irsa.ipac.caltech.edu/ibe/sia.html", _VERIFIED),
+    ServerEntry("nasa-heasarc-tap", "HEASARC", "NASA/GSFC", "tap", "https://heasarc.gsfc.nasa.gov/xamin/vo/tap",
+                "https://heasarc.gsfc.nasa.gov/docs/archive/vo/", _VERIFIED),
+    ServerEntry("nasa-mast-caom-tap", "MAST CAOM", "NASA/STScI", "tap", "https://mast.stsci.edu/vo-tap/api/v0.1/caom",
+                "https://mast.stsci.edu/vo-tap/", _VERIFIED),
+)
+
+
+@dataclass(frozen=True)
+class RegistrySearch:
+    """Esito di una ricerca nel registro VO: tabella RegTAP registrata e servizi trovati."""
+
+    result: VoResult
+    services: tuple[ServerEntry, ...]
+
+
+class ServerRegistry:
+    """Schede server (H10): elenco nostro più i server personali; ricerca nel registro VO."""
+
+    def __init__(self, personal=()) -> None:
+        self._personal: dict[str, ServerEntry] = {}
+        for entry in personal:
+            self.add_personal(entry.id, entry.name, entry.protocol, entry.url, provider=entry.provider)
+
+    @property
+    def builtin(self) -> tuple[ServerEntry, ...]:
+        return BUILTIN_SERVERS
+
+    def entries(self) -> tuple[ServerEntry, ...]:
+        return BUILTIN_SERVERS + tuple(self._personal.values())
+
+    def personal_servers(self) -> tuple[ServerEntry, ...]:
+        """Server personali, da salvare nelle preferenze (``40``)."""
+        return tuple(self._personal.values())
+
+    def get(self, server_id: str) -> ServerEntry:
+        for entry in self.entries():
+            if entry.id == server_id:
+                return entry
+        known = ", ".join(e.id for e in self.entries())
+        raise VoProtocolsError("SERVER_UNKNOWN", f"server {server_id!r} non in elenco (voci: {known})",
+                               server=server_id)
+
+    def find(self, protocol: str | None = None, provider: str | None = None) -> tuple[ServerEntry, ...]:
+        return tuple(e for e in self.entries()
+                     if (protocol is None or e.protocol == protocol) and (provider is None or e.provider == provider))
+
+    def add_personal(self, server_id: str, name: str, protocol: str, url: str, *,
+                     provider: str = "personale") -> ServerEntry:
+        if protocol not in PROTOCOLS:
+            raise ValueError(f"protocollo {protocol!r}: ammessi {', '.join(PROTOCOLS)}")
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            raise ValueError(f"URL non valido: {url!r}")
+        if not isinstance(server_id, str) or not server_id.strip():
+            raise ValueError("serve un identificativo")
+        if any(e.id == server_id for e in self.entries()):
+            raise ValueError(f"identificativo {server_id!r} già in elenco")
+        entry = ServerEntry(server_id, name, provider, protocol, url, "personale", None, personal=True)
+        self._personal[server_id] = entry
+        return entry
+
+    def remove_personal(self, server_id: str) -> None:
+        if server_id not in self._personal:
+            raise VoProtocolsError("SERVER_UNKNOWN", f"{server_id!r} non è un server personale", server=server_id)
+        del self._personal[server_id]
+
+    def search_registry(self, keywords, servicetype: str, *, max_rows: int = DEFAULT_MAX_ROWS,
+                        registry_url: str = pyvo.registry.regtap.REGISTRY_BASEURL,
+                        cache: SharedCache | None = None, refresh: bool = False,
+                        timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> RegistrySearch:
+        """Ricerca nel registro VO (RegTAP): ADQL costruito da ``pyvo``, eseguito con ``tap_query``."""
+        if servicetype not in PROTOCOLS:
+            raise ValueError(f"servicetype {servicetype!r}: ammessi {', '.join(PROTOCOLS)}")
+        words = [keywords] if isinstance(keywords, str) else list(keywords)
+        adql = pyvo.registry.regtap.get_RegTAP_query(keywords=words, servicetype=servicetype)
+        result = tap_query(registry_url, adql, max_rows=max_rows, cache=cache, refresh=refresh, timeouts=timeouts)
+        return RegistrySearch(result=result, services=_registry_services(result.table.table, servicetype))
+
+
+_REGTAP_SEP = ":::py VO sep:::"
+
+
+def _registry_services(table: Table, protocol: str) -> tuple[ServerEntry, ...]:
+    """Interfacce standard del protocollo richiesto nelle righe RegTAP (liste aggregate da ``pyvo``)."""
+    prefixes = _STANDARD_IDS[protocol]
+    services = []
+    for row in table:
+        urls = str(row["access_urls"]).split(_REGTAP_SEP)
+        stds = str(row["standard_ids"]).split(_REGTAP_SEP)
+        roles = str(row["intf_roles"]).split(_REGTAP_SEP)
+        for k, (url, std, role) in enumerate(zip(urls, stds, roles)):
+            std_l = std.lower()
+            if role != "std" or not url or not any(std_l.startswith(p) for p in prefixes):
+                continue
+            if protocol == "sia" and "#query-2." in std_l:
+                continue
+            services.append(ServerEntry(f"{row['ivoid']}#{k}", str(row["res_title"]), str(row["ivoid"]),
+                                        protocol, url, "registro VO", None))
+    return tuple(services)
+
+
+@dataclass(frozen=True)
+class ServiceParam:
+    """Parametro d'ingresso di un descrittore di servizio (gruppo ``inputParams``)."""
+
+    name: str
+    ref: str | None  # ID del FIELD da cui prendere il valore, se riferito a una colonna
+    ref_column: str | None  # nome della colonna con quell'ID
+    value: str | None
+    unit: str | None
+    ucd: str | None
+    datatype: str | None
+    minimum: str | None = None
+    maximum: str | None = None
+    options: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ServiceDescriptor:
+    """Descrittore di servizio di un VOTable (``RESOURCE type="meta" utype="adhoc:service"``)."""
+
+    id: str | None
+    standard_id: str | None
+    access_url: str
+    params: tuple[ServiceParam, ...]
+
+    @property
+    def is_datalink(self) -> bool:
+        return (self.standard_id or "").lower().startswith(pyvo.dal.adhoc.DATALINK_IVOID)
+
+
+def _param_text(value) -> str | None:
+    """Valore di un PARAM come testo; vuoto o mascherato (es. ``value=""`` per un array) → ``None``."""
+    if value is None or np.ma.is_masked(value) or (isinstance(value, str) and not value):
+        return None
+    if isinstance(value, np.ndarray):
+        return " ".join(str(v) for v in np.ravel(value))
+    return str(value)
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _raw_input_values(payload: bytes) -> dict[tuple[str | None, str], str]:
+    """Testo originale dell'attributo ``value`` dei parametri d'ingresso dei descrittori.
+
+    ``astropy`` converte ``value=""`` di un array numerico in zeri: il testo originale (letto con
+    ``defusedxml``) dice se il valore è davvero vuoto.
+    """
+    raw: dict[tuple[str | None, str], str] = {}
+    try:
+        root = safe_fromstring(payload)
+    except Exception:
+        return raw
+    for resource in root.iter():
+        if _local(resource.tag) != "RESOURCE" or resource.get("utype") != "adhoc:service":
+            continue
+        for group in resource:
+            if _local(group.tag) == "GROUP" and group.get("name") == "inputParams":
+                for param in group:
+                    if _local(param.tag) == "PARAM" and param.get("name") is not None:
+                        raw[(resource.get("ID"), param.get("name"))] = param.get("value", "")
+    return raw
+
+
+def _descriptors(votable, payload: bytes = b"") -> tuple[ServiceDescriptor, ...]:
+    """Descrittori di servizio del VOTable, letti con ``astropy`` (gruppi aggiunti da ``pyvo``)."""
+    raw = _raw_input_values(payload) if payload else {}
+    fields = {f.ID: f.name for t in votable.iter_tables() for f in t.fields if f.ID}
+    out = []
+    for resource in votable.iter_resources() if hasattr(votable, "iter_resources") else votable.resources:
+        if resource.type != "meta" or resource.utype != "adhoc:service":
+            continue
+        top = {p.name: p for p in resource.params}
+        if "accessURL" not in top:
+            continue
+        params = []
+        for group in getattr(resource, "groups", []):
+            if group.name != "inputParams":
+                continue
+            for entry in group.entries:
+                if not hasattr(entry, "datatype"):
+                    continue
+                values = getattr(entry, "values", None)
+                options = tuple(str(o[1]) for o in getattr(values, "options", []) or [])
+                text = raw.get((resource.ID, entry.name))
+                value = (text or None) if text is not None else _param_text(entry.value)
+                params.append(ServiceParam(
+                    name=entry.name, ref=entry.ref or None, ref_column=fields.get(entry.ref) if entry.ref else None,
+                    value=value, unit=str(entry.unit) if entry.unit is not None else None, ucd=entry.ucd,
+                    datatype=entry.datatype,
+                    minimum=None if values is None or values.min is None else str(values.min),
+                    maximum=None if values is None or values.max is None else str(values.max),
+                    options=options))
+        std = top.get("standardID")
+        out.append(ServiceDescriptor(id=resource.ID, standard_id=None if std is None else str(std.value),
+                                     access_url=str(top["accessURL"].value), params=tuple(params)))
+    return tuple(out)
+
+
+@dataclass(frozen=True)
+class DataLinks:
+    """Documento DataLink: tabella dei link (``CatalogTable``) e descrittori di servizio."""
+
+    result: VoResult
+
+    @property
+    def table(self) -> CatalogTable:
+        return self.result.table
+
+    @property
+    def descriptors(self) -> tuple[ServiceDescriptor, ...]:
+        return self.result.descriptors
+
+    def descriptor(self, service_def: str) -> ServiceDescriptor:
+        """Descrittore citato dalla colonna ``service_def`` di un link."""
+        for desc in self.descriptors:
+            if desc.id == service_def:
+                return desc
+        raise VoProtocolsError("SERVICE_ERROR", f"descrittore {service_def!r} assente dal documento DataLink")
+
+
+@dataclass(frozen=True)
+class DataProduct:
+    """Risposta di un servizio chiamato da un descrittore: byte, tipo dichiarato e richiesta registrata."""
+
+    payload: bytes
+    request: RequestRecord
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+_DATALINK_COLUMNS = ("ID", "access_url", "service_def", "error_message", "semantics", "description",
+                     "content_type", "content_length")
+
+
+class DataLinkClient:
+    """Lettura e risoluzione dei link DataLink (H8, D14-3), con i descrittori di servizio, via ``pyvo``."""
+
+    def __init__(self, *, cache: SharedCache | None = None, refresh: bool = False,
+                 timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> None:
+        self.cache, self.refresh, self.timeouts = cache, refresh, timeouts
+
+    def links(self, url: str, *, max_rows: int = DEFAULT_MAX_ROWS) -> DataLinks:
+        """Documento DataLink dall'URL (della colonna DataLink o di un descrittore): link e descrittori."""
+        limits = _check_max_rows(max_rows, None)
+        response = _http("datalink", url, cache=self.cache, refresh=self.refresh, timeouts=self.timeouts,
+                         accept_error_body=True)
+        parsed = _parse_results(response, pyvo.dal.adhoc.DatalinkResults)
+        missing = [c for c in _DATALINK_COLUMNS if c not in [f.name for f in parsed[1].get_first_table().fields]]
+        if missing:
+            raise VoProtocolsError("VOTABLE_INVALID", f"{url}: documento DataLink senza le colonne {missing}",
+                                   url=url)
+        return DataLinks(_finish("datalink", "DataLinkClient.links", {"url": url, "max_rows": max_rows}, response,
+                                 parsed, max_rows=max_rows, limits=limits, cache=self.cache))
+
+    @staticmethod
+    def service_descriptors(result: VoResult) -> tuple[ServiceDescriptor, ...]:
+        return result.descriptors
+
+    def call_service(self, descriptor: ServiceDescriptor, values: dict | None = None, **params) -> DataProduct:
+        """Chiama il servizio descritto: parametri riferiti a colonne da ``values`` (nome colonna o ID),
+        poi quelli dati dall'utente, poi i valori fissi del descrittore; parametri senza valore non si inviano."""
+        values = values or {}
+        query: dict[str, str] = {}
+        names = {p.name for p in descriptor.params}
+        unknown = sorted(set(params) - names)
+        if unknown:
+            raise ValueError(f"parametri non previsti dal descrittore: {unknown} (previsti: {sorted(names)})")
+        for param in descriptor.params:
+            if param.ref is not None:
+                key = param.ref_column if param.ref_column in values else param.ref
+                if key not in values:
+                    raise ValueError(f"manca il valore della colonna {param.ref_column or param.ref!r} "
+                                     f"per il parametro {param.name}")
+                query[param.name] = str(values[key])
+            elif param.name in params:
+                query[param.name] = str(params[param.name])
+            elif param.value is not None:
+                query[param.name] = param.value
+        response = _http("datalink-service", descriptor.access_url, query, cache=self.cache, refresh=self.refresh,
+                         timeouts=self.timeouts)
+        notes = response.notes + _store(response, "datalink-service", self.cache)
+        arguments = {"descriptor": descriptor.id, "standard_id": descriptor.standard_id, "values": dict(values),
+                     **params}
+        return DataProduct(payload=response.payload,
+                           request=_record("datalink-service", "DataLinkClient.call_service", arguments, response,
+                                           None),
+                           warnings=notes)

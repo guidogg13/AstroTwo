@@ -501,7 +501,9 @@ def _choose(available: list[TableInfo], table, path: str) -> TableInfo:
 
 
 def _votable_infos(vot) -> list[TableInfo]:
-    return [TableInfo(index=k, name=t.name or t.ID or "", rows=t.nrows, columns=len(t.fields))
+    # ``nrows`` è un attributo facoltativo del VOTable (assente → None): si contano le righe lette.
+    return [TableInfo(index=k, name=t.name or t.ID or "", rows=t.nrows if t.nrows is not None else len(t.array),
+                      columns=len(t.fields))
             for k, t in enumerate(vot.iter_tables())]
 
 

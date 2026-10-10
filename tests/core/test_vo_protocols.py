@@ -29,6 +29,9 @@ from astrotwo.core.catalogs import CatalogsError, read_table
 from astrotwo.core.vo_protocols import (
     DEFAULT_MAX_ROWS,
     VOTABLE_VERSION,
+    BUILTIN_SERVERS,
+    DataLinkClient,
+    ServerRegistry,
     VoProtocolsError,
     cone_search,
     download_table,
@@ -505,9 +508,146 @@ def test_t20_validate_adql():
 
 @pytest.mark.network
 def test_t2_cone_search_network(cache):
-    # Servizio SCS pubblico (Simbad, CDS); atteso ricalcolato con pyvo contro lo stesso servizio.
-    url = "https://simbad.cds.unistra.fr/cone/"
-    center = SkyCoord(83.8221 * u.deg, -5.3911 * u.deg, frame="icrs")
+    # Servizio SCS pubblico (IRSA, AllWISE); atteso ricalcolato con pyvo contro lo stesso servizio.
+    url = "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd"  # pagina ufficiale IRSA (TAP.html)
+    center = SkyCoord(210.80225 * u.deg, 54.34894 * u.deg, frame="icrs")
     result = cone_search(center, 10 * u.arcsec, url, cache=cache)
     expected = pyvo.dal.SCSService(url).search(center, 10 * u.arcsec)
     assert result.table.rows == len(expected) and result.request.rows == len(expected)
+
+
+# =============================================================================
+# P4 — Elenco dei server, registro VO, DataLink (T17, T18, T19)
+# =============================================================================
+
+
+def test_t17_server_registry(service, cache):
+    registry = ServerRegistry()
+    assert registry.builtin == BUILTIN_SERVERS and len(BUILTIN_SERVERS) >= 5
+    for entry in BUILTIN_SERVERS:
+        assert entry.provider and entry.protocol in ("scs", "tap", "sia", "sia2", "ssa")
+        assert entry.url.startswith("https://") and entry.source.startswith("https://") and entry.verified
+    assert len({e.id for e in BUILTIN_SERVERS}) == len(BUILTIN_SERVERS)
+    assert {e.provider for e in BUILTIN_SERVERS} >= {"CDS", "ESA"}
+    mine = registry.add_personal("mio-scs", "Il mio cone search", "scs", service.url + "/scs")
+    assert mine.personal and registry.get("mio-scs") == mine and registry.personal_servers() == (mine,)
+    assert mine in registry.find(protocol="scs")
+    with pytest.raises(ValueError):
+        registry.add_personal("mio-scs", "doppio", "scs", service.url + "/scs")
+    with pytest.raises(ValueError):
+        registry.add_personal("x", "x", "ftp", service.url)
+    service.routes["/scs"] = votable_route(votable_text(2))
+    result = cone_search(SkyCoord(10 * u.deg, -3 * u.deg), 5 * u.arcsec, "mio-scs", servers=registry, cache=cache)
+    assert result.table.rows == 2 and result.request.arguments["catalog"] == "mio-scs"
+    with pytest.raises(VoProtocolsError) as err:
+        cone_search(SkyCoord(10 * u.deg, -3 * u.deg), 5 * u.arcsec, "cds-simbad-tap", cache=cache)
+    assert err.value.code == "SERVER_UNKNOWN" and "tap" in err.value.message
+    registry.remove_personal("mio-scs")
+    with pytest.raises(VoProtocolsError) as err:
+        registry.get("mio-scs")
+    assert err.value.code == "SERVER_UNKNOWN"
+    # una voce TAP dell'elenco come servizio di tap_query (URL della voce)
+    service.routes["/tap/sync"] = tap_sync_route(3)
+    registry.add_personal("mio-tap", "Il mio TAP", "tap", service.url + "/tap/")
+    assert tap_query("mio-tap", "SELECT * FROM t", servers=registry, cache=cache).table.rows == 3
+
+
+REGTAP = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>
+<TABLE>
+<FIELD name="ivoid" datatype="char" arraysize="*"/>
+<FIELD name="res_title" datatype="char" arraysize="*"/>
+<FIELD name="access_urls" datatype="char" arraysize="*"/>
+<FIELD name="standard_ids" datatype="char" arraysize="*"/>
+<FIELD name="intf_roles" datatype="char" arraysize="*"/>
+<DATA><TABLEDATA>
+<TR><TD>ivo://esavo/gaia/tap</TD><TD>Gaia TAP</TD>
+<TD>https://gea.esac.esa.int/tap-server/tap:::py VO sep:::https://gea.esac.esa.int/tap-server/tap/tables</TD>
+<TD>ivo://ivoa.net/std/TAP:::py VO sep:::ivo://ivoa.net/std/VOSI#tables-1.1</TD>
+<TD>std:::py VO sep:::std</TD></TR>
+<TR><TD>ivo://example/aux</TD><TD>Ausiliario</TD><TD>https://example.org/tap</TD>
+<TD>ivo://ivoa.net/std/TAP#aux</TD><TD></TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+
+def test_t18_registry_search(service, cache):
+    service.routes["/reg/sync"] = votable_route(REGTAP)
+    found = ServerRegistry().search_registry(["gaia"], "tap", registry_url=service.url + "/reg", cache=cache)
+    sent = service.requests[-1]["params"]["QUERY"]
+    expected_adql = pyvo.registry.regtap.get_RegTAP_query(keywords=["gaia"], servicetype="tap")
+    assert sent == expected_adql  # ADQL RegTAP costruito da pyvo
+    assert [(s.url, s.protocol, s.source) for s in found.services] == [
+        ("https://gea.esac.esa.int/tap-server/tap", "tap", "registro VO")]
+    assert found.result.request.protocol == "tap" and found.result.table.rows == 2
+
+
+DATALINK = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>
+<TABLE>
+<FIELD name="ID" datatype="char" arraysize="*" ucd="meta.id;meta.main"/>
+<FIELD name="access_url" datatype="char" arraysize="*" ucd="meta.ref.url"/>
+<FIELD name="service_def" datatype="char" arraysize="*" ucd="meta.ref"/>
+<FIELD name="error_message" datatype="char" arraysize="*" ucd="meta.code.error"/>
+<FIELD name="semantics" datatype="char" arraysize="*" ucd="meta.code"/>
+<FIELD name="description" datatype="char" arraysize="*" ucd="meta.note"/>
+<FIELD name="content_type" datatype="char" arraysize="*" ucd="meta.code.mime"/>
+<FIELD name="content_length" datatype="long" unit="byte" ucd="phys.size;meta.file"/>
+<DATA><TABLEDATA>
+<TR><TD>ivo://x/obs?1</TD><TD>{url}/data/1.fits</TD><TD></TD><TD></TD><TD>#this</TD><TD>immagine</TD>
+<TD>image/fits</TD><TD>2880</TD></TR>
+<TR><TD>ivo://x/obs?1</TD><TD></TD><TD>soda</TD><TD></TD><TD>#cutout</TD><TD>ritaglio</TD>
+<TD>image/fits</TD><TD></TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE>
+<RESOURCE type="meta" utype="adhoc:service" ID="soda">
+<PARAM name="standardID" datatype="char" arraysize="*" value="ivo://ivoa.net/std/SODA#sync-1"/>
+<PARAM name="accessURL" datatype="char" arraysize="*" value="{url}/soda"/>
+<GROUP name="inputParams">
+<PARAM name="ID" datatype="char" arraysize="*" value="ivo://x/obs?1"/>
+<PARAM name="CIRCLE" datatype="double" arraysize="3" unit="deg" ucd="obs.field" value="">
+<VALUES><MIN value="0"/><MAX value="360"/></VALUES></PARAM>
+<PARAM name="RESPONSEFORMAT" datatype="char" arraysize="*" value="">
+<VALUES><OPTION value="image/fits"/><OPTION value="application/fits"/></VALUES></PARAM>
+</GROUP>
+</RESOURCE>
+</VOTABLE>
+"""
+
+
+def test_t19_datalink(service, cache):
+    service.routes["/links"] = votable_route(DATALINK.format(url=service.url))
+    service.routes["/soda"] = lambda r: (200, "image/fits", b"SIMPLE  =                    T")
+    client = DataLinkClient(cache=cache)
+    links = client.links(service.url + "/links")
+    expected = pyvo.dal.adhoc.DatalinkResults(
+        parse_votable(io.BytesIO(DATALINK.format(url=service.url).encode())))  # ricalcolo con pyvo
+    assert links.table.rows == len(expected) == 2
+    assert [str(v) for v in links.table.table["semantics"]] == [r.semantics for r in expected]
+    assert str(links.table.table["access_url"][0]) == expected[0].access_url
+    soda = links.descriptor("soda")
+    assert soda.standard_id == "ivo://ivoa.net/std/SODA#sync-1" and soda.access_url == service.url + "/soda"
+    assert [p.name for p in soda.params] == ["ID", "CIRCLE", "RESPONSEFORMAT"]
+    circle = soda.params[1]
+    assert circle.unit == "deg" and circle.value is None and (circle.minimum, circle.maximum) == ("0.0", "360.0")
+    assert soda.params[2].options == ("image/fits", "application/fits") and not soda.is_datalink
+    product = client.call_service(soda, CIRCLE="10.5 -3.2 0.01")
+    params = service.requests[-1]["params"]
+    assert params == {"ID": "ivo://x/obs?1", "CIRCLE": "10.5 -3.2 0.01"}  # vuoti non inviati
+    assert product.payload.startswith(b"SIMPLE") and product.request.protocol == "datalink-service"
+    with pytest.raises(ValueError):
+        client.call_service(soda, BAND="1 2")
+    service.routes["/bad"] = votable_route(votable_text(1))
+    with pytest.raises(VoProtocolsError) as err:
+        client.links(service.url + "/bad")
+    assert err.value.code == "VOTABLE_INVALID"
+
+
+@pytest.mark.network
+def test_t18_registry_network(cache):
+    # Registro RegTAP del GAVO in HTTPS (il default di pyvo, http://reg.g-vo.org/tap, è rifiutato da questa
+    # rete con "Request Denied": vedi il registro modifiche del 14).
+    found = ServerRegistry().search_registry(["gaia"], "tap", max_rows=200, registry_url="https://dc.g-vo.org/tap",
+                                             cache=cache)
+    assert found.services and all(s.protocol == "tap" and s.url.startswith("http") for s in found.services)
