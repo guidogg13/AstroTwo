@@ -89,8 +89,10 @@ accettate):**
   caricano **solo indice di riga, RA e Dec in ICRS** (gradi, convertiti con
   il modulo 10); il risultato si riporta agli indici locali. Il servizio ha
   `selection=best|all` (verificato sulla documentazione delle chiamate
-  API): `best` e `all` si chiedono al servizio, **`none` si ricava da
-  `all`**. **Verifiche prima di P5 (2026-10-11):** la documentazione delle
+  API): si chiede **sempre `selection=all`** (D15-9, decisa il
+  2026-10-11); **`best` e `none` si ricavano in locale** dalle coppie `all`
+  con le regole dell'incrocio locale (`best`: separazione minima,
+  `angDist` del servizio, a pari separazione l'indice più basso in B). **Verifiche prima di P5 (2026-10-11):** la documentazione delle
   chiamate API del CDS dice "Total size of uploaded tables can not be larger
   than 100 MB" (oltre: `TABLE_TOO_LARGE` prima dell'invio) e
   `distMaxArcsec` ≤ 180 (la pagina generale del servizio indica 120″ per
@@ -101,8 +103,8 @@ accettate):**
   RA e Dec restituiti con quelli caricati per quell'indice (entro 10⁻⁴°),
   altrimenti `SERVICE_ERROR`. La rete passa dal 14 (`cds_xmatch`, URL
   `XMATCH_URL`, chiave di cache con l'impronta SHA-256 delle tabelle
-  caricate). In `best` la scelta tra pari merito è quella del servizio
-  (non documentata), dichiarata nel report (D15-9).
+  caricate). In `best` la scelta tra pari merito è la nostra (indice più
+  basso in B), dichiarata nel report (D15-9).
 - **Report dei criteri:** ogni risultato riporta modalità, distanza massima,
   sistema di riferimento, epoca e servizio/URL usati.
 - **Distanze di appaiamento:** per ogni coppia si riporta la separazione
@@ -259,7 +261,12 @@ Codice in `src/astrotwo/core/crossmatch.py`.
 - **Corpo di riferimento (D19-3, esteso al 15 il 2026-10-09):** si incrociano
   solo tabelle con lo stesso `body` (campo obbligatorio del modulo 13); corpi
   diversi danno `BODY_MISMATCH`, forzabile solo con un'opzione esplicita
-  citata nel report (D19-4, stesso schema di D13-5).
+  citata nel report (D19-4, stesso schema di D13-5). **Nella correlazione
+  per campo (D15-8, decisa il 2026-10-11)** il corpo si controlla **solo se
+  entrambe le tabelle ne hanno uno**: un join per identificativo con una
+  tabella senza posizioni (corpo non ricavabile) si fa, dichiarato
+  (avviso `BODY_NOT_CHECKED`); corpi noti e diversi restano
+  `BODY_MISMATCH`, forzabile.
 - Le due modalità (locale e CDS) devono produrre risultati coerenti sullo
   stesso input: divergenze > soglia dichiarata = anomalia (test T4).
 
@@ -274,7 +281,7 @@ Codice in `src/astrotwo/core/crossmatch.py`.
 | Servizio CDS non raggiungibile | errore di rete; si propone di riprovare o usare il locale | `NET_TIMEOUT` |
 | Tabelle molto grandi (oltre 1 milione di righe, D15-3) | errore con il tetto dichiarato; proposta del servizio CDS o dell'elaborazione a blocchi; mai troncamento silenzioso | `TABLE_TOO_LARGE` |
 | Tabelle di corpi diversi (`body` diverso, D19-3) | incrocio rifiutato; forzabile solo con opzione esplicita citata nel report (D19-4) | `BODY_MISMATCH` |
-| Tabella con `body` non ricavabile | incrocio rifiutato | `BODY_UNKNOWN` |
+| Tabella con `body` non ricavabile | incrocio per posizione rifiutato; nella correlazione per campo il join si fa, dichiarato (D15-8) | `BODY_UNKNOWN` / avviso `BODY_NOT_CHECKED` |
 | Colonna chiave mancante o di tipo incompatibile | rifiuto prima del calcolo | `KEY_COLUMN_INVALID` |
 | Ellisse d'errore non valida (assi negativi o nulli, asse minore > asse maggiore, unità mancanti) | rifiuto con la riga e la colonna | `ERROR_ELLIPSE_INVALID` |
 | Conflitto di UCD principali tra le due tabelle | avviso; prevale la prima tabella salvo scelta esplicita | `UCD_CONFLICT` |
@@ -313,7 +320,7 @@ coppie né le separazioni.
 | T7 | Corpi diversi | incrociare una tabella celeste con una tabella di Marte (dati di prova) | `BODY_MISMATCH`, nessuna coppia | test di unità |
 | T8 | Forzatura | ripetere T7 con l'opzione di forzatura | incrocio eseguito; il report cita la forzatura e i corpi coinvolti | controllo del report |
 | T9 | Correlazione per campo (E3) | due tabelle con una colonna identificatore, 3 valori in comune | 3 coppie; con `none` i record senza corrispondenza | confronto con `astropy.table.join` nel test |
-| T10 | Chiavi ripetute (E3) | identificatore ripetuto 2 volte in A e 2 in B | 4 combinazioni, numero dichiarato nel report | test di unità |
+| T10 | Chiavi ripetute (E3) | identificatore ripetuto 2 volte in A e 2 in B; poi B senza posizioni e senza corpo, poi B di Marte (D15-8) | 4 combinazioni, numero dichiarato nel report; senza corpo join fatto con `BODY_NOT_CHECKED`; Marte → `BODY_MISMATCH`, forzabile | test di unità |
 | T11 | Ellisse non valida (E3) | asse minore maggiore dell'asse maggiore | `ERROR_ELLIPSE_INVALID` | test di unità |
 | T12 | Correlazione con ellissi (E3) | coppie sintetiche con ellissi note | associate solo le coppie con distanza di Mahalanobis (covarianza combinata) ≤ soglia; distanze riportate nel risultato | ricalcolo nel test con `numpy` (matrici di covarianza dalle ellissi) |
 | T13 | Suffissi e UCD (E3) | due tabelle con colonne omonime e UCD `pos.eq.ra`/`pos.eq.dec` | colonne in conflitto con `_tab1`/`_tab2`; colonne di posizione proposte dagli UCD; rinomine nel report | controllo del risultato |
@@ -323,7 +330,7 @@ coppie né le separazioni.
 | T18 | Tabella unita | `joined` con colonne omonime, scelta di colonne, prefissi, `main="b"`, conflitto `meta.main` | colonne e rinomine nel report, `xmatch_sep`, `meta.main` tolto dalla tabella non principale, posizioni della principale | controllo del risultato |
 | T19 | Rielaborazione | `rematch` con raggio più piccolo | stesse coppie dell'incrocio eseguito da capo con quel raggio | confronto diretto |
 | T20 | Ellissi: assi e soglia | stesse ellissi date come semiassi e come assi interi (doppi); soglia assente | stesse coppie e stesse distanze; soglia o `axes` assenti → `ERROR_ELLIPSE_INVALID`; frazione 2D nel report = 1 − exp(−k²/2) | ricalcolo con `numpy` |
-| T21 | Servizio CDS simulato | richiesta a un XMatch simulato | caricati solo indice, RA e Dec ICRS; URL HTTPS di default; `none` ricavato da `all`; risposta nella cache del 14; `max_sep` > 180″ rifiutato | servizio simulato |
+| T21 | Servizio CDS simulato | richiesta a un XMatch simulato; poi due righe di B alla stessa separazione, elencate dal servizio con l'indice più alto per primo (D15-9) | caricati solo indice, RA e Dec ICRS; URL HTTPS di default; sempre `selection=all`; `best` e `none` ricavati in locale, a pari separazione l'indice più basso in B (`BEST_TIE`), come il locale; risposta nella cache del 14; `max_sep` > 180″ rifiutato | servizio simulato |
 | T14 | Raggio obbligatorio | incrocio senza `max_sep`, con un numero senza unità, con un'unità non angolare, ≤ 0, oltre 180° | `MAX_SEP_INVALID` in tutti i casi, nessun incrocio eseguito | test di unità |
 
 ## 13. Decisioni aperte
@@ -377,28 +384,20 @@ coppie né le separazioni.
   tabella non principale); `rematch` che riesegue; tolleranza di T4 1 mas.
   Applicate in §3, §6, §7, §9, §10, §12.
 
-- **D15-8 — Corpo nella correlazione per campo: DA DECIDERE (aperta il
-  2026-10-11, Gruppo 3).** §9 chiede lo stesso `body` per ogni incrocio, e
-  P3 lo applica così; ma una correlazione per identificativo non usa le
-  posizioni, e una tabella senza colonne di posizione (es. un CSV di
-  fotometria con un identificativo) ha `body` non ricavabile, quindi
-  `BODY_UNKNOWN` e nessun join possibile (non forzabile). Opzioni: (a)
-  nella correlazione per campo il corpo non si controlla, ed è scritto nel
-  report; (b) si controlla solo se entrambe le tabelle hanno un corpo; (c)
-  come oggi. **Raccomandazione:** (b): un corpo noto e diverso resta
-  `BODY_MISMATCH` (forzabile), un corpo ignoto non blocca un join che non
-  usa posizioni, e il report lo dichiara. **Fermo solo questo punto:** oggi
-  vale (c), come scritto in §9.
+- **D15-8 — Corpo nella correlazione per campo: DECISA il 2026-10-11
+  (decisione del proprietario, opzione (b)).** In `crossmatch_by_field` il
+  corpo si controlla solo se entrambe le tabelle ne hanno uno; altrimenti il
+  join si fa e il risultato lo dichiara (`BODY_NOT_CHECKED`). Corpi noti e
+  diversi: `BODY_MISMATCH`, forzabile con `force_body=True`. Applicata in
+  §9, §10, §12 (T10).
 
-- **D15-9 — `best` con il servizio CDS: DA DECIDERE (aperta il 2026-10-11,
-  Gruppo 3).** La decisione dice "`best` e `all` dal servizio" e insieme "a
-  pari distanza vince l'indice più basso in B"; con `selection=best` la
-  scelta tra pari merito la fa il servizio, con una regola non documentata,
-  quindi il locale e il CDS potrebbero differire nei pari merito (T4). Opzioni:
-  (a) chiedere `all` anche per `best` e applicare la nostra regola in locale
-  (stesso risultato del locale, più dati scaricati); (b) come oggi, regola
-  del servizio dichiarata nel report. **Raccomandazione:** (a). **Fermo solo
-  questo punto:** oggi vale (b), dichiarato.
+- **D15-9 — `best` con il servizio CDS: DECISA il 2026-10-11 (decisione del
+  proprietario, opzione (a)).** Con il servizio CDS XMatch si chiede sempre
+  `selection=all`; la modalità `best` si applica in locale con la nostra
+  regola (a pari separazione vince l'indice più basso in B). Le
+  separazioni sono quelle del servizio (`angDist`, 6 decimali in arcsec):
+  il pari merito si giudica su quel valore, dichiarato nel report.
+  Applicata in §3, §12 (T21).
 
 ## 14. Registro modifiche
 
@@ -416,3 +415,4 @@ coppie né le separazioni.
 | 2026-10-11 | Claude Code | **P3 scritta** (`crossmatch_by_field`, `FIELD_MODES`; test T9, T10): join con `astropy.table.join` su chiavi normalizzate (testo senza spazi finali; numeri reali in `float64` se una delle due chiavi è reale; booleani), chiavi mancanti mai coincidenti (`KEY_MISSING`), combinazioni da chiavi ripetute dichiarate (`KEY_REPEATED`, nuovo in §10); regola del corpo di §9 applicata anche qui. Nuova decisione aperta **D15-8** (corpo nella correlazione per campo, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P4 scritta** (`crossmatch_ellipses`; test T11, T12, T20): verificato con astropy 8.0.1 che `spherical_offsets_to` dà le componenti verso est e verso nord (angolo di posizione 0° = nord, 90° = est); soglia e `axes` obbligatori (`ERROR_ELLIPSE_INVALID`), raggio rigoroso dei candidati, coppie con covarianza singolare escluse con avviso, distanza nella colonna `mahalanobis` e separazione in `sep`; report con formula, piano tangente in A e frazione 2D 1 − exp(−k²/2) calcolata per la soglia data; valori d'ellisse mancanti esclusi e contati. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P5 scritta — modulo 15 completo tranne i pezzi fermi D15-8 e D15-9** (`crossmatch_cds`, rete con `cds_xmatch` del 14; test T21 con un XMatch simulato e T4 di rete, locale contro CDS entro 1 mas in `all`, `best`, `none`): verifiche dei limiti (100 MB, 180″), controllo dell'eco di RA e Dec per ogni indice, `none` da `all`. Nuova decisione aperta **D15-9** (`best` con il servizio, Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D15-8 e D15-9 decise e applicate** (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): nella correlazione per campo il corpo si controlla solo se entrambe le tabelle ne hanno uno (avviso `BODY_NOT_CHECKED`); con il servizio CDS sempre `selection=all`, `best` in locale con la nostra regola dei pari merito. T10 e T21 estesi. Stato `approvato` invariato. |

@@ -303,9 +303,15 @@ def test_t10_repeated_and_invalid_keys(tmp_path):
     with pytest.raises(CrossmatchError) as err:
         crossmatch_by_field(a, b, "manca", "n")
     assert err.value.code == "KEY_COLUMN_INVALID"
-    with pytest.raises(CrossmatchError) as err:  # corpo: stessa regola di ogni incrocio (§9)
-        crossmatch_by_field(a, dataclasses.replace(b, body=None), "n", "n")
-    assert err.value.code == "BODY_UNKNOWN"
+    # D15-8: corpo controllato solo se entrambe le tabelle ne hanno uno; un corpo ignoto non blocca il join.
+    unknown = crossmatch_by_field(a, dataclasses.replace(b, body=None, positions=None), "n", "n")
+    assert len(unknown.pairs) == 4 and "tabella B" in dict(unknown.warnings)["BODY_NOT_CHECKED"]
+    assert unknown.report.bodies == ("celestial", None) and not unknown.report.forced_body
+    with pytest.raises(CrossmatchError) as err:  # corpi noti e diversi: BODY_MISMATCH, forzabile
+        crossmatch_by_field(a, dataclasses.replace(b, body="Mars"), "n", "n")
+    assert err.value.code == "BODY_MISMATCH"
+    forced = crossmatch_by_field(a, dataclasses.replace(b, body="Mars"), "n", "n", force_body=True)
+    assert forced.report.forced_body and "BODY_FORCED" in dict(forced.warnings)
 
 
 # =============================================================================
@@ -425,7 +431,7 @@ def uploaded_tables(request):
     return tables, fields
 
 
-def xmatch_route(log, corrupt=False):
+def xmatch_route(log, corrupt=False, high_b_first=False):
     def route(request):
         tables, fields = uploaded_tables(request)
         log.append((tables, fields))
@@ -434,7 +440,7 @@ def xmatch_route(log, corrupt=False):
         from astropy.coordinates import search_around_sky
 
         i1, i2, sep, _ = search_around_sky(c1, c2, float(fields["distMaxArcsec"]) * u.arcsec)
-        rows = sorted(zip(i1, i2, sep.arcsec), key=lambda r: (r[0], r[2]))
+        rows = sorted(zip(i1, i2, sep.arcsec), key=lambda r: (r[0], round(r[2], 6), -r[1] if high_b_first else r[1]))
         if fields["selection"] == "best":
             seen, best = set(), []
             for r in rows:
@@ -467,7 +473,8 @@ def test_t21_cds_simulated(tmp_path, service, cache, monkeypatch):
     assert tables["cat1"].colnames == ["idx", "ra", "dec"] and tables["cat2"].colnames == ["idx", "ra", "dec"]
     assert list(tables["cat1"]["idx"]) == list(range(6))  # la riga senza posizione non si carica
     icrs = gal.transform_to("icrs")  # B caricata in ICRS, convertita (ricalcolo con astropy)
-    assert np.allclose(tables["cat2"]["ra"], icrs.ra.deg, atol=1e-12) and fields["selection"] == "best"
+    assert np.allclose(tables["cat2"]["ra"], icrs.ra.deg, atol=1e-12)
+    assert fields["selection"] == "all"  # D15-9: sempre all, best applicato in locale
     assert list(result.pairs["idx_a"]) == [0, 2, 3] and list(result.pairs["idx_b"]) == [0, 1, 2]
     local = crossmatch(a, b, "best", 2 * u.arcsec)
     assert np.max(np.abs(result.pairs["sep"] - local.pairs["sep"])) <= 1e-3  # entro 1 mas (arcsec)
@@ -486,6 +493,23 @@ def test_t21_cds_simulated(tmp_path, service, cache, monkeypatch):
     with pytest.raises(CrossmatchError) as err:
         crossmatch_cds(a, b, "all", 2 * u.arcsec, cache=cache, refresh=True)
     assert err.value.code == "SERVICE_ERROR"
+
+
+def test_t21_cds_best_tie_rule(tmp_path, service, cache, monkeypatch):
+    """D15-9: a pari separazione vince l'indice più basso in B, anche se il servizio elenca prima l'altro."""
+    import astrotwo.core.vo_protocols as vo
+
+    log = []
+    service.routes["/xmatch"] = xmatch_route(log, high_b_first=True)
+    monkeypatch.setattr(vo, "XMATCH_URL", service.url + "/xmatch")
+    a = make_table(tmp_path / "a.xml", [10.0], [0.0])
+    north, south = offset(10.0, 0.0, 0.0, 1.0), offset(10.0, 0.0, 180.0, 1.0)  # stessa separazione, 1″
+    b = make_table(tmp_path / "b.xml", [north[0], south[0]], [north[1], south[1]])
+    result = crossmatch_cds(a, b, "best", 2 * u.arcsec, cache=cache)
+    assert log[-1][1]["selection"] == "all"
+    assert list(result.pairs["idx_b"]) == [0] and "BEST_TIE" in dict(result.warnings)
+    assert list(crossmatch(a, b, "best", 2 * u.arcsec).pairs["idx_b"]) == [0]  # stesso esito del locale
+    assert "D15-9" in result.report.describe()
 
 
 @pytest.mark.network

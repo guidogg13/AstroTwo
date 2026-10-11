@@ -162,7 +162,12 @@ def _check_table(table, which: str) -> CatalogTable:
     return table
 
 
-def _check_bodies(a: CatalogTable, b: CatalogTable, force_body: bool) -> list[tuple[str, str]]:
+def _check_bodies(a: CatalogTable, b: CatalogTable, force_body: bool,
+                  unknown_allowed: bool = False) -> list[tuple[str, str]]:
+    if unknown_allowed and (a.body is None or b.body is None):  # D15-8: join senza posizioni
+        unknown = " e ".join(w for w, t in (("A", a), ("B", b)) if t.body is None)
+        return [("BODY_NOT_CHECKED", f"corpo non ricavabile per la tabella {unknown}: nella correlazione per campo "
+                 "il corpo si controlla solo se entrambe le tabelle ne hanno uno (D15-8)")]
     for which, t in (("A", a), ("B", b)):
         if t.body is None:
             raise CrossmatchError("BODY_UNKNOWN", f"tabella {which} ({t.origin}): corpo non ricavabile, nessun incrocio")
@@ -481,7 +486,7 @@ def crossmatch_by_field(table_a: CatalogTable, table_b: CatalogTable, key_a: str
     if mode not in FIELD_MODES:
         raise ValueError(f"mode {mode!r}: ammesse {', '.join(FIELD_MODES)}")
     a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
-    notes = _check_bodies(a, b, force_body)
+    notes = _check_bodies(a, b, force_body, unknown_allowed=True)
     for which, t, key in (("A", a, key_a), ("B", b, key_b)):
         if key not in t.colnames:
             raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonna chiave {key!r} inesistente")
@@ -520,8 +525,8 @@ def crossmatch_by_field(table_a: CatalogTable, table_b: CatalogTable, key_a: str
         criterion=f"A.{key_a} = B.{key_b} ({kind_a}" + (", testo senza spazi finali" if kind_a == "text" else "") + ")",
         frame=None, systems=(_system_text(a), _system_text(b)),
         epochs=(a.positions.epoch if a.positions else None, b.positions.epoch if b.positions else None),
-        bodies=(a.body, b.body), forced_body=a.body != b.body, origins=(a.origin, b.origin), rows=(a.rows, b.rows),
-        excluded=missing, pairs=len(ia), unmatched=None if unmatched is None else len(unmatched),
+        bodies=(a.body, b.body), forced_body=None not in (a.body, b.body) and a.body != b.body,
+        origins=(a.origin, b.origin), rows=(a.rows, b.rows), excluded=missing, pairs=len(ia), unmatched=None if unmatched is None else len(unmatched),
         notes=(f"combinazioni da chiavi ripetute: {repeated}",),
     )
     params = {"runner": crossmatch_by_field, "key_a": key_a, "key_b": key_b, "mode": mode, "force_body": force_body}
@@ -689,7 +694,8 @@ def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "be
                    frame: str = "icrs", force_body: bool = False, cache=None, refresh: bool = False,
                    timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> CrossMatchResult:
     """Incrocio con il servizio CDS XMatch (P5): si caricano solo indice, RA e Dec in ICRS (modulo 10);
-    ``best`` e ``all`` dal servizio, ``none`` ricavato da ``all``; ``max_sep`` ≤ 180″; stesso risultato del locale."""
+    il servizio dà sempre tutte le coppie (``selection=all``, D15-9): ``best`` (a pari separazione l'indice più
+    basso in B) e ``none`` si ricavano in locale con le regole dell'incrocio locale; ``max_sep`` ≤ 180″."""
     from astrotwo.core import vo_protocols as vo
 
     if mode not in CROSSMATCH_MODES:
@@ -702,7 +708,7 @@ def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "be
     valid_a, coords_a, excl_a = _coordinates(a, "A", "icrs")
     valid_b, coords_b, excl_b = _coordinates(b, "B", "icrs")
     up_a, up_b = _upload(valid_a, coords_a), _upload(valid_b, coords_b)
-    selection = "best" if mode == "best" else "all"
+    selection = "all"  # D15-9: la modalità best si applica in locale con la nostra regola
     if len(up_a) and len(up_b):
         try:
             answer = vo.cds_xmatch(up_a, up_b, max_sep, selection, cache=cache, refresh=refresh, timeouts=timeouts)
@@ -721,8 +727,10 @@ def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "be
         request, service_notes = None, [("NO_REQUEST", "una tabella non ha righe con posizione: nessuna richiesta")]
     ia, ib, d, unmatched, ties, reused = _select(ia, ib, d, mode, valid_a)
     notes += service_notes + _common_notes(a, b, (excl_a, excl_b))
-    extra = ("In modalità best il servizio sceglie la controparte con la sua regola, non documentata per i pari "
-             "merito (D15-9).",) if mode == "best" else ()
+    extra = ()
+    if mode == "best":
+        extra = ("best ricavato in locale dalle coppie 'all' del servizio: per ogni riga di A la separazione minima "
+                 "(angDist del servizio, 6 decimali in arcsec), a pari separazione l'indice più basso in B (D15-9).",)
     if mode == "none":
         extra = ("none ricavato dalle coppie 'all' del servizio.",)
     import astroquery
