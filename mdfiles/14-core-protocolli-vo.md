@@ -187,7 +187,7 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   di **Simbad** per posizione con **raggio sempre esplicito, passato
   dall'interfaccia (41)**, che ne decide il default; nessun valore preso dal
   manuale di Aladin (regola d'oro n. 8; D14-9). Con `astroquery.simbad`,
-  restituendo identificativo, magnitudine, tipo,
+  restituendo identificativo, magnitudini (D14-12), tipo,
   coordinate e numero di riferimenti bibliografici dell'oggetto più citato
   (campo bibliografico **da verificare** nell'interfaccia di Simbad); **più
   oggetti con lo stesso numero di citazioni: vince il più vicino al
@@ -208,7 +208,20 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   (il 12 non è ancora scritto). **Campo delle citazioni in `astroquery.simbad`
   (verificato il 2026-10-10 con `Simbad.list_columns`):** `nbref` della
   tabella `basic` ("number of references"), aggiunto con
-  `add_votable_fields`. La
+  `add_votable_fields`. **Magnitudini (D14-12, decisa il 2026-10-11):**
+  **tutte le magnitudini disponibili** in SIMBAD per l'oggetto scelto,
+  ognuna con **nome della banda e sistema dichiarati**, da una seconda
+  interrogazione al TAP di SIMBAD (voce dell'elenco dei server, con
+  `tap_query`: stessa cache e richiesta registrata) sulle tabelle `flux`
+  (filtro, valore, errore, sistema, qualità, riferimento) e `filter`
+  (descrizione della banda, unità). **Verifica del 2026-10-11** sul
+  `TAP_SCHEMA` di SIMBAD: la colonna `system` di `flux` è descritta "flux
+  system A=AB V=Vega" ed è vuota per una parte delle misure (circa 4,4
+  milioni su 85 milioni); il sistema si dichiara quindi `AB` o `Vega` dal
+  codice, **non dichiarato** (`None`, avviso `SIMBAD_SYSTEM_UNDECLARED`)
+  se il codice manca, mai assunto; un codice diverso → `None` con
+  l'avviso `SIMBAD_SYSTEM_UNKNOWN`. Nessuna magnitudine → avviso
+  `SIMBAD_NO_MAGNITUDE`. La
   costruzione della SED è del modulo 20 (deciso il 2026-10-08).
 - **Equivalente di VOApp/VOObserver (H19):** per i programmi non Python lo
   scambio passa da SAMP (questo modulo); per i programmi Python dall'API del
@@ -266,7 +279,7 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
 | in | criteri SIA/SIA2 | struttura | posizione + raggio con unità; per SIA2 anche banda e intervallo di tempo (JD, scala dichiarata) | H23 |
 | out | lista di immagini | `astropy.table.Table` | URL di accesso, formato, campo, banda, eventuale calibrazione, `body` | H23 |
 | in | posizione per i puntatori | float64 | gradi + frame + raggio | H17 |
-| out | oggetto Simbad | struttura | identificativo, tipo, magnitudine, coordinate, numero di riferimenti, fonte e data | H17 |
+| out | oggetto Simbad | struttura | identificativo, tipo, magnitudini (banda, descrizione, valore, errore, unità, sistema, qualità, riferimento), coordinate, numero di riferimenti, fonte e data | H17, D14-12 |
 | out | misure fotometriche VizieR | `astropy.table.Table` | flusso con unità, frequenza o lunghezza d'onda, catalogo d'origine, data | H17; la SED si costruisce nel 20 |
 
 ## 7. Interfaccia pubblica
@@ -333,7 +346,11 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   con unità, metadati, provenienza) per il `21`.
 - **`simbad_pointer(center, radius, ...)`** (P6, H17) — `radius`
   obbligatorio, passato dal 41; oggetto Simbad più citato nel raggio
-  (a pari citazioni il più vicino, dichiarato), con fonte e data.
+  (a pari citazioni il più vicino, dichiarato), con fonte e data;
+  `SimbadObject.magnitudes` = tutte le magnitudini (`SimbadMagnitude`:
+  banda, descrizione, valore, errore, unità, sistema `AB`/`Vega`/`None`,
+  qualità, riferimento), richiesta registrata in `magnitudes_request`
+  (D14-12).
 - **`vizier_photometry(center, radius, ...)`** (P6, H17) — misure di flusso
   dal servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
 - **`SampHub`** (classe, P7) — hub SAMP (H14, G3, D14-2 decisa) con
@@ -408,6 +425,9 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Nessuna immagine per i criteri SIA/SIA2 | esito vuoto con avviso, non è un errore | `SIA_NO_RESULT` |
 | Risposta SIA malformata | nessuna lista mostrata come valida | `SIA_INVALID` |
 | Nessun oggetto Simbad nel raggio | esito vuoto con avviso | `SIMBAD_NO_OBJECT` |
+| Magnitudine Simbad senza codice di sistema | magnitudine restituita con sistema non dichiarato (`None`) | avviso `SIMBAD_SYSTEM_UNDECLARED` |
+| Codice di sistema Simbad diverso da `A`/`V` | magnitudine con sistema `None` | avviso `SIMBAD_SYSTEM_UNKNOWN` |
+| Oggetto Simbad senza magnitudini | oggetto restituito senza magnitudini | avviso `SIMBAD_NO_MAGNITUDE` |
 | Servizio fotometrico di VizieR non raggiungibile | errore di rete, nessun punto inventato | `NET_TIMEOUT` |
 | File IDHA non conforme, o lettore non disponibile per mancanza di documentazione ed esempi | rifiuto esplicito con la causa | `IDHA_UNREADABLE` |
 | File XML con costrutti pericolosi (es. espansione di entità) | lettura interrotta, nessun dato caricato | `XML_UNSAFE` |
@@ -446,7 +466,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T10 | Spettro SSA non valido (E4) | servire uno spettro senza assi/unità | `SSA_INVALID`, nessun dato mostrato come valido | test con servizio simulato |
 | T11 | SIA (H23, D14-11) | ricerca SIA su un servizio simulato; `sia_calibration` su righe complete, senza equinozio (FK5), con sistema `ECL`, con dimensioni diverse dall'immagine; immagine FITS senza WCS servita dal servizio e caricata dall'11 con `calibration` | lista con URL, formato, campo e provenienza; intestazione con `CTYPE`, `CRPIX`, `CRVAL`, `CD`, `RADESYS` della riga; immagine con il WCS uguale ad `astropy.wcs` costruito nel test e `EXTERNAL_CALIBRATION_USED`; righe incomplete senza calibrazione con il motivo; dimensioni diverse → `WCS_MISSING`; immagine con WCS proprio → `EXTERNAL_CALIBRATION_IGNORED` | servizio simulato (test di rete separato) |
 | T12 | SIA2 (H23) | ricerca SIA2 con banda e intervallo di tempo su un servizio simulato | parametri inviati secondo lo standard; tempo con scala dichiarata | servizio simulato |
-| T13 | Puntatore Simbad (H17) | `simbad_pointer` su una posizione con risposta simulata di due oggetti | restituito l'oggetto con più riferimenti, con fonte e data | servizio simulato |
+| T13 | Puntatore Simbad (H17, D14-12) | `simbad_pointer` su una posizione con risposta simulata di due oggetti e magnitudini simulate in sistema Vega, AB e senza sistema; test di rete su Vega | restituito l'oggetto con più riferimenti, con fonte e data; tutte le magnitudini con banda, sistema (`Vega`, `AB`, `None` con `SIMBAD_SYSTEM_UNDECLARED`), errore e riferimento; seconda chiamata dalla cache | servizio simulato (più un test di rete) |
 | T14 | Fotometria VizieR (H17) | `vizier_photometry` con risposta simulata | tabella con flusso, unità, frequenza o lunghezza d'onda e catalogo d'origine per ogni punto | servizio simulato |
 | T15 | IDHA (H23) | leggere un file XML ben formato (scritto nel test) con `read_idha` | `IDHA_UNREADABLE` con la causa (nessuna documentazione pubblica, D14-9 punto 13), nessun dato | test di unità |
 | T16 | XML malevolo (H23) | leggere un file IDHA con espansione di entità | `XML_UNSAFE`, nessun dato caricato | test di unità |
@@ -567,17 +587,12 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   nell'11. (Aperta il 2026-10-10: opzioni intestazione da `VOX:WCS_*` +
   parametro nell'11, solo SIA 1 su richiesta, nessun uso; raccomandazione
   la prima.)
-- **D14-12 — Magnitudine dell'oggetto del puntatore Simbad: DA DECIDERE
-  (aperta il 2026-10-10, Gruppo 3).** §3 e §6 chiedono "la magnitudine"
-  dell'oggetto, senza dire quale banda: SIMBAD conserva i flussi in molte
-  bande (tabella `flux`), nessuna è "la" magnitudine. Opzioni: (a) **tutte
-  le magnitudini disponibili**, ciascuna con banda, errore e riferimento
-  bibliografico; (b) una banda scelta dall'utente (parametro obbligatorio);
-  (c) una banda fissa (es. V), dichiarata nel risultato. **Raccomandazione:**
-  (a), perché non sceglie nulla al posto dell'utente e il 41 può mostrare la
-  banda che preferisce. **Fermo solo questo punto:** `simbad_pointer`
-  restituisce identificativo, tipo, coordinate, numero di citazioni e
-  distanza, senza magnitudine.
+- **D14-12 — Magnitudine dell'oggetto del puntatore Simbad: DECISA il
+  2026-10-11 (decisione del proprietario).** Il puntatore restituisce
+  **tutte le magnitudini disponibili**, ognuna con nome della banda e
+  sistema dichiarati (§3). Applicata in §3, §6, §7, §10, §12. (Aperta il
+  2026-10-10: opzioni tutte le bande, banda scelta dall'utente, banda
+  fissa; raccomandazione tutte le bande.)
 
 ## 14. Registro modifiche
 
@@ -609,3 +624,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P7 scritta — modulo 14 completo tranne i pezzi fermi su D14-10, D14-11, D14-12** (`SampHub`, `SampClient`, `SampSelection`, `SampSendResult`, `SAMP_MTYPES`; test T7, T8, hub proprio ed errori, con un hub locale `pyvo.samp` nella cartella home temporanea dei test): verifica dell'hub locale nei test riuscita; collegamento all'hub attivo (file di blocco SAMP), altrimenti hub proprio con profilo web disattivato; invio a uno o a tutti i programmi iscritti al tipo (`SAMP_NO_PEER` se nessuno); tabelle inviate come VOTable temporaneo con provenienza (P1), ricevute con `read_votable` (file) o `download_table` (URL); selezioni con indici di riga da 0 come nel messaggio SAMP; puntamenti in gradi ICRS; un errore nella funzione di ricezione torna al mittente come risposta d'errore SAMP. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D14-10 decisa e applicata; versione FITS** (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): nuovo formato di esportazione `ecsv` (ECSV di `astropy`, unità, UCD e provenienza nell'intestazione), CSV semplice con l'avviso `CSV_UNITS_NOT_SAVED`; `export_table` restituisce `ExportResult`; versione del formato FITS = "FITS Standard 4.0" e, per tutti i formati, versione di `astropy` in `A2WRITER`; T5 completo con l'andata e ritorno ECSV (§3, §6, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D14-11 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare i file approvati 11 e 14): `sia_calibration` / `SiaCalibration` (intestazione WCS dalle colonne `VOX:WCS_*` di SIA 1, verificate sulla raccomandazione SIA 1.0 §4.2; ICRS, FK5, FK4, GAL tradotti, ECL e SGAL no; equinozio mai assunto; validazione con il modulo 10); seconda metà di T11 completa con l'immagine caricata dall'11 (§3, §7, §12, §13). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D14-12 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `simbad_pointer` restituisce tutte le magnitudini di SIMBAD (`SimbadMagnitude`, tabelle `flux` e `filter` dal TAP di SIMBAD con `tap_query`, `magnitudes_request`), con banda e sistema dichiarati; verificato sul `TAP_SCHEMA` di SIMBAD che `system` vale A = AB, V = Vega ed è vuoto per una parte delle misure (sistema `None`, avviso `SIMBAD_SYSTEM_UNDECLARED`; nuovi anche `SIMBAD_SYSTEM_UNKNOWN`, `SIMBAD_NO_MAGNITUDE`); T13 aggiornato (§3, §6, §7, §10, §12, §13). Stato `approvato` invariato. |

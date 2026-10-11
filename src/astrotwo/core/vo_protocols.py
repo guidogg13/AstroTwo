@@ -67,6 +67,8 @@ __all__ = [
     "SampSendResult",
     "SIMBAD_COORDINATES_NOTE",
     "SimbadObject",
+    "SimbadMagnitude",
+    "SIMBAD_FLUX_SYSTEMS",
     "SimbadPointer",
     "VIZIER_PHOTOMETRY_URL",
     "simbad_pointer",
@@ -1436,17 +1438,36 @@ SIMBAD_COORDINATES_NOTE = "coordinate SIMBAD: ICRS all'epoca J2000 (documentazio
 VIZIER_PHOTOMETRY_URL = "https://vizier.cds.unistra.fr/viz-bin/sed"
 _VIZIER_MAX_RADIUS = 30 * u.arcsec  # limite dichiarato dalla documentazione del servizio
 _SIMBAD_FIELDS = ("otype", "nbref")  # nbref = "number of references" (colonne della tabella basic di SIMBAD)
+#: Servizio TAP di SIMBAD per le magnitudini (voce dell'elenco dei server).
+_SIMBAD_TAP = "cds-simbad-tap"
+#: Colonna ``system`` della tabella ``flux`` di SIMBAD (TAP_SCHEMA, verificato il 2026-10-11: "A=AB V=Vega").
+SIMBAD_FLUX_SYSTEMS = {"A": "AB", "V": "Vega"}
+
+
+@dataclass(frozen=True)
+class SimbadMagnitude:
+    """Una magnitudine SIMBAD (D14-12): banda e sistema come dichiarati da SIMBAD, mai assunti."""
+
+    band: str  # nome del filtro in SIMBAD (es. "V", "G")
+    description: str | None  # descrizione del filtro (tabella filter, es. "Magnitude Gaia G")
+    value: float
+    error: float | None
+    unit: str | None  # unità dichiarata dalla tabella filter (es. "mag")
+    system: str | None  # "AB", "Vega" o None se SIMBAD non lo dichiara
+    quality: str | None
+    bibcode: str | None
 
 
 @dataclass(frozen=True)
 class SimbadObject:
-    """Oggetto SIMBAD scelto dal puntatore (magnitudine: D14-12, da decidere)."""
+    """Oggetto SIMBAD scelto dal puntatore, con tutte le magnitudini disponibili (D14-12)."""
 
     main_id: str
     otype: str | None
     coords: SkyFrame
     nbref: int | None
     separation: u.Quantity
+    magnitudes: tuple[SimbadMagnitude, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1458,6 +1479,48 @@ class SimbadPointer:
     source: str
     request: RequestRecord
     warnings: tuple[tuple[str, str], ...] = ()
+    magnitudes_request: RequestRecord | None = None  # interrogazione TAP delle magnitudini (D14-12)
+
+
+def _adql_string(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
+
+
+def _simbad_magnitudes(main_id: str, *, cache, refresh: bool, timeouts: NetworkTimeouts):
+    """Tutte le magnitudini SIMBAD dell'oggetto (tabelle flux e filter), con banda e sistema dichiarati."""
+    adql = ("SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit "
+            "FROM flux AS f JOIN basic AS b ON f.oidref = b.oid "
+            "LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername "
+            f"WHERE b.main_id = {_adql_string(main_id)}")
+    result = tap_query(_SIMBAD_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    data = result.table.table
+
+    def text(row, name):
+        value = row[name]
+        return None if np.ma.is_masked(value) or not str(value).strip() else str(value).strip()
+
+    def number(row, name):
+        value = row[name]
+        return None if np.ma.is_masked(value) or not np.isfinite(float(value)) else float(value)
+
+    magnitudes, notes = [], []
+    for row in data:
+        value = number(row, "flux")
+        if value is None:
+            continue
+        code = text(row, "system")
+        system = SIMBAD_FLUX_SYSTEMS.get(code) if code else None
+        if code and system is None:
+            notes.append(("SIMBAD_SYSTEM_UNKNOWN", f"banda {text(row, 'filter')}: codice di sistema {code!r} "
+                          "non documentato da SIMBAD, sistema non dichiarato"))
+        magnitudes.append(SimbadMagnitude(band=text(row, "filter") or "", description=text(row, "description"),
+                                          value=value, error=number(row, "flux_err"), unit=text(row, "unit"),
+                                          system=system, quality=text(row, "qual"), bibcode=text(row, "bibcode")))
+    magnitudes.sort(key=lambda m: (m.band, m.bibcode or ""))  # ordine stabile, indipendente dal servizio
+    undeclared = [m.band for m in magnitudes if m.system is None]
+    if undeclared:
+        notes.append(("SIMBAD_SYSTEM_UNDECLARED", f"bande senza sistema dichiarato da SIMBAD: {', '.join(undeclared)}"))
+    return tuple(magnitudes), result, tuple(notes)
 
 
 def _query_simbad_region(ra: float, dec: float, radius_deg: float, timeouts: NetworkTimeouts) -> tuple[Table, str]:
@@ -1483,6 +1546,9 @@ def _table_bytes(table: Table) -> bytes:
 def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh: bool = False,
                    timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> SimbadPointer:
     """Oggetto SIMBAD più citato nel raggio; a pari citazioni il più vicino, dichiarato (D14-9 punto 15).
+
+    Con l'oggetto, tutte le magnitudini disponibili in SIMBAD, ognuna con banda e sistema dichiarati
+    (D14-12), da una seconda interrogazione TAP registrata in ``magnitudes_request``.
 
     ``radius`` è sempre esplicito: lo passa l'interfaccia (41), che ne decide il default (D14-9 punto 2).
     """
@@ -1547,9 +1613,15 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
                                   float(found["dec"].quantity[choice].to_value(u.deg)) * u.deg, "icrs",
                                   epoch=Time("J2000.0"))
     otype = None if np.ma.is_masked(row["otype"]) else str(row["otype"])
+    magnitudes, mag_result, mag_notes = _simbad_magnitudes(str(row["main_id"]), cache=cache, refresh=refresh,
+                                                           timeouts=timeouts)
+    notes += tuple(w for w in mag_result.warnings if w[0] == "FROM_CACHE") + mag_notes
+    if not magnitudes:
+        notes += (("SIMBAD_NO_MAGNITUDE", f"nessuna magnitudine in SIMBAD per {row['main_id']}"),)
     obj = SimbadObject(main_id=str(row["main_id"]), otype=otype, coords=coords,
-                       nbref=None if not valid[choice] else int(nbref[choice]), separation=sep[choice])
-    return SimbadPointer(obj, len(found), source, record, notes)
+                       nbref=None if not valid[choice] else int(nbref[choice]), separation=sep[choice],
+                       magnitudes=magnitudes)
+    return SimbadPointer(obj, len(found), source, record, notes, magnitudes_request=mag_result.request)
 
 
 def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limits: TableLimits | None = None,

@@ -908,7 +908,35 @@ def simbad_table(rows):
     return t
 
 
-def test_t13_simbad_pointer(monkeypatch, cache):
+FLUX = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>
+<TABLE>
+<FIELD name="filter" datatype="char" arraysize="*"/>
+<FIELD name="flux" datatype="float"/>
+<FIELD name="flux_err" datatype="float"/>
+<FIELD name="system" datatype="char" arraysize="1"/>
+<FIELD name="qual" datatype="char" arraysize="1"/>
+<FIELD name="bibcode" datatype="char" arraysize="19"/>
+<FIELD name="description" datatype="unicodeChar" arraysize="*"/>
+<FIELD name="unit" datatype="char" arraysize="*"/>
+<DATA><TABLEDATA>
+<TR><TD>G</TD><TD>17.5</TD><TD>0.003</TD><TD>V</TD><TD>C</TD><TD>2020yCat.1350....0G</TD><TD>Magnitude Gaia G</TD><TD>mag</TD></TR>
+<TR><TD>g</TD><TD>18.1</TD><TD></TD><TD>A</TD><TD>D</TD><TD>2017yCat.2349....0C</TD><TD>Magnitude SDSS g</TD><TD>mag</TD></TR>
+<TR><TD>V</TD><TD>17.9</TD><TD></TD><TD></TD><TD>E</TD><TD></TD><TD>Magnitude V</TD><TD>mag</TD></TR>
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+
+
+@pytest.fixture
+def simbad_tap(service, monkeypatch):
+    """TAP di SIMBAD simulato per le magnitudini (D14-12)."""
+    service.routes["/simbad/sync"] = lambda r: (200, "application/x-votable+xml", FLUX)
+    monkeypatch.setattr(vo, "_SIMBAD_TAP", service.url + "/simbad")
+    return service
+
+
+def test_t13_simbad_pointer(monkeypatch, cache, simbad_tap):
     calls = []
 
     def fake(ra, dec, radius_deg, timeouts):
@@ -925,11 +953,23 @@ def test_t13_simbad_pointer(monkeypatch, cache):
     assert obj.coords.frame_name == "icrs" and obj.coords.epoch == Time("J2000.0")
     assert "SIMBAD" in result.source and result.request.url == "https://simbad/tap" and not result.request.from_cache
     assert calls[0][2] == pytest.approx((30 * u.arcsec).to_value(u.deg))
+    # Tutte le magnitudini, con banda e sistema come dichiarati da SIMBAD (D14-12).
+    query = simbad_tap.requests[-1]["params"]["QUERY"]
+    assert "b.main_id = 'B'" in query and "JOIN filter" in query
+    mags = {m.band: m for m in obj.magnitudes}
+    assert set(mags) == {"G", "g", "V"}
+    assert (mags["G"].value, mags["G"].error, mags["G"].system, mags["G"].unit) == (pytest.approx(17.5),
+                                                                                    pytest.approx(0.003), "Vega", "mag")
+    assert mags["G"].description == "Magnitude Gaia G" and mags["G"].bibcode == "2020yCat.1350....0G"
+    assert mags["g"].system == "AB" and mags["g"].error is None
+    assert mags["V"].system is None and "V" in dict(result.warnings)["SIMBAD_SYSTEM_UNDECLARED"]
+    assert result.magnitudes_request.protocol == "tap" and result.magnitudes_request.rows == 3
     again = simbad_pointer(center, 30 * u.arcsec, cache=cache)
     assert again.request.from_cache and again.object.main_id == "B" and len(calls) == 1
+    assert again.magnitudes_request.from_cache and len(again.object.magnitudes) == 3
 
 
-def test_simbad_pointer_tie_and_empty(monkeypatch, cache):
+def test_simbad_pointer_tie_and_empty(monkeypatch, cache, simbad_tap):
     monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (simbad_table(
         [("lontano", 10.002, 20.0, "Star", 50), ("vicino", 10.0005, 20.0, "Star", 50), ("poco", 10.0, 20.0, "G", 3)]),
         "https://simbad/tap"))
@@ -992,6 +1032,8 @@ def test_t13_t14_network(cache):
     vega = SkyCoord(279.2347 * u.deg, 38.7837 * u.deg)
     pointer = simbad_pointer(vega, 30 * u.arcsec, cache=cache)
     assert pointer.object is not None and pointer.object.nbref is not None and pointer.candidates >= 1
+    bands = {m.band: m for m in pointer.object.magnitudes}
+    assert "V" in bands and bands["V"].system in ("Vega", "AB", None) and bands["V"].unit == "mag"
     photometry = vizier_photometry(vega, 1.5 * u.arcsec, cache=cache)
     assert photometry.table.rows > 0 and photometry.table.table["_sed_flux"].unit == u.Jy
 
