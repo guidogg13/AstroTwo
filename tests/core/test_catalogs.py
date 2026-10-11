@@ -1195,6 +1195,51 @@ def test_load_catalog_region_metadata_missing(service, cache, monkeypatch):
     assert err.value.code == "NO_COORD_COLUMNS"
 
 
+SIMBAD_DATA = """<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/><TABLE>
+<FIELD name="ra" datatype="double" unit="deg" ucd="pos.eq.ra;meta.main" utype="mango:EpochPosition.longitude[{lon}]"/>
+<FIELD name="dec" datatype="double" unit="deg" ucd="pos.eq.dec;meta.main" utype="mango:EpochPosition.latitude[{lat}]"/>
+<DATA><TABLEDATA>{rows}</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>"""
+
+
+def simbad_tap(lon="CS.spaceSys=ICRS CT.epoch=J2000", lat="CS.spaceSys=ICRS CT.epoch=J2000"):
+    def tap(request):
+        query = request["params"]["QUERY"]
+        if "TAP_SCHEMA.columns" in query:
+            cells = "<TR><TD>ra</TD><TD>pos.eq.ra;meta.main</TD></TR><TR><TD>dec</TD><TD>pos.eq.dec;meta.main</TD></TR>"
+            return 200, "application/x-votable+xml", REGION_SCHEMA.format(rows=cells)
+        rows = "" if "TOP 0" in query else "<TR><TD>10.0</TD><TD>41.0</TD></TR>"
+        return 200, "application/x-votable+xml", SIMBAD_DATA.format(lon=lon, lat=lat, rows=rows)
+    return tap
+
+
+def test_load_catalog_region_simbad_mango(service, cache, monkeypatch):
+    """D13-20: SIMBAD senza COOSYS, sistema ICRS J2000 dall'utype MANGO, dichiarato."""
+    from astropy.coordinates import FK5, SkyCoord
+
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/simbad") if e.id == "cds-simbad-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    service.routes["/simbad/sync"] = simbad_tap()
+    center = SkyCoord(150.0 * u.deg, 2.0 * u.deg, frame=FK5(equinox="J2000"))  # convertito in ICRS
+    cat = load_catalog("simbad", region=(center, 1 * u.arcmin), cache=cache)
+    icrs = center.icrs
+    expected = (f"SELECT * FROM basic WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), "
+                f"CIRCLE('ICRS', {float(icrs.ra.deg)!r}, {float(icrs.dec.deg)!r}, {float((1 * u.arcmin).to_value(u.deg))!r}))")
+    assert service.requests[-1]["params"]["QUERY"] == expected
+    assert (cat.positions.frame, cat.positions.epoch, cat.positions.system) == ("icrs", "J2000", "MANGO CS.spaceSys=ICRS")
+    notes = dict(cat.warnings)
+    assert "MANGO" in notes["POSITIONS_FROM_MANGO"] and "FRAME_UNKNOWN" not in notes
+    assert "ICRS, epoca delle posizioni J2000" in notes["REGION"]
+    # utype diversi sulle due colonne o sistema che richiede l'equinozio: nessuna scelta, FRAME_UNKNOWN.
+    for lon, lat in (("CS.spaceSys=ICRS CT.epoch=J2000", "CS.spaceSys=GALACTIC CT.epoch=J2000"),
+                     ("CS.spaceSys=FK5 CT.epoch=J2000", "CS.spaceSys=FK5 CT.epoch=J2000")):
+        service.routes["/simbad/sync"] = simbad_tap(lon, lat)
+        with pytest.raises(CatalogsError) as err:
+            load_catalog("simbad", region=(center, 1 * u.arcmin), cache=cache, refresh=True)
+        assert err.value.code == "FRAME_UNKNOWN"
+
+
 @pytest.mark.network
 def test_t33_load_catalog_region_network(cache):
     from astropy.coordinates import FK5, SkyCoord
@@ -1205,9 +1250,12 @@ def test_t33_load_catalog_region_network(cache):
     rows = SkyCoord(cat.table["RAJ2000"].quantity, cat.table["DEJ2000"].quantity, frame=FK5(equinox="J2000"))
     sep = rows.separation(m31.transform_to(FK5(equinox="J2000")))
     assert sep.max() <= 30 * u.arcsec + 1e-6 * u.arcsec  # tutte le righe nel cerchio (ricalcolo con astropy)
-    with pytest.raises(CatalogsError) as err:  # SIMBAD non dichiara il sistema con un COOSYS (D13-19, fermo)
-        load_catalog("simbad", region=(m31, 30 * u.arcsec), cache=cache)
-    assert err.value.code == "FRAME_UNKNOWN"
+    # SIMBAD: sistema ICRS J2000 dall'utype MANGO (D13-20); righe nel cerchio, separazione ricalcolata.
+    simbad = load_catalog("simbad", region=(m31, 30 * u.arcsec), cache=cache)
+    assert simbad.rows > 0 and (simbad.positions.frame, simbad.positions.epoch) == ("icrs", "J2000")
+    assert "POSITIONS_FROM_MANGO" in dict(simbad.warnings)
+    sep = SkyCoord(simbad.table["ra"].quantity, simbad.table["dec"].quantity).separation(m31)
+    assert sep.max() <= 30 * u.arcsec + 1e-6 * u.arcsec
 
 
 DATALINK_RESULT = """<?xml version="1.0" encoding="UTF-8"?>

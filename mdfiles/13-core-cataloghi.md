@@ -492,9 +492,15 @@ suo VOTable.
   sotto. Verifica del 2026-10-11: TAPVizieR scrive in `TAP_SCHEMA` i nomi
   tra virgolette (`"II/246/out"`, `"RAJ2000"`) e collega i campi a un
   `COOSYS` (2MASS `FK5` equinozio `2000.0`; Gaia DR3 `ICRS` epoca
-  `2016.0`). **SIMBAD** non collega le colonne a un `COOSYS` (dichiara il
-  sistema solo in un `utype` del modello MANGO): regione → `FRAME_UNKNOWN`,
-  fermo su D13-20.
+  `2016.0`). **SIMBAD** non collega le colonne a un `COOSYS`: il sistema
+  si legge dall'`utype` del modello IVOA MANGO delle due colonne
+  (`mango:EpochPosition.longitude[CS.spaceSys=ICRS CT.epoch=J2000]`, D13-20
+  decisa il 2026-10-11) ed è dichiarato (avviso `POSITIONS_FROM_MANGO`).
+  Vale per ogni tabella senza `COOSYS`: i due `utype` devono coincidere e
+  il sistema deve essere `ICRS`, `GALACTIC` o `SUPER_GALACTIC` (FK4/FK5
+  richiederebbero un equinozio che MANGO non dà in questa forma); altrimenti
+  nessuna scelta (`FRAME_UNKNOWN`). Verifica del 2026-10-11 sulla risposta
+  di SIMBAD (`SELECT TOP 0 ra, dec FROM basic`).
   **Senza regione (decisione del proprietario del 2026-10-11):** il
   catalogo si carica solo se il suo numero totale di righe è entro
   `max_rows`; il superamento si conosce dal **troncamento dichiarato dal
@@ -628,7 +634,7 @@ suo VOTable.
 | Regione con raggio senza unità angolare, non positivo o oltre 180° | rifiuto | `REGION_INVALID` |
 | Regione con più di `max_rows` righe | nessuna tabella; ridurre il raggio o `allow_partial=True` | `REGION_TOO_LARGE` |
 | Regione: colonne di posizione non univoche negli UCD di `TAP_SCHEMA` | rifiuto | `NO_COORD_COLUMNS` |
-| Regione: sistema delle colonne non dichiarato con un `COOSYS` | rifiuto, nessun sistema assunto | `FRAME_UNKNOWN` |
+| Regione: sistema delle colonne non dichiarato con un `COOSYS` né con l'`utype` MANGO (D13-20) | rifiuto, nessun sistema assunto | `FRAME_UNKNOWN` |
 | Regione usata | righe nel cerchio; colonne, sistema, centro convertito e raggio dichiarati | avviso `REGION` |
 | Record del MocServer che non è una collezione VizieR | escluso dall'albero | avviso `COLLECTION_SKIPPED` |
 | Collezioni senza `vizier_popularity` (o con un valore non intero) | dopo le altre, in ordine naturale | avvisi `POPULARITY_MISSING`, `POPULARITY_INVALID` |
@@ -705,7 +711,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T30 | Filtro temporale | VOTable con `TIMESYS` (MJD, TDB) e colonna ISO senza `TIMESYS`; intervallo `[inizio, fine]` | estremi inclusi, mancanti esclusi e contati; con `TIMESYS` parametri rifiutati; senza `TIMESYS` formato e scala obbligatori; inizio > fine → `EPOCH_INVALID` | confronto con `astropy.time` |
 | T31 | Albero delle collezioni (D13-18) | MocServer simulato con popolarità diverse, uguali, assenti, un record `CDS/Simbad`; poi senza la proprietà; poi risposta non JSON; test di rete sul MocServer | ordine decrescente, a pari valore ordine naturale (`I/9` prima di `I/10`), assenti in fondo; ordine dichiarato "proprietà non documentata del MocServer"; senza proprietà ordine naturale dichiarato; `CDS/Simbad` escluso; seconda chiamata dalla cache; risposta non valida → `SERVICE_ERROR` del 14 | test con servizio simulato (più un test di rete) |
 | T32 | `load_catalog` senza regione | TAP VizieR simulato con 3 righe e `max_rows` 2 e 3; con `allow_partial=True`; test di rete su 2MASS con `max_rows` 5 | `max_rows` 2 → `REGION_REQUIRED`; con `allow_partial=True` 2 righe, `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` e voce nella storia; `max_rows` 3 → catalogo intero senza avvisi; in rete stesso comportamento | test con servizio simulato (più un test di rete) |
-| T33 | `load_catalog` con regione (D13-19) | TAP simulato con `TAP_SCHEMA` (nomi tra virgolette) e `COOSYS` `FK5` equinozio `2000.0`; centro ICRS; poi senza `COOSYS`, con due RA senza `meta.main`, raggi non validi, regione oltre `max_rows`; termini `refframe` nel `COOSYS`; test di rete su 2MASS attorno a M31 e su SIMBAD | ADQL con il centro convertito in FK5 J2000 uguale ad astropy; sistema e colonne dichiarati; `FRAME_UNKNOWN`, `NO_COORD_COLUMNS`, `REGION_INVALID`, `REGION_TOO_LARGE`; in rete tutte le righe entro il raggio (separazione ricalcolata con astropy); SIMBAD → `FRAME_UNKNOWN` | test con servizio simulato (più un test di rete) |
+| T33 | `load_catalog` con regione (D13-19) | TAP simulato con `TAP_SCHEMA` (nomi tra virgolette) e `COOSYS` `FK5` equinozio `2000.0`; centro ICRS; poi senza `COOSYS`, con due RA senza `meta.main`, raggi non validi, regione oltre `max_rows`; termini `refframe` nel `COOSYS`; SIMBAD simulato con l'`utype` MANGO e senza `COOSYS` (D13-20), poi con `utype` diversi sulle due colonne e con `FK5`; test di rete su 2MASS attorno a M31 e su SIMBAD | ADQL con il centro convertito in FK5 J2000 uguale ad astropy; sistema e colonne dichiarati; `FRAME_UNKNOWN`, `NO_COORD_COLUMNS`, `REGION_INVALID`, `REGION_TOO_LARGE`; in rete tutte le righe entro il raggio (separazione ricalcolata con astropy); SIMBAD: centro convertito in ICRS, sistema ICRS epoca J2000 dichiarato (`POSITIONS_FROM_MANGO`), `utype` diversi o `FK5` → `FRAME_UNKNOWN` | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
@@ -850,17 +856,15 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
   Applicata in §3, §7, §10, §12 (T33). Con la verifica, il 13 legge anche
   i termini del vocabolario IVOA `refframe` nel `COOSYS` (prima TAPVizieR
   dava `FRAME_UNKNOWN`).
-- **D13-20 — Sistema delle colonne di SIMBAD per la regione: DA DECIDERE
-  (aperta il 2026-10-11, Gruppo 3).** SIMBAD non collega `ra`/`dec` a un
-  `COOSYS`: il sistema è scritto solo nell'`utype`
-  `mango:EpochPosition.longitude[CS.spaceSys=ICRS CT.epoch=J2000]` (modello
-  IVOA MANGO) e nella documentazione di SIMBAD (già citata dal puntatore del
-  14). Opzioni: (a) leggere `CS.spaceSys` e `CT.epoch` dall'`utype` MANGO,
-  dichiarato come tale; (b) usare la documentazione di SIMBAD (ICRS J2000)
-  come per il puntatore del 14, dichiarata; (c) nessuna regione per
-  SIMBAD. **Raccomandazione:** (a), perché è un metadato della risposta,
-  con (b) come conferma nel testo dichiarato. **Fermo solo questo punto:**
-  `load_catalog("simbad", region=...)` dà `FRAME_UNKNOWN`.
+- **D13-20 — Sistema delle colonne di SIMBAD per la regione: DECISA il
+  2026-10-11 (decisione del proprietario).** Il sistema delle posizioni si
+  legge dall'`utype` del modello IVOA MANGO
+  (`mango:EpochPosition.longitude[CS.spaceSys=ICRS CT.epoch=J2000]`) e si
+  **dichiara** nel risultato (avviso `POSITIONS_FROM_MANGO`, colonne,
+  sistema ed epoca); `load_catalog("simbad", region=...)` non dà più
+  `FRAME_UNKNOWN`. La lettura vale per ogni tabella senza `COOSYS` con gli
+  `utype` MANGO (opzione (a) della raccomandazione). Applicata in §3, §10,
+  §12 (T33).
 - **D13-14c — Traduzione UCD1 con il servizio del CDS: RIMANDATA (decisione
   del proprietario del 2026-10-11, bassa priorità, Gruppo 3).** Il servizio
   di traduzione UCD1 → UCD1+ del CDS (opzione esplicita prevista da
@@ -912,3 +916,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-11 | Claude Code | **D13-19 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `load_catalog(..., region=(centro, raggio))` con colonne dagli UCD di `TAP_SCHEMA`, sistema dal `COOSYS` del servizio, centro convertito con il modulo 10, `CatalogRegion` dichiarata; nuovi `REGION_INVALID`, `REGION_TOO_LARGE`, avviso `REGION`; `REGION_REQUIRED` indica il parametro; il lettore riconosce i termini del vocabolario IVOA `refframe` (`FK5`, `FK4`, `GALACTIC`, `SUPER_GALACTIC`) e legge l'equinozio numerico come per ASTRORES (verifica su TAPVizieR); T33. Nuova decisione aperta **D13-20** (sistema di SIMBAD nell'`utype` MANGO, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): ECSV scritto da AstroTwo con colonne, sistema, equinozio ed epoca delle posizioni nei metadati YAML `A2POSITIONS`, riletti senza `FRAME_UNKNOWN` (avvisi `POSITIONS_FROM_ECSV`, `ECSV_POSITIONS_INVALID`); albero delle collezioni in ordine naturale a pari popolarità (e per le collezioni senza popolarità); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | Regola delle ripetizioni dei test di rete spostata in `02-convenzioni.md` §8 (punto 8) insieme alla regola dei commit (punto 9); qui resta il rimando (decisione del proprietario del 2026-10-11, autorizzazione esplicita). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D13-20 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): sistema delle posizioni dall'`utype` MANGO (ICRS, epoca J2000 per SIMBAD) quando manca il `COOSYS`, dichiarato con l'avviso `POSITIONS_FROM_MANGO`; regione su SIMBAD attiva; T33 esteso. Stato `approvato` invariato. |

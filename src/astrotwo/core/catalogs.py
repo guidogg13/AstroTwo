@@ -361,6 +361,29 @@ def _coosys_frame(coosys) -> tuple[str | None, str | None, str | None, str | Non
     return frame, equinox, epoch, system
 
 
+_MANGO_UTYPE = re.compile(r"^mango:EpochPosition\.(longitude|latitude)\[(?P<attrs>[^\]]*)\]$")
+
+
+def _mango_frame(lon_utype: str | None, lat_utype: str | None) -> tuple[str, str | None, str] | None:
+    """(frame, epoca, sistema) dagli ``utype`` MANGO delle due colonne (es. SIMBAD:
+    ``mango:EpochPosition.longitude[CS.spaceSys=ICRS CT.epoch=J2000]``); None se mancano, differiscono o il
+    sistema non è un termine ``refframe`` supportato senza equinozio (D13-20)."""
+    found = []
+    for utype in (lon_utype, lat_utype):
+        match = _MANGO_UTYPE.match((utype or "").strip())
+        if match is None:
+            return None
+        attrs = dict(item.split("=", 1) for item in match["attrs"].split() if "=" in item)
+        found.append((attrs.get("CS.spaceSys"), attrs.get("CT.epoch")))
+    if found[0] != found[1]:
+        return None
+    space, epoch = found[0]
+    frame = {"ICRS": "icrs", "GALACTIC": "galactic", "SUPER_GALACTIC": "supergalactic"}.get(space or "")
+    if frame is None or frame not in supported_frames():  # FK4/FK5 richiederebbero l'equinozio, non previsto
+        return None
+    return frame, _astrores_year(epoch, space) if epoch else None, f"MANGO CS.spaceSys={space}"
+
+
 def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColumns | None, list[tuple[str, str]]]:
     notes: list[tuple[str, str]] = []
     for lon_ucd, lat_ucd, implied in _UCD_PAIRS:
@@ -377,6 +400,13 @@ def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColum
         lon, lat = lons[0], lats[0]
         ref = table[lon].meta.get("ref") or table[lat].meta.get("ref")
         frame, equinox, epoch, system = _coosys_frame(coosys_by_id.get(ref))
+        if frame is None and system is None:  # nessun COOSYS: sistema dall'utype del modello MANGO (D13-20)
+            mango = _mango_frame(table[lon].meta.get("utype"), table[lat].meta.get("utype"))
+            if mango is not None:
+                frame, epoch, system = mango
+                notes.append(("POSITIONS_FROM_MANGO", f"colonne {lon}/{lat}: sistema {frame.upper()}"
+                              + (f", epoca {epoch}" if epoch else "") + " dall'utype del modello IVOA MANGO "
+                              f"({table[lon].meta.get('utype')})"))
         if frame is None and implied is not None:
             frame = implied
         if frame is None:
