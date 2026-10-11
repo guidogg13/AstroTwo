@@ -33,12 +33,22 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   solo la regione su SIMBAD (D13-20); traduzione UCD1 del CDS rimandata
   (D13-14c). **Modulo 15 (`crossmatch.py`) scritto in 5 parti P1–P5**
   (incrocio locale, tabella unita, per campo, ellissi, CDS XMatch), fermi
-  D15-8 e D15-9. Nel 10 aggiunte `proper_motion_only` e
-  `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
-  Test: **325 di default, 337 con la rete (12 test di rete), 0 saltati**
-  (2026-10-11); i test di rete si ripetono al massimo 2 volte solo per
-  errori di connessione o timeout, con la ripetizione dichiarata
-  (`tests/conftest.py`, nessuna dipendenza nuova).
+  poi chiusi il 2026-10-11 (D15-8 corpo nel join, D15-9 `selection=all`).
+  Nel 13 chiusa D13-20 (sistema di SIMBAD dall'`utype` MANGO). **Modulo 16
+  (`moc.py`) scritto in 5 parti P1–P5 il 2026-10-11** (classe `Moc`, FITS
+  IVOA 1.0/1.1/2.0, JSON e testo, operazioni; creazione da cerchio,
+  poligono, catalogo, immagine; filtro e mappe/griglie HEALPix; MOC
+  temporali in TCB e spazio-temporali, mappe di probabilità e regioni di
+  credibilità; MocServer, lettura da URL, `build_moc`), fermi D16-6
+  (versione 2.1) e D16-7 (complemento degli ST-MOC). Nel 10 aggiunte
+  `proper_motion_only` e `parse_sexagesimal`. Dipendenze nuove:
+  `defusedxml` 0.7.1 (PSF), **`mocpy` 0.20.0 e `astropy-healpix` 2.0.1
+  (BSD)**; **`healpy` escluso (GPL-2.0)**. Test: **359 di default, 373 con
+  la rete (14 test di rete, tutti superati, nessuna ripetizione reale), 0
+  saltati** (2026-10-11). Regole dei test di rete e dei commit in
+  `02-convenzioni.md` §8 punti 8–9: commit solo con
+  `scripts/commit_checked.py`, che esegue i test e chiama `git commit` solo
+  se l'esito lo consente.
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
   MPL-2.0 per `certifi`). Gli obblighi LGPL per il `.dmg` vanno specificati
@@ -405,6 +415,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Verifiche e scelte minori (13, 14) | Registro VO di default `https://dc.g-vo.org/tap` (HTTPS, configurabile); server esclusi confermati con il motivo, da ricontrollare; FITS esportati "FITS Standard 4.0" più versione di `astropy`; `load_catalog` senza regione solo entro `max_rows`, altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato; altre scelte minori confermate | 2026-10-11 | decisione del proprietario, `13`, `14` | aperte D13-19 (regione) e D13-14c (UCD1 CDS, rimandata) |
 
 | D13-19, D15-6, D15-7 | `load_catalog(region=(centro, raggio))` con colonne dagli UCD di `TAP_SCHEMA` e sistema dal `COOSYS` (termini `refframe` riconosciuti); ECSV con il sistema delle posizioni nei metadati YAML; albero in ordine naturale; ripetizioni dei test di rete solo per connessione/timeout (massimo 2, dichiarate); modulo 15 in 5 parti con tutte le raccomandazioni accettate (epoche senza propagazione, `best` con pari merito e B riusato dichiarati, mancanti esclusi, `max_sep` ≤ 180° / 180″, CDS in HTTPS con cache del 14, soglia e assi delle ellissi obbligatori, tolleranza T4 1 mas) | 2026-10-11 | decisione del proprietario, `13`, `14`, `15` §13 | aperte D13-20, D15-8, D15-9 |
+| D13-20, D15-8, D15-9, regola dei commit, decisioni del 16 | SIMBAD: sistema dall'`utype` MANGO, dichiarato; join per campo: corpo controllato solo se entrambe le tabelle lo hanno; CDS XMatch sempre `selection=all`, `best` in locale; commit solo se tutti i test di default passano (rete a parte, dichiarata); 16: `healpy` escluso, `order_max` obbligatorio, MOC da catalogo una cella per sorgente, da immagine dai pixel validi con il WCS dell'11, poligoni su cerchi massimi, MOC spaziali sempre ICRS, probabilità con somma = 1 entro 10⁻⁶, MocServer con la rete del 14, `build_moc` solo funzione, mappe NESTED ICRS; C4 e H12 progressivi rinviati al 12 | 2026-10-11 | decisioni del proprietario | file di origine: `02`, `13`, `15`, `16` (restano `approvato`) |
 
 ## 6. Decisioni aperte
 
@@ -434,8 +445,9 @@ il modulo 13 fino a P5: 17; **dopo il modulo 14 e P6 del 13: 21 aperte**
 (decisa D14-5; nuove D14-10, D14-11, D14-12, D13-17, D13-18 nel Gruppo 3:
 Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17). Il 2026-10-11, decise le cinque
 e aperte D13-19 e D13-14c: 18 aperte; poi, con il modulo 15, decise D13-19
-e D15-6 e aperte D13-20, D15-8, D15-9: **19 aperte** (Gruppo 1 = 0,
-Gruppo 2 = 4, Gruppo 3 = 15).
+e D15-6 e aperte D13-20, D15-8, D15-9: 19 aperte; poi, con il modulo 16,
+decise D13-20, D15-8, D15-9 e aperte D16-6, D16-7: **18 aperte** (Gruppo 1
+= 0, Gruppo 2 = 4, Gruppo 3 = 14).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -463,14 +475,14 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** completi `04`, 10, 11, 13, 14;
-   **modulo 15 scritto (P1–P5)**, fermi D15-8 e D15-9; fermo nel 13 solo
-   D13-20 (regione su SIMBAD); **proposta di divisione del modulo 16
-   consegnata al proprietario, in attesa del suo ok**; poi gli altri moduli
-   del livello 1 (12, 17, 18, 19). Aperte anche: D10-9 (con il 41), D11-8
-   (con 20 e 41), A11 licenza (blocca il 60). **Da autorizzare:** scrivere
-   la regola delle ripetizioni dei test di rete anche in `02-convenzioni.md`
-   §8 (oggi in 13 e 14).
+0. **Subito (fase codice del livello 1):** completi `04`, 10, 11, 13, 14,
+   15; **modulo 16 scritto (P1–P5)**, fermi D16-6 e D16-7; **proposta di
+   divisione del modulo 12 (HiPS) consegnata al proprietario, in attesa del
+   suo ok**; poi gli altri moduli del livello 1 (17, 18, 19). Da confermare
+   le scelte minori del 16 (elenco in `16-core-moc.md` §3). Aperte anche:
+   D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60). Il
+   paragrafo sulle ripetizioni dei test di rete in 14 §12 resta (uguale a
+   `02` §8): il 14 non era tra i file autorizzati il 2026-10-11.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -493,8 +505,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (19): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 15); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (18): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 14); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -536,3 +548,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | **Modulo 14 scritto (P1–P7) e P6 del 13** (decisioni del proprietario D14-5 e D14-9 applicate in 14, 13 e nella riga H23 di `03`; strumenti IA del 14 annotati nella riga del 32): VOTable ed esportazione, rete con registro e cache, cone search e TAP, elenco dei server e registro VO, DataLink, SIA/SIA2, IDHA (solo errore), SSA, puntatore Simbad, fotometria VizieR, SAMP; nel 13 `load_table`, `load_catalog`, gruppo fisso, `datalink_column`, più correzioni (commenti `#` nei testi delimitati, VOTable senza `nrows`, `utype` e `TUCDn`). Fermi: D14-10, D14-11, D14-12, D13-17, D13-18 (nuove, Gruppo 3). Test: 293 di default, 301 con la rete. Aperte **21**. |
 | 2026-10-11 | Claude Code | **Pezzi fermi di 13 e 14 chiusi** (decisioni del proprietario D14-10, D14-11, D14-12, D13-17, D13-18; autorizzazione a modificare 11, 13, 14, che restano `approvato`): esportazione ECSV e lettura nel 13; `sia_calibration` e parametro `calibration` di `load_image`; magnitudini SIMBAD; `LINK` ASTRORES; albero delle collezioni dal MocServer; registro VO di default in HTTPS; FITS Standard 4.0; `load_catalog` con `allow_partial`. Nuove aperte D13-19 e D13-14c. Test: 299 di default, 308 con la rete. Aperte **18**. Prossimo: modulo 15 (proposta in attesa). |
 | 2026-10-11 | Claude Code | **Modulo 15 scritto (P1–P5) e decisioni del proprietario applicate in 13, 14, 15** (restano `approvato`): D13-19 regione di `load_catalog`; termini `refframe` nel `COOSYS`; ECSV con il sistema delle posizioni; albero in ordine naturale; ripetizioni dei test di rete; crossmatch locale, tabella unita, per campo, ellissi (D15-6 decisa), CDS XMatch (`cds_xmatch` nel 14). Nuove aperte D13-20, D15-8, D15-9. Test: 325 di default, 337 con la rete. Aperte **19**. Prossimo: modulo 16 (proposta in attesa). |
+| 2026-10-11 | Claude Code | **Regola dei commit e modulo 16** (decisioni del proprietario del 2026-10-11; 02, 13, 15, 16 modificati e restano `approvato`): `02` §8 punti 8–9 (ripetizioni dei test di rete, commit solo se i test di default passano, `scripts/commit_checked.py` con `--no-network` per le parti intermedie); D13-20, D15-8, D15-9 decise e applicate; **modulo 16 scritto in 5 parti** con `mocpy` 0.20.0 e `astropy-healpix` 2.0.1 (`healpy` escluso); nuove aperte D16-6 (versione 2.1 del formato MOC) e D16-7 (complemento degli ST-MOC). Scelte minori della sessione precedente (moduli 13–15) confermate dal proprietario. Test 359 di default, 373 con la rete. Aperte 18. Prossimo: modulo 12 (proposta di divisione in attesa del proprietario). |

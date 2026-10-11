@@ -8,7 +8,12 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-11 — **modulo 15 scritto (P1–P5)** tranne i pezzi fermi D15-8 e
+**Ultimo aggiornamento:** 2026-10-11 — **regola dei commit in `02` §8 e modulo 16 scritto (P1–P5)**
+tranne i pezzi fermi D16-6 (versione 2.1 del formato MOC) e D16-7 (complemento degli ST-MOC);
+D13-20, D15-8, D15-9 decise; 02, 13, 15, 16 modificati e restano `approvato`. Test 359 di default,
+373 con la rete. Aperte 18. Prossimo: modulo 12 (proposta in attesa del proprietario).
+Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-11 — **modulo 15 scritto (P1–P5)** tranne i pezzi fermi D15-8 e
 D15-9; D13-19 (regione di `load_catalog`) e D15-6 decise; ECSV con il sistema delle posizioni,
 ordine naturale dell'albero, ripetizioni dei test di rete solo per connessione/timeout; 13, 14,
 15 modificati e restano `approvato`. Nuove aperte D13-20, D15-8, D15-9. Test 325 di default,
@@ -249,7 +254,7 @@ Dove si trovano le decisioni:
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (17: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 13) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `decisioni-aperte.md` | Decisioni aperte (18: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 
@@ -261,7 +266,7 @@ Dove si trovano le decisioni:
 | `13-core-cataloghi.md` | Cataloghi e tabelle: caricamento, plottaggio, filtri | approvato |
 | `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, elenco dei server e registro VO, DataLink, SIA/SIA2, SAMP (G3), spettri SSA (E4), puntatori Simbad/VizieR | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi (cross-match) | approvato |
-| `16-core-moc.md` | Mappe di copertura MOC | approvato |
+| `16-core-moc.md` | Mappe di copertura MOC (codice scritto in 5 parti il 2026-10-11, `src/astrotwo/core/moc.py`; fermi D16-6 e D16-7) | approvato |
 | `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura | approvato |
 | `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo (livello 1; origine H4 di `03-parita-aladin.md`; dipende da `10`, `11`) | approvato |
 | `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari (livello 1; origine H21 di `03-parita-aladin.md`, AM1 accettata il 2026-10-08) | approvato |
