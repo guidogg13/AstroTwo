@@ -45,7 +45,7 @@ from astropy.table import Table
 
 import astrotwo
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
-from astrotwo.core.coordinates_wcs import SkyFrame
+from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, wcs_from_header
 from astrotwo.core.catalogs import (
     CatalogsError,
     CatalogTable,
@@ -72,6 +72,8 @@ __all__ = [
     "simbad_pointer",
     "vizier_photometry",
     "Spectrum",
+    "SiaCalibration",
+    "sia_calibration",
     "read_idha",
     "sia_search",
     "ssa_load",
@@ -1152,6 +1154,112 @@ def sia_search(center, radius, *, version: int, service: str, band=None, time=No
     result = _finish(protocol, "sia_search", arguments, response, parsed, max_rows=max_rows, limits=limits,
                      cache=cache)
     return _no_result(result, "SIA_NO_RESULT", "a immagine")
+
+
+#: Sistemi di SIA 1.0 (VOX:STC_CoordRefFrame) tradotti in FITS WCS: assi e RADESYS; ECL e SGAL non tradotti
+#: (lo standard non dice quale eclittica né il suo equinozio; il supergalattico non serve all'11).
+_SIA_FRAMES = {"ICRS": ("RA", "DEC", "ICRS"), "FK5": ("RA", "DEC", "FK5"), "FK4": ("RA", "DEC", "FK4"),
+               "GAL": ("GLON", "GLAT", None)}
+_SIA_WCS_UCDS = {"projection": "vox:wcs_coordprojection", "crpix": "vox:wcs_coordrefpixel",
+                 "crval": "vox:wcs_coordrefvalue", "cd": "vox:wcs_cdmatrix", "frame": "vox:stc_coordrefframe",
+                 "equinox": "vox:stc_coordequinox", "naxis": "vox:image_naxis"}
+
+
+@dataclass(frozen=True)
+class SiaCalibration:
+    """Calibrazione astrometrica di una riga della lista SIA 1 (D14-11), da dare a ``load_image`` dell'11.
+
+    ``header`` è ``None`` se la riga non basta a costruirla, con il motivo in ``reason``."""
+
+    header: fits.Header | None
+    source: str
+    columns: dict[str, str]
+    reason: str | None = None
+
+
+def _sia_cell(table: Table, index: int, name: str):
+    value = table[name][index]
+    if np.ma.is_masked(value):
+        return None
+    return value
+
+
+def sia_calibration(result: VoResult, index: int) -> SiaCalibration:
+    """Intestazione WCS dalle colonne ``VOX:WCS_*`` della riga ``index`` di una lista SIA 1 (D14-11).
+
+    Colonne riconosciute dagli UCD di SIA 1.0 (§4.2 della raccomandazione IVOA): proiezione (3 caratteri),
+    pixel di riferimento (= CRPIX, convenzione FITS), valori di riferimento (= CRVAL, gradi), matrice CD
+    (ordine [1,1], [1,2], [2,1], [2,2]), sistema (ICRS, FK5, FK4, GAL), equinozio (FK5, FK4) e dimensioni.
+    Ogni dato mancante → nessuna calibrazione, con il motivo; nulla è assunto. La validità è controllata
+    con ``wcs_from_header`` del modulo 10."""
+    table = result.table.table
+    if result.request is None or result.request.protocol != "sia":
+        raise ValueError("sia_calibration vale per le liste SIA 1 (version=1): SIA 2 non ha colonne WCS")
+    if not 0 <= index < len(table):
+        raise IndexError(f"riga {index} inesistente: la lista ha {len(table)} righe")
+    source = f"lista SIA {result.request.url}, riga {index}"
+    columns: dict[str, str] = {}
+    for key, ucd in _SIA_WCS_UCDS.items():
+        found = [n for n in table.colnames if (table[n].meta.get("ucd") or "").strip().lower() == ucd]
+        if len(found) == 1:
+            columns[key] = found[0]
+
+    def unavailable(reason: str) -> SiaCalibration:
+        return SiaCalibration(None, source, columns, reason)
+
+    missing = [k for k in ("projection", "crpix", "crval", "cd", "frame", "naxis") if k not in columns]
+    if missing:
+        return unavailable(f"colonne VOX mancanti (o non univoche): {', '.join(_SIA_WCS_UCDS[k] for k in missing)}")
+    values = {k: _sia_cell(table, index, n) for k, n in columns.items()}
+    absent = [k for k in ("projection", "crpix", "crval", "cd", "frame", "naxis") if values[k] is None]
+    if absent:
+        return unavailable(f"valori mancanti nella riga: {', '.join(absent)}")
+    projection = str(values["projection"]).strip().upper()
+    if not re.fullmatch(r"[A-Z]{3}", projection):
+        return unavailable(f"proiezione {projection!r}: attesi tre caratteri come in FITS WCS")
+    frame = str(values["frame"]).strip().upper()
+    if frame not in _SIA_FRAMES:
+        return unavailable(f"sistema {frame!r} non tradotto (tradotti: {', '.join(_SIA_FRAMES)})")
+    try:
+        crpix = np.asarray(values["crpix"], dtype=float).ravel()
+        crval_col = table[columns["crval"]]
+        crval = np.asarray(values["crval"], dtype=float).ravel()
+        if crval_col.unit is not None:
+            crval = (crval * crval_col.unit).to_value(u.deg)
+        cd = np.asarray(values["cd"], dtype=float).ravel()
+        naxis = np.asarray(values["naxis"], dtype=float).ravel()
+    except (TypeError, ValueError, u.UnitsError) as exc:
+        return unavailable(f"valori non numerici o unità non angolari: {exc}")
+    if crpix.size != 2 or crval.size != 2 or cd.size != 4 or naxis.size < 2:
+        return unavailable(f"dimensioni attese 2, 2, 4 e ≥ 2: trovate {crpix.size}, {crval.size}, {cd.size}, "
+                           f"{naxis.size}")
+    if naxis.size > 2 and np.any(naxis[2:] != 1):
+        return unavailable(f"immagine con più di due assi utili ({naxis.astype(int).tolist()})")
+    lon, lat, radesys = _SIA_FRAMES[frame]
+    header = fits.Header()
+    header["NAXIS"] = 2
+    header["NAXIS1"], header["NAXIS2"] = int(naxis[0]), int(naxis[1])
+    header["CTYPE1"] = f"{lon}{'-' * (5 - len(lon))}{projection}"
+    header["CTYPE2"] = f"{lat}{'-' * (5 - len(lat))}{projection}"
+    header["CRPIX1"], header["CRPIX2"] = float(crpix[0]), float(crpix[1])
+    header["CRVAL1"], header["CRVAL2"] = float(crval[0]), float(crval[1])
+    header["CUNIT1"] = header["CUNIT2"] = "deg"
+    header["CD1_1"], header["CD1_2"], header["CD2_1"], header["CD2_2"] = (float(v) for v in cd)
+    if radesys is not None:
+        header["RADESYS"] = radesys
+    if frame in ("FK5", "FK4"):
+        equinox = values.get("equinox")
+        if equinox is None:
+            return unavailable(f"sistema {frame} senza equinozio (VOX:STC_CoordEquinox): mai assunto")
+        try:
+            header["EQUINOX"] = float(equinox)
+        except (TypeError, ValueError):
+            return unavailable(f"equinozio {equinox!r} non numerico")
+    try:
+        wcs_from_header(header)  # validazione con il modulo 10
+    except CoordinatesWcsError as exc:
+        return unavailable(f"calibrazione non valida ({exc.code}: {exc.message})")
+    return SiaCalibration(header, source, columns)
 
 
 def read_idha(path) -> None:

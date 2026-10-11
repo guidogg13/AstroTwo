@@ -42,6 +42,20 @@ pixel memorizzati.
   `NET_TIMEOUT`. Download con i timeout comuni (10 s connessione, 60 s
   lettura); un download interrotto o con errore HTTP non lascia nulla in
   cache né dati parziali. Per gli URL non si cerca il file `.hhh`.
+- **Calibrazione esterna (D14-11, decisa dal proprietario il 2026-10-11):**
+  `load_image` riceve il parametro facoltativo `calibration`, un oggetto
+  con `header` (intestazione FITS con WCS celeste e `NAXIS1`/`NAXIS2`) e
+  `source` (da dove viene, obbligatorio), per esempio la `SiaCalibration`
+  che il 14 costruisce dalle colonne `VOX:WCS_*` di una lista SIA 1. Si usa
+  **solo se l'immagine non ha una calibrazione propria** (altrimenti
+  avviso `EXTERNAL_CALIBRATION_IGNORED`), con le stesse regole del `.hhh`:
+  `NAXIS1`/`NAXIS2` uguali alle dimensioni dell'immagine e WCS celeste
+  valido per il modulo 10, altrimenti l'immagine resta senza WCS con
+  `WCS_MISSING` e il motivo; se il 14 non ha potuto costruirla (`header`
+  assente) lo stesso avviso cita il motivo. Usata: avviso
+  `EXTERNAL_CALIBRATION_USED` con la fonte, `calibration_source =
+  "external"` e una voce nella storia dell'immagine (scritta anche da
+  `save_fits`).
 - **Scala di visualizzazione:** regolare luminosità e contrasto (B3),
   istogramma / CTF (B4), palette colori per immagini monocrome (B6),
   trasparenza e sovrapposizione tra layer di immagine (B5), coniugazione /
@@ -369,7 +383,9 @@ pixel memorizzati.
   restituisce `FitsImage` o errore; dichiara origine e data (per gli URL
   anche se la copia viene dalla cache); con più HDU immagine serve `hdu` (indice o nome), altrimenti
   `HDU_CHOICE_REQUIRED`; `rgb=True` legge una HDU di 3 piani come FITS RGB;
-  per JPEG/PNG legge la calibrazione dal commento o dal `.hhh`.
+  per JPEG/PNG legge la calibrazione dal commento o dal `.hhh`;
+  `calibration=None` (parola chiave, D14-11) = calibrazione esterna usata
+  solo se l'immagine non ne ha una propria (§3).
 - **`list_image_hdus(source)`** — elenco delle HDU immagine del file
   (indice, nome, dimensioni, compressione), per la scelta dell'utente.
 - **`set_display(image, vmin, vmax, gamma, palette, stretch="linear")`** —
@@ -502,6 +518,9 @@ pixel memorizzati.
 | Centroide non definito (somma dei pesi ≤ 0 dopo la sottrazione del fondo, pixel non finiti nella finestra, nessun pixel finito nella corona) | nessuna posizione prodotta | `CENTROID_UNDEFINED` |
 | Memoria stimata di un'operazione oltre il limite delle operazioni (D11-11) | nessun dato caricato, errore con stima e tetto | `MEMORY_LIMIT_EXCEEDED` |
 | JPEG/PNG con commento e `.hhh` che descrivono WCS diversi | vale il commento; avviso con le parole chiave diverse | avviso `HHH_WCS_DIFFERS` |
+| Calibrazione esterna (D14-11) usata su un'immagine senza WCS | WCS dalla calibrazione, fonte dichiarata | avviso `EXTERNAL_CALIBRATION_USED` |
+| Calibrazione esterna data per un'immagine che ha già il WCS | vale il WCS proprio | avviso `EXTERNAL_CALIBRATION_IGNORED` |
+| Calibrazione esterna assente, con dimensioni diverse o non valida | immagine senza WCS, motivo nell'avviso | `WCS_MISSING` |
 
 ## 11. Esposizione all'IA
 
@@ -550,6 +569,7 @@ funzioni di §7.
 | T32 | Commento contro `.hhh` | PNG con WCS nel commento e `.hhh` con lo stesso WCS, poi con `CRVAL1` diverso, poi non valido | vale sempre il commento (WCS uguale a quello costruito dal commento con `astropy.wcs`); nessun `HHH_WCS_DIFFERS` con lo stesso WCS; avviso che cita `CRVAL1` (e non `CRVAL2`) con WCS diverso; avviso anche con `.hhh` non valido | ricalcolo con Astropy |
 | T33 | Limite delle operazioni (D11-11) | limite piccolo configurato nel test; ogni operazione sull'immagine intera; immagine in `memmap` | `MEMORY_LIMIT_EXCEEDED` con la stima della tabella di §3 e il limite; nessun dato caricato; taglio piccolo e `save_fits` sotto il limite riescono; con il limite di default le stesse operazioni riescono e l'immagine in `memmap` si visualizza (strategia A10 e limite separati) | test di unità |
 | T34 | Visualizzazione a blocchi in `float32` | `set_display` su un array 6000 × 6000 con il limite di default; `histeq` con blocchi piccoli | si visualizza; valori uguali ad `astropy.visualization` in `float32`; picco di memoria (misurato con `tracemalloc`) sotto 8 byte per pixel + 64 MB, cioè senza copia `float64` dell'immagine; `histeq` a blocchi uguale all'equalizzazione su tutto il piano | ricalcolo con Astropy, `tracemalloc` |
+| T35 | Calibrazione esterna (D14-11) | FITS senza WCS caricato con una calibrazione esterna; stessa calibrazione su un FITS con WCS; oggetto senza `source`; nel 14 (T11) calibrazione della lista SIA su un'immagine scaricata | WCS uguale ad `astropy.wcs` costruito dall'intestazione del test, `EXTERNAL_CALIBRATION_USED`; con WCS proprio `EXTERNAL_CALIBRATION_IGNORED`; senza `source` errore; dimensioni diverse → `WCS_MISSING` | ricalcolo con Astropy |
 | T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
@@ -649,3 +669,4 @@ funzioni di §7.
 | 2026-10-10 | Claude Code | **Codice completo** in `src/astrotwo/core/images_fits.py` (P1–P7, un commit per parte): tutto il §7, test T1–T31 in `tests/core/test_images_fits.py` superati (progetto: 197 di default, 200 con la rete). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario dopo il codice** (autorizzazione esplicita a modificare il file approvato): confermate le scelte di P1–P7 (D11-10); avviso `HHH_WCS_DIFFERS` quando commento e `.hhh` hanno WCS diversi (criterio: parole chiave normalizzate da `WCS.to_header`); tetto di memoria A10 con stima prima delle operazioni sull'immagine intera e del taglio, errore `MEMORY_LIMIT_EXCEEDED` (tabella delle stime in §3); §11 spostato nel 32 (D11-9); regola d'oro n. 8: tolti i motivi "come Aladin" (§2, ricampionamento esplicito, righe dal basso, mosaico senza correzione del fondo, D11-2, D11-4). Codice e test T32–T33 in `images_fits.py` / `test_images_fits.py`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **D11-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): limite delle operazioni separato da A10, 4 GB di default, configurabile (`LargeImageLimits.operation_bytes`); `set_display` a blocchi di righe in `float32` senza copia intera (eccezione dichiarata: `histeq` raccoglie i valori del piano); stima di `set_display` aggiornata in §3; criterio commento/`.hhh` confermato; test T33 aggiornato, nuovo T34 (6000 × 6000, picco di memoria con `tracemalloc`). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D14-11** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): parametro facoltativo `calibration` di `load_image` (calibrazione esterna con `header` e `source`, es. `SiaCalibration` del 14), usata solo se l'immagine non ha WCS proprio, con le regole del `.hhh` (dimensioni, WCS celeste valido); avvisi `EXTERNAL_CALIBRATION_USED` e `EXTERNAL_CALIBRATION_IGNORED`, `calibration_source = "external"`, voce nella storia (§3, §7, §10, §12 T35). Stato `approvato` invariato. |

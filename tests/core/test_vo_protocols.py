@@ -680,6 +680,84 @@ def test_t11_sia(service, cache):
         sia_search(center, 0.1 * u.deg, version=1, service=service.url + "/sia", band=[1, 2] * u.m)
 
 
+SIA1_WCS = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>
+<TABLE>
+<FIELD name="title" datatype="char" arraysize="*" ucd="VOX:Image_Title"/>
+<FIELD name="url" datatype="char" arraysize="*" ucd="VOX:Image_AccessReference"/>
+<FIELD name="format" datatype="char" arraysize="*" ucd="VOX:Image_Format"/>
+<FIELD name="naxis" datatype="int" arraysize="*" ucd="VOX:Image_Naxis"/>
+<FIELD name="frame" datatype="char" arraysize="*" ucd="VOX:STC_CoordRefFrame"/>
+<FIELD name="equinox" datatype="double" ucd="VOX:STC_CoordEquinox"/>
+<FIELD name="proj" datatype="char" arraysize="3" ucd="VOX:WCS_CoordProjection"/>
+<FIELD name="crpix" datatype="double" arraysize="2" ucd="VOX:WCS_CoordRefPixel"/>
+<FIELD name="crval" datatype="double" arraysize="2" unit="deg" ucd="VOX:WCS_CoordRefValue"/>
+<FIELD name="cd" datatype="double" arraysize="4" ucd="VOX:WCS_CDMatrix"/>
+<DATA><TABLEDATA>
+{rows}
+</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>
+"""
+SIA1_WCS_ROWS = (
+    # (url, naxis, frame, equinox, proiezione)
+    ("/img.fits", "40 30", "ICRS", "", "TAN"),
+    ("/img.fits", "40 30", "FK5", "", "TAN"),  # FK5 senza equinozio: mai assunto
+    ("/img.fits", "40 30", "ECL", "", "TAN"),  # sistema non tradotto
+    ("/img.fits", "41 30", "FK5", "2000", "SIN"),  # dimensioni diverse dall'immagine
+)
+
+
+def sia1_wcs_text(base):
+    rows = "".join(f"<TR><TD>i{k}</TD><TD>{base}{url}</TD><TD>image/fits</TD><TD>{naxis}</TD><TD>{frame}</TD>"
+                   f"<TD>{equinox}</TD><TD>{proj}</TD><TD>20.5 15.5</TD><TD>10 20</TD>"
+                   f"<TD>-0.001 0.0002 0.0003 0.001</TD></TR>"
+                   for k, (url, naxis, frame, equinox, proj) in enumerate(SIA1_WCS_ROWS))
+    return SIA1_WCS.format(rows=rows)
+
+
+def test_t11_sia_calibration_used_by_11(service, cache):
+    from astropy.wcs import WCS
+    from astrotwo.core.images_fits import load_image
+
+    service.routes["/sia"] = votable_route(sia1_wcs_text(service.url))
+    buffer = io.BytesIO()
+    fits.PrimaryHDU(np.arange(30 * 40, dtype=np.float32).reshape(30, 40)).writeto(buffer)  # senza WCS
+    service.routes["/img.fits"] = lambda r: (200, "application/fits", buffer.getvalue())
+    result = sia_search(SkyCoord(10 * u.deg, 20 * u.deg), 0.1 * u.deg, version=1, service=service.url + "/sia",
+                        cache=cache)
+    calibration = vo.sia_calibration(result, 0)
+    assert calibration.reason is None and "riga 0" in calibration.source
+    h = calibration.header
+    assert (h["CTYPE1"], h["CTYPE2"], h["RADESYS"]) == ("RA---TAN", "DEC--TAN", "ICRS")
+    assert (h["CRPIX1"], h["CRPIX2"], h["CRVAL1"], h["CRVAL2"]) == (20.5, 15.5, 10.0, 20.0)
+    assert [h[k] for k in ("CD1_1", "CD1_2", "CD2_1", "CD2_2")] == [-0.001, 0.0002, 0.0003, 0.001]
+    url = str(result.table.table["url"][0])
+    image = load_image(url, cache=cache, calibration=calibration)
+    codes = [c for c, _ in image.warnings]
+    assert "EXTERNAL_CALIBRATION_USED" in codes and image.calibration_source == "external"
+    # Ricalcolo con astropy dall'intestazione scritta nel test (CRPIX in convenzione FITS: pixel 1 = indice 0).
+    expected = WCS(fits.Header({"CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN", "CRPIX1": 20.5, "CRPIX2": 15.5,
+                                "CRVAL1": 10.0, "CRVAL2": 20.0, "CD1_1": -0.001, "CD1_2": 0.0002,
+                                "CD2_1": 0.0003, "CD2_2": 0.001, "RADESYS": "ICRS"}))
+    x, y = np.array([0.0, 19.5, 39.0]), np.array([0.0, 14.5, 29.0])
+    assert np.allclose(image.wcs.wcs.pixel_to_world_values(x, y), expected.pixel_to_world_values(x, y), atol=1e-12)
+    # Righe senza i dati necessari: nessuna calibrazione, con il motivo; l'11 lo dichiara.
+    assert "equinozio" in vo.sia_calibration(result, 1).reason and vo.sia_calibration(result, 1).header is None
+    assert "ECL" in vo.sia_calibration(result, 2).reason
+    plain = load_image(url, cache=cache, calibration=vo.sia_calibration(result, 1))
+    assert plain.wcs is None and any("non disponibile" in m for c, m in plain.warnings if c == "WCS_MISSING")
+    wrong_size = load_image(url, cache=cache, calibration=vo.sia_calibration(result, 3))
+    assert wrong_size.wcs is None and any("NAXIS1/NAXIS2 = 41/30" in m for c, m in wrong_size.warnings)
+    # Immagine con calibrazione propria: la esterna si ignora, dichiarato.
+    own = io.BytesIO()
+    fits.PrimaryHDU(np.zeros((30, 40), dtype=np.float32), header=expected.to_header()).writeto(own)
+    service.routes["/own.fits"] = lambda r: (200, "application/fits", own.getvalue())
+    kept = load_image(service.url + "/own.fits", cache=cache, calibration=calibration)
+    assert "EXTERNAL_CALIBRATION_IGNORED" in [c for c, _ in kept.warnings] and kept.calibration_source is None
+    with pytest.raises(IndexError):
+        vo.sia_calibration(result, 9)
+
+
 def test_t12_sia2_band_time(service, cache):
     service.routes["/sia2"] = votable_route(sia1_text(1))
     start, end = Time("2020-01-01T00:00:00", scale="tt"), Time("2020-02-01T00:00:00", scale="tt")

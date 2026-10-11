@@ -1229,3 +1229,21 @@ def test_t34_histeq_uses_the_whole_plane_across_blocks(tmp_path, monkeypatch):
     plane = set_display(image, vmin=20.0, vmax=250.0, stretch="histeq")
     expected = _expected_values(image.data, 20.0, 250.0, "histeq", 1.0)
     assert np.allclose(plane.values, expected, equal_nan=True, rtol=0, atol=0)
+
+
+def test_external_calibration_parameter(tmp_path):
+    # D14-11: calibrazione esterna usata solo se l'immagine non ne ha una, sempre dichiarata.
+    from types import SimpleNamespace
+    from astropy.wcs import WCS
+
+    header = fits.Header({"NAXIS": 2, "NAXIS1": 8, "NAXIS2": 6, "CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN",
+                          "CRPIX1": 4.5, "CRPIX2": 3.5, "CRVAL1": 150.0, "CRVAL2": 2.0, "CDELT1": -0.01,
+                          "CDELT2": 0.01, "RADESYS": "ICRS"})
+    path = tmp_path / "nowcs.fits"
+    fits.PrimaryHDU(np.ones((6, 8), dtype=np.float32)).writeto(path)
+    external = SimpleNamespace(header=header, source="prova del test")
+    image = load_image(path, calibration=external)
+    assert image.calibration_source == "external" and ("EXTERNAL_CALIBRATION_USED", "calibrazione astrometrica esterna: prova del test") in image.warnings
+    assert np.allclose(image.wcs.wcs.pixel_to_world_values(3.5, 2.5), WCS(header).pixel_to_world_values(3.5, 2.5))
+    with pytest.raises(TypeError):
+        load_image(path, calibration=SimpleNamespace(header=header))

@@ -161,7 +161,23 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   risultato è una tabella di immagini con URL di accesso, formato, campo,
   banda e, se presente, calibrazione astrometrica fornita dalla lista; il
   caricamento delle immagini è di `11-core-immagini-fits.md`, che usa la
-  calibrazione della lista quando l'immagine non ne ha una propria. Il
+  calibrazione della lista quando l'immagine non ne ha una propria.
+  **Calibrazione della lista (D14-11, decisa il 2026-10-11):**
+  `sia_calibration` costruisce un'intestazione WCS dalle colonne di una
+  riga SIA 1, riconosciute dagli UCD della raccomandazione **SIA 1.0** (§4.2,
+  verificata il 2026-10-11): `VOX:WCS_CoordProjection` (codice di tre
+  caratteri di FITS WCS), `VOX:WCS_CoordRefPixel` (= `CRPIX`, convenzione
+  FITS), `VOX:WCS_CoordRefValue` (= `CRVAL`, gradi; convertito se la
+  colonna dichiara un'altra unità angolare), `VOX:WCS_CDMatrix` (= `CD`,
+  ordine [1,1], [1,2], [2,1], [2,2]), `VOX:STC_CoordRefFrame` (tradotti
+  `ICRS`, `FK5`, `FK4` → `RADESYS`, `GAL` → assi `GLON`/`GLAT`; `ECL` e
+  `SGAL` non tradotti: lo standard non dice quale eclittica),
+  `VOX:STC_CoordEquinox` (obbligatorio per FK5 e FK4, mai assunto) e
+  `VOX:Image_Naxis` (dimensioni, per il controllo nell'11). Validata con
+  `wcs_from_header` del modulo 10. Un dato mancante o non valido → nessuna
+  calibrazione, con il motivo (`reason`). L'11 la riceve con il parametro
+  `calibration` di `load_image` e la dichiara nel risultato. **SIA 2**
+  (ObsCore) non ha colonne WCS: `sia_calibration` vale solo per SIA 1. Il
   formato storico IDHA (alternativa a SIA supportata da Aladin per
   compatibilità): **nessuna documentazione pubblica trovata** (D14-9 punto
   13, 2026-10-10), quindi **solo l'errore `IDHA_UNREADABLE`**; il file si
@@ -303,6 +319,10 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   (SIA2); `band` intervallo di lunghezze d'onda con unità e `time`
   intervallo di `Time` con scala dichiarata (solo SIA2); restituisce
   `VoResult` con la lista di immagini.
+- **`sia_calibration(result, index)`** (D14-11) — `SiaCalibration`
+  (`header` FITS con WCS e dimensioni, o `None`; `source` = URL della lista
+  e riga; colonne usate; `reason` se non costruibile) dalla riga `index` di
+  una lista SIA 1; da passare a `load_image(..., calibration=...)` dell'11.
 - **`read_idha(path)`** (P5) — apre il file con `defusedxml` e lo
   rifiuta: `XML_UNSAFE` o `IDHA_UNREADABLE` (D14-9 punto 13).
 - **`ssa_search(center, radius, *, service, max_rows=100_000, ...)`** (P5,
@@ -424,7 +444,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T8 | SAMP selezione e puntamento (G3) | inviare al client simulato una selezione e un puntamento, poi riceverne uno | contenuti identici a quelli inviati, tipi supportati | test con client simulato |
 | T9 | Ricerca e caricamento SSA (E4) | eseguire ricerca e caricamento su servizio SSA simulato | elenco candidati e spettro con assi, unità e provenienza corretti | confronto con il servizio simulato |
 | T10 | Spettro SSA non valido (E4) | servire uno spettro senza assi/unità | `SSA_INVALID`, nessun dato mostrato come valido | test con servizio simulato |
-| T11 | SIA (H23) | ricerca SIA su un servizio simulato | lista con URL, formato, campo e provenienza; immagine caricata dall'11 con la calibrazione della lista | servizio simulato (test di rete separato) |
+| T11 | SIA (H23, D14-11) | ricerca SIA su un servizio simulato; `sia_calibration` su righe complete, senza equinozio (FK5), con sistema `ECL`, con dimensioni diverse dall'immagine; immagine FITS senza WCS servita dal servizio e caricata dall'11 con `calibration` | lista con URL, formato, campo e provenienza; intestazione con `CTYPE`, `CRPIX`, `CRVAL`, `CD`, `RADESYS` della riga; immagine con il WCS uguale ad `astropy.wcs` costruito nel test e `EXTERNAL_CALIBRATION_USED`; righe incomplete senza calibrazione con il motivo; dimensioni diverse → `WCS_MISSING`; immagine con WCS proprio → `EXTERNAL_CALIBRATION_IGNORED` | servizio simulato (test di rete separato) |
 | T12 | SIA2 (H23) | ricerca SIA2 con banda e intervallo di tempo su un servizio simulato | parametri inviati secondo lo standard; tempo con scala dichiarata | servizio simulato |
 | T13 | Puntatore Simbad (H17) | `simbad_pointer` su una posizione con risposta simulata di due oggetti | restituito l'oggetto con più riferimenti, con fonte e data | servizio simulato |
 | T14 | Fotometria VizieR (H17) | `vizier_photometry` con risposta simulata | tabella con flusso, unità, frequenza o lunghezza d'onda e catalogo d'origine per ogni punto | servizio simulato |
@@ -538,19 +558,15 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   resta disponibile con l'avviso `CSV_UNITS_NOT_SAVED`. T5 completo.
   Applicata in §3, §6, §7, §10, §12. (Aperta il 2026-10-10: opzioni riga
   di commento, ECSV, nessuna unità; raccomandazione ECSV.)
-- **D14-11 — Calibrazione della lista SIA usata dall'11: DA DECIDERE (aperta
-  il 2026-10-10, Gruppo 3).** §3 e T11 chiedono che l'immagine sia
-  "caricata dall'11 con la calibrazione della lista quando non ne ha una
-  propria", ma l'11 (approvato e completo) non ha un'interfaccia per una
-  calibrazione esterna, e questo lavoro non può toccare l'11. Oggi la lista
-  SIA conserva le colonne di calibrazione del servizio (per SIA 1 gli UCD
-  `VOX:WCS_*`); SIA 2 (ObsCore) non ha colonne WCS. Opzioni: (a) il 14
-  costruisce dalle colonne `VOX:WCS_*` un'intestazione WCS (con il modulo
-  10) e l'11 riceve un parametro facoltativo per usarla, dichiarato nel
-  risultato; (b) solo SIA 1 e solo su richiesta esplicita dell'utente; (c)
-  nessun uso della calibrazione della lista. **Raccomandazione:** (a), con
-  un'autorizzazione a modificare l'11. **Fermo solo questo punto** (seconda
-  metà di T11).
+- **D14-11 — Calibrazione della lista SIA usata dall'11: DECISA il
+  2026-10-11 (decisione del proprietario, con autorizzazione a modificare
+  l'11).** Il 14 costruisce l'intestazione WCS dalle colonne `VOX:WCS_*` di
+  SIA 1 (`sia_calibration`); l'11 riceve un parametro facoltativo con la
+  calibrazione esterna (`calibration` di `load_image`), dichiarata nel
+  risultato. Seconda metà di T11 completa. Applicata in §3, §7, §12 e
+  nell'11. (Aperta il 2026-10-10: opzioni intestazione da `VOX:WCS_*` +
+  parametro nell'11, solo SIA 1 su richiesta, nessun uso; raccomandazione
+  la prima.)
 - **D14-12 — Magnitudine dell'oggetto del puntatore Simbad: DA DECIDERE
   (aperta il 2026-10-10, Gruppo 3).** §3 e §6 chiedono "la magnitudine"
   dell'oggetto, senza dire quale banda: SIMBAD conserva i flussi in molte
@@ -592,3 +608,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P6 scritta** (`simbad_pointer`, `SimbadPointer`, `SimbadObject`, `vizier_photometry`, `VIZIER_PHOTOMETRY_URL`; test T13, T14, pari citazioni, nessun oggetto, test di rete su Vega): verifiche in §3 (servizio fotometrico) e campo `nbref`; SIMBAD interrogato con `astroquery` (`query_region` con `otype` e `nbref`) tramite la sessione con i timeout comuni del 10 (`_simbad_with_timeouts`, unico punto con il campo interno di astroquery), risposta salvata nella cache del 14 come VOTable e letta con `read_table`; coordinate ICRS J2000 dichiarate come nel 10; distanza con `astropy.coordinates.angular_separation`; a pari citazioni il più vicino (`SIMBAD_TIE`), a pari distanza l'identificativo in ordine alfabetico; senza `nbref` il più vicino (`SIMBAD_NBREF_MISSING`); nessun oggetto → `SIMBAD_NO_OBJECT`. Nuova decisione aperta **D14-12** (magnitudine del puntatore). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P7 scritta — modulo 14 completo tranne i pezzi fermi su D14-10, D14-11, D14-12** (`SampHub`, `SampClient`, `SampSelection`, `SampSendResult`, `SAMP_MTYPES`; test T7, T8, hub proprio ed errori, con un hub locale `pyvo.samp` nella cartella home temporanea dei test): verifica dell'hub locale nei test riuscita; collegamento all'hub attivo (file di blocco SAMP), altrimenti hub proprio con profilo web disattivato; invio a uno o a tutti i programmi iscritti al tipo (`SAMP_NO_PEER` se nessuno); tabelle inviate come VOTable temporaneo con provenienza (P1), ricevute con `read_votable` (file) o `download_table` (URL); selezioni con indici di riga da 0 come nel messaggio SAMP; puntamenti in gradi ICRS; un errore nella funzione di ricezione torna al mittente come risposta d'errore SAMP. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D14-10 decisa e applicata; versione FITS** (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): nuovo formato di esportazione `ecsv` (ECSV di `astropy`, unità, UCD e provenienza nell'intestazione), CSV semplice con l'avviso `CSV_UNITS_NOT_SAVED`; `export_table` restituisce `ExportResult`; versione del formato FITS = "FITS Standard 4.0" e, per tutti i formati, versione di `astropy` in `A2WRITER`; T5 completo con l'andata e ritorno ECSV (§3, §6, §7, §10, §12, §13). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D14-11 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare i file approvati 11 e 14): `sia_calibration` / `SiaCalibration` (intestazione WCS dalle colonne `VOX:WCS_*` di SIA 1, verificate sulla raccomandazione SIA 1.0 §4.2; ICRS, FK5, FK4, GAL tradotti, ECL e SGAL no; equinozio mai assunto; validazione con il modulo 10); seconda metà di T11 completa con l'immagine caricata dall'11 (§3, §7, §12, §13). Stato `approvato` invariato. |

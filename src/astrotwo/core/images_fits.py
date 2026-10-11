@@ -206,7 +206,7 @@ class FitsImage:
     warnings: tuple[tuple[str, str], ...] = ()
     color: bool = False  # True: data è 3 × righe × colonne (R, G, B), solo presentazione
     frames: int | None = None  # fotogrammi del file (GIF animate)
-    calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG
+    calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG, "external" (D14-11)
     from_cache: bool = False  # True: copia servita dalla cache comune (04), con origine e data del download
     history: tuple[str, ...] = ()  # operazioni applicate (taglio, H5), per la riproducibilità
     strategy: str = "memory"  # "memory", "memmap" o "two_level" (H27, A10)
@@ -462,6 +462,7 @@ def load_image(
     cache: SharedCache | None = None,
     refresh: bool = False,
     timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+    calibration=None,
 ) -> FitsImage:
     """Carica un'immagine e ne dichiara origine e data.
 
@@ -469,12 +470,41 @@ def load_image(
     ``HDU_CHOICE_REQUIRED`` (D11-4); ``rgb=True`` legge una HDU di 3 piani come
     FITS RGB; JPEG/PNG/GIF si leggono con ``Pillow`` (P2). Gli URL seguono la
     politica "prima la cache" con la cache comune di ``04-cache.md`` (P3).
+
+    ``calibration`` (D14-11): calibrazione esterna, un oggetto con ``header``
+    (intestazione FITS con WCS e ``NAXIS1``/``NAXIS2``) e ``source`` (da dove
+    viene), es. ``SiaCalibration`` del modulo 14. Si usa solo se l'immagine
+    non ha una calibrazione propria, ed è dichiarata nel risultato.
     """
     text = os.fspath(source) if not isinstance(source, str) else source
     if text.startswith(("http://", "https://")):
-        return _load_url(text, hdu, rgb, cache, refresh, timeouts)
-    path = str(Path(text).expanduser().resolve())
-    return _load_path(text, path, hdu, rgb, allow_hhh=True)
+        image = _load_url(text, hdu, rgb, cache, refresh, timeouts)
+    else:
+        path = str(Path(text).expanduser().resolve())
+        image = _load_path(text, path, hdu, rgb, allow_hhh=True)
+    return image if calibration is None else _apply_external_calibration(image, calibration)
+
+
+def _apply_external_calibration(image: FitsImage, calibration) -> FitsImage:
+    """Calibrazione esterna (D14-11): mai al posto di quella propria; dimensioni controllate come per il ``.hhh``."""
+    header = getattr(calibration, "header", None)
+    source = getattr(calibration, "source", None)
+    if not source:
+        raise TypeError("calibration deve avere 'header' e 'source' (da dove viene la calibrazione)")
+    if image.wcs is not None:
+        note = ("EXTERNAL_CALIBRATION_IGNORED", f"calibrazione esterna ({source}) ignorata: l'immagine ha la propria")
+        return dataclasses.replace(image, warnings=image.warnings + (note,))
+    if header is None:
+        reason = getattr(calibration, "reason", None) or "nessuna intestazione"
+        note = ("WCS_MISSING", f"calibrazione esterna ({source}) non disponibile: {reason}")
+        return dataclasses.replace(image, warnings=image.warnings + (note,))
+    ny, nx = image.data.shape[-2:]
+    solution, notes = _raster_calibration(header, f"esterna: {source}", nx, ny)
+    if solution is None:
+        return dataclasses.replace(image, warnings=image.warnings + tuple(notes))
+    note = ("EXTERNAL_CALIBRATION_USED", f"calibrazione astrometrica esterna: {source}")
+    return dataclasses.replace(image, wcs=solution, calibration_source="external", warnings=image.warnings + (note,),
+                               history=image.history + (f"calibrazione esterna da {source}",))
 
 
 def _section_key(raw_ndim: int, dropped: tuple[int, ...], rows, cols) -> tuple:
