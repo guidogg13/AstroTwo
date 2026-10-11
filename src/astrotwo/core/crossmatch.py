@@ -25,6 +25,7 @@ from astropy.coordinates import search_around_sky
 from astropy.table import Table, join
 
 from astrotwo.core.catalogs import CatalogTable, PositionColumns
+from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     "FIELD_MODES",
     "crossmatch",
     "crossmatch_by_field",
+    "crossmatch_cds",
     "crossmatch_ellipses",
     "suggest_columns",
 ]
@@ -657,3 +659,84 @@ def crossmatch_ellipses(table_a: CatalogTable, table_b: CatalogTable, ellipse_a,
               "axes": axes, "mode": mode, "frame": frame, "force_body": force_body}
     seps = np.array([order_sep[(x, y)] for x, y in zip(ia, ib)]) if len(ia) else np.zeros(0)
     return _result(ia, ib, {"sep": seps * u.arcsec, "mahalanobis": d}, unmatched, report, notes, a, b, params)
+
+
+# --------------------------------------------------------------------------
+# P5 — Incrocio con il servizio CDS XMatch (tramite il modulo 14)
+# --------------------------------------------------------------------------
+
+_ECHO_TOLERANCE_DEG = 1e-4  # il servizio restituisce RA e Dec in float32: controllo che l'indice sia quello giusto
+
+
+def _upload(index: np.ndarray, coords: SkyFrame) -> Table:
+    return Table({"idx": np.asarray(index, dtype=np.int64), "ra": coords.lon.to_value(u.deg).astype(np.float64),
+                  "dec": coords.lat.to_value(u.deg).astype(np.float64)})
+
+
+def _check_echo(answer: Table, up_a: Table, up_b: Table, url: str) -> None:
+    """Ogni coppia restituita deve riportare RA e Dec caricate per quell'indice (nessun indice frainteso)."""
+    for cols, upload in ((("idx", "ra", "dec"), up_a), (("idx2", "ra2", "dec2"), up_b)):
+        rows = {int(i): k for k, i in enumerate(upload["idx"])}
+        for k, i in enumerate(np.asarray(answer[cols[0]], dtype=np.int64)):
+            pos = rows.get(int(i))
+            if pos is None or abs(float(answer[cols[1]][k]) - upload["ra"][pos]) > _ECHO_TOLERANCE_DEG \
+                    or abs(float(answer[cols[2]][k]) - upload["dec"][pos]) > _ECHO_TOLERANCE_DEG:
+                raise CrossmatchError("SERVICE_ERROR", f"{url}: la riga {k} della risposta non corrisponde alle "
+                                      f"posizioni caricate per l'indice {int(i)}")
+
+
+def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "best", max_sep=None, *,
+                   frame: str = "icrs", force_body: bool = False, cache=None, refresh: bool = False,
+                   timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> CrossMatchResult:
+    """Incrocio con il servizio CDS XMatch (P5): si caricano solo indice, RA e Dec in ICRS (modulo 10);
+    ``best`` e ``all`` dal servizio, ``none`` ricavato da ``all``; ``max_sep`` ≤ 180″; stesso risultato del locale."""
+    from astrotwo.core import vo_protocols as vo
+
+    if mode not in CROSSMATCH_MODES:
+        raise ValueError(f"mode {mode!r}: ammesse {', '.join(CROSSMATCH_MODES)}")
+    if frame != "icrs":
+        raise ValueError("il servizio CDS confronta le posizioni caricate: si caricano in ICRS (frame='icrs')")
+    max_sep = _check_max_sep(max_sep, vo.XMATCH_MAX_DISTANCE, "per il servizio CDS XMatch")
+    a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
+    notes = _check_bodies(a, b, force_body)
+    valid_a, coords_a, excl_a = _coordinates(a, "A", "icrs")
+    valid_b, coords_b, excl_b = _coordinates(b, "B", "icrs")
+    up_a, up_b = _upload(valid_a, coords_a), _upload(valid_b, coords_b)
+    selection = "best" if mode == "best" else "all"
+    if len(up_a) and len(up_b):
+        try:
+            answer = vo.cds_xmatch(up_a, up_b, max_sep, selection, cache=cache, refresh=refresh, timeouts=timeouts)
+        except vo.VoProtocolsError as exc:
+            raise CrossmatchError(exc.code, exc.message) from exc
+        data = answer.table.table
+        _check_echo(data, up_a, up_b, vo.XMATCH_URL)
+        ia = np.asarray(data["idx"], dtype=np.int64)
+        ib = np.asarray(data["idx2"], dtype=np.int64)
+        d = np.asarray(data["angDist"].quantity.to_value(u.arcsec) if data["angDist"].unit is not None
+                       else data["angDist"], dtype=np.float64)
+        request, service_notes = answer.request, list(answer.warnings)
+    else:
+        ia = ib = np.zeros(0, dtype=np.int64)
+        d = np.zeros(0)
+        request, service_notes = None, [("NO_REQUEST", "una tabella non ha righe con posizione: nessuna richiesta")]
+    ia, ib, d, unmatched, ties, reused = _select(ia, ib, d, mode, valid_a)
+    notes += service_notes + _common_notes(a, b, (excl_a, excl_b))
+    extra = ("In modalità best il servizio sceglie la controparte con la sua regola, non documentata per i pari "
+             "merito (D15-9).",) if mode == "best" else ()
+    if mode == "none":
+        extra = ("none ricavato dalle coppie 'all' del servizio.",)
+    import astroquery
+
+    report = MatchReport(
+        method=f"servizio CDS XMatch via astroquery.xmatch (astroquery {astroquery.__version__}), selection="
+               f"{selection}",
+        mode=mode, criterion=f"max_sep = {max_sep}", frame="icrs", systems=(_system_text(a), _system_text(b)),
+        epochs=(a.positions.epoch, b.positions.epoch), bodies=(a.body, b.body), forced_body=a.body != b.body,
+        origins=(a.origin, b.origin), rows=(a.rows, b.rows), excluded=(excl_a, excl_b), pairs=len(ia),
+        unmatched=None if unmatched is None else len(unmatched), best_ties=ties, b_reused=reused,
+        service=vo.XMATCH_URL, request=request,
+        notes=("Caricati solo indice di riga, RA e Dec in ICRS (gradi, convertiti con il modulo 10).",) + extra,
+    )
+    params = {"runner": crossmatch_cds, "mode": mode, "max_sep": max_sep, "frame": frame, "force_body": force_body,
+              "cache": cache, "refresh": refresh, "timeouts": timeouts}
+    return _result(ia, ib, {"sep": d * u.arcsec}, unmatched, report, notes, a, b, params)

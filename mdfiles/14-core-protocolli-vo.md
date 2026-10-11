@@ -242,6 +242,17 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   copre cone search, TAP, SIA, SSA): l'URL è una costante del modulo,
   come quello del servizio fotometrico di VizieR. L'albero si costruisce
   nel 13 (`collection_tree`).
+- **Servizio CDS XMatch (per il modulo 15, decisione del 2026-10-11):**
+  `cds_xmatch` invia due tabelle (colonne `idx`, `ra`, `dec` in gradi ICRS,
+  preparate dal 15) con `astroquery.xmatch` all'URL **HTTPS**
+  `XMATCH_URL` = `https://cdsxmatch.cds.unistra.fr/xmatch/api/v1/sync`
+  (il default di `astroquery` è `http://`), con i **timeout comuni di
+  `04`**, la **cache di `astroquery` disattivata** e la risposta (VOTable)
+  nella **cache del 14** (chiave con l'impronta SHA-256 delle tabelle
+  caricate), letta con `read_table` del 13; `selection` `best` o `all`;
+  limiti verificati sulla documentazione delle chiamate API il 2026-10-11:
+  `distMaxArcsec` ≤ 180 (`MAX_SEP_INVALID`), tabelle caricate ≤ 100 MB
+  (`TABLE_TOO_LARGE`); servizio che rifiuta → `SERVICE_ERROR`.
 - **Equivalente di VOApp/VOObserver (H19):** per i programmi non Python lo
   scambio passa da SAMP (questo modulo); per i programmi Python dall'API del
   24; nessuna interfaccia nuova (decisione del 2026-10-08).
@@ -374,6 +385,9 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 - **`vizier_collections(*, cache, refresh, timeouts)`** (D13-18) —
   `MocServerRecords` (record del MocServer come dati dal servizio, richiesta
   registrata, avvisi), per l'albero delle collezioni del 13.
+- **`cds_xmatch(cat1, cat2, max_distance, selection, *, cache, refresh,
+  timeouts)`** — incrocio con CDS XMatch per il 15; restituisce `VoResult`
+  (coppie con `angDist`, `idx`, `idx2`, richiesta registrata).
 - **`vizier_photometry(center, radius, ...)`** (P6, H17) — misure di flusso
   dal servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
 - **`SampHub`** (classe, P7) — hub SAMP (H14, G3, D14-2 decisa) con
@@ -400,6 +414,7 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | `pyvo` (D14-1) | ricerche SIA e SIA2 (H23) | stessa libreria VO già scelta |
 | `astroquery.simbad` | puntatore Simbad (H17) | servizio CDS ufficiale, già usato dal modulo 10 |
 | Servizio fotometrico di VizieR (CDS) | misure di flusso per la SED (H17) | servizio pubblico che raccoglie in un'unica risposta le misure di flusso dei cataloghi di VizieR; interfaccia da verificare prima del codice |
+| `astroquery.xmatch` (D15-2) | client del servizio CDS XMatch per il 15 | client ufficiale; URL HTTPS e cache del 14 |
 | MocServer del CDS (D13-18) | elenco delle collezioni VizieR con `vizier_popularity` per l'albero del 13 | unico servizio trovato che elenca le collezioni con una popolarità; proprietà non documentata, dichiarata nel risultato |
 | `defusedxml` 0.7.1 (D14-8; licenza PSF, già tra le dipendenze) | apertura sicura dei file IDHA prima del rifiuto (H23) | parser XML sicuro per file non fidati |
 | `requests` (già tra le dipendenze) | sessione HTTP con i timeout comuni di `04` | client HTTP consolidato, usato anche da `pyvo` |
@@ -673,3 +688,4 @@ senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
 | 2026-10-11 | Claude Code | **Con D13-18** (13; decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `vizier_collections`, `MocServerRecords`, `MOCSERVER_URL` — collezioni dal MocServer del CDS (JSON, protocollo `mocserver`, cache e registro comuni), verificato in linea il 2026-10-11 (§3, §7, §8, D14-4). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Verifiche chiuse dal proprietario** (2026-10-11, autorizzazione esplicita a modificare il file approvato): registro VO di default `DEFAULT_REGISTRY_URL` = `https://dc.g-vo.org/tap` (HTTPS con certificato valido, verificato), configurabile con `registry_url`, nessun default senza HTTPS valido (§3, §7; test T18 sul default); server esclusi (ESASky TAP, MAST CAOM SIA 2, cone search di SIMBAD, SSA generale) confermati fuori, con il motivo, da ricontrollare in futuro (D14-4). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): l'esportazione ECSV scrive il sistema delle posizioni nei metadati YAML `A2POSITIONS` (riletti dal 13, T5 esteso); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate nel risultato). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Per il modulo 15** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `cds_xmatch`, `XMATCH_URL` — CDS XMatch con `astroquery.xmatch` in HTTPS, timeout di `04`, cache di astroquery disattivata, risposta nella cache del 14 con l'impronta delle tabelle caricate; limiti verificati (180″, 100 MB) (§3, §7, §8). Stato `approvato` invariato. |

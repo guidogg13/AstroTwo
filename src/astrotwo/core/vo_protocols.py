@@ -73,6 +73,8 @@ __all__ = [
     "SimbadPointer",
     "VIZIER_PHOTOMETRY_URL",
     "MOCSERVER_URL",
+    "XMATCH_URL",
+    "cds_xmatch",
     "MocServerRecords",
     "vizier_collections",
     "simbad_pointer",
@@ -1689,6 +1691,80 @@ def vizier_collections(*, cache: SharedCache | None = None, refresh: bool = Fals
     notes = response.notes + _store(response, "mocserver", cache)
     record = _record("mocserver", "vizier_collections", {}, response, len(records))
     return MocServerRecords(records=tuple(records), request=record, warnings=notes)
+
+
+#: Servizio CDS XMatch (modulo 15, D15-7): URL HTTPS (il default di astroquery è http://), verificato il 2026-10-11.
+XMATCH_URL = "https://cdsxmatch.cds.unistra.fr/xmatch/api/v1/sync"
+#: Limiti dichiarati dalla documentazione delle chiamate API del servizio (verificati il 2026-10-11).
+XMATCH_MAX_DISTANCE = 180 * u.arcsec
+XMATCH_MAX_UPLOAD_BYTES = 100 * 1000 * 1000  # "Total size of uploaded tables can not be larger than 100 MB"
+
+
+def _upload_csv(table: Table) -> bytes:
+    buffer = io.StringIO()
+    table.write(buffer, format="ascii.csv")  # stessa scrittura di astroquery.xmatch per le tabelle caricate
+    return buffer.getvalue().encode("utf-8")
+
+
+def cds_xmatch(cat1: Table, cat2: Table, max_distance, selection: str, *, cache: SharedCache | None = None,
+               refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
+    """Incrocio con il servizio CDS XMatch tramite ``astroquery.xmatch`` (per il modulo 15).
+
+    ``cat1``/``cat2``: tabelle con colonne ``idx``, ``ra``, ``dec`` (gradi ICRS, preparate dal 15). URL HTTPS,
+    timeout comuni di ``04``, cache di astroquery disattivata; risposta nella cache del 14 (chiave con l'impronta
+    SHA-256 delle tabelle caricate) e letta con ``read_table`` del 13."""
+    import hashlib
+
+    from astroquery.exceptions import InvalidQueryError
+    from astroquery.xmatch import XMatchClass
+
+    if selection not in ("best", "all"):
+        raise ValueError("selection: 'best' o 'all' (parametri del servizio)")
+    distance = max_distance.to(u.arcsec)
+    if not (0 < distance.value <= XMATCH_MAX_DISTANCE.value):
+        raise VoProtocolsError("MAX_SEP_INVALID", f"max_distance {distance}: il servizio XMatch ammette (0, "
+                               f"{XMATCH_MAX_DISTANCE}]")
+    uploads = [_upload_csv(t) for t in (cat1, cat2)]
+    if sum(len(b) for b in uploads) > XMATCH_MAX_UPLOAD_BYTES:
+        raise VoProtocolsError("TABLE_TOO_LARGE", f"tabelle caricate di {sum(len(b) for b in uploads)} byte, oltre "
+                               f"il limite di {XMATCH_MAX_UPLOAD_BYTES} byte del servizio XMatch")
+    params = {"request": "xmatch", "distMaxArcsec": repr(float(distance.value)), "selection": selection,
+              "RESPONSEFORMAT": "votable", "colRA1": "ra", "colDec1": "dec", "colRA2": "ra", "colDec2": "dec",
+              "cat1_sha256": hashlib.sha256(uploads[0]).hexdigest(),
+              "cat2_sha256": hashlib.sha256(uploads[1]).hexdigest()}
+    canonical = _canonical(params)
+    cache_obj = SharedCache() if cache is None else cache
+    rows = cache_obj.table(_CACHE_MODULE, _QUERY_TABLE, _QUERY_COLUMNS)
+    key = _cache_key("xmatch", "POST", XMATCH_URL, canonical)
+    cached = rows.get(key)
+    if cached is not None and not refresh:
+        response = _Response(cached.data["payload"], XMATCH_URL, "POST", canonical, cached.retrieved_at, True,
+                             (("FROM_CACHE", f"copia in cache del {_iso(cached.retrieved_at)}"),))
+    else:
+        client = XMatchClass()
+        client.URL = XMATCH_URL
+        client.TIMEOUT = timeouts.as_requests()
+        try:
+            answer = client.query_async(cat1, cat2, distance, colRA1="ra", colDec1="dec", colRA2="ra",
+                                        colDec2="dec", cache=False, selection=selection)
+        except InvalidQueryError as exc:
+            raise VoProtocolsError("SERVICE_ERROR", f"{XMATCH_URL}: il servizio ha rifiutato la richiesta: {exc}",
+                                   url=XMATCH_URL) from exc
+        except requests.exceptions.HTTPError as exc:
+            raise VoProtocolsError("SERVICE_ERROR", f"{XMATCH_URL}: {exc}", url=XMATCH_URL) from exc
+        except requests.exceptions.RequestException as exc:
+            if cached is None:
+                raise _net_error(XMATCH_URL, exc, timeouts) from exc
+            response = _Response(cached.data["payload"], XMATCH_URL, "POST", canonical, cached.retrieved_at, True,
+                                 (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache"),))
+        else:
+            response = _Response(answer.content, XMATCH_URL, "POST", canonical, datetime.now(UTC), False)
+    result = _read_payload(response)
+    notes = response.notes + _store(response, "xmatch", cache)
+    arguments = {"max_distance_arcsec": float(distance.value), "selection": selection,
+                 "cat1_rows": len(cat1), "cat2_rows": len(cat2)}
+    return VoResult(table=result, request=_record("xmatch", "cds_xmatch", arguments, response, result.rows),
+                    warnings=notes)
 
 
 def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limits: TableLimits | None = None,

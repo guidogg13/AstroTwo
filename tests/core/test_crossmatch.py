@@ -18,6 +18,7 @@ from astrotwo.core.crossmatch import (
     CrossmatchError,
     crossmatch,
     crossmatch_by_field,
+    crossmatch_cds,
     crossmatch_ellipses,
     suggest_columns,
 )
@@ -394,3 +395,113 @@ def test_t11_invalid_ellipse(tmp_path):
     a.table["epa"].mask = [False, True]
     result = crossmatch_ellipses(a, b, ELL, ELL, 3.0, axes="semi", mode="none")
     assert result.report.excluded == (1, 0) and list(result.unmatched) == []
+
+
+# =============================================================================
+# P5 — Servizio CDS XMatch (T21 simulato, T4 di rete)
+# =============================================================================
+
+XM_VOTABLE = """<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><TABLE>
+<FIELD name="angDist" datatype="double" unit="arcsec" ucd="pos.angDistance"/>
+<FIELD name="idx" datatype="int"/><FIELD name="ra" datatype="float"/><FIELD name="dec" datatype="float"/>
+<FIELD name="idx" datatype="int"/><FIELD name="ra" datatype="float"/><FIELD name="dec" datatype="float"/>
+<DATA><TABLEDATA>{rows}</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>"""
+
+
+def uploaded_tables(request):
+    """Tabelle caricate (multipart) lette nel test con la libreria standard e astropy."""
+    from email.parser import BytesParser
+    from email.policy import default
+
+    from astropy.io import ascii as astropy_ascii
+
+    raw = b"Content-Type: " + request["headers"]["Content-Type"].encode() + b"\r\n\r\n" + request["body"]
+    message = BytesParser(policy=default).parsebytes(raw)
+    parts = {part.get_param("name", header="content-disposition"): part.get_content() for part in message.iter_parts()}
+    tables = {k: astropy_ascii.read(v if isinstance(v, str) else v.decode(), format="csv")
+              for k, v in parts.items() if k in ("cat1", "cat2")}
+    fields = {k: (v if isinstance(v, str) else v.decode()) for k, v in parts.items() if k not in ("cat1", "cat2")}
+    return tables, fields
+
+
+def xmatch_route(log, corrupt=False):
+    def route(request):
+        tables, fields = uploaded_tables(request)
+        log.append((tables, fields))
+        t1, t2 = tables["cat1"], tables["cat2"]
+        c1, c2 = SkyCoord(t1["ra"] * u.deg, t1["dec"] * u.deg), SkyCoord(t2["ra"] * u.deg, t2["dec"] * u.deg)
+        from astropy.coordinates import search_around_sky
+
+        i1, i2, sep, _ = search_around_sky(c1, c2, float(fields["distMaxArcsec"]) * u.arcsec)
+        rows = sorted(zip(i1, i2, sep.arcsec), key=lambda r: (r[0], r[2]))
+        if fields["selection"] == "best":
+            seen, best = set(), []
+            for r in rows:
+                if r[0] not in seen:
+                    seen.add(r[0])
+                    best.append(r)
+            rows = best
+        cells = "".join(
+            f"<TR><TD>{d:.6f}</TD><TD>{t1['idx'][i]}</TD><TD>{t1['ra'][i] + (1 if corrupt else 0)}</TD>"
+            f"<TD>{t1['dec'][i]}</TD><TD>{t2['idx'][j]}</TD><TD>{t2['ra'][j]}</TD><TD>{t2['dec'][j]}</TD></TR>"
+            for i, j, d in rows)
+        return 200, "application/x-votable+xml", XM_VOTABLE.format(rows=cells)
+    return route
+
+
+def test_t21_cds_simulated(tmp_path, service, cache, monkeypatch):
+    import astrotwo.core.vo_protocols as vo
+
+    assert vo.XMATCH_URL.startswith("https://")  # URL HTTPS di default (il default di astroquery è http://)
+    log = []
+    service.routes["/xmatch"] = xmatch_route(log)
+    monkeypatch.setattr(vo, "XMATCH_URL", service.url + "/xmatch")
+    ra = 10 + 0.01 * np.arange(6)
+    a = make_table(tmp_path / "a.xml", list(ra) + [None], [0.0] * 7, extra={"mag": ("mag", [1.0] * 7)})
+    shifted = [offset(r, 0.0, 10.0, 0.7) for r in ra[[0, 2, 3]]]
+    gal = SkyCoord([x[0] for x in shifted] * u.deg, [x[1] for x in shifted] * u.deg).transform_to(Galactic())
+    b = make_table(tmp_path / "b.xml", gal.l.deg, gal.b.deg, system="galactic", galactic=True)
+    result = crossmatch_cds(a, b, "best", 2 * u.arcsec, cache=cache)
+    tables, fields = log[-1]
+    assert tables["cat1"].colnames == ["idx", "ra", "dec"] and tables["cat2"].colnames == ["idx", "ra", "dec"]
+    assert list(tables["cat1"]["idx"]) == list(range(6))  # la riga senza posizione non si carica
+    icrs = gal.transform_to("icrs")  # B caricata in ICRS, convertita (ricalcolo con astropy)
+    assert np.allclose(tables["cat2"]["ra"], icrs.ra.deg, atol=1e-12) and fields["selection"] == "best"
+    assert list(result.pairs["idx_a"]) == [0, 2, 3] and list(result.pairs["idx_b"]) == [0, 1, 2]
+    local = crossmatch(a, b, "best", 2 * u.arcsec)
+    assert np.max(np.abs(result.pairs["sep"] - local.pairs["sep"])) <= 1e-3  # entro 1 mas (arcsec)
+    assert result.report.service == service.url + "/xmatch" and result.report.request.protocol == "xmatch"
+    assert result.report.excluded == (1, 0) and "D15-9" in result.report.describe()
+    # none ricavato da all; la stessa richiesta torna dalla cache del 14.
+    none = crossmatch_cds(a, b, "none", 2 * u.arcsec, cache=cache)
+    assert log[-1][1]["selection"] == "all" and list(none.unmatched) == [1, 4, 5]
+    calls = len(log)
+    again = crossmatch_cds(a, b, "none", 2 * u.arcsec, cache=cache)
+    assert len(log) == calls and again.report.request.from_cache
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_cds(a, b, "best", 181 * u.arcsec, cache=cache)
+    assert err.value.code == "MAX_SEP_INVALID"
+    service.routes["/xmatch"] = xmatch_route(log, corrupt=True)
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_cds(a, b, "all", 2 * u.arcsec, cache=cache, refresh=True)
+    assert err.value.code == "SERVICE_ERROR"
+
+
+@pytest.mark.network
+def test_t4_local_vs_cds(tmp_path, cache):
+    rng = np.random.default_rng(7)
+    ra, dec = 150 + 0.02 * rng.random(30), 2 + 0.02 * rng.random(30)
+    others = [offset(r, d, float(pa), float(sep)) for r, d, pa, sep in
+              zip(ra, dec, 360 * rng.random(30), 3 * rng.random(30))]
+    a = make_table(tmp_path / "a.xml", ra, dec)
+    b = make_table(tmp_path / "b.xml", [o[0] for o in others], [o[1] for o in others])
+    for mode in ("all", "best", "none"):
+        local = crossmatch(a, b, mode, 2 * u.arcsec)
+        remote = crossmatch_cds(a, b, mode, 2 * u.arcsec, cache=cache)
+        if mode == "none":
+            assert list(local.unmatched) == list(remote.unmatched)
+            continue
+        assert list(local.pairs["idx_a"]) == list(remote.pairs["idx_a"])
+        assert list(local.pairs["idx_b"]) == list(remote.pairs["idx_b"])
+        assert np.max(np.abs(local.pairs["sep"] - remote.pairs["sep"])) <= 1e-3  # 1 mas, in arcsec

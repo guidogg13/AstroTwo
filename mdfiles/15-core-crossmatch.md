@@ -90,8 +90,19 @@ accettate):**
   il modulo 10); il risultato si riporta agli indici locali. Il servizio ha
   `selection=best|all` (verificato sulla documentazione delle chiamate
   API): `best` e `all` si chiedono al servizio, **`none` si ricava da
-  `all`**. **Prima di P5:** verifica dei limiti di dimensione dei file
-  caricati.
+  `all`**. **Verifiche prima di P5 (2026-10-11):** la documentazione delle
+  chiamate API del CDS dice "Total size of uploaded tables can not be larger
+  than 100 MB" (oltre: `TABLE_TOO_LARGE` prima dell'invio) e
+  `distMaxArcsec` ≤ 180 (la pagina generale del servizio indica 120″ per
+  l'interfaccia web; l'API ha accettato 150″ in una prova del 2026-10-11,
+  quindi vale 180″ come deciso); `angDist` è restituito con 6 decimali in
+  arcsec. Il servizio rimanda `idx`, RA e Dec caricati con tipi propri
+  (`int16`, `float32` nella prova): ogni coppia si controlla confrontando
+  RA e Dec restituiti con quelli caricati per quell'indice (entro 10⁻⁴°),
+  altrimenti `SERVICE_ERROR`. La rete passa dal 14 (`cds_xmatch`, URL
+  `XMATCH_URL`, chiave di cache con l'impronta SHA-256 delle tabelle
+  caricate). In `best` la scelta tra pari merito è quella del servizio
+  (non documentata), dichiarata nel report (D15-9).
 - **Report dei criteri:** ogni risultato riporta modalità, distanza massima,
   sistema di riferimento, epoca e servizio/URL usati.
 - **Distanze di appaiamento:** per ogni coppia si riporta la separazione
@@ -379,6 +390,16 @@ coppie né le separazioni.
   usa posizioni, e il report lo dichiara. **Fermo solo questo punto:** oggi
   vale (c), come scritto in §9.
 
+- **D15-9 — `best` con il servizio CDS: DA DECIDERE (aperta il 2026-10-11,
+  Gruppo 3).** La decisione dice "`best` e `all` dal servizio" e insieme "a
+  pari distanza vince l'indice più basso in B"; con `selection=best` la
+  scelta tra pari merito la fa il servizio, con una regola non documentata,
+  quindi il locale e il CDS potrebbero differire nei pari merito (T4). Opzioni:
+  (a) chiedere `all` anche per `best` e applicare la nostra regola in locale
+  (stesso risultato del locale, più dati scaricati); (b) come oggi, regola
+  del servizio dichiarata nel report. **Raccomandazione:** (a). **Fermo solo
+  questo punto:** oggi vale (b), dichiarato.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -394,3 +415,4 @@ coppie né le separazioni.
 | 2026-10-11 | Claude Code | **P2 scritta** (`CrossMatchResult.joined`, `suggest_columns`, `ColumnSuggestions`; test T13, T18): rinomine solo dei nomi in conflitto (anche con `xmatch_sep`), avviso `COLUMNS_RENAMED` e voci nella storia; `meta.main` tolto dalle colonne della tabella non principale (`MAIN_UCD_REMOVED`, `UCD_CONFLICT` se lo stesso UCD principale è in entrambe); in modalità `none` solo le colonne di A dei non appaiati; metadati di colonna copiati (tabelle d'ingresso invariate). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P3 scritta** (`crossmatch_by_field`, `FIELD_MODES`; test T9, T10): join con `astropy.table.join` su chiavi normalizzate (testo senza spazi finali; numeri reali in `float64` se una delle due chiavi è reale; booleani), chiavi mancanti mai coincidenti (`KEY_MISSING`), combinazioni da chiavi ripetute dichiarate (`KEY_REPEATED`, nuovo in §10); regola del corpo di §9 applicata anche qui. Nuova decisione aperta **D15-8** (corpo nella correlazione per campo, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P4 scritta** (`crossmatch_ellipses`; test T11, T12, T20): verificato con astropy 8.0.1 che `spherical_offsets_to` dà le componenti verso est e verso nord (angolo di posizione 0° = nord, 90° = est); soglia e `axes` obbligatori (`ERROR_ELLIPSE_INVALID`), raggio rigoroso dei candidati, coppie con covarianza singolare escluse con avviso, distanza nella colonna `mahalanobis` e separazione in `sep`; report con formula, piano tangente in A e frazione 2D 1 − exp(−k²/2) calcolata per la soglia data; valori d'ellisse mancanti esclusi e contati. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **P5 scritta — modulo 15 completo tranne i pezzi fermi D15-8 e D15-9** (`crossmatch_cds`, rete con `cds_xmatch` del 14; test T21 con un XMatch simulato e T4 di rete, locale contro CDS entro 1 mas in `all`, `best`, `none`): verifiche dei limiti (100 MB, 180″), controllo dell'eco di RA e Dec per ogni indice, `none` da `all`. Nuova decisione aperta **D15-9** (`best` con il servizio, Gruppo 3). Stato `approvato` invariato. |
