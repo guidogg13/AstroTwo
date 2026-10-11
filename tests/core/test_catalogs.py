@@ -1024,6 +1024,8 @@ def test_collection_tree_popularity(service, cache, monkeypatch):
         {"ID": "CDS/I/355/gaiadr3", "obs_title": "Gaia DR3", "vizier_popularity": "1000"},
         {"ID": "CDS/I/355/paramp", "obs_title": "Gaia DR3 paramp", "vizier_popularity": "1000"},
         {"ID": "CDS/I/239/hip_main", "obs_title": "Hipparcos", "vizier_popularity": "50"},
+        {"ID": "CDS/I/10/x", "obs_title": "pari 50, numero più grande", "vizier_popularity": "50"},
+        {"ID": "CDS/I/9/y", "obs_title": "pari 50, numero più piccolo", "vizier_popularity": "50"},
         {"ID": "CDS/I/100/a", "obs_title": "senza popolarità"},
         {"ID": "CDS/I/101/b", "obs_title": "anche lui"},
         {"ID": "CDS/Simbad", "obs_title": "SIMBAD"},
@@ -1038,7 +1040,8 @@ def test_collection_tree_popularity(service, cache, monkeypatch):
     i = tree.find("I")
     assert i.popularity == 1000 and not i.table
     # Decrescente per popolarità, poi le collezioni senza la proprietà in ordine alfabetico.
-    assert [c.id for c in i.children] == ["I/355", "I/239", "I/100", "I/101"]
+    # A pari popolarità ordine naturale (I/9 prima di I/10 e di I/239).
+    assert [c.id for c in i.children] == ["I/355", "I/9", "I/10", "I/239", "I/100", "I/101"]
     assert [c.id for c in tree.find("I/355").children] == ["I/355/gaiadr3", "I/355/paramp"]  # pari: alfabetico
     leaf = tree.find("II/246/out")
     assert leaf.table and leaf.title == "2MASS" and leaf.popularity == 320
@@ -1050,7 +1053,7 @@ def test_collection_tree_popularity(service, cache, monkeypatch):
     service.routes["/moc"] = mocserver_route([{"ID": r["ID"], "obs_title": r["obs_title"]} for r in records])
     plain = collection_tree(cache=cache, refresh=True)
     assert plain.ordering == ALPHABETICAL_NOTE and [c.id for c in plain.find("I").children] == [
-        "I/100", "I/101", "I/239", "I/355"]
+        "I/9", "I/10", "I/100", "I/101", "I/239", "I/355"]
     service.routes["/moc"] = lambda r: (200, "application/json", "non è json")
     with pytest.raises(vo.VoProtocolsError) as err:
         collection_tree(cache=cache, refresh=True)

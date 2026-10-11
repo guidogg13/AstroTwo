@@ -254,6 +254,11 @@ def _write_ecsv_file(table: CatalogTable, target: Path, info: dict[str, str]) ->
     """ECSV di astropy (D14-10): unità, UCD e descrizioni nell'intestazione, provenienza nei metadati."""
     data = table.table.copy(copy_data=False)
     data.meta = dict(info)
+    pos = table.positions
+    if pos is not None and pos.frame is not None:
+        # Sistema delle posizioni nei metadati YAML (l'ECSV non ha un COOSYS): il 13 lo rilegge.
+        data.meta["A2POSITIONS"] = {"lon": pos.lon, "lat": pos.lat, "frame": pos.frame, "system": pos.system,
+                                    "equinox": pos.equinox, "epoch": pos.epoch, "source": pos.source}
     for name in data.colnames:
         col = data[name]
         meta = {k: v for k, v in col.meta.items() if k != "ref"}  # il COOSYS citato non esiste nell'ECSV

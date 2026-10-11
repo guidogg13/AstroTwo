@@ -158,8 +158,12 @@ def test_ecsv_round_trip_units_and_ucd(tmp_path, catalog):
     assert np.ma.getmaskarray(back.table["Vmag"]).tolist() == [False, True, False]
     assert back.table["flag"].unit is None and back.table["flag"].meta["unit_unrecognized"] == "---"
     assert ("UNIT_UNRECOGNIZED" in [c for c, _ in back.warnings])
-    # Posizioni dagli UCD; il sistema di riferimento (COOSYS) non ha posto nell'ECSV: dichiarato sconosciuto.
-    assert (back.positions.lon, back.positions.lat) == ("RA", "DE") and back.positions.frame is None
+    # Sistema, equinozio ed epoca delle posizioni nei metadati YAML: riletti, nessun FRAME_UNKNOWN.
+    assert (back.positions.lon, back.positions.lat) == ("RA", "DE")
+    assert (back.positions.frame, back.positions.epoch) == (catalog.positions.frame, catalog.positions.epoch) == (
+        "icrs", "J2016.0")
+    assert back.body == "celestial" and "FRAME_UNKNOWN" not in dict(back.warnings)
+    assert "POSITIONS_FROM_ECSV" in dict(back.warnings)
     meta = back.table.meta
     assert meta["A2FORMAT"] == "ECSV 1.0" and meta["A2ORIGIN"] == catalog.origin
     assert meta["A2WRITER"] == f"astropy {astropy.__version__}"
@@ -167,6 +171,25 @@ def test_ecsv_round_trip_units_and_ucd(tmp_path, catalog):
     # Senza unità nella tabella il CSV non dà avvisi.
     plain = dataclasses.replace(catalog, table=Table({"a": [1, 2]}))
     assert export_table(plain, tmp_path / "p.csv", "csv").warnings == ()
+
+
+def test_ecsv_positions_fk5_and_confirmed(tmp_path):
+    # FK5 con equinozio, e colonne confermate dall'utente (senza UCD): andata e ritorno ECSV.
+    import dataclasses
+    from astrotwo.core.catalogs import confirm_position_columns
+
+    path = tmp_path / "fk5.xml"
+    path.write_text(VOTABLE.replace('<COOSYS ID="sys" system="ICRS" epoch="J2016.0"/>',
+                                    '<COOSYS ID="sys" system="eq_FK5" equinox="J2000"/>')
+                    .format(rows="<TR><TD>1</TD><TD>2</TD><TD>3</TD><TD>a</TD></TR>", status="OK"), encoding="utf-8")
+    fk5 = read_table(path)
+    back = read_table(export_table(fk5, tmp_path / "fk5.ecsv", "ecsv"))
+    assert (back.positions.frame, back.positions.equinox) == ("fk5", "J2000")
+    plain = dataclasses.replace(fk5, table=Table({"x": [1.0, 2.0], "y": [3.0, 4.0]}), positions=None, body=None)
+    confirmed = confirm_position_columns(plain, "x", "y", "galactic", unit=u.deg)
+    again = read_table(export_table(confirmed, tmp_path / "c.ecsv", "ecsv"))
+    assert (again.positions.lon, again.positions.frame, again.positions.source) == ("x", "galactic", "confirmed")
+    assert again.body == "celestial"
 
 
 def test_fits_and_csv_provenance(tmp_path, catalog):

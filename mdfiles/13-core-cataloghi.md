@@ -33,12 +33,14 @@ suo VOTable.
     che non sono collezioni VizieR (es. `CDS/Simbad`, già nel gruppo fisso)
     sono esclusi con l'avviso `COLLECTION_SKIPPED`. **Ordine:** fratelli per
     `vizier_popularity` **decrescente** (per un nodo interno: il massimo del
-    suo sottoalbero), a pari valore in ordine alfabetico dell'identificativo;
-    le collezioni senza la proprietà dopo le altre, in ordine alfabetico
+    suo sottoalbero), a pari valore in **ordine naturale**
+    dell'identificativo (i numeri contano come numeri: `I/9` prima di
+    `I/10`; decisione del proprietario del 2026-10-11);
+    le collezioni senza la proprietà dopo le altre, in ordine naturale
     (`POPULARITY_MISSING`); un valore non intero vale come assente
     (`POPULARITY_INVALID`). Il risultato **dichiara** l'ordine: "ordine per
     vizier_popularity, **proprietà non documentata del MocServer**"; se la
-    proprietà manca in tutta la risposta, ordine alfabetico, dichiarato.
+    proprietà manca in tutta la risposta, ordine naturale, dichiarato.
     Verifica del 2026-10-11: risposta JSON di 37 306 collezioni (circa
     5 MB, pochi secondi), `vizier_popularity` presente in 37 302; il
     valore è lo stesso per tutte le tabelle di un catalogo (es. 1000 per
@@ -61,8 +63,12 @@ suo VOTable.
   (predecessore di VOTable, letto per compatibilità), più **ECSV** di
   `astropy` (D14-10, decisa il 2026-10-11: è il formato in cui il 14
   esporta le tabelle con unità; unità, UCD, descrizioni e valori mancanti
-  si leggono dall'intestazione; il sistema di riferimento delle posizioni
-  non c'è, quindi `FRAME_UNKNOWN` finché l'utente non lo conferma). Tutti i
+  si leggono dall'intestazione; **colonne di posizione, sistema,
+  equinozio ed epoca** di un ECSV scritto da AstroTwo si leggono dai
+  metadati YAML `A2POSITIONS` (decisione del proprietario del
+  2026-10-11; avviso `POSITIONS_FROM_ECSV`, nessun `FRAME_UNKNOWN`);
+  metadati non utilizzabili o in disaccordo con le colonne degli UCD →
+  avviso `ECSV_POSITIONS_INVALID`, nessuna scelta). Tutti i
   formati si leggono con `astropy.io.votable`, `astropy.io.ascii` e
   `astropy.io.fits`,
   **tranne ASTRORES**, letto da un lettore nel modulo con **`defusedxml`**
@@ -625,7 +631,7 @@ suo VOTable.
 | Regione: sistema delle colonne non dichiarato con un `COOSYS` | rifiuto, nessun sistema assunto | `FRAME_UNKNOWN` |
 | Regione usata | righe nel cerchio; colonne, sistema, centro convertito e raggio dichiarati | avviso `REGION` |
 | Record del MocServer che non è una collezione VizieR | escluso dall'albero | avviso `COLLECTION_SKIPPED` |
-| Collezioni senza `vizier_popularity` (o con un valore non intero) | dopo le altre, in ordine alfabetico | avvisi `POPULARITY_MISSING`, `POPULARITY_INVALID` |
+| Collezioni senza `vizier_popularity` (o con un valore non intero) | dopo le altre, in ordine naturale | avvisi `POPULARITY_MISSING`, `POPULARITY_INVALID` |
 | File assente o non leggibile | nessuna tabella aperta, errore con il percorso | `TABLE_UNREADABLE` |
 | Tabella senza colonne di posizione da UCD/metadati né confermate | caricamento riuscito con avviso; le funzioni di posizione danno errore | `NO_COORD_COLUMNS` |
 | Colonne di posizione senza sistema di riferimento dichiarato | funzioni che lo richiedono rifiutate | `FRAME_UNKNOWN` |
@@ -697,7 +703,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T23 | Parallasse e moto proprio mancanti | tabella con righe senza parallasse, con parallasse negativa e senza moto proprio | nessuna riga esclusa; righe senza parallasse valida propagate solo con il moto proprio (`pm_only`), valori uguali ad Astropy senza distanza; righe senza moto proprio mascherate (`missing`); conteggi nel report; colonne originali intatte | ricalcolo con Astropy |
 | T28 | ASTRORES non conforme | campo `F` in gradi con dati sessagesimali; `ref` `#id(...)` | colonna in gradi uguale ad `astropy.coordinates.Angle` (ore per RA, gradi per Dec), colonna `_text` conservata, `ASTRORES_TYPE_MISMATCH`; `ref` accettato con `ASTRORES_NONCONFORMING_REF` | ricalcolo con Astropy |
 | T30 | Filtro temporale | VOTable con `TIMESYS` (MJD, TDB) e colonna ISO senza `TIMESYS`; intervallo `[inizio, fine]` | estremi inclusi, mancanti esclusi e contati; con `TIMESYS` parametri rifiutati; senza `TIMESYS` formato e scala obbligatori; inizio > fine → `EPOCH_INVALID` | confronto con `astropy.time` |
-| T31 | Albero delle collezioni (D13-18) | MocServer simulato con popolarità diverse, uguali, assenti, un record `CDS/Simbad`; poi senza la proprietà; poi risposta non JSON; test di rete sul MocServer | ordine decrescente, a pari valore alfabetico, assenti in fondo; ordine dichiarato "proprietà non documentata del MocServer"; senza proprietà ordine alfabetico dichiarato; `CDS/Simbad` escluso; seconda chiamata dalla cache; risposta non valida → `SERVICE_ERROR` del 14 | test con servizio simulato (più un test di rete) |
+| T31 | Albero delle collezioni (D13-18) | MocServer simulato con popolarità diverse, uguali, assenti, un record `CDS/Simbad`; poi senza la proprietà; poi risposta non JSON; test di rete sul MocServer | ordine decrescente, a pari valore ordine naturale (`I/9` prima di `I/10`), assenti in fondo; ordine dichiarato "proprietà non documentata del MocServer"; senza proprietà ordine naturale dichiarato; `CDS/Simbad` escluso; seconda chiamata dalla cache; risposta non valida → `SERVICE_ERROR` del 14 | test con servizio simulato (più un test di rete) |
 | T32 | `load_catalog` senza regione | TAP VizieR simulato con 3 righe e `max_rows` 2 e 3; con `allow_partial=True`; test di rete su 2MASS con `max_rows` 5 | `max_rows` 2 → `REGION_REQUIRED`; con `allow_partial=True` 2 righe, `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` e voce nella storia; `max_rows` 3 → catalogo intero senza avvisi; in rete stesso comportamento | test con servizio simulato (più un test di rete) |
 | T33 | `load_catalog` con regione (D13-19) | TAP simulato con `TAP_SCHEMA` (nomi tra virgolette) e `COOSYS` `FK5` equinozio `2000.0`; centro ICRS; poi senza `COOSYS`, con due RA senza `meta.main`, raggi non validi, regione oltre `max_rows`; termini `refframe` nel `COOSYS`; test di rete su 2MASS attorno a M31 e su SIMBAD | ADQL con il centro convertito in FK5 J2000 uguale ad astropy; sistema e colonne dichiarati; `FRAME_UNKNOWN`, `NO_COORD_COLUMNS`, `REGION_INVALID`, `REGION_TOO_LARGE`; in rete tutte le righe entro il raggio (separazione ricalcolata con astropy); SIMBAD → `FRAME_UNKNOWN` | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
@@ -705,6 +711,17 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
 | T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
 | T27 | Più tabelle | VOTable con due `TABLE`, FITS con due HDU di tabella | senza `table` → `TABLE_CHOICE_REQUIRED` con l'elenco; con `table` la tabella giusta; `list_tables` | confronto con Astropy |
+
+**Test di rete (decisione del proprietario del 2026-10-11):** i test con il
+marcatore `network` si ripetono **al massimo 2 volte** e **solo** per un
+errore di connessione o di timeout (eccezioni di connessione/timeout di
+`requests` e della libreria standard, errori `NET_TIMEOUT` dei moduli, i
+due messaggi fissi di `pyvo` "Connection failed" e "Request timed out"),
+**mai** per un risultato sbagliato (un `AssertionError` non si ripete);
+ogni ripetizione è scritta nel risultato del test (sezione "ripetizioni di
+rete" e riepilogo finale di `pytest`). Implementata in `tests/conftest.py`
+senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
+`tests/test_network_retries.py`.
 
 ## 13. Decisioni aperte
 
@@ -827,7 +844,8 @@ sono verificati da `34-ia-verifica-risultati.md`.
   DECISA il 2026-10-11 (decisione del proprietario).** L'albero usa la
   proprietà `vizier_popularity` del MocServer del CDS, dichiarata nel
   risultato come "proprietà non documentata del MocServer"; se manca,
-  ordinamento alfabetico. Client nel 14 (`vizier_collections`). Applicata
+  ordinamento alfabetico (dal 2026-10-11 ordine naturale, anche a pari
+  popolarità). Client nel 14 (`vizier_collections`). Applicata
   in §3, §7, §10, §12 (T31). (Aperta il 2026-10-10: opzioni MocServer con
   popolarità, senza popolarità, `TAP_SCHEMA`; raccomandazione la prima.)
 - **D13-19 — Parametro di regione di `load_catalog`: DECISA il 2026-10-11
@@ -897,3 +915,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **D13-18 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `collection_tree`, `CollectionTree`, `CollectionNode` — albero delle collezioni dal MocServer del CDS (client `vizier_collections` nel 14), ordinato per `vizier_popularity` decrescente (nodi interni: massimo del sottoalbero; pari valore e assenti in ordine alfabetico), dichiarato come "proprietà non documentata del MocServer", ordine alfabetico se la proprietà manca; `CDS/Simbad` escluso; avvisi `COLLECTION_SKIPPED`, `POPULARITY_MISSING`, `POPULARITY_INVALID`; verifica in linea del MocServer; nuovo T31 (§3, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `load_catalog` senza regione solo entro `max_rows` (troncamento dichiarato dal servizio), altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato (`PARTIAL_CATALOG`); nuovo T32. Nuova decisione aperta **D13-19** (parametro di regione di `load_catalog`, Gruppo 3; fermo solo il parametro). Traduzione UCD1 del CDS rimandata a bassa priorità come **D13-14c** (Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-19 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `load_catalog(..., region=(centro, raggio))` con colonne dagli UCD di `TAP_SCHEMA`, sistema dal `COOSYS` del servizio, centro convertito con il modulo 10, `CatalogRegion` dichiarata; nuovi `REGION_INVALID`, `REGION_TOO_LARGE`, avviso `REGION`; `REGION_REQUIRED` indica il parametro; il lettore riconosce i termini del vocabolario IVOA `refframe` (`FK5`, `FK4`, `GALACTIC`, `SUPER_GALACTIC`) e legge l'equinozio numerico come per ASTRORES (verifica su TAPVizieR); T33. Nuova decisione aperta **D13-20** (sistema di SIMBAD nell'`utype` MANGO, Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): ECSV scritto da AstroTwo con colonne, sistema, equinozio ed epoca delle posizioni nei metadati YAML `A2POSITIONS`, riletti senza `FRAME_UNKNOWN` (avvisi `POSITIONS_FROM_ECSV`, `ECSV_POSITIONS_INVALID`); albero delle collezioni in ordine naturale a pari popolarità (e per le collezioni senza popolarità); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate). Stato `approvato` invariato. |

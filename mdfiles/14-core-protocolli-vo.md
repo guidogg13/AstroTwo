@@ -96,12 +96,13 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   descrizioni e valori mancanti; provenienza nei metadati della tabella;
   versione del formato "ECSV 1.0"); il 13 rilegge l'ECSV. Il **CSV
   semplice resta disponibile**: con colonne che hanno unità dà l'avviso
-  `CSV_UNITS_NOT_SAVED` (le unità non vengono salvate). Nell'ECSV il
-  sistema di riferimento delle colonne di posizione (il `COOSYS` del
-  VOTable) non ha un posto standard: riletto, le colonne di posizione si
-  ritrovano dagli UCD ma il sistema è sconosciuto (`FRAME_UNKNOWN`, da
-  confermare con `confirm_position_columns` del 13); il testo resta nella
-  provenienza `A2POS`.
+  `CSV_UNITS_NOT_SAVED` (le unità non vengono salvate). L'ECSV non ha un
+  posto standard per il sistema delle posizioni (il `COOSYS` del VOTable):
+  **AstroTwo lo scrive nei metadati YAML** come `A2POSITIONS` (colonne,
+  sistema, termine originale, equinozio, epoca, fonte: UCD o conferma
+  dell'utente; decisione del proprietario del 2026-10-11) e il 13 lo
+  rilegge, quindi un ECSV scritto da AstroTwo non dà `FRAME_UNKNOWN`; il
+  testo resta anche nella provenienza `A2POS`.
 - **Schede server (H10):** gestire i collegamenti a servizi esterni con un
   **elenco di server nostro**, tratto dai servizi pubblici del VO (D14-4,
   corretta il 2026-10-10), più i server personali dell'utente; le immagini
@@ -481,7 +482,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T2 | Cone search nota | cone search di raggio 10 arcsec attorno a una posizione presa dal tester | numero di righe coincidente con quanto ricalcolato dal test contro lo stesso servizio | doppia chiamata confrontata (test di rete separato) |
 | T3 | Troncamento | eseguire una query con `max_rows` piccolo su un catalogo fitto | `ROW_LIMIT_EXCEEDED`/avviso e numero di righe = `max_rows` | test con servizio simulato |
 | T4 | ADQL non valida | inviare ADQL malformata | rifiuto con messaggio, nessuna chiamata di rete inutile | test di unità con server simulato |
-| T5 | Export CSV/ECSV/VOTable/FITS (D14-10) | esportare la stessa tabella nei quattro formati e rileggere con `read_table` del 13; andata e ritorno ECSV con unità (anche non riconosciute), UCD e valori mancanti | valori equivalenti nei quattro casi; unità identiche in ECSV, VOTable e FITS; CSV senza unità con `CSV_UNITS_NOT_SAVED`; versione "FITS Standard 4.0" e `A2WRITER` | ricalcolo con Astropy |
+| T5 | Export CSV/ECSV/VOTable/FITS (D14-10) | esportare la stessa tabella nei quattro formati e rileggere con `read_table` del 13; andata e ritorno ECSV con unità (anche non riconosciute), UCD, valori mancanti e sistema delle posizioni (ICRS con epoca, FK5 con equinozio, colonne confermate dall'utente) | valori equivalenti nei quattro casi; unità identiche in ECSV, VOTable e FITS; CSV senza unità con `CSV_UNITS_NOT_SAVED`; versione "FITS Standard 4.0" e `A2WRITER` | ricalcolo con Astropy |
 | T6 | Riproducibilità | eseguire una query, poi rilesare i parametri registrati | la seconda esecuzione usa gli stessi URL, parametri e restituisce lo stesso schema | confronto dei metadati registrati |
 | T7 | SAMP | avviare l'hub, collegare un client simulato, inviare una tabella | il client riceve lo stesso contenuto | test con client simulato |
 | T8 | SAMP selezione e puntamento (G3) | inviare al client simulato una selezione e un puntamento, poi riceverne uno | contenuti identici a quelli inviati, tipi supportati | test con client simulato |
@@ -498,6 +499,17 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T19 | DataLink (H8, D14-3) | `links` su un documento DataLink simulato con un descrittore di servizio; `call_service` | link con semantica, URL e content-type; chiamata con i parametri del descrittore | servizio simulato |
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
+
+**Test di rete (decisione del proprietario del 2026-10-11):** i test con il
+marcatore `network` si ripetono **al massimo 2 volte** e **solo** per un
+errore di connessione o di timeout (eccezioni di connessione/timeout di
+`requests` e della libreria standard, errori `NET_TIMEOUT` dei moduli, i
+due messaggi fissi di `pyvo` "Connection failed" e "Request timed out"),
+**mai** per un risultato sbagliato (un `AssertionError` non si ripete);
+ogni ripetizione è scritta nel risultato del test (sezione "ripetizioni di
+rete" e riepilogo finale di `pytest`). Implementata in `tests/conftest.py`
+senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
+`tests/test_network_retries.py`.
 
 ## 13. Decisioni aperte
 
@@ -660,3 +672,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **Con D13-17** (13): `download_table` passa al lettore del 13 la funzione di rete per i dati in un `LINK` ASTRORES (stessa cache e stessi timeout, `href` relativo risolto sull'URL scaricato). Nessun altro comportamento cambia. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Con D13-18** (13; decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `vizier_collections`, `MocServerRecords`, `MOCSERVER_URL` — collezioni dal MocServer del CDS (JSON, protocollo `mocserver`, cache e registro comuni), verificato in linea il 2026-10-11 (§3, §7, §8, D14-4). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Verifiche chiuse dal proprietario** (2026-10-11, autorizzazione esplicita a modificare il file approvato): registro VO di default `DEFAULT_REGISTRY_URL` = `https://dc.g-vo.org/tap` (HTTPS con certificato valido, verificato), configurabile con `registry_url`, nessun default senza HTTPS valido (§3, §7; test T18 sul default); server esclusi (ESASky TAP, MAST CAOM SIA 2, cone search di SIMBAD, SSA generale) confermati fuori, con il motivo, da ricontrollare in futuro (D14-4). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): l'esportazione ECSV scrive il sistema delle posizioni nei metadati YAML `A2POSITIONS` (riletti dal 13, T5 esteso); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate nel risultato). Stato `approvato` invariato. |

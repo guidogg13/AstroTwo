@@ -387,6 +387,26 @@ def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColum
     return None, notes
 
 
+def _ecsv_positions(table: Table, positions: PositionColumns | None, notes: list[tuple[str, str]]):
+    """Sistema delle posizioni dai metadati ``A2POSITIONS`` di un ECSV scritto da AstroTwo (il 14)."""
+    meta = table.meta.get("A2POSITIONS")
+    if not isinstance(meta, dict):
+        return positions, notes
+    lon, lat, frame = meta.get("lon"), meta.get("lat"), meta.get("frame")
+    if lon not in table.colnames or lat not in table.colnames or frame not in supported_frames():
+        return positions, notes + [("ECSV_POSITIONS_INVALID", f"metadati A2POSITIONS non utilizzabili: {meta}")]
+    if positions is not None and (positions.lon, positions.lat) != (lon, lat):
+        return positions, notes + [("ECSV_POSITIONS_INVALID", f"A2POSITIONS ({lon}/{lat}) diverso dalle colonne "
+                                    f"degli UCD ({positions.lon}/{positions.lat}): nessuna scelta")]
+    found = PositionColumns(lon=lon, lat=lat, frame=frame, equinox=meta.get("equinox"), epoch=meta.get("epoch"),
+                            source=meta.get("source") or "ucd", system=meta.get("system"))
+    kept = [n for n in notes if not (n[0] == "FRAME_UNKNOWN" and f"{lon!r}/{lat!r}" in n[1])]
+    return found, kept + [("POSITIONS_FROM_ECSV", f"colonne {lon}/{lat}, sistema {frame}"
+                           + (f" equinozio {found.equinox}" if found.equinox else "")
+                           + (f" epoca {found.epoch}" if found.epoch else "")
+                           + " dai metadati ECSV scritti da AstroTwo")]
+
+
 def _celestial_body(positions: PositionColumns | None, table: Table) -> str | None:
     if positions is None:
         return None
@@ -658,6 +678,8 @@ def _read_table(source, *, table=None, format=None, limits: TableLimits | None =
         notes.append(("FORMAT_DECLARED", f"formato {format} indicato dall'utente, nessun riconoscimento"))
     notes.extend(_normalize_units(result))
     positions, position_notes = _positions_from_ucd(result, coosys)
+    if fmt == "ecsv":
+        positions, position_notes = _ecsv_positions(result, positions, position_notes)
     notes.extend(position_notes)
     body = _celestial_body(positions, result)
     if positions is None:
@@ -2288,7 +2310,7 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
 
 #: Dichiarazione dell'ordine dell'albero (D13-18): la proprietà non è descritta dalla documentazione del MocServer.
 POPULARITY_NOTE = "ordine per vizier_popularity, proprietà non documentata del MocServer"
-ALPHABETICAL_NOTE = "ordine alfabetico degli identificativi (vizier_popularity assente)"
+ALPHABETICAL_NOTE = "ordine naturale degli identificativi (vizier_popularity assente)"
 
 
 @dataclass(frozen=True)
@@ -2337,6 +2359,11 @@ def _popularity(value) -> int | None:
     return int(number) if math.isfinite(number) and number == int(number) else None
 
 
+def _natural_key(text: str) -> tuple:
+    """Ordinamento naturale: i numeri contano come numeri (``I/9`` prima di ``I/10``), il resto come testo."""
+    return tuple(int(part) if k % 2 else part for k, part in enumerate(re.split(r"(\d+)", text)))
+
+
 def collection_tree(*, cache=None, refresh: bool = False, timeouts=None) -> CollectionTree:
     """Albero delle collezioni VizieR dal MocServer del CDS (client nel 14), ordinato per ``vizier_popularity``
     (decrescente, a pari valore in ordine alfabetico) e dichiarato come proprietà non documentata; senza la
@@ -2371,8 +2398,8 @@ def collection_tree(*, cache=None, refresh: bool = False, timeouts=None) -> Coll
     def key(node_id: str):
         pop = nodes[node_id]["popularity"]
         if not any_popularity:
-            return (0, 0, node_id)
-        return (pop is None, -(pop or 0), node_id)
+            return (0, 0, _natural_key(node_id))
+        return (pop is None, -(pop or 0), _natural_key(node_id))
 
     def build(node_id: str) -> CollectionNode:
         n = nodes[node_id]
@@ -2388,7 +2415,7 @@ def collection_tree(*, cache=None, refresh: bool = False, timeouts=None) -> Coll
     missing = sum(1 for n in nodes.values() if n["table"] and n["popularity"] is None)
     if any_popularity and missing:
         notes.append(("POPULARITY_MISSING", f"{missing} collezioni senza vizier_popularity: dopo le altre, in "
-                      "ordine alfabetico"))
+                      "ordine naturale"))
     ordering = POPULARITY_NOTE if any_popularity else ALPHABETICAL_NOTE
     return CollectionTree(roots=roots, ordering=ordering, source=f"MocServer del CDS ({vo.MOCSERVER_URL})",
                           retrieved_at=fetched.request.retrieved_at, request=fetched.request, warnings=tuple(notes))
