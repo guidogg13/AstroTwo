@@ -56,6 +56,7 @@ __all__ = [
     "POPULARITY_NOTE",
     "collection_tree",
     "datalink_column",
+    "CatalogRegion",
     "load_catalog",
     "load_table",
     "CatalogTable",
@@ -347,10 +348,14 @@ def _coosys_frame(coosys) -> tuple[str | None, str | None, str | None, str | Non
     if coosys is None:
         return None, None, None, None
     system = coosys.system
-    equinox = str(coosys.equinox) if coosys.equinox else None
-    epoch = str(coosys.epoch) if coosys.epoch else None
-    frames = {"ICRS": "icrs", "eq_FK5": "fk5", "eq_FK4": "fk4", "galactic": "galactic", "supergalactic": "supergalactic"}
+    # Termini del vocabolario IVOA refframe (usati dai VOTable recenti, es. TAPVizieR) e i vecchi termini VOTable.
+    frames = {"ICRS": "icrs", "eq_FK5": "fk5", "eq_FK4": "fk4", "galactic": "galactic", "supergalactic": "supergalactic",
+              "FK5": "fk5", "FK4": "fk4", "GALACTIC": "galactic", "SUPER_GALACTIC": "supergalactic"}
     frame = frames.get(system)
+    # Equinozio ed epoca scritti come numero: giuliani per FK5 e ICRS, besseliani per FK4 (come per ASTRORES).
+    kind = "eq_FK4" if frame == "fk4" else system
+    equinox = _astrores_year(str(coosys.equinox), kind) if coosys.equinox else None
+    epoch = _astrores_year(str(coosys.epoch), kind) if coosys.epoch else None
     if frame is not None and frame not in supported_frames():
         frame = None
     return frame, equinox, epoch, system
@@ -2141,14 +2146,104 @@ def load_table(source, *, table=None, format=None, limits: TableLimits | None = 
                                              refresh=refresh, **kwargs))
 
 
-def load_catalog(catalog_id: str, *, max_rows: int | None = None, allow_partial: bool = False,
+_IDENTIFIER = re.compile(r'^"?[A-Za-z_][A-Za-z0-9_.+-]*"?$')
+_ADQL_SYSTEMS = {"icrs": "ICRS", "fk5": "FK5", "fk4": "FK4"}
+
+
+@dataclass(frozen=True)
+class CatalogRegion:
+    """Regione di ``load_catalog`` (D13-19): colonne, sistema e centro nel sistema delle colonne, dichiarati."""
+
+    lon: str
+    lat: str
+    frame: str
+    equinox: str | None
+    epoch: str | None
+    center_lon_deg: float
+    center_lat_deg: float
+    radius_deg: float
+    adql: str
+
+    def describe(self) -> str:
+        sys = self.frame.upper() + (f" equinozio {self.equinox}" if self.equinox else "") + (
+            f", epoca delle posizioni {self.epoch}" if self.epoch else ", epoca delle posizioni non dichiarata")
+        return (f"regione: cerchio di raggio {self.radius_deg!r}° attorno a ({self.center_lon_deg!r}°, "
+                f"{self.center_lat_deg!r}°) nel sistema delle colonne {self.lon}/{self.lat} ({sys}, dai metadati "
+                "del servizio; centro convertito con il modulo 10)")
+
+
+def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]:
+    """Colonne di posizione principali dagli UCD di ``TAP_SCHEMA.columns`` (mai dai nomi)."""
+    plain = name.replace("'", "''")
+    adql = ("SELECT column_name, ucd FROM TAP_SCHEMA.columns WHERE "
+            f"table_name = '{plain}' OR table_name = '\"{plain}\"'")
+    schema = vo.tap_query(server, adql, **kwargs).table.table
+    found = {}
+    for ucd_word in ("pos.eq.ra", "pos.eq.dec"):
+        rows = [(str(r["column_name"]), _ucd_words(str(r["ucd"]))) for r in schema
+                if not np.ma.is_masked(r["ucd"]) and ucd_word in _ucd_words(str(r["ucd"]))]
+        if len(rows) > 1:
+            rows = [row for row in rows if "meta.main" in row[1]]
+        if len(rows) != 1:
+            raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nessuna colonna {ucd_word} univoca negli "
+                                f"UCD di TAP_SCHEMA ({len(rows)} candidate): regione non applicabile")
+        if not _IDENTIFIER.match(rows[0][0]):
+            raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nome di colonna non ammesso {rows[0][0]!r}")
+        found[ucd_word] = rows[0][0]
+    return found["pos.eq.ra"], found["pos.eq.dec"]
+
+
+def _catalog_region(vo, server: str, name: str, region, kwargs: dict) -> CatalogRegion:
+    from astropy.coordinates import SkyCoord
+
+    if not isinstance(region, tuple) or len(region) != 2:
+        raise TypeError("region = (centro, raggio): centro SkyFrame/SkyCoord, raggio angolo con unità")
+    center, radius = region
+    if not isinstance(radius, u.Quantity) or not radius.unit.is_equivalent(u.deg):
+        raise CatalogsError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità")
+    r = float(radius.to_value(u.deg))
+    if not (math.isfinite(r) and 0.0 < r <= 180.0):
+        raise CatalogsError("REGION_INVALID", f"raggio {r!r}°: ammesso in (0°, 180°]")
+    if isinstance(center, SkyCoord):
+        center = SkyFrame(center)
+    if not isinstance(center, SkyFrame) or np.atleast_1d(center.lon.value).size != 1:
+        raise TypeError("il centro della regione è una sola posizione SkyFrame/SkyCoord (frame dichiarato)")
+    lon, lat = _schema_columns(vo, server, name, kwargs)
+    # Sistema delle colonne: dal COOSYS che il servizio collega ai campi (risposta senza righe).
+    header = vo.tap_query(server, f'SELECT TOP 0 {lon}, {lat} FROM "{name}"' if "/" in name
+                          else f"SELECT TOP 0 {lon}, {lat} FROM {name}", **kwargs).table
+    pos = header.positions
+    if pos is None or pos.frame not in _ADQL_SYSTEMS:
+        raise CatalogsError("FRAME_UNKNOWN", f"catalogo {name!r}: il servizio non dichiara il sistema delle colonne "
+                            f"{lon}/{lat} con un COOSYS ({pos.system if pos else 'nessuno'}): regione non applicabile")
+    equinox, epoch = pos.equinox, pos.epoch  # già normalizzati dal lettore (giuliani per FK5/ICRS, besseliani FK4)
+    if pos.frame in ("fk5", "fk4") and equinox is None:
+        raise CatalogsError("FRAME_UNKNOWN", f"catalogo {name!r}: sistema {pos.system} senza equinozio")
+    if pos.frame == "fk5":
+        target = center.to("fk5", equinox=equinox)
+    elif pos.frame == "fk4":
+        target = center.to("fk4", equinox=equinox, obstime=epoch)  # epoca mai assunta (modulo 10)
+    else:
+        target = center if center.frame_name == "icrs" else center.to("icrs")
+    clon = float(np.atleast_1d(target.lon.to_value(u.deg))[0])
+    clat = float(np.atleast_1d(target.lat.to_value(u.deg))[0])
+    system = _ADQL_SYSTEMS[pos.frame]
+    table = f'"{name}"' if "/" in name else name
+    adql = (f"SELECT * FROM {table} WHERE 1 = CONTAINS(POINT('{system}', {lon}, {lat}), "
+            f"CIRCLE('{system}', {clon!r}, {clat!r}, {r!r}))")
+    return CatalogRegion(lon.strip('"'), lat.strip('"'), pos.frame, equinox, epoch, clon, clat, r, adql)
+
+
+def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, allow_partial: bool = False,
                  limits: TableLimits | None = None, cache=None, refresh: bool = False, timeouts=None) -> CatalogTable:
-    """Catalogo intero per identificatore (D1): VizieR (es. ``"II/246/out"``) tramite TAP VizieR del 14, o una
+    """Catalogo per identificatore (D1): VizieR (es. ``"II/246/out"``) tramite TAP VizieR del 14, o una
     voce del gruppo fisso (``FIXED_COLLECTIONS``).
 
-    Senza regione il catalogo si carica solo se ha al più ``max_rows`` righe (il servizio dichiara il
-    troncamento con ``OVERFLOW``); altrimenti ``REGION_REQUIRED``, oppure ``allow_partial=True`` che dà le
-    prime ``max_rows`` righe dichiarandolo (``PARTIAL_CATALOG`` e ``ROW_LIMIT_EXCEEDED``)."""
+    ``region = (centro, raggio)`` (D13-19): solo le righe nel cerchio; colonne di posizione dagli UCD di
+    ``TAP_SCHEMA``, sistema dal ``COOSYS`` del servizio, centro convertito con il modulo 10, tutto dichiarato.
+    Senza regione il catalogo si carica solo se ha al più ``max_rows`` righe (troncamento dichiarato dal
+    servizio con ``OVERFLOW``); altrimenti ``REGION_REQUIRED``. Con la regione, oltre ``max_rows``
+    ``REGION_TOO_LARGE``. In entrambi i casi ``allow_partial=True`` dà le prime ``max_rows`` righe, dichiarandolo."""
     from astrotwo.core import vo_protocols as vo
 
     if not isinstance(catalog_id, str) or not _CATALOG_ID.match(catalog_id):
@@ -2156,29 +2251,39 @@ def load_catalog(catalog_id: str, *, max_rows: int | None = None, allow_partial:
     fixed = {c.id: c for c in FIXED_COLLECTIONS}
     server, name = (fixed[catalog_id].server, fixed[catalog_id].table) if catalog_id in fixed \
         else ("cds-vizier-tap", catalog_id)
-    kwargs = {} if timeouts is None else {"timeouts": timeouts}
+    kwargs = {"cache": cache, "refresh": refresh}
+    if timeouts is not None:
+        kwargs["timeouts"] = timeouts
     try:
-        result = vo.tap_query(server, f'SELECT * FROM "{name}"',
-                              max_rows=vo.DEFAULT_MAX_ROWS if max_rows is None else max_rows,
-                              limits=limits, cache=cache, refresh=refresh, **kwargs)
+        area = None if region is None else _catalog_region(vo, server, name, region, kwargs)
+        adql = f'SELECT * FROM "{name}"' if area is None else area.adql
+        result = vo.tap_query(server, adql, max_rows=vo.DEFAULT_MAX_ROWS if max_rows is None else max_rows,
+                              limits=limits, **kwargs)
     except vo.VoProtocolsError as exc:
         if exc.code == "ADQL_INVALID":  # il servizio rifiuta la tabella: catalogo sconosciuto
             raise CatalogsError("CATALOG_UNKNOWN", f"catalogo {catalog_id!r} non trovato su {server}: "
                                 f"{exc.details.get('service_message', exc.message)}") from exc
         raise
     if result.truncated and not allow_partial:
-        raise CatalogsError("REGION_REQUIRED", f"catalogo {catalog_id!r}: più di {result.max_rows} righe "
-                            f"({dict(result.warnings).get('ROW_LIMIT_EXCEEDED', 'troncamento dichiarato')}); "
-                            "indicare una regione (per ora: tap_query del 14 con CONTAINS) o allow_partial=True "
-                            "per le prime righe", max_rows=result.max_rows)
+        declared = dict(result.warnings).get("ROW_LIMIT_EXCEEDED", "troncamento dichiarato")
+        if area is None:
+            raise CatalogsError("REGION_REQUIRED", f"catalogo {catalog_id!r}: più di {result.max_rows} righe "
+                                f"({declared}); indicare una regione con il parametro region=(centro, raggio), "
+                                "oppure allow_partial=True per le prime righe", max_rows=result.max_rows)
+        raise CatalogsError("REGION_TOO_LARGE", f"catalogo {catalog_id!r}: più di {result.max_rows} righe nella "
+                            f"regione ({declared}); ridurre il raggio o usare allow_partial=True",
+                            max_rows=result.max_rows)
     table = _from_vo_result(result)
     history = (f"catalogo {catalog_id} da {server}",)
+    notes = ()
+    if area is not None:
+        history += (area.describe(),)
+        notes += (("REGION", area.describe()),)
     if result.truncated:
-        table = dataclasses.replace(table, warnings=table.warnings + (
-            ("PARTIAL_CATALOG", f"allow_partial=True: solo le prime {result.max_rows} righe restituite dal "
-             f"servizio, non tutto il catalogo {catalog_id}"),))
+        notes += (("PARTIAL_CATALOG", f"allow_partial=True: solo le prime {result.max_rows} righe restituite dal "
+                   f"servizio, non tutto il catalogo {catalog_id}" + (" nella regione" if area else "")),)
         history += (f"allow_partial=True: prime {result.max_rows} righe",)
-    return dataclasses.replace(table, history=history)
+    return dataclasses.replace(table, history=history, warnings=table.warnings + notes)
 
 
 #: Dichiarazione dell'ordine dell'albero (D13-18): la proprietà non è descritta dalla documentazione del MocServer.

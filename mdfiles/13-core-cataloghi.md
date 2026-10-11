@@ -183,7 +183,13 @@ suo VOTable.
   `pos.galactic.lon`/`pos.galactic.lat`, `pos.ecliptic.lon`/`pos.ecliptic.lat`
   (con più coppie vale quella con `meta.main`; più coppie senza `meta.main`
   → nessuna scelta, avviso); il sistema di riferimento dal `COOSYS` del
-  VOTable collegato alle colonne (sistema, equinozio, epoca) o, per le
+  VOTable collegato alle colonne (sistema, equinozio, epoca; per
+  `system` valgono i termini del **vocabolario IVOA `refframe`** —
+  `ICRS`, `FK5`, `FK4`, `GALACTIC`, `SUPER_GALACTIC`, usati per esempio da
+  TAPVizieR — e i vecchi termini VOTable `eq_FK5`, `eq_FK4`, `galactic`,
+  `supergalactic`, verificato il 2026-10-11; equinozio ed epoca scritti
+  come numero si leggono giuliani per FK5 e ICRS e besseliani per FK4,
+  come per ASTRORES) o, per le
   coordinate galattiche, dall'UCD stesso; senza sistema dichiarato le
   colonne sono note ma il sistema resta **sconosciuto** (le funzioni che lo
   richiedono danno `FRAME_UNKNOWN`). **In più** `suggest_position_columns`
@@ -456,19 +462,39 @@ suo VOTable.
   P2).
 - **`list_tables(source)`** — tabelle del file (indice, nome, righe,
   colonne), per la scelta dell'utente.
-- **`load_catalog(catalog_id, *, max_rows=None, allow_partial=False,
-  limits=None, cache=None, refresh=False, timeouts=None)`** (P6) — catalogo
+- **`load_catalog(catalog_id, *, region=None, max_rows=None,
+  allow_partial=False, limits=None, cache=None, refresh=False,
+  timeouts=None)`** (P6) — catalogo
   VizieR per identificativo (es. `"II/246/out"`) con `SELECT * FROM "<id>"`
   su TAP VizieR tramite `tap_query` del 14 (D14-9 punto 6), o una voce di
   `FIXED_COLLECTIONS`; `max_rows` di default quello del 14 (100 000);
   identificativo non valido o rifiutato dal servizio → `CATALOG_UNKNOWN`.
+  **Con regione (`region=(centro, raggio)`, D13-19 decisa il
+  2026-10-11):** solo le righe nel cerchio. Le colonne di posizione si
+  trovano dagli **UCD di `TAP_SCHEMA.columns`** del servizio
+  (`pos.eq.ra`/`pos.eq.dec`, con più candidate quella `meta.main`; mai dai
+  nomi; nessuna univoca → `NO_COORD_COLUMNS`); il **sistema si legge dal
+  `COOSYS`** che il servizio collega a quelle colonne (interrogazione
+  `SELECT TOP 0`), mai assunto (assente → `FRAME_UNKNOWN`); il centro si
+  converte in quel sistema con il modulo 10 (FK5 con il suo equinozio, FK4
+  con equinozio ed epoca) e l'ADQL è `CONTAINS(POINT(sistema, ra, dec),
+  CIRCLE(sistema, centro, raggio))`. Raggio angolare con unità in (0°,
+  180°], altrimenti `REGION_INVALID`. Il risultato **dichiara** colonne,
+  sistema, equinozio, epoca delle posizioni, centro convertito e raggio
+  (avviso `REGION`, voce nella storia; `CatalogRegion`). Oltre `max_rows`
+  nella regione: `REGION_TOO_LARGE`, oppure `allow_partial=True` come
+  sotto. Verifica del 2026-10-11: TAPVizieR scrive in `TAP_SCHEMA` i nomi
+  tra virgolette (`"II/246/out"`, `"RAJ2000"`) e collega i campi a un
+  `COOSYS` (2MASS `FK5` equinozio `2000.0`; Gaia DR3 `ICRS` epoca
+  `2016.0`). **SIMBAD** non collega le colonne a un `COOSYS` (dichiara il
+  sistema solo in un `utype` del modello MANGO): regione → `FRAME_UNKNOWN`,
+  fermo su D13-20.
   **Senza regione (decisione del proprietario del 2026-10-11):** il
   catalogo si carica solo se il suo numero totale di righe è entro
   `max_rows`; il superamento si conosce dal **troncamento dichiarato dal
   servizio** (`OVERFLOW` di TAP, `MAXREC = max_rows`) o da più righe del
-  massimo; allora errore `REGION_REQUIRED`, che chiede una regione (finché
-  `load_catalog` non ha un parametro di regione, D13-19 aperta: con
-  `tap_query` del 14 e `CONTAINS`), oppure `allow_partial=True` esplicito,
+  massimo; allora errore `REGION_REQUIRED`, che indica il parametro
+  `region=(centro, raggio)`, oppure `allow_partial=True` esplicito,
   che restituisce le prime `max_rows` righe ricevute dichiarandolo nel
   risultato (avvisi `PARTIAL_CATALOG` e `ROW_LIMIT_EXCEEDED`, voce nella
   storia). Un servizio che troncasse senza dichiararlo non sarebbe
@@ -593,6 +619,11 @@ suo VOTable.
 | Catalogo sconosciuto | errore con riferimento all'id | `CATALOG_UNKNOWN` |
 | `load_catalog` senza regione su un catalogo con più di `max_rows` righe | nessuna tabella; si chiede una regione o `allow_partial=True` | `REGION_REQUIRED` |
 | `load_catalog` con `allow_partial=True` oltre `max_rows` | prime `max_rows` righe, dichiarate | avvisi `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` |
+| Regione con raggio senza unità angolare, non positivo o oltre 180° | rifiuto | `REGION_INVALID` |
+| Regione con più di `max_rows` righe | nessuna tabella; ridurre il raggio o `allow_partial=True` | `REGION_TOO_LARGE` |
+| Regione: colonne di posizione non univoche negli UCD di `TAP_SCHEMA` | rifiuto | `NO_COORD_COLUMNS` |
+| Regione: sistema delle colonne non dichiarato con un `COOSYS` | rifiuto, nessun sistema assunto | `FRAME_UNKNOWN` |
+| Regione usata | righe nel cerchio; colonne, sistema, centro convertito e raggio dichiarati | avviso `REGION` |
 | Record del MocServer che non è una collezione VizieR | escluso dall'albero | avviso `COLLECTION_SKIPPED` |
 | Collezioni senza `vizier_popularity` (o con un valore non intero) | dopo le altre, in ordine alfabetico | avvisi `POPULARITY_MISSING`, `POPULARITY_INVALID` |
 | File assente o non leggibile | nessuna tabella aperta, errore con il percorso | `TABLE_UNREADABLE` |
@@ -668,6 +699,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T30 | Filtro temporale | VOTable con `TIMESYS` (MJD, TDB) e colonna ISO senza `TIMESYS`; intervallo `[inizio, fine]` | estremi inclusi, mancanti esclusi e contati; con `TIMESYS` parametri rifiutati; senza `TIMESYS` formato e scala obbligatori; inizio > fine → `EPOCH_INVALID` | confronto con `astropy.time` |
 | T31 | Albero delle collezioni (D13-18) | MocServer simulato con popolarità diverse, uguali, assenti, un record `CDS/Simbad`; poi senza la proprietà; poi risposta non JSON; test di rete sul MocServer | ordine decrescente, a pari valore alfabetico, assenti in fondo; ordine dichiarato "proprietà non documentata del MocServer"; senza proprietà ordine alfabetico dichiarato; `CDS/Simbad` escluso; seconda chiamata dalla cache; risposta non valida → `SERVICE_ERROR` del 14 | test con servizio simulato (più un test di rete) |
 | T32 | `load_catalog` senza regione | TAP VizieR simulato con 3 righe e `max_rows` 2 e 3; con `allow_partial=True`; test di rete su 2MASS con `max_rows` 5 | `max_rows` 2 → `REGION_REQUIRED`; con `allow_partial=True` 2 righe, `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` e voce nella storia; `max_rows` 3 → catalogo intero senza avvisi; in rete stesso comportamento | test con servizio simulato (più un test di rete) |
+| T33 | `load_catalog` con regione (D13-19) | TAP simulato con `TAP_SCHEMA` (nomi tra virgolette) e `COOSYS` `FK5` equinozio `2000.0`; centro ICRS; poi senza `COOSYS`, con due RA senza `meta.main`, raggi non validi, regione oltre `max_rows`; termini `refframe` nel `COOSYS`; test di rete su 2MASS attorno a M31 e su SIMBAD | ADQL con il centro convertito in FK5 J2000 uguale ad astropy; sistema e colonne dichiarati; `FRAME_UNKNOWN`, `NO_COORD_COLUMNS`, `REGION_INVALID`, `REGION_TOO_LARGE`; in rete tutte le righe entro il raggio (separazione ricalcolata con astropy); SIMBAD → `FRAME_UNKNOWN` | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
@@ -798,22 +830,24 @@ sono verificati da `34-ia-verifica-risultati.md`.
   ordinamento alfabetico. Client nel 14 (`vizier_collections`). Applicata
   in §3, §7, §10, §12 (T31). (Aperta il 2026-10-10: opzioni MocServer con
   popolarità, senza popolarità, `TAP_SCHEMA`; raccomandazione la prima.)
-- **D13-19 — Parametro di regione di `load_catalog`: DA DECIDERE (aperta il
-  2026-10-11, Gruppo 3).** La decisione del 2026-10-11 dice che senza
-  regione `load_catalog` vale solo per i cataloghi entro `max_rows` e che
-  l'errore "chiede una regione", ma `load_catalog` non ha un parametro di
-  regione. Aggiungerlo richiede scelte tecniche: quali colonne di posizione
-  usare nell'ADQL (da `TAP_SCHEMA.columns` con UCD `pos.eq.ra;meta.main` /
-  `pos.eq.dec;meta.main`, mai dai nomi), in che sistema esprimere il
-  cerchio (`CONTAINS(POINT('ICRS', …), CIRCLE('ICRS', …))` su colonne che
-  possono essere FK5 J2000), e se la regione è solo un cerchio. Opzioni:
-  (a) `region=(centro, raggio)` con colonne da `TAP_SCHEMA` per UCD e
-  sistema dichiarato dal servizio, errore se non univoci; (b) nessun
-  parametro: l'errore rimanda a `tap_query` del 14 con `CONTAINS` (come
-  oggi); (c) regione tramite il cone search VizieR. **Raccomandazione:**
-  (a), con il sistema delle colonne letto dai metadati e dichiarato nel
-  risultato. **Fermo solo questo punto:** oggi `REGION_REQUIRED` rimanda a
-  `tap_query`.
+- **D13-19 — Parametro di regione di `load_catalog`: DECISA il 2026-10-11
+  (decisione del proprietario).** `region=(centro, raggio)`; colonne di
+  posizione dagli UCD in `TAP_SCHEMA`; sistema letto dai metadati e
+  dichiarato nel risultato; `REGION_REQUIRED` indica il parametro.
+  Applicata in §3, §7, §10, §12 (T33). Con la verifica, il 13 legge anche
+  i termini del vocabolario IVOA `refframe` nel `COOSYS` (prima TAPVizieR
+  dava `FRAME_UNKNOWN`).
+- **D13-20 — Sistema delle colonne di SIMBAD per la regione: DA DECIDERE
+  (aperta il 2026-10-11, Gruppo 3).** SIMBAD non collega `ra`/`dec` a un
+  `COOSYS`: il sistema è scritto solo nell'`utype`
+  `mango:EpochPosition.longitude[CS.spaceSys=ICRS CT.epoch=J2000]` (modello
+  IVOA MANGO) e nella documentazione di SIMBAD (già citata dal puntatore del
+  14). Opzioni: (a) leggere `CS.spaceSys` e `CT.epoch` dall'`utype` MANGO,
+  dichiarato come tale; (b) usare la documentazione di SIMBAD (ICRS J2000)
+  come per il puntatore del 14, dichiarata; (c) nessuna regione per
+  SIMBAD. **Raccomandazione:** (a), perché è un metadato della risposta,
+  con (b) come conferma nel testo dichiarato. **Fermo solo questo punto:**
+  `load_catalog("simbad", region=...)` dà `FRAME_UNKNOWN`.
 - **D13-14c — Traduzione UCD1 con il servizio del CDS: RIMANDATA (decisione
   del proprietario del 2026-10-11, bassa priorità, Gruppo 3).** Il servizio
   di traduzione UCD1 → UCD1+ del CDS (opzione esplicita prevista da
@@ -862,3 +896,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **D13-17 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `LINK` ASTRORES letti solo con `href`, formato dal `content-type` del `LINK` (verificato come attributo nella DTD v0.9) con i lettori CSV, TSV, VOTable e FITS del modulo, nessun formato indovinato; dati scaricati con il 14 tramite `load_table` (anche per un ASTRORES scaricato da URL, con `href` relativo risolto sull'URL); `read_table` senza rete rimanda a `load_table`; accordo stretto tra FIELD e dati collegati (scelta da confermare); avvisi `ASTRORES_LINK`, `ASTRORES_LINK_SOURCE`; T15 completo (§3, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-18 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `collection_tree`, `CollectionTree`, `CollectionNode` — albero delle collezioni dal MocServer del CDS (client `vizier_collections` nel 14), ordinato per `vizier_popularity` decrescente (nodi interni: massimo del sottoalbero; pari valore e assenti in ordine alfabetico), dichiarato come "proprietà non documentata del MocServer", ordine alfabetico se la proprietà manca; `CDS/Simbad` escluso; avvisi `COLLECTION_SKIPPED`, `POPULARITY_MISSING`, `POPULARITY_INVALID`; verifica in linea del MocServer; nuovo T31 (§3, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `load_catalog` senza regione solo entro `max_rows` (troncamento dichiarato dal servizio), altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato (`PARTIAL_CATALOG`); nuovo T32. Nuova decisione aperta **D13-19** (parametro di regione di `load_catalog`, Gruppo 3; fermo solo il parametro). Traduzione UCD1 del CDS rimandata a bassa priorità come **D13-14c** (Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D13-19 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `load_catalog(..., region=(centro, raggio))` con colonne dagli UCD di `TAP_SCHEMA`, sistema dal `COOSYS` del servizio, centro convertito con il modulo 10, `CatalogRegion` dichiarata; nuovi `REGION_INVALID`, `REGION_TOO_LARGE`, avviso `REGION`; `REGION_REQUIRED` indica il parametro; il lettore riconosce i termini del vocabolario IVOA `refframe` (`FK5`, `FK4`, `GALACTIC`, `SUPER_GALACTIC`) e legge l'equinozio numerico come per ASTRORES (verifica su TAPVizieR); T33. Nuova decisione aperta **D13-20** (sistema di SIMBAD nell'`utype` MANGO, Gruppo 3). Stato `approvato` invariato. |

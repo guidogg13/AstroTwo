@@ -1109,6 +1109,104 @@ def test_load_catalog_vizier_tap(service, cache, monkeypatch):
     assert [c.id for c in FIXED_COLLECTIONS] == ["simbad", "I/355/gaiadr3", "II/246/out"]
 
 
+REGION_SCHEMA = """<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/><TABLE>
+<FIELD name="column_name" datatype="char" arraysize="*"/><FIELD name="ucd" datatype="char" arraysize="*"/>
+<DATA><TABLEDATA>{rows}</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>"""
+REGION_DATA = """<?xml version="1.0"?><VOTABLE version="1.3" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results"><INFO name="QUERY_STATUS" value="{status}"/>{coosys}<TABLE>
+<FIELD name="RAJ2000" datatype="double" unit="deg" ucd="pos.eq.ra;meta.main" ref="c"/>
+<FIELD name="DEJ2000" datatype="double" unit="deg" ucd="pos.eq.dec;meta.main" ref="c"/>
+<DATA><TABLEDATA>{rows}</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>"""
+FK5_COOSYS = '<COOSYS ID="c" system="FK5" equinox="2000.0"/>'
+
+
+def region_tap(coosys=FK5_COOSYS, schema=('"RAJ2000"', "pos.eq.ra;meta.main", '"DEJ2000"', "pos.eq.dec;meta.main"),
+               rows=3):
+    def tap(request):
+        query = request["params"]["QUERY"]
+        if "TAP_SCHEMA.columns" in query:
+            cells = "".join(f"<TR><TD>{schema[k]}</TD><TD>{schema[k + 1]}</TD></TR>" for k in range(0, len(schema), 2))
+            return 200, "application/x-votable+xml", REGION_SCHEMA.format(rows=cells)
+        maxrec = int(request["params"].get("MAXREC", 10 ** 6))
+        n = 0 if "TOP 0" in query else rows
+        body = "".join(f"<TR><TD>{10 + 0.001 * k}</TD><TD>{41 + 0.001 * k}</TD></TR>" for k in range(min(n, maxrec)))
+        return 200, "application/x-votable+xml", REGION_DATA.format(
+            coosys=coosys, rows=body, status="OVERFLOW" if n > maxrec else "OK")
+    return tap
+
+
+def test_t33_load_catalog_region(service, cache, monkeypatch):
+    from astropy.coordinates import FK5, SkyCoord
+
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    service.routes["/viz/sync"] = region_tap()
+    center = SkyCoord(10.0 * u.deg, 41.0 * u.deg)  # ICRS
+    cat = load_catalog("II/246/out", region=(center, 30 * u.arcsec), cache=cache)
+    queries = [r["params"]["QUERY"] for r in service.requests]
+    assert "TAP_SCHEMA.columns" in queries[0] and "\"II/246/out\"" in queries[0]
+    assert queries[1] == 'SELECT TOP 0 "RAJ2000", "DEJ2000" FROM "II/246/out"'
+    # Centro convertito nel sistema delle colonne (FK5 J2000), ricalcolato nel test con astropy.
+    fk5 = center.transform_to(FK5(equinox="J2000"))
+    expected = (f"SELECT * FROM \"II/246/out\" WHERE 1 = CONTAINS(POINT('FK5', \"RAJ2000\", \"DEJ2000\"), "
+                f"CIRCLE('FK5', {float(fk5.ra.deg)!r}, {float(fk5.dec.deg)!r}, {float((30 * u.arcsec).to_value(u.deg))!r}))")
+    assert queries[2] == expected and cat.rows == 3
+    assert (cat.positions.frame, cat.positions.equinox) == ("fk5", "J2000")  # equinozio "2000.0" letto giuliano
+    region = dict(cat.warnings)["REGION"]
+    assert "FK5 equinozio J2000" in region and "RAJ2000/DEJ2000" in region and region in cat.history
+    # Oltre max_rows nella regione: errore, o allow_partial dichiarato.
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("II/246/out", region=(center, 30 * u.arcsec), max_rows=2, cache=cache)
+    assert err.value.code == "REGION_TOO_LARGE"
+    part = load_catalog("II/246/out", region=(center, 30 * u.arcsec), max_rows=2, allow_partial=True, cache=cache)
+    assert part.rows == 2 and "PARTIAL_CATALOG" in dict(part.warnings)
+    # Senza regione e oltre max_rows: l'errore indica il parametro region.
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("II/246/out", max_rows=2, cache=cache)
+    assert err.value.code == "REGION_REQUIRED" and "region=(centro, raggio)" in err.value.message
+    for bad in ((center, 30), (center, -1 * u.arcsec), (center, 181 * u.deg), (center, 1 * u.m)):
+        with pytest.raises(CatalogsError) as err:
+            load_catalog("II/246/out", region=bad, cache=cache)
+        assert err.value.code == "REGION_INVALID"
+    with pytest.raises(TypeError):
+        load_catalog("II/246/out", region=(10.0, 30 * u.arcsec), cache=cache)
+
+
+def test_load_catalog_region_metadata_missing(service, cache, monkeypatch):
+    from astropy.coordinates import SkyCoord
+
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    center = SkyCoord(10.0 * u.deg, 41.0 * u.deg)
+    service.routes["/viz/sync"] = region_tap(coosys="")  # nessun COOSYS: sistema mai assunto
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("II/246/out", region=(center, 1 * u.arcmin), cache=cache, refresh=True)
+    assert err.value.code == "FRAME_UNKNOWN"
+    service.routes["/viz/sync"] = region_tap(schema=('"RA1"', "pos.eq.ra", '"RA2"', "pos.eq.ra",
+                                                     '"DE"', "pos.eq.dec;meta.main"))
+    with pytest.raises(CatalogsError) as err:  # due RA senza meta.main: nessuna scelta
+        load_catalog("II/246/out", region=(center, 1 * u.arcmin), cache=cache, refresh=True)
+    assert err.value.code == "NO_COORD_COLUMNS"
+
+
+@pytest.mark.network
+def test_t33_load_catalog_region_network(cache):
+    from astropy.coordinates import FK5, SkyCoord
+
+    m31 = SkyCoord(10.6847 * u.deg, 41.2690 * u.deg)
+    cat = load_catalog("II/246/out", region=(m31, 30 * u.arcsec), cache=cache)
+    assert cat.rows > 0 and cat.positions.frame == "fk5" and cat.positions.equinox == "J2000"
+    rows = SkyCoord(cat.table["RAJ2000"].quantity, cat.table["DEJ2000"].quantity, frame=FK5(equinox="J2000"))
+    sep = rows.separation(m31.transform_to(FK5(equinox="J2000")))
+    assert sep.max() <= 30 * u.arcsec + 1e-6 * u.arcsec  # tutte le righe nel cerchio (ricalcolo con astropy)
+    with pytest.raises(CatalogsError) as err:  # SIMBAD non dichiara il sistema con un COOSYS (D13-19, fermo)
+        load_catalog("simbad", region=(m31, 30 * u.arcsec), cache=cache)
+    assert err.value.code == "FRAME_UNKNOWN"
+
+
 DATALINK_RESULT = """<?xml version="1.0" encoding="UTF-8"?>
 <VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
 <RESOURCE type="results">
@@ -1151,3 +1249,19 @@ def test_load_catalog_network(cache):
     assert err.value.code == "REGION_REQUIRED"
     cat = load_catalog("II/246/out", max_rows=5, allow_partial=True, cache=cache)
     assert cat.rows == 5 and "PARTIAL_CATALOG" in dict(cat.warnings) and cat.request.from_cache is True
+
+
+def test_coosys_refframe_terms(tmp_path):
+    # Termini del vocabolario IVOA refframe nel COOSYS; equinozio numerico giuliano (FK5) o besseliano (FK4).
+    for system, equinox, frame, expected in (("FK5", "2000.0", "fk5", "J2000"), ("FK4", "1950.0", "fk4", "B1950"),
+                                              ("eq_FK5", "J2000", "fk5", "J2000"), ("ICRS", "", "icrs", None)):
+        path = tmp_path / f"{system}.xml"
+        attr = f' equinox="{equinox}"' if equinox else ""
+        path.write_text(REGION_DATA.format(coosys=f'<COOSYS ID="c" system="{system}"{attr}/>', status="OK",
+                                           rows="<TR><TD>1</TD><TD>2</TD></TR>"), encoding="utf-8")
+        pos = read_table(path).positions
+        assert (pos.frame, pos.equinox, pos.system) == (frame, expected, system)
+    path = tmp_path / "gal.xml"
+    path.write_text(REGION_DATA.format(coosys='<COOSYS ID="c" system="GALACTIC"/>', status="OK", rows="")
+                    .replace("pos.eq.ra", "pos.galactic.lon").replace("pos.eq.dec", "pos.galactic.lat"), encoding="utf-8")
+    assert read_table(path).positions.frame == "galactic"
