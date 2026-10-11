@@ -254,3 +254,172 @@ def test_describe(tmp_path):
     text = a.describe()
     assert a.sky_fraction == pytest.approx(1 / 12) and a.area.value == pytest.approx(4 * np.pi / 12)
     assert "MOC space" in text and "ICRS" in text and "corpo celestial" in text and "1 celle" in text
+
+
+# =============================================================================
+# P2 — Creazione da cerchio, poligono, catalogo, immagine (T1, T2)
+
+from astropy.coordinates import ICRS, Galactic, SkyCoord  # noqa: E402
+from astropy_healpix import HEALPix  # noqa: E402
+
+from astrotwo.core.moc import CircleRegion, PolygonRegion, moc_from_catalog, moc_from_image, moc_from_region  # noqa: E402
+
+
+def cell_area(order: int) -> float:
+    return 4 * np.pi / (12 * 4 ** order)
+
+
+def boundary_cells(order: int, candidates, inside) -> int:
+    """Celle (tra i candidati) attraversate dal contorno: punti del bordo della cella sia dentro sia fuori.
+    Bordi delle celle ricalcolati nel test con astropy-healpix (NESTED, ICRS)."""
+    hp = HEALPix(nside=2 ** order, order="nested", frame=ICRS())
+    corners = hp.boundaries_skycoord(np.asarray(candidates, dtype=np.int64), step=8)
+    flags = inside(corners)
+    return int(np.count_nonzero(flags.any(axis=1) & ~flags.all(axis=1)))
+
+
+def neighbourhood(moc: Moc) -> np.ndarray:
+    return np.asarray(moc.moc.extended().flatten(), dtype=np.int64)  # add_neighbours modifica sul posto
+
+
+def test_t1_circle(tmp_path):
+    order = 9
+    center = SkyCoord(150 * u.deg, 2 * u.deg, frame=Galactic())  # convertito in ICRS con il modulo 10
+    moc = moc_from_region(CircleRegion(center, 1 * u.deg), order)
+    expected = 2 * np.pi * (1 - np.cos(np.radians(1.0)))  # steradianti, formula ricalcolata nel test
+    icrs = center.icrs
+    n_border = boundary_cells(order, neighbourhood(moc), lambda c: c.separation(icrs) <= 1 * u.deg)
+    assert n_border > 0
+    assert abs(moc.area.to_value(u.sr) - expected) <= n_border * cell_area(order)
+    assert moc.space_order == order and moc.body == "celestial" and "galactic" in moc.origin
+    assert "from_cone" in moc.history[-1]
+    for bad in (0 * u.deg, 181 * u.deg, 1.0, 1 * u.m):
+        with pytest.raises(MocError) as err:
+            moc_from_region(CircleRegion(center, bad), order)
+        assert err.value.code == "REGION_INVALID"
+    for bad_order in (None, -1, 30, 2.0, True):
+        with pytest.raises(MocError) as err:
+            moc_from_region(CircleRegion(center, 1 * u.deg), bad_order)
+        assert err.value.code == "HEALPIX_ORDER_INVALID"
+
+
+def octant(lon0: float, north: bool) -> PolygonRegion:
+    pole = 90.0 if north else -90.0
+    return PolygonRegion(SkyCoord([lon0, lon0 + 90.0, 0.0] * u.deg, [0.0, 0.0, pole] * u.deg))
+
+
+def test_t2_full_sky_from_quarters():
+    order = 6
+    quarters = [moc_from_region(octant(90.0 * q, True), order).union(moc_from_region(octant(90.0 * q, False), order))
+                for q in range(4)]
+    sky = quarters[0].union(quarters[1]).union(quarters[2]).union(quarters[3])
+    # Celle di bordo: attraversate dall'equatore o dai meridiani 0°, 90°, 180°, 270° (ricalcolo nel test).
+    all_cells = np.arange(12 * 4 ** order)
+
+    def border(c):
+        lon, lat = c.ra.deg, c.dec.deg
+        straddle = (lat.min(axis=1) < 0) & (lat.max(axis=1) > 0)
+        for m in (0.0, 90.0, 180.0, 270.0):
+            d = (lon - m + 180.0) % 360.0 - 180.0
+            straddle |= (d.min(axis=1) < 0) & (d.max(axis=1) > 0) & (np.abs(d).max(axis=1) < 90)
+        return straddle
+
+    hp = HEALPix(nside=2 ** order, order="nested", frame=ICRS())
+    n_border = int(np.count_nonzero(border(hp.boundaries_skycoord(all_cells, step=4))))
+    assert abs(sky.area.to_value(u.sr) - 4 * np.pi) <= n_border * cell_area(order)
+    assert quarters[0].sky_fraction == pytest.approx(0.25, abs=n_border * cell_area(order) / (4 * np.pi))
+
+
+def test_polygon_interior_rule():
+    order = 7
+    tri = SkyCoord([0.0, 90.0, 0.0] * u.deg, [0.0, 0.0, 89.0] * u.deg)
+    small = moc_from_region(PolygonRegion(tri), order)
+    reversed_ = moc_from_region(PolygonRegion(tri[::-1]), order)
+    other = moc_from_region(PolygonRegion(tri), order, complement=True)
+    assert small.sky_fraction < 0.5 < other.sky_fraction and reversed_.sky_fraction < 0.5  # regione più piccola
+    # Verso dei vertici: stessa regione, celle di bordo che possono differire (comportamento di mocpy).
+    border = small.moc.extended().difference(small.moc.contracted())
+    assert small.moc.difference(reversed_.moc).difference(border).empty()
+    assert reversed_.moc.difference(small.moc).difference(border).empty()
+    assert "regione più piccola" in small.history[-1] and "complement=True" in other.history[-1]
+    with pytest.raises(MocError) as err:
+        moc_from_region(PolygonRegion(tri[:2]), order)
+    assert err.value.code == "REGION_INVALID"
+
+
+def test_moc_from_catalog(tmp_path):
+    from test_crossmatch import make_table
+
+    gal = SkyCoord([10.0, 10.001, 200.0] * u.deg, [5.0, 5.0, -30.0] * u.deg, frame=Galactic())
+    table = make_table(tmp_path / "c.xml", list(gal.l.deg) + [None], list(gal.b.deg) + [None], system="galactic",
+                       galactic=True)
+    moc = moc_from_catalog(table, 10)
+    icrs = gal.icrs  # ricalcolo nel test con astropy e mocpy
+    assert moc.moc == MOC.from_lonlat(lon=icrs.ra, lat=icrs.dec, max_norder=10)
+    assert "1 righe senza posizione" in dict(moc.warnings)["ROWS_EXCLUDED"] and "senza raggio" in moc.history[-1]
+    import dataclasses
+
+    with pytest.raises(MocError) as err:
+        moc_from_catalog(dataclasses.replace(table, positions=None), 10)
+    assert err.value.code == "NO_COORD_COLUMNS"
+    with pytest.raises(MocError) as err:
+        moc_from_catalog(dataclasses.replace(table, body="Mars"), 10)
+    assert err.value.code == "MOC_BODY_UNSUPPORTED"
+    with pytest.raises(MocError) as err:
+        moc_from_catalog(table, None)
+    assert err.value.code == "HEALPIX_ORDER_INVALID"
+
+
+def write_image(path, data, *, wcs=True, blank=None):
+    header = fits.Header()
+    if wcs:
+        ny, nx = data.shape
+        header.update({"CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN", "CRVAL1": 150.0, "CRVAL2": 2.0,
+                       "CRPIX1": (nx + 1) / 2, "CRPIX2": (ny + 1) / 2, "CDELT1": -0.01, "CDELT2": 0.01,
+                       "CUNIT1": "deg", "CUNIT2": "deg", "RADESYS": "ICRS"})
+    if blank is not None:
+        header["BLANK"] = blank
+    fits.PrimaryHDU(data=data, header=header).writeto(path)
+    from astrotwo.core.images_fits import load_image
+
+    return load_image(path)
+
+
+def footprint_polygon(image, x1: float, y1: float, order: int) -> Moc:
+    """Poligono degli angoli dei pixel validi: in TAN i bordi rettilinei sono cerchi massimi (ricalcolo con
+    astropy.wcs nel test)."""
+    corners = image.wcs.wcs.pixel_to_world([-0.5, x1, x1, -0.5], [-0.5, -0.5, y1, y1])
+    return moc_from_region(PolygonRegion(corners), order)
+
+
+def check_against_polygon(moc: Moc, poly: Moc, order: int) -> None:
+    outer, inner = poly.moc.extended(), poly.moc.contracted()
+    assert moc.moc.difference(outer).empty()  # mai oltre una cella dal contorno
+    assert inner.difference(moc.moc).empty()  # l'interno è tutto coperto
+    n_border = len(outer.flatten()) - len(inner.flatten())
+    assert abs(moc.area.to_value(u.sr) - poly.area.to_value(u.sr)) <= n_border * cell_area(order)
+
+
+@pytest.mark.parametrize("order", [9, 14])  # pixel più piccolo di metà cella (k = 1) e più grande (k > 1)
+def test_moc_from_image(tmp_path, order):
+    ny, nx = (100, 200) if order == 9 else (10, 20)
+    image = write_image(tmp_path / "i.fits", np.ones((ny, nx), dtype=np.float32))
+    moc = moc_from_image(image, order)
+    check_against_polygon(moc, footprint_polygon(image, nx - 0.5, ny - 0.5, order), order)
+    assert "pixel validi" in moc.history[-1] and moc.body == "celestial"
+    # Metà destra non valida (NaN): MOC dei soli pixel validi.
+    data = np.ones((ny, nx), dtype=np.float32)
+    data[:, nx // 2:] = np.nan
+    half = moc_from_image(write_image(tmp_path / "h.fits", data), order)
+    check_against_polygon(half, footprint_polygon(image, nx // 2 - 0.5, ny - 0.5, order), order)
+
+
+def test_moc_from_image_errors(tmp_path):
+    data = np.ones((10, 20), dtype=np.int16)
+    data[:, 10:] = -1
+    blank = moc_from_image(write_image(tmp_path / "b.fits", data, blank=-1), 12)
+    full = moc_from_image(write_image(tmp_path / "f.fits", np.ones((10, 20), dtype=np.int16)), 12)
+    assert blank.sky_fraction < full.sky_fraction and "100 non validi" in blank.history[-1]
+    with pytest.raises(MocError) as err:
+        moc_from_image(write_image(tmp_path / "n.fits", np.ones((5, 5)), wcs=False), 8)
+    assert err.value.code == "WCS_MISSING"

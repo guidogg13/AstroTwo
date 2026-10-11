@@ -30,12 +30,17 @@ from mocpy import MOC, STMOC, TimeMOC
 import astrotwo
 
 __all__ = [
+    "CircleRegion",
     "MOC_KINDS",
+    "PolygonRegion",
     "SPACE_MAX_ORDER",
     "SUPPORTED_VERSIONS",
     "TIME_MAX_ORDER",
     "Moc",
     "MocError",
+    "moc_from_catalog",
+    "moc_from_image",
+    "moc_from_region",
     "read_moc",
     "write_moc",
 ]
@@ -430,3 +435,244 @@ def write_moc(moc: Moc, path, format: str = "fits", overwrite: bool = False) -> 
     else:
         target.write_text(moc.moc.to_string("ascii"), encoding="utf-8")
     return target
+
+
+# --------------------------------------------------------------------------
+# P2 — Creazione da cerchio, poligono, catalogo, immagine (E6)
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CircleRegion:
+    """Cerchio sulla sfera: centro (una posizione ``SkyFrame``, sistema dichiarato) e raggio angolare."""
+
+    center: object
+    radius: u.Quantity
+
+
+@dataclass(frozen=True)
+class PolygonRegion:
+    """Poligono con lati su cerchi massimi: vertici ``SkyFrame`` (almeno 3, sistema dichiarato)."""
+
+    vertices: object
+
+
+def _to_icrs(coords, what: str):
+    """Coordinate ``SkyFrame`` del modulo 10 convertite in ICRS (i MOC spaziali sono sempre ICRS)."""
+    from astropy.coordinates import SkyCoord
+
+    from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
+
+    if isinstance(coords, SkyCoord):
+        coords = SkyFrame(coords)
+    if not isinstance(coords, SkyFrame):
+        raise TypeError(f"{what}: servono coordinate SkyFrame/SkyCoord con il sistema dichiarato (modulo 10)")
+    try:
+        icrs = coords if coords.frame_name == "icrs" else coords.to("icrs")
+    except CoordinatesWcsError as exc:
+        raise MocError("REGION_INVALID", f"{what}: {exc.message}") from exc
+    lon = np.atleast_1d(icrs.lon.to_value(u.deg))
+    lat = np.atleast_1d(icrs.lat.to_value(u.deg))
+    if not (np.all(np.isfinite(lon)) and np.all(np.isfinite(lat))):
+        raise MocError("REGION_INVALID", f"{what}: coordinate non finite")
+    note = "" if coords.frame_name == "icrs" else f" (convertite da {coords.frame_name} in ICRS con il modulo 10)"
+    return lon, lat, note
+
+
+def _created(moc, origin: str, step: str, notes=(), body: str = "celestial") -> Moc:
+    result = Moc(moc=moc, kind="space", body=body, origin=origin, history=(step,))
+    notes = list(notes)
+    if result.is_empty:
+        notes.append(("MOC_EMPTY", f"{origin}: MOC vuoto"))
+    return replace(result, warnings=tuple(notes))
+
+
+def _cell_size(order: int) -> u.Quantity:
+    return MOC.order_to_spatial_resolution(order).to(u.deg)
+
+
+def moc_from_region(region, order_max: int, *, complement: bool = False) -> Moc:
+    """MOC da un cerchio o da un poligono con lati su cerchi massimi (E6), all'ordine ``order_max`` (obbligatorio).
+
+    Cerchio: ``mocpy.MOC.from_cone`` (celle che toccano il cerchio, calcolo a ``order_max`` + 2).
+    Poligono: ``mocpy.MOC.from_polygon``; interno = la più piccola delle due regioni, la complementare con
+    ``complement=True`` (verificato in mocpy il 2026-10-11)."""
+    order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
+    resolution = f"ordine {order} (lato delle celle {_cell_size(order).value!r}°)"
+    if isinstance(region, CircleRegion):
+        lon, lat, note = _to_icrs(region.center, "centro del cerchio")
+        if lon.size != 1:
+            raise MocError("REGION_INVALID", "il centro del cerchio è una sola posizione")
+        radius = region.radius
+        if not isinstance(radius, u.Quantity) or not radius.isscalar or not radius.unit.is_equivalent(u.deg):
+            raise MocError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità")
+        r = float(radius.to_value(u.deg))
+        if not (math.isfinite(r) and 0.0 < r <= 180.0):
+            raise MocError("REGION_INVALID", f"raggio {r!r}°: ammesso in (0°, 180°]")
+        if complement:
+            raise ValueError("complement vale solo per i poligoni")
+        moc = MOC.from_cone(lon=lon[0] * u.deg, lat=lat[0] * u.deg, radius=r * u.deg, max_depth=order,
+                            delta_depth=2)
+        origin = f"cerchio di centro ICRS ({lon[0]!r}°, {lat[0]!r}°) e raggio {r!r}°{note}"
+        step = (f"MOC da cerchio con mocpy.MOC.from_cone, {resolution}: celle che toccano il cerchio, "
+                "calcolo all'ordine + 2")
+        return _created(moc, origin, step)
+    if isinstance(region, PolygonRegion):
+        lon, lat, note = _to_icrs(region.vertices, "vertici del poligono")
+        if lon.size < 3:
+            raise MocError("REGION_INVALID", f"poligono con {lon.size} vertici: ne servono almeno 3")
+        try:
+            moc = MOC.from_polygon(lon=lon * u.deg, lat=lat * u.deg, complement=bool(complement), max_depth=order)
+        except Exception as exc:  # mocpy rifiuta i poligoni non validi (es. lati che si incrociano)
+            raise MocError("REGION_INVALID", f"poligono non valido per mocpy: {exc}") from exc
+        side = "regione complementare (complement=True)" if complement else "regione più piccola delle due"
+        origin = f"poligono di {lon.size} vertici ICRS{note}"
+        step = (f"MOC da poligono con mocpy.MOC.from_polygon, {resolution}: lati su cerchi massimi, interno = "
+                f"{side}")
+        return _created(moc, origin, step)
+    raise TypeError("region: CircleRegion o PolygonRegion")
+
+
+def _catalog_positions(table, what: str):
+    """(lon ICRS, lat ICRS, righe escluse, nota) dalle colonne di posizione del 13, convertite con il 10."""
+    from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
+
+    pos = table.positions
+    if pos is None:
+        raise MocError("NO_COORD_COLUMNS", f"{what} ({table.origin}): nessuna colonna di posizione (modulo 13)")
+    if pos.frame is None:
+        raise MocError("FRAME_UNKNOWN", f"{what}: colonne {pos.lon}/{pos.lat} senza sistema dichiarato")
+    lon_col, lat_col = table.table[pos.lon], table.table[pos.lat]
+    if lon_col.unit is None or lat_col.unit is None or not (
+            lon_col.unit.is_equivalent(u.deg) and lat_col.unit.is_equivalent(u.deg)):
+        raise MocError("NO_COORD_COLUMNS", f"{what}: colonne {pos.lon}/{pos.lat} senza unità angolare")
+    lon_v = np.ma.filled(np.ma.asarray(lon_col, dtype=float), np.nan)
+    lat_v = np.ma.filled(np.ma.asarray(lat_col, dtype=float), np.nan)
+    valid = np.isfinite(lon_v) & np.isfinite(lat_v)
+    if not np.any(valid):
+        return np.zeros(0), np.zeros(0), valid, ""
+    try:
+        coords = SkyFrame.from_lonlat((lon_v[valid] * lon_col.unit).to(u.deg) % (360 * u.deg),
+                                      (lat_v[valid] * lat_col.unit).to(u.deg), pos.frame, equinox=pos.equinox,
+                                      obstime=pos.epoch if pos.frame == "fk4" else None)
+        lon, lat, note = _to_icrs(coords, what)
+    except CoordinatesWcsError as exc:
+        raise MocError(exc.code, f"{what}: {exc.message}") from exc
+    return lon, lat, valid, note
+
+
+def _check_celestial(body: str | None, what: str) -> str:
+    if body is None:
+        raise MocError("BODY_UNKNOWN", f"{what}: corpo non ricavabile, nessun MOC")
+    if body != "celestial":
+        raise MocError("MOC_BODY_UNSUPPORTED", f"{what}: corpo {body!r}; i MOC spaziali sono in ICRS (solo cielo)")
+    return body
+
+
+def moc_from_catalog(table, order_max: int) -> Moc:
+    """MOC da un catalogo (E6): una cella per sorgente all'ordine ``order_max`` (obbligatorio), senza raggio.
+
+    Posizioni dalle colonne del 13 convertite in ICRS con il 10; righe senza posizione escluse e contate;
+    l'epoca delle posizioni è riportata, mai propagata."""
+    order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
+    _check_celestial(table.body, f"catalogo {table.origin}")
+    lon, lat, valid, note = _catalog_positions(table, f"catalogo {table.origin}")
+    moc = MOC.from_lonlat(lon=lon * u.deg, lat=lat * u.deg, max_norder=order) if lon.size else MOC.new_empty(order)
+    notes = []
+    excluded = int(np.count_nonzero(~valid))
+    if excluded:
+        notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione escluse"))
+    epoch = table.positions.epoch
+    step = (f"MOC da catalogo con mocpy.MOC.from_lonlat, ordine {order}: una cella per sorgente, senza raggio; "
+            f"{lon.size} sorgenti{note}; epoca delle posizioni {epoch if epoch else 'non dichiarata'}")
+    return _created(moc, f"catalogo {table.origin}", step, notes)
+
+
+def _valid_pixels(image) -> np.ndarray:
+    """Pixel validi: valori finiti, non mascherati e diversi da ``BLANK`` per i dati interi."""
+    data = image.data
+    valid = ~np.ma.getmaskarray(data)
+    values = np.ma.getdata(data)
+    if values.dtype.kind == "f":
+        valid &= np.isfinite(values)
+    elif values.dtype.kind in "iu" and image.header.get("BLANK") is not None:
+        valid &= values != image.header["BLANK"]
+    return valid
+
+
+def _sample_axis(n: int, k: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Punti di campionamento su un asse di ``n`` pixel con ``k`` passi per pixel (bordi compresi), convenzione
+    numpy (centri interi, bordi a ±0.5): (coordinate, pixel prima, pixel dopo) con indici spostati di 1 per il
+    bordo di guardia."""
+    a = np.arange(k * n + 1)
+    coord = a / k - 0.5
+    after = a // k  # pixel che contiene il punto (o che inizia sul punto)
+    before = np.where(a % k == 0, after - 1, after)  # sul bordo tra due pixel il punto appartiene a entrambi
+    return coord, before + 1, np.minimum(after, n) + 1
+
+
+def moc_from_image(image, order_max: int, *, block_rows: int = 512) -> Moc:
+    """MOC da un'immagine (E6): dai **pixel validi** con il WCS dell'11 (non solo i quattro angoli).
+
+    Per ogni pixel valido si campionano angoli e punti interni a passo non più grande di metà del lato di una
+    cella all'ordine ``order_max`` (obbligatorio); i punti si convertono in ICRS con il WCS (modulo 10) e il MOC
+    contiene ogni cella che contiene un punto. Lo scarto dal contorno vero è limitato alle celle di bordo."""
+    from astropy.wcs.utils import proj_plane_pixel_scales
+
+    from astrotwo.core.coordinates_wcs import pixel_to_sky
+
+    order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
+    if getattr(image, "is_preview", False):
+        raise MocError("PREVIEW_NOT_MEASURABLE", "MOC da immagine: l'immagine è aperta a due livelli e i dati in "
+                       "memoria sono solo l'anteprima")
+    if getattr(image, "color", False):
+        raise MocError("OPERATION_UNSUPPORTED", "MOC da immagine: immagine a colori, solo presentazione")
+    if image.wcs is None:
+        raise MocError("WCS_MISSING", f"immagine {image.origin}: nessun WCS, nessuna posizione sul cielo")
+    valid = _valid_pixels(image)
+    ny, nx = valid.shape
+    pixel = float(np.max(proj_plane_pixel_scales(image.wcs.wcs.celestial)))  # gradi per pixel
+    cell = float(_cell_size(order).value)
+    k = max(1, math.ceil(2.0 * pixel / cell))
+    xs, x_before, x_after = _sample_axis(nx, k)
+    ys, y_before, y_after = _sample_axis(ny, k)
+    padded = np.zeros((ny + 2, nx + 2), dtype=bool)
+    padded[1:-1, 1:-1] = valid
+    result = MOC.new_empty(order)
+    points = outside = 0
+    step_rows = max(1, block_rows * k)
+    for start in range(0, ys.size, step_rows):
+        sl = slice(start, start + step_rows)
+        yb, ya = y_before[sl][:, None], y_after[sl][:, None]
+        keep = (padded[yb, x_before] | padded[yb, x_after] | padded[ya, x_before] | padded[ya, x_after])
+        rows, cols = np.nonzero(keep)
+        if rows.size == 0:
+            continue
+        sky = pixel_to_sky(image.wcs, xs[cols], ys[sl][rows], convention="numpy").coords
+        lon, lat, _ = _to_icrs_finite(sky)
+        outside += rows.size - lon.size
+        points += lon.size
+        if lon.size:
+            result = result.union(MOC.from_lonlat(lon=lon * u.deg, lat=lat * u.deg, max_norder=order))
+    notes = []
+    if outside:
+        notes.append(("POINTS_OUTSIDE_PROJECTION", f"{outside} punti di campionamento senza posizione sul cielo "
+                      "(fuori dalla proiezione) esclusi"))
+    invalid = int(valid.size - np.count_nonzero(valid))
+    step = (f"MOC da immagine all'ordine {order}: {int(np.count_nonzero(valid))} pixel validi ({invalid} non validi: "
+            f"NaN, mascherati o BLANK), {k} passi per pixel (pixel {pixel!r}°, cella {cell!r}°), {points} punti "
+            f"convertiti con il WCS dell'11 ({image.wcs.projection}, {image.wcs.frame_name}) e il modulo 10; "
+            "celle che contengono almeno un punto (mocpy.MOC.from_lonlat)")
+    return _created(result, f"immagine {image.origin}", step, notes)
+
+
+def _to_icrs_finite(coords):
+    """Come ``_to_icrs`` ma scarta i punti senza posizione (fuori dalla proiezione) invece di rifiutarli."""
+    lon_all = np.atleast_1d(coords.lon.to_value(u.deg))
+    lat_all = np.atleast_1d(coords.lat.to_value(u.deg))
+    finite = np.isfinite(lon_all) & np.isfinite(lat_all)
+    if coords.frame_name == "icrs" or not np.any(finite):
+        return lon_all[finite], lat_all[finite], ""
+    from astrotwo.core.coordinates_wcs import SkyFrame
+
+    kept = SkyFrame(coord=coords.coord[finite], epoch=coords.epoch, frame_defaults_note=coords.frame_defaults_note)
+    return _to_icrs(kept, "punti dell'immagine")

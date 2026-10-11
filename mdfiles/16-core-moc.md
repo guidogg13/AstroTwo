@@ -150,6 +150,45 @@ di un dato sia sempre verificabile e confrontabile.
   ICRS, un MOC di un altro corpo → `MOC_BODY_UNSUPPORTED`.
 - Risultato vuoto: consentito, con l'avviso `MOC_EMPTY`.
 
+**P2 — creazione (scritta il 2026-10-11):**
+
+- **Cerchio:** `moc_from_region(CircleRegion(centro, raggio), order_max)`,
+  `mocpy.MOC.from_cone` con calcolo all'ordine + 2: contiene le celle che
+  toccano il cerchio (approssimazione per eccesso). Centro in qualsiasi
+  sistema del 10, convertito in ICRS; raggio in (0°, 180°].
+- **Poligono:** `moc_from_region(PolygonRegion(vertici), order_max,
+  complement=False)`, `mocpy.MOC.from_polygon`. Verifica: la regione scelta
+  non dipende dal verso dei vertici, ma le **celle di bordo** possono
+  differire tra i due versi (186 e 61 celle su 24 910 all'ordine 7 in una
+  prova): la differenza resta entro le celle di bordo (T2 e test del
+  poligono).
+- **Catalogo:** `moc_from_catalog(table, order_max)`, `mocpy.MOC.from_lonlat`;
+  colonne e sistema dal 13, conversione in ICRS con il 10, righe senza
+  posizione escluse e contate (avviso `ROWS_EXCLUDED`), epoca delle
+  posizioni riportata, mai propagata.
+- **Immagine (scelta minore, da confermare):** `moc_from_image(image,
+  order_max)`. Pixel validi = valori finiti, non mascherati e diversi da
+  `BLANK` per i dati interi. Per ogni pixel valido si campionano **angoli e
+  punti interni** a passo non più grande di **metà del lato di una cella**
+  all'ordine dato (`k` passi per pixel, `k` = ⌈2 × pixel / cella⌉, almeno 1;
+  i punti sul bordo tra un pixel valido e uno non valido contano); i punti
+  si convertono con il WCS dell'11 (`pixel_to_sky` del 10) e in ICRS; il MOC
+  contiene **ogni cella che contiene un punto**. Motivo: un poligono per
+  pixel con `mocpy.MOC.from_polygons` è troppo lento (oltre 200 s per 200 000
+  pixel in una prova del 2026-10-11) e `mocpy.MOC.from_fits_image` con
+  maschera usa solo i centri dei pixel (approssimazione dichiarata dalla sua
+  documentazione). Lo scarto dal contorno vero è limitato alle celle di
+  bordo (test: il MOC sta dentro il poligono degli angoli allargato di una
+  cella e contiene il poligono ristretto di una cella, per un'immagine TAN,
+  dove i bordi sono cerchi massimi). Punti fuori dalla proiezione: esclusi,
+  avviso `POINTS_OUTSIDE_PROJECTION`. Immagini a due livelli: rifiuto
+  (`PREVIEW_NOT_MEASURABLE`, come nell'11).
+- MOC da catalogo o immagine di un corpo diverso da `celestial`:
+  `MOC_BODY_UNSUPPORTED` (i MOC spaziali sono ICRS).
+- Nota di verifica: `mocpy.MOC.add_neighbours` modifica il MOC sul posto;
+  il 16 non lo usa (si usano `extended`/`contracted`, che restituiscono un
+  nuovo MOC).
+
 ## 4. Cosa NON fa
 
 - Non scarica immagini né cataloghi (11, 12, 14).
@@ -198,9 +237,11 @@ di un dato sia sempre verificabile e confrontabile.
 
 - **`Moc`** (classe): MOC spaziale/temporale/spazio-temporale; metodi
   descrittivi `union`, `intersection`, `difference`, `complement`, `contains`.
-- **`moc_from_catalog(table, order_max)`**, **`moc_from_region(...)`**
-  (cerchi/poligoni), **`moc_from_image(image)`**, **`moc_from_probability(map)`**
-  — costruttori (E6); ciascuno dichiara risoluzione e unità.
+- **`moc_from_catalog(table, order_max)`**, **`moc_from_region(region,
+  order_max, *, complement=False)`** (`CircleRegion`, `PolygonRegion`),
+  **`moc_from_image(image, order_max)`**, **`moc_from_probability(map)`**
+  — costruttori (E6); `order_max` obbligatorio; ciascuno dichiara
+  risoluzione e unità nella storia.
 - **`filter_by_moc(table, moc, inside)`** — filtro delle sorgenti (E6);
   restituisce indici.
 - **`survey_coverage(survey)`** — copertura di un survey come MOC (C4).
@@ -279,7 +320,12 @@ di un dato sia sempre verificabile e confrontabile.
 | Probabilità fuori [0,1] | rifiuto dell'input | `PROBABILITY_OUT_OF_RANGE` |
 | Operazione tra MOC di unità diverse (spaziale vs temporale) | rifiuto con descrizione | `MOC_TYPE_MISMATCH` |
 | MOC corrotto in lettura | errore con il file/la riga problematica | `MOC_UNREADABLE` |
-| Tabella senza coordinate per il filtro | rifiuto prima del calcolo | `NO_COORD_COLUMNS` |
+| Tabella senza coordinate per il filtro o per la creazione | rifiuto prima del calcolo | `NO_COORD_COLUMNS` |
+| Colonne di posizione senza sistema dichiarato | rifiuto | `FRAME_UNKNOWN` |
+| Immagine senza WCS | nessun MOC | `WCS_MISSING` |
+| Immagine aperta a due livelli (solo anteprima in memoria) | nessun MOC | `PREVIEW_NOT_MEASURABLE` |
+| Immagine a colori | nessun MOC | `OPERATION_UNSUPPORTED` |
+| Righe senza posizione / punti fuori dalla proiezione | esclusi e contati | avvisi `ROWS_EXCLUDED`, `POINTS_OUTSIDE_PROJECTION` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
 | Operazione o filtro tra MOC/dati di corpi diversi | rifiuto; forzatura solo con opzione esplicita citata nel risultato (D19-4) | `BODY_MISMATCH` |
 | Versione del MOC non supportata | nessun MOC letto, errore con la versione trovata | `MOC_VERSION_UNSUPPORTED` |
@@ -306,14 +352,15 @@ L'IA non calcola né approssima mai superfici o coperture.
 
 | # | Descrizione | Passi | Atteso | Verifica |
 |---|---|---|---|---|
-| T1 | MOC da cerchio | creare un MOC di raggio 1° attorno a un punto | area ≈ 2π(1 − cos 1°) steradianti (entro la tolleranza legata all'ordine usato) | area ricalcolata nel test con la formula e con `astropy.units` |
-| T2 | Circolo completo | unione di quattro quarti di cielo (regioni che coprono tutto) | area ≈ 4π steradianti (entro la tolleranza dell'ordine) | ricalcolo con Astropy/`math` nel test |
+| T1 | MOC da cerchio | creare un MOC di raggio 1° attorno a un punto (centro galattico, convertito in ICRS) all'ordine 9 | area ≈ 2π(1 − cos 1°) steradianti entro **celle di bordo × area di una cella** (celle attraversate dal cerchio contate nel test con `astropy-healpix`) | area ricalcolata nel test con la formula e con `astropy.units` |
+| T2 | Circolo completo | unione di quattro quarti di cielo, ognuno da due triangoli d'ottante (poligoni), all'ordine 6 | area ≈ 4π steradianti entro celle di bordo (attraversate da equatore e meridiani 0°, 90°, 180°, 270°, contate con `astropy-healpix`) × area di una cella | ricalcolo con Astropy/`math` nel test |
 | T3 | Proprietà insiemistiche | generare due MOC casuali con semina fissa; verificare A∪B ⊇ A∩B, (A∖B)∩B = ∅, ¬¬A = A | tutte le proprietà vere | controllo con le operazioni ricalcolate nel test |
 | T4 | Filtro per Moc | 1000 punti casuali (semina fissa) dentro un MOC noto | conteggio coincidente con quello ricalcolato nel test con `astropy-healpix` | ricalcolo con la libreria HEALPix |
 | T5 | Mismatch di unità | unire un MOC spaziale con uno temporale | `MOC_TYPE_MISMATCH` | test di unità |
 | T6 | Mappe HEALPix | produrre una mappa HEALPix su una distribuzione nota | valori per cella coincidenti con `astropy-healpix` ricalcolato nel test; schema NESTED e sistema ICRS dichiarati | ricalcolo con la libreria scelta |
 | T7 | Versioni MOC (H22) | file di prova **scritti nel test secondo il testo dello standard** (mai file di Aladin): FITS 1.x (intestazioni di 1.0/1.1, colonna `UNIQ` `1J`), 2.0 `NUNIQ` e `RANGE` (spaziale, temporale, spazio-temporale), JSON con e senza prefisso, testo; `MOCVERS='2.1'`; versione sconosciuta; `kind` mancante | stesse celle lette da `mocpy`; versione riportata ("1.1, assunta…", "2.0", "non dichiarata nel formato"); 2.1 → `MOC_VERSION_UNSUPPORTED` (D16-6); `MOC_TYPE_REQUIRED`; andata e ritorno in scrittura | confronto con `mocpy` |
 | T8 | Filtro MocServer (H26) | `query_mocserver` su una regione con risposta simulata | elenco delle collezioni con origine e data | servizio simulato (test di rete separato) |
+| T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (k = 1) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
 | T9 | MocServer assente (H26) | `query_mocserver` senza rete | `MOCSERVER_UNAVAILABLE`, nessun elenco parziale | test di unità |
 
 ## 13. Decisioni aperte
@@ -390,3 +437,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §5, §7, §9 — MOC salvati come file nella cache comune `SharedCache`. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Decisioni del proprietario del 2026-10-11 applicate** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti; `healpy` escluso (GPL), solo `astropy-healpix` e `mocpy`; `order_max` obbligatorio; MOC da catalogo una cella per sorgente; MOC da immagine dai pixel validi con il WCS dell'11; poligoni a lati di cerchio massimo (interno = regione più piccola, verificato in `mocpy`); MOC spaziali sempre ICRS; somma delle probabilità entro 10⁻⁶ relativo; tolleranze di T1/T2 dalle celle di bordo; MocServer con la rete del 14; `build_moc` solo funzione; mappe NESTED ICRS; C4 e cataloghi HiPS progressivi rinviati al 12. Verifiche del 2026-10-11: versioni dello standard (1.0, 1.1, 2.0; nessuna 2.1), intestazioni FITS, JSON e testo, scala TCB dei MOC temporali. Nuovi `MOC_TYPE_REQUIRED`, `MOC_BODY_UNSUPPORTED`; nuove decisioni aperte **D16-6** (versione 2.1) e **D16-7** (complemento degli ST-MOC), Gruppo 3. Scelte minori di P1 elencate in §3. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **P2 scritta** (`moc_from_region` con `CircleRegion`/`PolygonRegion`, `moc_from_catalog`, `moc_from_image`; T1, T2, T10): cerchio con `from_cone` (per eccesso), poligono con `from_polygon` (celle di bordo diverse tra i due versi, verificato), catalogo una cella per sorgente, immagine dai pixel validi campionati a passo ≤ metà cella con il WCS dell'11 (scelta minore da confermare, motivi in §3). Nuovi casi in §10. Stato `approvato` invariato. |
