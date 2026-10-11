@@ -106,12 +106,13 @@ class CatalogsError(Exception):
 # --------------------------------------------------------------------------
 
 #: Formati riconosciuti (H22); ``format`` esplicito accetta solo i testi.
-TABLE_FORMATS: tuple[str, ...] = ("votable", "fits", "csv", "tsv", "bsv", "ipac", "sextractor", "astrores")
-_TEXT_FORMATS: tuple[str, ...] = ("csv", "tsv", "bsv", "ipac", "sextractor")
+TABLE_FORMATS: tuple[str, ...] = ("votable", "fits", "csv", "tsv", "bsv", "ipac", "sextractor", "ecsv", "astrores")
+_TEXT_FORMATS: tuple[str, ...] = ("csv", "tsv", "bsv", "ipac", "sextractor", "ecsv")
 # Le righe che iniziano con "#" sono commenti nei testi delimitati (§3), anche per astropy.
 _ASCII_READERS = {"csv": dict(format="csv", comment="#"), "tsv": dict(format="tab", comment="#"),
                   "bsv": dict(format="basic", delimiter=" ", comment="#"),
-                  "ipac": dict(format="ipac"), "sextractor": dict(format="sextractor")}
+                  "ipac": dict(format="ipac"), "sextractor": dict(format="sextractor"),
+                  "ecsv": dict(format="ecsv")}  # ECSV di astropy (D14-10): unità e UCD nell'intestazione
 _SNIFF_LINES = 20
 _PROVENANCE = f"astropy {astropy.__version__} (astropy.io.votable, astropy.io.fits, astropy.io.ascii)"
 
@@ -257,6 +258,8 @@ def detect_table_format(source) -> str:
             return "astrores"
         raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: XML con radice {root!r}; formati: {', '.join(TABLE_FORMATS)}")
     nonempty = [line for line in text.splitlines() if line.strip()]
+    if nonempty and nonempty[0].startswith("# %ECSV"):  # prima riga dichiarata dallo standard ECSV
+        return "ecsv"
     if nonempty and nonempty[0].lstrip()[:1] in ("\\", "|"):
         return "ipac"
     if nonempty and re.match(r"^#\s+\d+\s+\S+", nonempty[0]):
@@ -476,9 +479,9 @@ def _count_text_rows(path: str, fmt: str) -> tuple[int, int]:
                 continue
             if stripped.startswith("#"):
                 continue
-            if fmt in ("csv", "tsv", "bsv") and not header_seen:
+            if fmt in ("csv", "tsv", "bsv", "ecsv") and not header_seen:
                 header_seen = True
-                sep = {"csv": ",", "tsv": "\t", "bsv": None}[fmt]
+                sep = {"csv": ",", "tsv": "\t", "bsv": None}.get(fmt, "," if "," in stripped else None)
                 columns = len(stripped.split(sep))
                 continue
             rows += 1

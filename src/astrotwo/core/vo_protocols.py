@@ -58,6 +58,7 @@ from astrotwo.core.catalogs import (
 __all__ = [
     "DEFAULT_MAX_ROWS",
     "EXPORT_FORMATS",
+    "ExportResult",
     "AdqlCheck",
     "SAMP_MTYPES",
     "SampClient",
@@ -118,15 +119,30 @@ def _iso(moment: datetime) -> str:
 # P1 — Lettura/scrittura VOTable ed esportazione con provenienza
 # --------------------------------------------------------------------------
 
-#: Formati di esportazione (D13).
-EXPORT_FORMATS: tuple[str, ...] = ("csv", "votable", "fits")
+#: Formati di esportazione (D13; ``ecsv`` con D14-10).
+EXPORT_FORMATS: tuple[str, ...] = ("csv", "ecsv", "votable", "fits")
 #: Versione dei VOTable scritti (D14-9 punto 9).
 VOTABLE_VERSION = "1.4"
 _FORMAT_VERSIONS = {
     "votable": f"VOTable {VOTABLE_VERSION}",
-    "fits": f"FITS (scritto con astropy.io.fits {astropy.__version__})",
+    "fits": "FITS Standard 4.0",
     "csv": "CSV (RFC 4180)",
+    "ecsv": "ECSV 1.0",
 }
+#: Libreria che scrive i file (A2WRITER, accanto alla versione del formato).
+_WRITER = f"astropy {astropy.__version__}"
+
+
+@dataclass(frozen=True)
+class ExportResult:
+    """File esportato con il formato e gli avvisi (es. ``CSV_UNITS_NOT_SAVED``); vale come percorso."""
+
+    path: Path
+    format: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    def __fspath__(self) -> str:
+        return os.fspath(self.path)
 
 
 def read_votable(path, *, table: int | None = None, limits: TableLimits | None = None) -> CatalogTable:
@@ -150,7 +166,7 @@ def read_votable(path, *, table: int | None = None, limits: TableLimits | None =
         raise VoProtocolsError("VOTABLE_INVALID", f"{text}: VOTable malformato ({exc.message})", path=text) from exc
 
 
-def write_votable(table: CatalogTable, path, overwrite: bool = False) -> Path:
+def write_votable(table: CatalogTable, path, overwrite: bool = False) -> ExportResult:
     """Scrive un VOTable 1.4 con provenienza: ``export_table(table, path, "votable")``."""
     return export_table(table, path, "votable", overwrite=overwrite)
 
@@ -160,6 +176,7 @@ def _provenance(table: CatalogTable, fmt: str) -> dict[str, str]:
     info = {
         "A2VERS": f"AstroTwo {astrotwo.__version__}",
         "A2FORMAT": _FORMAT_VERSIONS[fmt],
+        "A2WRITER": _WRITER,
         "A2ORIGIN": table.origin,
         "A2DATE": _iso(table.retrieved_at),
         "A2EXPORT": _iso(datetime.now(UTC)),
@@ -217,15 +234,41 @@ def _write_csv_file(table: CatalogTable, target: Path, info: dict[str, str]) -> 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         astropy_ascii.write(table.table, buffer, format="csv", fast_writer=False)
-    # D14-10 (da decidere): nessuna unità nel CSV, solo provenienza e valori.
+    # CSV semplice (D14-10): provenienza e valori, nessuna unità (avviso CSV_UNITS_NOT_SAVED).
     lines = [f"# {name} = {value}" for name, value in info.items()]
     with open(target, "w", encoding="utf-8", newline="") as handle:
         handle.write("\n".join(lines) + "\n")
         handle.write(buffer.getvalue())
 
 
-def export_table(table: CatalogTable, path, format: str, overwrite: bool = False) -> Path:
-    """Salva una tabella in CSV, VOTable o FITS con origine, data, versione di AstroTwo e del formato."""
+def _write_ecsv_file(table: CatalogTable, target: Path, info: dict[str, str]) -> None:
+    """ECSV di astropy (D14-10): unità, UCD e descrizioni nell'intestazione, provenienza nei metadati."""
+    data = table.table.copy(copy_data=False)
+    data.meta = dict(info)
+    for name in data.colnames:
+        col = data[name]
+        meta = {k: v for k, v in col.meta.items() if k != "ref"}  # il COOSYS citato non esiste nell'ECSV
+        unrecognized = meta.pop("unit_unrecognized", None)
+        if col.dtype == object and all(isinstance(v, str) for v in np.ma.compressed(col)):
+            data[name] = col.astype(str)
+            data[name].description = col.description
+        data[name].meta = meta
+        data[name].unit = col.unit if unrecognized is None else u.Unit(unrecognized, parse_strict="silent")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        astropy_ascii.write(data, str(target), format="ecsv", delimiter=",")
+
+
+def _has_units(table: CatalogTable) -> bool:
+    return any(table.table[n].unit is not None or table.table[n].meta.get("unit_unrecognized")
+               for n in table.table.colnames)
+
+
+def export_table(table: CatalogTable, path, format: str, overwrite: bool = False) -> ExportResult:
+    """Salva una tabella in CSV, ECSV, VOTable o FITS con origine, data, versione di AstroTwo e del formato.
+
+    Il CSV semplice non salva le unità: con colonne che ne hanno, avviso ``CSV_UNITS_NOT_SAVED``
+    (per conservarle: ``ecsv``, D14-10)."""
     if format not in EXPORT_FORMATS:
         raise VoProtocolsError("EXPORT_FORMAT_UNSUPPORTED",
                                f"formato {format!r}: ammessi {', '.join(EXPORT_FORMATS)}")
@@ -237,8 +280,14 @@ def export_table(table: CatalogTable, path, format: str, overwrite: bool = False
     if target.exists():
         target.unlink()
     info = _provenance(table, format)
-    {"votable": _write_votable_file, "fits": _write_fits_file, "csv": _write_csv_file}[format](table, target, info)
-    return target
+    writers = {"votable": _write_votable_file, "fits": _write_fits_file, "csv": _write_csv_file,
+               "ecsv": _write_ecsv_file}
+    writers[format](table, target, info)
+    notes = []
+    if format == "csv" and _has_units(table):
+        notes.append(("CSV_UNITS_NOT_SAVED", "il CSV semplice non salva le unità delle colonne: per conservarle "
+                      "esportare in ecsv (D14-10)"))
+    return ExportResult(path=target, format=format, warnings=tuple(notes))
 
 
 # --------------------------------------------------------------------------
@@ -1567,7 +1616,8 @@ class SampHub:
         self._require()
         if self._tmpdir is None:
             self._tmpdir = tempfile.TemporaryDirectory(prefix="astrotwo-samp-")
-        path = export_table(table, Path(self._tmpdir.name) / f"{len(os.listdir(self._tmpdir.name))}.xml", "votable")
+        path = export_table(table, Path(self._tmpdir.name) / f"{len(os.listdir(self._tmpdir.name))}.xml",
+                            "votable").path
         params = {"url": path.resolve().as_uri(), "table-id": table_id, "name": name or table_id}
         return self.send_message("table.load.votable", params, recipient)
 

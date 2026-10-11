@@ -11,6 +11,7 @@ import io
 import time as _time
 import urllib.parse
 
+import astropy
 import astropy.units as u
 import numpy as np
 import pytest
@@ -91,7 +92,7 @@ def catalog(tmp_path):
 
 
 def test_t1_votable_round_trip(tmp_path, catalog):
-    out = write_votable(catalog, tmp_path / "out.xml")
+    out = write_votable(catalog, tmp_path / "out.xml").path
     again = read_votable(out)
     expected = parse_votable(str(out)).get_first_table().to_table(use_names_over_ids=True)
     assert again.colnames == expected.colnames == catalog.colnames
@@ -104,7 +105,7 @@ def test_t1_votable_round_trip(tmp_path, catalog):
 
 
 def test_votable_provenance_and_version(tmp_path, catalog):
-    out = write_votable(catalog, tmp_path / "out.xml")
+    out = write_votable(catalog, tmp_path / "out.xml").path
     vot = parse_votable(str(out))
     assert vot.version == VOTABLE_VERSION == "1.4"
     infos = {i.name: i.value for i in vot.resources[0].infos}
@@ -113,31 +114,68 @@ def test_votable_provenance_and_version(tmp_path, catalog):
     assert infos["A2ORIGIN"] == catalog.origin and infos["A2DATE"].endswith("Z") and "A2EXPORT" in infos
 
 
-def test_t5_export_three_formats(tmp_path, catalog):
-    paths = {fmt: export_table(catalog, tmp_path / f"t.{fmt}", fmt) for fmt in ("votable", "fits", "csv")}
+def test_t5_export_all_formats(tmp_path, catalog):
+    results = {fmt: export_table(catalog, tmp_path / f"t.{fmt}", fmt) for fmt in ("votable", "fits", "csv", "ecsv")}
+    paths = {fmt: r.path for fmt, r in results.items()}
     expected = {
         "votable": parse_votable(str(paths["votable"])).get_first_table().to_table(use_names_over_ids=True),
         "fits": Table.read(paths["fits"], hdu=1),
         "csv": astropy_ascii.read(paths["csv"], format="csv", comment="#"),
+        "ecsv": astropy_ascii.read(paths["ecsv"], format="ecsv"),
     }
     for fmt, path in paths.items():
         back = read_table(path)
-        assert back.format == ("votable" if fmt == "votable" else fmt)
+        assert back.format == fmt
         for name in ("RA", "DE", "Vmag"):
             assert np.allclose(np.asarray(back.table[name], dtype=float), np.asarray(expected[fmt][name], dtype=float))
             assert np.allclose(np.asarray(back.table[name], dtype=float), np.asarray(catalog.table[name], dtype=float))
         assert [str(v) for v in back.table["Name"]] == [str(v) for v in catalog.table["Name"]]
-        if fmt != "csv":  # unità nel CSV: D14-10 da decidere
+        if fmt == "csv":  # CSV semplice: nessuna unità, con l'avviso (D14-10)
+            assert all(back.table[name].unit is None for name in ("RA", "DE", "Vmag"))
+            assert [c for c, _ in results[fmt].warnings] == ["CSV_UNITS_NOT_SAVED"]
+        else:
             for name in ("RA", "DE", "Vmag"):
                 assert back.table[name].unit == catalog.table[name].unit == expected[fmt][name].unit
+            assert results[fmt].warnings == ()
+
+
+def test_ecsv_round_trip_units_and_ucd(tmp_path, catalog):
+    # Andata e ritorno ECSV (D14-10): unità (anche non riconosciute), UCD, valori mancanti, provenienza.
+    data = catalog.table.copy()
+    data["Vmag"] = np.ma.MaskedArray(data["Vmag"], mask=[False, True, False])
+    data["Vmag"].unit = u.mag
+    data["Vmag"].meta["ucd"] = "phot.mag;em.opt.V"
+    data["flag"] = [1, 2, 3]
+    data["flag"].meta["unit_unrecognized"] = "---"
+    import dataclasses
+    table = dataclasses.replace(catalog, table=data)
+    out = export_table(table, tmp_path / "t.ecsv", "ecsv")
+    back = read_table(out)
+    assert back.format == "ecsv"
+    for name in ("RA", "DE", "Vmag"):
+        assert back.table[name].unit == data[name].unit
+        assert back.table[name].meta["ucd"] == data[name].meta["ucd"]
+    assert np.ma.getmaskarray(back.table["Vmag"]).tolist() == [False, True, False]
+    assert back.table["flag"].unit is None and back.table["flag"].meta["unit_unrecognized"] == "---"
+    assert ("UNIT_UNRECOGNIZED" in [c for c, _ in back.warnings])
+    # Posizioni dagli UCD; il sistema di riferimento (COOSYS) non ha posto nell'ECSV: dichiarato sconosciuto.
+    assert (back.positions.lon, back.positions.lat) == ("RA", "DE") and back.positions.frame is None
+    meta = back.table.meta
+    assert meta["A2FORMAT"] == "ECSV 1.0" and meta["A2ORIGIN"] == catalog.origin
+    assert meta["A2WRITER"] == f"astropy {astropy.__version__}"
+    assert out.path.read_text(encoding="utf-8").startswith("# %ECSV")
+    # Senza unità nella tabella il CSV non dà avvisi.
+    plain = dataclasses.replace(catalog, table=Table({"a": [1, 2]}))
+    assert export_table(plain, tmp_path / "p.csv", "csv").warnings == ()
 
 
 def test_fits_and_csv_provenance(tmp_path, catalog):
     fits_path = export_table(catalog, tmp_path / "t.fits", "fits")
     header = fits.getheader(fits_path, 1)
     assert header["A2VERS"] == f"AstroTwo {astrotwo.__version__}" and header["A2ORIGIN"] == catalog.origin
-    assert header["A2FORMAT"].startswith("FITS") and header["TUCD1"] == "pos.eq.ra;meta.main"
-    csv_path = export_table(catalog, tmp_path / "t.csv", "csv")
+    assert header["A2FORMAT"] == "FITS Standard 4.0" and header["TUCD1"] == "pos.eq.ra;meta.main"
+    assert header["A2WRITER"] == f"astropy {astropy.__version__}"
+    csv_path = export_table(catalog, tmp_path / "t.csv", "csv").path
     head = csv_path.read_text(encoding="utf-8").splitlines()
     assert head[0] == f"# A2VERS = AstroTwo {astrotwo.__version__}"
     assert f"# A2ORIGIN = {catalog.origin}" in head and head[head.index("RA,DE,Vmag,Name") - 1].startswith("#")
@@ -147,11 +185,11 @@ def test_export_errors(tmp_path, catalog):
     with pytest.raises(VoProtocolsError) as err:
         export_table(catalog, tmp_path / "t.txt", "xlsx")
     assert err.value.code == "EXPORT_FORMAT_UNSUPPORTED" and "csv" in err.value.message
-    path = export_table(catalog, tmp_path / "t.xml", "votable")
+    path = export_table(catalog, tmp_path / "t.xml", "votable").path
     with pytest.raises(VoProtocolsError) as err:
         export_table(catalog, path, "votable")
     assert err.value.code == "FILE_EXISTS"
-    assert export_table(catalog, path, "fits", overwrite=True) == path
+    assert export_table(catalog, path, "fits", overwrite=True).path == path
     with pytest.raises(TypeError):
         export_table(Table({"a": [1]}), tmp_path / "x.xml", "votable")
 

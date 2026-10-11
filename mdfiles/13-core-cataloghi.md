@@ -39,8 +39,13 @@ suo VOTable.
 - **Formati delle tabelle (H22, sez. 8.1 del manuale di Aladin, ed. giugno
   2022):** VOTable, tabelle FITS ASCII e binarie, CSV, TSV, **BSV** (valori
   separati da spazi), **IPAC TBL**, **formato SExtractor** e **ASTRORES**
-  (predecessore di VOTable, letto per compatibilità). Tutti i formati si
-  leggono con `astropy.io.votable`, `astropy.io.ascii` e `astropy.io.fits`,
+  (predecessore di VOTable, letto per compatibilità), più **ECSV** di
+  `astropy` (D14-10, decisa il 2026-10-11: è il formato in cui il 14
+  esporta le tabelle con unità; unità, UCD, descrizioni e valori mancanti
+  si leggono dall'intestazione; il sistema di riferimento delle posizioni
+  non c'è, quindi `FRAME_UNKNOWN` finché l'utente non lo conferma). Tutti i
+  formati si leggono con `astropy.io.votable`, `astropy.io.ascii` e
+  `astropy.io.fits`,
   **tranne ASTRORES**, letto da un lettore nel modulo con **`defusedxml`**
   (D13-7; protezione da file XML non fidati).
   - **Lettore ASTRORES (D13-14, decisa dal proprietario il 2026-10-10,
@@ -92,6 +97,8 @@ suo VOTable.
   - **Riconoscimento dal contenuto, non dall'estensione (decisione del
     proprietario del 2026-10-10):** FITS = firma `SIMPLE  =` con almeno una
     HDU di tabella; XML = radice `VOTABLE` (VOTable) o `ASTRO` (ASTRORES);
+    ECSV = prima riga non vuota che inizia con `# %ECSV` (dichiarazione
+    obbligatoria dello standard ECSV; D14-10);
     IPAC = intestazione con righe che iniziano con `\` o `|`; SExtractor =
     righe d'intestazione `# 1 NOME`. Per i testi delimitati la regola si
     applica alle prime 20 righe non vuote e non di commento (`#`): **TSV**
@@ -100,7 +107,7 @@ suo VOTable.
     tabulazione; **BSV** se nessuna contiene tabulazioni o virgole e tutte
     hanno lo stesso numero (≥ 2) di campi separati da spazi; **in ogni altro
     caso** errore `FORMAT_AMBIGUOUS`, che chiede il parametro `format`
-    (`csv`, `tsv`, `bsv`, `ipac`, `sextractor`). Con `format` esplicito il
+    (`csv`, `tsv`, `bsv`, `ipac`, `sextractor`, `ecsv`). Con `format` esplicito il
     riconoscimento non si fa e il formato usato è scritto nel risultato.
 - **Unità delle colonne (decisione del proprietario del 2026-10-10):** una
   stringa di unità valida nei formati standard **FITS** o **VOUnit** di
@@ -372,7 +379,7 @@ suo VOTable.
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
 | in | `catalog_id` | stringa | id catalogo CDS | es. "I/239/hip_main" (esempio di formato, id da verificare); P6 |
-| in | file tabella | percorso (URL in P6) | VOTable, FITS, CSV, TSV, BSV, IPAC TBL, SExtractor, ASTRORES | natura riconosciuta dal contenuto (H22) o `format` esplicito |
+| in | file tabella | percorso (URL in P6) | VOTable, FITS, CSV, TSV, BSV, IPAC TBL, SExtractor, ECSV, ASTRORES | natura riconosciuta dal contenuto (H22) o `format` esplicito |
 | in | `table` | intero ≥ 0 | indice della tabella nel file | obbligatorio con più tabelle |
 | in | `limits` | `TableLimits` | righe, byte | 1 milione di righe, 4 GB |
 | in | `expression` | stringa | grammatica di §3 (comando `search`) | validata prima dell'esecuzione (D13-1) |
@@ -482,7 +489,7 @@ suo VOTable.
 | `astropy.table` | rappresentazione delle tabelle con unità | standard del dominio |
 | `astropy.io.votable` | lettura dei VOTable locali (UCD, `COOSYS`) | standard VO; da URL tramite il 14 |
 | `astropy.io.fits` | tabelle FITS ASCII e binarie | standard FITS |
-| `astropy.io.ascii` | lettura di CSV, TSV, BSV, IPAC TBL e formato SExtractor (H22) | lettori consolidati della comunità |
+| `astropy.io.ascii` | lettura di CSV, TSV, BSV, IPAC TBL, formato SExtractor (H22) ed ECSV (D14-10) | lettori consolidati della comunità |
 | `numpy` | espressioni su colonne, istogrammi, grafici dati | consolidato |
 | `astropy.units` | unità delle colonne (formati FITS e VOUnit) | unità esplicite sempre |
 | `sqlite3` (tramite `04-cache.md`) | sottoinsiemi salvati (se D13-13 lo conferma) | persistenza semplice e interrogabile |
@@ -773,3 +780,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **Con P4 del 14** (autorizzazione esplicita a modificare il file approvato): correzione — un VOTable senza l'attributo facoltativo `nrows` (dati `BINARY`, es. le risposte TAP del registro VO) dava un errore nel controllo del tetto di righe; ora le righe si contano dai dati letti. Nuovo test. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Con P5 del 14** (autorizzazione esplicita a modificare il file approvato): la lettura conserva nei metadati di colonna anche l'`utype` dei campi VOTable e gli UCD/utype delle tabelle FITS (parole chiave `TUCDn`, `TUTYPn`), che servono a riconoscere gli assi degli spettri SSA; nessun altro comportamento cambia. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P6 scritta tranne l'albero dinamico (D13-18) e il `LINK` ASTRORES (D13-17)** (autorizzazione esplicita a modificare il file approvato): `load_table` (file locale o URL tramite `download_table` del 14), `load_catalog` (TAP VizieR o gruppo fisso tramite `tap_query` del 14; `CATALOG_UNKNOWN`), `FIXED_COLLECTIONS` con identificativi verificati, `datalink_column` (descrittore DataLink o content-type DataLink nella colonna del formato, forma ObsCore), campi `request` e `descriptors` di `CatalogTable` (§7); test con servizi simulati e test di rete su 2MASS. Nuove decisioni aperte **D13-17** e **D13-18** (Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Con D14-10** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): lettura dell'**ECSV** di `astropy` (formato `ecsv`, riconosciuto dalla prima riga `# %ECSV`, anche come `format` esplicito), con unità, UCD e valori mancanti; sistema delle posizioni non presente nell'ECSV (`FRAME_UNKNOWN`). Test di andata e ritorno nel 14 (T5). Stato `approvato` invariato. |

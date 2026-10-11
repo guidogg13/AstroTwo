@@ -85,10 +85,23 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   salvare tabelle in CSV, VOTable e FITS con intestazione che riporta origine,
   data e versione dello schema. **Provenienza nei file esportati (D14-9):**
   origine e data della tabella, operazioni registrate, data
-  dell'esportazione, **versione di AstroTwo e versione del formato**:
+  dell'esportazione, **versione di AstroTwo e versione del formato**, più
+  la **versione di `astropy`** che scrive il file (`A2WRITER`):
   VOTable scritto in versione **1.4** con `INFO`; FITS con parole chiave
-  dell'intestazione; **CSV con righe di commento `#` all'inizio**. Le unità
-  nel CSV: vedi D14-10 (da decidere).
+  dell'intestazione e versione del formato **"FITS Standard 4.0"**
+  (decisione del proprietario del 2026-10-11); **CSV con righe di commento
+  `#` all'inizio**. **Unità (D14-10, decisa il 2026-10-11):** per le
+  tabelle con unità si esporta in **ECSV** di `astropy` (formato `ecsv`:
+  CSV con intestazione YAML in righe `#`, che conserva unità, UCD,
+  descrizioni e valori mancanti; provenienza nei metadati della tabella;
+  versione del formato "ECSV 1.0"); il 13 rilegge l'ECSV. Il **CSV
+  semplice resta disponibile**: con colonne che hanno unità dà l'avviso
+  `CSV_UNITS_NOT_SAVED` (le unità non vengono salvate). Nell'ECSV il
+  sistema di riferimento delle colonne di posizione (il `COOSYS` del
+  VOTable) non ha un posto standard: riletto, le colonne di posizione si
+  ritrovano dagli UCD ma il sistema è sconosciuto (`FRAME_UNKNOWN`, da
+  confermare con `confirm_position_columns` del 13); il testo resta nella
+  provenienza `A2POS`.
 - **Schede server (H10):** gestire i collegamenti a servizi esterni con un
   **elenco di server nostro**, tratto dai servizi pubblici del VO (D14-4,
   corretta il 2026-10-10), più i server personali dell'utente; le immagini
@@ -232,7 +245,7 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
 | out | tabella | `astropy.table.Table` | con unità e provenienza | |
 | out | `body` | stringa | `celestial` o nome IAU del corpo | obbligatorio (D19-3) per tabelle, spettri e risultati di query: ricavato dal sistema di coordinate dichiarato dal servizio o dai metadati EPN-TAP, mai assunto |
 | out | righe | intero | conteggio | con limite dichiarato |
-| out | file esportato | VOTable/CSV/FITS | con header di provenienza e data | |
+| out | file esportato | VOTable/ECSV/CSV/FITS | con header di provenienza e data | ECSV per le unità (D14-10) |
 | out | stato query | enumerativo | eseguita / in corso / fallita + errore | |
 | in | criteri SIA/SIA2 | struttura | posizione + raggio con unità; per SIA2 anche banda e intervallo di tempo (JD, scala dichiarata) | H23 |
 | out | lista di immagini | `astropy.table.Table` | URL di accesso, formato, campo, banda, eventuale calibrazione, `body` | H23 |
@@ -257,8 +270,10 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   overwrite=False)`** (P1) — I/O VOTable; la lettura passa da `read_table`
   del 13 (D14-9 punto 5); la scrittura è `export_table(..., "votable")`.
 - **`export_table(table, path, format, overwrite=False)`** (P1, D13) —
-  `format` in `csv`, `votable`, `fits`; provenienza come in §3; file
-  esistente senza `overwrite=True` → `FILE_EXISTS`.
+  `format` in `csv`, `ecsv`, `votable`, `fits`; provenienza come in §3; file
+  esistente senza `overwrite=True` → `FILE_EXISTS`. Restituisce
+  `ExportResult` (percorso, formato, avvisi come `CSV_UNITS_NOT_SAVED`;
+  vale anche come percorso).
 - **`download_table(url, *, table=None, format=None, ...)`** (P2) — scarica
   una tabella da URL e la legge con `read_table` del 13; restituisce
   `VoResult`.
@@ -361,6 +376,7 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Servizio TAP non raggiungibile / timeout | errore di rete, nessun risultato parziale mostrato come valido | `NET_TIMEOUT` |
 | Query che supera il limite di righe | risultato troncato con avviso e conteggio dichiarato (avviso, non errore) | `ROW_LIMIT_EXCEEDED` |
 | Formato di esportazione non supportato | elenco dei formati | `EXPORT_FORMAT_UNSUPPORTED` |
+| Esportazione in CSV semplice di una tabella con unità | file scritto senza unità; si suggerisce `ecsv` (D14-10) | avviso `CSV_UNITS_NOT_SAVED` |
 | Nessun hub SAMP disponibile (né attivo, né avviabile) | funzioni VO non-SAMP operative, avviso | `SAMP_UNAVAILABLE` |
 | Nessun client SAMP connesso | azione rifiutata con messaggio chiaro | `SAMP_NO_PEER` |
 | Tipo di messaggio SAMP non supportato | rifiuto con l'elenco dei tipi supportati | `SAMP_UNSUPPORTED_TYPE` |
@@ -402,7 +418,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T2 | Cone search nota | cone search di raggio 10 arcsec attorno a una posizione presa dal tester | numero di righe coincidente con quanto ricalcolato dal test contro lo stesso servizio | doppia chiamata confrontata (test di rete separato) |
 | T3 | Troncamento | eseguire una query con `max_rows` piccolo su un catalogo fitto | `ROW_LIMIT_EXCEEDED`/avviso e numero di righe = `max_rows` | test con servizio simulato |
 | T4 | ADQL non valida | inviare ADQL malformata | rifiuto con messaggio, nessuna chiamata di rete inutile | test di unità con server simulato |
-| T5 | Export CSV/VOTable/FITS | esportare la stessa tabella nei tre formati e rileggere | valori e unità equivalenti nei tre casi | ricalcolo con Astropy |
+| T5 | Export CSV/ECSV/VOTable/FITS (D14-10) | esportare la stessa tabella nei quattro formati e rileggere con `read_table` del 13; andata e ritorno ECSV con unità (anche non riconosciute), UCD e valori mancanti | valori equivalenti nei quattro casi; unità identiche in ECSV, VOTable e FITS; CSV senza unità con `CSV_UNITS_NOT_SAVED`; versione "FITS Standard 4.0" e `A2WRITER` | ricalcolo con Astropy |
 | T6 | Riproducibilità | eseguire una query, poi rilesare i parametri registrati | la seconda esecuzione usa gli stessi URL, parametri e restituisce lo stesso schema | confronto dei metadati registrati |
 | T7 | SAMP | avviare l'hub, collegare un client simulato, inviare una tabella | il client riceve lo stesso contenuto | test con client simulato |
 | T8 | SAMP selezione e puntamento (G3) | inviare al client simulato una selezione e un puntamento, poi riceverne uno | contenuti identici a quelli inviati, tipi supportati | test con client simulato |
@@ -515,18 +531,13 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   da descrittore di servizio o content-type DataLink; (15) Simbad a pari
   citazioni: il più vicino, dichiarato; (16) §11 nel 32. Applicate in §3,
   §4, §7, §8, §10–§12.
-- **D14-10 — Unità delle colonne nel CSV esportato: DA DECIDERE (aperta il
-  2026-10-10, Gruppo 3).** T5 chiede "valori e unità equivalenti nei tre
-  casi", ma un CSV non ha un posto standard per le unità, e D14-9 punto 9
-  mette nei commenti `#` solo la provenienza. Opzioni: (a) unità in una
-  riga di commento `#` (informativa: `read_table` del 13 non la rilegge);
-  (b) **ECSV** di `astropy` (CSV con intestazione in commenti `#`, che
-  conserva unità, UCD e metadati e si rilegge; il 13 dovrebbe riconoscerlo
-  dalla riga `# %ECSV`); (c) nessuna unità nel CSV, T5 confronta solo i
-  valori per il CSV. **Raccomandazione:** (b), perché è un formato
-  consolidato che rilegge le unità senza convenzioni nostre. **Fermo solo
-  questo punto:** il CSV si esporta con la provenienza e i valori, senza
-  unità; T5 per il CSV confronta i valori.
+- **D14-10 — Unità delle colonne nel CSV esportato: DECISA il 2026-10-11
+  (decisione del proprietario).** Esportazione in **ECSV** di `astropy`
+  quando la tabella ha unità; il 13 legge l'ECSV (riconosciuto dalla prima
+  riga `# %ECSV`), con test di andata e ritorno delle unità; il CSV semplice
+  resta disponibile con l'avviso `CSV_UNITS_NOT_SAVED`. T5 completo.
+  Applicata in §3, §6, §7, §10, §12. (Aperta il 2026-10-10: opzioni riga
+  di commento, ECSV, nessuna unità; raccomandazione ECSV.)
 - **D14-11 — Calibrazione della lista SIA usata dall'11: DA DECIDERE (aperta
   il 2026-10-10, Gruppo 3).** §3 e T11 chiedono che l'immagine sia
   "caricata dall'11 con la calibrazione della lista quando non ne ha una
@@ -580,3 +591,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P5 scritta** (`sia_search` SIA 1 e SIA 2, `read_idha`, `ssa_search`, `ssa_load`, `Spectrum`; test T9–T12, T15, T16, `SIA_NO_RESULT`, `SIA_INVALID`, `SSA_NO_RESULT`): parametri costruiti con `pyvo`; SIA 1 con `SIZE` = 2 × raggio (lato del quadrato che contiene il cerchio), SSA con `SIZE` = diametro = 2 × raggio; SIA 2 con banda convertita in metri e tempo convertito in **UTC** prima dell'MJD (SIA 2.0 e DALI: MJD sulla scala UTC; verificato sul testo della raccomandazione), parametri ripetuti (es. `POS`) inviati tutti; spettri: VOTable dagli `utype` dello Spectrum DM (`…Data.SpectralAxis.Value`, `…Data.FluxAxis.Value`, `…Accuracy.StatError`), FITS anche dagli UCD (`em.wl`/`em.freq`/`em.energy`/`em.wavenumber`, `phot.flux*`), una sola colonna per asse e unità obbligatoria, FITS con una riga di colonne vettoriali svolto in una riga per campione; corpo dello spettro = corpo della lista dei candidati, `BODY_UNKNOWN` se caricato da solo URL. Nel 13 si conservano `utype` (VOTable) e `TUCDn`/`TUTYPn` (FITS). Nuova decisione aperta **D14-11** (calibrazione della lista nell'11; seconda metà di T11 ferma). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P6 scritta** (`simbad_pointer`, `SimbadPointer`, `SimbadObject`, `vizier_photometry`, `VIZIER_PHOTOMETRY_URL`; test T13, T14, pari citazioni, nessun oggetto, test di rete su Vega): verifiche in §3 (servizio fotometrico) e campo `nbref`; SIMBAD interrogato con `astroquery` (`query_region` con `otype` e `nbref`) tramite la sessione con i timeout comuni del 10 (`_simbad_with_timeouts`, unico punto con il campo interno di astroquery), risposta salvata nella cache del 14 come VOTable e letta con `read_table`; coordinate ICRS J2000 dichiarate come nel 10; distanza con `astropy.coordinates.angular_separation`; a pari citazioni il più vicino (`SIMBAD_TIE`), a pari distanza l'identificativo in ordine alfabetico; senza `nbref` il più vicino (`SIMBAD_NBREF_MISSING`); nessun oggetto → `SIMBAD_NO_OBJECT`. Nuova decisione aperta **D14-12** (magnitudine del puntatore). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P7 scritta — modulo 14 completo tranne i pezzi fermi su D14-10, D14-11, D14-12** (`SampHub`, `SampClient`, `SampSelection`, `SampSendResult`, `SAMP_MTYPES`; test T7, T8, hub proprio ed errori, con un hub locale `pyvo.samp` nella cartella home temporanea dei test): verifica dell'hub locale nei test riuscita; collegamento all'hub attivo (file di blocco SAMP), altrimenti hub proprio con profilo web disattivato; invio a uno o a tutti i programmi iscritti al tipo (`SAMP_NO_PEER` se nessuno); tabelle inviate come VOTable temporaneo con provenienza (P1), ricevute con `read_votable` (file) o `download_table` (URL); selezioni con indici di riga da 0 come nel messaggio SAMP; puntamenti in gradi ICRS; un errore nella funzione di ricezione torna al mittente come risposta d'errore SAMP. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D14-10 decisa e applicata; versione FITS** (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): nuovo formato di esportazione `ecsv` (ECSV di `astropy`, unità, UCD e provenienza nell'intestazione), CSV semplice con l'avviso `CSV_UNITS_NOT_SAVED`; `export_table` restituisce `ExportResult`; versione del formato FITS = "FITS Standard 4.0" e, per tutti i formati, versione di `astropy` in `A2WRITER`; T5 completo con l'andata e ritorno ECSV (§3, §6, §7, §10, §12, §13). Stato `approvato` invariato. |
