@@ -36,6 +36,7 @@ __all__ = [
     "FIELD_MODES",
     "crossmatch",
     "crossmatch_by_field",
+    "crossmatch_ellipses",
     "suggest_columns",
 ]
 
@@ -523,3 +524,136 @@ def crossmatch_by_field(table_a: CatalogTable, table_b: CatalogTable, key_a: str
     )
     params = {"runner": crossmatch_by_field, "key_a": key_a, "key_b": key_b, "mode": mode, "force_body": force_body}
     return _result(ia, ib, {}, unmatched, report, notes, a, b, params)
+
+
+# --------------------------------------------------------------------------
+# P4 — Correlazione con ellissi d'errore (distanza di Mahalanobis, D15-5)
+# --------------------------------------------------------------------------
+
+_AXES = {"semi": "semiassi a 1σ", "full": "assi interi (2 × semiasse a 1σ)"}
+
+
+def _check_threshold(threshold) -> float:
+    if isinstance(threshold, u.Quantity):
+        if threshold.unit != u.dimensionless_unscaled:
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"threshold {threshold!r}: è in sigma, senza unità")
+        threshold = threshold.value
+    if threshold is None or isinstance(threshold, bool) or not isinstance(threshold, (int, float, np.floating)):
+        raise CrossmatchError("ERROR_ELLIPSE_INVALID", "threshold obbligatoria, senza default (D15-6): numero di "
+                              "sigma > 0")
+    if not (math.isfinite(float(threshold)) and float(threshold) > 0):
+        raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"threshold {threshold!r}: serve un numero di sigma > 0")
+    return float(threshold)
+
+
+def _ellipse(table: CatalogTable, columns, which: str, rows: np.ndarray, axes: str):
+    """(semiasse maggiore, minore in arcsec, angolo in radianti, righe valide) per le righe ``rows``."""
+    if not isinstance(columns, (tuple, list)) or len(columns) != 3:
+        raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: servono 3 colonne (asse maggiore, asse "
+                              "minore, orientamento)")
+    out, valid = [], np.ones(len(rows), dtype=bool)
+    for name in columns:
+        if name not in table.colnames:
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: colonna {name!r} inesistente")
+        col = table.table[name]
+        if col.unit is None or not col.unit.is_equivalent(u.deg):
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: colonna {name!r} senza unità angolare")
+        values = np.ma.filled(np.ma.asarray(col, dtype=float), np.nan)[rows]
+        valid &= np.isfinite(values)
+        out.append((values * col.unit).to_value(u.arcsec if len(out) < 2 else u.rad))
+    major, minor, angle = out
+    for k in np.flatnonzero(valid):
+        problem = None
+        if major[k] <= 0 or minor[k] <= 0:
+            problem = "assi negativi o nulli"
+        elif minor[k] > major[k]:
+            problem = "asse minore maggiore dell'asse maggiore"
+        if problem:
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}, riga {int(rows[k])}, colonne "
+                                  f"{columns[0]}/{columns[1]}: {problem}", row=int(rows[k]))
+    if axes == "full":
+        major, minor = major / 2, minor / 2
+    return major, minor, angle, valid
+
+
+def _covariance(a, b, theta):
+    """Componenti (xx, yy, xy) di Σ = a²·u·uᵀ + b²·v·vᵀ, u = (sin θ, cos θ), x verso est e y verso nord."""
+    s, c = np.sin(theta), np.cos(theta)
+    return a ** 2 * s ** 2 + b ** 2 * c ** 2, a ** 2 * c ** 2 + b ** 2 * s ** 2, (a ** 2 - b ** 2) * s * c
+
+
+def crossmatch_ellipses(table_a: CatalogTable, table_b: CatalogTable, ellipse_a, ellipse_b, threshold=None, *,
+                        axes: str | None = None, mode: str = "best", frame: str = "icrs",
+                        force_body: bool = False) -> CrossMatchResult:
+    """Correlazione con ellissi d'errore (P4, E3): distanza di Mahalanobis con covarianza combinata ≤ ``threshold``.
+
+    ``threshold`` (sigma) e ``axes`` (``"semi"`` o ``"full"``) sono obbligatori, senza default (D15-6)."""
+    if mode not in CROSSMATCH_MODES:
+        raise ValueError(f"mode {mode!r}: ammesse {', '.join(CROSSMATCH_MODES)}")
+    k = _check_threshold(threshold)
+    if axes not in _AXES:
+        raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"axes {axes!r}: obbligatorio, 'semi' (semiassi a 1σ) o "
+                              "'full' (assi interi)")
+    a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
+    notes = _check_bodies(a, b, force_body)
+    rows_a, coords_a, excl_a = _coordinates(a, "A", frame)
+    rows_b, coords_b, excl_b = _coordinates(b, "B", frame)
+    ma, na, ta, ok_a = _ellipse(a, ellipse_a, "A", rows_a, axes)
+    mb, nb, tb, ok_b = _ellipse(b, ellipse_b, "B", rows_b, axes)
+    excl_a += int(np.count_nonzero(~ok_a))
+    excl_b += int(np.count_nonzero(~ok_b))
+    ca, cb = coords_a.coord[ok_a], coords_b.coord[ok_b]
+    rows_a, rows_b = rows_a[ok_a], rows_b[ok_b]
+    ma, na, ta, mb, nb, tb = ma[ok_a], na[ok_a], ta[ok_a], mb[ok_b], nb[ok_b], tb[ok_b]
+    empty = np.zeros(0, dtype=np.int64)
+    i1 = i2 = empty
+    sep = np.zeros(0)
+    if len(ca) and len(cb):
+        # Raggio rigoroso dei candidati: d ≤ k implica |Δ| ≤ k·√(a_A,max² + a_B,max²).
+        radius = min(k * math.hypot(ma.max(), mb.max()) * u.arcsec, 180 * u.deg)
+        i1, i2, sep2d, _ = search_around_sky(ca, cb, radius)
+        sep = sep2d.to_value(u.arcsec)
+    dist = np.zeros(len(i1))
+    singular = 0
+    if len(i1):
+        dx, dy = ca[i1].spherical_offsets_to(cb[i2])  # piano tangente in A: verso est e verso nord
+        dx, dy = dx.to_value(u.arcsec), dy.to_value(u.arcsec)
+        axx, ayy, axy = _covariance(ma[i1], na[i1], ta[i1])
+        bxx, byy, bxy = _covariance(mb[i2], nb[i2], tb[i2])
+        sxx, syy, sxy = axx + bxx, ayy + byy, axy + bxy
+        det = sxx * syy - sxy ** 2
+        good = np.isfinite(det) & (det > 0)
+        singular = int(np.count_nonzero(~good))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            dist = np.sqrt((syy * dx ** 2 - 2 * sxy * dx * dy + sxx * dy ** 2) / det)
+        keep = good & (dist <= k)
+        i1, i2, sep, dist = i1[keep], i2[keep], sep[keep], dist[keep]
+    if singular:
+        notes.append(("ERROR_ELLIPSE_INVALID", f"{singular} coppie candidate con covarianza combinata singolare: "
+                      "escluse"))
+    order_sep = dict(zip(zip(rows_a[i1], rows_b[i2]), sep))
+    ia, ib, d, unmatched, ties, reused = _select(rows_a[i1], rows_b[i2], dist, mode, rows_a)
+    fraction = 1 - math.exp(-k * k / 2)
+    notes += _common_notes(a, b, (excl_a, excl_b))
+    report = MatchReport(
+        method=f"ellissi d'errore: distanza di Mahalanobis con covarianza combinata (astropy {astropy.__version__}, "
+               "numpy)",
+        mode=mode, criterion=f"d ≤ {k:g} sigma; assi: {_AXES[axes]}", frame=frame,
+        systems=(_system_text(a), _system_text(b)), epochs=(a.positions.epoch, b.positions.epoch),
+        bodies=(a.body, b.body), forced_body=a.body != b.body, origins=(a.origin, b.origin), rows=(a.rows, b.rows),
+        excluded=(excl_a, excl_b), pairs=len(ia), unmatched=None if unmatched is None else len(unmatched),
+        best_ties=ties, b_reused=reused,
+        notes=(
+            f"Ellissi: A {tuple(ellipse_a)}, B {tuple(ellipse_b)}; orientamento da nord verso est.",
+            "Formula: d = √(Δᵀ Σ⁻¹ Δ), Σ = Σ_A + Σ_B, Σ = a²·u·uᵀ + b²·v·vᵀ con u = (sin θ, cos θ), "
+            "v = (cos θ, −sin θ), a e b semiassi a 1σ; Δ = spostamento di B rispetto ad A nel piano tangente in A "
+            "(SkyCoord.spherical_offsets_to), usato per entrambe le ellissi.",
+            f"In 2D la soglia di {k:g} sigma di Mahalanobis non corrisponde alla percentuale 1D: per errori "
+            f"gaussiani la frazione attesa entro la soglia è 1 − exp(−k²/2) = {100 * fraction:.2f} %"
+            + (" (non 99,73 %)." if k == 3 else "."),
+        ),
+    )
+    params = {"runner": crossmatch_ellipses, "ellipse_a": ellipse_a, "ellipse_b": ellipse_b, "threshold": k,
+              "axes": axes, "mode": mode, "frame": frame, "force_body": force_body}
+    seps = np.array([order_sep[(x, y)] for x, y in zip(ia, ib)]) if len(ia) else np.zeros(0)
+    return _result(ia, ib, {"sep": seps * u.arcsec, "mahalanobis": d}, unmatched, report, notes, a, b, params)

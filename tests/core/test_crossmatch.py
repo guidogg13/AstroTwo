@@ -14,7 +14,13 @@ import pytest
 from astropy.coordinates import Galactic, SkyCoord, angular_separation
 
 from astrotwo.core.catalogs import read_table
-from astrotwo.core.crossmatch import CrossmatchError, crossmatch, crossmatch_by_field, suggest_columns
+from astrotwo.core.crossmatch import (
+    CrossmatchError,
+    crossmatch,
+    crossmatch_by_field,
+    crossmatch_ellipses,
+    suggest_columns,
+)
 
 VOTABLE = """<?xml version="1.0" encoding="UTF-8"?>
 <VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
@@ -299,3 +305,92 @@ def test_t10_repeated_and_invalid_keys(tmp_path):
     with pytest.raises(CrossmatchError) as err:  # corpo: stessa regola di ogni incrocio (§9)
         crossmatch_by_field(a, dataclasses.replace(b, body=None), "n", "n")
     assert err.value.code == "BODY_UNKNOWN"
+
+
+# =============================================================================
+# P4 — Correlazione con ellissi d'errore (T11, T12, T20)
+# =============================================================================
+
+ELL = ("emaj", "emin", "epa")
+
+
+def ellipse_tables(tmp_path, a_rows, b_rows, scale=1.0):
+    """Tabelle con posizione ed ellisse: righe (ra, dec, maggiore", minore", PA°); ``scale`` moltiplica gli assi."""
+    def build(name, rows):
+        return make_table(tmp_path / name, [r[0] for r in rows], [r[1] for r in rows],
+                          extra={"emaj": ("arcsec", [scale * r[2] for r in rows]),
+                                 "emin": ("arcsec", [scale * r[3] for r in rows]), "epa": ("deg", [r[4] for r in rows])})
+    return build("ea.xml", a_rows), build("eb.xml", b_rows)
+
+
+def mahalanobis(a_row, b_row):
+    """Ricalcolo nel test con numpy: Σ = R·diag(a², b²)·Rᵀ per ogni ellisse, Δ dagli offset di astropy."""
+    pa, pb = SkyCoord(a_row[0] * u.deg, a_row[1] * u.deg), SkyCoord(b_row[0] * u.deg, b_row[1] * u.deg)
+    dx, dy = (x.to_value(u.arcsec) for x in pa.spherical_offsets_to(pb))
+
+    def cov(major, minor, pa_deg):
+        t = np.radians(pa_deg)
+        rot = np.array([[np.sin(t), np.cos(t)], [np.cos(t), -np.sin(t)]])  # colonne: asse maggiore, asse minore
+        return rot @ np.diag([major ** 2, minor ** 2]) @ rot.T
+
+    total = cov(*a_row[2:]) + cov(*b_row[2:])
+    delta = np.array([dx, dy])
+    return float(np.sqrt(delta @ np.linalg.solve(total, delta)))
+
+
+def test_t12_ellipses(tmp_path):
+    a_rows = [(50.0, 10.0, 1.0, 0.5, 30.0), (50.01, 10.0, 0.3, 0.3, 0.0)]
+    b0 = offset(50.0, 10.0, 30.0, 1.5) + (0.4, 0.2, 100.0)  # lungo l'asse maggiore di A
+    b1 = offset(50.0, 10.0, 120.0, 1.5) + (0.4, 0.2, 100.0)  # lungo l'asse minore di A
+    b2 = offset(50.01, 10.0, 200.0, 2.0) + (0.2, 0.1, 0.0)
+    b_rows = [b0, b1, b2]
+    a, b = ellipse_tables(tmp_path, a_rows, b_rows)
+    result = crossmatch_ellipses(a, b, ELL, ELL, 3.0, axes="semi", mode="all")
+    expected = {(i, j): mahalanobis(a_rows[i], b_rows[j]) for i in range(2) for j in range(3)}
+    associated = sorted(pair for pair, d in expected.items() if d <= 3.0)
+    got = sorted(zip(result.pairs["idx_a"].tolist(), result.pairs["idx_b"].tolist()))
+    assert got == associated and len(got) >= 1
+    for row in result.pairs:
+        assert row["mahalanobis"] == pytest.approx(expected[(row["idx_a"], row["idx_b"])], rel=1e-9)
+    report = result.report.describe()
+    assert "1 − exp(−k²/2)" in report and f"{100 * (1 - np.exp(-4.5)):.2f} %" in report and "non 99,73 %" in report
+
+
+def test_t20_axes_and_threshold(tmp_path):
+    a_rows = [(50.0, 10.0, 1.0, 0.5, 30.0)]
+    b_rows = [offset(50.0, 10.0, 60.0, 1.2) + (0.4, 0.2, 100.0)]
+    semi = crossmatch_ellipses(*ellipse_tables(tmp_path, a_rows, b_rows), ELL, ELL, 5.0, axes="semi", mode="all")
+    full = crossmatch_ellipses(*ellipse_tables(tmp_path, a_rows, b_rows, scale=2.0), ELL, ELL, 5.0, axes="full",
+                               mode="all")
+    assert list(semi.pairs["mahalanobis"]) == pytest.approx(list(full.pairs["mahalanobis"]), rel=1e-12)
+    assert "assi interi" in full.report.criterion and "semiassi a 1σ" in semi.report.criterion
+    a, b = ellipse_tables(tmp_path, a_rows, b_rows)
+    for kwargs in ({"axes": "semi"}, {"threshold": 3.0}, {"threshold": 3.0, "axes": "sigma"},
+                   {"threshold": -1.0, "axes": "semi"}, {"threshold": 3 * u.arcsec, "axes": "semi"}):
+        with pytest.raises(CrossmatchError) as err:
+            crossmatch_ellipses(a, b, ELL, ELL, **kwargs)
+        assert err.value.code == "ERROR_ELLIPSE_INVALID"
+    tighter = semi.rematch(threshold=0.5)
+    assert tighter.report.criterion.startswith("d ≤ 0.5") and len(tighter.pairs) <= len(semi.pairs)
+
+
+def test_t11_invalid_ellipse(tmp_path):
+    a, b = ellipse_tables(tmp_path, [(1.0, 1.0, 0.2, 0.5, 0.0)], [(1.0, 1.0, 0.3, 0.1, 0.0)])  # minore > maggiore
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_ellipses(a, b, ELL, ELL, 3.0, axes="semi")
+    assert err.value.code == "ERROR_ELLIPSE_INVALID" and "riga 0" in err.value.message
+    a, b = ellipse_tables(tmp_path, [(1.0, 1.0, 0.0, 0.0, 0.0)], [(1.0, 1.0, 0.3, 0.1, 0.0)])  # assi nulli
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_ellipses(a, b, ELL, ELL, 3.0, axes="semi")
+    assert err.value.code == "ERROR_ELLIPSE_INVALID"
+    a, b = ellipse_tables(tmp_path, [(1.0, 1.0, 0.2, 0.1, 0.0)], [(1.0, 1.0, 0.3, 0.1, 0.0)])
+    a.table["emaj"].unit = None  # unità mancante
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_ellipses(a, b, ELL, ELL, 3.0, axes="semi")
+    assert err.value.code == "ERROR_ELLIPSE_INVALID"
+    # Valori d'ellisse mancanti: righe escluse e contate come le coordinate mancanti.
+    a, b = ellipse_tables(tmp_path, [(1.0, 1.0, 0.2, 0.1, 0.0), (2.0, 1.0, 0.2, 0.1, 0.0)],
+                          [(1.0, 1.0, 0.3, 0.1, 0.0)])
+    a.table["epa"].mask = [False, True]
+    result = crossmatch_ellipses(a, b, ELL, ELL, 3.0, axes="semi", mode="none")
+    assert result.report.excluded == (1, 0) and list(result.unmatched) == []
