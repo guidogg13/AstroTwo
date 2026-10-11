@@ -22,7 +22,7 @@ import astropy
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import search_around_sky
-from astropy.table import Table
+from astropy.table import Table, join
 
 from astrotwo.core.catalogs import CatalogTable, PositionColumns
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
@@ -33,7 +33,9 @@ __all__ = [
     "CrossmatchError",
     "ColumnSuggestions",
     "MatchReport",
+    "FIELD_MODES",
     "crossmatch",
+    "crossmatch_by_field",
     "suggest_columns",
 ]
 
@@ -430,3 +432,94 @@ def suggest_columns(table_a: CatalogTable, table_b: CatalogTable | None = None) 
         conflicts = tuple(sorted(mains(table_a) & mains(table_b)))
     return ColumnSuggestions(positions=tuple(t.positions for t in tables),
                              errors=tuple(_error_columns(t) for t in tables), conflicts=conflicts)
+
+
+# --------------------------------------------------------------------------
+# P3 — Correlazione per campo (join su valori identici)
+# --------------------------------------------------------------------------
+
+#: Modalità della correlazione per campo (§3).
+FIELD_MODES: tuple[str, ...] = ("pairs", "none")
+
+
+def _key_kind(column) -> str | None:
+    kind = column.dtype.kind
+    if kind == "b":
+        return "bool"
+    if kind in "iuf":
+        return "number"
+    if kind in "US":
+        return "text"
+    if kind == "O" and all(isinstance(v, str) for v in np.ma.compressed(column)):
+        return "text"
+    return None
+
+
+def _key_values(column, kind: str):
+    """(valori normalizzati, maschera dei validi): testo senza spazi finali, numeri finiti, nessun mancante."""
+    mask = np.ma.getmaskarray(column)
+    if kind == "text":
+        values = np.array([str(v).rstrip() for v in np.ma.filled(column.astype(object), "")], dtype=str)
+        return values, ~mask
+    if kind == "bool":
+        return np.ma.filled(column, False).astype(bool), ~mask
+    raw = np.ma.filled(np.ma.asarray(column), 0)
+    if raw.dtype.kind == "f":
+        return raw.astype(np.float64), ~mask & np.isfinite(raw)
+    return raw, ~mask
+
+
+def crossmatch_by_field(table_a: CatalogTable, table_b: CatalogTable, key_a: str, key_b: str, mode: str = "pairs",
+                        *, force_body: bool = False) -> CrossMatchResult:
+    """Correlazione per valori identici (P3, E3) con ``astropy.table.join``: ``pairs`` (join interno) o ``none``.
+
+    Chiavi compatibili: numeri con numeri, testo con testo (senza spazi finali), booleani con booleani; le
+    chiavi mancanti non coincidono mai. Chiavi ripetute: tutte le combinazioni, numero dichiarato."""
+    if mode not in FIELD_MODES:
+        raise ValueError(f"mode {mode!r}: ammesse {', '.join(FIELD_MODES)}")
+    a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
+    notes = _check_bodies(a, b, force_body)
+    for which, t, key in (("A", a, key_a), ("B", b, key_b)):
+        if key not in t.colnames:
+            raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonna chiave {key!r} inesistente")
+    kind_a, kind_b = _key_kind(a.table[key_a]), _key_kind(b.table[key_b])
+    if kind_a is None or kind_a != kind_b:
+        raise CrossmatchError("KEY_COLUMN_INVALID", f"chiavi di tipo incompatibile: A {key_a!r} "
+                              f"({a.table[key_a].dtype}), B {key_b!r} ({b.table[key_b].dtype}); ammessi numeri con "
+                              "numeri, testo con testo, booleani con booleani")
+    values_a, valid_a = _key_values(a.table[key_a], kind_a)
+    values_b, valid_b = _key_values(b.table[key_b], kind_b)
+    if kind_a == "number" and (values_a.dtype.kind == "f" or values_b.dtype.kind == "f"):
+        values_a, values_b = values_a.astype(np.float64), values_b.astype(np.float64)
+    left = Table({"key": values_a[valid_a], "idx_a": np.flatnonzero(valid_a)})
+    right = Table({"key": values_b[valid_b], "idx_b": np.flatnonzero(valid_b)})
+    if len(left) and len(right):
+        joined = join(left, right, keys="key", join_type="inner")
+        order = np.lexsort((joined["idx_b"], joined["idx_a"]))
+        ia, ib, keys = (np.asarray(joined["idx_a"])[order], np.asarray(joined["idx_b"])[order],
+                        np.asarray(joined["key"])[order])
+    else:
+        ia = ib = np.zeros(0, dtype=np.int64)
+        keys = np.zeros(0, dtype=object)
+    missing = (int(np.count_nonzero(~valid_a)), int(np.count_nonzero(~valid_b)))
+    if any(missing):
+        notes.append(("KEY_MISSING", f"chiavi mancanti (mai coincidenti): A {missing[0]}, B {missing[1]}"))
+    _, inverse, counts = np.unique(keys.astype(str), return_inverse=True, return_counts=True) if len(keys) \
+        else (None, np.zeros(0, dtype=int), np.zeros(0, dtype=int))
+    repeated = int(np.count_nonzero(counts[inverse] > 1)) if len(keys) else 0
+    if repeated:
+        notes.append(("KEY_REPEATED", f"{repeated} coppie da chiavi ripetute (tutte le combinazioni)"))
+    unmatched = np.setdiff1d(np.flatnonzero(valid_a), ia) if mode == "none" else None
+    if mode == "none":
+        ia, ib = ia[:0], ib[:0]
+    report = MatchReport(
+        method=f"per campo: astropy.table.join (astropy {astropy.__version__})", mode=mode,
+        criterion=f"A.{key_a} = B.{key_b} ({kind_a}" + (", testo senza spazi finali" if kind_a == "text" else "") + ")",
+        frame=None, systems=(_system_text(a), _system_text(b)),
+        epochs=(a.positions.epoch if a.positions else None, b.positions.epoch if b.positions else None),
+        bodies=(a.body, b.body), forced_body=a.body != b.body, origins=(a.origin, b.origin), rows=(a.rows, b.rows),
+        excluded=missing, pairs=len(ia), unmatched=None if unmatched is None else len(unmatched),
+        notes=(f"combinazioni da chiavi ripetute: {repeated}",),
+    )
+    params = {"runner": crossmatch_by_field, "key_a": key_a, "key_b": key_b, "mode": mode, "force_body": force_body}
+    return _result(ia, ib, {}, unmatched, report, notes, a, b, params)

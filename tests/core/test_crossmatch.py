@@ -14,7 +14,7 @@ import pytest
 from astropy.coordinates import Galactic, SkyCoord, angular_separation
 
 from astrotwo.core.catalogs import read_table
-from astrotwo.core.crossmatch import CrossmatchError, crossmatch, suggest_columns
+from astrotwo.core.crossmatch import CrossmatchError, crossmatch, crossmatch_by_field, suggest_columns
 
 VOTABLE = """<?xml version="1.0" encoding="UTF-8"?>
 <VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
@@ -258,3 +258,44 @@ def test_t18_joined_options(tmp_path):
                      ("epa", "stat.error;pos.posAng")):
         errors.table[col].meta["ucd"] = ucd
     assert suggest_columns(errors).errors[0] == {"major": ["emaj"], "minor": ["emin"], "angle": ["epa"]}
+
+
+# =============================================================================
+# P3 — Correlazione per campo (T9, T10)
+# =============================================================================
+
+
+def test_t9_by_field(tmp_path):
+    from astropy.table import Table, join
+
+    a = make_table(tmp_path / "a.xml", [1.0] * 5, [1.0] * 5, ids=["x1", "x2", "x3", "x4", "x5"])
+    b = make_table(tmp_path / "b.xml", [2.0] * 4, [2.0] * 4, ids=["x4", "y1", "x2  ", "x5"])  # spazi finali
+    result = crossmatch_by_field(a, b, "id", "id")
+    # Ricalcolo con astropy.table.join nel test (testo senza spazi finali).
+    left = Table({"k": ["x1", "x2", "x3", "x4", "x5"], "ia": range(5)})
+    right = Table({"k": [v.rstrip() for v in ["x4", "y1", "x2  ", "x5"]], "ib": range(4)})
+    expected = join(left, right, keys="k")
+    expected.sort(["ia", "ib"])
+    assert list(result.pairs["idx_a"]) == list(expected["ia"]) and list(result.pairs["idx_b"]) == list(expected["ib"])
+    assert len(result.pairs) == 3 and "sep" not in result.pairs.colnames
+    none = crossmatch_by_field(a, b, "id", "id", mode="none")
+    assert list(none.unmatched) == [0, 2]
+    joined = result.joined()
+    assert list(joined.table["id_tab1"]) == ["x2", "x4", "x5"] and "xmatch_sep" not in joined.colnames
+
+
+def test_t10_repeated_and_invalid_keys(tmp_path):
+    a = make_table(tmp_path / "a.xml", [1.0] * 3, [1.0] * 3, extra={"n": (None, [7.0, 7.0, None])})
+    b = make_table(tmp_path / "b.xml", [1.0] * 3, [1.0] * 3, extra={"n": (None, [7.0, 7.0, 8.0])})
+    result = crossmatch_by_field(a, b, "n", "n")
+    assert len(result.pairs) == 4 and "4 coppie" in dict(result.warnings)["KEY_REPEATED"]
+    assert "KEY_MISSING" in dict(result.warnings) and result.report.excluded == (1, 0)
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_by_field(a, b, "id", "n")  # testo contro numero
+    assert err.value.code == "KEY_COLUMN_INVALID"
+    with pytest.raises(CrossmatchError) as err:
+        crossmatch_by_field(a, b, "manca", "n")
+    assert err.value.code == "KEY_COLUMN_INVALID"
+    with pytest.raises(CrossmatchError) as err:  # corpo: stessa regola di ogni incrocio (§9)
+        crossmatch_by_field(a, dataclasses.replace(b, body=None), "n", "n")
+    assert err.value.code == "BODY_UNKNOWN"

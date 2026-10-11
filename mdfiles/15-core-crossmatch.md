@@ -273,6 +273,7 @@ Codice in `src/astrotwo/core/crossmatch.py`.
 | `best` con più righe di B alla stessa distanza | vince l'indice più basso in B, conteggio dichiarato | avviso `BEST_TIE` |
 | `best` con una riga di B scelta da più righe di A | ammesso, conteggio dichiarato | avviso `B_REUSED` |
 | Chiavi mancanti nella correlazione per campo | mai coincidenti, contate | avviso `KEY_MISSING` |
+| Chiavi ripetute nella correlazione per campo | tutte le combinazioni, numero dichiarato | avviso `KEY_REPEATED` |
 | `axes` assente o diverso da `semi`/`full`; `threshold` assente, non numerico o ≤ 0 | rifiuto dell'input | `ERROR_ELLIPSE_INVALID` |
 | Servizio CDS: `max_sep` oltre 180″ | rifiuto prima della richiesta | `MAX_SEP_INVALID` |
 | Servizio CDS che risponde con un errore | messaggio del servizio riportato | `SERVICE_ERROR` |
@@ -365,6 +366,19 @@ coppie né le separazioni.
   tabella non principale); `rematch` che riesegue; tolleranza di T4 1 mas.
   Applicate in §3, §6, §7, §9, §10, §12.
 
+- **D15-8 — Corpo nella correlazione per campo: DA DECIDERE (aperta il
+  2026-10-11, Gruppo 3).** §9 chiede lo stesso `body` per ogni incrocio, e
+  P3 lo applica così; ma una correlazione per identificativo non usa le
+  posizioni, e una tabella senza colonne di posizione (es. un CSV di
+  fotometria con un identificativo) ha `body` non ricavabile, quindi
+  `BODY_UNKNOWN` e nessun join possibile (non forzabile). Opzioni: (a)
+  nella correlazione per campo il corpo non si controlla, ed è scritto nel
+  report; (b) si controlla solo se entrambe le tabelle hanno un corpo; (c)
+  come oggi. **Raccomandazione:** (b): un corpo noto e diverso resta
+  `BODY_MISMATCH` (forzabile), un corpo ignoto non blocca un join che non
+  usa posizioni, e il report lo dichiara. **Fermo solo questo punto:** oggi
+  vale (c), come scritto in §9.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -378,3 +392,4 @@ coppie né le separazioni.
 | 2026-10-11 | Claude Code | **Decisioni del proprietario sulla divisione in parti (D15-7) e D15-6** (autorizzazione esplicita a modificare il file approvato, prima del codice): cinque parti P1–P5 (§3); regole comuni (posizioni dal 13, conversione con il 10, epoche senza propagazione con `EPOCH_DIFFERS`, coordinate mancanti escluse e contate, `max_sep` in (0°, 180°] e ≤ 180″ per il CDS, `best` con pari merito e B riusato dichiarati, report, `rematch`); CDS con `astroquery.xmatch` in HTTPS e cache del 14; chiavi del join; ellissi con `axes` obbligatorio, soglia obbligatoria (D15-6 decisa), geometria e raggio dei candidati, frazione 2D nel report; tabella unita e conflitti di UCD (§3, §6, §7, §8, §9, §10); T4 con tolleranza 1 mas, nuovi T15–T21 (§12). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P1 scritta** (`src/astrotwo/core/crossmatch.py`: `crossmatch`, `CrossMatchResult` con `rematch`, `MatchReport`, `CrossmatchError`, `CROSSMATCH_MODES`; test T1–T3, T5–T8, T14–T17, T19 in `tests/core/test_crossmatch.py`): verificato con astropy 8.0.1 che `search_around_sky` include il confine (separazione ≤ `max_sep`) e accetta tabelle vuote; pari merito di `best` = stessa separazione in `float64`. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P2 scritta** (`CrossMatchResult.joined`, `suggest_columns`, `ColumnSuggestions`; test T13, T18): rinomine solo dei nomi in conflitto (anche con `xmatch_sep`), avviso `COLUMNS_RENAMED` e voci nella storia; `meta.main` tolto dalle colonne della tabella non principale (`MAIN_UCD_REMOVED`, `UCD_CONFLICT` se lo stesso UCD principale è in entrambe); in modalità `none` solo le colonne di A dei non appaiati; metadati di colonna copiati (tabelle d'ingresso invariate). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **P3 scritta** (`crossmatch_by_field`, `FIELD_MODES`; test T9, T10): join con `astropy.table.join` su chiavi normalizzate (testo senza spazi finali; numeri reali in `float64` se una delle due chiavi è reale; booleani), chiavi mancanti mai coincidenti (`KEY_MISSING`), combinazioni da chiavi ripetute dichiarate (`KEY_REPEATED`, nuovo in §10); regola del corpo di §9 applicata anche qui. Nuova decisione aperta **D15-8** (corpo nella correlazione per campo, Gruppo 3). Stato `approvato` invariato. |
