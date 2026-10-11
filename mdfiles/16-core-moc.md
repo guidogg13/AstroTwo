@@ -21,28 +21,134 @@ di un dato sia sempre verificabile e confrontabile.
   che cadono dentro (o fuori) da un MOC — l'operazione restituisce indici, il
   disegno è della UI.
 - **Impronta dei survey (C4):** rappresentare la copertura di un survey come
-  MOC e mostrarla (il servizio dei tile è di `12-core-hips.md`).
+  MOC e mostrarla (il servizio dei tile è di `12-core-hips.md`). **Rinviata
+  al modulo 12 (decisione del proprietario del 2026-10-11):** `survey_coverage`
+  si scrive con il 12, che conosce l'identità dei survey.
 - **Mappe e griglie HEALPix (H12):** produrre mappe HEALPix (conteggi/flussi
   per cella) e griglie di riferimento; **cataloghi HiPS progressivi** (H12):
   **confine deciso il 2026-10-04 (D16-5, pari a D12-5): dati e computazioni
   HEALPix vivono qui, il servizio dei tile resta in `12-core-hips.md`**.
+  **I cataloghi HiPS progressivi (H12) sono rinviati al modulo 12** (decisione
+  del proprietario del 2026-10-11); qui restano mappe e griglie HEALPix.
+  **Mappe HEALPix (decisione del proprietario del 2026-10-11):** schema
+  **NESTED** in **ICRS**, **ordine obbligatorio**; schema e sistema dichiarati
+  nel risultato.
 - **Generazione di MOC da riga di comando (H9):** stesse operazioni
   raggiungibili senza interfaccia grafica; integrazione con lo scripting di
-  `24-analisi-pipeline-riproducibili.md`.
+  `24-analisi-pipeline-riproducibili.md`. **Per ora `build_moc` è solo una
+  funzione** (decisione del proprietario del 2026-10-11); l'ingresso da riga
+  di comando arriverà con il 24.
 - **Versioni del formato MOC (H22, sez. 8.1 del manuale di Aladin, ed. giugno 2022):**
   lettura dei MOC nelle versioni dello standard IVOA **da 1.0 a 2.1**
   (spaziali, temporali, spazio-temporali) in FITS e in JSON; la versione letta
   è riportata nel risultato; la scrittura usa la versione corrente dello
-  standard (FITS IVOA, D16-2) dichiarata nei metadati. Il supporto di tutte le
-  versioni in `mocpy` è **da verificare prima del codice**.
+  standard (FITS IVOA, D16-2) dichiarata nei metadati. **Verifica del
+  2026-10-11** (documenti IVOA e `mocpy` 0.20.0): le versioni pubblicate dello
+  standard sono **1.0** (REC 2014-06-02), **1.1** (REC 2019-10-07) e **2.0**
+  (REC 2022-07-27), più la Note STMOC 1.0 (2019); **una versione 2.1 non
+  esiste** tra i documenti IVOA (→ **D16-6**, fermo solo questo pezzo). Le
+  intestazioni FITS di 1.0 e 1.1 sono identiche (`PIXTYPE='HEALPIX'`,
+  `ORDERING='NUNIQ'`, `COORDSYS='C'`, `MOCORDER`, colonna `UNIQ` `1J`/`1K`)
+  e non hanno `MOCVERS`: lo standard 2.0 dice che senza `MOCVERS` si assume
+  1.1 e senza `MOCDIM` si assume `SPACE`. Il 2.0 aggiunge `MOCVERS`,
+  `MOCDIM` (`SPACE`, `TIME`, `TIME.SPACE`), `ORDERING` `NUNIQ` o `RANGE`,
+  `MOCORD_S`, `MOCORD_T`, `TIMESYS='TCB'`. JSON e testo **non portano la
+  versione**: il risultato dice "versione non dichiarata nel formato".
+  `mocpy` legge i file 1.x scritti secondo lo standard e i file 2.0
+  (`NUNIQ` e `RANGE`), rifiuta `COORDSYS` diverso da `C` e accetta in
+  `MOCVERS` solo `1.1`, `2.0` e **`2.1`** (rifiuta `1.0`, che lo standard
+  1.0 non scrive: non ha `MOCVERS`). Il controllo della versione lo fa il 16
+  leggendo l'intestazione con `astropy.io.fits`; un file con
+  `MOCVERS='1.0'` si passa a `mocpy` come copia in memoria senza la parola
+  chiave (intestazioni identiche a 1.1). Versioni ammesse: assente (riportata
+  come "1.1, assunta dallo standard: `MOCVERS` assente; 1.0 ha le stesse
+  intestazioni"), `1.0`, `1.1`, `2.0`; ogni altra → `MOC_VERSION_UNSUPPORTED`
+  con la versione trovata.
+- **Formati JSON e testo (standard 2.0 §4.3 e appendice F, verificato il
+  2026-10-11):** il JSON è `{"ordine": [indici…], …}`, con il livello
+  facoltativo `{"s": …}` / `{"t": …}` e, per gli STMOC, una lista di coppie
+  `t`/`s`; il testo è `ordine/indici` con intervalli `a-b`, prefissi `t`/`s`
+  solo per gli STMOC. Lo standard dice che senza il prefisso "la natura del
+  MOC è determinata dal contesto d'uso": **il tipo non si assume mai**, lo
+  dichiara il chiamante (`kind`); se manca → `MOC_TYPE_REQUIRED`. `mocpy`
+  non legge i prefissi `s`/`t` dei MOC a una dimensione: li toglie il 16.
+  In scrittura il JSON porta sempre il prefisso `s`/`t` (lista `t`/`s` per
+  gli STMOC); il testo segue lo standard (prefissi solo per gli STMOC).
 - **Filtro spaziale delle collezioni tramite MocServer (H26, sez. 8.3.3):**
   interrogazione del MocServer del CDS con una regione o un MOC (più filtri
   sulle proprietà) per ottenere le collezioni che coprono la regione; i MOC
   delle collezioni restano sul server (troppo grandi per il client), le
-  proprietà sono nella copia locale di `12-core-hips.md`. Client
-  `astroquery.mocserver` (astroquery, S6; interfaccia **da verificare prima
-  del codice**). Senza rete il filtro spaziale non è disponibile: errore
-  esplicito, mai un elenco parziale presentato come completo.
+  proprietà sono nella copia locale di `12-core-hips.md`. **Client: la rete
+  del 14** (cache e registro delle richieste, `MOCSERVER_URL` già usato dal
+  13), **non `astroquery.mocserver`** (decisione del proprietario del
+  2026-10-11); l'interfaccia del MocServer per i filtri per regione si
+  verifica prima di P5. Senza rete il filtro spaziale non è disponibile:
+  errore esplicito, mai un elenco parziale presentato come completo.
+
+### Decisioni del proprietario del 2026-10-11 e divisione in parti
+
+- **HEALPix:** solo `astropy-healpix` e `mocpy`; **`healpy` escluso** (licenza
+  GPL-2.0). Verifiche fatte: `mocpy` 0.20.0 (BSD, wheel macOS arm64, Python
+  3.12), `astropy-healpix` 2.0.1 (BSD).
+- **`order_max` obbligatorio, senza default**, in ogni costruttore; intero in
+  [0, 29] per lo spazio e [0, 61] per il tempo (limiti dello standard 2.0),
+  altrimenti `HEALPIX_ORDER_INVALID`.
+- **MOC da catalogo:** una cella per sorgente all'ordine dato, **senza
+  raggio**.
+- **MOC da immagine:** dai **pixel validi**, con il **WCS dell'11** (non solo
+  i quattro angoli).
+- **Poligoni:** lati su **cerchi massimi**. La regola per l'interno si scrive
+  dopo la verifica di `mocpy`: **verificata il 2026-10-11**, `mocpy` prende
+  come interno **la più piccola delle due regioni** delimitate dal poligono,
+  indipendentemente dall'ordine dei vertici (provato con un triangolo e con
+  un poligono attorno a un polo, vertici in un verso e nell'altro);
+  `complement=True` dà l'altra regione. Regola di AstroTwo: interno = regione
+  più piccola, oppure la complementare con `complement=True`, dichiarata nel
+  risultato.
+- **MOC spaziali sempre in ICRS** (come da standard, `COORDSYS='C'`): le
+  posizioni in altri sistemi si convertono prima con il modulo 10.
+- **Mappe di probabilità:** somma = 1 entro **10⁻⁶ relativo**, dichiarato nel
+  risultato.
+- **Tolleranze delle aree in T1 e T2:** calcolate nel test come **numero di
+  celle di bordo × area di una cella** all'ordine usato.
+- **MocServer:** tramite la rete del 14 (sopra).
+- **`build_moc`:** per ora solo funzione (sopra).
+- **Mappe HEALPix:** NESTED, ICRS, ordine obbligatorio (sopra).
+- **Rinviati al 12:** `survey_coverage` (C4) e cataloghi HiPS progressivi
+  (H12).
+
+**Divisione in 5 parti (approvata dal proprietario il 2026-10-11):**
+
+| Parte | Contenuto | Test |
+|---|---|---|
+| P1 | classe `Moc` (spaziale, temporale, spazio-temporale, con `body`, sistema, origine), lettura/scrittura FITS IVOA, JSON e testo, versioni 1.0–2.1, operazioni insiemistiche, MOC vuoto, tipi diversi | T3, T5, T7 |
+| P2 | creazione da cerchio, poligono, catalogo, immagine | T1, T2 |
+| P3 | `filter_by_moc`, mappe e griglie HEALPix | T4, T6 |
+| P4 | MOC temporali e spazio-temporali (scala dei tempi), mappe di probabilità e regioni di credibilità (D16-4) | test di P4 |
+| P5 | `query_mocserver` (H26), `build_moc` (H9), lettura da URL (H22) | T8, T9 |
+
+**Scelte di P1 (scelte minori, da confermare):**
+
+- `Moc` è immutabile e contiene l'oggetto `mocpy` (`MOC`, `TimeMOC`, `STMOC`),
+  il tipo (`space`, `time`, `space-time`), il **sistema** (`ICRS` per lo
+  spazio, `TCB` per il tempo), gli ordini massimi, `body`, l'origine, la
+  versione letta (o `None` se creato), la storia e gli avvisi.
+- **`body` dei MOC solo temporali: "non applicabile"** (`None`, dichiarato):
+  un `TMOC` non ha posizioni, la regola del corpo vale per i MOC spaziali e
+  spazio-temporali. Un MOC spaziale letto da file con `COORDSYS='C'` ha
+  `body = "celestial"` (ricavato dal sistema, D19-3).
+- Operazioni tra MOC dello stesso tipo e dello stesso corpo; con
+  `force_body=True` il risultato porta il corpo del primo operando e
+  l'avviso `BODY_FORCED` con entrambi i corpi.
+- Ordine del risultato di unione, intersezione e differenza = il **massimo**
+  degli ordini degli operandi (comportamento di `mocpy`, verificato); il
+  complemento conserva l'ordine; dichiarato nella storia.
+- Scrittura FITS: standard **2.0**; MOC spaziali in **`NUNIQ`** con anche
+  `MOCORDER` (raccomandato dallo standard per la compatibilità con i
+  lettori 1.x), temporali e spazio-temporali in `RANGE`; `MOCTOOL` =
+  `AstroTwo <versione>`. Si scrivono solo MOC celesti: lo standard è solo
+  ICRS, un MOC di un altro corpo → `MOC_BODY_UNSUPPORTED`.
+- Risultato vuoto: consentito, con l'avviso `MOC_EMPTY`.
 
 ## 4. Cosa NON fa
 
@@ -99,15 +205,21 @@ di un dato sia sempre verificabile e confrontabile.
   restituisce indici.
 - **`survey_coverage(survey)`** — copertura di un survey come MOC (C4).
 - **`healpix_map(...)`** / **`healpix_grid(...)`** — mappe e griglie HEALPix
-  (H12). **Calcolo: `healpy` o `astropy-healpix`.**
-- **`build_moc(...)`** — ingresso da riga di comando (H9), delegato alle
-  funzioni sopra.
+  (H12), NESTED in ICRS con ordine obbligatorio. **Calcolo: `astropy-healpix`**
+  (`healpy` escluso, licenza GPL).
+- **`build_moc(...)`** — generazione senza interfaccia (H9), delegata alle
+  funzioni sopra; per ora solo funzione, la riga di comando arriva con il 24.
 - **Persistenza e export (D16-2):** i MOC si salvano in cache in **formato
   FITS standard IVOA** (file nella cache comune di `04-cache.md`, con origine
   e data come gli altri dati; nessuna cache propria, CA4); l'export
   dell'utente offre anche **JSON** e **testo**.
-- **`read_moc(source)`** (H22) — legge un MOC FITS o JSON e ne dichiara la
-  versione.
+- **`read_moc(source, *, format=None, kind=None)`** (H22) — legge un MOC
+  FITS, JSON o testo e ne dichiara la versione; `kind` (`space`, `time`,
+  `space-time`) obbligatorio solo per JSON e testo senza prefisso.
+- **`write_moc(moc, path, format="fits", overwrite=False)`** — scrive in FITS
+  IVOA 2.0, JSON o testo (D16-2).
+- **`Moc.describe()`** — tipo, sistema, ordini, corpo, area (steradianti e
+  frazione di cielo) o durata, numero di celle, origine e versione.
 - **`query_mocserver(region_or_moc, property_filter)`** (H26) — collezioni
   che coprono la regione, con provenienza della risposta.
 
@@ -116,11 +228,10 @@ di un dato sia sempre verificabile e confrontabile.
 | Libreria / standard | Uso nel modulo | Motivazione |
 |---|---|---|
 | Standard IVOA MOC | formato delle mappe di copertura (cache in **FITS IVOA**, export JSON/testo — D16-2) | standard della comunità |
-| `astropy-healpix` | operazioni HEALPix | mantenuto da AstroPy/ESA |
-| `healpy` | mappe HEALPix, mappe di probabilità | consolidato in astronomia |
-| `mocpy` (**scelto con D16-1**) | creazione/operazioni MOC, incluso i MOC temporali | libreria MOC dedicata allineata allo standard IVOA; **licenza e installazione su macOS da verificare prima di approvare `16`** |
+| `astropy-healpix` (2.0.1, BSD) | operazioni HEALPix, mappe e griglie | mantenuto da AstroPy; **`healpy` escluso** (GPL-2.0, decisione del proprietario del 2026-10-11) |
+| `mocpy` (**scelto con D16-1**; 0.20.0, BSD, wheel macOS arm64 per Python 3.12, verificato il 2026-10-11) | creazione/operazioni MOC, incluso i MOC temporali | libreria MOC dedicata allineata allo standard IVOA |
 | `astropy.coordinates` (via 10) | cerchi/poligoni in coordinate | conversioni verificate |
-| `astroquery.mocserver` (astroquery, S6) | filtro spaziale delle collezioni (H26) | client del servizio CDS; interfaccia da verificare prima del codice |
+| rete del 14 (`MOCSERVER_URL`) | filtro spaziale delle collezioni (H26) | cache e registro delle richieste comuni; **non `astroquery.mocserver`** (decisione del proprietario del 2026-10-11) |
 
 ## 9. Regole e vincoli
 
@@ -138,7 +249,9 @@ di un dato sia sempre verificabile e confrontabile.
 - **Tempo (D16-3, decisa il 2026-10-04):** internamente **numerico, JD tramite
   `astropy.time`**; **ISO 8601 solo nell'interfaccia e nei file**; **la scala
   di tempo si dichiara sempre** (UTC, TDB, TCB); i **MOC temporali usano la
-  scala dello standard IVOA (da verificare)**. Regola di progetto in
+  scala dello standard IVOA: TCB** (verificato il 2026-10-11 sul testo dello
+  standard 2.0 §4.2: JD, scala TCB, baricentro del Sistema Solare, 1 μs
+  all'ordine 61). `mocpy` converte in TCB i tempi in altre scale (verificato). Regola di progetto in
   `02-convenzioni.md` DC1.
 - **Formato in cache:** FITS standard IVOA su file nella cache comune di
   `04-cache.md` (limite unico di 5 GB), con origine e data come gli altri
@@ -171,6 +284,10 @@ di un dato sia sempre verificabile e confrontabile.
 | Operazione o filtro tra MOC/dati di corpi diversi | rifiuto; forzatura solo con opzione esplicita citata nel risultato (D19-4) | `BODY_MISMATCH` |
 | Versione del MOC non supportata | nessun MOC letto, errore con la versione trovata | `MOC_VERSION_UNSUPPORTED` |
 | MocServer non raggiungibile | nessun filtro spaziale, errore esplicito | `MOCSERVER_UNAVAILABLE` |
+| JSON o testo senza prefisso di tipo e senza `kind` | nessuna lettura: il tipo non si assume | `MOC_TYPE_REQUIRED` |
+| Scrittura in formato IVOA di un MOC di un corpo diverso da `celestial` | rifiuto (lo standard è solo ICRS) | `MOC_BODY_UNSUPPORTED` |
+| File con `MOCVERS = '2.1'` | rifiuto finché D16-6 non è decisa | `MOC_VERSION_UNSUPPORTED` |
+| Complemento di un MOC spazio-temporale | non disponibile in `mocpy` 0.20.0, fermo su D16-7 | `MOC_OPERATION_UNSUPPORTED` |
 
 ## 11. Esposizione all'IA
 
@@ -192,10 +309,10 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T1 | MOC da cerchio | creare un MOC di raggio 1° attorno a un punto | area ≈ 2π(1 − cos 1°) steradianti (entro la tolleranza legata all'ordine usato) | area ricalcolata nel test con la formula e con `astropy.units` |
 | T2 | Circolo completo | unione di quattro quarti di cielo (regioni che coprono tutto) | area ≈ 4π steradianti (entro la tolleranza dell'ordine) | ricalcolo con Astropy/`math` nel test |
 | T3 | Proprietà insiemistiche | generare due MOC casuali con semina fissa; verificare A∪B ⊇ A∩B, (A∖B)∩B = ∅, ¬¬A = A | tutte le proprietà vere | controllo con le operazioni ricalcolate nel test |
-| T4 | Filtro per Moc | 1000 punti casuali (semina fissa) dentro un MOC noto | conteggio coincidente con quello ricalcolato nel test con `healpy`/`astropy-healpix` | ricalcolo con la libreria HEALPix |
+| T4 | Filtro per Moc | 1000 punti casuali (semina fissa) dentro un MOC noto | conteggio coincidente con quello ricalcolato nel test con `astropy-healpix` | ricalcolo con la libreria HEALPix |
 | T5 | Mismatch di unità | unire un MOC spaziale con uno temporale | `MOC_TYPE_MISMATCH` | test di unità |
-| T6 | Mappe HEALPix | produrre una mappa HEALPix su una distribuzione nota | valori per cella coincidenti con `healpy`/`astropy-healpix` ricalcolato nel test | ricalcolo con la libreria scelta |
-| T7 | Versioni MOC (H22) | leggere MOC di prova nelle versioni 1.0, 2.0 e 2.1, in FITS e JSON | stesse celle lette da `mocpy`; versione riportata | confronto con `mocpy` |
+| T6 | Mappe HEALPix | produrre una mappa HEALPix su una distribuzione nota | valori per cella coincidenti con `astropy-healpix` ricalcolato nel test; schema NESTED e sistema ICRS dichiarati | ricalcolo con la libreria scelta |
+| T7 | Versioni MOC (H22) | file di prova **scritti nel test secondo il testo dello standard** (mai file di Aladin): FITS 1.x (intestazioni di 1.0/1.1, colonna `UNIQ` `1J`), 2.0 `NUNIQ` e `RANGE` (spaziale, temporale, spazio-temporale), JSON con e senza prefisso, testo; `MOCVERS='2.1'`; versione sconosciuta; `kind` mancante | stesse celle lette da `mocpy`; versione riportata ("1.1, assunta…", "2.0", "non dichiarata nel formato"); 2.1 → `MOC_VERSION_UNSUPPORTED` (D16-6); `MOC_TYPE_REQUIRED`; andata e ritorno in scrittura | confronto con `mocpy` |
 | T8 | Filtro MocServer (H26) | `query_mocserver` su una regione con risposta simulata | elenco delle collezioni con origine e data | servizio simulato (test di rete separato) |
 | T9 | MocServer assente (H26) | `query_mocserver` senza rete | `MOCSERVER_UNAVAILABLE`, nessun elenco parziale | test di unità |
 
@@ -205,8 +322,9 @@ L'IA non calcola né approssima mai superfici o coperture.
   operazioni MOC, incluso i MOC temporali); le librerie HEALPix (`healpy` /
   `astropy-healpix`) restano per mappe e griglie. **Motivazione:** E6 richiede
   MOC spaziali **e temporali**, `mocpy` è allineato allo standard IVOA.
-  **Da verificare prima di approvare `16`:** licenza e installazione su macOS.
-  Applicata in §8 qui sopra.
+  **Verificato il 2026-10-11:** `mocpy` 0.20.0, licenza BSD, wheel macOS
+  arm64 per Python 3.12; `healpy` escluso (GPL-2.0), mappe e griglie con
+  `astropy-healpix`. Applicata in §8 qui sopra.
 - **D16-2 — Serializzazione: DECISA il 2026-10-04.** I MOC vivono in cache in
   **formato FITS standard IVOA** (file su disco, con origine e data come gli
   altri dati della cache A7); l'export offre anche **JSON** e **testo**.
@@ -233,6 +351,32 @@ L'IA non calcola né approssima mai superfici o coperture.
   due file si contraddicono; nessuna logica HEALPix duplicata. Applicata in
   §3 qui sopra.
 
+- **D16-6 — Versione "2.1" del formato MOC: DA DECIDERE (aperta il
+  2026-10-11, Gruppo 3).** §3 (H22, dal manuale di Aladin) chiede la lettura
+  delle versioni "da 1.0 a 2.1", ma tra i documenti IVOA (verifica del
+  2026-10-11) le versioni pubblicate sono solo 1.0, 1.1 e 2.0 (più la Note
+  STMOC 1.0); `mocpy` 0.20.0 però elenca `2.1` tra i valori ammessi di
+  `MOCVERS` (forse una bozza non pubblicata tra i documenti IVOA, da
+  verificare). Opzioni: (a) nessuna 2.1 finché l'IVOA non la pubblica: un file
+  `2.1` → `MOC_VERSION_UNSUPPORTED`; (b) leggere un file `2.1` come un 2.0,
+  con un avviso che la versione non è uno standard pubblicato; (c) cercare il
+  documento a cui si riferisce il manuale (forse una bozza di lavoro) e
+  decidere dopo. **Raccomandazione:** (a) ora, (c) prima della verifica
+  finale della parità (AP1). **Fermo solo questo pezzo:** oggi un file `2.1`
+  dà `MOC_VERSION_UNSUPPORTED`.
+
+- **D16-7 — Complemento dei MOC spazio-temporali: DA DECIDERE (aperta il
+  2026-10-11, Gruppo 3).** §3 prevede il complemento per tutti i MOC, ma
+  `mocpy` 0.20.0 non lo implementa per gli ST-MOC ("Complement not
+  implemented (yet) for ST-MOCs"). Opzioni: (a) nessun complemento per gli
+  ST-MOC finché `mocpy` non lo offre (`MOC_OPERATION_UNSUPPORTED`,
+  dichiarato); (b) complemento scritto da noi sugli intervalli (regola d'oro
+  n. 4: da evitare); (c) complemento come differenza tra un ST-MOC "tutto il
+  tempo × tutto il cielo" e il MOC dato, con le operazioni di `mocpy`.
+  **Raccomandazione:** (c) se il proprietario la ritiene corretta, perché usa
+  solo operazioni della libreria; altrimenti (a). **Fermo solo questo
+  pezzo:** oggi `MOC_OPERATION_UNSUPPORTED`.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -245,3 +389,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-09 | Claude Code | **Completamento con gli esiti di AP5** (decisione del proprietario del 2026-10-09): §3, §6, §7, §8, §10, §12 per H22 (versioni MOC 1.0–2.1, FITS e JSON; supporto in `mocpy` da verificare) e H26 (filtro spaziale delle collezioni con il MocServer, client `astroquery.mocserver`). Nessuna nuova decisione dei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §5, §7, §9 — MOC salvati come file nella cache comune `SharedCache`. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Decisioni del proprietario del 2026-10-11 applicate** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti; `healpy` escluso (GPL), solo `astropy-healpix` e `mocpy`; `order_max` obbligatorio; MOC da catalogo una cella per sorgente; MOC da immagine dai pixel validi con il WCS dell'11; poligoni a lati di cerchio massimo (interno = regione più piccola, verificato in `mocpy`); MOC spaziali sempre ICRS; somma delle probabilità entro 10⁻⁶ relativo; tolleranze di T1/T2 dalle celle di bordo; MocServer con la rete del 14; `build_moc` solo funzione; mappe NESTED ICRS; C4 e cataloghi HiPS progressivi rinviati al 12. Verifiche del 2026-10-11: versioni dello standard (1.0, 1.1, 2.0; nessuna 2.1), intestazioni FITS, JSON e testo, scala TCB dei MOC temporali. Nuovi `MOC_TYPE_REQUIRED`, `MOC_BODY_UNSUPPORTED`; nuove decisioni aperte **D16-6** (versione 2.1) e **D16-7** (complemento degli ST-MOC), Gruppo 3. Scelte minori di P1 elencate in §3. Stato `approvato` invariato. |

@@ -6,9 +6,11 @@ readme = "CLAUDE.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "astropy>=8.0.1",
+    "astropy-healpix>=2.0.1",
     "astroquery>=0.4.11",
     "defusedxml>=0.7.1",
     "matplotlib>=3.11.2",
+    "mocpy>=0.20.0",
     "numpy>=2.5.3",
     "pillow>=12.3.0",
     "pyvo>=1.9.1",
