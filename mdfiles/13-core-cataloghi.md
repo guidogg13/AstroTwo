@@ -103,8 +103,8 @@ suo VOTable.
     `pos.eq.dec` per una sola declinazione), con l'avviso
     `UCD1_TRANSLATED` e l'UCD originale conservato; **tutte le altre** restano
     come sono, con `UCD1_NOT_TRANSLATED` e conferma dell'utente. Il servizio
-    di traduzione del CDS si valuta in P6 come opzione esplicita, dichiarata
-    nel risultato come "traduzione CDS". La traduzione avviene prima della
+    di traduzione del CDS (opzione esplicita, dichiarata nel risultato come
+    "traduzione CDS") è rimandato, a bassa priorità (D13-14c, 2026-10-11). La traduzione avviene prima della
     lettura dei dati, quindi decide anche ore o gradi per i sessagesimali.
     (c) Un
     `ref` scritto `#id(...)` o `#id($...)` (forma non conforme alla DTD, che
@@ -456,13 +456,24 @@ suo VOTable.
   P2).
 - **`list_tables(source)`** — tabelle del file (indice, nome, righe,
   colonne), per la scelta dell'utente.
-- **`load_catalog(catalog_id, *, max_rows=None, limits=None, cache=None,
-  refresh=False, timeouts=None)`** (P6) — catalogo VizieR per identificativo
-  (es. `"II/246/out"`) con `SELECT * FROM "<id>"` su TAP VizieR tramite
-  `tap_query` del 14 (D14-9 punto 6), o una voce di `FIXED_COLLECTIONS`;
-  `max_rows` di default quello del 14 (100 000), troncamento dichiarato con
-  `ROW_LIMIT_EXCEEDED`; identificativo non valido o rifiutato dal servizio →
-  `CATALOG_UNKNOWN`.
+- **`load_catalog(catalog_id, *, max_rows=None, allow_partial=False,
+  limits=None, cache=None, refresh=False, timeouts=None)`** (P6) — catalogo
+  VizieR per identificativo (es. `"II/246/out"`) con `SELECT * FROM "<id>"`
+  su TAP VizieR tramite `tap_query` del 14 (D14-9 punto 6), o una voce di
+  `FIXED_COLLECTIONS`; `max_rows` di default quello del 14 (100 000);
+  identificativo non valido o rifiutato dal servizio → `CATALOG_UNKNOWN`.
+  **Senza regione (decisione del proprietario del 2026-10-11):** il
+  catalogo si carica solo se il suo numero totale di righe è entro
+  `max_rows`; il superamento si conosce dal **troncamento dichiarato dal
+  servizio** (`OVERFLOW` di TAP, `MAXREC = max_rows`) o da più righe del
+  massimo; allora errore `REGION_REQUIRED`, che chiede una regione (finché
+  `load_catalog` non ha un parametro di regione, D13-19 aperta: con
+  `tap_query` del 14 e `CONTAINS`), oppure `allow_partial=True` esplicito,
+  che restituisce le prime `max_rows` righe ricevute dichiarandolo nel
+  risultato (avvisi `PARTIAL_CATALOG` e `ROW_LIMIT_EXCEEDED`, voce nella
+  storia). Un servizio che troncasse senza dichiararlo non sarebbe
+  conforme a TAP e non si può riconoscere: si usano solo i servizi
+  dell'elenco del 14.
 - **`load_table(source, *, table=None, format=None, limits=None, cache=None,
   refresh=False, timeouts=None)`** (P6) — come `read_table` per un file
   locale (con i descrittori di servizio del VOTable); un URL passa da
@@ -580,6 +591,8 @@ suo VOTable.
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
 | Catalogo sconosciuto | errore con riferimento all'id | `CATALOG_UNKNOWN` |
+| `load_catalog` senza regione su un catalogo con più di `max_rows` righe | nessuna tabella; si chiede una regione o `allow_partial=True` | `REGION_REQUIRED` |
+| `load_catalog` con `allow_partial=True` oltre `max_rows` | prime `max_rows` righe, dichiarate | avvisi `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` |
 | Record del MocServer che non è una collezione VizieR | escluso dall'albero | avviso `COLLECTION_SKIPPED` |
 | Collezioni senza `vizier_popularity` (o con un valore non intero) | dopo le altre, in ordine alfabetico | avvisi `POPULARITY_MISSING`, `POPULARITY_INVALID` |
 | File assente o non leggibile | nessuna tabella aperta, errore con il percorso | `TABLE_UNREADABLE` |
@@ -654,6 +667,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T28 | ASTRORES non conforme | campo `F` in gradi con dati sessagesimali; `ref` `#id(...)` | colonna in gradi uguale ad `astropy.coordinates.Angle` (ore per RA, gradi per Dec), colonna `_text` conservata, `ASTRORES_TYPE_MISMATCH`; `ref` accettato con `ASTRORES_NONCONFORMING_REF` | ricalcolo con Astropy |
 | T30 | Filtro temporale | VOTable con `TIMESYS` (MJD, TDB) e colonna ISO senza `TIMESYS`; intervallo `[inizio, fine]` | estremi inclusi, mancanti esclusi e contati; con `TIMESYS` parametri rifiutati; senza `TIMESYS` formato e scala obbligatori; inizio > fine → `EPOCH_INVALID` | confronto con `astropy.time` |
 | T31 | Albero delle collezioni (D13-18) | MocServer simulato con popolarità diverse, uguali, assenti, un record `CDS/Simbad`; poi senza la proprietà; poi risposta non JSON; test di rete sul MocServer | ordine decrescente, a pari valore alfabetico, assenti in fondo; ordine dichiarato "proprietà non documentata del MocServer"; senza proprietà ordine alfabetico dichiarato; `CDS/Simbad` escluso; seconda chiamata dalla cache; risposta non valida → `SERVICE_ERROR` del 14 | test con servizio simulato (più un test di rete) |
+| T32 | `load_catalog` senza regione | TAP VizieR simulato con 3 righe e `max_rows` 2 e 3; con `allow_partial=True`; test di rete su 2MASS con `max_rows` 5 | `max_rows` 2 → `REGION_REQUIRED`; con `allow_partial=True` 2 righe, `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` e voce nella storia; `max_rows` 3 → catalogo intero senza avvisi; in rete stesso comportamento | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
@@ -759,8 +773,8 @@ sono verificati da `34-ia-verifica-risultati.md`.
 - **D13-14b — UCD1 → UCD1+: DECISA il 2026-10-10 (decisione del
   proprietario).** Solo le parole UCD1 scritte nella raccomandazione IVOA
   sugli UCD (quattro, §3); le altre non tradotte con `UCD1_NOT_TRANSLATED`
-  e conferma dell'utente; servizio del CDS da valutare in P6 come opzione
-  esplicita ("traduzione CDS").
+  e conferma dell'utente; servizio del CDS da valutare come opzione
+  esplicita ("traduzione CDS"): rimandato il 2026-10-11 (D13-14c).
 - **D13-15 — Numeri e unità nelle colonne calcolate: DECISA il 2026-10-10
   (decisione del proprietario).** In `+`, `-`, `%`, `min`, `max` il numero
   prende l'unità della colonna; in `*` e `/` resta adimensionale; T4
@@ -784,6 +798,31 @@ sono verificati da `34-ia-verifica-risultati.md`.
   ordinamento alfabetico. Client nel 14 (`vizier_collections`). Applicata
   in §3, §7, §10, §12 (T31). (Aperta il 2026-10-10: opzioni MocServer con
   popolarità, senza popolarità, `TAP_SCHEMA`; raccomandazione la prima.)
+- **D13-19 — Parametro di regione di `load_catalog`: DA DECIDERE (aperta il
+  2026-10-11, Gruppo 3).** La decisione del 2026-10-11 dice che senza
+  regione `load_catalog` vale solo per i cataloghi entro `max_rows` e che
+  l'errore "chiede una regione", ma `load_catalog` non ha un parametro di
+  regione. Aggiungerlo richiede scelte tecniche: quali colonne di posizione
+  usare nell'ADQL (da `TAP_SCHEMA.columns` con UCD `pos.eq.ra;meta.main` /
+  `pos.eq.dec;meta.main`, mai dai nomi), in che sistema esprimere il
+  cerchio (`CONTAINS(POINT('ICRS', …), CIRCLE('ICRS', …))` su colonne che
+  possono essere FK5 J2000), e se la regione è solo un cerchio. Opzioni:
+  (a) `region=(centro, raggio)` con colonne da `TAP_SCHEMA` per UCD e
+  sistema dichiarato dal servizio, errore se non univoci; (b) nessun
+  parametro: l'errore rimanda a `tap_query` del 14 con `CONTAINS` (come
+  oggi); (c) regione tramite il cone search VizieR. **Raccomandazione:**
+  (a), con il sistema delle colonne letto dai metadati e dichiarato nel
+  risultato. **Fermo solo questo punto:** oggi `REGION_REQUIRED` rimanda a
+  `tap_query`.
+- **D13-14c — Traduzione UCD1 con il servizio del CDS: RIMANDATA (decisione
+  del proprietario del 2026-10-11, bassa priorità, Gruppo 3).** Il servizio
+  di traduzione UCD1 → UCD1+ del CDS (opzione esplicita prevista da
+  D13-14b, "traduzione CDS") non si scrive ora; restano le quattro parole
+  della raccomandazione IVOA e `UCD1_NOT_TRANSLATED` per le altre.
+- **Scelte minori del 2026-10-11 confermate dal proprietario:** tutte,
+  tranne due cambiate dal proprietario: versione del formato dei FITS
+  esportati "FITS Standard 4.0" più la versione di `astropy` (nel 14), e
+  `load_catalog` senza regione (§7, T32).
 - **Scelte minori del 2026-10-10 confermate dal proprietario:** epoca di
   origine (parametro vietato se è nei metadati, colonna in anni giuliani);
   equinozio ed epoca ASTRORES numerici giuliani (FK5/ICRS) o besseliani
@@ -822,3 +861,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **Con D14-10** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): lettura dell'**ECSV** di `astropy` (formato `ecsv`, riconosciuto dalla prima riga `# %ECSV`, anche come `format` esplicito), con unità, UCD e valori mancanti; sistema delle posizioni non presente nell'ECSV (`FRAME_UNKNOWN`). Test di andata e ritorno nel 14 (T5). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-17 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `LINK` ASTRORES letti solo con `href`, formato dal `content-type` del `LINK` (verificato come attributo nella DTD v0.9) con i lettori CSV, TSV, VOTable e FITS del modulo, nessun formato indovinato; dati scaricati con il 14 tramite `load_table` (anche per un ASTRORES scaricato da URL, con `href` relativo risolto sull'URL); `read_table` senza rete rimanda a `load_table`; accordo stretto tra FIELD e dati collegati (scelta da confermare); avvisi `ASTRORES_LINK`, `ASTRORES_LINK_SOURCE`; T15 completo (§3, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-18 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `collection_tree`, `CollectionTree`, `CollectionNode` — albero delle collezioni dal MocServer del CDS (client `vizier_collections` nel 14), ordinato per `vizier_popularity` decrescente (nodi interni: massimo del sottoalbero; pari valore e assenti in ordine alfabetico), dichiarato come "proprietà non documentata del MocServer", ordine alfabetico se la proprietà manca; `CDS/Simbad` escluso; avvisi `COLLECTION_SKIPPED`, `POPULARITY_MISSING`, `POPULARITY_INVALID`; verifica in linea del MocServer; nuovo T31 (§3, §7, §10, §12, §13). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `load_catalog` senza regione solo entro `max_rows` (troncamento dichiarato dal servizio), altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato (`PARTIAL_CATALOG`); nuovo T32. Nuova decisione aperta **D13-19** (parametro di regione di `load_catalog`, Gruppo 3; fermo solo il parametro). Traduzione UCD1 del CDS rimandata a bassa priorità come **D13-14c** (Gruppo 3). Stato `approvato` invariato. |

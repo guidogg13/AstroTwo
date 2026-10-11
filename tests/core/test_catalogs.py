@@ -1091,8 +1091,15 @@ def test_load_catalog_vizier_tap(service, cache, monkeypatch):
     cat = load_catalog("II/246/out", cache=cache)
     assert service.requests[-1]["params"]["QUERY"] == 'SELECT * FROM "II/246/out"' and cat.rows == 3
     assert cat.request.protocol == "tap" and cat.history == ("catalogo II/246/out da cds-vizier-tap",)
-    cut = load_catalog("II/246/out", max_rows=2, cache=cache)
-    assert cut.rows == 2 and "ROW_LIMIT_EXCEEDED" in dict(cut.warnings)
+    # Catalogo oltre max_rows senza regione: errore, oppure allow_partial=True dichiarato.
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("II/246/out", max_rows=2, cache=cache)
+    assert err.value.code == "REGION_REQUIRED" and "allow_partial" in err.value.message
+    cut = load_catalog("II/246/out", max_rows=2, allow_partial=True, cache=cache)
+    assert cut.rows == 2 and "ROW_LIMIT_EXCEEDED" in dict(cut.warnings) and "PARTIAL_CATALOG" in dict(cut.warnings)
+    assert "allow_partial=True: prime 2 righe" in cut.history
+    exact = load_catalog("II/246/out", max_rows=3, cache=cache)  # entro max_rows: nessun avviso
+    assert exact.rows == 3 and "PARTIAL_CATALOG" not in dict(exact.warnings)
     with pytest.raises(CatalogsError) as err:
         load_catalog("XX/999/none", cache=cache)
     assert err.value.code == "CATALOG_UNKNOWN" and "Unknown table" in err.value.message
@@ -1139,5 +1146,8 @@ def test_datalink_column(tmp_path):
 
 @pytest.mark.network
 def test_load_catalog_network(cache):
-    cat = load_catalog("II/246/out", max_rows=5, cache=cache)
-    assert cat.rows == 5 and "ROW_LIMIT_EXCEEDED" in dict(cat.warnings) and cat.request.from_cache is False
+    with pytest.raises(CatalogsError) as err:  # 2MASS ha molte più di 5 righe: il servizio lo dichiara
+        load_catalog("II/246/out", max_rows=5, cache=cache)
+    assert err.value.code == "REGION_REQUIRED"
+    cat = load_catalog("II/246/out", max_rows=5, allow_partial=True, cache=cache)
+    assert cat.rows == 5 and "PARTIAL_CATALOG" in dict(cat.warnings) and cat.request.from_cache is True

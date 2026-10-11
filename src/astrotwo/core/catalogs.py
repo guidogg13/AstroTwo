@@ -2141,10 +2141,14 @@ def load_table(source, *, table=None, format=None, limits: TableLimits | None = 
                                              refresh=refresh, **kwargs))
 
 
-def load_catalog(catalog_id: str, *, max_rows: int | None = None, limits: TableLimits | None = None, cache=None,
-                 refresh: bool = False, timeouts=None) -> CatalogTable:
-    """Catalogo per identificatore (D1): VizieR (es. ``"II/246/out"``) tramite TAP VizieR del 14, o una
-    voce del gruppo fisso (``FIXED_COLLECTIONS``); righe oltre ``max_rows`` → ``ROW_LIMIT_EXCEEDED`` dichiarato."""
+def load_catalog(catalog_id: str, *, max_rows: int | None = None, allow_partial: bool = False,
+                 limits: TableLimits | None = None, cache=None, refresh: bool = False, timeouts=None) -> CatalogTable:
+    """Catalogo intero per identificatore (D1): VizieR (es. ``"II/246/out"``) tramite TAP VizieR del 14, o una
+    voce del gruppo fisso (``FIXED_COLLECTIONS``).
+
+    Senza regione il catalogo si carica solo se ha al più ``max_rows`` righe (il servizio dichiara il
+    troncamento con ``OVERFLOW``); altrimenti ``REGION_REQUIRED``, oppure ``allow_partial=True`` che dà le
+    prime ``max_rows`` righe dichiarandolo (``PARTIAL_CATALOG`` e ``ROW_LIMIT_EXCEEDED``)."""
     from astrotwo.core import vo_protocols as vo
 
     if not isinstance(catalog_id, str) or not _CATALOG_ID.match(catalog_id):
@@ -2162,7 +2166,19 @@ def load_catalog(catalog_id: str, *, max_rows: int | None = None, limits: TableL
             raise CatalogsError("CATALOG_UNKNOWN", f"catalogo {catalog_id!r} non trovato su {server}: "
                                 f"{exc.details.get('service_message', exc.message)}") from exc
         raise
-    return dataclasses.replace(_from_vo_result(result), history=(f"catalogo {catalog_id} da {server}",))
+    if result.truncated and not allow_partial:
+        raise CatalogsError("REGION_REQUIRED", f"catalogo {catalog_id!r}: più di {result.max_rows} righe "
+                            f"({dict(result.warnings).get('ROW_LIMIT_EXCEEDED', 'troncamento dichiarato')}); "
+                            "indicare una regione (per ora: tap_query del 14 con CONTAINS) o allow_partial=True "
+                            "per le prime righe", max_rows=result.max_rows)
+    table = _from_vo_result(result)
+    history = (f"catalogo {catalog_id} da {server}",)
+    if result.truncated:
+        table = dataclasses.replace(table, warnings=table.warnings + (
+            ("PARTIAL_CATALOG", f"allow_partial=True: solo le prime {result.max_rows} righe restituite dal "
+             f"servizio, non tutto il catalogo {catalog_id}"),))
+        history += (f"allow_partial=True: prime {result.max_rows} righe",)
+    return dataclasses.replace(table, history=history)
 
 
 #: Dichiarazione dell'ordine dell'albero (D13-18): la proprietà non è descritta dalla documentazione del MocServer.
