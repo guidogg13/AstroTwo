@@ -24,15 +24,17 @@ import numpy as np
 from astropy.coordinates import search_around_sky
 from astropy.table import Table
 
-from astrotwo.core.catalogs import CatalogTable
+from astrotwo.core.catalogs import CatalogTable, PositionColumns
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
 
 __all__ = [
     "CROSSMATCH_MODES",
     "CrossMatchResult",
     "CrossmatchError",
+    "ColumnSuggestions",
     "MatchReport",
     "crossmatch",
+    "suggest_columns",
 ]
 
 #: Modalità dell'incrocio per posizione (§3); ``best`` è il default (D15-1).
@@ -134,6 +136,10 @@ class CrossMatchResult:
         if threshold is not None:
             kwargs["threshold"] = threshold
         return runner(self.table_a, self.table_b, **kwargs)
+
+    def joined(self, keep_columns=None, prefixes=("", ""), suffixes=("_tab1", "_tab2"), main: str = "a") -> CatalogTable:
+        """Tabella unita (P2): colonne scelte delle due tabelle, rinomine dichiarate, separazione."""
+        return _joined(self, keep_columns, prefixes, suffixes, main)
 
 
 # --------------------------------------------------------------------------
@@ -285,3 +291,142 @@ def crossmatch(table_a: CatalogTable, table_b: CatalogTable, mode: str = "best",
     )
     params = {"runner": crossmatch, "mode": mode, "max_sep": max_sep, "frame": frame, "force_body": force_body}
     return _result(ia, ib, {"sep": d * u.arcsec}, unmatched, report, notes, a, b, params)
+
+
+# --------------------------------------------------------------------------
+# P2 — Tabella unita, colonne proposte dagli UCD
+# --------------------------------------------------------------------------
+
+_EXTRA_COLUMNS = ("sep", "mahalanobis")
+
+
+def _ucd_words(ucd) -> list[str]:
+    return [w.strip().lower() for w in str(ucd or "").split(";") if w.strip()]
+
+
+def _kept(table: CatalogTable, chosen, which: str) -> list[str]:
+    if chosen is None:
+        return list(table.colnames)
+    missing = [c for c in chosen if c not in table.colnames]
+    if missing:
+        raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonne inesistenti {missing}")
+    return list(chosen)
+
+
+def _joined(result: CrossMatchResult, keep_columns, prefixes, suffixes, main: str) -> CatalogTable:
+    if main not in ("a", "b"):
+        raise ValueError("main deve essere 'a' o 'b'")
+    a, b = result.table_a, result.table_b
+    cols_a, cols_b = (None, None) if keep_columns is None else keep_columns
+    keep_a, keep_b = _kept(a, cols_a, "A"), _kept(b, cols_b, "B")
+    none_mode = result.mode == "none"
+    if none_mode:
+        keep_b = []
+        rows_a = np.asarray(result.unmatched, dtype=np.int64)
+        rows_b = np.zeros(0, dtype=np.int64)
+    else:
+        rows_a = np.asarray(result.pairs["idx_a"], dtype=np.int64)
+        rows_b = np.asarray(result.pairs["idx_b"], dtype=np.int64)
+    if len(rows_a) > a.limits.max_rows:
+        raise CrossmatchError("TABLE_TOO_LARGE", f"tabella unita di {len(rows_a)} righe, oltre il tetto di "
+                              f"{a.limits.max_rows}")
+    extras = [f"xmatch_{n}" for n in _EXTRA_COLUMNS if n in result.pairs.colnames and not none_mode]
+    conflicts = (set(keep_a) & set(keep_b)) | ((set(keep_a) | set(keep_b)) & set(extras))
+    renames: list[tuple[str, str]] = []
+
+    def name_for(col: str, k: int) -> str:
+        if col not in conflicts:
+            return col
+        new = f"{prefixes[k]}{col}{suffixes[k]}"
+        renames.append((f"{'AB'[k]}.{col}", new))
+        return new
+
+    out = Table()
+    sources = []
+    for k, (table, keep, rows) in enumerate(((a, keep_a, rows_a), (b, keep_b, rows_b))):
+        for col in keep:
+            new = name_for(col, k)
+            if new in out.colnames or new in extras:
+                raise CrossmatchError("KEY_COLUMN_INVALID", f"nome {new!r} ripetuto anche dopo prefissi e suffissi")
+            out[new] = table.table[col][rows]
+            out[new].meta = dict(table.table[col].meta)  # copia: la tabella d'ingresso non cambia mai
+            sources.append((k, col, new))
+    for name in extras:
+        out[name] = result.pairs[name.removeprefix("xmatch_")]
+    notes: list[tuple[str, str]] = []
+    if renames:
+        notes.append(("COLUMNS_RENAMED", "rinomine: " + ", ".join(f"{old} → {new}" for old, new in renames)))
+    # Conflitti di UCD principali: prevale la tabella principale; l'altra perde meta.main.
+    main_k = 0 if main == "a" else 1
+    main_ucds = {tuple(_ucd_words((a, b)[main_k].table[col].meta.get("ucd")))
+                 for k, col, _ in sources if k == main_k and "meta.main" in _ucd_words((a, b)[k].table[col].meta.get("ucd"))}
+    stripped = []
+    for k, col, new in sources:
+        words = _ucd_words(out[new].meta.get("ucd"))
+        if k != main_k and "meta.main" in words:
+            if tuple(words) in main_ucds:
+                notes.append(("UCD_CONFLICT", f"UCD principale {out[new].meta['ucd']!r} in entrambe le tabelle: "
+                              f"prevale la tabella {'AB'[main_k]}"))
+            out[new].meta["ucd"] = ";".join(w for w in str(out[new].meta["ucd"]).split(";")
+                                            if w.strip().lower() != "meta.main")
+            stripped.append(new)
+    if stripped:
+        notes.append(("MAIN_UCD_REMOVED", f"meta.main tolto dall'UCD delle colonne {stripped} (tabella non principale)"))
+    owner = (a, b)[main_k]
+    positions = None
+    pos = owner.positions
+    if pos is not None:
+        names = {col: new for k, col, new in sources if k == main_k}
+        if pos.lon in names and pos.lat in names:
+            positions = dataclasses.replace(pos, lon=names[pos.lon], lat=names[pos.lat])
+    if positions is None:
+        notes.append(("NO_COORD_COLUMNS", "la tabella unita non ha le colonne di posizione della tabella principale"))
+    report = result.report
+    history = (f"incrocio {report.mode} di {a.origin} (A) e {b.origin} (B): {report.criterion}; {report.method}",)
+    history += tuple(f"rinomina {old} → {new}" for old, new in renames)
+    return CatalogTable(
+        table=out, source="crossmatch", origin=f"incrocio di {a.origin} e {b.origin}", retrieved_at=datetime.now(UTC),
+        file_modified=None, format="crossmatch", table_index=0, table_name="", positions=positions, body=owner.body,
+        limits=a.limits, warnings=tuple(notes) + result.warnings, history=history,
+    )
+
+
+@dataclass(frozen=True)
+class ColumnSuggestions:
+    """Colonne proposte dagli UCD (E3): posizione ed ellisse d'errore per tabella, conflitti ``meta.main``."""
+
+    positions: tuple[PositionColumns | None, ...]
+    errors: tuple[dict[str, list[str]], ...]  # ruolo ("major", "minor", "angle", "error") → colonne
+    conflicts: tuple[str, ...]
+    kind: str = "suggestion"
+
+
+_ERROR_ROLES = (("major", "phys.size.smajaxis"), ("minor", "phys.size.sminaxis"), ("angle", "pos.posang"))
+
+
+def _error_columns(table: CatalogTable) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for col in table.colnames:
+        words = _ucd_words(table.table[col].meta.get("ucd"))
+        erroneous = "stat.error" in words or "pos.errorellipse" in words
+        if not erroneous:
+            continue
+        role = next((r for r, w in _ERROR_ROLES if w in words), None)
+        if role is None and any(w.startswith("pos.eq") for w in words):
+            role = "error"
+        if role is not None:
+            out.setdefault(role, []).append(col)
+    return out
+
+
+def suggest_columns(table_a: CatalogTable, table_b: CatalogTable | None = None) -> ColumnSuggestions:
+    """Colonne di posizione (dagli UCD, modulo 13) ed errore proposte, con i conflitti di UCD ``meta.main``."""
+    tables = (table_a,) if table_b is None else (table_a, table_b)
+    conflicts: tuple[str, ...] = ()
+    if table_b is not None:
+        def mains(t):
+            return {";".join(_ucd_words(t.table[c].meta.get("ucd"))) for c in t.colnames
+                    if "meta.main" in _ucd_words(t.table[c].meta.get("ucd"))}
+        conflicts = tuple(sorted(mains(table_a) & mains(table_b)))
+    return ColumnSuggestions(positions=tuple(t.positions for t in tables),
+                             errors=tuple(_error_columns(t) for t in tables), conflicts=conflicts)

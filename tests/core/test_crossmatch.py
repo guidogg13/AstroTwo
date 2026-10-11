@@ -14,7 +14,7 @@ import pytest
 from astropy.coordinates import Galactic, SkyCoord, angular_separation
 
 from astrotwo.core.catalogs import read_table
-from astrotwo.core.crossmatch import CrossmatchError, crossmatch
+from astrotwo.core.crossmatch import CrossmatchError, crossmatch, suggest_columns
 
 VOTABLE = """<?xml version="1.0" encoding="UTF-8"?>
 <VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
@@ -211,3 +211,50 @@ def test_errors_positions(tmp_path):
     with pytest.raises(ValueError):
         crossmatch(a, a, "migliore", 1 * u.arcsec)
     assert a.table["RA"][0] == 1.0  # tabelle invariate
+
+
+# =============================================================================
+# P2 — Tabella unita e colonne proposte dagli UCD (T13, T18)
+# =============================================================================
+
+
+def test_t13_suffixes_and_ucd(tmp_path):
+    a = make_table(tmp_path / "a.xml", [10.0, 11.0], [0.0, 0.0], extra={"mag": ("mag", [1.0, 2.0])})
+    b = make_table(tmp_path / "b.xml", [10.0, 12.0], [0.0, 0.0], extra={"mag": ("mag", [5.0, 6.0])})
+    result = crossmatch(a, b, "best", 1 * u.arcsec)
+    t = result.joined()
+    assert t.colnames == ["RA_tab1", "DE_tab1", "id_tab1", "mag_tab1", "RA_tab2", "DE_tab2", "id_tab2", "mag_tab2",
+                          "xmatch_sep"]
+    assert "COLUMNS_RENAMED" in dict(t.warnings) and "A.mag → mag_tab1" in dict(t.warnings)["COLUMNS_RENAMED"]
+    assert list(t.table["mag_tab2"]) == [5.0] and t.table["mag_tab2"].unit == u.mag
+    assert t.table["xmatch_sep"].unit == u.arcsec and any("rinomina A.RA → RA_tab1" in h for h in t.history)
+    # Posizioni proposte dagli UCD e conflitto meta.main.
+    sug = suggest_columns(a, b)
+    assert (sug.positions[0].lon, sug.positions[1].lat) == ("RA", "DE") and sug.kind == "suggestion"
+    assert sug.conflicts == ("pos.eq.dec;meta.main", "pos.eq.ra;meta.main")
+    assert "UCD_CONFLICT" in dict(t.warnings) and "MAIN_UCD_REMOVED" in dict(t.warnings)
+    assert "meta.main" not in t.table["RA_tab2"].meta["ucd"] and "meta.main" in t.table["RA_tab1"].meta["ucd"]
+    assert (t.positions.lon, t.positions.lat, t.positions.frame) == ("RA_tab1", "DE_tab1", "icrs")
+    assert "meta.main" in b.table["RA"].meta["ucd"]  # tabella d'ingresso invariata
+
+
+def test_t18_joined_options(tmp_path):
+    a = make_table(tmp_path / "a.xml", [10.0, 11.0], [0.0, 0.0])
+    b = make_table(tmp_path / "b.xml", [10.0], [0.0], extra={"flux": ("Jy", [3.0])})
+    result = crossmatch(a, b, "best", 1 * u.arcsec)
+    t = result.joined(keep_columns=(["id"], ["RA", "DE", "flux", "id"]), prefixes=("A_", "B_"), suffixes=("", ""),
+                      main="b")
+    assert t.colnames == ["A_id", "RA", "DE", "flux", "B_id", "xmatch_sep"]
+    assert (t.positions.lon, t.positions.lat) == ("RA", "DE") and t.body == "celestial"
+    unmatched = crossmatch(a, b, "none", 1 * u.arcsec).joined()
+    assert unmatched.colnames == ["RA", "DE", "id"] and list(unmatched.table["id"]) == ["s1"]
+    with pytest.raises(CrossmatchError):
+        result.joined(keep_columns=(["nessuna"], None))
+    with pytest.raises(CrossmatchError):  # stesso nome anche dopo prefissi e suffissi vuoti
+        result.joined(prefixes=("", ""), suffixes=("", ""))
+    errors = make_table(tmp_path / "e.xml", [1.0], [1.0], extra={"emaj": ("arcsec", [0.1]), "emin": ("arcsec", [0.05]),
+                                                                 "epa": ("deg", [10.0])})
+    for col, ucd in (("emaj", "stat.error;phys.size.smajAxis"), ("emin", "stat.error;phys.size.sminAxis"),
+                     ("epa", "stat.error;pos.posAng")):
+        errors.table[col].meta["ucd"] = ucd
+    assert suggest_columns(errors).errors[0] == {"major": ["emaj"], "minor": ["emin"], "angle": ["epa"]}
