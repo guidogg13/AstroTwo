@@ -18,6 +18,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -38,10 +39,12 @@ __all__ = [
     "HealpixGrid",
     "HealpixMap",
     "ProbabilityMap",
+    "MocServerResult",
     "SUPPORTED_VERSIONS",
     "TIME_MAX_ORDER",
     "Moc",
     "MocError",
+    "build_moc",
     "filter_by_moc",
     "healpix_grid",
     "healpix_map",
@@ -49,6 +52,7 @@ __all__ = [
     "moc_from_probability",
     "moc_from_times",
     "moc_space_time",
+    "query_mocserver",
     "read_probability_map",
     "moc_from_image",
     "moc_from_region",
@@ -427,17 +431,22 @@ def _read_ascii(path: Path, text: str, kind: str | None) -> tuple[object, str]:
         raise _unreadable(path, exc) from exc
 
 
-def read_moc(source, *, format: str | None = None, kind: str | None = None) -> Moc:
-    """Legge un MOC FITS IVOA, JSON o testo (H22) e ne dichiara la versione.
+def read_moc(source, *, format: str | None = None, kind: str | None = None, cache=None, refresh: bool = False,
+             timeouts=None) -> Moc:
+    """Legge un MOC FITS IVOA, JSON o testo (H22), da file o da URL, e ne dichiara la versione.
 
     FITS: versione da ``MOCVERS`` (1.0, 1.1, 2.0; assente → 1.1 assunta dallo standard), tipo da ``MOCDIM``.
     JSON e testo non portano la versione; senza prefisso ``s``/``t`` il tipo si indica con ``kind``.
-    I MOC spaziali sono in ICRS per lo standard: corpo ``celestial``."""
+    I MOC spaziali sono in ICRS per lo standard: corpo ``celestial``. Da URL: prima la cache comune (04), dove
+    il MOC si conserva in FITS IVOA (D16-2), con origine e data."""
     if kind is not None:
         _check_kind(kind)
     if isinstance(source, str) and source.split("://", 1)[0].lower() in ("http", "https"):
-        raise MocError("MOC_UNREADABLE", f"{source}: la lettura da URL passa dalla rete (parte P5 del modulo)")
-    path = Path(source)
+        return _read_url(source, format, kind, cache, refresh, timeouts)
+    return _read_path(Path(source), format, kind)
+
+
+def _read_path(path: Path, format: str | None, kind: str | None) -> Moc:
     try:
         raw = path.read_bytes()
     except OSError as exc:
@@ -1127,3 +1136,226 @@ def moc_from_probability(pmap: ProbabilityMap, level: float, order_max: int) -> 
     result = Moc(moc=moc, kind="space", body="celestial", origin=f"mappa di probabilità {pmap.origin}",
                  history=(step,))
     return replace(result, warnings=tuple(notes) + (("CREDIBLE_PROBABILITY", f"{contained!r}"),))
+
+
+# --------------------------------------------------------------------------
+# P5 — Lettura da URL, MocServer (H26), build_moc (H9)
+# --------------------------------------------------------------------------
+
+_CACHE_MODULE = "16"
+
+
+def _download(url: str, timeouts) -> bytes:
+    """Scarica tutto il contenuto o niente (nessun dato parziale), con i timeout comuni di 04."""
+    import requests
+
+    with requests.get(url, timeout=timeouts.as_requests(), stream=True) as response:
+        response.raise_for_status()
+        return b"".join(response.iter_content(chunk_size=1 << 16))
+
+
+def _read_bytes(payload: bytes, format: str | None, kind: str | None, suffix: str) -> Moc:
+    import os
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(prefix="astrotwo-moc-", suffix=suffix)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        return _read_path(Path(tmp), format, kind)
+    finally:
+        os.unlink(tmp)
+
+
+def _fits_bytes(moc: Moc) -> bytes:
+    import os
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(prefix="astrotwo-moc-", suffix=".fits")
+    os.close(fd)
+    try:
+        write_moc(moc, tmp, overwrite=True)
+        return Path(tmp).read_bytes()
+    finally:
+        os.unlink(tmp)
+
+
+def _read_url(url: str, format: str | None, kind: str | None, cache, refresh: bool, timeouts) -> Moc:
+    from datetime import UTC, datetime
+
+    import requests
+
+    from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, SharedCache
+
+    timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
+    cache = SharedCache() if cache is None else cache
+    keys = {"fits": f"url:{url}", "json": f"url-from-json:{url}", "ascii": f"url-from-ascii:{url}"}
+    cached, cached_fmt = None, None
+    for fmt, key in keys.items():
+        cached = cache.get(_CACHE_MODULE, key)
+        if cached is not None:
+            cached_fmt = fmt
+            break
+    notes: list[tuple[str, str]] = []
+    if cached is None or refresh:
+        try:
+            payload = _download(url, timeouts)
+        except requests.exceptions.RequestException as exc:
+            if cached is None:
+                raise MocError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
+                               f"{timeouts.read:g} s lettura): {exc}", url=url) from exc
+            notes.append(("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
+                          f"{cached.retrieved_at.isoformat()}"))
+        else:
+            fmt = format if format is not None else _detect_format(payload[:80])
+            moc = _read_bytes(payload, fmt, kind, f".{fmt}")
+            retrieved_at = datetime.now(UTC)
+            stored = payload if fmt == "fits" else _fits_bytes(moc)  # in cache sempre FITS IVOA (D16-2)
+            try:
+                cache.put(_CACHE_MODULE, keys[fmt], stored, origin=url, retrieved_at=retrieved_at)
+            except CacheError as exc:  # es. CACHE_FULL: il MOC si usa comunque
+                notes.append((exc.code, exc.message))
+            step = f"letto da {url} ({fmt}, versione {moc.version}), scaricato il {retrieved_at.isoformat()}"
+            return replace(moc, origin=url, history=(step,), warnings=tuple(notes) + moc.warnings)
+    moc = _read_bytes(cached.data, "fits", kind, ".fits")
+    version = moc.version if cached_fmt == "fits" else f"{VERSION_NOT_DECLARED} ({cached_fmt} originale)"
+    if not notes:
+        notes.append(("FROM_CACHE", f"copia in cache di {url}, scaricata il {cached.retrieved_at.isoformat()}"
+                      + ("" if cached_fmt == "fits" else f", conservata in FITS IVOA (originale {cached_fmt})")))
+    step = f"letto da {url} (copia in cache, versione {version})"
+    return replace(moc, origin=url, version=version, history=(step,), warnings=tuple(notes) + moc.warnings)
+
+
+#: Valori ammessi di ``intersect`` del MocServer (verificati il 2026-10-11 sul modulo del servizio).
+MOCSERVER_INTERSECT: tuple[str, ...] = ("overlaps", "enclosed", "covers")
+_MOCSERVER_RESERVED = {"ra", "dec", "sr", "time", "stc", "moc", "url", "intersect", "spacesys", "timesys", "get",
+                       "fields", "fmt", "casesensitive", "maxrec", "expr", "op", "order"}
+_PROPERTY_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.*?]*$")
+
+
+@dataclass(frozen=True)
+class MocServerResult:
+    """Collezioni che coprono la regione (H26), con la richiesta registrata (origine e data della risposta)."""
+
+    records: tuple[dict, ...]
+    request: object  # RequestRecord del modulo 14
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def ids(self) -> tuple[str, ...]:
+        return tuple(str(r.get("ID")) for r in self.records)
+
+
+def query_mocserver(region, *, properties: dict | None = None, intersect: str = "overlaps",
+                    fields: tuple[str, ...] = ("ID", "obs_title"), cache=None, refresh: bool = False,
+                    timeouts=None) -> MocServerResult:
+    """Collezioni del MocServer del CDS che coprono la regione (H26): cerchio (cono ``RA``/``DEC``/``SR`` in ICRS)
+    o MOC spaziale (``moc=`` in testo, POST); i poligoni si passano come MOC (``moc_from_region``). Filtri
+    sulle proprietà del servizio con ``properties``. Rete e cache del 14; senza rete ``MOCSERVER_UNAVAILABLE``."""
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.cache import NETWORK_TIMEOUTS
+
+    timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
+    if intersect not in MOCSERVER_INTERSECT:
+        raise ValueError(f"intersect {intersect!r}: ammessi {', '.join(MOCSERVER_INTERSECT)} (il servizio ignora in "
+                         "silenzio un valore sconosciuto)")
+    params: dict[str, str] = {"get": "record", "fmt": "json", "intersect": intersect, "spacesys": "C"}
+    if isinstance(region, CircleRegion):
+        lon, lat, note = _to_icrs(region.center, "centro del cerchio")
+        radius = region.radius
+        if not isinstance(radius, u.Quantity) or not radius.isscalar or not radius.unit.is_equivalent(u.deg) \
+                or not 0 < float(radius.to_value(u.deg)) <= 180:
+            raise MocError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità in (0°, 180°]")
+        params.update({"RA": repr(float(lon[0])), "DEC": repr(float(lat[0])),
+                       "SR": repr(float(radius.to_value(u.deg)))})
+        method, where = "GET", f"cerchio ICRS ({lon[0]!r}°, {lat[0]!r}°) raggio {float(radius.to_value(u.deg))!r}°{note}"
+    elif isinstance(region, Moc):
+        if region.kind != "space":
+            raise MocError("MOC_TYPE_MISMATCH", f"filtro spaziale del MocServer con un MOC {region.kind}")
+        _check_celestial(region.body, f"MOC {region.origin}")
+        params["moc"] = region.moc.to_string("ascii")
+        method, where = "POST", f"MOC {region.origin} (ordine {region.space_order})"
+    elif isinstance(region, PolygonRegion):
+        raise TypeError("poligono: crearne prima il MOC con moc_from_region (il servizio non accetta lo STC con il "
+                        "sistema ICRS dichiarato, verifica del 2026-10-11)")
+    else:
+        raise TypeError("region: CircleRegion o Moc spaziale")
+    for name, value in (properties or {}).items():
+        if not isinstance(name, str) or not _PROPERTY_NAME.match(name) or name.lower() in _MOCSERVER_RESERVED:
+            raise ValueError(f"proprietà {name!r} non ammessa come filtro")
+        params[name] = str(value)
+    if not fields or not all(isinstance(f, str) and _PROPERTY_NAME.match(f) for f in fields):
+        raise ValueError("fields: nomi di proprietà del MocServer")
+    params["fields"] = ",".join(fields)
+    try:
+        response = vo._http("mocserver", vo.MOCSERVER_URL, params, method=method, cache=cache, refresh=refresh,
+                            timeouts=timeouts)
+    except vo.VoProtocolsError as exc:
+        if exc.code == "NET_TIMEOUT":
+            raise MocError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile, nessun filtro spaziale: "
+                           f"{exc.message}") from exc
+        raise MocError(exc.code, exc.message) from exc
+    try:
+        records = json.loads(response.payload.decode("utf-8"))
+        if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+            raise ValueError("attesa una lista di record")
+    except (UnicodeDecodeError, ValueError) as exc:
+        text = response.payload[:200].decode("utf-8", "replace")
+        raise MocError("SERVICE_ERROR", f"{vo.MOCSERVER_URL}: risposta non leggibile ({exc}): {text!r}") from exc
+    notes = response.notes + vo._store(response, "mocserver", cache)
+    arguments = {"region": where, "properties": dict(properties or {}), "intersect": intersect,
+                 "fields": list(fields)}
+    record = vo._record("mocserver", "query_mocserver", arguments, response, len(records))
+    description = (f"{len(records)} collezioni del MocServer ({intersect}) per {where}"
+                   + (f", filtri {dict(properties)}" if properties else "")
+                   + f"; risposta del {response.retrieved_at.isoformat()}"
+                   + (" (dalla cache)" if response.from_cache else ""))
+    return MocServerResult(records=tuple(records), request=record, description=description, warnings=tuple(notes))
+
+
+_BUILD_KINDS = ("image", "catalog", "moc")
+
+
+def build_moc(sources, *, order_max: int, output=None, format: str = "fits", overwrite: bool = False) -> Moc:
+    """Generazione di un MOC senza interfaccia (H9): unione dei MOC delle sorgenti, scritta in ``output`` se dato.
+
+    Sorgenti: ``CircleRegion``/``PolygonRegion``, ``CatalogTable`` (13), ``FitsImage`` (11), ``Moc``, oppure
+    coppie esplicite ``("image", percorso)``, ``("catalog", percorso)``, ``("moc", percorso)`` (il tipo di un
+    file non si indovina). Per ora solo funzione: la riga di comando arriverà con il 24."""
+    from astrotwo.core.catalogs import CatalogTable, read_table
+    from astrotwo.core.images_fits import FitsImage, load_image
+
+    order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
+    items = list(sources)
+    if not items:
+        raise ValueError("build_moc: nessuna sorgente")
+    mocs = []
+    for item in items:
+        if isinstance(item, tuple) and len(item) == 2 and item[0] in _BUILD_KINDS:
+            what, path = item
+            item = load_image(path) if what == "image" else read_table(path) if what == "catalog" \
+                else read_moc(path, kind="space")
+        if isinstance(item, (CircleRegion, PolygonRegion)):
+            mocs.append(moc_from_region(item, order))
+        elif isinstance(item, CatalogTable):
+            mocs.append(moc_from_catalog(item, order))
+        elif isinstance(item, FitsImage):
+            mocs.append(moc_from_image(item, order))
+        elif isinstance(item, Moc):
+            if item.kind != "space":
+                raise MocError("MOC_TYPE_MISMATCH", f"build_moc: MOC {item.kind}, attesi MOC spaziali")
+            mocs.append(item)
+        else:
+            raise TypeError(f"build_moc: sorgente non riconosciuta {item!r}; i file vanno indicati come "
+                            "('image'|'catalog'|'moc', percorso)")
+    result = mocs[0]
+    for other in mocs[1:]:
+        result = result.union(other)
+    steps = tuple(dict.fromkeys(sum((m.history for m in mocs), ())))
+    result = replace(result, origin=f"build_moc di {len(mocs)} sorgenti",
+                     history=steps + (f"build_moc: unione di {len(mocs)} MOC, ordine richiesto {order}",))
+    if output is not None:
+        write_moc(result, output, format=format, overwrite=overwrite)
+        result = replace(result, history=result.history + (f"scritto in {output} ({format})",))
+    return result

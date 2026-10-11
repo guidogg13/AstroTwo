@@ -250,6 +250,43 @@ di un dato sia sempre verificabile e confrontabile.
   dell'ordine della mappa la regione si porta a `order_max` per eccesso
   (`ORDER_DEGRADED`).
 
+**P5 — rete e `build_moc` (scritta il 2026-10-11):**
+
+- **Interfaccia del MocServer verificata il 2026-10-11** (pagina del
+  servizio, v5.10 giugno 2024, e richieste di prova): cono `RA`, `DEC`, `SR`
+  in gradi ICRS; `stc=` (Circle/Polygon); `moc=` in testo o JSON, anche in
+  POST; `intersect` = `overlaps` (default), `enclosed`, `covers`;
+  `spacesys=C`; filtri sulle proprietà (`campo=modello`, `*` e `?`);
+  `get=record`, `fmt=json`, `fields=`. Due comportamenti non documentati:
+  un valore sconosciuto di `intersect` è **ignorato in silenzio** (il 16 lo
+  rifiuta prima dell'invio) e lo STC con il sistema dichiarato (`Polygon
+  ICRS …`, `Circle ICRS …`, come indica la pagina) dà "STC parsing error",
+  mentre senza sistema è accettato. **Scelta minore (da confermare):**
+  cerchi inviati come cono `RA`/`DEC`/`SR`, MOC spaziali come `moc=` in
+  POST; **i poligoni si passano come MOC** (`moc_from_region`, interno
+  secondo la nostra regola), mai come STC.
+- **`query_mocserver(region, *, properties=None, intersect="overlaps",
+  fields=("ID", "obs_title"), cache, refresh, timeouts)`** →
+  `MocServerResult` (record, `ids`, richiesta registrata del 14 con URL,
+  parametri e data, descrizione). Rete con `_http`/`_store`/`_record` del
+  14 (`MOCSERVER_URL`), cache e registro comuni; senza rete e senza copia in
+  cache → `MOCSERVER_UNAVAILABLE`; con la copia in cache si usa quella
+  (risposta completa di una data precedente, dichiarata `FROM_CACHE`);
+  risposta non JSON (es. pagina d'errore HTML) → `SERVICE_ERROR`.
+- **Lettura da URL (H22):** `read_moc(url, …, cache, refresh, timeouts)`;
+  prima la cache comune (modulo `16`), download intero o niente con i
+  timeout di `04`; in cache il MOC si conserva **in FITS IVOA** (D16-2): il
+  FITS originale così com'è, un JSON o un testo convertito in FITS 2.0 (la
+  versione riletta dalla cache resta "non dichiarata nel formato" con il
+  formato originale); rete assente → copia in cache dichiarata, senza copia
+  `NET_TIMEOUT`.
+- **`build_moc(sources, *, order_max, output=None, format="fits",
+  overwrite=False)`** (H9): unione dei MOC di cerchi, poligoni, cataloghi,
+  immagini e MOC; i file si indicano con il tipo esplicito
+  (`("image", percorso)`, `("catalog", percorso)`, `("moc", percorso)`):
+  **il tipo di un file non si indovina** (scelta minore); scrittura
+  facoltativa con `write_moc`. Solo funzione; riga di comando con il 24.
+
 ## 4. Cosa NON fa
 
 - Non scarica immagini né cataloghi (11, 12, 14).
@@ -325,8 +362,12 @@ di un dato sia sempre verificabile e confrontabile.
   IVOA 2.0, JSON o testo (D16-2).
 - **`Moc.describe()`** — tipo, sistema, ordini, corpo, area (steradianti e
   frazione di cielo) o durata, numero di celle, origine e versione.
-- **`query_mocserver(region_or_moc, property_filter)`** (H26) — collezioni
-  che coprono la regione, con provenienza della risposta.
+- **`query_mocserver(region, *, properties=None, intersect="overlaps",
+  fields=("ID", "obs_title"), cache=None, refresh=False, timeouts=None)`**
+  (H26) — collezioni che coprono la regione (`CircleRegion` o MOC
+  spaziale), con provenienza della risposta (`MocServerResult`).
+- **`build_moc(sources, *, order_max, output=None, format="fits",
+  overwrite=False)`** (H9).
 
 ## 8. Librerie e standard di riferimento
 
@@ -398,6 +439,8 @@ di un dato sia sempre verificabile e confrontabile.
 | Operazione o filtro tra MOC/dati di corpi diversi | rifiuto; forzatura solo con opzione esplicita citata nel risultato (D19-4) | `BODY_MISMATCH` |
 | Versione del MOC non supportata | nessun MOC letto, errore con la versione trovata | `MOC_VERSION_UNSUPPORTED` |
 | MocServer non raggiungibile | nessun filtro spaziale, errore esplicito | `MOCSERVER_UNAVAILABLE` |
+| Risposta del MocServer non leggibile (es. pagina d'errore) | nessun elenco | `SERVICE_ERROR` |
+| URL di un MOC non raggiungibile e senza copia in cache | nessun MOC | `NET_TIMEOUT` |
 | JSON o testo senza prefisso di tipo e senza `kind` | nessuna lettura: il tipo non si assume | `MOC_TYPE_REQUIRED` |
 | Scrittura in formato IVOA di un MOC di un corpo diverso da `celestial` | rifiuto (lo standard è solo ICRS) | `MOC_BODY_UNSUPPORTED` |
 | File con `MOCVERS = '2.1'` | rifiuto finché D16-6 non è decisa | `MOC_VERSION_UNSUPPORTED` |
@@ -427,7 +470,7 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T5 | Mismatch di unità | unire un MOC spaziale con uno temporale | `MOC_TYPE_MISMATCH` | test di unità |
 | T6 | Mappe HEALPix | punti ai centri di celle note (3 e 1) con flussi, uno mancante; 500 punti casuali; griglia dell'ordine 1 e griglia limitata da un MOC | conteggi e somme esatti; valori uguali a `astropy-healpix` + `numpy` ricalcolati nel test; schema NESTED e sistema ICRS dichiarati; contorni uguali a `boundaries_lonlat`; il MOC dato non cambia; `GRID_TOO_LARGE` | ricalcolo con la libreria scelta |
 | T7 | Versioni MOC (H22) | file di prova **scritti nel test secondo il testo dello standard** (mai file di Aladin): FITS 1.x (intestazioni di 1.0/1.1, colonna `UNIQ` `1J`), 2.0 `NUNIQ` e `RANGE` (spaziale, temporale, spazio-temporale), JSON con e senza prefisso, testo; `MOCVERS='2.1'`; versione sconosciuta; `kind` mancante | stesse celle lette da `mocpy`; versione riportata ("1.1, assunta…", "2.0", "non dichiarata nel formato"); 2.1 → `MOC_VERSION_UNSUPPORTED` (D16-6); `MOC_TYPE_REQUIRED`; andata e ritorno in scrittura | confronto con `mocpy` |
-| T8 | Filtro MocServer (H26) | `query_mocserver` su una regione con risposta simulata | elenco delle collezioni con origine e data | servizio simulato (test di rete separato) |
+| T8 | Filtro MocServer (H26) | `query_mocserver` con un cerchio galattico e con un MOC su un servizio simulato; seconda richiesta uguale; `intersect` sconosciuto; proprietà riservata; poligono; risposta HTML d'errore; lettura di un MOC da URL (FITS e JSON, poi servizio spento); `build_moc` | parametri inviati (centro convertito in ICRS uguale ad astropy, `intersect`, `spacesys=C`, `moc` in POST); elenco delle collezioni con origine e data; seconda dalla cache; errori del §10; in cache solo FITS IVOA; `build_moc` uguale all'unione dei costruttori | servizio simulato (test di rete separati sul MocServer vero: collezioni attorno a M31 e lettura di un MOC da URL) |
 | T11 | Tempo e probabilità (P4) | intervalli UTC e istanti TT; ST-MOC da due osservazioni con proiezioni; mappa multi-ordine sintetica nel formato LIGO; mappa piatta RING con colonna vettoriale; somma sbagliata, densità negativa, unità mancante, `COORDSYS='G'` | celle uguali a `mocpy` sui tempi convertiti in TCB con `astropy.time` nel test; regione di credibilità uguale al calcolo indipendente del test (densità decrescente, probabilità ≥ livello) e probabilità contenuta uguale; RING→NESTED uguale ad `astropy-healpix`; errori del §10 | ricalcolo con astropy, `astropy-healpix` e `numpy` |
 | T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (k = 1) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
 | T9 | MocServer assente (H26) | `query_mocserver` senza rete | `MOCSERVER_UNAVAILABLE`, nessun elenco parziale | test di unità |
@@ -509,3 +552,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-11 | Claude Code | **P2 scritta** (`moc_from_region` con `CircleRegion`/`PolygonRegion`, `moc_from_catalog`, `moc_from_image`; T1, T2, T10): cerchio con `from_cone` (per eccesso), poligono con `from_polygon` (celle di bordo diverse tra i due versi, verificato), catalogo una cella per sorgente, immagine dai pixel validi campionati a passo ≤ metà cella con il WCS dell'11 (scelta minore da confermare, motivi in §3). Nuovi casi in §10. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P3 scritta** (`filter_by_moc`/`FilterResult`, `Moc.contains`, `healpix_map`/`HealpixMap`, `healpix_grid`/`HealpixGrid`; T4, T6): NESTED in ICRS con `astropy-healpix`; righe senza posizione mai selezionate; limite della griglia senza MOC (scelta minore, `GRID_TOO_LARGE`); verificato che `refine_to_order` di `mocpy` modifica sul posto. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P4 scritta** (`moc_from_times`, `moc_space_time`, `read_probability_map`/`ProbabilityMap`, `moc_from_probability`; metodi temporali di `Moc`; T11): TCB con `astropy.time`; formato delle mappe LIGO/Virgo/KAGRA verificato sulla guida pubblica; regione di credibilità a celle intere con probabilità ≥ livello (scelta minore da confermare), probabilità contenuta dichiarata; nuovi `TIME_RANGE_INVALID`, `PROBABILITY_SUM_INVALID`, `PROBABILITY_MAP_INVALID`. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **P5 scritta — modulo 16 completo tranne i pezzi fermi D16-6 e D16-7** (`query_mocserver`/`MocServerResult`, lettura da URL in `read_moc`, `build_moc`; T8, T9): interfaccia del MocServer verificata (due comportamenti non documentati: `intersect` sconosciuto ignorato, STC con sistema rifiutato), rete e cache del 14; poligoni inviati come MOC (scelta minore); MOC da URL in cache sempre in FITS IVOA; tipo dei file di `build_moc` esplicito. Stato `approvato` invariato. |

@@ -661,3 +661,121 @@ def test_probability_map_errors(tmp_path):
     with pytest.raises(MocError) as err:
         read_probability_map(tmp_path / "g.fits")
     assert err.value.code == "PROBABILITY_MAP_INVALID"
+
+
+# =============================================================================
+# P5 — Lettura da URL, MocServer (T8, T9), build_moc (H9)
+
+from astrotwo.core.cache import NetworkTimeouts  # noqa: E402
+from astrotwo.core.moc import build_moc, query_mocserver  # noqa: E402
+
+MOCSERVER_ANSWER = '[{"ID": "CDS/II/246/out", "obs_title": "2MASS"}, {"ID": "CDS/I/355/gaiadr3", "obs_title": "Gaia"}]'
+
+
+def test_t8_mocserver_simulated(service, cache, monkeypatch):
+    import astrotwo.core.vo_protocols as vo
+
+    service.routes["/ms"] = lambda request: (200, "application/json", MOCSERVER_ANSWER)
+    monkeypatch.setattr(vo, "MOCSERVER_URL", service.url + "/ms")
+    center = SkyCoord(121.17 * u.deg, -21.57 * u.deg, frame=Galactic())  # convertito in ICRS
+    result = query_mocserver(CircleRegion(center, 0.1 * u.deg), properties={"ID": "CDS/*"}, cache=cache)
+    params = service.requests[-1]["params"]
+    icrs = center.icrs
+    assert float(params["RA"]) == pytest.approx(icrs.ra.deg, abs=1e-12)
+    assert float(params["DEC"]) == pytest.approx(icrs.dec.deg, abs=1e-12) and float(params["SR"]) == 0.1
+    assert (params["intersect"], params["spacesys"], params["get"], params["fmt"], params["ID"]) == \
+        ("overlaps", "C", "record", "json", "CDS/*")
+    assert result.ids == ("CDS/II/246/out", "CDS/I/355/gaiadr3") and result.request.url == service.url + "/ms"
+    assert result.request.retrieved_at is not None and "risposta del" in result.description
+    again = query_mocserver(CircleRegion(center, 0.1 * u.deg), properties={"ID": "CDS/*"}, cache=cache)
+    assert again.request.from_cache and len(service.requests) == 1 and "FROM_CACHE" in dict(again.warnings)
+    # MOC come regione: inviato in POST nel parametro moc (testo dello standard).
+    moc = moc_from_region(CircleRegion(SkyCoord(10 * u.deg, 41 * u.deg), 0.2 * u.deg), 8)
+    query_mocserver(moc, intersect="enclosed", cache=cache)
+    last = service.requests[-1]
+    assert last["method"] == "POST" and last["params"]["moc"] == moc.moc.to_string("ascii")
+    assert last["params"]["intersect"] == "enclosed"
+    with pytest.raises(ValueError):
+        query_mocserver(moc, intersect="bogus", cache=cache)
+    with pytest.raises(ValueError):
+        query_mocserver(moc, properties={"moc": "x"}, cache=cache)
+    with pytest.raises(TypeError):
+        query_mocserver(PolygonRegion(SkyCoord([0, 1, 1] * u.deg, [0, 0, 1] * u.deg)), cache=cache)
+    service.routes["/ms"] = lambda request: (200, "text/html", "<html><body><p>Error: STC parsing</p></body></html>")
+    with pytest.raises(MocError) as err:
+        query_mocserver(moc, cache=cache, refresh=True)
+    assert err.value.code == "SERVICE_ERROR"
+
+
+def test_t9_mocserver_unavailable(cache, monkeypatch):
+    import socket
+
+    import astrotwo.core.vo_protocols as vo
+
+    with socket.socket() as sock:  # porta locale libera, nessun servizio in ascolto
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    monkeypatch.setattr(vo, "MOCSERVER_URL", f"http://127.0.0.1:{port}/ms")
+    with pytest.raises(MocError) as err:
+        query_mocserver(CircleRegion(SkyCoord(10 * u.deg, 41 * u.deg), 0.1 * u.deg), cache=cache,
+                        timeouts=NetworkTimeouts(connect=1.0, read=1.0))
+    assert err.value.code == "MOCSERVER_UNAVAILABLE"
+
+
+def test_read_moc_url(service, cache, tmp_path):
+    moc = ascii_moc(tmp_path, "a.txt", 5, [1, 2, 3])
+    payload = write_moc(moc, tmp_path / "a.fits").read_bytes()
+    service.routes["/a.fits"] = lambda request: (200, "application/fits", payload)
+    service.routes["/b.json"] = lambda request: (200, "application/json", '{"s": {"5": [7]}}')
+    got = read_moc(service.url + "/a.fits", cache=cache)
+    assert got == moc and got.version == "2.0" and got.origin == service.url + "/a.fits"
+    again = read_moc(service.url + "/a.fits", cache=cache)
+    assert again == moc and "FROM_CACHE" in dict(again.warnings) and len(service.requests) == 1
+    from_json = read_moc(service.url + "/b.json", cache=cache)
+    assert from_json.version == VERSION_NOT_DECLARED
+    cached = cache.get("16", f"url-from-json:{service.url}/b.json")
+    assert cached.data.startswith(b"SIMPLE") and cached.origin == service.url + "/b.json"  # FITS IVOA (D16-2)
+    service.close()  # rete assente: copia in cache, dichiarata
+    offline = read_moc(service.url + "/b.json", cache=cache, refresh=True, timeouts=NetworkTimeouts(1.0, 1.0))
+    assert offline.moc == from_json.moc and "rete non disponibile" in dict(offline.warnings)["FROM_CACHE"]
+    assert "json originale" in offline.version
+    with pytest.raises(MocError) as err:
+        read_moc(service.url + "/c.fits", cache=cache, timeouts=NetworkTimeouts(1.0, 1.0))
+    assert err.value.code == "NET_TIMEOUT"
+
+
+def test_build_moc(tmp_path):
+    from test_crossmatch import make_table
+
+    table = make_table(tmp_path / "c.xml", [10.0, 200.0], [20.0, -30.0])
+    image_path = tmp_path / "i.fits"
+    write_image(image_path, np.ones((20, 30), dtype=np.float32))
+    circle = CircleRegion(SkyCoord(50 * u.deg, 0 * u.deg), 1 * u.deg)
+    built = build_moc([circle, table, ("image", image_path)], order_max=8, output=tmp_path / "out.fits")
+    # Ricalcolo nel test: unione dei costruttori del modulo con mocpy.
+    from astrotwo.core.images_fits import load_image
+
+    expected = moc_from_region(circle, 8).union(moc_from_catalog(table, 8)).union(moc_from_image(load_image(image_path), 8))
+    assert built == expected and read_moc(tmp_path / "out.fits") == expected
+    assert "build_moc: unione di 3 MOC" in built.history[-2] and "scritto in" in built.history[-1]
+    with pytest.raises(TypeError):
+        build_moc([str(image_path)], order_max=8)  # il tipo di un file non si indovina
+    with pytest.raises(MocError) as err:
+        build_moc([circle], order_max=None)
+    assert err.value.code == "HEALPIX_ORDER_INVALID"
+
+
+@pytest.mark.network
+def test_t8_mocserver_network(cache):
+    m31 = SkyCoord(10.6847 * u.deg, 41.2690 * u.deg)
+    result = query_mocserver(CircleRegion(m31, 0.1 * u.deg), properties={"ID": "CDS/II/246*"}, cache=cache)
+    assert "CDS/II/246/out" in result.ids and result.request.url.startswith("https://")
+    moc = moc_from_region(CircleRegion(m31, 0.1 * u.deg), 9)
+    assert "CDS/II/246/out" in query_mocserver(moc, properties={"ID": "CDS/II/246*"}, cache=cache).ids
+
+
+@pytest.mark.network
+def test_read_moc_url_network(cache):
+    url = "https://alasky.cds.unistra.fr/MocServer/query?ID=CDS/II/246/out&get=moc&order=3&fmt=fits"
+    moc = read_moc(url, cache=cache)
+    assert moc.kind == "space" and moc.body == "celestial" and moc.space_order <= 3 and moc.sky_fraction > 0.9
