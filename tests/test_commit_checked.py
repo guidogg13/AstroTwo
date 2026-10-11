@@ -23,3 +23,9 @@ def test_network_failures_split_connection_from_other(tmp_path):
     by_connection, other = commit_checked.network_failures(junit)
     assert by_connection == ["t::conn (connessione: ConnectionError)"]
     assert other == ["t::wrong"]
+
+
+def test_note_goes_before_attribution():
+    message = "Titolo\n\nCorpo\n\nCo-Authored-By: X <x@example.org>"
+    assert commit_checked.with_note(message, "Nota") == "Titolo\n\nCorpo\n\nNota\n\nCo-Authored-By: X <x@example.org>"
+    assert commit_checked.with_note("Titolo", "Nota") == "Titolo\n\nNota"

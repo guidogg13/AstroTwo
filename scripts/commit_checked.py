@@ -41,6 +41,14 @@ def network_failures(junit: Path) -> tuple[list[str], list[str]]:
     return by_connection, other
 
 
+def with_note(message: str, note: str) -> str:
+    """Aggiunge la nota prima delle righe finali di attribuzione (``Co-Authored-By``)."""
+    body, sep, trailer = message.rpartition("\n\nCo-Authored-By:")
+    if not sep:
+        return f"{message}\n\n{note}"
+    return f"{body}\n\n{note}{sep}{trailer}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("-m", "--message", required=True, help="messaggio di commit")
@@ -53,8 +61,8 @@ def main() -> int:
         return 1
 
     if args.no_network:
-        message = args.message + ("\n\nTest di rete non eseguiti in questo commit: si eseguono "
-                                  "alla fine del modulo (02-convenzioni.md §8, punto 9).")
+        message = with_note(args.message, "Test di rete non eseguiti in questo commit: si eseguono "
+                                          "alla fine del modulo (02-convenzioni.md §8, punto 9).")
         return subprocess.run(["git", "commit", "-m", message], cwd=ROOT).returncode
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -72,8 +80,8 @@ def main() -> int:
 
     message = args.message
     if by_connection:
-        message += ("\n\nTest di rete falliti solo per connessione dopo le ripetizioni "
-                    "(02-convenzioni.md §8, punto 9):\n" + "\n".join(f"- {t}" for t in by_connection))
+        message = with_note(message, "Test di rete falliti solo per connessione dopo le ripetizioni "
+                            "(02-convenzioni.md §8, punto 9):\n" + "\n".join(f"- {t}" for t in by_connection))
     return subprocess.run(["git", "commit", "-m", message], cwd=ROOT).returncode
 
 
