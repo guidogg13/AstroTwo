@@ -34,10 +34,16 @@ __all__ = [
     "MOC_KINDS",
     "PolygonRegion",
     "SPACE_MAX_ORDER",
+    "FilterResult",
+    "HealpixGrid",
+    "HealpixMap",
     "SUPPORTED_VERSIONS",
     "TIME_MAX_ORDER",
     "Moc",
     "MocError",
+    "filter_by_moc",
+    "healpix_grid",
+    "healpix_map",
     "moc_from_catalog",
     "moc_from_image",
     "moc_from_region",
@@ -230,6 +236,14 @@ class Moc:
             raise MocError("MOC_OPERATION_UNSUPPORTED", "complemento di un MOC spazio-temporale non disponibile in "
                            f"{_PROVENANCE} (D16-7)")
         return self._derived(self.moc.complement(), "complemento", [])
+
+    def contains(self, coords) -> np.ndarray:
+        """Maschera booleana delle posizioni (``SkyFrame``, sistema dichiarato) che cadono nel MOC spaziale;
+        le posizioni si convertono in ICRS con il modulo 10."""
+        if self.kind != "space":
+            raise MocError("MOC_TYPE_MISMATCH", f"contains su posizioni: serve un MOC spaziale, non {self.kind}")
+        lon, lat, _ = _to_icrs(coords, "posizioni")
+        return np.asarray(self.moc.contains_lonlat(lon=lon * u.deg, lat=lat * u.deg), dtype=bool)
 
     def __eq__(self, other: object) -> bool:  # stesse celle, stesso tipo e stesso corpo
         if not isinstance(other, Moc):
@@ -676,3 +690,193 @@ def _to_icrs_finite(coords):
 
     kept = SkyFrame(coord=coords.coord[finite], epoch=coords.epoch, frame_defaults_note=coords.frame_defaults_note)
     return _to_icrs(kept, "punti dell'immagine")
+
+
+# --------------------------------------------------------------------------
+# P3 — Filtro per MOC, mappe e griglie HEALPix (E6, H12)
+# --------------------------------------------------------------------------
+
+#: Schema e sistema delle mappe e griglie HEALPix (decisione del proprietario del 2026-10-11).
+HEALPIX_SCHEME = "NESTED"
+HEALPIX_FRAME = "ICRS"
+#: Celle massime di una griglia senza MOC che la limiti (tutto il cielo fino all'ordine 7).
+GRID_MAX_CELLS = 12 * 4 ** 7
+
+
+def _healpix(order: int):
+    from astropy.coordinates import ICRS
+    from astropy_healpix import HEALPix
+
+    return HEALPix(nside=2 ** order, order="nested", frame=ICRS())
+
+
+def _healpix_provenance() -> str:
+    import astropy_healpix
+
+    return f"astropy-healpix {astropy_healpix.__version__}"
+
+
+def _check_bodies(table, moc: Moc, force_body: bool) -> list[tuple[str, str]]:
+    if table.body is None:
+        raise MocError("BODY_UNKNOWN", f"tabella {table.origin}: corpo non ricavabile, nessun filtro")
+    if table.body == moc.body:
+        return []
+    if not force_body:
+        raise MocError("BODY_MISMATCH", f"corpi diversi: tabella {table.body!r}, MOC {moc.body!r}; forzabile solo "
+                       "con force_body=True (citato nel risultato)")
+    return [("BODY_FORCED", f"filtro tra corpi diversi forzato: tabella {table.body!r}, MOC {moc.body!r}")]
+
+
+@dataclass(frozen=True)
+class FilterResult:
+    """Selezione per MOC (E6): solo indici, la tabella non cambia (§9)."""
+
+    mask: np.ndarray  # booleana, una voce per riga della tabella
+    inside: bool
+    excluded: int  # righe senza posizione: né dentro né fuori, mai selezionate
+    moc_origin: str
+    table_origin: str
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def indices(self) -> np.ndarray:
+        return np.flatnonzero(self.mask)
+
+    @property
+    def count(self) -> int:
+        return int(np.count_nonzero(self.mask))
+
+
+def filter_by_moc(table, moc: Moc, inside: bool = True, *, force_body: bool = False) -> FilterResult:
+    """Righe della tabella (``CatalogTable`` del 13) dentro (``inside=True``) o fuori dal MOC spaziale (E6).
+
+    Posizioni convertite in ICRS con il 10; righe senza posizione mai selezionate e contate. Restituisce indici,
+    la tabella non cambia. Calcolo: ``mocpy.MOC.contains_lonlat``."""
+    if not isinstance(moc, Moc):
+        raise TypeError("filter_by_moc: serve un Moc")
+    if moc.kind != "space":
+        raise MocError("MOC_TYPE_MISMATCH", f"filtro di posizioni con un MOC {moc.kind}: serve un MOC spaziale")
+    notes = _check_bodies(table, moc, force_body)
+    lon, lat, valid, note = _catalog_positions(table, f"tabella {table.origin}")
+    mask = np.zeros(len(valid), dtype=bool)
+    if lon.size:
+        mask[valid] = np.asarray(moc.moc.contains_lonlat(lon=lon * u.deg, lat=lat * u.deg, keep_inside=bool(inside)),
+                                 dtype=bool)
+    excluded = int(np.count_nonzero(~valid))
+    if excluded:
+        notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione: mai selezionate"))
+    epoch = table.positions.epoch
+    description = (f"righe {'dentro' if inside else 'fuori da'}l MOC {moc.origin}: {int(np.count_nonzero(mask))} su "
+                   f"{len(mask)}{note}; epoca delle posizioni {epoch if epoch else 'non dichiarata'}, non propagata "
+                   f"(calcolo: {moc.provenance}, contains_lonlat)")
+    return FilterResult(mask=mask, inside=bool(inside), excluded=excluded, moc_origin=moc.origin,
+                        table_origin=table.origin, description=description, warnings=tuple(notes))
+
+
+@dataclass(frozen=True)
+class HealpixMap:
+    """Mappa HEALPix: un valore per cella, schema NESTED in ICRS, ordine dichiarato (H12)."""
+
+    values: np.ndarray  # lunghezza 12 × 4**order, indice = cella NESTED
+    order: int
+    quantity: str  # "count" o "sum:<colonna>"
+    unit: object | None
+    scheme: str
+    frame: str
+    origin: str
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def nside(self) -> int:
+        return 2 ** self.order
+
+
+def healpix_map(table, order: int, *, column: str | None = None) -> HealpixMap:
+    """Mappa HEALPix di una tabella (H12): conteggi per cella, o somma della colonna ``column`` (es. flussi).
+
+    Schema NESTED in ICRS, ``order`` obbligatorio; posizioni convertite con il 10; righe senza posizione o con
+    valore mancante escluse e contate. Calcolo: ``astropy-healpix`` (``lonlat_to_healpix``) e ``numpy``."""
+    order = _check_order(order, SPACE_MAX_ORDER, "order")
+    hp = _healpix(order)
+    if hp.npix > 12 * 4 ** 12:
+        raise MocError("HEALPIX_ORDER_INVALID", f"order {order}: mappa di {hp.npix} celle oltre il limite di questa "
+                       "funzione (ordine 12)")
+    _check_celestial(table.body, f"tabella {table.origin}")
+    lon, lat, valid, note = _catalog_positions(table, f"tabella {table.origin}")
+    weights, unit, quantity = None, None, "count"
+    notes = []
+    if column is not None:
+        if column not in table.table.colnames:
+            raise ValueError(f"colonna {column!r} inesistente")
+        col = table.table[column]
+        if col.dtype.kind not in "iuf":
+            raise ValueError(f"colonna {column!r}: servono valori numerici")
+        raw = np.ma.filled(np.ma.asarray(col, dtype=float), np.nan)[valid]
+        good = np.isfinite(raw)
+        if not np.all(good):
+            notes.append(("VALUES_EXCLUDED", f"{int(np.count_nonzero(~good))} righe con {column} mancante escluse"))
+        lon, lat, weights = lon[good], lat[good], raw[good]
+        unit, quantity = col.unit, f"sum:{column}"
+    excluded = int(np.count_nonzero(~valid))
+    if excluded:
+        notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione escluse"))
+    cells = hp.lonlat_to_healpix(lon * u.deg, lat * u.deg) if lon.size else np.zeros(0, dtype=np.int64)
+    values = np.bincount(cells, weights=weights, minlength=hp.npix)
+    if weights is None:
+        values = values.astype(np.int64)
+    description = (f"mappa HEALPix {HEALPIX_SCHEME} in {HEALPIX_FRAME}, ordine {order} (nside {hp.nside}), "
+                   f"{'conteggi' if column is None else 'somma di ' + column}"
+                   f"{'' if unit is None else ' [' + str(unit) + ']'} per cella, {lon.size} righe{note} "
+                   f"(calcolo: {_healpix_provenance()})")
+    return HealpixMap(values=values, order=order, quantity=quantity, unit=unit, scheme=HEALPIX_SCHEME,
+                      frame=HEALPIX_FRAME, origin=f"tabella {table.origin}", description=description,
+                      warnings=tuple(notes))
+
+
+@dataclass(frozen=True)
+class HealpixGrid:
+    """Griglia HEALPix di riferimento: celle NESTED e loro contorni in ICRS (gradi), per il disegno (41)."""
+
+    order: int
+    cells: np.ndarray
+    lon: np.ndarray  # (celle, 4 × step) gradi ICRS
+    lat: np.ndarray
+    scheme: str
+    frame: str
+    description: str
+
+
+def healpix_grid(order: int, *, within: Moc | None = None, step: int = 1) -> HealpixGrid:
+    """Griglia HEALPix all'ordine dato (obbligatorio): contorni delle celle in ICRS, NESTED.
+
+    ``within`` (MOC spaziale) limita le celle a quelle che lo toccano all'ordine dato; senza ``within`` la
+    griglia di tutto il cielo è ammessa fino a ``GRID_MAX_CELLS`` celle (``GRID_TOO_LARGE``).
+    Calcolo: ``astropy-healpix`` (``boundaries_lonlat``)."""
+    order = _check_order(order, SPACE_MAX_ORDER, "order")
+    if isinstance(step, bool) or not isinstance(step, int) or step < 1:
+        raise ValueError("step: intero ≥ 1 (punti per lato del contorno)")
+    hp = _healpix(order)
+    if within is None:
+        if hp.npix > GRID_MAX_CELLS:
+            raise MocError("GRID_TOO_LARGE", f"griglia di tutto il cielo all'ordine {order}: {hp.npix} celle, oltre "
+                           f"{GRID_MAX_CELLS}; indicare within=MOC")
+        cells = np.arange(hp.npix, dtype=np.int64)
+        where = "tutto il cielo"
+    else:
+        if not isinstance(within, Moc) or within.kind != "space":
+            raise MocError("MOC_TYPE_MISMATCH", "healpix_grid: within deve essere un MOC spaziale")
+        _check_celestial(within.body, f"MOC {within.origin}")
+        # mocpy: refine_to_order modifica il MOC sul posto (verificato), l'unione con un MOC vuoto no.
+        target = within.moc.degrade_to_order(order) if within.space_order > order \
+            else within.moc.union(MOC.new_empty(order))
+        cells = np.asarray(target.flatten(), dtype=np.int64)
+        if cells.size > GRID_MAX_CELLS:
+            raise MocError("GRID_TOO_LARGE", f"griglia di {cells.size} celle oltre {GRID_MAX_CELLS}")
+        where = f"celle che toccano il MOC {within.origin}"
+    lon, lat = hp.boundaries_lonlat(cells, step=step)
+    description = (f"griglia HEALPix {HEALPIX_SCHEME} in {HEALPIX_FRAME}, ordine {order}: {cells.size} celle, "
+                   f"{where} (calcolo: {_healpix_provenance()})")
+    return HealpixGrid(order=order, cells=cells, lon=lon.to_value(u.deg), lat=lat.to_value(u.deg),
+                       scheme=HEALPIX_SCHEME, frame=HEALPIX_FRAME, description=description)

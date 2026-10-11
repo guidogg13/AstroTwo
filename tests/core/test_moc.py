@@ -423,3 +423,90 @@ def test_moc_from_image_errors(tmp_path):
     with pytest.raises(MocError) as err:
         moc_from_image(write_image(tmp_path / "n.fits", np.ones((5, 5)), wcs=False), 8)
     assert err.value.code == "WCS_MISSING"
+
+
+# =============================================================================
+# P3 — Filtro per MOC, mappe e griglie HEALPix (T4, T6)
+
+from astrotwo.core.moc import GRID_MAX_CELLS, filter_by_moc, healpix_grid, healpix_map  # noqa: E402
+
+
+def random_sky(n: int, seed: int, ra=(0.0, 30.0), dec=(-10.0, 20.0)):
+    rng = np.random.default_rng(seed)
+    return rng.uniform(*ra, n), rng.uniform(*dec, n)
+
+
+def test_t4_filter_by_moc(tmp_path):
+    from test_crossmatch import make_table
+
+    ra, dec = random_sky(1000, 11)
+    table = make_table(tmp_path / "t.xml", list(ra) + [None], list(dec) + [None])
+    order = 6
+    moc = moc_from_region(CircleRegion(SkyCoord(15 * u.deg, 5 * u.deg), 8 * u.deg), order)
+    inside = filter_by_moc(table, moc)
+    # Ricalcolo con astropy-healpix: cella NESTED di ogni punto all'ordine del MOC, appartenenza alle sue celle.
+    cells = HEALPix(nside=2 ** order, order="nested", frame=ICRS()).lonlat_to_healpix(ra * u.deg, dec * u.deg)
+    expected = np.isin(cells, np.asarray(moc.moc.flatten()))
+    assert inside.count == int(np.count_nonzero(expected)) and np.array_equal(inside.mask[:1000], expected)
+    assert not inside.mask[1000] and inside.excluded == 1 and "ROWS_EXCLUDED" in dict(inside.warnings)
+    outside = filter_by_moc(table, moc, inside=False)
+    assert outside.count == 1000 - inside.count and not outside.mask[1000]
+    assert list(inside.indices) == list(np.flatnonzero(expected)) and table.rows == 1001  # tabella invariata
+    assert np.array_equal(moc.contains(SkyCoord(ra * u.deg, dec * u.deg)), expected)
+    import dataclasses
+
+    with pytest.raises(MocError) as err:
+        filter_by_moc(dataclasses.replace(table, body="Mars"), moc)
+    assert err.value.code == "BODY_MISMATCH"
+    forced = filter_by_moc(dataclasses.replace(table, body="Mars"), moc, force_body=True)
+    assert "BODY_FORCED" in dict(forced.warnings)
+    with pytest.raises(MocError) as err:
+        filter_by_moc(dataclasses.replace(table, positions=None), moc)
+    assert err.value.code == "NO_COORD_COLUMNS"
+    tpath = tmp_path / "t.json"
+    tpath.write_text('{"t": {"30": [1]}}')
+    with pytest.raises(MocError) as err:
+        filter_by_moc(table, read_moc(tpath))
+    assert err.value.code == "MOC_TYPE_MISMATCH"
+
+
+def test_t6_healpix_map(tmp_path):
+    from test_crossmatch import make_table
+
+    order = 4
+    hp = HEALPix(nside=2 ** order, order="nested", frame=ICRS())
+    # Distribuzione nota: 3 punti al centro della cella 10, 1 al centro della cella 2000.
+    lon, lat = hp.healpix_to_lonlat([10, 10, 10, 2000])
+    table = make_table(tmp_path / "m.xml", lon.deg, lat.deg,
+                       extra={"flux": ("mJy", [1.0, 2.0, None, 5.0])})
+    counts = healpix_map(table, order)
+    assert counts.values[10] == 3 and counts.values[2000] == 1 and counts.values.sum() == 4
+    assert (counts.scheme, counts.frame, counts.nside, counts.values.size) == ("NESTED", "ICRS", 16, hp.npix)
+    flux = healpix_map(table, order, column="flux")
+    assert flux.values[10] == 3.0 and flux.values[2000] == 5.0 and str(flux.unit) == "mJy"
+    assert "VALUES_EXCLUDED" in dict(flux.warnings) and "NESTED in ICRS" in flux.description
+    # Distribuzione casuale: valori uguali a astropy-healpix + numpy ricalcolati nel test.
+    ra, dec = random_sky(500, 5)
+    rand = healpix_map(make_table(tmp_path / "r.xml", ra, dec), 5)
+    cells = HEALPix(nside=32, order="nested", frame=ICRS()).lonlat_to_healpix(ra * u.deg, dec * u.deg)
+    assert np.array_equal(rand.values, np.bincount(cells, minlength=12 * 4 ** 5))
+    with pytest.raises(MocError) as err:
+        healpix_map(table, None)
+    assert err.value.code == "HEALPIX_ORDER_INVALID"
+
+
+def test_healpix_grid():
+    grid = healpix_grid(1)
+    hp = HEALPix(nside=2, order="nested", frame=ICRS())
+    lon, lat = hp.boundaries_lonlat(np.arange(48), step=1)
+    assert grid.cells.size == 48 and np.allclose(grid.lon, lon.deg) and np.allclose(grid.lat, lat.deg)
+    moc = moc_from_region(CircleRegion(SkyCoord(15 * u.deg, 5 * u.deg), 1 * u.deg), 6)
+    before = moc.moc.to_string()
+    local = healpix_grid(8, within=moc)
+    assert moc.moc.to_string() == before and moc.space_order == 6  # il MOC dato non cambia
+    assert local.cells.size == 16 * len(moc.moc.flatten())
+    coarse = healpix_grid(3, within=moc)
+    assert set(coarse.cells) == set(np.asarray(moc.moc.degrade_to_order(3).flatten()))
+    with pytest.raises(MocError) as err:
+        healpix_grid(8)
+    assert err.value.code == "GRID_TOO_LARGE" and GRID_MAX_CELLS == 12 * 4 ** 7

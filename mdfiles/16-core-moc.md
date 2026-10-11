@@ -187,7 +187,32 @@ di un dato sia sempre verificabile e confrontabile.
   `MOC_BODY_UNSUPPORTED` (i MOC spaziali sono ICRS).
 - Nota di verifica: `mocpy.MOC.add_neighbours` modifica il MOC sul posto;
   il 16 non lo usa (si usano `extended`/`contracted`, che restituiscono un
-  nuovo MOC).
+  nuovo MOC). Verifica estesa: anche `refine_to_order` modifica il MOC sul
+  posto; tutte le altre operazioni usate restituiscono un nuovo oggetto. Il
+  16 non chiama mai i due metodi che modificano sul posto sui MOC
+  dell'utente.
+
+**P3 — filtro, mappe e griglie (scritta il 2026-10-11):**
+
+- **`filter_by_moc(table, moc, inside=True, *, force_body=False)`** →
+  `FilterResult` (maschera booleana, `indices`, `count`, righe escluse,
+  descrizione); posizioni del 13 convertite in ICRS con il 10;
+  `mocpy.MOC.contains_lonlat`; righe senza posizione **mai selezionate**, né
+  dentro né fuori (avviso `ROWS_EXCLUDED`); la tabella non cambia; solo MOC
+  spaziali (`MOC_TYPE_MISMATCH`); regola del corpo come per le operazioni.
+  Anche **`Moc.contains(coords)`** per posizioni sciolte.
+- **`healpix_map(table, order, *, column=None)`** → `HealpixMap`: conteggi
+  per cella o somma della colonna `column` (es. flussi, unità conservata),
+  NESTED in ICRS, `order` obbligatorio (fino a 12 in questa funzione, 201
+  milioni di celle); righe senza posizione o con valore mancante escluse e
+  contate (`ROWS_EXCLUDED`, `VALUES_EXCLUDED`). Calcolo: `astropy-healpix`
+  (`lonlat_to_healpix`) e `numpy.bincount`.
+- **`healpix_grid(order, *, within=None, step=1)`** → `HealpixGrid`: celle
+  NESTED e contorni in ICRS (`boundaries_lonlat` di `astropy-healpix`) per il
+  disegno del 41. **Scelta minore (da confermare):** senza `within` la
+  griglia di tutto il cielo è ammessa fino a 12 × 4⁷ = 196 608 celle
+  (ordine 7), oltre → `GRID_TOO_LARGE`; con `within` (MOC spaziale) solo le
+  celle che toccano il MOC all'ordine dato.
 
 ## 4. Cosa NON fa
 
@@ -242,8 +267,8 @@ di un dato sia sempre verificabile e confrontabile.
   **`moc_from_image(image, order_max)`**, **`moc_from_probability(map)`**
   — costruttori (E6); `order_max` obbligatorio; ciascuno dichiara
   risoluzione e unità nella storia.
-- **`filter_by_moc(table, moc, inside)`** — filtro delle sorgenti (E6);
-  restituisce indici.
+- **`filter_by_moc(table, moc, inside=True, *, force_body=False)`** — filtro
+  delle sorgenti (E6); restituisce indici (`FilterResult`); `Moc.contains`.
 - **`survey_coverage(survey)`** — copertura di un survey come MOC (C4).
 - **`healpix_map(...)`** / **`healpix_grid(...)`** — mappe e griglie HEALPix
   (H12), NESTED in ICRS con ordine obbligatorio. **Calcolo: `astropy-healpix`**
@@ -326,6 +351,7 @@ di un dato sia sempre verificabile e confrontabile.
 | Immagine aperta a due livelli (solo anteprima in memoria) | nessun MOC | `PREVIEW_NOT_MEASURABLE` |
 | Immagine a colori | nessun MOC | `OPERATION_UNSUPPORTED` |
 | Righe senza posizione / punti fuori dalla proiezione | esclusi e contati | avvisi `ROWS_EXCLUDED`, `POINTS_OUTSIDE_PROJECTION` |
+| Griglia HEALPix troppo grande senza MOC che la limiti | rifiuto con il limite | `GRID_TOO_LARGE` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
 | Operazione o filtro tra MOC/dati di corpi diversi | rifiuto; forzatura solo con opzione esplicita citata nel risultato (D19-4) | `BODY_MISMATCH` |
 | Versione del MOC non supportata | nessun MOC letto, errore con la versione trovata | `MOC_VERSION_UNSUPPORTED` |
@@ -355,9 +381,9 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T1 | MOC da cerchio | creare un MOC di raggio 1° attorno a un punto (centro galattico, convertito in ICRS) all'ordine 9 | area ≈ 2π(1 − cos 1°) steradianti entro **celle di bordo × area di una cella** (celle attraversate dal cerchio contate nel test con `astropy-healpix`) | area ricalcolata nel test con la formula e con `astropy.units` |
 | T2 | Circolo completo | unione di quattro quarti di cielo, ognuno da due triangoli d'ottante (poligoni), all'ordine 6 | area ≈ 4π steradianti entro celle di bordo (attraversate da equatore e meridiani 0°, 90°, 180°, 270°, contate con `astropy-healpix`) × area di una cella | ricalcolo con Astropy/`math` nel test |
 | T3 | Proprietà insiemistiche | generare due MOC casuali con semina fissa; verificare A∪B ⊇ A∩B, (A∖B)∩B = ∅, ¬¬A = A | tutte le proprietà vere | controllo con le operazioni ricalcolate nel test |
-| T4 | Filtro per Moc | 1000 punti casuali (semina fissa) dentro un MOC noto | conteggio coincidente con quello ricalcolato nel test con `astropy-healpix` | ricalcolo con la libreria HEALPix |
+| T4 | Filtro per Moc | 1000 punti casuali (semina fissa) e una riga senza posizione, MOC da cerchio all'ordine 6; dentro e fuori; corpo diverso; MOC temporale | conteggio e maschera coincidenti con quelli ricalcolati nel test con `astropy-healpix` (cella NESTED di ogni punto ∈ celle del MOC); riga senza posizione mai selezionata; tabella invariata; `BODY_MISMATCH` (forzabile), `MOC_TYPE_MISMATCH` | ricalcolo con la libreria HEALPix |
 | T5 | Mismatch di unità | unire un MOC spaziale con uno temporale | `MOC_TYPE_MISMATCH` | test di unità |
-| T6 | Mappe HEALPix | produrre una mappa HEALPix su una distribuzione nota | valori per cella coincidenti con `astropy-healpix` ricalcolato nel test; schema NESTED e sistema ICRS dichiarati | ricalcolo con la libreria scelta |
+| T6 | Mappe HEALPix | punti ai centri di celle note (3 e 1) con flussi, uno mancante; 500 punti casuali; griglia dell'ordine 1 e griglia limitata da un MOC | conteggi e somme esatti; valori uguali a `astropy-healpix` + `numpy` ricalcolati nel test; schema NESTED e sistema ICRS dichiarati; contorni uguali a `boundaries_lonlat`; il MOC dato non cambia; `GRID_TOO_LARGE` | ricalcolo con la libreria scelta |
 | T7 | Versioni MOC (H22) | file di prova **scritti nel test secondo il testo dello standard** (mai file di Aladin): FITS 1.x (intestazioni di 1.0/1.1, colonna `UNIQ` `1J`), 2.0 `NUNIQ` e `RANGE` (spaziale, temporale, spazio-temporale), JSON con e senza prefisso, testo; `MOCVERS='2.1'`; versione sconosciuta; `kind` mancante | stesse celle lette da `mocpy`; versione riportata ("1.1, assunta…", "2.0", "non dichiarata nel formato"); 2.1 → `MOC_VERSION_UNSUPPORTED` (D16-6); `MOC_TYPE_REQUIRED`; andata e ritorno in scrittura | confronto con `mocpy` |
 | T8 | Filtro MocServer (H26) | `query_mocserver` su una regione con risposta simulata | elenco delle collezioni con origine e data | servizio simulato (test di rete separato) |
 | T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (k = 1) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
@@ -438,3 +464,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §5, §7, §9 — MOC salvati come file nella cache comune `SharedCache`. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Decisioni del proprietario del 2026-10-11 applicate** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti; `healpy` escluso (GPL), solo `astropy-healpix` e `mocpy`; `order_max` obbligatorio; MOC da catalogo una cella per sorgente; MOC da immagine dai pixel validi con il WCS dell'11; poligoni a lati di cerchio massimo (interno = regione più piccola, verificato in `mocpy`); MOC spaziali sempre ICRS; somma delle probabilità entro 10⁻⁶ relativo; tolleranze di T1/T2 dalle celle di bordo; MocServer con la rete del 14; `build_moc` solo funzione; mappe NESTED ICRS; C4 e cataloghi HiPS progressivi rinviati al 12. Verifiche del 2026-10-11: versioni dello standard (1.0, 1.1, 2.0; nessuna 2.1), intestazioni FITS, JSON e testo, scala TCB dei MOC temporali. Nuovi `MOC_TYPE_REQUIRED`, `MOC_BODY_UNSUPPORTED`; nuove decisioni aperte **D16-6** (versione 2.1) e **D16-7** (complemento degli ST-MOC), Gruppo 3. Scelte minori di P1 elencate in §3. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P2 scritta** (`moc_from_region` con `CircleRegion`/`PolygonRegion`, `moc_from_catalog`, `moc_from_image`; T1, T2, T10): cerchio con `from_cone` (per eccesso), poligono con `from_polygon` (celle di bordo diverse tra i due versi, verificato), catalogo una cella per sorgente, immagine dai pixel validi campionati a passo ≤ metà cella con il WCS dell'11 (scelta minore da confermare, motivi in §3). Nuovi casi in §10. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **P3 scritta** (`filter_by_moc`/`FilterResult`, `Moc.contains`, `healpix_map`/`HealpixMap`, `healpix_grid`/`HealpixGrid`; T4, T6): NESTED in ICRS con `astropy-healpix`; righe senza posizione mai selezionate; limite della griglia senza MOC (scelta minore, `GRID_TOO_LARGE`); verificato che `refine_to_order` di `mocpy` modifica sul posto. Stato `approvato` invariato. |
