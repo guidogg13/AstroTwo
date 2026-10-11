@@ -37,6 +37,7 @@ __all__ = [
     "FilterResult",
     "HealpixGrid",
     "HealpixMap",
+    "ProbabilityMap",
     "SUPPORTED_VERSIONS",
     "TIME_MAX_ORDER",
     "Moc",
@@ -45,6 +46,10 @@ __all__ = [
     "healpix_grid",
     "healpix_map",
     "moc_from_catalog",
+    "moc_from_probability",
+    "moc_from_times",
+    "moc_space_time",
+    "read_probability_map",
     "moc_from_image",
     "moc_from_region",
     "read_moc",
@@ -244,6 +249,43 @@ class Moc:
             raise MocError("MOC_TYPE_MISMATCH", f"contains su posizioni: serve un MOC spaziale, non {self.kind}")
         lon, lat, _ = _to_icrs(coords, "posizioni")
         return np.asarray(self.moc.contains_lonlat(lon=lon * u.deg, lat=lat * u.deg), dtype=bool)
+
+    @property
+    def time_range(self):
+        """Primo e ultimo istante coperti (``astropy.time.Time`` in TCB) di un MOC temporale o spazio-temporale."""
+        if self.kind == "space" or self.is_empty:
+            return None
+        return self.moc.min_time.tcb, self.moc.max_time.tcb
+
+    def contains_times(self, times) -> np.ndarray:
+        """Maschera degli istanti (``astropy.time.Time``, scala dichiarata) coperti dal MOC temporale; gli
+        istanti si convertono in TCB con ``astropy.time``."""
+        if self.kind != "time":
+            raise MocError("MOC_TYPE_MISMATCH", f"contains_times: serve un MOC temporale, non {self.kind}")
+        return np.asarray(self.moc.contains(_tcb(times, "istanti")), dtype=bool)
+
+    def space_during(self, during: Moc) -> Moc:
+        """Copertura spaziale di un MOC spazio-temporale negli intervalli del MOC temporale ``during``."""
+        if self.kind != "space-time" or not isinstance(during, Moc) or during.kind != "time":
+            raise MocError("MOC_TYPE_MISMATCH", "space_during: MOC spazio-temporale e MOC temporale")
+        result = Moc(moc=self.moc.query_by_time(during.moc), kind="space", body=self.body,
+                     origin=f"spazio di {self.origin} durante {during.origin}", history=self.history)
+        return replace(result, history=result.history + ("proiezione sullo spazio con mocpy.STMOC.query_by_time",))
+
+    def time_within(self, within: Moc, *, force_body: bool = False) -> Moc:
+        """Copertura temporale di un MOC spazio-temporale nelle zone del MOC spaziale ``within``."""
+        if self.kind != "space-time" or not isinstance(within, Moc) or within.kind != "space":
+            raise MocError("MOC_TYPE_MISMATCH", "time_within: MOC spazio-temporale e MOC spaziale")
+        notes = []
+        if within.body != self.body:
+            if not force_body:
+                raise MocError("BODY_MISMATCH", f"corpi diversi: {self.body!r} e {within.body!r}; forzabile solo con "
+                               "force_body=True")
+            notes.append(("BODY_FORCED", f"corpi diversi forzati: {self.body!r} e {within.body!r}"))
+        result = Moc(moc=self.moc.query_by_space(within.moc), kind="time", body=None,
+                     origin=f"tempo di {self.origin} in {within.origin}", history=self.history)
+        return replace(result, history=result.history + ("proiezione sul tempo con mocpy.STMOC.query_by_space",),
+                       warnings=tuple(notes))
 
     def __eq__(self, other: object) -> bool:  # stesse celle, stesso tipo e stesso corpo
         if not isinstance(other, Moc):
@@ -880,3 +922,208 @@ def healpix_grid(order: int, *, within: Moc | None = None, step: int = 1) -> Hea
                    f"{where} (calcolo: {_healpix_provenance()})")
     return HealpixGrid(order=order, cells=cells, lon=lon.to_value(u.deg), lat=lat.to_value(u.deg),
                        scheme=HEALPIX_SCHEME, frame=HEALPIX_FRAME, description=description)
+
+
+# --------------------------------------------------------------------------
+# P4 — MOC temporali e spazio-temporali; mappe di probabilità (D16-3, D16-4)
+# --------------------------------------------------------------------------
+
+def _tcb(times, what: str):
+    """Istanti ``astropy.time.Time`` (la scala è parte dell'oggetto) convertiti in TCB, la scala dello standard."""
+    from astropy.time import Time
+
+    if not isinstance(times, Time):
+        raise TypeError(f"{what}: servono istanti astropy.time.Time con la scala dichiarata")
+    jd = np.atleast_1d(times.jd)
+    if not np.all(np.isfinite(jd)):
+        raise MocError("TIME_RANGE_INVALID", f"{what}: istanti non finiti")
+    if np.any(jd < 0):
+        raise MocError("TIME_RANGE_INVALID", f"{what}: istanti prima di JD 0, fuori dai MOC temporali (standard 2.0)")
+    return Time(np.atleast_1d(times.tcb.jd1), np.atleast_1d(times.tcb.jd2), format="jd", scale="tcb")
+
+
+def _time_note(times) -> str:
+    return f"scala d'ingresso {times.scale.upper()}, convertiti in TCB con astropy.time"
+
+
+def moc_from_times(start, end=None, *, order_max: int) -> Moc:
+    """MOC temporale (D16-3) da istanti (``end=None``) o intervalli [start, end], all'ordine ``order_max``
+    (obbligatorio, 0–61; 61 = 1 μs). Tempi convertiti in TCB (scala dello standard 2.0) con ``astropy.time``."""
+    order = _check_order(order_max, TIME_MAX_ORDER, "order_max")
+    begin = _tcb(start, "inizio")
+    if end is None:
+        moc = TimeMOC.from_times(begin, order=order)
+        what = f"{begin.size} istanti"
+    else:
+        stop = _tcb(end, "fine")
+        if stop.shape != begin.shape:
+            raise MocError("TIME_RANGE_INVALID", "inizio e fine con numeri di valori diversi")
+        if np.any(stop.jd < begin.jd):
+            raise MocError("TIME_RANGE_INVALID", "intervallo con fine prima dell'inizio")
+        moc = TimeMOC.from_time_ranges(begin, stop, order=order)
+        what = f"{begin.size} intervalli"
+    resolution = TimeMOC.order_to_time_resolution(order).to(u.s)
+    step = (f"MOC temporale da {what} con mocpy.TimeMOC, ordine {order} (risoluzione {resolution.value!r} s), "
+            f"{_time_note(start)}")
+    result = Moc(moc=moc, kind="time", body=None, origin=f"tempi ({what})", history=(step,))
+    return replace(result, warnings=(("MOC_EMPTY", "MOC vuoto"),) if result.is_empty else ())
+
+
+def moc_space_time(start, end, coords, *, time_order: int, space_order: int) -> Moc:
+    """MOC spazio-temporale da osservazioni: istanti (``end=None``) o intervalli con una posizione ciascuno
+    (``SkyFrame``, convertita in ICRS con il 10); ordini obbligatori. Calcolo: ``mocpy.STMOC``."""
+    t_order = _check_order(time_order, TIME_MAX_ORDER, "time_order")
+    s_order = _check_order(space_order, SPACE_MAX_ORDER, "space_order")
+    begin = _tcb(start, "inizio")
+    lon, lat, note = _to_icrs(coords, "posizioni")
+    if lon.size != begin.size:
+        raise MocError("TIME_RANGE_INVALID", f"{begin.size} tempi e {lon.size} posizioni: serve una posizione per "
+                       "osservazione")
+    if end is None:
+        moc = STMOC.from_times_positions(begin, t_order, lon * u.deg, lat * u.deg, s_order)
+    else:
+        stop = _tcb(end, "fine")
+        if stop.shape != begin.shape or np.any(stop.jd < begin.jd):
+            raise MocError("TIME_RANGE_INVALID", "intervalli non validi (numeri diversi o fine prima dell'inizio)")
+        moc = STMOC.from_time_ranges_positions(begin, stop, lon * u.deg, lat * u.deg, time_depth=t_order,
+                                               spatial_depth=s_order)
+    step = (f"MOC spazio-temporale con mocpy.STMOC, ordini tempo {t_order} e spazio {s_order}, {lon.size} "
+            f"osservazioni, {_time_note(start)}{note}")
+    result = Moc(moc=moc, kind="space-time", body="celestial", origin=f"osservazioni ({lon.size})", history=(step,))
+    return replace(result, warnings=(("MOC_EMPTY", "MOC vuoto"),) if result.is_empty else ())
+
+
+#: Tolleranza della somma delle probabilità (decisione del proprietario del 2026-10-11): 1e-6 relativo.
+PROBABILITY_SUM_TOLERANCE = 1e-6
+
+
+@dataclass(frozen=True)
+class ProbabilityMap:
+    """Mappa di probabilità HEALPix (D16-4) come celle NUNIQ e densità di probabilità per steradiante."""
+
+    uniq: np.ndarray  # uint64, celle NUNIQ (ICRS, NESTED)
+    density: np.ndarray  # float64, probabilità per sr
+    layout: str  # "flat" o "multi-order"
+    max_order: int
+    total: float  # somma delle probabilità, verificata = 1 entro PROBABILITY_SUM_TOLERANCE
+    origin: str
+    description: str
+
+    @property
+    def probability(self) -> np.ndarray:
+        """Probabilità per cella = densità × area della cella."""
+        return self.density * _uniq_area(self.uniq)
+
+
+_UNIQ_STARTS = np.array([4 * 4 ** k for k in range(SPACE_MAX_ORDER + 1)], dtype=np.uint64)
+
+
+def _uniq_order(uniq: np.ndarray) -> np.ndarray:
+    """Ordine di ogni cella NUNIQ (uniq = 4·4^ordine + indice), calcolato con interi."""
+    return np.searchsorted(_UNIQ_STARTS, np.asarray(uniq, dtype=np.uint64), side="right").astype(np.int64) - 1
+
+
+def _uniq_area(uniq: np.ndarray) -> np.ndarray:
+    return 4.0 * math.pi / (12.0 * 4.0 ** _uniq_order(uniq))
+
+
+def _invalid_map(path, reason: str) -> MocError:
+    return MocError("PROBABILITY_MAP_INVALID", f"{path}: mappa di probabilità non valida ({reason})")
+
+
+def read_probability_map(path) -> ProbabilityMap:
+    """Legge una mappa di probabilità LIGO/Virgo/KAGRA in FITS (D16-4): **piatta** (colonna ``PROB``,
+    ``NSIDE``, ``ORDERING`` RING o NESTED) o **multi-ordine** (``UNIQ`` e ``PROBDENSITY`` in sr⁻¹,
+    ``ORDERING='NUNIQ'``); ``COORDSYS='C'``. Probabilità in [0, 1], somma = 1 entro 10⁻⁶ relativo."""
+    from astropy.table import Table
+
+    path = Path(path)
+    try:
+        with fits.open(path, memmap=False) as hdul:
+            tables = [h for h in hdul if isinstance(h, fits.BinTableHDU)]
+            if not tables:
+                raise _invalid_map(path, "nessuna tabella binaria")
+            header = tables[0].header
+            table = Table.read(tables[0], unit_parse_strict="silent")
+    except MocError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise _invalid_map(path, exc) from exc
+    if str(header.get("COORDSYS", "")).strip() != "C":
+        raise _invalid_map(path, f"COORDSYS {header.get('COORDSYS')!r}: serve 'C' (equatoriale, ICRS)")
+    ordering = str(header.get("ORDERING", "")).strip().upper()
+    if "UNIQ" in table.colnames and "PROBDENSITY" in table.colnames:
+        col = table["PROBDENSITY"]
+        if col.unit is None or not col.unit.is_equivalent(1 / u.sr):
+            raise _invalid_map(path, f"PROBDENSITY con unità {col.unit!r}: serve una densità per steradiante")
+        density = np.asarray(col.quantity.to_value(1 / u.sr), dtype=np.float64)
+        uniq = np.asarray(table["UNIQ"], dtype=np.uint64)
+        layout = "multi-order"
+    elif "PROB" in table.colnames:
+        if ordering not in ("RING", "NESTED"):
+            raise _invalid_map(path, f"ORDERING {ordering!r}: serve RING o NESTED")
+        nside = int(header.get("NSIDE", 0))
+        prob = np.asarray(table["PROB"], dtype=np.float64).ravel()  # anche colonne vettoriali (righe da 1024)
+        if nside < 1 or nside & (nside - 1) or prob.size != 12 * nside * nside:
+            raise _invalid_map(path, f"NSIDE {nside} e {prob.size} valori non coerenti")
+        order = nside.bit_length() - 1
+        cells = np.arange(prob.size, dtype=np.int64)
+        if ordering == "RING":  # conversione nell'ordine NESTED con astropy-healpix
+            nested = _healpix(order).ring_to_nested(cells)
+            reordered = np.empty_like(prob)
+            reordered[nested] = prob
+            prob = reordered
+        if np.any(~np.isfinite(prob)) or np.any(prob < 0) or np.any(prob > 1):
+            raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: probabilità per cella fuori da [0, 1]")
+        uniq = (4 * 4 ** order + cells).astype(np.uint64)
+        density = prob / (4.0 * math.pi / prob.size)
+        layout = "flat"
+    else:
+        raise _invalid_map(path, "attese le colonne PROB (mappa piatta) o UNIQ e PROBDENSITY (multi-ordine)")
+    if np.any(~np.isfinite(density)) or np.any(density < 0):
+        raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: densità di probabilità negative o non finite")
+    probability = density * _uniq_area(uniq)
+    if np.any(probability > 1):
+        raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: probabilità per cella oltre 1")
+    total = float(np.sum(probability))
+    if abs(total - 1.0) > PROBABILITY_SUM_TOLERANCE:
+        raise MocError("PROBABILITY_SUM_INVALID", f"{path}: somma delle probabilità {total!r}, attesa 1 entro "
+                       f"{PROBABILITY_SUM_TOLERANCE:g} relativo")
+    orders = _uniq_order(uniq)
+    if uniq.size == 0 or np.any(orders < 0) or np.any(uniq >= 16 * _UNIQ_STARTS[orders]):
+        raise _invalid_map(path, "celle UNIQ non valide")
+    max_order = int(np.max(orders))
+    description = (f"mappa di probabilità {layout} ({ordering}), ordine massimo {max_order}, {uniq.size} celle, "
+                   f"somma delle probabilità {total!r} (= 1 entro {PROBABILITY_SUM_TOLERANCE:g} relativo), ICRS")
+    return ProbabilityMap(uniq=uniq, density=density, layout=layout, max_order=max_order, total=total,
+                          origin=str(path), description=description)
+
+
+def moc_from_probability(pmap: ProbabilityMap, level: float, order_max: int) -> Moc:
+    """Regione di credibilità (D16-4): la più piccola insieme di celle intere, prese per densità decrescente,
+    con probabilità ≥ ``level`` (``mocpy.MOC.from_valued_healpix_cells`` con ``strict=False, no_split=True``).
+    La probabilità contenuta è ricalcolata con ``mocpy`` e dichiarata."""
+    from astropy.table import Table
+
+    if not isinstance(pmap, ProbabilityMap):
+        raise TypeError("moc_from_probability: serve una ProbabilityMap (read_probability_map)")
+    order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
+    if isinstance(level, bool) or not isinstance(level, (int, float)) or not 0.0 < float(level) <= 1.0:
+        raise MocError("PROBABILITY_OUT_OF_RANGE", f"livello di credibilità {level!r}: ammesso in (0, 1]")
+    depth = max(order, pmap.max_order)  # mocpy: il MOC è almeno profondo quanto la cella più piccola
+    moc = MOC.from_valued_healpix_cells(pmap.uniq, pmap.density, max_depth=depth, values_are_densities=True,
+                                        cumul_from=0.0, cumul_to=float(level), asc=False, strict=False,
+                                        no_split=True)
+    notes = []
+    if depth > order:
+        moc = moc.degrade_to_order(order)
+        notes.append(("ORDER_DEGRADED", f"mappa all'ordine {pmap.max_order}: regione portata all'ordine {order} per "
+                      "eccesso (celle più grandi che contengono la regione)"))
+    contained = float(moc.probability_in_multiordermap(Table({"UNIQ": pmap.uniq,
+                                                               "PROBDENSITY": pmap.density / u.sr})))
+    step = (f"regione di credibilità {float(level)!r} da {pmap.origin} con mocpy.MOC.from_valued_healpix_cells "
+            f"(densità decrescente, celle intere, strict=False, no_split=True), ordine {order}; probabilità "
+            f"contenuta {contained!r} (mocpy.probability_in_multiordermap); {pmap.description}")
+    result = Moc(moc=moc, kind="space", body="celestial", origin=f"mappa di probabilità {pmap.origin}",
+                 history=(step,))
+    return replace(result, warnings=tuple(notes) + (("CREDIBLE_PROBABILITY", f"{contained!r}"),))

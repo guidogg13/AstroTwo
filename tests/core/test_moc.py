@@ -510,3 +510,154 @@ def test_healpix_grid():
     with pytest.raises(MocError) as err:
         healpix_grid(8)
     assert err.value.code == "GRID_TOO_LARGE" and GRID_MAX_CELLS == 12 * 4 ** 7
+
+
+# =============================================================================
+# P4 — MOC temporali e spazio-temporali, mappe di probabilità (D16-3, D16-4)
+
+from astrotwo.core.moc import (  # noqa: E402
+    PROBABILITY_SUM_TOLERANCE,
+    moc_from_probability,
+    moc_from_times,
+    moc_space_time,
+    read_probability_map,
+)
+
+
+def test_time_moc_scale():
+    start = Time(["2020-01-01T00:00:00", "2020-03-01T00:00:00"], scale="utc")
+    end = Time(["2020-01-02T00:00:00", "2020-03-01T12:00:00"], scale="utc")
+    tmoc = moc_from_times(start, end, order_max=40)
+    # Ricalcolo nel test: conversione in TCB con astropy.time, poi mocpy.
+    expected = TimeMOC.from_time_ranges(start.tcb, end.tcb, order=40)
+    assert tmoc.moc == expected and tmoc.kind == "time" and tmoc.system == "TCB" and tmoc.time_order == 40
+    assert "scala d'ingresso UTC, convertiti in TCB" in tmoc.history[-1]
+    first, last = tmoc.time_range
+    assert first.scale == "tcb" and abs((first - start[0].tcb).to_value(u.s)) <= 2 ** (61 - 40) * 1e-6
+    inside = Time(["2020-01-01T12:00:00", "2020-02-01T00:00:00"], scale="utc")
+    assert list(tmoc.contains_times(inside)) == [True, False]
+    instants = moc_from_times(Time([2459000.5], format="jd", scale="tt"), order_max=61)
+    assert instants.moc == TimeMOC.from_times(Time([2459000.5], format="jd", scale="tt").tcb, order=61)
+    with pytest.raises(MocError) as err:
+        moc_from_times(end, start, order_max=40)
+    assert err.value.code == "TIME_RANGE_INVALID"
+    with pytest.raises(MocError) as err:
+        moc_from_times(start, end, order_max=62)
+    assert err.value.code == "HEALPIX_ORDER_INVALID"
+    with pytest.raises(TypeError):
+        moc_from_times([2459000.5], order_max=30)  # senza scala dichiarata (non Time)
+
+
+def test_space_time_moc(tmp_path):
+    times = Time([2459000.5, 2459100.5], format="jd", scale="tcb")
+    coords = SkyCoord([10.0, 200.0] * u.deg, [20.0, -30.0] * u.deg)
+    st = moc_space_time(times, None, coords, time_order=30, space_order=8)
+    expected = STMOC.from_times_positions(times, 30, coords.ra, coords.dec, 8)
+    assert st.moc == expected and (st.time_order, st.space_order) == (30, 8) and st.body == "celestial"
+    first_day = moc_from_times(Time([2459000.0], format="jd", scale="tcb"), Time([2459001.0], format="jd", scale="tcb"),
+                               order_max=30)
+    space = st.space_during(first_day)
+    assert space.kind == "space" and space.moc.contains_lonlat(lon=[10.0] * u.deg, lat=[20.0] * u.deg)[0]
+    assert not space.moc.contains_lonlat(lon=[200.0] * u.deg, lat=[-30.0] * u.deg)[0]
+    around = moc_from_region(CircleRegion(SkyCoord(200 * u.deg, -30 * u.deg), 0.5 * u.deg), 8)
+    when = st.time_within(around)
+    assert list(when.contains_times(Time([2459100.5, 2459000.5], format="jd", scale="tcb"))) == [True, False]
+    back = read_moc(write_moc(st, tmp_path / "st.fits"))
+    assert back == st and fits.getheader(tmp_path / "st.fits", 1)["TIMESYS"] == "TCB"
+
+
+def write_multiorder(path, uniq, density, *, unit="sr-1", coordsys="C"):
+    """Mappa multi-ordine nel formato pubblico LIGO/Virgo/KAGRA: UNIQ, PROBDENSITY [sr-1], ORDERING NUNIQ."""
+    cols = [fits.Column(name="UNIQ", format="K", array=np.asarray(uniq, dtype=np.int64)),
+            fits.Column(name="PROBDENSITY", format="D", array=density, unit=unit)]
+    hdu = fits.BinTableHDU.from_columns(cols)
+    hdu.header.update({"PIXTYPE": "HEALPIX", "ORDERING": "NUNIQ", "COORDSYS": coordsys})
+    fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(path, overwrite=True)
+
+
+def synthetic_multiorder(seed=3):
+    """Cella 0 dell'ordine 0 divisa in 16 celle dell'ordine 2, le altre 11 all'ordine 0 (tutto il cielo)."""
+    uniq = np.array([4 * 4 ** 2 + i for i in range(16)] + [4 + i for i in range(1, 12)], dtype=np.int64)
+    order = np.array([2] * 16 + [0] * 11)
+    area = 4 * np.pi / (12 * 4.0 ** order)
+    weights = np.random.default_rng(seed).random(uniq.size)
+    weights[:16] *= 20
+    prob = weights / weights.sum()
+    return uniq, prob / area, prob, area
+
+
+def credible_reference(prob, density, level):
+    """Calcolo indipendente nel test (guida LIGO): celle per densità decrescente fino a probabilità ≥ livello."""
+    order = np.argsort(-density, kind="stable")
+    k = int(np.searchsorted(np.cumsum(prob[order]), level))
+    return set(order[: k + 1]), float(np.cumsum(prob[order])[k])
+
+
+def test_probability_multiorder(tmp_path):
+    uniq, density, prob, _ = synthetic_multiorder()
+    write_multiorder(tmp_path / "m.fits", uniq, density)
+    pmap = read_probability_map(tmp_path / "m.fits")
+    assert pmap.layout == "multi-order" and pmap.max_order == 2
+    assert abs(pmap.total - 1.0) <= PROBABILITY_SUM_TOLERANCE and "entro 1e-06" in pmap.description
+    region = moc_from_probability(pmap, 0.9, 2)
+    chosen, contained = credible_reference(prob, density, 0.9)
+    expected_cells = sorted(int(uniq[i]) for i in chosen)
+    assert sorted(int(x) for x in region.moc.uniq_hpx) == sorted(
+        int(x) for x in MOC.from_healpix_cells(*_cells(expected_cells), max_depth=2).uniq_hpx)
+    reported = float(dict(region.warnings)["CREDIBLE_PROBABILITY"])
+    assert reported == pytest.approx(contained, rel=1e-9) and reported >= 0.9
+    coarse = moc_from_probability(pmap, 0.9, 1)  # ordine più basso della mappa: per eccesso, dichiarato
+    assert "ORDER_DEGRADED" in dict(coarse.warnings) and region.moc.difference(coarse.moc).empty()
+    with pytest.raises(MocError) as err:
+        moc_from_probability(pmap, 1.5, 2)
+    assert err.value.code == "PROBABILITY_OUT_OF_RANGE"
+
+
+def _cells(uniq_list):
+    uniq = np.asarray(uniq_list, dtype=np.int64)
+    order = np.searchsorted([4 * 4 ** k for k in range(30)], uniq, side="right") - 1
+    return uniq - 4 * 4 ** order, order
+
+
+def test_probability_flat_ring(tmp_path):
+    nside = 16  # 3072 celle: colonna vettoriale di 3 righe da 1024 valori
+    npix = 12 * nside ** 2
+    prob_ring = np.random.default_rng(9).random(npix)
+    prob_ring /= prob_ring.sum()
+    hdu = fits.BinTableHDU.from_columns([fits.Column(name="PROB", format="1024D", array=prob_ring.reshape(-1, 1024))])
+    hdu.header.update({"PIXTYPE": "HEALPIX", "ORDERING": "RING", "NSIDE": nside, "COORDSYS": "C",
+                       "INDXSCHM": "IMPLICIT"})
+    fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(tmp_path / "flat.fits")
+    pmap = read_probability_map(tmp_path / "flat.fits")
+    # Ricalcolo nel test: celle RING → NESTED con astropy-healpix.
+    nested = HEALPix(nside=nside, order="nested", frame=ICRS()).ring_to_nested(np.arange(npix))
+    prob_nested = np.empty(npix)
+    prob_nested[nested] = prob_ring
+    assert pmap.layout == "flat" and pmap.max_order == 4
+    assert np.allclose(pmap.probability, prob_nested, rtol=1e-12, atol=0)
+    region = moc_from_probability(pmap, 0.5, 4)
+    chosen, contained = credible_reference(prob_nested, prob_nested, 0.5)
+    assert set(np.asarray(region.moc.flatten())) == chosen
+    assert float(dict(region.warnings)["CREDIBLE_PROBABILITY"]) == pytest.approx(contained, rel=1e-9)
+
+
+def test_probability_map_errors(tmp_path):
+    uniq, density, _, _ = synthetic_multiorder()
+    write_multiorder(tmp_path / "s.fits", uniq, density * (1 + 1e-5))
+    with pytest.raises(MocError) as err:
+        read_probability_map(tmp_path / "s.fits")
+    assert err.value.code == "PROBABILITY_SUM_INVALID"
+    bad = density.copy()
+    bad[0] = -bad[0]
+    write_multiorder(tmp_path / "n.fits", uniq, bad)
+    with pytest.raises(MocError) as err:
+        read_probability_map(tmp_path / "n.fits")
+    assert err.value.code == "PROBABILITY_OUT_OF_RANGE"
+    write_multiorder(tmp_path / "u.fits", uniq, density, unit="")
+    with pytest.raises(MocError) as err:
+        read_probability_map(tmp_path / "u.fits")
+    assert err.value.code == "PROBABILITY_MAP_INVALID"
+    write_multiorder(tmp_path / "g.fits", uniq, density, coordsys="G")
+    with pytest.raises(MocError) as err:
+        read_probability_map(tmp_path / "g.fits")
+    assert err.value.code == "PROBABILITY_MAP_INVALID"

@@ -214,6 +214,42 @@ di un dato sia sempre verificabile e confrontabile.
   (ordine 7), oltre → `GRID_TOO_LARGE`; con `within` (MOC spaziale) solo le
   celle che toccano il MOC all'ordine dato.
 
+**P4 — tempo e probabilità (scritta il 2026-10-11):**
+
+- **`moc_from_times(start, end=None, *, order_max)`** → MOC temporale da
+  istanti o intervalli `astropy.time.Time` (la scala fa parte dell'oggetto e
+  si dichiara nella storia); conversione in **TCB** con `astropy.time` prima
+  di `mocpy.TimeMOC`; ordine 0–61 obbligatorio (61 = 1 μs); fine prima
+  dell'inizio, istanti non finiti o prima di JD 0 → `TIME_RANGE_INVALID`.
+  `Moc.time_range` (TCB) e `Moc.contains_times`.
+- **`moc_space_time(start, end, coords, *, time_order, space_order)`** →
+  MOC spazio-temporale da osservazioni (una posizione per istante o
+  intervallo, convertita in ICRS con il 10), `mocpy.STMOC`; proiezioni
+  `Moc.space_during(moc_temporale)` e `Moc.time_within(moc_spaziale)`
+  (`query_by_time`/`query_by_space` di `mocpy`).
+- **`read_probability_map(path)`** → `ProbabilityMap` (celle NUNIQ e densità
+  per sr): formato pubblico LIGO/Virgo/KAGRA verificato il 2026-10-11 sulla
+  guida utente (`emfollow.docs.ligo.org`): **multi-ordine** con `UNIQ`,
+  `PROBDENSITY` in `sr-1`, `ORDERING='NUNIQ'`, `COORDSYS='C'`; **piatte** con
+  `PROB` per cella, `NSIDE`, `ORDERING` RING o NESTED (RING convertito in
+  NESTED con `astropy-healpix`; anche colonne vettoriali da 1024 valori per
+  riga). Probabilità per cella in [0, 1] e densità ≥ 0
+  (`PROBABILITY_OUT_OF_RANGE`); **somma = 1 entro 10⁻⁶ relativo**, dichiarata
+  (`PROBABILITY_SUM_INVALID` altrimenti); `PROBDENSITY` senza unità di
+  densità per sr, `COORDSYS` diverso da `C` o colonne mancanti →
+  `PROBABILITY_MAP_INVALID`.
+- **`moc_from_probability(pmap, level, order_max)`** → regione di
+  credibilità: **la più piccola insieme di celle intere**, prese per densità
+  decrescente, con probabilità **≥ livello** (stesso calcolo della guida
+  LIGO; `mocpy.MOC.from_valued_healpix_cells` con `strict=False,
+  no_split=True`, verificato contro un calcolo indipendente). **Scelta minore
+  (da confermare):** celle intere e probabilità ≥ livello (con `strict=True`
+  `mocpy` dà invece la regione con probabilità ≤ livello); la probabilità
+  contenuta è ricalcolata con `mocpy.probability_in_multiordermap` e
+  dichiarata (avviso `CREDIBLE_PROBABILITY`). Con `order_max` minore
+  dell'ordine della mappa la regione si porta a `order_max` per eccesso
+  (`ORDER_DEGRADED`).
+
 ## 4. Cosa NON fa
 
 - Non scarica immagini né cataloghi (11, 12, 14).
@@ -267,6 +303,9 @@ di un dato sia sempre verificabile e confrontabile.
   **`moc_from_image(image, order_max)`**, **`moc_from_probability(map)`**
   — costruttori (E6); `order_max` obbligatorio; ciascuno dichiara
   risoluzione e unità nella storia.
+- **`moc_from_times`**, **`moc_space_time`**, **`read_probability_map`**,
+  **`moc_from_probability(pmap, level, order_max)`** (P4); metodi
+  `time_range`, `contains_times`, `space_during`, `time_within`.
 - **`filter_by_moc(table, moc, inside=True, *, force_body=False)`** — filtro
   delle sorgenti (E6); restituisce indici (`FilterResult`); `Moc.contains`.
 - **`survey_coverage(survey)`** — copertura di un survey come MOC (C4).
@@ -342,7 +381,10 @@ di un dato sia sempre verificabile e confrontabile.
 | MOC vuoto | consentito; contiene niente, operazioni definite | esito `MOC_EMPTY` |
 | Ordine HEALPix non valido (negativo o oltre il max dello standard) | rifiuto con l'intervallo | `HEALPIX_ORDER_INVALID` |
 | Regione fuori dal cielo o coordinate invalide | rifiuto dell'input | `REGION_INVALID` |
-| Probabilità fuori [0,1] | rifiuto dell'input | `PROBABILITY_OUT_OF_RANGE` |
+| Probabilità fuori [0,1] (o livello di credibilità fuori da (0, 1]) | rifiuto dell'input | `PROBABILITY_OUT_OF_RANGE` |
+| Somma delle probabilità diversa da 1 oltre 10⁻⁶ relativo | rifiuto della mappa | `PROBABILITY_SUM_INVALID` |
+| Mappa di probabilità senza le colonne o le parole chiave del formato | rifiuto della mappa | `PROBABILITY_MAP_INVALID` |
+| Tempi non validi (fine prima dell'inizio, prima di JD 0, non finiti, numeri diversi) | rifiuto | `TIME_RANGE_INVALID` |
 | Operazione tra MOC di unità diverse (spaziale vs temporale) | rifiuto con descrizione | `MOC_TYPE_MISMATCH` |
 | MOC corrotto in lettura | errore con il file/la riga problematica | `MOC_UNREADABLE` |
 | Tabella senza coordinate per il filtro o per la creazione | rifiuto prima del calcolo | `NO_COORD_COLUMNS` |
@@ -386,6 +428,7 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T6 | Mappe HEALPix | punti ai centri di celle note (3 e 1) con flussi, uno mancante; 500 punti casuali; griglia dell'ordine 1 e griglia limitata da un MOC | conteggi e somme esatti; valori uguali a `astropy-healpix` + `numpy` ricalcolati nel test; schema NESTED e sistema ICRS dichiarati; contorni uguali a `boundaries_lonlat`; il MOC dato non cambia; `GRID_TOO_LARGE` | ricalcolo con la libreria scelta |
 | T7 | Versioni MOC (H22) | file di prova **scritti nel test secondo il testo dello standard** (mai file di Aladin): FITS 1.x (intestazioni di 1.0/1.1, colonna `UNIQ` `1J`), 2.0 `NUNIQ` e `RANGE` (spaziale, temporale, spazio-temporale), JSON con e senza prefisso, testo; `MOCVERS='2.1'`; versione sconosciuta; `kind` mancante | stesse celle lette da `mocpy`; versione riportata ("1.1, assunta…", "2.0", "non dichiarata nel formato"); 2.1 → `MOC_VERSION_UNSUPPORTED` (D16-6); `MOC_TYPE_REQUIRED`; andata e ritorno in scrittura | confronto con `mocpy` |
 | T8 | Filtro MocServer (H26) | `query_mocserver` su una regione con risposta simulata | elenco delle collezioni con origine e data | servizio simulato (test di rete separato) |
+| T11 | Tempo e probabilità (P4) | intervalli UTC e istanti TT; ST-MOC da due osservazioni con proiezioni; mappa multi-ordine sintetica nel formato LIGO; mappa piatta RING con colonna vettoriale; somma sbagliata, densità negativa, unità mancante, `COORDSYS='G'` | celle uguali a `mocpy` sui tempi convertiti in TCB con `astropy.time` nel test; regione di credibilità uguale al calcolo indipendente del test (densità decrescente, probabilità ≥ livello) e probabilità contenuta uguale; RING→NESTED uguale ad `astropy-healpix`; errori del §10 | ricalcolo con astropy, `astropy-healpix` e `numpy` |
 | T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (k = 1) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
 | T9 | MocServer assente (H26) | `query_mocserver` senza rete | `MOCSERVER_UNAVAILABLE`, nessun elenco parziale | test di unità |
 
@@ -465,3 +508,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-11 | Claude Code | **Decisioni del proprietario del 2026-10-11 applicate** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti; `healpy` escluso (GPL), solo `astropy-healpix` e `mocpy`; `order_max` obbligatorio; MOC da catalogo una cella per sorgente; MOC da immagine dai pixel validi con il WCS dell'11; poligoni a lati di cerchio massimo (interno = regione più piccola, verificato in `mocpy`); MOC spaziali sempre ICRS; somma delle probabilità entro 10⁻⁶ relativo; tolleranze di T1/T2 dalle celle di bordo; MocServer con la rete del 14; `build_moc` solo funzione; mappe NESTED ICRS; C4 e cataloghi HiPS progressivi rinviati al 12. Verifiche del 2026-10-11: versioni dello standard (1.0, 1.1, 2.0; nessuna 2.1), intestazioni FITS, JSON e testo, scala TCB dei MOC temporali. Nuovi `MOC_TYPE_REQUIRED`, `MOC_BODY_UNSUPPORTED`; nuove decisioni aperte **D16-6** (versione 2.1) e **D16-7** (complemento degli ST-MOC), Gruppo 3. Scelte minori di P1 elencate in §3. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P2 scritta** (`moc_from_region` con `CircleRegion`/`PolygonRegion`, `moc_from_catalog`, `moc_from_image`; T1, T2, T10): cerchio con `from_cone` (per eccesso), poligono con `from_polygon` (celle di bordo diverse tra i due versi, verificato), catalogo una cella per sorgente, immagine dai pixel validi campionati a passo ≤ metà cella con il WCS dell'11 (scelta minore da confermare, motivi in §3). Nuovi casi in §10. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P3 scritta** (`filter_by_moc`/`FilterResult`, `Moc.contains`, `healpix_map`/`HealpixMap`, `healpix_grid`/`HealpixGrid`; T4, T6): NESTED in ICRS con `astropy-healpix`; righe senza posizione mai selezionate; limite della griglia senza MOC (scelta minore, `GRID_TOO_LARGE`); verificato che `refine_to_order` di `mocpy` modifica sul posto. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **P4 scritta** (`moc_from_times`, `moc_space_time`, `read_probability_map`/`ProbabilityMap`, `moc_from_probability`; metodi temporali di `Moc`; T11): TCB con `astropy.time`; formato delle mappe LIGO/Virgo/KAGRA verificato sulla guida pubblica; regione di credibilità a celle intere con probabilità ≥ livello (scelta minore da confermare), probabilità contenuta dichiarata; nuovi `TIME_RANGE_INVALID`, `PROBABILITY_SUM_INVALID`, `PROBABILITY_MAP_INVALID`. Stato `approvato` invariato. |
