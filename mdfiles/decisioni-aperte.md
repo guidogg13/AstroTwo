@@ -37,7 +37,12 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-11, con le decisioni del proprietario sui pezzi fermi: 18 aperte** — Gruppo 1:
+**Dal 2026-10-11, con il modulo 15 scritto: 19 aperte** — Gruppo 1: **0** · Gruppo 2: **4**
+(`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **15** (decise `D13-19` regione di `load_catalog` e
+`D15-6` soglia delle ellissi; nuove `D13-20` sistema di SIMBAD, `D15-8` corpo nella
+correlazione per campo, `D15-9` `best` con il servizio CDS).
+
+Prima, sempre il 2026-10-11, con le decisioni del proprietario sui pezzi fermi: 18 aperte — Gruppo 1:
 **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **14** (decise `D14-10`,
 `D14-11`, `D14-12`, `D13-17`, `D13-18`; nuove `D13-19` regione di `load_catalog` e
 `D13-14c` traduzione UCD1 del CDS, rimandata a bassa priorità).
@@ -207,7 +212,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (14)
+## 5. GRUPPO 3 — rimandabili al momento del codice (15)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -220,10 +225,11 @@ gruppi successivi, A8 dopo il livello 1).
 | `D18-6` | Come leggere il valore grezzo di un pixel quando `astropy.io.fits` applica BSCALE/BZERO? | `18-core-calcolatrici.md` |
 | `A10` | Tetti di memoria per gli **HiPS** (coerenti con l'obiettivo di `01-architettura.md` §8)? Per le immagini e i cataloghi decisa il 2026-10-10 (valori nell'11 e nel 13) | `01-architettura.md` §8 (e `12`, `61`) |
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
-| `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
-| `D13-19` | Parametro di regione di `load_catalog` (la decisione del 2026-10-11 vuole un errore che "chiede una regione", ma `load_catalog` non ne ha): (a) `region=(centro, raggio)` con colonne di posizione da `TAP_SCHEMA` per UCD e sistema dichiarato; (b) nessun parametro, l'errore rimanda a `tap_query` con `CONTAINS`; (c) cone search VizieR. Raccomandazione: (a). Fermo solo il parametro (oggi `REGION_REQUIRED` rimanda a `tap_query`) | `13-core-cataloghi.md` §13 |
+| `D13-20` | Sistema delle colonne di SIMBAD per la regione di `load_catalog`: SIMBAD non usa un `COOSYS`, dichiara ICRS J2000 solo nell'`utype` MANGO (`CS.spaceSys=ICRS CT.epoch=J2000`) e nella documentazione. (a) leggere l'`utype` MANGO, dichiarato; (b) documentazione di SIMBAD come nel puntatore del 14; (c) nessuna regione per SIMBAD. Raccomandazione: (a). Fermo solo `load_catalog("simbad", region=...)` (`FRAME_UNKNOWN`) | `13-core-cataloghi.md` §13 |
+| `D15-8` | Corpo nella correlazione per campo: §9 lo chiede per ogni incrocio, ma il join per identificativo non usa posizioni e una tabella senza posizioni ha `BODY_UNKNOWN`. (a) nessun controllo, dichiarato; (b) controllo solo se entrambe hanno un corpo; (c) come oggi. Raccomandazione: (b). Fermo solo questo punto (oggi vale c) | `15-core-crossmatch.md` §13 |
+| `D15-9` | `best` con il servizio CDS: con `selection=best` il pari merito lo sceglie il servizio (regola non documentata), non "indice più basso in B". (a) chiedere `all` e applicare la nostra regola; (b) come oggi, dichiarato. Raccomandazione: (a). Fermo solo questo punto (oggi vale b) | `15-core-crossmatch.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
 ## 6. Note
@@ -282,3 +288,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-10 | Claude Code | Decise dal proprietario `D13-14b` (solo gli UCD1 della raccomandazione IVOA), `D13-15` (numeri con l'unità della colonna in `+`, `-`, `%`, `min`, `max`), `D13-16` (`time_filter`). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 13). |
 | 2026-10-10 | Claude Code | Decisa dal proprietario `D14-5` (`max_rows` 100 000, fino al tetto del 13) e tolta dal Gruppo 3; `D14-1` aggiornata (SAMP con `pyvo.samp`). Nuove nel Gruppo 3, dal codice del 14 e di P6 del 13: `D14-10` (unità nel CSV), `D14-11` (calibrazione della lista SIA nell'11), `D14-12` (magnitudine del puntatore Simbad), `D13-17` (`LINK` ASTRORES), `D13-18` (albero delle collezioni e popolarità). Conteggi: aperte **21** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17). |
 | 2026-10-11 | Claude Code | **Decise dal proprietario** `D14-10` (ECSV per le tabelle con unità, CSV semplice con avviso), `D14-11` (WCS dalle colonne `VOX:WCS_*` di SIA 1, parametro `calibration` nell'11), `D14-12` (tutte le magnitudini SIMBAD con banda e sistema), `D13-17` (`LINK` ASTRORES solo con `href`, formato dal `content-type` dichiarato), `D13-18` (albero dal MocServer per `vizier_popularity`, dichiarata non documentata; altrimenti alfabetico) e tolte dal Gruppo 3. Nuove nel Gruppo 3: `D13-19` (parametro di regione di `load_catalog`) e `D13-14c` (traduzione UCD1 del CDS, rimandata). Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14). |
+| 2026-10-11 | Claude Code | **Decise dal proprietario** `D13-19` (`region=(centro, raggio)` in `load_catalog`) e `D15-6` (soglia delle ellissi obbligatoria) e tolte dal Gruppo 3. Nuove nel Gruppo 3, dal codice: `D13-20` (sistema di SIMBAD nell'`utype` MANGO), `D15-8` (corpo nella correlazione per campo), `D15-9` (`best` con il servizio CDS). `D13-14c` resta rimandata. Conteggi: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 15). |

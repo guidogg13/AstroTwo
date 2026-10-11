@@ -8,7 +8,13 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-11 — **pezzi fermi di 13 e 14 chiusi** (decisioni del
+**Ultimo aggiornamento:** 2026-10-11 — **modulo 15 scritto (P1–P5)** tranne i pezzi fermi D15-8 e
+D15-9; D13-19 (regione di `load_catalog`) e D15-6 decise; ECSV con il sistema delle posizioni,
+ordine naturale dell'albero, ripetizioni dei test di rete solo per connessione/timeout; 13, 14,
+15 modificati e restano `approvato`. Nuove aperte D13-20, D15-8, D15-9. Test 325 di default,
+337 con la rete. Aperte 19. Prossimo: modulo 16 (proposta in attesa del proprietario).
+Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-11 — **pezzi fermi di 13 e 14 chiusi** (decisioni del
 proprietario D14-10, D14-11, D14-12, D13-17, D13-18; 11, 13, 14 modificati e restano `approvato`):
 ECSV, calibrazione della lista SIA nell'11, magnitudini SIMBAD, `LINK` ASTRORES, albero delle
 collezioni; registro VO di default in HTTPS; `load_catalog` senza regione con `allow_partial`.
