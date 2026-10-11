@@ -23,16 +23,17 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   `astroquery`, `numpy`, `scipy`, `requests`, `pyvo`, `pillow`,
   `matplotlib` (palette; porta `contourpy`), `reproject`; `pytest` per i
   test; licenze verificate, tutte permissive salvo WCSLIB (LGPL-3, vedi
-  sotto). **Modulo 14 (`vo_protocols.py`) scritto in 7 parti P1–P7, un
-  commit per parte, tranne tre pezzi fermi su decisioni aperte** (D14-10
-  unità nel CSV esportato, D14-11 calibrazione della lista SIA nell'11,
-  D14-12 magnitudine del puntatore Simbad). **Modulo 13: P1–P6 scritte,
-  tranne l'albero dinamico delle collezioni (D13-18) e il `LINK` ASTRORES
-  (D13-17)**; resta da valutare il servizio di traduzione UCD1 del CDS
-  come opzione (D13-14b). Nel 10 aggiunte `proper_motion_only` e
-  `parse_sexagesimal`. Dipendenza nuova: `defusedxml` 0.7.1 (licenza PSF).
-  Test: **293 superati di default, 301 con la rete (8 test di rete), 0
-  saltati, 0 falliti** (2026-10-10).
+  sotto). **Modulo 14 (`vo_protocols.py`) scritto in 7 parti P1–P7** e,
+  il 2026-10-11, con i pezzi fermi chiusi (D14-10 ECSV, D14-11
+  `sia_calibration` con il parametro `calibration` dell'11, D14-12
+  magnitudini SIMBAD; registro VO di default `https://dc.g-vo.org/tap`).
+  **Modulo 13: P1–P6 scritte per intero** (D13-17 `LINK` ASTRORES, D13-18
+  albero delle collezioni dal MocServer, `load_catalog` con
+  `allow_partial`); fermo solo il parametro di regione di `load_catalog`
+  (D13-19); traduzione UCD1 del CDS rimandata (D13-14c). Nel 10 aggiunte
+  `proper_motion_only` e `parse_sexagesimal`. Dipendenza nuova:
+  `defusedxml` 0.7.1 (licenza PSF). Test: **299 superati di default, 308
+  con la rete (9 test di rete), 0 saltati, 0 falliti** (2026-10-11).
 - **Vincolo per `60-distribuzione-dmg.md`:** WCSLIB, incluso in astropy, è
   **LGPL-3**; tutte le altre dipendenze sono permissive (BSD, MIT, Apache,
   MPL-2.0 per `certifi`). Gli obblighi LGPL per il `.dmg` vanno specificati
@@ -395,6 +396,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 
 | D13-14b, D13-15, D13-16 | UCD1 tradotti solo se scritti nella raccomandazione IVOA (servizio CDS in P6, opzione esplicita); nelle colonne calcolate un numero scritto prende l'unità della colonna in `+`, `-`, `%`, `min`, `max`, `round` metà al pari; `time_filter` con colonna indicata, `TIMESYS` o parametri, intervallo chiuso; scelte minori confermate | 2026-10-10 | decisione del proprietario, `13` §13 | 13 completo fino a P5 |
 
+| D14-10, D14-11, D14-12, D13-17, D13-18 | ECSV per le tabelle con unità (CSV semplice con avviso `CSV_UNITS_NOT_SAVED`); WCS dalle colonne `VOX:WCS_*` di SIA 1 e parametro `calibration` dell'11 dichiarato; tutte le magnitudini SIMBAD con banda e sistema (AB/Vega/non dichiarato); `LINK` ASTRORES solo con `href`, formato dal `content-type` dichiarato, nessun formato indovinato; albero delle collezioni dal MocServer per `vizier_popularity` ("proprietà non documentata del MocServer"), altrimenti alfabetico | 2026-10-11 | decisione del proprietario, `11`, `13`, `14` §13 | applicate nel codice; T5, T11, T13, T15, T31 |
+| Verifiche e scelte minori (13, 14) | Registro VO di default `https://dc.g-vo.org/tap` (HTTPS, configurabile); server esclusi confermati con il motivo, da ricontrollare; FITS esportati "FITS Standard 4.0" più versione di `astropy`; `load_catalog` senza regione solo entro `max_rows`, altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato; altre scelte minori confermate | 2026-10-11 | decisione del proprietario, `13`, `14` | aperte D13-19 (regione) e D13-14c (UCD1 CDS, rimandata) |
+
 ## 6. Decisioni aperte
 
 Ogni decisione qui ha una voce corrispondente nel file `.md` pertinente.
@@ -421,7 +425,9 @@ A6, A9, A11 per `60`/`40`; Gruppo 3 = 15, con D10-9 da decidere con il 41,
 D11-8 con 20 e 41, A10 ormai solo per cataloghi e HiPS). Il 2026-10-10, dopo
 il modulo 13 fino a P5: 17; **dopo il modulo 14 e P6 del 13: 21 aperte**
 (decisa D14-5; nuove D14-10, D14-11, D14-12, D13-17, D13-18 nel Gruppo 3:
-Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17).
+Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17). Il 2026-10-11, decise le cinque
+e aperte D13-19 e D13-14c: **18 aperte** (Gruppo 1 = 0, Gruppo 2 = 4,
+Gruppo 3 = 14).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -449,14 +455,13 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **modulo
-   14 scritto (P1–P7) e P6 del 13 scritta**, tranne i pezzi fermi su D14-10,
-   D14-11, D14-12, D13-17, D13-18 (decisioni del proprietario attese); da
-   verificare il registro VO di default di `pyvo` (rifiutato da questa
-   rete); poi il prossimo modulo del livello 1 (12, 15, 16, 17, 18 o 19)
-   con divisione in parti, verifiche e punti ambigui da proporre. Regola d'oro n. 8 applicata in tutti i
-   file approvati (11–19, 10 e 17 il 2026-10-10). Aperte anche: D10-9 (con
-   il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
+0. **Subito (fase codice del livello 1):** completi `04`, 10 e 11; **moduli
+   13 e 14 scritti per intero** (pezzi fermi chiusi il 2026-10-11), fermo
+   solo il parametro di regione di `load_catalog` (D13-19); **proposta di
+   divisione del modulo 15 consegnata al proprietario, in attesa del suo
+   ok**; poi gli altri moduli del livello 1 (12, 16, 17, 18, 19) con
+   divisione in parti, verifiche e punti ambigui da proporre. Aperte anche:
+   D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -479,8 +484,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (21): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 17); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (18): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 4, Gruppo 3 = 14); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -520,3 +525,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-10 | Claude Code | **Modulo 13, P2–P5** (decisioni D13-10…D13-14 applicate in 10, 13, 17): P2 lettore ASTRORES (`defusedxml`, `parse_sexagesimal` nuova nel 10); P3 `search` e regole di disegno; P4 senza `calculated_column` (nuova D13-15: numeri accanto a colonne con unità); P5 senza `time_filter` (nuova D13-16); nel 10 `proper_motion_only` (T24) e `parse_sexagesimal` (T25). Verifica: nessuna tabella ufficiale IVOA UCD1 → UCD1+ → nuova D13-14b. Un commit per parte. Test: 247 di default, 251 con la rete. Aperte **20**. |
 | 2026-10-10 | Claude Code | **Modulo 13 completo fino a P5:** D13-14b, D13-15, D13-16 applicate (traduzione UCD1, `calculated_column`, `time_filter`); P6 dopo il 14. Test: 253 di default, 257 con la rete. Aperte **17**. Prossimo: proposta di divisione del modulo 14. |
 | 2026-10-10 | Claude Code | **Modulo 14 scritto (P1–P7) e P6 del 13** (decisioni del proprietario D14-5 e D14-9 applicate in 14, 13 e nella riga H23 di `03`; strumenti IA del 14 annotati nella riga del 32): VOTable ed esportazione, rete con registro e cache, cone search e TAP, elenco dei server e registro VO, DataLink, SIA/SIA2, IDHA (solo errore), SSA, puntatore Simbad, fotometria VizieR, SAMP; nel 13 `load_table`, `load_catalog`, gruppo fisso, `datalink_column`, più correzioni (commenti `#` nei testi delimitati, VOTable senza `nrows`, `utype` e `TUCDn`). Fermi: D14-10, D14-11, D14-12, D13-17, D13-18 (nuove, Gruppo 3). Test: 293 di default, 301 con la rete. Aperte **21**. |
+| 2026-10-11 | Claude Code | **Pezzi fermi di 13 e 14 chiusi** (decisioni del proprietario D14-10, D14-11, D14-12, D13-17, D13-18; autorizzazione a modificare 11, 13, 14, che restano `approvato`): esportazione ECSV e lettura nel 13; `sia_calibration` e parametro `calibration` di `load_image`; magnitudini SIMBAD; `LINK` ASTRORES; albero delle collezioni dal MocServer; registro VO di default in HTTPS; FITS Standard 4.0; `load_catalog` con `allow_partial`. Nuove aperte D13-19 e D13-14c. Test: 299 di default, 308 con la rete. Aperte **18**. Prossimo: modulo 15 (proposta in attesa). |

@@ -8,7 +8,14 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-10 — **modulo 14 scritto (P1–P7) e P6 del 13**, tranne i
+**Ultimo aggiornamento:** 2026-10-11 — **pezzi fermi di 13 e 14 chiusi** (decisioni del
+proprietario D14-10, D14-11, D14-12, D13-17, D13-18; 11, 13, 14 modificati e restano `approvato`):
+ECSV, calibrazione della lista SIA nell'11, magnitudini SIMBAD, `LINK` ASTRORES, albero delle
+collezioni; registro VO di default in HTTPS; `load_catalog` senza regione con `allow_partial`.
+Nuove aperte D13-19 e D13-14c (Gruppo 3). Test 299 di default, 308 con la rete. Aperte 18.
+Prossimo: modulo 15 (proposta di divisione in attesa del proprietario). Riepilogo invariato:
+approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-10 — **modulo 14 scritto (P1–P7) e P6 del 13**, tranne i
 pezzi fermi su D14-10, D14-11, D14-12, D13-17, D13-18 (nuove, Gruppo 3); D14-5 decisa; riga
 H23 di `03` annotata (IDHA). Test 293 di default, 301 con la rete. Aperte 21. Riepilogo
 invariato: approvato 14, bozza 5, non esiste 23, totale 42.

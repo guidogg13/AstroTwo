@@ -37,7 +37,12 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-10, con il modulo 14 scritto e P6 del 13: 21 aperte** — Gruppo 1: **0** ·
+**Dal 2026-10-11, con le decisioni del proprietario sui pezzi fermi: 18 aperte** — Gruppo 1:
+**0** · Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **14** (decise `D14-10`,
+`D14-11`, `D14-12`, `D13-17`, `D13-18`; nuove `D13-19` regione di `load_catalog` e
+`D13-14c` traduzione UCD1 del CDS, rimandata a bassa priorità).
+
+Prima, il 2026-10-10, con il modulo 14 scritto e P6 del 13: 21 aperte — Gruppo 1: **0** ·
 Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **17** (decisa `D14-5`; nuove `D14-10`,
 `D14-11`, `D14-12`, `D13-17`, `D13-18`).
 
@@ -202,7 +207,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (17)
+## 5. GRUPPO 3 — rimandabili al momento del codice (14)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -218,11 +223,9 @@ gruppi successivi, A8 dopo il livello 1).
 | `D15-6` | Valore predefinito in sigma della soglia della correlazione con ellissi d'errore? | `15-core-crossmatch.md` |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
-| `D14-10` | Unità delle colonne nel CSV esportato: (a) riga di commento `#` informativa, (b) **ECSV** di astropy riconosciuto anche dal 13, (c) nessuna unità (T5 solo sui valori)? Raccomandazione: (b). Fermo solo questo punto | `14-core-protocolli-vo.md` §13 |
-| `D14-11` | Calibrazione della lista SIA usata dall'11 quando l'immagine non ne ha una: l'11 non ha l'interfaccia e questo lavoro non poteva toccarlo. (a) intestazione WCS dalle colonne `VOX:WCS_*` (SIA 1) + parametro facoltativo nell'11; (b) solo SIA 1 su richiesta; (c) nessun uso. Raccomandazione: (a), con autorizzazione a modificare l'11. Ferma la seconda metà di T11 | `14-core-protocolli-vo.md` §13 |
-| `D14-12` | Magnitudine dell'oggetto del puntatore Simbad (la specifica non dice quale banda): (a) tutte le bande disponibili, (b) banda scelta dall'utente, (c) banda fissa dichiarata? Raccomandazione: (a). Fermo solo questo punto | `14-core-protocolli-vo.md` §13 |
-| `D13-17` | Dati ASTRORES in un `LINK` esterno: la DTD non dice il formato dei dati collegati (e il link può essere `href`, `action` o `gref`). (a) solo `href`, letti come il `CSV` della DTD; (b) come (a) ma solo con `content-type` di testo separato; (c) nessuna lettura. Raccomandazione: (b). Fermo solo questo punto | `13-core-cataloghi.md` §13 |
-| `D13-18` | Albero delle collezioni ordinato per popolarità (D13-3): l'unica fonte trovata è la proprietà `vizier_popularity` del MocServer del CDS, non documentata. (a) albero dal MocServer ordinato per `vizier_popularity`, client nel 14; (b) senza ordine per popolarità; (c) da `TAP_SCHEMA` di TAPVizieR. Raccomandazione: (a), con conferma del CDS sul significato. Fermo solo l'albero dinamico | `13-core-cataloghi.md` §13 |
+| `D13-19` | Parametro di regione di `load_catalog` (la decisione del 2026-10-11 vuole un errore che "chiede una regione", ma `load_catalog` non ne ha): (a) `region=(centro, raggio)` con colonne di posizione da `TAP_SCHEMA` per UCD e sistema dichiarato; (b) nessun parametro, l'errore rimanda a `tap_query` con `CONTAINS`; (c) cone search VizieR. Raccomandazione: (a). Fermo solo il parametro (oggi `REGION_REQUIRED` rimanda a `tap_query`) | `13-core-cataloghi.md` §13 |
+| `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
+
 ## 6. Note
 
 - Le decisioni chiuse non compaiono nei Gruppi 2 e 3: **D12-2** e **D17-1**
@@ -278,3 +281,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-10 | Claude Code | Decise dal proprietario `D13-10` (`skydist` con astropy, usato anche dal 17), `D13-11` (DataLink in P6), `D13-12` (`proper_motion_only` nel 10; righe senza moto proprio mascherate), `D13-13` (sottoinsiemi in un VOTable scelto dall'utente), `D13-14` (lettura ASTRORES, punti a, c, d, e). Nuove nel Gruppo 3: `D13-14b`, `D13-15`, `D13-16`. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 16). |
 | 2026-10-10 | Claude Code | Decise dal proprietario `D13-14b` (solo gli UCD1 della raccomandazione IVOA), `D13-15` (numeri con l'unità della colonna in `+`, `-`, `%`, `min`, `max`), `D13-16` (`time_filter`). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 13). |
 | 2026-10-10 | Claude Code | Decisa dal proprietario `D14-5` (`max_rows` 100 000, fino al tetto del 13) e tolta dal Gruppo 3; `D14-1` aggiornata (SAMP con `pyvo.samp`). Nuove nel Gruppo 3, dal codice del 14 e di P6 del 13: `D14-10` (unità nel CSV), `D14-11` (calibrazione della lista SIA nell'11), `D14-12` (magnitudine del puntatore Simbad), `D13-17` (`LINK` ASTRORES), `D13-18` (albero delle collezioni e popolarità). Conteggi: aperte **21** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17). |
+| 2026-10-11 | Claude Code | **Decise dal proprietario** `D14-10` (ECSV per le tabelle con unità, CSV semplice con avviso), `D14-11` (WCS dalle colonne `VOX:WCS_*` di SIA 1, parametro `calibration` nell'11), `D14-12` (tutte le magnitudini SIMBAD con banda e sistema), `D13-17` (`LINK` ASTRORES solo con `href`, formato dal `content-type` dichiarato), `D13-18` (albero dal MocServer per `vizier_popularity`, dichiarata non documentata; altrimenti alfabetico) e tolte dal Gruppo 3. Nuove nel Gruppo 3: `D13-19` (parametro di regione di `load_catalog`) e `D13-14c` (traduzione UCD1 del CDS, rimandata). Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14). |
