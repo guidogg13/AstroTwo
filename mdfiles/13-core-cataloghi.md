@@ -24,6 +24,25 @@ suo VOTable.
   (Hipparcos, TYCHO-2, Gaia, 2MASS, ecc.) per identificatore; il
   trasferimento dei dati è di `14-core-protocolli-vo.md`, qui si gestisce la
   tabella risultante.
+  - **Albero delle collezioni (D13-3, D13-18 decisa il 2026-10-11):**
+    `collection_tree` legge dal **MocServer del CDS** (client
+    `vizier_collections` nel 14) le collezioni di cataloghi `CDS/...` con
+    `ID`, titolo e proprietà `vizier_popularity`; l'albero segue i livelli
+    dell'identificativo VizieR (es. `I` → `I/355` → `I/355/gaiadr3`; le
+    foglie sono le collezioni, utilizzabili con `load_catalog`); i record
+    che non sono collezioni VizieR (es. `CDS/Simbad`, già nel gruppo fisso)
+    sono esclusi con l'avviso `COLLECTION_SKIPPED`. **Ordine:** fratelli per
+    `vizier_popularity` **decrescente** (per un nodo interno: il massimo del
+    suo sottoalbero), a pari valore in ordine alfabetico dell'identificativo;
+    le collezioni senza la proprietà dopo le altre, in ordine alfabetico
+    (`POPULARITY_MISSING`); un valore non intero vale come assente
+    (`POPULARITY_INVALID`). Il risultato **dichiara** l'ordine: "ordine per
+    vizier_popularity, **proprietà non documentata del MocServer**"; se la
+    proprietà manca in tutta la risposta, ordine alfabetico, dichiarato.
+    Verifica del 2026-10-11: risposta JSON di 37 306 collezioni (circa
+    5 MB, pochi secondi), `vizier_popularity` presente in 37 302; il
+    valore è lo stesso per tutte le tabelle di un catalogo (es. 1000 per
+    `I/355/*`).
 - **Tabelle da file locale (D2, P1) e da URL (D3, P6):** VOTable, CSV,
   tabelle FITS e gli altri formati di H22; lettura dello schema, delle unità,
   dei nomi delle colonne e degli UCD. **I VOTable locali si leggono
@@ -452,6 +471,11 @@ suo VOTable.
 - **`CatalogTable.request`** / **`CatalogTable.descriptors`** (P6) —
   richiesta registrata dal 14 (`RequestRecord`) per i dati da rete e
   descrittori di servizio del VOTable.
+- **`collection_tree(*, cache=None, refresh=False, timeouts=None)`** (P6,
+  D13-18) — `CollectionTree` (`roots` di `CollectionNode` con `id`,
+  `title`, `popularity`, `table`, `children`; `ordering` dichiarato;
+  fonte, data, richiesta registrata, avvisi; `find(id)`), ordinato come in
+  §3.
 - **`FIXED_COLLECTIONS`** (P6, D13-3) — gruppo fisso: `simbad` (tabella
   `basic` del TAP di SIMBAD), `I/355/gaiadr3` (Gaia DR3), `II/246/out`
   (2MASS), ognuno con la voce TAP dell'elenco del 14.
@@ -556,6 +580,8 @@ suo VOTable.
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
 | Catalogo sconosciuto | errore con riferimento all'id | `CATALOG_UNKNOWN` |
+| Record del MocServer che non è una collezione VizieR | escluso dall'albero | avviso `COLLECTION_SKIPPED` |
+| Collezioni senza `vizier_popularity` (o con un valore non intero) | dopo le altre, in ordine alfabetico | avvisi `POPULARITY_MISSING`, `POPULARITY_INVALID` |
 | File assente o non leggibile | nessuna tabella aperta, errore con il percorso | `TABLE_UNREADABLE` |
 | Tabella senza colonne di posizione da UCD/metadati né confermate | caricamento riuscito con avviso; le funzioni di posizione danno errore | `NO_COORD_COLUMNS` |
 | Colonne di posizione senza sistema di riferimento dichiarato | funzioni che lo richiedono rifiutate | `FRAME_UNKNOWN` |
@@ -627,6 +653,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T23 | Parallasse e moto proprio mancanti | tabella con righe senza parallasse, con parallasse negativa e senza moto proprio | nessuna riga esclusa; righe senza parallasse valida propagate solo con il moto proprio (`pm_only`), valori uguali ad Astropy senza distanza; righe senza moto proprio mascherate (`missing`); conteggi nel report; colonne originali intatte | ricalcolo con Astropy |
 | T28 | ASTRORES non conforme | campo `F` in gradi con dati sessagesimali; `ref` `#id(...)` | colonna in gradi uguale ad `astropy.coordinates.Angle` (ore per RA, gradi per Dec), colonna `_text` conservata, `ASTRORES_TYPE_MISMATCH`; `ref` accettato con `ASTRORES_NONCONFORMING_REF` | ricalcolo con Astropy |
 | T30 | Filtro temporale | VOTable con `TIMESYS` (MJD, TDB) e colonna ISO senza `TIMESYS`; intervallo `[inizio, fine]` | estremi inclusi, mancanti esclusi e contati; con `TIMESYS` parametri rifiutati; senza `TIMESYS` formato e scala obbligatori; inizio > fine → `EPOCH_INVALID` | confronto con `astropy.time` |
+| T31 | Albero delle collezioni (D13-18) | MocServer simulato con popolarità diverse, uguali, assenti, un record `CDS/Simbad`; poi senza la proprietà; poi risposta non JSON; test di rete sul MocServer | ordine decrescente, a pari valore alfabetico, assenti in fondo; ordine dichiarato "proprietà non documentata del MocServer"; senza proprietà ordine alfabetico dichiarato; `CDS/Simbad` escluso; seconda chiamata dalla cache; risposta non valida → `SERVICE_ERROR` del 14 | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
@@ -664,7 +691,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
   gruppo fisso verificati sui servizi del CDS — `I/355/gaiadr3` (Gaia DR3
   Part 1, MocServer e TAPVizieR), `II/246/out` (2MASS PSC, MocServer e
   TAPVizieR, interrogabile con il nome diretto), SIMBAD = tabella `basic` del
-  suo TAP; il criterio di popolarità: vedi D13-18 (aperta). **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
+  suo TAP; il criterio di popolarità: vedi D13-18 (decisa il 2026-10-11). **Motivazione (nostra, 2026-10-10):** le collezioni sono migliaia e
   cambiano nel tempo, quindi l'albero si legge dal servizio invece di una
   tabella mantenuta a mano; l'ordine per popolarità mette in alto i
   cataloghi più usati dalla comunità (criterio di popolarità: proprietà del
@@ -750,22 +777,13 @@ sono verificati da `34-ia-verifica-risultati.md`.
   d), §7, §10, §12. Regola di accordo tra FIELD e dati collegati (stesse
   colonne, nessuna differenza di unità, UCD e tipo): scelta del
   2026-10-11, da confermare. (Aperta il 2026-10-10.)
-- **D13-18 — Albero delle collezioni e criterio di popolarità (D13-3): DA
-  DECIDERE (aperta il 2026-10-10, Gruppo 3).** L'unico servizio trovato che
-  elenca le collezioni di VizieR con una popolarità è il **MocServer** del
-  CDS (`https://alasky.cds.unistra.fr/MocServer/query`): ogni record ha la
-  proprietà `vizier_popularity` (es. 1000 per Gaia DR3, 320 per 2MASS),
-  **ma la pagina di documentazione del MocServer non la descrive** (verifica
-  del 2026-10-10), e il MocServer è anche il servizio dei MOC (16). Opzioni:
-  (a) albero dal MocServer (gerarchia degli identificativi VizieR, es.
-  `I/…`, `II/…`), ordinato per `vizier_popularity`, con il client nel 14
-  (voce dell'elenco dei server); (b) albero dal MocServer senza ordine per
-  popolarità (ordine degli identificativi); (c) albero da `TAP_SCHEMA` di
-  TAPVizieR (nessuna popolarità). **Raccomandazione:** (a), chiedendo al CDS
-  conferma del significato di `vizier_popularity` e dichiarando nel
-  risultato che l'ordine viene da quella proprietà. **Fermo solo l'albero
-  dinamico;** il gruppo fisso (`FIXED_COLLECTIONS`) e `load_catalog` sono
-  scritti.
+- **D13-18 — Albero delle collezioni e criterio di popolarità (D13-3):
+  DECISA il 2026-10-11 (decisione del proprietario).** L'albero usa la
+  proprietà `vizier_popularity` del MocServer del CDS, dichiarata nel
+  risultato come "proprietà non documentata del MocServer"; se manca,
+  ordinamento alfabetico. Client nel 14 (`vizier_collections`). Applicata
+  in §3, §7, §10, §12 (T31). (Aperta il 2026-10-10: opzioni MocServer con
+  popolarità, senza popolarità, `TAP_SCHEMA`; raccomandazione la prima.)
 - **Scelte minori del 2026-10-10 confermate dal proprietario:** epoca di
   origine (parametro vietato se è nei metadati, colonna in anni giuliani);
   equinozio ed epoca ASTRORES numerici giuliani (FK5/ICRS) o besseliani
@@ -803,3 +821,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **P6 scritta tranne l'albero dinamico (D13-18) e il `LINK` ASTRORES (D13-17)** (autorizzazione esplicita a modificare il file approvato): `load_table` (file locale o URL tramite `download_table` del 14), `load_catalog` (TAP VizieR o gruppo fisso tramite `tap_query` del 14; `CATALOG_UNKNOWN`), `FIXED_COLLECTIONS` con identificativi verificati, `datalink_column` (descrittore DataLink o content-type DataLink nella colonna del formato, forma ObsCore), campi `request` e `descriptors` di `CatalogTable` (§7); test con servizi simulati e test di rete su 2MASS. Nuove decisioni aperte **D13-17** e **D13-18** (Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Con D14-10** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): lettura dell'**ECSV** di `astropy` (formato `ecsv`, riconosciuto dalla prima riga `# %ECSV`, anche come `format` esplicito), con unità, UCD e valori mancanti; sistema delle posizioni non presente nell'ECSV (`FRAME_UNKNOWN`). Test di andata e ritorno nel 14 (T5). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-17 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `LINK` ASTRORES letti solo con `href`, formato dal `content-type` del `LINK` (verificato come attributo nella DTD v0.9) con i lettori CSV, TSV, VOTable e FITS del modulo, nessun formato indovinato; dati scaricati con il 14 tramite `load_table` (anche per un ASTRORES scaricato da URL, con `href` relativo risolto sull'URL); `read_table` senza rete rimanda a `load_table`; accordo stretto tra FIELD e dati collegati (scelta da confermare); avvisi `ASTRORES_LINK`, `ASTRORES_LINK_SOURCE`; T15 completo (§3, §7, §10, §12, §13). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D13-18 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `collection_tree`, `CollectionTree`, `CollectionNode` — albero delle collezioni dal MocServer del CDS (client `vizier_collections` nel 14), ordinato per `vizier_popularity` decrescente (nodi interni: massimo del sottoalbero; pari valore e assenti in ordine alfabetico), dichiarato come "proprietà non documentata del MocServer", ordine alfabetico se la proprietà manca; `CDS/Simbad` escluso; avvisi `COLLECTION_SKIPPED`, `POPULARITY_MISSING`, `POPULARITY_INVALID`; verifica in linea del MocServer; nuovo T31 (§3, §7, §10, §12, §13). Stato `approvato` invariato. |

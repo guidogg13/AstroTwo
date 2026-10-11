@@ -47,8 +47,14 @@ from astrotwo.core.coordinates_wcs import (
 __all__ = [
     "CONSTANTS",
     "DataLinkColumn",
+    "ALPHABETICAL_NOTE",
+    "ASTRORES_LINK_TYPES",
+    "CollectionNode",
+    "CollectionTree",
     "FIXED_COLLECTIONS",
     "FixedCollection",
+    "POPULARITY_NOTE",
+    "collection_tree",
     "datalink_column",
     "load_catalog",
     "load_table",
@@ -2157,6 +2163,114 @@ def load_catalog(catalog_id: str, *, max_rows: int | None = None, limits: TableL
                                 f"{exc.details.get('service_message', exc.message)}") from exc
         raise
     return dataclasses.replace(_from_vo_result(result), history=(f"catalogo {catalog_id} da {server}",))
+
+
+#: Dichiarazione dell'ordine dell'albero (D13-18): la proprietà non è descritta dalla documentazione del MocServer.
+POPULARITY_NOTE = "ordine per vizier_popularity, proprietà non documentata del MocServer"
+ALPHABETICAL_NOTE = "ordine alfabetico degli identificativi (vizier_popularity assente)"
+
+
+@dataclass(frozen=True)
+class CollectionNode:
+    """Nodo dell'albero delle collezioni: un livello dell'identificativo VizieR (es. ``I``, ``I/355``,
+    ``I/355/gaiadr3``); ``table`` vero se l'identificativo è una collezione del MocServer (per ``load_catalog``)."""
+
+    id: str
+    title: str | None
+    popularity: int | None  # massimo del sottoalbero; None se la proprietà manca in tutto il sottoalbero
+    table: bool
+    children: tuple[CollectionNode, ...] = ()
+
+    def walk(self):
+        yield self
+        for child in self.children:
+            yield from child.walk()
+
+
+@dataclass(frozen=True)
+class CollectionTree:
+    """Albero dinamico delle collezioni VizieR (D13-3, D13-18) con l'ordine usato dichiarato."""
+
+    roots: tuple[CollectionNode, ...]
+    ordering: str
+    source: str
+    retrieved_at: datetime
+    request: object  # RequestRecord del 14
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    def find(self, node_id: str) -> CollectionNode | None:
+        for root in self.roots:
+            for node in root.walk():
+                if node.id == node_id:
+                    return node
+        return None
+
+
+def _popularity(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(number) if math.isfinite(number) and number == int(number) else None
+
+
+def collection_tree(*, cache=None, refresh: bool = False, timeouts=None) -> CollectionTree:
+    """Albero delle collezioni VizieR dal MocServer del CDS (client nel 14), ordinato per ``vizier_popularity``
+    (decrescente, a pari valore in ordine alfabetico) e dichiarato come proprietà non documentata; senza la
+    proprietà, ordine alfabetico (D13-18). Il gruppo fisso è ``FIXED_COLLECTIONS``."""
+    from astrotwo.core import vo_protocols as vo
+
+    kwargs = {} if timeouts is None else {"timeouts": timeouts}
+    fetched = vo.vizier_collections(cache=cache, refresh=refresh, **kwargs)
+    notes = list(fetched.warnings)
+    nodes: dict[str, dict] = {}
+    skipped, invalid = [], 0
+    for record in fetched.records:
+        parts = record["ID"].split("/")
+        if len(parts) < 3 or parts[0] != "CDS" or not all(parts[1:]):
+            skipped.append(record["ID"])  # es. CDS/Simbad: non è una collezione VizieR
+            continue
+        popularity = _popularity(record.get("vizier_popularity"))
+        if popularity is None and record.get("vizier_popularity") is not None:
+            invalid += 1
+        for depth in range(2, len(parts) + 1):
+            node_id = "/".join(parts[1:depth])
+            node = nodes.setdefault(node_id, {"title": None, "popularity": None, "table": False, "children": set()})
+            if depth > 2:
+                nodes["/".join(parts[1:depth - 1])]["children"].add(node_id)
+            if popularity is not None:
+                node["popularity"] = max(popularity, node["popularity"] or popularity)
+        leaf = nodes["/".join(parts[1:])]
+        leaf["table"] = True
+        leaf["title"] = record.get("obs_title")
+    any_popularity = any(n["popularity"] is not None for n in nodes.values())
+
+    def key(node_id: str):
+        pop = nodes[node_id]["popularity"]
+        if not any_popularity:
+            return (0, 0, node_id)
+        return (pop is None, -(pop or 0), node_id)
+
+    def build(node_id: str) -> CollectionNode:
+        n = nodes[node_id]
+        return CollectionNode(node_id, n["title"], n["popularity"], n["table"],
+                              tuple(build(c) for c in sorted(n["children"], key=key)))
+
+    roots = tuple(build(r) for r in sorted((i for i in nodes if "/" not in i), key=key))
+    if skipped:
+        notes.append(("COLLECTION_SKIPPED", f"record non VizieR esclusi dall'albero: {', '.join(skipped[:10])}"
+                      + (" …" if len(skipped) > 10 else "")))
+    if invalid:
+        notes.append(("POPULARITY_INVALID", f"{invalid} record con vizier_popularity non intera: trattati come assenti"))
+    missing = sum(1 for n in nodes.values() if n["table"] and n["popularity"] is None)
+    if any_popularity and missing:
+        notes.append(("POPULARITY_MISSING", f"{missing} collezioni senza vizier_popularity: dopo le altre, in "
+                      "ordine alfabetico"))
+    ordering = POPULARITY_NOTE if any_popularity else ALPHABETICAL_NOTE
+    return CollectionTree(roots=roots, ordering=ordering, source=f"MocServer del CDS ({vo.MOCSERVER_URL})",
+                          retrieved_at=fetched.request.retrieved_at, request=fetched.request, warnings=tuple(notes))
 
 
 _DATALINK_MIME = "application/x-votable+xml;content=datalink"

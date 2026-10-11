@@ -72,6 +72,9 @@ __all__ = [
     "SIMBAD_FLUX_SYSTEMS",
     "SimbadPointer",
     "VIZIER_PHOTOMETRY_URL",
+    "MOCSERVER_URL",
+    "MocServerRecords",
+    "vizier_collections",
     "simbad_pointer",
     "vizier_photometry",
     "Spectrum",
@@ -1639,6 +1642,39 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
                        nbref=None if not valid[choice] else int(nbref[choice]), separation=sep[choice],
                        magnitudes=magnitudes)
     return SimbadPointer(obj, len(found), source, record, notes, magnitudes_request=mag_result.request)
+
+
+#: MocServer del CDS (D13-18): elenco delle collezioni VizieR con le loro proprietà (verificato il 2026-10-11).
+MOCSERVER_URL = "https://alasky.cds.unistra.fr/MocServer/query"
+_MOCSERVER_FIELDS = "ID,obs_title,vizier_popularity"
+
+
+@dataclass(frozen=True)
+class MocServerRecords:
+    """Record del MocServer (proprietà come stringhe, così come il servizio le dà) con la richiesta registrata."""
+
+    records: tuple[dict, ...]
+    request: RequestRecord
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def vizier_collections(*, cache: SharedCache | None = None, refresh: bool = False,
+                       timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> MocServerRecords:
+    """Collezioni di cataloghi del CDS dal MocServer (ID, titolo, ``vizier_popularity``), per l'albero del 13."""
+    params = {"expr": "ID=CDS/* && dataproduct_type=catalog", "get": "record", "fmt": "json",
+              "fields": _MOCSERVER_FIELDS}
+    response = _http("mocserver", MOCSERVER_URL, params, cache=cache, refresh=refresh, timeouts=timeouts)
+    try:
+        records = json.loads(response.payload.decode("utf-8"))
+        if not isinstance(records, list) or not all(isinstance(r, dict) and isinstance(r.get("ID"), str)
+                                                    for r in records):
+            raise ValueError("attesa una lista di record con ID")
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise VoProtocolsError("SERVICE_ERROR", f"{MOCSERVER_URL}: risposta non leggibile ({exc})",
+                               url=MOCSERVER_URL) from exc
+    notes = response.notes + _store(response, "mocserver", cache)
+    record = _record("mocserver", "vizier_collections", {}, response, len(records))
+    return MocServerRecords(records=tuple(records), request=record, warnings=notes)
 
 
 def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limits: TableLimits | None = None,

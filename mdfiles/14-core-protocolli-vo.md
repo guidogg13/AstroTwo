@@ -223,6 +223,17 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   l'avviso `SIMBAD_SYSTEM_UNKNOWN`. Nessuna magnitudine → avviso
   `SIMBAD_NO_MAGNITUDE`. La
   costruzione della SED è del modulo 20 (deciso il 2026-10-08).
+- **Collezioni del MocServer (D13-18, decisa il 2026-10-11):**
+  `vizier_collections` interroga il **MocServer del CDS**
+  (`MOCSERVER_URL` = `https://alasky.cds.unistra.fr/MocServer/query`,
+  verificato in linea il 2026-10-11) con l'espressione `ID=CDS/* &&
+  dataproduct_type=catalog`, risposta JSON con `ID`, `obs_title` e
+  `vizier_popularity`; stessa sessione, cache e registro delle richieste
+  delle altre funzioni (protocollo `mocserver`); risposta non leggibile →
+  `SERVICE_ERROR`. Il MocServer non entra nell'elenco dei server (che
+  copre cone search, TAP, SIA, SSA): l'URL è una costante del modulo,
+  come quello del servizio fotometrico di VizieR. L'albero si costruisce
+  nel 13 (`collection_tree`).
 - **Equivalente di VOApp/VOObserver (H19):** per i programmi non Python lo
   scambio passa da SAMP (questo modulo); per i programmi Python dall'API del
   24; nessuna interfaccia nuova (decisione del 2026-10-08).
@@ -351,6 +362,9 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   banda, descrizione, valore, errore, unità, sistema `AB`/`Vega`/`None`,
   qualità, riferimento), richiesta registrata in `magnitudes_request`
   (D14-12).
+- **`vizier_collections(*, cache, refresh, timeouts)`** (D13-18) —
+  `MocServerRecords` (record del MocServer come dati dal servizio, richiesta
+  registrata, avvisi), per l'albero delle collezioni del 13.
 - **`vizier_photometry(center, radius, ...)`** (P6, H17) — misure di flusso
   dal servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
 - **`SampHub`** (classe, P7) — hub SAMP (H14, G3, D14-2 decisa) con
@@ -377,6 +391,7 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | `pyvo` (D14-1) | ricerche SIA e SIA2 (H23) | stessa libreria VO già scelta |
 | `astroquery.simbad` | puntatore Simbad (H17) | servizio CDS ufficiale, già usato dal modulo 10 |
 | Servizio fotometrico di VizieR (CDS) | misure di flusso per la SED (H17) | servizio pubblico che raccoglie in un'unica risposta le misure di flusso dei cataloghi di VizieR; interfaccia da verificare prima del codice |
+| MocServer del CDS (D13-18) | elenco delle collezioni VizieR con `vizier_popularity` per l'albero del 13 | unico servizio trovato che elenca le collezioni con una popolarità; proprietà non documentata, dichiarata nel risultato |
 | `defusedxml` 0.7.1 (D14-8; licenza PSF, già tra le dipendenze) | apertura sicura dei file IDHA prima del rifiuto (H23) | parser XML sicuro per file non fidati |
 | `requests` (già tra le dipendenze) | sessione HTTP con i timeout comuni di `04` | client HTTP consolidato, usato anche da `pyvo` |
 
@@ -530,7 +545,8 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   **Escluse, da verificare:** ESASky TAP (servizio in linea, ma URL non
   trovato sulle pagine ufficiali ESA), MAST CAOM SIA 2 (URL ufficiale, ma
   nessuna risposta in 60 s il 2026-10-10), cone search di SIMBAD (in linea,
-  non documentato sulle pagine del CDS); XMatch e MocServer non sono servizi
+  non documentato sulle pagine del CDS); XMatch e MocServer (il MocServer
+  serve anche all'albero delle collezioni del 13, D13-18) non sono servizi
   dei protocolli dell'elenco (cone search, TAP, SIA, SSA) e restano ai moduli
   15 e 16; nessun servizio SSA generale trovato (quelli di HEASARC chiedono
   il nome di una tabella).
@@ -626,3 +642,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **D14-11 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare i file approvati 11 e 14): `sia_calibration` / `SiaCalibration` (intestazione WCS dalle colonne `VOX:WCS_*` di SIA 1, verificate sulla raccomandazione SIA 1.0 §4.2; ICRS, FK5, FK4, GAL tradotti, ECL e SGAL no; equinozio mai assunto; validazione con il modulo 10); seconda metà di T11 completa con l'immagine caricata dall'11 (§3, §7, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D14-12 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `simbad_pointer` restituisce tutte le magnitudini di SIMBAD (`SimbadMagnitude`, tabelle `flux` e `filter` dal TAP di SIMBAD con `tap_query`, `magnitudes_request`), con banda e sistema dichiarati; verificato sul `TAP_SCHEMA` di SIMBAD che `system` vale A = AB, V = Vega ed è vuoto per una parte delle misure (sistema `None`, avviso `SIMBAD_SYSTEM_UNDECLARED`; nuovi anche `SIMBAD_SYSTEM_UNKNOWN`, `SIMBAD_NO_MAGNITUDE`); T13 aggiornato (§3, §6, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Con D13-17** (13): `download_table` passa al lettore del 13 la funzione di rete per i dati in un `LINK` ASTRORES (stessa cache e stessi timeout, `href` relativo risolto sull'URL scaricato). Nessun altro comportamento cambia. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Con D13-18** (13; decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `vizier_collections`, `MocServerRecords`, `MOCSERVER_URL` — collezioni dal MocServer del CDS (JSON, protocollo `mocserver`, cache e registro comuni), verificato in linea il 2026-10-11 (§3, §7, §8, D14-4). Stato `approvato` invariato. |

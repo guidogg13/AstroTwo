@@ -1011,6 +1011,63 @@ def test_t15_astrores_link_refused(service, cache, tmp_path):
         assert info.value.code == "ASTRORES_UNREADABLE" and word in info.value.message
 
 
+def mocserver_route(records):
+    import json
+    return lambda request: (200, "application/json", json.dumps(records))
+
+
+def test_collection_tree_popularity(service, cache, monkeypatch):
+    from astrotwo.core.catalogs import ALPHABETICAL_NOTE, POPULARITY_NOTE, collection_tree
+
+    records = [
+        {"ID": "CDS/II/246/out", "obs_title": "2MASS", "vizier_popularity": "320"},
+        {"ID": "CDS/I/355/gaiadr3", "obs_title": "Gaia DR3", "vizier_popularity": "1000"},
+        {"ID": "CDS/I/355/paramp", "obs_title": "Gaia DR3 paramp", "vizier_popularity": "1000"},
+        {"ID": "CDS/I/239/hip_main", "obs_title": "Hipparcos", "vizier_popularity": "50"},
+        {"ID": "CDS/I/100/a", "obs_title": "senza popolarità"},
+        {"ID": "CDS/I/101/b", "obs_title": "anche lui"},
+        {"ID": "CDS/Simbad", "obs_title": "SIMBAD"},
+    ]
+    service.routes["/moc"] = mocserver_route(records)
+    monkeypatch.setattr(vo, "MOCSERVER_URL", service.url + "/moc")
+    tree = collection_tree(cache=cache)
+    params = service.requests[-1]["params"]
+    assert params["fmt"] == "json" and "vizier_popularity" in params["fields"]
+    assert tree.ordering == POPULARITY_NOTE and "non documentata" in tree.ordering
+    assert [r.id for r in tree.roots] == ["I", "II"]  # 1000 prima di 320
+    i = tree.find("I")
+    assert i.popularity == 1000 and not i.table
+    # Decrescente per popolarità, poi le collezioni senza la proprietà in ordine alfabetico.
+    assert [c.id for c in i.children] == ["I/355", "I/239", "I/100", "I/101"]
+    assert [c.id for c in tree.find("I/355").children] == ["I/355/gaiadr3", "I/355/paramp"]  # pari: alfabetico
+    leaf = tree.find("II/246/out")
+    assert leaf.table and leaf.title == "2MASS" and leaf.popularity == 320
+    codes = dict(tree.warnings)
+    assert "CDS/Simbad" in codes["COLLECTION_SKIPPED"] and "2 collezioni" in codes["POPULARITY_MISSING"]
+    assert tree.request.protocol == "mocserver" and tree.find("Simbad") is None
+    assert collection_tree(cache=cache).request.from_cache
+    # Proprietà assente ovunque: ordine alfabetico dichiarato.
+    service.routes["/moc"] = mocserver_route([{"ID": r["ID"], "obs_title": r["obs_title"]} for r in records])
+    plain = collection_tree(cache=cache, refresh=True)
+    assert plain.ordering == ALPHABETICAL_NOTE and [c.id for c in plain.find("I").children] == [
+        "I/100", "I/101", "I/239", "I/355"]
+    service.routes["/moc"] = lambda r: (200, "application/json", "non è json")
+    with pytest.raises(vo.VoProtocolsError) as err:
+        collection_tree(cache=cache, refresh=True)
+    assert err.value.code == "SERVICE_ERROR"
+
+
+@pytest.mark.network
+def test_collection_tree_network(cache):
+    from astrotwo.core.catalogs import POPULARITY_NOTE, collection_tree
+
+    tree = collection_tree(cache=cache)
+    assert tree.ordering == POPULARITY_NOTE
+    assert tree.find("I/355/gaiadr3").table and tree.find("II/246/out").table
+    pops = [r.popularity for r in tree.roots]
+    assert pops == sorted(pops, reverse=True)
+
+
 def test_load_catalog_vizier_tap(service, cache, monkeypatch):
     def tap(request):
         query = request["params"]["QUERY"]
