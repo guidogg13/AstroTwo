@@ -909,6 +909,108 @@ def test_load_table_from_url(service, cache, tmp_path):
     assert local.request is None and local.rows == 3
 
 
+LINKED = """<?xml version="1.0"?>
+<ASTRO>
+ <DEFINITIONS><COOSYS ID="eq" system="ICRS"/></DEFINITIONS>
+ <RESOURCE><TABLE>
+  <FIELD ref="eq" ucd="pos.eq.ra;meta.main" unit="deg" datatype="F"><NAME>RA</NAME><DESCRIPTION>Ascensione retta</DESCRIPTION></FIELD>
+  <FIELD ref="eq" ucd="pos.eq.dec;meta.main" unit="deg" datatype="F"><NAME>DE</NAME></FIELD>
+  <FIELD unit="mag" datatype="F"><NAME>Vmag</NAME></FIELD>
+  <FIELD datatype="A"><NAME>Id</NAME></FIELD>
+  <DATA><LINK {link}/></DATA>
+ </TABLE></RESOURCE>
+</ASTRO>
+"""
+LINKED_ROWS = {"RA": [10.5, 11.5], "DE": [-3.25, -4.25], "Vmag": [11.2, 12.4], "Id": ["a", "bb"]}
+
+
+def linked_payloads():
+    """Gli stessi dati nei quattro formati ammessi per un LINK (D13-17), scritti con astropy nel test."""
+    t = Table(LINKED_ROWS)
+    out = {}
+    for fmt, kw in (("csv", dict(format="csv")), ("tsv", dict(format="tab"))):
+        buffer = io.StringIO()
+        astropy_ascii.write(t, buffer, **kw)
+        out[fmt] = buffer.getvalue().encode()
+    buffer = io.BytesIO()
+    t.write(buffer, format="votable")
+    out["votable"] = buffer.getvalue()
+    buffer = io.BytesIO()
+    fits.HDUList([fits.PrimaryHDU(), fits.table_to_hdu(t)]).writeto(buffer)
+    out["fits"] = buffer.getvalue()
+    return out
+
+
+def test_t15_astrores_link(service, cache, tmp_path):
+    payloads = linked_payloads()
+    types = {"csv": "text/csv", "tsv": "text/tab-separated-values", "votable": "application/x-votable+xml",
+             "fits": "application/fits"}
+    for fmt, ctype in types.items():
+        service.routes[f"/dati.{fmt}"] = (lambda body: lambda r: (200, "application/octet-stream", body))(payloads[fmt])
+        path = tmp_path / f"link_{fmt}.xml"
+        path.write_text(LINKED.format(link=f'href="{service.url}/dati.{fmt}" content-type="{ctype}; charset=utf-8"'),
+                        encoding="utf-8")
+        with pytest.raises(CatalogsError) as info:  # read_table non usa la rete
+            read_table(path)
+        assert info.value.code == "ASTRORES_UNREADABLE" and "load_table" in info.value.message
+        cat = load_table(path, cache=cache)
+        t = cat.table
+        assert t.colnames == list(LINKED_ROWS) and cat.format == "astrores"
+        for name in ("RA", "DE", "Vmag"):
+            assert np.allclose(np.asarray(t[name], dtype=float), LINKED_ROWS[name])
+        assert [str(v) for v in t["Id"]] == LINKED_ROWS["Id"]
+        assert t["RA"].unit == u.deg and t["Vmag"].unit == u.mag and t["RA"].description == "Ascensione retta"
+        assert (cat.positions.lon, cat.positions.lat, cat.positions.frame) == ("RA", "DE", "icrs")
+        assert cat.body == "celestial"
+        codes = dict(cat.warnings)
+        assert fmt in codes["ASTRORES_LINK"] and "dati collegati" in codes["ASTRORES_LINK_SOURCE"]
+    # Documento scaricato da URL: href relativo risolto sull'URL del documento.
+    service.routes["/doc.xml"] = lambda r: (200, "text/xml", LINKED.format(
+        link='href="dati.csv" content-type="text/csv"'))
+    remote = load_table(service.url + "/doc.xml", cache=cache)
+    assert remote.rows == 2 and "dati.csv" in dict(remote.warnings)["ASTRORES_LINK"]
+
+
+def test_t15_astrores_link_refused(service, cache, tmp_path):
+    payloads = linked_payloads()
+    service.routes["/dati.csv"] = lambda r: (200, "text/csv", payloads["csv"])
+    service.routes["/dati.vot"] = lambda r: (200, "text/xml", payloads["votable"])
+    url = service.url + "/dati.csv"
+    cases = {
+        "senza content-type": f'href="{url}"',
+        "content-type sconosciuto": f'href="{url}" content-type="text/plain"',
+        "xml generico": f'href="{service.url}/dati.vot" content-type="text/xml"',
+        "csv senza intestazione": f'href="{url}" content-type="text/csv; header=absent"',
+        "gref": 'gref="VizieR ${-source}" content-type="text/csv"',
+        "action": 'action="http://esempio.invalid/q" content-type="text/csv"',
+        "href relativo in un file locale": 'href="dati.csv" content-type="text/csv"',
+        "formato dichiarato diverso": f'href="{url}" content-type="application/fits"',
+    }
+    for label, link in cases.items():
+        path = tmp_path / "rifiuto.xml"
+        path.write_text(LINKED.format(link=link), encoding="utf-8")
+        with pytest.raises(CatalogsError) as info:
+            load_table(path, cache=cache)
+        assert info.value.code == "ASTRORES_UNREADABLE", label
+    # FIELD e dati collegati diversi: nessuna scelta tra i due.
+    other = Table({"RA": [1.0], "DE": [2.0], "Vmag": [3.0], "Nome": ["x"]})
+    buffer = io.StringIO()
+    astropy_ascii.write(other, buffer, format="csv")
+    service.routes["/nomi.csv"] = lambda r: (200, "text/csv", buffer.getvalue())
+    vot = io.BytesIO()
+    units = Table(LINKED_ROWS)
+    units["Vmag"].unit = u.Jy
+    units.write(vot, format="votable")
+    service.routes["/unita.xml"] = lambda r: (200, "text/xml", vot.getvalue())
+    for href, ctype, word in ((service.url + "/nomi.csv", "text/csv", "colonne"),
+                              (service.url + "/unita.xml", "application/x-votable+xml", "unità")):
+        path = tmp_path / "diversi.xml"
+        path.write_text(LINKED.format(link=f'href="{href}" content-type="{ctype}"'), encoding="utf-8")
+        with pytest.raises(CatalogsError) as info:
+            load_table(path, cache=cache)
+        assert info.value.code == "ASTRORES_UNREADABLE" and word in info.value.message
+
+
 def test_load_catalog_vizier_tap(service, cache, monkeypatch):
     def tap(request):
         query = request["params"]["QUERY"]

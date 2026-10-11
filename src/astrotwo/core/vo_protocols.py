@@ -51,6 +51,7 @@ from astrotwo.core.catalogs import (
     CatalogTable,
     TableLimits,
     _catalog_votable,
+    _read_table,
     detect_table_format,
     read_table,
 )
@@ -459,14 +460,29 @@ def _store(response: _Response, protocol: str, cache: SharedCache | None) -> tup
     return ()
 
 
+def _link_fetcher(*, cache: SharedCache | None = None, refresh: bool = False,
+                  timeouts: NetworkTimeouts = NETWORK_TIMEOUTS):
+    """Funzione di rete per i dati in un ``LINK`` ASTRORES (D13-17): prima la cache, risposta registrata."""
+
+    def fetch(url: str) -> tuple[bytes, tuple[str, str]]:
+        response = _http("download", url, cache=cache, refresh=refresh, timeouts=timeouts)
+        _store(response, "download", cache)
+        state = "copia in cache" if response.from_cache else "scaricati"
+        return response.payload, ("ASTRORES_LINK_SOURCE", f"dati collegati {url}: {state} il "
+                                  f"{_iso(response.retrieved_at)}")
+
+    return fetch
+
+
 def _read_payload(response: _Response, *, table=None, format=None, limits: TableLimits | None = None,
-                  origin: str | None = None) -> CatalogTable:
+                  origin: str | None = None, fetch_link=None) -> CatalogTable:
     """Legge i byte ricevuti con ``read_table`` del 13 (un solo lettore) e mette la provenienza di rete."""
     fd, tmp = tempfile.mkstemp(prefix="astrotwo-vo-")
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(response.payload)
-        result = read_table(tmp, table=table, format=format, limits=limits)
+        result = _read_table(tmp, table=table, format=format, limits=limits, fetch_link=fetch_link,
+                             base=response.url)
     finally:
         os.unlink(tmp)
     where = origin or response.url
@@ -487,7 +503,8 @@ def download_table(url: str, *, table: int | None = None, format: str | None = N
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
         raise ValueError(f"URL non valido: {url!r} (serve http:// o https://)")
     response = _http("download", url, cache=cache, refresh=refresh, timeouts=timeouts)
-    result = _read_payload(response, table=table, format=format, limits=limits)
+    result = _read_payload(response, table=table, format=format, limits=limits,
+                           fetch_link=_link_fetcher(cache=cache, refresh=refresh, timeouts=timeouts))
     notes = response.notes + _store(response, "download", cache)
     arguments = {"url": url, "table": table, "format": format}
     descriptors = ()

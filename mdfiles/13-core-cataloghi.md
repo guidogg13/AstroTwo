@@ -90,8 +90,30 @@ suo VOTable.
     (c) Un
     `ref` scritto `#id(...)` o `#id($...)` (forma non conforme alla DTD, che
     vuole un IDREF) si accetta con l'avviso `ASTRORES_NONCONFORMING_REF`.
-    (d) `DATA` con `LINK` esterno: lettura tramite il 14 in P6; fino ad
-    allora `ASTRORES_UNREADABLE` esplicito. (e) Test su file nostri scritti
+    (d) `DATA` con `LINK` esterno (D13-17, decisa il 2026-10-11): si
+    leggono **solo i `LINK` con `href`** (`gref` e `action` →
+    `ASTRORES_UNREADABLE`); il **formato si decide dal `content-type`
+    dichiarato nel `LINK`** (attributo della DTD), con i lettori già
+    presenti nel modulo: `text/csv` → CSV, `text/tab-separated-values` →
+    TSV, `application/x-votable+xml` → VOTable, `application/fits` → FITS
+    (parametri come `charset` ignorati; `text/csv` con `header=absent` di
+    RFC 4180 rifiutato, perché il lettore CSV vuole la riga dei nomi);
+    `content-type` assente o diverso → `ASTRORES_UNREADABLE`, **niente
+    formati indovinati** (né dal contenuto né dall'intestazione HTTP). I
+    dati si scaricano con il 14 (prima la cache, `load_table`; `read_table`
+    resta senza rete e rimanda a `load_table`); un `href` relativo si
+    risolve solo sull'URL di un documento scaricato da URL, altrimenti
+    serve un URL `http(s)`. **Accordo tra FIELD e dati collegati** (scelta
+    del 2026-10-11, da confermare): la tabella collegata deve avere **le
+    stesse colonne, con gli stessi nomi e nello stesso ordine** dei
+    `FIELD`; unità e UCD presenti in entrambi devono coincidere, un `FIELD`
+    numerico (`F`, `D`, `E`, `I`) vuole dati numerici e uno `L` dati
+    booleani; ogni differenza → `ASTRORES_UNREADABLE` con l'elenco, nessuna
+    scelta tra i due. Unità, UCD (tradotti come al punto b), descrizioni e
+    `ref` dei `FIELD` completano la tabella; i `COOSYS` dell'ASTRORES
+    valgono per le posizioni. Avvisi `ASTRORES_LINK` (URL, formato,
+    content-type) e `ASTRORES_LINK_SOURCE` (data, copia in cache o no).
+    (e) Test su file nostri scritti
     dalla DTD, più l'esempio pubblico del CDS letto in un test di rete,
     **senza copiarlo nel repository**.
   - **Riconoscimento dal contenuto, non dall'estensione (decisione del
@@ -425,7 +447,8 @@ suo VOTable.
 - **`load_table(source, *, table=None, format=None, limits=None, cache=None,
   refresh=False, timeouts=None)`** (P6) — come `read_table` per un file
   locale (con i descrittori di servizio del VOTable); un URL passa da
-  `download_table` del 14 (prima la cache).
+  `download_table` del 14 (prima la cache). È anche la via per gli
+  ASTRORES con i dati in un `LINK` esterno (D13-17), scaricati con il 14.
 - **`CatalogTable.request`** / **`CatalogTable.descriptors`** (P6) —
   richiesta registrata dal 14 (`RequestRecord`) per i dati da rete e
   descrittori di servizio del VOTable.
@@ -549,7 +572,9 @@ suo VOTable.
 | Epoca richiesta non valida | rifiuto dell'input | `EPOCH_INVALID` |
 | Tipo colonna non supportato per un'operazione | errore con tipo atteso e trovato | `COLUMN_TYPE_UNSUPPORTED` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
-| File ASTRORES non conforme alla DTD, o con i dati in un `LINK` esterno (fino a P6) | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
+| File ASTRORES non conforme alla DTD | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
+| `LINK` ASTRORES senza `href`, senza `content-type` o con un `content-type` non ammesso, dati non leggibili nel formato dichiarato, FIELD diversi dai dati collegati, o letto con `read_table` (senza rete) | rifiuto esplicito con la causa (D13-17) | `ASTRORES_UNREADABLE` |
+| `LINK` ASTRORES letto | dati collegati con URL, formato e data | avvisi `ASTRORES_LINK`, `ASTRORES_LINK_SOURCE` |
 | ASTRORES: dati diversi dal tipo dichiarato (es. sessagesimali in un campo `F` in gradi) | conversione in gradi con il modulo 10 e colonna di testo conservata, oppure testo | avviso `ASTRORES_TYPE_MISMATCH` |
 | ASTRORES: `ref` scritto `#id(...)` | riferimento accettato | avviso `ASTRORES_NONCONFORMING_REF` |
 | ASTRORES con UCD1 della raccomandazione IVOA | tradotti, originale conservato | avviso `UCD1_TRANSLATED` |
@@ -591,7 +616,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T12 | Colonna calcolata (H8) | colonne `B` e `V` in magnitudini; nuova colonna `B-V` con espressione `${B} - ${V}`, UCD e 3 decimali | valori = `B - V` calcolati con `numpy`; UCD, decimali e provenienza registrati; tabella originale invariata | ricalcolo con `numpy` |
 | T13 | Espressione non valida (H8) | espressione con una colonna inesistente o con un nome non previsto | `COLUMN_EXPRESSION_INVALID`, nulla eseguito | test di unità |
 | T14 | Unità incompatibili (H8) | somma di una colonna in gradi e una in magnitudini | `UNIT_INCOMPATIBLE` | test di unità |
-| T15 | ASTRORES (H22) | file nostri scritti dalla DTD (`CSV` con `colsep`/`headlines`, `TABLEDATA`, più tabelle, valori mancanti, `LINK`); test di rete: l'esempio pubblico del CDS scaricato nel test (non copiato nel repository) | colonne, unità, tipi e valori uguali a quelli scritti nel test; `LINK` → `ASTRORES_UNREADABLE`; l'esempio pubblico si legge con gli avvisi previsti | confronto con i valori del test |
+| T15 | ASTRORES (H22, D13-17) | file nostri scritti dalla DTD (`CSV` con `colsep`/`headlines`, `TABLEDATA`, più tabelle, valori mancanti); `LINK` a dati CSV, TSV, VOTable e FITS scritti con astropy nel test e serviti da un servizio simulato, anche con `href` relativo in un documento da URL; `LINK` senza `content-type`, con `content-type` sconosciuto, `gref`, `action`, `href` relativo in un file locale, formato dichiarato diverso dai dati, nomi o unità diversi dai FIELD; test di rete: l'esempio pubblico del CDS scaricato nel test (non copiato nel repository) | colonne, unità, tipi e valori uguali a quelli scritti nel test; `LINK` letto con `load_table` (unità, UCD e `COOSYS` dei FIELD), con `read_table` → `ASTRORES_UNREADABLE`; casi rifiutati → `ASTRORES_UNREADABLE`; l'esempio pubblico si legge con gli avvisi previsti | confronto con i valori del test |
 | T16 | XML malevolo (H22) | leggere un file ASTRORES con espansione di entità | `XML_UNSAFE`, nessun dato caricato | test di unità |
 | T17 | Grammatica di `search` | ogni costrutto di §3 (confronti numerici e di testo, `|colonna|`, `${nome}`, `&&`/`||` con parentesi e precedenza, testo da solo su tutte le colonne di testo, jolly ed escape, spazi finali) ed espressioni non conformi | maschere uguali a quelle ricalcolate nel test con `numpy` e `re`; errori `EXPRESSION_INVALID` con la posizione | ricalcolo con `numpy` |
 | T18 | Maiuscole e minuscole | testo con i jolly con e senza `case_sensitive=True` | per default non contano; con l'opzione contano | test di unità |
@@ -717,18 +742,14 @@ sono verificati da `34-ia-verifica-risultati.md`.
   proprietario).** Colonna indicata dall'utente; formato e scala dal
   `TIMESYS`, altrimenti parametri obbligatori; intervallo chiuso
   `[inizio, fine]`.
-- **D13-17 — Dati ASTRORES in un `LINK` esterno: DA DECIDERE (aperta il
-  2026-10-10, Gruppo 3).** La DTD (v0.9) ammette `DATA` con `LINK` ma non
-  dice in che formato siano i dati collegati (CSV? con quali separatori?
-  frammento XML?) e il link può essere `href`, `action` (come un modulo
-  HTML, con i campi "hidden" della risorsa) o `gref` (sistema GLU del CDS).
-  Opzioni: (a) solo `href`, dati letti come il `CSV` della DTD con i
-  separatori di default (tabulazione, a capo), scaricati con il 14; (b) come
-  (a) ma solo se `content-type` dichiara un testo separato (es.
-  `text/tab-separated-values`, `text/csv`); (c) nessuna lettura, resta
-  `ASTRORES_UNREADABLE`. **Raccomandazione:** (b), che non indovina il
-  formato. **Fermo solo questo punto** (resta `ASTRORES_UNREADABLE` con
-  rimando a D13-17).
+- **D13-17 — Dati ASTRORES in un `LINK` esterno: DECISA il 2026-10-11
+  (decisione del proprietario).** Solo tramite `href`; il formato si decide
+  dal `content-type` dichiarato con i lettori già presenti nel 13 (CSV,
+  TSV, VOTable, FITS); `content-type` assente o sconosciuto →
+  `ASTRORES_UNREADABLE`; niente formati indovinati. Applicata in §3 (punto
+  d), §7, §10, §12. Regola di accordo tra FIELD e dati collegati (stesse
+  colonne, nessuna differenza di unità, UCD e tipo): scelta del
+  2026-10-11, da confermare. (Aperta il 2026-10-10.)
 - **D13-18 — Albero delle collezioni e criterio di popolarità (D13-3): DA
   DECIDERE (aperta il 2026-10-10, Gruppo 3).** L'unico servizio trovato che
   elenca le collezioni di VizieR con una popolarità è il **MocServer** del
@@ -781,3 +802,4 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | 2026-10-10 | Claude Code | **Con P5 del 14** (autorizzazione esplicita a modificare il file approvato): la lettura conserva nei metadati di colonna anche l'`utype` dei campi VOTable e gli UCD/utype delle tabelle FITS (parole chiave `TUCDn`, `TUTYPn`), che servono a riconoscere gli assi degli spettri SSA; nessun altro comportamento cambia. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **P6 scritta tranne l'albero dinamico (D13-18) e il `LINK` ASTRORES (D13-17)** (autorizzazione esplicita a modificare il file approvato): `load_table` (file locale o URL tramite `download_table` del 14), `load_catalog` (TAP VizieR o gruppo fisso tramite `tap_query` del 14; `CATALOG_UNKNOWN`), `FIXED_COLLECTIONS` con identificativi verificati, `datalink_column` (descrittore DataLink o content-type DataLink nella colonna del formato, forma ObsCore), campi `request` e `descriptors` di `CatalogTable` (§7); test con servizi simulati e test di rete su 2MASS. Nuove decisioni aperte **D13-17** e **D13-18** (Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Con D14-10** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): lettura dell'**ECSV** di `astropy` (formato `ecsv`, riconosciuto dalla prima riga `# %ECSV`, anche come `format` esplicito), con unità, UCD e valori mancanti; sistema delle posizioni non presente nell'ECSV (`FRAME_UNKNOWN`). Test di andata e ritorno nel 14 (T5). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **D13-17 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `LINK` ASTRORES letti solo con `href`, formato dal `content-type` del `LINK` (verificato come attributo nella DTD v0.9) con i lettori CSV, TSV, VOTable e FITS del modulo, nessun formato indovinato; dati scaricati con il 14 tramite `load_table` (anche per un ASTRORES scaricato da URL, con `href` relativo risolto sull'URL); `read_table` senza rete rimanda a `load_table`; accordo stretto tra FIELD e dati collegati (scelta da confermare); avvisi `ASTRORES_LINK`, `ASTRORES_LINK_SOURCE`; T15 completo (§3, §7, §10, §12, §13). Stato `approvato` invariato. |

@@ -16,6 +16,7 @@ import functools
 import math
 import os
 import re
+import tempfile
 import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -608,7 +609,15 @@ def _read_text(path: str, fmt: str, table, limits: TableLimits):
 
 
 def read_table(source, *, table=None, format=None, limits: TableLimits | None = None) -> CatalogTable:
-    """Legge una tabella da file locale (H22, P1) con formato, limiti, unità, posizioni e corpo."""
+    """Legge una tabella da file locale (H22, P1) con formato, limiti, unità, posizioni e corpo.
+
+    Senza rete: un ASTRORES con i dati in un ``LINK`` esterno si legge con ``load_table`` (D13-17)."""
+    return _read_table(source, table=table, format=format, limits=limits)
+
+
+def _read_table(source, *, table=None, format=None, limits: TableLimits | None = None, fetch_link=None,
+                base: str | None = None) -> CatalogTable:
+    """``read_table`` con, per i ``LINK`` ASTRORES (D13-17), la funzione di rete del 14 e l'URL di base."""
     limits = TableLimits() if limits is None else limits
     text = os.fspath(source)
     if text.startswith(("http://", "https://")):
@@ -627,7 +636,7 @@ def read_table(source, *, table=None, format=None, limits: TableLimits | None = 
     elif fmt == "fits":
         result, info, coosys = _read_fits(path, table, limits)
     elif fmt == "astrores":
-        result, info, coosys, astrores_notes = _read_astrores(path, table, limits)
+        result, info, coosys, astrores_notes = _read_astrores(path, table, limits, fetch_link, base)
     else:
         result, info, coosys = _read_text(path, fmt, table, limits)
     # Dopo la lettura: righe e memoria esatte (per l'XML è il primo controllo esatto).
@@ -727,10 +736,6 @@ def _astrores_rows(table_el, n_fields: int, path: str) -> list[list[str | None]]
     data = table_el.find("DATA")
     if data is None:
         return []
-    if data.find("LINK") is not None:
-        # D13-17 (da decidere): la DTD non dice in che formato sono i dati puntati dal LINK.
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati in un LINK esterno: formato dei dati collegati "
-                            "non definito dalla DTD (D13-17, da decidere)")
     csv = data.find("CSV")
     if csv is not None:
         colsep = csv.get("colsep") or "\t"
@@ -827,7 +832,107 @@ def _astrores_infos(root) -> list[TableInfo]:
     return out
 
 
-def _read_astrores(path: str, table, limits: TableLimits):
+#: Content-type dei dati in un LINK ASTRORES e lettore del modulo che li legge (D13-17): nessun altro.
+ASTRORES_LINK_TYPES = {"text/csv": "csv", "text/tab-separated-values": "tsv",
+                       "application/x-votable+xml": "votable", "application/fits": "fits"}
+
+
+def _link_format(link, path: str) -> str:
+    declared = link.get("content-type")
+    if not declared or not declared.strip():
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK senza content-type: il formato dei dati "
+                            "collegati non si indovina (D13-17)")
+    media, *params = [part.strip().lower() for part in declared.split(";")]
+    fmt = ASTRORES_LINK_TYPES.get(media)
+    if fmt is None:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK con content-type {declared!r} non letto; "
+                            f"ammessi: {', '.join(ASTRORES_LINK_TYPES)} (D13-17)")
+    if fmt == "csv" and "header=absent" in [p.replace(" ", "") for p in params]:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK {declared!r}: il lettore CSV del modulo vuole "
+                            "la riga dei nomi delle colonne (header=absent, RFC 4180)")
+    return fmt
+
+
+def _link_url(link, path: str, base: str | None) -> str:
+    from urllib.parse import urljoin
+
+    if link.get("href") is None:
+        kind = "gref (sistema GLU)" if link.get("gref") is not None else (
+            "action" if link.get("action") is not None else "nessun indirizzo")
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK con {kind}: si leggono solo i LINK con href "
+                            "(D13-17)")
+    href = link.get("href").strip()
+    url = urljoin(base, href) if base and base.startswith(("http://", "https://")) else href
+    if not url.startswith(("http://", "https://")):
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK href {href!r}: serve un URL http(s) "
+                            "(relativo solo in un documento scaricato da URL)")
+    return url
+
+
+def _link_conflicts(fields, names: list[str], linked: Table, ucds: list[str | None]) -> list[str]:
+    """Differenze tra le definizioni FIELD dell'ASTRORES e la tabella collegata (nessuna scelta tra le due)."""
+    if linked.colnames != names:
+        return [f"colonne {linked.colnames} invece dei FIELD {names}"]
+    problems = []
+    for field_el, name, ucd in zip(fields, names, ucds):
+        col = linked[name]
+        text = field_el.get("unit")
+        mine = _standard_unit(text) if text else None
+        theirs = _unit_string(col.unit)
+        if text and theirs:
+            other = _standard_unit(theirs)
+            if mine is None or other is None or mine != other:
+                problems.append(f"{name}: unità {text!r} nel FIELD e {theirs!r} nei dati collegati")
+        if ucd and col.meta.get("ucd") and col.meta["ucd"].strip().lower() != ucd.strip().lower():
+            problems.append(f"{name}: UCD {ucd!r} nel FIELD e {col.meta['ucd']!r} nei dati collegati")
+        datatype = (field_el.get("datatype") or "A").upper()
+        if datatype in _ASTRORES_FLOAT + ("I",) and col.dtype.kind not in "iuf":
+            problems.append(f"{name}: FIELD numerico ({datatype}) ma dati collegati di tipo {col.dtype}")
+        if datatype == "L" and col.dtype.kind != "b":
+            problems.append(f"{name}: FIELD booleano ma dati collegati di tipo {col.dtype}")
+    return problems
+
+
+def _read_link(table_el, fields, names: list[str], ucds: list[str | None], path: str, limits: TableLimits,
+               fetch_link, base: str | None):
+    """Dati in un LINK esterno (D13-17): solo href, formato dal content-type dichiarato, lettori del modulo."""
+    link = table_el.find("DATA").find("LINK")
+    fmt = _link_format(link, path)
+    url = _link_url(link, path, base)
+    if fetch_link is None:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati in un LINK esterno ({url}): servono la rete e "
+                            "la cache del modulo 14, usare load_table (D13-17)")
+    payload, note = fetch_link(url)
+    _check_memory(f"dati collegati {url}", len(payload), limits)
+    fd, tmp = tempfile.mkstemp(prefix="astrotwo-link-")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        try:
+            readers = {"votable": _read_votable, "fits": _read_fits}
+            if fmt in readers:
+                linked, _, linked_coosys = readers[fmt](tmp, None, limits)
+            else:
+                linked, _, linked_coosys = _read_text(tmp, fmt, None, limits)
+        except CatalogsError as exc:
+            if exc.code in ("TABLE_TOO_LARGE", "MEMORY_LIMIT_EXCEEDED"):
+                raise
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati collegati {url} non leggibili come {fmt} "
+                                f"(content-type dichiarato): {exc.message}") from exc
+        except (OSError, ValueError) as exc:  # es. dati che non sono del formato dichiarato
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati collegati {url} non leggibili come {fmt} "
+                                f"(content-type dichiarato): {exc}") from exc
+    finally:
+        os.unlink(tmp)
+    problems = _link_conflicts(fields, names, linked, ucds)
+    if problems:
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: FIELD e dati collegati {url} non coincidono: "
+                            + "; ".join(problems), conflicts=tuple(problems))
+    return linked, linked_coosys, [note, ("ASTRORES_LINK", f"dati letti dal LINK {url} come {fmt} "
+                                          f"(content-type dichiarato {link.get('content-type')!r})")]
+
+
+def _read_astrores(path: str, table, limits: TableLimits, fetch_link=None, base: str | None = None):
     _check_memory(f"lettura di {path}", os.path.getsize(path), limits)  # stima prima della lettura (XML)
     root = _parse_astrores(path)
     info = _choose(_astrores_infos(root), table, path)
@@ -836,19 +941,40 @@ def _read_astrores(path: str, table, limits: TableLimits):
     fields = table_el.findall("FIELD")
     if not fields:
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: tabella {info.index} senza FIELD")
-    rows = _astrores_rows(table_el, len(fields), path)
     notes: list[tuple[str, str]] = []
-    result = Table()
+    names, ucds = [], []
     for k, field_el in enumerate(fields):
         name = _astrores_text(field_el, "NAME") or field_el.get("name") or field_el.get("ID") or f"col{k}"
-        if name in result.colnames:
+        if name in names:
             raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: due campi con lo stesso nome {name!r}")
         original_ucd = field_el.get("ucd")
         ucd = UCD1_TRANSLATIONS.get((original_ucd or "").strip().upper(), original_ucd)
         if ucd != original_ucd:
             notes.append(("UCD1_TRANSLATED", f"campo {name!r}: UCD1 {original_ucd!r} tradotto in {ucd!r} "
                           "(raccomandazione IVOA sugli UCD, §3.1 e appendice A)"))
-        _astrores_column(name, [row[k] for row in rows], field_el, notes, result, ucd)
+        names.append(name)
+        ucds.append(ucd)
+    data_el = table_el.find("DATA")
+    linked_coosys: dict = {}
+    if data_el is not None and data_el.find("LINK") is not None:
+        result, linked_coosys, link_notes = _read_link(table_el, fields, names, ucds, path, limits, fetch_link, base)
+        notes.extend(link_notes)
+        for field_el, name, ucd in zip(fields, names, ucds):
+            column = result[name]
+            if field_el.get("unit") and column.unit is None:
+                column.unit = u.Unit(field_el.get("unit"), parse_strict="silent")
+            if ucd:
+                column.meta["ucd"] = ucd
+            description = _astrores_text(field_el, "DESCRIPTION")
+            if description and not column.description:
+                column.description = " ".join(description.split())
+    else:
+        rows = _astrores_rows(table_el, len(fields), path)
+        result = Table()
+        for k, (field_el, name, ucd) in enumerate(zip(fields, names, ucds)):
+            _astrores_column(name, [row[k] for row in rows], field_el, notes, result, ucd)
+    for field_el, name, ucd in zip(fields, names, ucds):
+        original_ucd = field_el.get("ucd")
         if ucd != original_ucd:
             result[name].meta["ucd_original"] = original_ucd
         ref = field_el.get("ref")
@@ -859,7 +985,7 @@ def _read_astrores(path: str, table, limits: TableLimits):
                               f"accettato come {match.group(1)!r}"))
                 ref = match.group(1)
             result[name].meta["ref"] = ref
-    coosys = {}
+    coosys = dict(linked_coosys)
     for el in root.iter("COOSYS"):
         if el.get("ID"):
             system = el.get("system") or "eq_FK5"  # default della DTD
@@ -1993,8 +2119,11 @@ def load_table(source, *, table=None, format=None, limits: TableLimits | None = 
     from astrotwo.core import vo_protocols as vo
 
     text = os.fspath(source)
+    kwargs = {} if timeouts is None else {"timeouts": timeouts}
     if not text.startswith(("http://", "https://")):
-        result = read_table(text, table=table, format=format, limits=limits)
+        # Un ASTRORES con i dati in un LINK esterno li scarica con il 14 (D13-17).
+        fetch = vo._link_fetcher(cache=cache, refresh=refresh, **kwargs)
+        result = _read_table(text, table=table, format=format, limits=limits, fetch_link=fetch)
         if result.format == "votable":
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -2002,7 +2131,6 @@ def load_table(source, *, table=None, format=None, limits: TableLimits | None = 
                 descriptors = vo._descriptors(parse_votable(result.origin, verify="ignore"), payload)
             result = dataclasses.replace(result, descriptors=descriptors)
         return result
-    kwargs = {} if timeouts is None else {"timeouts": timeouts}
     return _from_vo_result(vo.download_table(text, table=table, format=format, limits=limits, cache=cache,
                                              refresh=refresh, **kwargs))
 
