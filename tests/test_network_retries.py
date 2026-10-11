@@ -59,3 +59,7 @@ def test_count():
     result = pytester.runpytest("-p", "no:cacheprovider")
     result.assert_outcomes(failed=2, passed=1)
     result.stdout.fnmatch_lines(["*test di rete ripetuti*", "*test_conn*dopo 2 ripetizioni*"])
+    reports = {r.nodeid.split("::")[-1]: r for r in result.reprec.getreports("pytest_runtest_logreport")
+               if r.when == "call"}
+    assert ("network_final", "connessione: ConnectionError") in reports["test_conn"].user_properties
+    assert not any(name == "network_final" for name, _ in reports["test_wrong"].user_properties)

@@ -137,6 +137,9 @@ def _with_network_retries(item):
                 return original()
             except BaseException as exc:
                 if attempt == NETWORK_RETRIES or not network_failure(exc):
+                    if network_failure(exc):
+                        # Fallito ancora per connessione dopo le ripetizioni (02-convenzioni.md §8, punto 8).
+                        item.user_properties.append(("network_final", f"connessione: {type(exc).__name__}"))
                     raise
                 item.user_properties.append(
                     ("network_retry", f"tentativo {attempt + 1} fallito per la rete "

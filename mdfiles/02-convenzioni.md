@@ -179,7 +179,9 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
 
 1. Ogni modulo ha i suoi "Test di accettazione" nel proprio `.md`.
 2. I valori attesi vanno **ricalcolati con una libreria consolidata**
-   (Astropy, astroquery, healpy, scipy): mai numeri scritti a memoria.
+   (Astropy, astroquery, astropy-healpix, scipy): mai numeri scritti a memoria
+   (`healpy` è escluso dal progetto per la licenza GPL, decisione del
+   proprietario del 2026-10-11).
 3. Nessun test dipende dalla rete di default; i test di rete sono separati e
    marcati come tali.
 4. I test non usano mai una chiave API reale; il livello 3 si testa con doppi
@@ -191,6 +193,27 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
    (deciso con A3 in `01-architettura.md`); **framework ed esecutore: `pytest`**
    (decisione del proprietario del 2026-10-09, anticipata da
    `61-strategia-test.md`, dove restano gli altri dettagli).
+8. **Ripetizione dei test di rete (decisione del proprietario del
+   2026-10-11):** i test con il marcatore `network` si ripetono **al massimo
+   2 volte** e **solo** per un errore di connessione o di timeout (eccezioni
+   di connessione/timeout di `requests` e della libreria standard, errori
+   `NET_TIMEOUT` dei moduli, i messaggi fissi di `pyvo` "Connection failed" e
+   "Request timed out"), **mai** per un risultato sbagliato; ogni ripetizione
+   è scritta nel risultato del test. Un test di rete che fallisce ancora per
+   connessione dopo le ripetizioni è marcato come tale nel risultato
+   (proprietà `network_final`). Implementazione in `tests/conftest.py`.
+9. **Regola dei commit (decisione del proprietario del 2026-10-11):** si fa
+   commit **solo se tutti i test di default passano**. I test di rete si
+   eseguono e si riportano **a parte**: se falliscono **solo per
+   connessione** (dopo le ripetizioni del punto 8) il commit si può fare, ma
+   il **messaggio di commit lo dichiara** (test e motivo); se un test di rete
+   fallisce per un altro motivo (es. un risultato sbagliato) il commit non
+   si fa. Il commit si fa **solo** con `scripts/commit_checked.py -m "…"`,
+   che esegue i test e chiama `git commit` solo se l'esito lo consente
+   (aggiunge da sé al messaggio i test di rete falliti per connessione).
+   Nelle parti intermedie di un modulo, se il proprietario chiede i test di
+   rete solo alla fine del modulo, si usa `--no-network`: il messaggio di
+   commit dichiara che i test di rete non sono stati eseguiti.
 
 ## 9. Decisioni aperte
 
@@ -257,3 +280,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | §8: **framework dei test = `pytest`** (decisione del proprietario), anticipata da `61-strategia-test.md`. Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | §3: **nomi dei file Python confermati in inglese** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): regola = traduzione inglese del nome della specifica in `snake_case`; tabella con il file Python e il file di test di `04` e dei moduli 10–19. Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | §8: **ripetizione dei test di rete** (punto 8) e **regola dei commit** (punto 9, con lo script `scripts/commit_checked.py` e l'opzione `--no-network`) (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato); esempio del punto 2 aggiornato (`astropy-healpix` al posto di `healpy`, escluso per la licenza GPL). Stato `approvato` invariato. |

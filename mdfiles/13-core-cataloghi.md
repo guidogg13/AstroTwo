@@ -712,16 +712,11 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
 | T27 | Più tabelle | VOTable con due `TABLE`, FITS con due HDU di tabella | senza `table` → `TABLE_CHOICE_REQUIRED` con l'elenco; con `table` la tabella giusta; `list_tables` | confronto con Astropy |
 
-**Test di rete (decisione del proprietario del 2026-10-11):** i test con il
-marcatore `network` si ripetono **al massimo 2 volte** e **solo** per un
-errore di connessione o di timeout (eccezioni di connessione/timeout di
-`requests` e della libreria standard, errori `NET_TIMEOUT` dei moduli, i
-due messaggi fissi di `pyvo` "Connection failed" e "Request timed out"),
-**mai** per un risultato sbagliato (un `AssertionError` non si ripete);
-ogni ripetizione è scritta nel risultato del test (sezione "ripetizioni di
-rete" e riepilogo finale di `pytest`). Implementata in `tests/conftest.py`
-senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
-`tests/test_network_retries.py`.
+**Test di rete:** regola delle ripetizioni (al massimo 2, solo per
+connessione o timeout, dichiarate nel risultato) e regola dei commit in
+`02-convenzioni.md` §8, punti 8 e 9 (decisioni del proprietario del
+2026-10-11); implementazione in `tests/conftest.py` e
+`scripts/commit_checked.py`, test in `tests/test_network_retries.py`.
 
 ## 13. Decisioni aperte
 
@@ -916,3 +911,4 @@ senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `load_catalog` senza regione solo entro `max_rows` (troncamento dichiarato dal servizio), altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato (`PARTIAL_CATALOG`); nuovo T32. Nuova decisione aperta **D13-19** (parametro di regione di `load_catalog`, Gruppo 3; fermo solo il parametro). Traduzione UCD1 del CDS rimandata a bassa priorità come **D13-14c** (Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-19 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `load_catalog(..., region=(centro, raggio))` con colonne dagli UCD di `TAP_SCHEMA`, sistema dal `COOSYS` del servizio, centro convertito con il modulo 10, `CatalogRegion` dichiarata; nuovi `REGION_INVALID`, `REGION_TOO_LARGE`, avviso `REGION`; `REGION_REQUIRED` indica il parametro; il lettore riconosce i termini del vocabolario IVOA `refframe` (`FK5`, `FK4`, `GALACTIC`, `SUPER_GALACTIC`) e legge l'equinozio numerico come per ASTRORES (verifica su TAPVizieR); T33. Nuova decisione aperta **D13-20** (sistema di SIMBAD nell'`utype` MANGO, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): ECSV scritto da AstroTwo con colonne, sistema, equinozio ed epoca delle posizioni nei metadati YAML `A2POSITIONS`, riletti senza `FRAME_UNKNOWN` (avvisi `POSITIONS_FROM_ECSV`, `ECSV_POSITIONS_INVALID`); albero delle collezioni in ordine naturale a pari popolarità (e per le collezioni senza popolarità); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | Regola delle ripetizioni dei test di rete spostata in `02-convenzioni.md` §8 (punto 8) insieme alla regola dei commit (punto 9); qui resta il rimando (decisione del proprietario del 2026-10-11, autorizzazione esplicita). Stato `approvato` invariato. |
