@@ -106,7 +106,14 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   **elenco di server nostro**, tratto dai servizi pubblici del VO (D14-4,
   corretta il 2026-10-10), più i server personali dell'utente; le immagini
   HiPS restano in `12-core-hips.md`. La ricerca nel registro VO usa
-  `pyvo.registry` (protocollo RegTAP). I server personali sono voci con gli
+  `pyvo.registry` (protocollo RegTAP). **Registro di default (verifica
+  chiusa dal proprietario il 2026-10-11):** `DEFAULT_REGISTRY_URL` =
+  `https://dc.g-vo.org/tap` (RegTAP del GAVO in HTTPS, certificato valido
+  verificato il 2026-10-11, lo stesso del test di rete), **configurabile**
+  con `registry_url`; nessun servizio senza HTTPS valido come default: il
+  default di `pyvo` (`http://reg.g-vo.org/tap`) non ha un certificato
+  valido per il suo nome in HTTPS e da questa rete risponde "Request
+  Denied". I server personali sono voci con gli
   stessi campi, tenute da `ServerRegistry`; il loro salvataggio nelle
   preferenze è di `40-ui-finestra-principale.md`.
 - **DataLink (H8, parte VO):** leggere e risolvere i link di DataLink
@@ -331,7 +338,8 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 - **`ServerRegistry`** (classe, P4) — schede server H10: elenco nostro
   (`builtin`), server personali (`add_personal`, `remove_personal`),
   `get(id)`, `find(protocol=None, provider=None)`, `search_registry(
-  keywords, servicetype)` nel registro VO; voce `ServerEntry` con `id`,
+  keywords, servicetype, registry_url=None)` nel registro VO (`None` =
+  `DEFAULT_REGISTRY_URL`, HTTPS); voce `ServerEntry` con `id`,
   nome, ente, protocollo, URL, fonte dell'URL (pagina ufficiale dell'ente)
   e data di verifica.
 - **`DataLinkClient`** (P4) — `links(source)` (URL DataLink o riga con
@@ -486,7 +494,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T15 | IDHA (H23) | leggere un file XML ben formato (scritto nel test) con `read_idha` | `IDHA_UNREADABLE` con la causa (nessuna documentazione pubblica, D14-9 punto 13), nessun dato | test di unità |
 | T16 | XML malevolo (H23) | leggere un file IDHA con espansione di entità | `XML_UNSAFE`, nessun dato caricato | test di unità |
 | T17 | Elenco dei server (H10, D14-4) | leggere l'elenco nostro; aggiungere e togliere un server personale; cone search con una voce TAP | ogni voce con ente, protocollo, URL, fonte e data di verifica; personali aggiunti e tolti; protocollo sbagliato → `SERVER_UNKNOWN` | test di unità |
-| T18 | Registro VO (H10) | `search_registry` con parole chiave e tipo di servizio su un registro simulato | elenco di servizi con URL e protocollo; parametri inviati secondo RegTAP | servizio simulato (più un test di rete) |
+| T18 | Registro VO (H10) | `search_registry` con parole chiave e tipo di servizio su un registro simulato; test di rete con il registro di default | elenco di servizi con URL e protocollo; parametri inviati secondo RegTAP; default `https://dc.g-vo.org/tap` | servizio simulato (più un test di rete) |
 | T19 | DataLink (H8, D14-3) | `links` su un documento DataLink simulato con un descrittore di servizio; `call_service` | link con semantica, URL e content-type; chiamata con i parametri del descrittore | servizio simulato |
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
@@ -549,7 +557,15 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   serve anche all'albero delle collezioni del 13, D13-18) non sono servizi
   dei protocolli dell'elenco (cone search, TAP, SIA, SSA) e restano ai moduli
   15 e 16; nessun servizio SSA generale trovato (quelli di HEASARC chiedono
-  il nome di una tabella).
+  il nome di una tabella). **Esclusioni confermate dal proprietario il
+  2026-10-11, da ricontrollare in futuro** (a ogni revisione dell'elenco):
+  ESASky TAP — URL non pubblicato sulle pagine ufficiali dell'ESA, quindi
+  senza una fonte ufficiale da citare nella voce; MAST CAOM SIA 2 — URL
+  ufficiale, ma nessuna risposta entro 60 s il 2026-10-10; cone search di
+  SIMBAD — in linea, ma non documentato sulle pagine del CDS (SIMBAD resta
+  raggiungibile con il suo TAP); SSA generale — nessun servizio SSA che
+  risponda senza il nome di una tabella. Un servizio escluso si può sempre
+  aggiungere come server personale.
 - **D14-5 — Limiti di riga predefiniti: DECISA il 2026-10-10 (decisione
   del proprietario).** `max_rows` di default **100 000**, configurabile fino
   al tetto del `13` (1 000 000); superamento sempre dichiarato con
@@ -643,3 +659,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **D14-12 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `simbad_pointer` restituisce tutte le magnitudini di SIMBAD (`SimbadMagnitude`, tabelle `flux` e `filter` dal TAP di SIMBAD con `tap_query`, `magnitudes_request`), con banda e sistema dichiarati; verificato sul `TAP_SCHEMA` di SIMBAD che `system` vale A = AB, V = Vega ed è vuoto per una parte delle misure (sistema `None`, avviso `SIMBAD_SYSTEM_UNDECLARED`; nuovi anche `SIMBAD_SYSTEM_UNKNOWN`, `SIMBAD_NO_MAGNITUDE`); T13 aggiornato (§3, §6, §7, §10, §12, §13). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Con D13-17** (13): `download_table` passa al lettore del 13 la funzione di rete per i dati in un `LINK` ASTRORES (stessa cache e stessi timeout, `href` relativo risolto sull'URL scaricato). Nessun altro comportamento cambia. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Con D13-18** (13; decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `vizier_collections`, `MocServerRecords`, `MOCSERVER_URL` — collezioni dal MocServer del CDS (JSON, protocollo `mocserver`, cache e registro comuni), verificato in linea il 2026-10-11 (§3, §7, §8, D14-4). Stato `approvato` invariato. |
+| 2026-10-11 | Claude Code | **Verifiche chiuse dal proprietario** (2026-10-11, autorizzazione esplicita a modificare il file approvato): registro VO di default `DEFAULT_REGISTRY_URL` = `https://dc.g-vo.org/tap` (HTTPS con certificato valido, verificato), configurabile con `registry_url`, nessun default senza HTTPS valido (§3, §7; test T18 sul default); server esclusi (ESASky TAP, MAST CAOM SIA 2, cone search di SIMBAD, SSA generale) confermati fuori, con il motivo, da ricontrollare in futuro (D14-4). Stato `approvato` invariato. |

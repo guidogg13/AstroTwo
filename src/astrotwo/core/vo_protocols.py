@@ -85,6 +85,7 @@ __all__ = [
     "ssa_load",
     "ssa_search",
     "BUILTIN_SERVERS",
+    "DEFAULT_REGISTRY_URL",
     "DataLinkClient",
     "DataLinks",
     "DataProduct",
@@ -826,6 +827,11 @@ class RegistrySearch:
     services: tuple[ServerEntry, ...]
 
 
+#: Registro VO di default (RegTAP del GAVO in HTTPS, verificato il 2026-10-11, configurabile con
+#: ``registry_url``): il default di ``pyvo`` (http://reg.g-vo.org/tap) non ha HTTPS valido.
+DEFAULT_REGISTRY_URL = "https://dc.g-vo.org/tap"
+
+
 class ServerRegistry:
     """Schede server (H10): elenco nostro più i server personali; ricerca nel registro VO."""
 
@@ -877,10 +883,13 @@ class ServerRegistry:
         del self._personal[server_id]
 
     def search_registry(self, keywords, servicetype: str, *, max_rows: int = DEFAULT_MAX_ROWS,
-                        registry_url: str = pyvo.registry.regtap.REGISTRY_BASEURL,
+                        registry_url: str | None = None,
                         cache: SharedCache | None = None, refresh: bool = False,
                         timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> RegistrySearch:
-        """Ricerca nel registro VO (RegTAP): ADQL costruito da ``pyvo``, eseguito con ``tap_query``."""
+        """Ricerca nel registro VO (RegTAP): ADQL costruito da ``pyvo``, eseguito con ``tap_query``.
+
+        ``registry_url`` di default ``DEFAULT_REGISTRY_URL`` (HTTPS)."""
+        registry_url = DEFAULT_REGISTRY_URL if registry_url is None else registry_url
         if servicetype not in PROTOCOLS:
             raise ValueError(f"servicetype {servicetype!r}: ammessi {', '.join(PROTOCOLS)}")
         words = [keywords] if isinstance(keywords, str) else list(keywords)

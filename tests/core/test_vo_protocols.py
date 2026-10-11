@@ -551,6 +551,7 @@ REGTAP = """<?xml version="1.0" encoding="UTF-8"?>
 
 def test_t18_registry_search(service, cache):
     service.routes["/reg/sync"] = votable_route(REGTAP)
+    assert vo.DEFAULT_REGISTRY_URL.startswith("https://")  # nessun default senza HTTPS
     found = ServerRegistry().search_registry(["gaia"], "tap", registry_url=service.url + "/reg", cache=cache)
     sent = service.requests[-1]["params"]["QUERY"]
     expected_adql = pyvo.registry.regtap.get_RegTAP_query(keywords=["gaia"], servicetype="tap")
@@ -623,10 +624,11 @@ def test_t19_datalink(service, cache):
 
 @pytest.mark.network
 def test_t18_registry_network(cache):
-    # Registro RegTAP del GAVO in HTTPS (il default di pyvo, http://reg.g-vo.org/tap, è rifiutato da questa
-    # rete con "Request Denied": vedi il registro modifiche del 14).
-    found = ServerRegistry().search_registry(["gaia"], "tap", max_rows=200, registry_url="https://dc.g-vo.org/tap",
-                                             cache=cache)
+    # Registro di default: RegTAP del GAVO in HTTPS (il default di pyvo, http://reg.g-vo.org/tap, non ha HTTPS
+    # valido ed è rifiutato da questa rete con "Request Denied": vedi il registro modifiche del 14).
+    assert vo.DEFAULT_REGISTRY_URL == "https://dc.g-vo.org/tap"
+    found = ServerRegistry().search_registry(["gaia"], "tap", max_rows=200, cache=cache)
+    assert found.result.request.url.startswith("https://dc.g-vo.org/tap")
     assert found.services and all(s.protocol == "tap" and s.url.startswith("http") for s in found.services)
 
 
