@@ -238,7 +238,13 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   dataproduct_type=catalog`, risposta JSON con `ID`, `obs_title` e
   `vizier_popularity`; stessa sessione, cache e registro delle richieste
   delle altre funzioni (protocollo `mocserver`); risposta non leggibile →
-  `SERVICE_ERROR`. Il MocServer non entra nell'elenco dei server (che
+  `SERVICE_ERROR`. **Codifica delle risposte (verifica del 2026-10-12):** il
+  MocServer dichiara le risposte JSON in **ISO-8859-1**
+  (`Content-Type: application/json;charset=ISO-8859-1`; alcuni titoli
+  contengono ad esempio "µm" in un solo byte, non UTF-8); le risposte si
+  leggono **secondo la codifica dichiarata**, con la costante
+  `MOCSERVER_CHARSET` di questo modulo, usata anche dal 12 (collezioni HiPS)
+  e dal 16 (`query_mocserver`); mai in UTF-8 per presunzione. Il MocServer non entra nell'elenco dei server (che
   copre cone search, TAP, SIA, SSA): l'URL è una costante del modulo,
   come quello del servizio fotometrico di VizieR. L'albero si costruisce
   nel 13 (`collection_tree`).
@@ -384,7 +390,8 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   (D14-12).
 - **`vizier_collections(*, cache, refresh, timeouts)`** (D13-18) —
   `MocServerRecords` (record del MocServer come dati dal servizio, richiesta
-  registrata, avvisi), per l'albero delle collezioni del 13.
+  registrata, avvisi), per l'albero delle collezioni del 13. Risposta letta
+  con `MOCSERVER_CHARSET` (ISO-8859-1, la codifica dichiarata dal servizio).
 - **`cds_xmatch(cat1, cat2, max_distance, selection, *, cache, refresh,
   timeouts)`** — incrocio con CDS XMatch per il 15; restituisce `VoResult`
   (coppie con `angDist`, `idx`, `idx2`, richiesta registrata).
@@ -682,3 +689,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): l'esportazione ECSV scrive il sistema delle posizioni nei metadati YAML `A2POSITIONS` (riletti dal 13, T5 esteso); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate nel risultato). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Per il modulo 15** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `cds_xmatch`, `XMATCH_URL` — CDS XMatch con `astroquery.xmatch` in HTTPS, timeout di `04`, cache di astroquery disattivata, risposta nella cache del 14 con l'impronta delle tabelle caricate; limiti verificati (180″, 100 MB) (§3, §7, §8). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | §12: il paragrafo sulle ripetizioni dei test di rete sostituito da un rimando a `02-convenzioni.md` §8 (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato). Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Allineamento specifica–codice** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato; regola: le specifiche si aggiornano sempre insieme al codice): §3 e §7 — risposte del MocServer dichiarate ISO-8859-1 e lette secondo la codifica dichiarata (`MOCSERVER_CHARSET`, usata anche da 12 e 16), regola già applicata nel codice con il modulo 12. Stato `approvato` invariato. |

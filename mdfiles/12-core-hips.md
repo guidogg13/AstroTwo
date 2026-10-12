@@ -52,7 +52,7 @@ riquadro mostrato.
   Inclusa per decisione del proprietario (2026-10-04): in Aladin la funzione
   non risulta documentata, ma la parità con Aladin è il minimo.
 - **Schede server (H10, parte HiPS):** aggiungere immagini da servizi di
-  terze parti (es. SkyView); la parte protocollo/VO di H10 è in
+  terze parti (es. SkyView: **rinviato**, vedi sotto, punto 3); la parte protocollo/VO di H10 è in
   `14-core-protocolli-vo.md`.
 - **Cubi HiPS (H24, sez. 8.1 del manuale di Aladin, ed. giugno 2022):** survey
   progressivi a cubo secondo lo standard HiPS 1.0 (tile per piano, profondità
@@ -87,7 +87,10 @@ riquadro mostrato.
    non documentano un URL SIA; un indirizzo `…/current/cgi/vo/sia.pl` risponde
    con un VOTable SIA, ma non è dichiarato sul sito ufficiale, quindi non si
    usa (regola: niente URL non verificati). Si riprende quando l'URL è
-   documentato da NASA.
+   documentato da NASA. **Rinvio confermato dal proprietario il
+   2026-10-12. Motivo:** un URL non documentato dal gestore può cambiare o
+   sparire senza avviso, e i risultati costruiti su di esso non sarebbero
+   verificabili né riproducibili; si attende che NASA documenti l'URL SIA.
 4. **`tiles_for_fov`:** campo **a cerchio** (centro, raggio) finché non
    esiste il 41.
 5. **Tile corrotto:** una sola nuova richiesta, poi `HIPS_BAD_TILE`.
@@ -148,14 +151,15 @@ riquadro mostrato.
   `mars`, `moon`) e ammette in `hips_frame` il "frame del corpo". Nei HiPS
   planetari del MocServer (verifica del 2026-10-12, es. `CDS/P/Mars/MGS-MOLA-DEM`)
   si trovano `hips_frame = mars` e `hips_body = mars`. **Regola (scelta
-  minore, da confermare):** `hips_frame` in `equatorial`, `galactic`,
+  minore, confermata il 2026-10-12):** `hips_frame` in `equatorial`, `galactic`,
   `ecliptic` → `body = "celestial"` (D19-3, ricavato dal sistema); altrimenti
   `body = hips_body` se presente **e uguale** a `hips_frame`, con l'avviso
   `HIPS_BODY_DRAFT` ("`hips_body` è del Working Draft HiPS 2.0, non ancora
   raccomandazione IVOA"); senza `hips_body`, o con valori diversi →
   `body = None` e `BODY_UNKNOWN` (il dato si apre da solo, mai sovrapposto).
   Il nome resta come scritto dal servizio (minuscolo): l'eventuale
-  allineamento ai nomi del 19 si fa con il 19 (**D12-6**, da decidere).
+  allineamento ai nomi del 19 si fa con il 19 (**D12-6 decisa:
+  normalizzazione con una tabella del 19, scritta insieme al 19**).
 - **DSS2 a colori nel MocServer** (verifica del 2026-10-12): identificativo
   **`CDS/P/DSS2/color`** (`creator_did = ivo://CDS/P/DSS2/color`), servizio
   `https://alasky.cds.unistra.fr/DSS/DSSColor`, `hips_tile_format = jpeg`
@@ -166,8 +170,10 @@ riquadro mostrato.
   stesse celle di un conteggio indipendente con i contorni campionati);
   quindi `tiles_for_fov` dà un insieme per eccesso.
 - **Disposizione dei pixel nel tile** (necessaria per H27, non scritta nel
-  testo dello standard 1.0): verificata il 2026-10-12 in due modi
-  indipendenti. Per un punto, la cella all'ordine K+S (S = log₂ larghezza)
+  testo dello standard 1.0): **approvata dal proprietario il 2026-10-12,
+  verificata su dati reali (2MASS K, confronto con `reproject`); da
+  ricontrollare in AP1** (validazione finale della parità). Verificata il
+  2026-10-12 in due modi indipendenti. Per un punto, la cella all'ordine K+S (S = log₂ larghezza)
   è c; tile N = c >> 2S; sotto-indice v = c mod 4^S; a = bit pari di v,
   b = bit dispari (de-interlacciamento dell'ordine NESTED); nell'array letto
   con `astropy.io.fits` (indici da 0, riga = y): **colonna x = b, riga
@@ -236,8 +242,9 @@ riquadro mostrato.
   all'ordine del tile con `mocpy`); nessuno → `HIPS_OUT_OF_COVERAGE`. Il
   filtro vale solo per i HiPS equatoriali (il MOC è ICRS); per gli altri
   frame non si applica, avviso `HIPS_COVERAGE_NOT_CHECKED` (scelta minore,
-  da confermare). `hips_frame = ecliptic` → `HIPS_FRAME_UNSUPPORTED`: lo
-  standard non dice quale eclittica (**D12-7**, da decidere); frame
+  confermata il 2026-10-12). `hips_frame = ecliptic` → `HIPS_FRAME_UNSUPPORTED`: lo
+  standard non dice quale eclittica (**D12-7 decisa: non supportato finché
+  non è verificato su un HiPS eclittico reale**); frame
   planetari → `HIPS_FRAME_UNSUPPORTED` fino al 19.
 - **`order_for_resolution(service, resolution)`**: ordine più basso con il
   pixel del tile non più grande della risoluzione chiesta
@@ -298,7 +305,7 @@ riquadro mostrato.
   **`filter(text=None, **regole)`** solo sulla copia locale: `text` = parole
   (senza maiuscole) tutte presenti in identificativo, titolo o categoria;
   regole = proprietà → modello con `*` e `?` (senza maiuscole), tutte vere
-  (scelta minore, da confermare).
+  (scelta minore, confermata il 2026-10-12).
 - **`survey_coverage(service)`** (C4) → (MOC, avvisi): il `Moc.fits` del
   servizio (16); se manca, il MOC della collezione dal MocServer
   (`ID=…&get=moc&fmt=fits`, verificato il 2026-10-12), avviso
@@ -351,11 +358,12 @@ riquadro mostrato.
   colonne diverse da `metadata.xml` o righe
   con un numero di campi sbagliato: una nuova richiesta, poi
   `HIPS_BAD_TILE`. Le righe **non** sono ritagliate sul cerchio (scelta
-  minore, da confermare): sono tutto il contenuto dei tile.
+  minore, confermata il 2026-10-12): sono tutto il contenuto dei tile.
 
 **P5 — `build_hips` (scritta il 2026-10-12):**
 
-- **Scelta dell'uso di `reproject` (da confermare dal proprietario):**
+- **Uso di `reproject` (approvato dal proprietario il 2026-10-12 così
+  com'è):**
   `reproject_to_hips` non basta per H9 (una sola immagine, tile FITS in
   `float32` contro DC6, nessuna combinazione di tile FITS sovrapposti in
   `coadd_hips`) e la geometria dei tile di `reproject` è in funzioni interne.
@@ -367,7 +375,8 @@ riquadro mostrato.
   quelli ottenuti con il WCS HPX interno di `reproject` e in modo esatto con
   un'interpolazione bilineare indipendente (`scipy`). `reproject_exact`
   (metodo `flux`) richiede i contorni dei pixel di uscita, non definiti per
-  questa griglia: **non disponibile** (`OPERATION_UNSUPPORTED`).
+  questa griglia: **il metodo `flux` non è disponibile in `build_hips`**
+  (`OPERATION_UNSUPPORTED`); restano `nearest` e `bilinear`.
 - **`build_hips(images, output, *, order, hips_id, title, method,
   tile_width=512, formats=(), display=None, status="public master
   clonableOnce")`** → **`BuildResult`** (cartella, ordine, tile per ordine,
@@ -379,7 +388,7 @@ riquadro mostrato.
   `hips_id` nella forma `AUTORITÀ/P/nome` (diventa `creator_did =
   ivo://…`), `title` obbligatorio (`obs_title`). La cartella deve essere
   **nuova o vuota** (nulla si sovrascrive). Solo frame `equatorial` (scelta
-  minore, da confermare).
+  minore, confermata il 2026-10-12).
 - **Tile più profondi:** i tile che toccano l'unione dei MOC delle immagini
   (16, `moc_from_image` all'ordine `order`), **uno alla volta**: per ogni
   immagine `reproject_interp` sul WCS del tile; più immagini → **media
@@ -408,7 +417,7 @@ riquadro mostrato.
   `hips_pixel_bitpix`, `hips_builder = AstroTwo <versione>`, date di
   creazione e rilascio, `hips_sampling`, `hips_overlay`, `hips_hierarchy`,
   `moc_sky_fraction`, `hips_order_min = 0`. **`Allsky` non scritto** (avviso
-  `HIPS_ALLSKY_NOT_WRITTEN`, **D12-8**). Il HiPS generato si rilegge con
+  `HIPS_ALLSKY_NOT_WRITTEN`, **D12-8 decisa: per ora nessun Allsky**). Il HiPS generato si rilegge con
   `read_service`, `fetch_tile`, `pixel_values` (T14).
 
 ## 4. Cosa NON fa
@@ -601,32 +610,29 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
   sulla checklist del livello 1).** **client HTTP diretto** secondo lo
   standard IVOA HiPS 1.0 (tile, proprietà, ordini); `astroquery.hips2fits`
   solo come complemento per i ritagli FITS prodotti dal server.
-- **D12-6 — Nomi dei corpi planetari: DA DECIDERE (aperta il 2026-10-12,
-  Gruppo 3).** I HiPS planetari scrivono il corpo in minuscolo (`mars`,
-  WD HiPS 2.0); il 19 userà nomi IAU (es. `Mars`). Opzioni: (a) il 12
-  conserva il nome del servizio e il confronto dei corpi è sensibile alle
-  maiuscole (oggi); (b) il 19 fornisce una tabella di corrispondenza e il 12
-  normalizza. **Raccomandazione:** (b) quando si scrive il 19; fino ad allora
-  (a). Non blocca il codice del 12.
-- **D12-7 — `hips_frame = ecliptic`: DA DECIDERE (aperta il 2026-10-12,
-  Gruppo 3).** Lo standard HiPS 1.0 dice solo "ecliptic", senza indicare
+- **D12-6 — Nomi dei corpi planetari: DECISA il 2026-10-12 (decisione del
+  proprietario).** I HiPS planetari scrivono il corpo in minuscolo (`mars`,
+  WD HiPS 2.0); il 19 userà nomi IAU (es. `Mars`). **Esito:** opzione (b) —
+  **normalizzazione dei nomi con una tabella di corrispondenza del 19, da
+  scrivere insieme al 19**; fino ad allora il 12 conserva il nome del
+  servizio e il confronto è sensibile alle maiuscole. **Motivazione:** un
+  solo elenco dei corpi (nel 19) evita tabelle duplicate tra i moduli.
+- **D12-7 — `hips_frame = ecliptic`: DECISA il 2026-10-12 (decisione del
+  proprietario).** Lo standard HiPS 1.0 dice solo "ecliptic", senza indicare
   quale eclittica (es. media J2000 baricentrica, geocentrica, vera della
-  data). Opzioni: (a) nessun calcolo di campo o di pixel per i HiPS
-  eclittici (`HIPS_FRAME_UNSUPPORTED`, oggi); (b) un frame di `astropy`
-  scelto dal proprietario, dichiarato nel risultato. **Raccomandazione:**
-  (a) finché non si trova un HiPS eclittico reale da cui verificarlo.
-  Fermo solo questo pezzo.
-- **D12-8 — File `Allsky` di `build_hips`: DA DECIDERE (aperta il
-  2026-10-12, Gruppo 3).** Lo standard HiPS 1.0 (§4.3.2) dice che l'Allsky
-  è facoltativo, è una matrice di tile affiancati "da sinistra a destra" di
-  larghezza `(int)sqrt(numero di tile)` e con tile ridotti a una potenza di
-  2, ma **non** dice in che verso vanno le righe della matrice né come si
-  riempie l'ultima riga, né l'orientamento dentro i tile per il FITS. Opzioni:
-  (a) nessun Allsky (oggi; è facoltativo e i client devono comunque usare i
-  tile regolari); (b) ricavare la disposizione dagli Allsky di un HiPS
-  pubblico e verificarla sui suoi tile (validazione, non copia: regola
-  d'oro n. 8), poi scriverlo. **Raccomandazione:** (a) ora, (b) se serve per
-  la velocità del 41. Fermo solo questo pezzo.
+  data). **Esito:** opzione (a) — **non supportato** (nessun calcolo di
+  campo o di pixel, `HIPS_FRAME_UNSUPPORTED`) **finché non è verificato su
+  un HiPS eclittico reale**. **Motivazione:** scegliere un'eclittica senza
+  verifica produrrebbe posizioni sbagliate in silenzio.
+- **D12-8 — File `Allsky` di `build_hips`: DECISA il 2026-10-12 (decisione
+  del proprietario).** Lo standard HiPS 1.0 (§4.3.2) dice che l'Allsky è
+  facoltativo, ma **non** dice in che verso vanno le righe della matrice né
+  come si riempie l'ultima riga, né l'orientamento dentro i tile per il
+  FITS. **Esito:** opzione (a) — **`build_hips` per ora non produce
+  l'Allsky** (avviso `HIPS_ALLSKY_NOT_WRITTEN`); i client usano i tile
+  regolari. Si riapre con una proposta se il 41 ne ha bisogno per la
+  velocità (disposizione da ricavare e verificare su un HiPS pubblico,
+  validazione e non copia, regola d'oro n. 8).
 - **D12-5 — Cataloghi HiPS progressivi (H12): DECISA il 2026-10-04.**
   **Dati e computazioni HEALPix nel `16`, servizio dei tile nel `12`** (stesso
   confine scritto in `16-core-moc.md`, D16-5). **Motivazione:** un solo
@@ -653,3 +659,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **P3 scritta** (`CollectionIndex` con `sync`/`filter`, `INDEX_FIELDS`, `survey_coverage`, `set_survey`/`ActiveSurvey`, `DEFAULT_SURVEY`; T1, T10, T11): copia locale delle collezioni HiPS dal MocServer, risposte in ISO-8859-1 come dichiarato dal servizio (verifica del 2026-10-12), copertura dal `Moc.fits` del servizio o dal MocServer; campi dell'indice e regole del filtro come scelte minori. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P4 scritta** (`cube_planes`/`CubePlanes`, piani in `fetch_tile` e `pixel_values`, `catalog_tiles`/`CatalogTiles`; T9, nuovo T13): cubi HiPS 1.0 con suffisso `_n` e asse fisico dalle chiavi `data_cube_*` (indice FITS dal 10); cataloghi progressivi dai tile TSV regolari con `metadata.xml`, rami chiusi dai tile assenti, righe non ritagliate (scelta minore). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P5 scritta — modulo 12 completo tranne i pezzi fermi** (`build_hips`/`BuildResult`, `BUILD_METHODS`; T14–T16 nuovi): WCS APE 14 del tile + `reproject_interp` (verifica del 2026-10-12 contro il WCS HPX interno di `reproject` e un'interpolazione indipendente; uso di `reproject` da confermare), tile FITS `float64`, media pesata con la copertura, ordini inferiori per media di 4 pixel, PNG/JPEG con parametri espliciti (`set_display` dell'11), `Moc.fits` dal 16, `properties` per ultimo; nuova decisione aperta **D12-8** (Allsky, Gruppo 3). Fermi: H10 SkyView (URL SIA non documentato da NASA), D12-6, D12-7, D12-8. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): H10 SkyView rinviato finché NASA non documenta l'URL SIA, con il motivo (§3); **D12-6 decisa** (normalizzazione dei nomi dei corpi con una tabella del 19, scritta con il 19), **D12-7 decisa** (`hips_frame = ecliptic` non supportato finché non è verificato su un HiPS reale), **D12-8 decisa** (nessun Allsky da `build_hips` per ora) (§3, §13); uso di `reproject` in `build_hips` approvato com'è, metodo `flux` non disponibile in `build_hips` (§3); disposizione dei pixel nel tile approvata, verificata su dati reali (2MASS K, confronto con `reproject`), da ricontrollare in AP1 (§3); scelte minori del 12 tutte confermate. Nessun codice cambia. Stato `approvato` invariato. |

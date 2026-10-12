@@ -129,7 +129,7 @@ di un dato sia sempre verificabile e confrontabile.
 | P4 | MOC temporali e spazio-temporali (scala dei tempi), mappe di probabilità e regioni di credibilità (D16-4) | test di P4 |
 | P5 | `query_mocserver` (H26), `build_moc` (H9), lettura da URL (H22) | T8, T9 |
 
-**Scelte di P1 (scelte minori, da confermare):**
+**Scelte di P1 (scelte minori, confermate dal proprietario il 2026-10-12):**
 
 - `Moc` è immutabile e contiene l'oggetto `mocpy` (`MOC`, `TimeMOC`, `STMOC`),
   il tipo (`space`, `time`, `space-time`), il **sistema** (`ICRS` per lo
@@ -165,7 +165,7 @@ di un dato sia sempre verificabile e confrontabile.
   rilegge `A2BODY`/`A2BODIES` (stesso avviso nel MOC letto); senza `A2BODY`
   il MOC è `celestial`. JSON e testo non hanno dove dichiarare il corpo: un
   MOC non celeste in quei formati → `MOC_BODY_UNSUPPORTED` (scelta minore,
-  da confermare).
+  confermata il 2026-10-12).
 - **Scelte minori 1–4 e 7–13 confermate dal proprietario il 2026-10-12.**
 - Risultato vuoto: consentito, con l'avviso `MOC_EMPTY`.
 
@@ -185,7 +185,7 @@ di un dato sia sempre verificabile e confrontabile.
   colonne e sistema dal 13, conversione in ICRS con il 10, righe senza
   posizione escluse e contate (avviso `ROWS_EXCLUDED`), epoca delle
   posizioni riportata, mai propagata.
-- **Immagine (scelta minore, da confermare):** `moc_from_image(image,
+- **Immagine (scelta minore, confermata il 2026-10-12):** `moc_from_image(image,
   order_max)`. Pixel validi = valori finiti, non mascherati e diversi da
   `BLANK` per i dati interi. Per ogni pixel valido si campionano **angoli e
   punti interni** a passo non più grande di **metà del lato di una cella**
@@ -228,7 +228,7 @@ di un dato sia sempre verificabile e confrontabile.
   (`lonlat_to_healpix`) e `numpy.bincount`.
 - **`healpix_grid(order, *, within=None, step=1)`** → `HealpixGrid`: celle
   NESTED e contorni in ICRS (`boundaries_lonlat` di `astropy-healpix`) per il
-  disegno del 41. **Scelta minore (da confermare):** senza `within` la
+  disegno del 41. **Scelta minore (confermata il 2026-10-12):** senza `within` la
   griglia di tutto il cielo è ammessa fino a 12 × 4⁷ = 196 608 celle
   (ordine 7), oltre → `GRID_TOO_LARGE`; con `within` (MOC spaziale) solo le
   celle che toccano il MOC all'ordine dato.
@@ -262,7 +262,7 @@ di un dato sia sempre verificabile e confrontabile.
   decrescente, con probabilità **≥ livello** (stesso calcolo della guida
   LIGO; `mocpy.MOC.from_valued_healpix_cells` con `strict=False,
   no_split=True`, verificato contro un calcolo indipendente). **Scelta minore
-  (da confermare):** celle intere e probabilità ≥ livello (con `strict=True`
+  (confermata il 2026-10-12):** celle intere e probabilità ≥ livello (con `strict=True`
   `mocpy` dà invece la regione con probabilità ≤ livello); la probabilità
   contenuta è ricalcolata con `mocpy.probability_in_multiordermap` e
   dichiarata (avviso `CREDIBLE_PROBABILITY`). Con `order_max` minore
@@ -280,7 +280,7 @@ di un dato sia sempre verificabile e confrontabile.
   un valore sconosciuto di `intersect` è **ignorato in silenzio** (il 16 lo
   rifiuta prima dell'invio) e lo STC con il sistema dichiarato (`Polygon
   ICRS …`, `Circle ICRS …`, come indica la pagina) dà "STC parsing error",
-  mentre senza sistema è accettato. **Scelta minore (da confermare):**
+  mentre senza sistema è accettato. **Scelta minore (confermata il 2026-10-12):**
   cerchi inviati come cono `RA`/`DEC`/`SR`, MOC spaziali come `moc=` in
   POST; **i poligoni si passano come MOC** (`moc_from_region`, interno
   secondo la nostra regola), mai come STC.
@@ -292,6 +292,10 @@ di un dato sia sempre verificabile e confrontabile.
   cache → `MOCSERVER_UNAVAILABLE`; con la copia in cache si usa quella
   (risposta completa di una data precedente, dichiarata `FROM_CACHE`);
   risposta non JSON (es. pagina d'errore HTML) → `SERVICE_ERROR`.
+  **Codifica (verifica del 2026-10-12):** il MocServer dichiara le risposte
+  JSON in **ISO-8859-1** (`Content-Type: application/json;charset=ISO-8859-1`;
+  es. "µm" in un solo byte); si leggono **secondo la codifica dichiarata**,
+  con `MOCSERVER_CHARSET` del 14, mai in UTF-8 per presunzione.
 - **Lettura da URL (H22):** `read_moc(url, …, cache, refresh, timeouts)`;
   prima la cache comune (modulo `16`), download intero o niente con i
   timeout di `04`; in cache il MOC si conserva **in FITS IVOA** (D16-2): il
@@ -586,3 +590,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-11 | Claude Code | **P4 scritta** (`moc_from_times`, `moc_space_time`, `read_probability_map`/`ProbabilityMap`, `moc_from_probability`; metodi temporali di `Moc`; T11): TCB con `astropy.time`; formato delle mappe LIGO/Virgo/KAGRA verificato sulla guida pubblica; regione di credibilità a celle intere con probabilità ≥ livello (scelta minore da confermare), probabilità contenuta dichiarata; nuovi `TIME_RANGE_INVALID`, `PROBABILITY_SUM_INVALID`, `PROBABILITY_MAP_INVALID`. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P5 scritta — modulo 16 completo tranne i pezzi fermi D16-6 e D16-7** (`query_mocserver`/`MocServerResult`, lettura da URL in `read_moc`, `build_moc`; T8, T9): interfaccia del MocServer verificata (due comportamenti non documentati: `intersect` sconosciuto ignorato, STC con sistema rifiutato), rete e cache del 14; poligoni inviati come MOC (scelta minore); MOC da URL in cache sempre in FITS IVOA; tipo dei file di `build_moc` esplicito. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): **D16-6 decisa** — verifica sul sito IVOA, nessuna 2.1 tra WD e PR, resta rifiutata (§3, §10, §13); **D16-7 decisa** — complemento degli ST-MOC come differenza da "tutto il tempo × tutto il cielo" con `mocpy`, normalizzazione dei risultati ST (§7, §13, T14); **scelta 5 cambiata** — risultato forzato con `body = "mixed"` ed elenco dei corpi, nuova forzatura per ogni operazione successiva (§3, §10, T12); **scelta 6 cambiata** — MOC planetari e misti scritti in FITS 2.0 con `A2BODY`/`A2BODIES`, estensione non standard dichiarata (`MocWriteResult`, `MOC_NONSTANDARD_EXTENSION`), riletti dal 16; JSON e testo non celesti rifiutati (scelta minore da confermare) (§3, §7, §10, T13); scelte minori 1–4 e 7–13 confermate. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Allineamento specifica–codice** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato): §3 P5 — risposte del MocServer dichiarate ISO-8859-1 e lette secondo la codifica dichiarata (`MOCSERVER_CHARSET` del 14), regola già applicata nel codice di `query_mocserver`; **scelte minori del 16 tutte confermate** dal proprietario (le voci "da confermare" di §3 diventano confermate). Stato `approvato` invariato. |

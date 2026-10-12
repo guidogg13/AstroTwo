@@ -63,7 +63,7 @@ MANDATORY_PROPERTIES: tuple[str, ...] = (
     "hips_tile_format", "hips_order", "hips_frame",
 )
 #: Valori di ``hips_frame`` celesti dello standard 1.0 → frame di ``astropy.coordinates`` (``ecliptic``: frame
-#: non precisato dallo standard, nessuna conversione finché non è deciso, D12-7).
+#: non precisato dallo standard, nessuna conversione finché non è verificato su un HiPS reale, D12-7).
 CELESTIAL_FRAMES: dict[str, str | None] = {"equatorial": "icrs", "galactic": "galactic", "ecliptic": None}
 _PRODUCT_TYPES = ("image", "catalog", "cube")
 _IMAGE_FORMATS = ("fits", "jpeg", "png")
@@ -449,8 +449,8 @@ def _astropy_frame(frame: str) -> str:
     planetari (modulo 19) → ``HIPS_FRAME_UNSUPPORTED``."""
     name = CELESTIAL_FRAMES.get(frame)
     if name is None:
-        why = ("lo standard HiPS 1.0 non precisa quale eclittica (D12-7, da decidere)" if frame == "ecliptic"
-               else "frame planetario: le posizioni planetarie arrivano con il modulo 19")
+        why = ("lo standard HiPS 1.0 non precisa quale eclittica (D12-7: non supportato finché non è verificato "
+               "su un HiPS reale)" if frame == "ecliptic" else "frame planetario: le posizioni planetarie arrivano con il modulo 19")
         raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"hips_frame {frame!r}: {why}", frame=frame)
     return name
 
@@ -892,7 +892,7 @@ def pixel_values(service: HiPSService, coords, *, order: int | None = None, plan
 
 #: Survey attivo di default (D12-3): DSS2 a colori, identificativo verificato nel MocServer il 2026-10-12.
 DEFAULT_SURVEY = "CDS/P/DSS2/color"
-#: Proprietà copiate nell'indice locale delle collezioni HiPS (scelta minore, da confermare).
+#: Proprietà copiate nell'indice locale delle collezioni HiPS (scelta minore, confermata il 2026-10-12).
 INDEX_FIELDS: tuple[str, ...] = (
     "ID", "obs_title", "obs_regime", "dataproduct_type", "dataproduct_subtype", "hips_service_url", "hips_order",
     "hips_frame", "hips_body", "hips_tile_format", "em_min", "em_max", "moc_sky_fraction", "client_category",

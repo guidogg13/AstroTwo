@@ -106,7 +106,7 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 | A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): sì**, firma e notarizzazione con account Apple Developer **solo al momento della distribuzione**; blocca l'approvazione di `60-distribuzione-dmg.md` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
 | A9 | Lingua dell'interfaccia | solo inglese · solo italiano · entrambe (internazionalizzazione) | `40-ui-finestra-principale.md` | **orientamento (2026-10-09): inglese di base + italiano** con le traduzioni di Qt; blocca l'approvazione di `40-ui-finestra-principale.md` |
-| A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS: da fissare al momento del codice** (Gruppo 3) |
+| A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS (12): decisa il 2026-10-12** — tile in memoria entro **512 MB, configurabili**; `build_hips` lavora **un tile alla volta** entro il **limite delle operazioni** (4 GB, D11-11); su disco la **cache comune di 5 GB** (`04-cache.md`). **A10 interamente decisa** |
 | A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
 
 Fuori da questo file: **AP1** validazione finale della parità con Aladin
@@ -168,8 +168,9 @@ astrotwo/
   obiettivi (dimensione di immagini e cubi caricabili) e il dettaglio di tutti
   i test misurabili restano in `61-strategia-test.md`.
 - La memoria deve essere limitata e dichiarata: non si caricano interi cataloghi
-  HiPS/FITS in RAM senza un tetto. Tetti precisi: decisione **A10** (Gruppo 3), da
-  fissare al momento del codice nei moduli interessati.
+  HiPS/FITS in RAM senza un tetto. Tetti precisi: decisione **A10**, decisa
+  per immagini (11), cataloghi (13) e HiPS (12); valori nei moduli
+  interessati e nella riga A10 di §5.
 - **Cache (vincoli da A7):** SQLite per le interrogazioni ai cataloghi, file su
   disco per i riquadri HiPS e FITS; limite di spazio configurabile
   dall'utente con eliminazione dei dati meno usati; ogni dato servito dalla
@@ -196,8 +197,10 @@ astrotwo/
   `60-distribuzione-dmg.md`, insieme ad A6.
 - **DA-07 — A10, Tetti di memoria:** valori per immagini, cataloghi e HiPS,
   coerenti con l'obiettivo di §8; **per le immagini decisi il 2026-10-10**
-  (valori in `11-core-immagini-fits.md` §3); per cataloghi e HiPS da fissare
-  al momento del codice (Gruppo 3).
+  (valori in `11-core-immagini-fits.md` §3); **per i cataloghi il
+  2026-10-10** (D13-4 nel 13); **per gli HiPS il 2026-10-12** (512 MB di tile
+  in memoria, configurabili; `build_hips` un tile alla volta entro il limite
+  delle operazioni di 4 GB; cache comune di 5 GB su disco; valori nel 12).
 - **DA-08 — A11, Licenza di AstroTwo:** da decidere (Gruppo 2); blocca
   l'approvazione di `60-distribuzione-dmg.md`. Vincolo noto: WCSLIB (LGPL-3,
   dentro astropy). Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
@@ -224,3 +227,4 @@ astrotwo/
 | 2026-10-09 | Claude Code | §4.2 (note): **framework dei test = `pytest`** (decisione del proprietario), anticipata da `61-strategia-test.md`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario:** nuova decisione aperta **A11 — Licenza di AstroTwo** (Gruppo 2, blocca il 60, §5 e §9 DA-08); **A10 decisa per le immagini** (valori nell'11), resta aperta per cataloghi e HiPS. Nuova regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero, nulla preso da Aladin). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario** (autorizzazione esplicita a modificare il file approvato): §7 — gli strumenti per l'IA si dichiarano nel 32, non nel §11 dei moduli (da D11-9). A10 resta la strategia di caricamento delle immagini; il limite delle operazioni (4 GB) è separato, D11-11 nell'11. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **A10 per gli HiPS** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato): riga A10 di §5, §8 e DA-07 aggiornate con l'esito — tile in memoria entro 512 MB configurabili, `build_hips` un tile alla volta entro il limite delle operazioni di 4 GB, cache comune di 5 GB su disco; A10 interamente decisa. Stato `approvato` invariato. |
