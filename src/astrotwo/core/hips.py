@@ -22,7 +22,9 @@ import astropy.units as u
 __all__ = [
     "ActiveSurvey",
     "CELESTIAL_FRAMES",
+    "CatalogTiles",
     "CollectionIndex",
+    "CubePlanes",
     "DEFAULT_SURVEY",
     "DEFAULT_TILE_MEMORY_BYTES",
     "HIPS_STANDARD_VERSION",
@@ -35,6 +37,8 @@ __all__ = [
     "TileMemory",
     "TileSelection",
     "add_hips",
+    "catalog_tiles",
+    "cube_planes",
     "fetch_tile",
     "order_for_resolution",
     "parse_properties",
@@ -755,11 +759,18 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
 
 
 def _check_plane(service: HiPSService, plane) -> int | None:
+    """Piano di un cubo (H24): intero in [0, hips_cube_depth); senza piano, il piano 0 (il tile senza suffisso,
+    standard §4.2.3). Per un HiPS non cubo solo ``None``/0."""
     if service.dataproduct_type != "cube":
         if plane not in (None, 0):
             raise HiPSError("HIPS_CUBE_PLANE_INVALID", f"{service.hips_id}: non è un cubo, nessun piano {plane!r}")
         return None
-    return 0 if plane is None else plane  # controllo completo dei piani in P4
+    if plane is None:
+        return 0
+    if isinstance(plane, bool) or not isinstance(plane, int) or not 0 <= plane < service.cube_depth:
+        raise HiPSError("HIPS_CUBE_PLANE_INVALID", f"{service.hips_id}: piano {plane!r} inesistente; piani "
+                        f"disponibili 0–{service.cube_depth - 1} ({service.cube_depth})", depth=service.cube_depth)
+    return plane
 
 
 def service_coverage(service: HiPSService, *, cache=None, refresh: bool = False, timeouts=None) -> tuple:
@@ -838,8 +849,8 @@ def tile_pixel_values(tile: HiPSTile, coords, *, frame: str = "equatorial") -> P
     return PixelValues(values=values, tile_index=tiles, x=x, y=y, order=tile.order, unit=unit, description=description)
 
 
-def pixel_values(service: HiPSService, coords, *, order: int | None = None, cache=None, refresh: bool = False,
-                 timeouts=None, memory: TileMemory | None = None) -> PixelValues:
+def pixel_values(service: HiPSService, coords, *, order: int | None = None, plane: int | None = None, cache=None,
+                 refresh: bool = False, timeouts=None, memory: TileMemory | None = None) -> PixelValues:
     """Valore del pixel sotto le posizioni (H27): dai tile FITS del servizio all'ordine dato (default: il più
     profondo), scaricati o letti dalla cache; mai da tile JPEG/PNG."""
     import numpy as np
@@ -855,8 +866,8 @@ def pixel_values(service: HiPSService, coords, *, order: int | None = None, cach
     sources = []
     notes: list[tuple[str, str]] = []
     for index in np.unique(tiles):
-        tile = fetch_tile(service, order, int(index), format="fits", cache=cache, refresh=refresh, timeouts=timeouts,
-                          memory=memory)
+        tile = fetch_tile(service, order, int(index), format="fits", plane=plane, cache=cache, refresh=refresh,
+                          timeouts=timeouts, memory=memory)
         data = tile.data if tile.data.ndim == 2 else tile.data[0]
         if values is None:
             values = np.empty(len(tiles), dtype=data.dtype)
@@ -865,8 +876,9 @@ def pixel_values(service: HiPSService, coords, *, order: int | None = None, cach
         sources.append(tile.provenance())
         notes += [n for n in tile.warnings if n[0] != "FROM_CACHE"]
         unit = tile.header.get("BUNIT") if tile.header is not None else None
-    description = (f"{len(tiles)} valori di {service.hips_id} all'ordine {order} dai tile FITS {', '.join(sources)}"
-                   f"{note}")
+    where = f", piano {tile.plane}" if tile.plane is not None else ""
+    description = (f"{len(tiles)} valori di {service.hips_id} all'ordine {order}{where} dai tile FITS "
+                   f"{', '.join(sources)}{note}")
     return PixelValues(values=values, tile_index=tiles, x=x, y=y, order=order, unit=unit, description=description,
                        warnings=tuple(notes))
 
@@ -1035,3 +1047,234 @@ def set_survey(hips_id: str | None = None, *, hips_list: HiPSList | None = None,
         notes.append(("HIPS_COVERAGE_UNKNOWN", f"{service.hips_id}: copertura non disponibile ({exc.code}: "
                       f"{exc.message})"))
     return ActiveSurvey(service=service, coverage=coverage, warnings=service.warnings + tuple(notes))
+
+
+# --------------------------------------------------------------------------
+# P4 — Cubi HiPS (H24) e cataloghi HiPS progressivi (H12)
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CubePlanes:
+    """Piani di un cubo HiPS (standard HiPS 1.0 §4.2.3, ``hips_cube_depth``) e asse fisico se dichiarato."""
+
+    depth: int
+    first_frame: int  # hips_cube_firstframe (piano da mostrare all'inizio; default 0)
+    axis: u.Quantity | None  # valore fisico di ogni piano dalle chiavi data_cube_*, se presenti
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def cube_planes(service: HiPSService) -> CubePlanes:
+    """Numero e descrizione dei piani di un cubo HiPS (H24). Asse fisico dalle chiavi facoltative
+    ``data_cube_crpix3``, ``data_cube_crval3``, ``data_cube_cdelt3``, ``data_cube_bunit3`` secondo la regola FITS
+    lineare ``valore = CRVAL3 + (p − CRPIX3) × CDELT3`` con p = indice FITS del piano (da 1, conversione del 10)."""
+    import numpy as np
+
+    from astrotwo.core.coordinates_wcs import convert_pixel_convention
+
+    if service.dataproduct_type != "cube":
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: non è un cubo HiPS ({service.dataproduct_type})")
+    props, source = service.properties, service.origin
+    first = _int(props, "hips_cube_firstframe", source) or 0
+    notes: list[tuple[str, str]] = []
+    if first >= service.cube_depth:
+        raise _invalid(source, "hips_cube_firstframe", f"{first} oltre la profondità {service.cube_depth}")
+    keys = ("data_cube_crpix3", "data_cube_crval3", "data_cube_cdelt3")
+    found = {k: _float(props, k, source) for k in keys}
+    axis = None
+    if all(v is not None for v in found.values()):
+        planes = np.arange(service.cube_depth, dtype=np.float64)
+        fits_index = convert_pixel_convention(planes, np.zeros_like(planes), "numpy", "fits").x
+        values = found["data_cube_crval3"] + (fits_index - found["data_cube_crpix3"]) * found["data_cube_cdelt3"]
+        unit_text = _first(props, "data_cube_bunit3")
+        unit = u.dimensionless_unscaled
+        if unit_text is not None:
+            try:
+                unit = u.Unit(unit_text, format="fits")
+            except ValueError:
+                notes.append(("HIPS_CUBE_UNIT_UNKNOWN", f"{source}: data_cube_bunit3 {unit_text!r} non è un'unità FITS: "
+                              "asse senza unità"))
+        else:
+            notes.append(("HIPS_CUBE_UNIT_UNKNOWN", f"{source}: data_cube_bunit3 assente: asse senza unità"))
+        axis = values * unit
+    elif any(v is not None for v in found.values()):
+        notes.append(("HIPS_CUBE_AXIS_INCOMPLETE", f"{source}: chiavi data_cube_* incomplete, asse fisico non "
+                      "calcolato"))
+    description = (f"cubo {service.hips_id}: {service.cube_depth} piani (0–{service.cube_depth - 1}), piano iniziale "
+                   f"{first}" + (f", asse da {axis[0]} a {axis[-1]}" if axis is not None else ", asse fisico non "
+                                 "dichiarato"))
+    return CubePlanes(depth=service.cube_depth, first_frame=first, axis=axis, description=description,
+                      warnings=tuple(notes))
+
+
+@dataclass(frozen=True)
+class CatalogTiles:
+    """Sorgenti di un catalogo HiPS progressivo (H12) nei tile che toccano il campo, ordine per ordine."""
+
+    table: object  # CatalogTable del 13
+    order: int  # ordine più profondo letto
+    tiles: tuple[tuple[int, int, str, int, bool], ...]  # (ordine, indice, URL, righe, da cache)
+    complete: bool  # True se nessun tile letto ha figli possibili (ordine massimo del servizio raggiunto)
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def _cached_bytes(url: str, cache, refresh: bool, timeouts, check):
+    """(byte, data, da cache, avvisi) di un file del servizio: cache comune (modulo 12) o rete; ``check`` dice se
+    i byte sono validi (un file non valido: una nuova richiesta, poi ``HIPS_BAD_TILE``); 404 → ``None``."""
+    import requests
+
+    from astrotwo.core.cache import CacheError
+
+    key = f"tile:{url}"
+    notes: list[tuple[str, str]] = []
+    cached = None if refresh else cache.get(_CACHE_MODULE, key)
+    attempts = 1
+    if cached is not None:
+        problem = check(cached.data)
+        if problem is None:
+            return cached.data, cached.retrieved_at, True, ()
+        notes.append(("HIPS_TILE_DISCARDED", f"copia in cache di {url} non valida ({problem}): nuova richiesta"))
+        attempts = 0
+    for _ in range(attempts + 1):
+        try:
+            payload = _download_tile(url, timeouts)
+        except requests.exceptions.RequestException as exc:
+            raise HiPSError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
+                            f"{timeouts.read:g} s lettura): {exc}", url=url) from exc
+        if payload is None:
+            return None, None, False, tuple(notes)
+        problem = check(payload)
+        if problem is None:
+            break
+        notes.append(("HIPS_TILE_DISCARDED", f"{url}: file non valido ({problem}), scartato"))
+    else:
+        raise HiPSError("HIPS_BAD_TILE", f"{url}: file non valido anche dopo una nuova richiesta ({problem})", url=url)
+    retrieved_at = datetime.now(UTC)
+    try:
+        cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
+    except CacheError as exc:
+        notes.append((exc.code, exc.message))
+    return payload, retrieved_at, False, tuple(notes)
+
+
+def _tsv_rows(payload: bytes, names: list[str]):
+    """Righe di un tile TSV (standard §4.2.2.1): UTF-8, ``#`` = commento, prima riga = nomi delle colonne (uguali a
+    quelli di ``metadata.xml``), campi separati da TAB, campo vuoto = nullo. Errore → (None, motivo)."""
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return None, f"non UTF-8 ({exc})"
+    lines = [line.rstrip("\r") for line in text.split("\n")]
+    lines = [line for line in lines if line and not line.startswith("#")]
+    if not lines:
+        return None, "nessuna riga di intestazione"
+    header = lines[0].split("\t")
+    if header != names:
+        return None, f"colonne {header} diverse da metadata.xml {names}"
+    rows = [line.split("\t") for line in lines[1:]]
+    bad = [i for i, row in enumerate(rows) if len(row) != len(names)]
+    if bad:
+        return None, f"riga {bad[0] + 2}: {len(rows[bad[0]])} campi invece di {len(names)}"
+    return rows, None
+
+
+def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=None, refresh: bool = False,
+                  timeouts=None):
+    """Catalogo HiPS progressivo (H12): sorgenti dei tile che toccano il cerchio, dall'ordine più basso fino a
+    ``order`` (ogni ordine aggiunge sorgenti diverse, standard §4.2.2). Si usano i tile regolari, mai ``Allsky``
+    (che li duplica). Un tile assente (HTTP 404) dall'ordine minimo in su chiude il suo ramo (nessun figlio
+    richiesto); sotto ``hips_order_min`` gli ordini omessi si saltano. Colonne, unità, UCD e sistema delle posizioni
+    da ``metadata.xml`` (VOTable obbligatorio per i cataloghi); la tabella si legge con il lettore del 13. Le righe
+    non sono ritagliate sul cerchio (tutto il contenuto dei tile)."""
+    import dataclasses
+    import io
+    import os
+    import tempfile
+
+    from astropy.io import votable
+
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.cache import NETWORK_TIMEOUTS, SharedCache
+    from astrotwo.core.catalogs import read_table
+
+    if service.dataproduct_type != "catalog":
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: non è un catalogo HiPS ({service.dataproduct_type})")
+    timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
+    cache = SharedCache() if cache is None else cache
+    order = _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    order_min = _int(service.properties, "hips_order_min", service.origin) or 0
+    meta_url = service.base_url + "/metadata.xml"
+    try:
+        response = vo._http("hips", meta_url, cache=cache, refresh=refresh, timeouts=timeouts)
+    except vo.VoProtocolsError as exc:
+        if exc.code == "SERVICE_ERROR":
+            raise HiPSError("HIPS_METADATA_INVALID", f"{meta_url}: {exc.message}; metadata.xml è richiesto per i "
+                            "cataloghi HiPS (standard §4.4.3)", field="metadata.xml") from exc
+        raise _net(exc) from exc
+    try:
+        template = votable.parse(io.BytesIO(response.payload), verify="warn")
+        vtable = template.get_first_table()
+    except Exception as exc:  # astropy.io.votable: errori di XML o di VOTable
+        raise HiPSError("HIPS_METADATA_INVALID", f"{meta_url}: VOTable non leggibile ({exc})",
+                        field="metadata.xml") from exc
+    notes = list(response.notes) + list(vo._store(response, "hips", cache))
+    names = [f.name for f in vtable.fields]
+    selection = None
+    rows: list[list[str]] = []
+    read: list[tuple[int, int, str, int, bool]] = []
+    present: set[int] | None = None
+    latest = response.retrieved_at
+    for level in range(order + 1):
+        selection = tiles_for_fov(center, radius, level, frame=service.frame)
+        indices = selection.indices
+        if present is not None and level > order_min:
+            indices = tuple(i for i in indices if (i >> 2) in present)
+        found: set[int] = set()
+        for index in indices:
+            url = f"{service.base_url}/{tile_path(level, index, 'tsv')}"
+            payload, when, from_cache, tile_notes = _cached_bytes(url, cache, refresh, timeouts,
+                                                               lambda b: _tsv_rows(b, names)[1])
+            notes += tile_notes
+            if payload is None:
+                continue
+            tile_rows, _ = _tsv_rows(payload, names)
+            rows += tile_rows
+            latest = when if latest is None else max(latest, when)
+            found.add(index)
+            read.append((level, index, url, len(tile_rows), from_cache))
+        if level >= order_min:
+            present = found
+        if level >= order_min and not found:
+            break
+    vtable.create_arrays(nrows=len(rows))
+    for j, field in enumerate(vtable.fields):
+        column = vtable.array[field.name]
+        for i, row in enumerate(rows):
+            text = row[j]
+            if text == "":
+                column.mask[i] = True
+                continue
+            try:
+                value, mask = field.converter.parse(text, config={"version": template.version})
+            except Exception as exc:  # valore non conforme al tipo dichiarato
+                raise HiPSError("HIPS_BAD_TILE", f"{service.hips_id}: valore {text!r} della colonna {field.name} non "
+                                f"conforme al tipo {field.datatype} ({exc})") from exc
+            column[i] = value
+            column.mask[i] = mask
+    fd, tmp = tempfile.mkstemp(prefix="astrotwo-hipscat-", suffix=".xml")
+    os.close(fd)
+    try:
+        template.to_xml(tmp)
+        table = read_table(tmp)  # formato riconosciuto dal 13 (VOTable)
+    finally:
+        os.unlink(tmp)
+    table = dataclasses.replace(table, source=service.base_url, origin=service.base_url, retrieved_at=latest,
+                                file_modified=None)
+    deepest = max((t[0] for t in read), default=0)
+    complete = not read or deepest >= service.order or (present is not None and not present)
+    description = (f"{len(rows)} sorgenti di {service.hips_id} da {len(read)} tile TSV (ordini 0–{order}, minimo del "
+                   f"servizio {order_min}) per {selection.description if selection else 'il campo'}; righe dei tile "
+                   "non ritagliate sul cerchio" + ("" if complete else "; altre sorgenti agli ordini più profondi"))
+    return CatalogTiles(table=table, order=order, tiles=tuple(read), complete=bool(complete), description=description,
+                        warnings=tuple(notes) + table.warnings)

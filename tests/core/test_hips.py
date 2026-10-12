@@ -605,3 +605,118 @@ def test_survey_coverage_fallback(service, cache, mocserver):
     active = set_survey(mars.base_url, cache=cache)
     assert active.coverage is None and "HIPS_COVERAGE_UNKNOWN" in dict(active.warnings)
     assert vo.MOCSERVER_URL.startswith(service.url)
+
+
+# =============================================================================
+# P4 — Cubi (T9) e cataloghi progressivi (test nuovo)
+
+from astrotwo.core.hips import catalog_tiles, cube_planes  # noqa: E402
+
+
+def test_t9_cube(service, cache):
+    text = properties_text(dataproduct_type="cube", hips_cube_depth="3", hips_cube_firstframe="1",
+                           data_cube_crpix3="1", data_cube_crval3="1.4204e9", data_cube_cdelt3="-1e5",
+                           data_cube_bunit3="Hz")
+    cube = read_service(serve_properties(service, "/cubo", text), cache=cache)
+    planes = cube_planes(cube)
+    # Asse ricalcolato nel test con astropy.wcs (WCS lineare a 1 asse, pixel da 0).
+    from astropy.wcs import WCS
+
+    w = WCS(naxis=1)
+    w.wcs.crpix, w.wcs.crval, w.wcs.cdelt, w.wcs.cunit, w.wcs.ctype = [1], [1.4204e9], [-1e5], ["Hz"], ["FREQ"]
+    expected = w.pixel_to_world_values(np.arange(3))
+    assert planes.depth == 3 and planes.first_frame == 1 and planes.axis.unit == u.Hz
+    assert np.allclose(planes.axis.value, expected, rtol=0, atol=1e-3)
+    for plane in (0, 2):
+        route = "/cubo/" + tile_path(3, 50, "fits", plane=plane)
+        service.routes[route] = lambda request, p=plane: (200, "application/fits", fits_tile(100 + p))
+    tile = fetch_tile(cube, 3, 50, plane=2, cache=cache)
+    assert tile.plane == 2 and tile.url.endswith("Npix50_2.fits")
+    assert np.array_equal(tile.data, fits.getdata(io.BytesIO(fits_tile(102))))
+    assert fetch_tile(cube, 3, 50, cache=cache).url.endswith("Npix50.fits")  # piano 0 = senza suffisso
+    for plane in (5, -1, 3):
+        with pytest.raises(HiPSError) as err:
+            fetch_tile(cube, 3, 50, plane=plane, cache=cache)
+        assert err.value.code == "HIPS_CUBE_PLANE_INVALID" and err.value.details["depth"] == 3
+    hp = HEALPix(nside=2 ** (3 + 6), order="nested")
+    lon, lat = hp.healpix_to_lonlat([(50 << 12) + 7])
+    got = pixel_values(cube, SkyCoord(lon, lat), plane=2, cache=cache)
+    assert "piano 2" in got.description
+    image = read_service(serve_properties(service), cache=cache)
+    with pytest.raises(HiPSError) as err:
+        fetch_tile(image, 3, 50, plane=1, cache=cache)
+    assert err.value.code == "HIPS_CUBE_PLANE_INVALID"
+    with pytest.raises(HiPSError) as err:
+        cube_planes(image)
+    assert err.value.code == "HIPS_TYPE_MISMATCH"
+    bare = read_service(serve_properties(service, "/cubo2", properties_text(dataproduct_type="cube",
+                                                                            hips_cube_depth="4")), cache=cache)
+    plain = cube_planes(bare)
+    assert plain.axis is None and plain.first_frame == 0 and plain.warnings == ()
+
+
+METADATA_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.3" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+  <RESOURCE>
+    <COOSYS ID="sys" system="ICRS" epoch="J2000"/>
+    <TABLE name="prova">
+      <FIELD name="ident" datatype="char" arraysize="*" ucd="meta.id;meta.main"/>
+      <FIELD name="RA" datatype="double" unit="deg" ucd="pos.eq.ra;meta.main" ref="sys"/>
+      <FIELD name="DE" datatype="double" unit="deg" ucd="pos.eq.dec;meta.main" ref="sys"/>
+      <FIELD name="mag" datatype="float" unit="mag" ucd="phot.mag;em.opt.V"/>
+    </TABLE>
+  </RESOURCE>
+</VOTABLE>
+"""
+
+
+def tsv(rows, header="ident\tRA\tDE\tmag"):
+    return "# Completezza: commento ignorato\n" + header + "\n" + "".join("\t".join(r) + "\n" for r in rows)
+
+
+def test_progressive_catalog(service, cache):
+    text = properties_text(dataproduct_type="catalog", hips_tile_format="tsv", hips_order="3", hips_tile_width=None)
+    cat = read_service(serve_properties(service, "/cat", text), cache=cache)
+    service.routes["/cat/metadata.xml"] = lambda request: (200, "text/xml", METADATA_XML)
+    center = SkyCoord(45 * u.deg, 20 * u.deg)
+    radius = 2 * u.deg
+    # Albero sintetico: a ogni ordine una sorgente per tile che tocca il campo, fino all'ordine 1 (ordine 2 assente).
+    expected = []
+    for level in (0, 1):
+        for index in HEALPix(nside=2 ** level, order="nested").cone_search_lonlat(45 * u.deg, 20 * u.deg, radius):
+            lon, lat = HEALPix(nside=2 ** level, order="nested").healpix_to_lonlat([index])
+            row = [f"S{level}_{index}", f"{lon[0].deg:.6f}", f"{lat[0].deg:.6f}", "" if level else "12.5"]
+            expected.append(row[0])
+            service.routes[f"/cat/{tile_path(level, int(index), 'tsv')}"] = \
+                lambda request, r=row: (200, "text/tab-separated-values", tsv([r]))
+    result = catalog_tiles(cat, center, radius, 3, cache=cache)
+    table = result.table
+    assert sorted(table.table["ident"]) == sorted(expected) and len(result.tiles) == len(expected)
+    assert table.positions.lon == "RA" and table.positions.frame == "icrs" and table.body == "celestial"
+    assert str(table.table["mag"].unit) == "mag" and table.table["mag"].mask.sum() == len(expected) - 1
+    assert [t[0] for t in result.tiles] == sorted(t[0] for t in result.tiles)  # dall'ordine più basso
+    # Ordine 2: richiesti solo i figli dei tile presenti all'ordine 1; nessuno presente → ordine 3 non richiesto.
+    hp1 = set(HEALPix(nside=2, order="nested").cone_search_lonlat(45 * u.deg, 20 * u.deg, radius))
+    asked2 = {int(r["path"].split("Npix")[1].split(".")[0]) for r in service.requests
+              if r["path"].startswith("/cat/Norder2/")}
+    assert asked2 and all((i >> 2) in hp1 for i in asked2)
+    assert not any(r["path"].startswith("/cat/Norder3/") for r in service.requests)
+    assert result.complete and "non ritagliate" in result.description
+    again = catalog_tiles(cat, center, radius, 1, cache=cache)
+    assert all(t[4] for t in again.tiles) and len(again.table.table) == len(expected)
+    # Tile con colonne diverse da metadata.xml: una nuova richiesta, poi HIPS_BAD_TILE.
+    bad_index = int(HEALPix(nside=1, order="nested").lonlat_to_healpix(45 * u.deg, 20 * u.deg))
+    path = f"/cat/{tile_path(0, bad_index, 'tsv')}"
+    service.routes[path] = lambda request: (200, "text/plain", tsv([["x", "1", "2", "3"]], header="a\tb\tc\td"))
+    before = service.hits(path)
+    with pytest.raises(HiPSError) as err:
+        catalog_tiles(cat, center, radius, 1, cache=cache, refresh=True)
+    assert err.value.code == "HIPS_BAD_TILE" and service.hits(path) - before == 2
+    image = read_service(serve_properties(service), cache=cache)
+    with pytest.raises(HiPSError) as err:
+        catalog_tiles(image, center, radius, 1, cache=cache)
+    assert err.value.code == "HIPS_TYPE_MISMATCH"
+    nometa = read_service(serve_properties(service, "/cat2", text), cache=cache)
+    with pytest.raises(HiPSError) as err:
+        catalog_tiles(nometa, center, radius, 1, cache=cache)
+    assert err.value.code == "HIPS_METADATA_INVALID"

@@ -311,6 +311,42 @@ riquadro mostrato.
   Una copertura non disponibile non impedisce l'attivazione (avviso
   `HIPS_COVERAGE_UNKNOWN`).
 
+**P4 — cubi e cataloghi progressivi (scritta il 2026-10-12):**
+
+- **Verifiche del 2026-10-12** sui servizi reali: cubi HiPS 1.0 nel
+  MocServer (es. `CDS/C/HIPASS`: `dataproduct_type = cube`,
+  `hips_cube_depth = 1024`, `hips_cube_firstframe = 512`, tile
+  `Npix0_5.fits` presenti); cataloghi HiPS (es. `CDS/VI/145/attitude`): tile
+  TSV con righe di commento `#`, intestazione con i nomi delle colonne,
+  `metadata.xml` VOTable con `COOSYS`, `hips_order_min = 1` (ordine 0
+  omesso), `Allsky.tsv` con le stesse righe dei tile del suo ordine.
+- **Cubi (H24):** **`cube_planes(service)`** → **`CubePlanes`** (profondità,
+  piano iniziale `hips_cube_firstframe` di default 0, asse fisico,
+  descrizione): asse solo se ci sono `data_cube_crpix3`, `crval3`, `cdelt3`,
+  con la regola lineare FITS `CRVAL3 + (p − CRPIX3) × CDELT3`, p indice FITS
+  del piano (da 1, conversione `convert_pixel_convention` del 10, DC7), unità
+  da `data_cube_bunit3` (formato FITS; assente o non valida → avviso
+  `HIPS_CUBE_UNIT_UNKNOWN`); chiavi incomplete → `HIPS_CUBE_AXIS_INCOMPLETE`.
+  **`fetch_tile(…, plane=n)`**: tile `NpixN_n` (piano 0 = senza suffisso),
+  piano fuori da [0, profondità) → `HIPS_CUBE_PLANE_INVALID` con la
+  profondità; `pixel_values(…, plane=n)`.
+- **Cataloghi progressivi (H12):** **`catalog_tiles(service, center,
+  radius, order)`** → **`CatalogTiles`** (tabella del 13, ordine, tile letti
+  con URL, righe e cache, completezza, descrizione): dall'ordine 0 fino a
+  `order`, i tile TSV che toccano il cerchio (`tiles_for_fov`), dalla cache
+  comune o dalla rete; **solo tile regolari, mai `Allsky`** (che li
+  duplica). Dall'ordine `hips_order_min` in su un tile assente (404) chiude
+  il ramo: all'ordine successivo si chiedono solo i figli dei tile presenti;
+  se nessun tile c'è, ci si ferma. Colonne, tipi, unità, UCD e sistema delle
+  posizioni da **`metadata.xml`** (obbligatorio, standard §4.4.3; assente o
+  non leggibile → `HIPS_METADATA_INVALID`): i valori TSV si convertono con i
+  convertitori VOTable di `astropy` secondo il tipo dichiarato (campo vuoto
+  = nullo) e la tabella si legge con il lettore del 13 (posizioni dagli
+  UCD, corpo, avvisi). Tile con colonne diverse da `metadata.xml` o righe
+  con un numero di campi sbagliato: una nuova richiesta, poi
+  `HIPS_BAD_TILE`. Le righe **non** sono ritagliate sul cerchio (scelta
+  minore, da confermare): sono tutto il contenuto dei tile.
+
 ## 4. Cosa NON fa
 
 - Non fa le trasformazioni di coordinate (10) né gestisce i file FITS locali (11).
@@ -427,6 +463,8 @@ riquadro mostrato.
 | Tile non fornito dal servizio (HTTP 404) | nessun tile | `HIPS_TILE_MISSING` |
 | Copertura di un survey senza `Moc.fits` | MOC della collezione dal MocServer, dichiarato | avviso `HIPS_COVERAGE_FROM_MOCSERVER` |
 | Copertura di un survey planetario | nessun MOC (MOC IVOA solo ICRS; con il 19) | `HIPS_FRAME_UNSUPPORTED` |
+| Operazione per un tipo di HiPS diverso (es. tile immagine di un catalogo, piani di un'immagine) | rifiuto | `HIPS_TYPE_MISMATCH` |
+| `metadata.xml` di un catalogo HiPS assente o non leggibile | nessuna tabella | `HIPS_METADATA_INVALID` |
 | Formato di tile non offerto dal servizio | nessun tile | `HIPS_FORMAT_UNAVAILABLE` |
 | Indice del tile fuori dall'ordine | rifiuto con l'intervallo | `HEALPIX_INDEX_INVALID` |
 | `hips_frame = ecliptic` (D12-7) o planetario (19) per campi e pixel | rifiuto | `HIPS_FRAME_UNSUPPORTED` |
@@ -465,6 +503,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | T9 | Cubo HiPS (H24) | servizio HiPS simulato a cubo con 3 piani; richiedere il tile del piano 2 | tile del piano 2; richiesta del piano 5 → `HIPS_CUBE_PLANE_INVALID` | servizio simulato |
 | T10 | Sincronizzazione delle collezioni (H26) | `CollectionIndex.sync()` contro un MocServer simulato, poi `filter` per testo | elenco filtrato corretto; origine e data della sincronizzazione presenti | servizio simulato (test di rete separato per il servizio reale) |
 | T11 | MocServer assente (H26) | sincronizzazione con rete assente e copia locale presente | copia locale usata, avviso `MOCSERVER_UNAVAILABLE` con la data della copia | test di unità |
+| T13 | Catalogo HiPS progressivo (H12) | servizio simulato con `metadata.xml` (COOSYS ICRS) e tile TSV agli ordini 0 e 1 attorno a (45°, 20°); lettura fino all'ordine 3; seconda lettura; tile con colonne sbagliate; immagine; catalogo senza `metadata.xml` | righe = tutte quelle dei tile che toccano il cerchio (ricalcolati con `astropy-healpix`); posizioni ICRS, unità e nulli dal VOTable; all'ordine 2 solo figli dei tile presenti, ordine 3 non chiesto; seconda lettura dalla cache; `HIPS_BAD_TILE` dopo una nuova richiesta; `HIPS_TYPE_MISMATCH`; `HIPS_METADATA_INVALID` | servizio simulato |
 | T12 | Valore del pixel su HiPS (H27) | leggere il valore sotto il cursore su un tile FITS in cache | valore uguale a quello del tile FITS letto con `astropy.io.fits` | confronto diretto |
 
 ## 13. Decisioni aperte
@@ -528,3 +567,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **P1 scritta** (`src/astrotwo/core/hips.py`: `parse_properties`, `read_service`, `HiPSService`, `add_hips`, `HiPSList`, `HiPSError`; T7, T8, chiavi obbligatorie, corpo, risoluzione dell'identificativo con il MocServer, errori di rete): proprietà validate secondo HiPS 1.0, solo le risposte valide in cache; nuovi avvisi in §10. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P2 scritta** (`tile_path`, `tiles_for_fov`/`TileSelection`, `order_for_resolution`, `fetch_tile`/`HiPSTile`, `service_coverage`, `TileMemory`, `pixel_values`/`tile_pixel_values`/`PixelValues`; T2–T6, T12, tile corrotti, JPEG/PNG, memoria): cache comune per i tile, una nuova richiesta per un tile corrotto, 404 = `HIPS_TILE_MISSING` (scelta minore), filtro di copertura solo equatoriale (scelta minore); nuova decisione aperta **D12-7** (`hips_frame = ecliptic`, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P3 scritta** (`CollectionIndex` con `sync`/`filter`, `INDEX_FIELDS`, `survey_coverage`, `set_survey`/`ActiveSurvey`, `DEFAULT_SURVEY`; T1, T10, T11): copia locale delle collezioni HiPS dal MocServer, risposte in ISO-8859-1 come dichiarato dal servizio (verifica del 2026-10-12), copertura dal `Moc.fits` del servizio o dal MocServer; campi dell'indice e regole del filtro come scelte minori. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **P4 scritta** (`cube_planes`/`CubePlanes`, piani in `fetch_tile` e `pixel_values`, `catalog_tiles`/`CatalogTiles`; T9, nuovo T13): cubi HiPS 1.0 con suffisso `_n` e asse fisico dalle chiavi `data_cube_*` (indice FITS dal 10); cataloghi progressivi dai tile TSV regolari con `metadata.xml`, rami chiusi dai tile assenti, righe non ritagliate (scelta minore). Stato `approvato` invariato. |
