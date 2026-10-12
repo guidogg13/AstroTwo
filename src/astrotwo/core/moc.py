@@ -42,8 +42,10 @@ __all__ = [
     "MocServerResult",
     "SUPPORTED_VERSIONS",
     "TIME_MAX_ORDER",
+    "MIXED_BODY",
     "Moc",
     "MocError",
+    "MocWriteResult",
     "build_moc",
     "filter_by_moc",
     "healpix_grid",
@@ -65,7 +67,8 @@ MOC_KINDS: tuple[str, ...] = ("space", "time", "space-time")
 #: Ordini massimi dello standard IVOA MOC 2.0 (spazio: 29, tempo: 61).
 SPACE_MAX_ORDER = 29
 TIME_MAX_ORDER = 61
-#: Versioni pubblicate dello standard lette dal modulo (verifica del 2026-10-11; 2.1 ferma su D16-6).
+#: Versioni pubblicate dello standard lette dal modulo (verifiche del 2026-10-11 e 2026-10-12: nessuna 2.1 tra i
+#: documenti IVOA, nemmeno come Working Draft o Proposed Recommendation; D16-6 decisa, 2.1 rifiutata).
 SUPPORTED_VERSIONS: tuple[str, ...] = ("1.0", "1.1", "2.0")
 #: Versione scritta (standard corrente, D16-2).
 WRITTEN_VERSION = "2.0"
@@ -77,6 +80,12 @@ _DIMS = {"SPACE": "space", "TIME": "time", "TIME.SPACE": "space-time"}
 _SYSTEMS = {"space": "ICRS", "time": "TCB", "space-time": "TCB + ICRS"}
 _PROVENANCE = f"mocpy {mocpy.__version__}"
 _TOOL = f"AstroTwo {astrotwo.__version__}"
+#: Corpo del risultato di un'operazione forzata tra corpi diversi (scelta 5, decisione del 2026-10-12): l'elenco
+#: dei corpi sta in ``Moc.bodies``; ogni operazione successiva sul MOC misto richiede di nuovo la forzatura.
+MIXED_BODY = "mixed"
+#: Parole chiave FITS nostre (estensione non standard, scelta 6 del 2026-10-12, D19-7): corpo di un MOC non celeste.
+BODY_KEYWORD = "A2BODY"
+BODIES_KEYWORD = "A2BODIES"
 
 
 class MocError(Exception):
@@ -108,7 +117,8 @@ class Moc:
     """MOC con tipo, sistema, ordini massimi, corpo, origine e versione letta (§7, §9).
 
     ``body`` è obbligatorio per i MOC spaziali e spazio-temporali (D19-3); per i MOC solo temporali è
-    ``None`` = "non applicabile" (un TMOC non ha posizioni, scelta di P1)."""
+    ``None`` = "non applicabile" (un TMOC non ha posizioni, scelta di P1). Un MOC con ``body == "mixed"``
+    (operazione forzata tra corpi diversi) porta in ``bodies`` l'elenco ordinato dei corpi."""
 
     moc: object  # mocpy.MOC, mocpy.TimeMOC o mocpy.STMOC
     kind: str
@@ -118,6 +128,7 @@ class Moc:
     history: tuple[str, ...] = ()
     warnings: tuple[tuple[str, str], ...] = ()
     provenance: str = _PROVENANCE
+    bodies: tuple[str, ...] = ()  # solo per body == "mixed": i corpi combinati
 
     def __post_init__(self) -> None:
         _check_kind(self.kind)
@@ -126,6 +137,16 @@ class Moc:
                             f"ricevuto {type(self.moc).__name__}")
         if self.kind != "time" and not (isinstance(self.body, str) and self.body):
             raise MocError("BODY_UNKNOWN", f"MOC {self.kind} senza corpo (body): un MOC senza corpo è un errore")
+        if (self.body == MIXED_BODY) != bool(self.bodies) or (self.bodies and len(self.bodies) < 2):
+            raise ValueError("bodies: elenco di almeno due corpi, solo con body='mixed'")
+
+    @property
+    def body_list(self) -> tuple[str, ...]:
+        """Corpi del MOC: l'elenco dei corpi per un MOC misto, altrimenti il solo corpo."""
+        return self.bodies if self.body == MIXED_BODY else ((self.body,) if self.body is not None else ())
+
+    def _body_label(self) -> str:
+        return f"misto ({', '.join(self.bodies)})" if self.body == MIXED_BODY else repr(self.body)
 
     # -- descrizione -------------------------------------------------------
     @property
@@ -184,7 +205,10 @@ class Moc:
             parts.append(f"ordine spaziale massimo {self.space_order}")
         if self.time_order is not None:
             parts.append(f"ordine temporale massimo {self.time_order}")
-        parts.append(f"corpo {self.body}" if self.body is not None else "corpo non applicabile (MOC temporale)")
+        if self.body == MIXED_BODY:
+            parts.append(f"corpo misto ({', '.join(self.bodies)})")
+        else:
+            parts.append(f"corpo {self.body}" if self.body is not None else "corpo non applicabile (MOC temporale)")
         if self.kind == "space":
             parts.append(f"area {self.area.value!r} sr (frazione di cielo {self.sky_fraction!r})")
         if self.kind == "time":
@@ -199,24 +223,43 @@ class Moc:
         return "; ".join(parts) + f" (calcolo: {self.provenance})"
 
     # -- operazioni insiemistiche (§3, §9) ---------------------------------
-    def _check_other(self, other: Moc, force_body: bool) -> list[tuple[str, str]]:
+    def _check_mixed(self, op: str, force_body: bool) -> list[tuple[str, str]]:
+        """Ogni operazione su un MOC misto richiede di nuovo la forzatura (scelta 5 del 2026-10-12)."""
+        if self.body != MIXED_BODY:
+            return []
+        if not force_body:
+            raise MocError("BODY_MISMATCH", f"{op} su un MOC misto {self._body_label()}: forzabile solo con "
+                           "force_body=True (citato nel risultato)")
+        return [("BODY_FORCED", f"{op} su un MOC misto forzata: corpi {', '.join(self.bodies)}")]
+
+    def _check_other(self, other: Moc, force_body: bool) -> tuple[list[tuple[str, str]], str | None, tuple]:
+        """Controlli di tipo e corpo; restituisce avvisi, corpo e corpi del risultato."""
         if not isinstance(other, Moc):
             raise TypeError("operazione tra MOC: serve un Moc")
         if other.kind != self.kind:
             raise MocError("MOC_TYPE_MISMATCH", f"operazione tra un MOC {self.kind} e un MOC {other.kind}: tipi "
                            "diversi (unità diverse)")
-        if self.kind == "time" or self.body == other.body:
-            return []
+        if self.kind == "time":
+            return [], None, ()
+        if self.body == other.body and self.body != MIXED_BODY:
+            return [], self.body, ()
         if not force_body:
-            raise MocError("BODY_MISMATCH", f"corpi diversi: {self.body!r} e {other.body!r}; forzabile solo con "
-                           "force_body=True (citato nel risultato)")
-        return [("BODY_FORCED", f"operazione tra corpi diversi forzata: {self.body!r} e {other.body!r}; il "
-                 f"risultato porta il corpo del primo operando ({self.body!r})")]
+            raise MocError("BODY_MISMATCH", f"corpi diversi o MOC misto: {self._body_label()} e "
+                           f"{other._body_label()}; forzabile solo con force_body=True (citato nel risultato)")
+        bodies = tuple(sorted(set(self.body_list) | set(other.body_list)))  # almeno due: corpi diversi o MOC misto
+        return [("BODY_FORCED", f"operazione forzata tra {self._body_label()} e {other._body_label()}; il "
+                 f"risultato ha corpo misto ({', '.join(bodies)})")], MIXED_BODY, bodies
 
-    def _derived(self, result, op: str, notes: list[tuple[str, str]], others: tuple[Moc, ...] = ()) -> Moc:
+    def _derived(self, result, op: str, notes: list[tuple[str, str]], others: tuple[Moc, ...] = (), *,
+                 body: str | None = None, bodies: tuple[str, ...] = ()) -> Moc:
         origin = f"{op}(" + ", ".join(m.origin for m in (self, *others)) + ")"
         history = tuple(dict.fromkeys(self.history + sum((m.history for m in others), ())))
-        moc = Moc(moc=result, kind=self.kind, body=self.body, origin=origin, history=history, warnings=())
+        if self.kind == "space-time":
+            # mocpy 0.20.0 lascia nei risultati delle operazioni tra ST-MOC elementi con un insieme di tempi vuoto
+            # (verificato il 2026-10-12): stessa copertura, rappresentazione non normalizzata. Si normalizza con la
+            # rilettura JSON di mocpy, che li toglie.
+            result = STMOC.from_json(result.serialize("json"))
+        moc = Moc(moc=result, kind=self.kind, body=body, origin=origin, history=history, warnings=(), bodies=bodies)
         orders = []
         if moc.space_order is not None:
             orders.append(f"ordine spaziale {moc.space_order}")
@@ -227,30 +270,40 @@ class Moc:
             notes = notes + [("MOC_EMPTY", f"risultato di {op} vuoto")]
         return replace(moc, history=history + (step,), warnings=tuple(notes))
 
+    def _binary(self, other: Moc, op: str, method: str, force_body: bool) -> Moc:
+        notes, body, bodies = self._check_other(other, force_body)
+        return self._derived(getattr(self.moc, method)(other.moc), op, notes, (other,), body=body, bodies=bodies)
+
     def union(self, other: Moc, *, force_body: bool = False) -> Moc:
-        notes = self._check_other(other, force_body)
-        return self._derived(self.moc.union(other.moc), "unione", notes, (other,))
+        return self._binary(other, "unione", "union", force_body)
 
     def intersection(self, other: Moc, *, force_body: bool = False) -> Moc:
-        notes = self._check_other(other, force_body)
-        return self._derived(self.moc.intersection(other.moc), "intersezione", notes, (other,))
+        return self._binary(other, "intersezione", "intersection", force_body)
 
     def difference(self, other: Moc, *, force_body: bool = False) -> Moc:
         """Celle di questo MOC non coperte da ``other``."""
-        notes = self._check_other(other, force_body)
-        return self._derived(self.moc.difference(other.moc), "differenza", notes, (other,))
+        return self._binary(other, "differenza", "difference", force_body)
 
-    def complement(self) -> Moc:
-        if self.kind == "space-time":  # mocpy 0.20.0: "Complement not implemented (yet) for ST-MOCs" (D16-7)
-            raise MocError("MOC_OPERATION_UNSUPPORTED", "complemento di un MOC spazio-temporale non disponibile in "
-                           f"{_PROVENANCE} (D16-7)")
-        return self._derived(self.moc.complement(), "complemento", [])
+    def complement(self, *, force_body: bool = False) -> Moc:
+        """Complemento. Per i MOC spazio-temporali (D16-7, decisa il 2026-10-12) è la differenza tra lo ST-MOC
+        "tutto il tempo × tutto il cielo" agli stessi ordini e il MOC dato, solo con operazioni di ``mocpy``
+        (``mocpy`` 0.20.0 non offre il complemento degli ST-MOC)."""
+        notes = self._check_mixed("complemento", force_body)
+        if self.kind != "space-time":
+            return self._derived(self.moc.complement(), "complemento", notes, body=self.body, bodies=self.bodies)
+        t_order, s_order = self.time_order, self.space_order
+        full = STMOC.from_string(f"t0/0-1 {t_order}/ s0/0-11 {s_order}/", format="ascii")
+        result = self._derived(full.difference(self.moc), "complemento", notes, body=self.body, bodies=self.bodies)
+        return replace(result, history=result.history[:-1] + (
+            f"complemento con mocpy: differenza tra tutto il tempo (TCB, ordine {t_order}) × tutto il cielo "
+            f"(ordine {s_order}) e il MOC dato (D16-7)",))
 
-    def contains(self, coords) -> np.ndarray:
+    def contains(self, coords, *, force_body: bool = False) -> np.ndarray:
         """Maschera booleana delle posizioni (``SkyFrame``, sistema dichiarato) che cadono nel MOC spaziale;
         le posizioni si convertono in ICRS con il modulo 10."""
         if self.kind != "space":
             raise MocError("MOC_TYPE_MISMATCH", f"contains su posizioni: serve un MOC spaziale, non {self.kind}")
+        self._check_mixed("contains", force_body)
         lon, lat, _ = _to_icrs(coords, "posizioni")
         return np.asarray(self.moc.contains_lonlat(lon=lon * u.deg, lat=lat * u.deg), dtype=bool)
 
@@ -268,24 +321,26 @@ class Moc:
             raise MocError("MOC_TYPE_MISMATCH", f"contains_times: serve un MOC temporale, non {self.kind}")
         return np.asarray(self.moc.contains(_tcb(times, "istanti")), dtype=bool)
 
-    def space_during(self, during: Moc) -> Moc:
+    def space_during(self, during: Moc, *, force_body: bool = False) -> Moc:
         """Copertura spaziale di un MOC spazio-temporale negli intervalli del MOC temporale ``during``."""
         if self.kind != "space-time" or not isinstance(during, Moc) or during.kind != "time":
             raise MocError("MOC_TYPE_MISMATCH", "space_during: MOC spazio-temporale e MOC temporale")
-        result = Moc(moc=self.moc.query_by_time(during.moc), kind="space", body=self.body,
+        notes = self._check_mixed("space_during", force_body)
+        result = Moc(moc=self.moc.query_by_time(during.moc), kind="space", body=self.body, bodies=self.bodies,
                      origin=f"spazio di {self.origin} durante {during.origin}", history=self.history)
-        return replace(result, history=result.history + ("proiezione sullo spazio con mocpy.STMOC.query_by_time",))
+        return replace(result, history=result.history + ("proiezione sullo spazio con mocpy.STMOC.query_by_time",),
+                       warnings=tuple(notes))
 
     def time_within(self, within: Moc, *, force_body: bool = False) -> Moc:
         """Copertura temporale di un MOC spazio-temporale nelle zone del MOC spaziale ``within``."""
         if self.kind != "space-time" or not isinstance(within, Moc) or within.kind != "space":
             raise MocError("MOC_TYPE_MISMATCH", "time_within: MOC spazio-temporale e MOC spaziale")
         notes = []
-        if within.body != self.body:
+        if within.body != self.body or self.body == MIXED_BODY:
             if not force_body:
-                raise MocError("BODY_MISMATCH", f"corpi diversi: {self.body!r} e {within.body!r}; forzabile solo con "
-                               "force_body=True")
-            notes.append(("BODY_FORCED", f"corpi diversi forzati: {self.body!r} e {within.body!r}"))
+                raise MocError("BODY_MISMATCH", f"corpi diversi o MOC misto: {self._body_label()} e "
+                               f"{within._body_label()}; forzabile solo con force_body=True")
+            notes.append(("BODY_FORCED", f"corpi forzati: {self._body_label()} e {within._body_label()}"))
         result = Moc(moc=self.moc.query_by_space(within.moc), kind="time", body=None,
                      origin=f"tempo di {self.origin} in {within.origin}", history=self.history)
         return replace(result, history=result.history + ("proiezione sul tempo con mocpy.STMOC.query_by_space",),
@@ -294,7 +349,8 @@ class Moc:
     def __eq__(self, other: object) -> bool:  # stesse celle, stesso tipo e stesso corpo
         if not isinstance(other, Moc):
             return NotImplemented
-        return self.kind == other.kind and self.body == other.body and self.moc == other.moc
+        return (self.kind == other.kind and self.body == other.body and self.bodies == other.bodies
+                and self.moc == other.moc)
 
     __hash__ = None  # type: ignore[assignment]
 
@@ -314,7 +370,28 @@ def _unreadable(path: Path, reason: object) -> MocError:
     return MocError("MOC_UNREADABLE", f"{path}: MOC non leggibile ({reason})", path=str(path))
 
 
-def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tuple[str, str]]]:
+def _header_body(path: Path, header, found: str) -> tuple[str | None, tuple[str, ...], list[tuple[str, str]]]:
+    """Corpo dalla parola chiave nostra ``A2BODY`` (estensione non standard, scelta 6 del 2026-10-12); senza la
+    parola chiave il MOC è celeste (``COORDSYS='C'``, D19-3)."""
+    if found == "time":
+        return None, (), []
+    raw = header.get(BODY_KEYWORD)
+    if raw is None:
+        return "celestial", (), []
+    body = str(raw).strip()
+    bodies: tuple[str, ...] = ()
+    if body == MIXED_BODY:
+        bodies = tuple(b.strip() for b in str(header.get(BODIES_KEYWORD, "")).split(",") if b.strip())
+        if len(bodies) < 2:
+            raise _unreadable(path, f"{BODY_KEYWORD}='mixed' senza {BODIES_KEYWORD} con almeno due corpi")
+    if not body:
+        raise _unreadable(path, f"{BODY_KEYWORD} vuoto")
+    label = f"misto ({', '.join(bodies)})" if bodies else repr(body)
+    return body, bodies, [("MOC_NONSTANDARD_EXTENSION", f"{path}: corpo {label} dalla parola chiave {BODY_KEYWORD} "
+                           "di AstroTwo, estensione non standard del formato IVOA MOC 2.0 (D19-7)")]
+
+
+def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tuple[str, str]], str | None, tuple]:
     try:
         with fits.open(path, memmap=False) as hdul:
             tables = [h for h in hdul if isinstance(h, fits.BinTableHDU)]
@@ -331,7 +408,8 @@ def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tup
     else:
         version = str(raw_version).strip()
         if version not in SUPPORTED_VERSIONS:
-            extra = " (D16-6: una versione 2.1 dello standard non esiste tra i documenti IVOA)" \
+            extra = (" (D16-6: nessuna versione 2.1 tra i documenti IVOA, nemmeno come Working Draft o Proposed "
+                     "Recommendation, verifica del 2026-10-12)") \
                 if version == "2.1" else ""
             raise MocError("MOC_VERSION_UNSUPPORTED", f"{path}: versione MOC {version!r} non supportata; "
                            f"lette: {', '.join(SUPPORTED_VERSIONS)}{extra}", version=version)
@@ -365,7 +443,8 @@ def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tup
         raise _unreadable(path, exc) from exc
     if raw_version is None:
         notes.append(("MOC_VERSION_ASSUMED", f"{path}: MOCVERS assente, versione {VERSION_ASSUMED_11}"))
-    return moc, found, version, notes
+    body, bodies, body_notes = _header_body(path, header, found)
+    return moc, found, version, notes + body_notes, body, bodies
 
 
 def _json_cells(value: object, path: Path) -> dict:
@@ -455,8 +534,9 @@ def _read_path(path: Path, format: str | None, kind: str | None) -> Moc:
     if fmt not in ("fits", "json", "ascii"):
         raise ValueError(f"format {format!r}: ammessi fits, json, ascii")
     notes: list[tuple[str, str]] = []
+    bodies: tuple[str, ...] = ()
     if fmt == "fits":
-        moc, found, version, notes = _read_fits(path, kind)
+        moc, found, version, notes, body, bodies = _read_fits(path, kind)
     else:
         try:
             text = raw.decode("utf-8")
@@ -464,9 +544,9 @@ def _read_path(path: Path, format: str | None, kind: str | None) -> Moc:
             raise _unreadable(path, exc) from exc
         moc, found = _read_json(path, text, kind) if fmt == "json" else _read_ascii(path, text, kind)
         version = VERSION_NOT_DECLARED
-    body = None if found == "time" else "celestial"  # ICRS per lo standard (COORDSYS='C'), D19-3
+        body = None if found == "time" else "celestial"  # ICRS per lo standard (COORDSYS='C'), D19-3
     step = f"letto da {path} ({fmt}, versione {version})"
-    result = Moc(moc=moc, kind=found, body=body, origin=str(path), version=version, history=(step,))
+    result = Moc(moc=moc, kind=found, body=body, origin=str(path), version=version, history=(step,), bodies=bodies)
     if result.is_empty:
         notes.append(("MOC_EMPTY", f"{path}: MOC vuoto"))
     return replace(result, warnings=tuple(notes))
@@ -479,27 +559,56 @@ def _json_payload(moc: Moc) -> object:
     return {"s" if moc.kind == "space" else "t": data}
 
 
-def write_moc(moc: Moc, path, format: str = "fits", overwrite: bool = False) -> Path:
+@dataclass(frozen=True)
+class MocWriteResult:
+    """Esito di ``write_moc``: file scritto, formato, versione e avvisi (es. estensione non standard)."""
+
+    path: Path
+    format: str
+    version: str | None
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    def __fspath__(self) -> str:
+        return str(self.path)
+
+
+def write_moc(moc: Moc, path, format: str = "fits", overwrite: bool = False) -> MocWriteResult:
     """Scrive un MOC in FITS IVOA 2.0 (spaziali in ``NUNIQ`` con ``MOCORDER``, altri in ``RANGE``), JSON (con
-    prefisso ``s``/``t``) o testo (D16-2). Solo MOC celesti: lo standard è solo ICRS."""
+    prefisso ``s``/``t``) o testo (D16-2).
+
+    MOC non celesti (corpo planetario o misto, scelta 6 del 2026-10-12, D19-7): solo FITS 2.0 con le parole
+    chiave nostre ``A2BODY`` (e ``A2BODIES`` per un MOC misto), dichiarate nel risultato come estensione non
+    standard (avviso ``MOC_NONSTANDARD_EXTENSION``); JSON e testo non hanno dove dichiarare il corpo →
+    ``MOC_BODY_UNSUPPORTED``."""
     if not isinstance(moc, Moc):
         raise TypeError("write_moc: serve un Moc")
     if format not in ("fits", "json", "ascii"):
         raise ValueError(f"format {format!r}: ammessi fits, json, ascii")
-    if moc.kind != "time" and moc.body != "celestial":
-        raise MocError("MOC_BODY_UNSUPPORTED", f"MOC del corpo {moc.body!r}: il formato IVOA MOC è solo per il cielo "
-                       "(ICRS)")
+    planetary = moc.kind != "time" and moc.body != "celestial"
+    if planetary and format != "fits":
+        raise MocError("MOC_BODY_UNSUPPORTED", f"MOC del corpo {moc._body_label()}: in {format} il corpo non si può "
+                       "dichiarare; i MOC non celesti si scrivono solo in FITS con la parola chiave A2BODY")
     target = Path(path)
     if target.exists() and not overwrite:
         raise FileExistsError(f"{target} esiste già (overwrite=True per sostituirlo)")
+    notes: list[tuple[str, str]] = []
     if format == "fits":
-        moc.moc.save(target, format="fits", overwrite=True, pre_v2=moc.kind == "space",
-                     fits_keywords={"MOCTOOL": _TOOL})
+        keywords = {"MOCTOOL": _TOOL}
+        if planetary:
+            keywords[BODY_KEYWORD] = moc.body
+            if moc.bodies:
+                keywords[BODIES_KEYWORD] = ",".join(moc.bodies)
+            notes.append(("MOC_NONSTANDARD_EXTENSION", f"{target}: corpo {moc._body_label()} scritto nella parola "
+                          f"chiave {BODY_KEYWORD} di AstroTwo, estensione non standard del formato IVOA MOC 2.0 "
+                          "(D19-7); COORDSYS resta 'C' come richiesto dal formato: un lettore senza l'estensione "
+                          "vede un MOC celeste"))
+        moc.moc.save(target, format="fits", overwrite=True, pre_v2=moc.kind == "space", fits_keywords=keywords)
     elif format == "json":
         target.write_text(json.dumps(_json_payload(moc)), encoding="utf-8")
     else:
         target.write_text(moc.moc.to_string("ascii"), encoding="utf-8")
-    return target
+    return MocWriteResult(path=target, format=format, version=WRITTEN_VERSION if format == "fits" else None,
+                          warnings=tuple(notes))
 
 
 # --------------------------------------------------------------------------
@@ -773,9 +882,9 @@ def _check_bodies(table, moc: Moc, force_body: bool) -> list[tuple[str, str]]:
     if table.body == moc.body:
         return []
     if not force_body:
-        raise MocError("BODY_MISMATCH", f"corpi diversi: tabella {table.body!r}, MOC {moc.body!r}; forzabile solo "
-                       "con force_body=True (citato nel risultato)")
-    return [("BODY_FORCED", f"filtro tra corpi diversi forzato: tabella {table.body!r}, MOC {moc.body!r}")]
+        raise MocError("BODY_MISMATCH", f"corpi diversi: tabella {table.body!r}, MOC {moc._body_label()}; forzabile "
+                       "solo con force_body=True (citato nel risultato)")
+    return [("BODY_FORCED", f"filtro tra corpi diversi forzato: tabella {table.body!r}, MOC {moc._body_label()}")]
 
 
 @dataclass(frozen=True)
@@ -1356,6 +1465,7 @@ def build_moc(sources, *, order_max: int, output=None, format: str = "fits", ove
     result = replace(result, origin=f"build_moc di {len(mocs)} sorgenti",
                      history=steps + (f"build_moc: unione di {len(mocs)} MOC, ordine richiesto {order}",))
     if output is not None:
-        write_moc(result, output, format=format, overwrite=overwrite)
-        result = replace(result, history=result.history + (f"scritto in {output} ({format})",))
+        written = write_moc(result, output, format=format, overwrite=overwrite)
+        result = replace(result, history=result.history + (f"scritto in {output} ({format})",),
+                         warnings=result.warnings + written.warnings)
     return result

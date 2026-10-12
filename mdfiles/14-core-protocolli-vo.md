@@ -515,16 +515,8 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
 
-**Test di rete (decisione del proprietario del 2026-10-11):** i test con il
-marcatore `network` si ripetono **al massimo 2 volte** e **solo** per un
-errore di connessione o di timeout (eccezioni di connessione/timeout di
-`requests` e della libreria standard, errori `NET_TIMEOUT` dei moduli, i
-due messaggi fissi di `pyvo` "Connection failed" e "Request timed out"),
-**mai** per un risultato sbagliato (un `AssertionError` non si ripete);
-ogni ripetizione è scritta nel risultato del test (sezione "ripetizioni di
-rete" e riepilogo finale di `pytest`). Implementata in `tests/conftest.py`
-senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
-`tests/test_network_retries.py`.
+**Test di rete:** regola delle ripetizioni in `02-convenzioni.md` §8, punto 8
+(implementazione in `tests/conftest.py`, test in `tests/test_network_retries.py`).
 
 ## 13. Decisioni aperte
 
@@ -689,3 +681,4 @@ senza dipendenze nuove (`pytester` fa parte di `pytest`); test in
 | 2026-10-11 | Claude Code | **Verifiche chiuse dal proprietario** (2026-10-11, autorizzazione esplicita a modificare il file approvato): registro VO di default `DEFAULT_REGISTRY_URL` = `https://dc.g-vo.org/tap` (HTTPS con certificato valido, verificato), configurabile con `registry_url`, nessun default senza HTTPS valido (§3, §7; test T18 sul default); server esclusi (ESASky TAP, MAST CAOM SIA 2, cone search di SIMBAD, SSA generale) confermati fuori, con il motivo, da ricontrollare in futuro (D14-4). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): l'esportazione ECSV scrive il sistema delle posizioni nei metadati YAML `A2POSITIONS` (riletti dal 13, T5 esteso); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate nel risultato). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **Per il modulo 15** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `cds_xmatch`, `XMATCH_URL` — CDS XMatch con `astroquery.xmatch` in HTTPS, timeout di `04`, cache di astroquery disattivata, risposta nella cache del 14 con l'impronta delle tabelle caricate; limiti verificati (180″, 100 MB) (§3, §7, §8). Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | §12: il paragrafo sulle ripetizioni dei test di rete sostituito da un rimando a `02-convenzioni.md` §8 (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato). Stato `approvato` invariato. |

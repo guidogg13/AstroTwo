@@ -46,7 +46,9 @@ di un dato sia sempre verificabile e confrontabile.
   2026-10-11** (documenti IVOA e `mocpy` 0.20.0): le versioni pubblicate dello
   standard sono **1.0** (REC 2014-06-02), **1.1** (REC 2019-10-07) e **2.0**
   (REC 2022-07-27), più la Note STMOC 1.0 (2019); **una versione 2.1 non
-  esiste** tra i documenti IVOA (→ **D16-6**, fermo solo questo pezzo). Le
+  esiste** tra i documenti IVOA (→ **D16-6, decisa il 2026-10-12**: verifica
+  del 2026-10-12 sull'elenco dei documenti IVOA, nessuna 2.1 nemmeno come
+  Working Draft o Proposed Recommendation → un file `2.1` resta rifiutato). Le
   intestazioni FITS di 1.0 e 1.1 sono identiche (`PIXTYPE='HEALPIX'`,
   `ORDERING='NUNIQ'`, `COORDSYS='C'`, `MOCORDER`, colonna `UNIQ` `1J`/`1K`)
   e non hanno `MOCVERS`: lo standard 2.0 dice che senza `MOCVERS` si assume
@@ -137,17 +139,34 @@ di un dato sia sempre verificabile e confrontabile.
   un `TMOC` non ha posizioni, la regola del corpo vale per i MOC spaziali e
   spazio-temporali. Un MOC spaziale letto da file con `COORDSYS='C'` ha
   `body = "celestial"` (ricavato dal sistema, D19-3).
-- Operazioni tra MOC dello stesso tipo e dello stesso corpo; con
-  `force_body=True` il risultato porta il corpo del primo operando e
-  l'avviso `BODY_FORCED` con entrambi i corpi.
+- Operazioni tra MOC dello stesso tipo e dello stesso corpo. **Scelta 5
+  cambiata dal proprietario il 2026-10-12:** con `force_body=True` tra corpi
+  diversi il risultato ha **`body = "mixed"`** con l'**elenco dei corpi**
+  (`Moc.bodies`, ordinato) e l'avviso `BODY_FORCED`; **ogni operazione
+  successiva su un MOC misto** (unione, intersezione, differenza, complemento,
+  `contains`, `space_during`, `time_within`, `filter_by_moc`) **richiede di
+  nuovo la forzatura**, anche con un MOC di uno dei suoi corpi
+  (`BODY_MISMATCH` altrimenti); un MOC misto non si usa dove serve un MOC
+  celeste (griglie, MocServer: `MOC_BODY_UNSUPPORTED`).
 - Ordine del risultato di unione, intersezione e differenza = il **massimo**
   degli ordini degli operandi (comportamento di `mocpy`, verificato); il
   complemento conserva l'ordine; dichiarato nella storia.
 - Scrittura FITS: standard **2.0**; MOC spaziali in **`NUNIQ`** con anche
   `MOCORDER` (raccomandato dallo standard per la compatibilità con i
   lettori 1.x), temporali e spazio-temporali in `RANGE`; `MOCTOOL` =
-  `AstroTwo <versione>`. Si scrivono solo MOC celesti: lo standard è solo
-  ICRS, un MOC di un altro corpo → `MOC_BODY_UNSUPPORTED`.
+  `AstroTwo <versione>`. **Scelta 6 cambiata dal proprietario il
+  2026-10-12 (coerente con D19-7):** anche i MOC **planetari** (e misti) si
+  scrivono, in FITS **2.0** più la parola chiave nostra **`A2BODY`** (il
+  corpo; per un MOC misto `A2BODY = 'mixed'` e **`A2BODIES`** con i corpi
+  separati da virgole), dichiarata nel risultato (`MocWriteResult`) come
+  **estensione non standard** (avviso `MOC_NONSTANDARD_EXTENSION`); `COORDSYS`
+  resta `'C'`, come il formato richiede e come scrive `mocpy`, quindi un
+  lettore senza l'estensione vede un MOC celeste (scritto nell'avviso). Il 16
+  rilegge `A2BODY`/`A2BODIES` (stesso avviso nel MOC letto); senza `A2BODY`
+  il MOC è `celestial`. JSON e testo non hanno dove dichiarare il corpo: un
+  MOC non celeste in quei formati → `MOC_BODY_UNSUPPORTED` (scelta minore,
+  da confermare).
+- **Scelte minori 1–4 e 7–13 confermate dal proprietario il 2026-10-12.**
 - Risultato vuoto: consentito, con l'avviso `MOC_EMPTY`.
 
 **P2 — creazione (scritta il 2026-10-11):**
@@ -359,7 +378,12 @@ di un dato sia sempre verificabile e confrontabile.
   FITS, JSON o testo e ne dichiara la versione; `kind` (`space`, `time`,
   `space-time`) obbligatorio solo per JSON e testo senza prefisso.
 - **`write_moc(moc, path, format="fits", overwrite=False)`** — scrive in FITS
-  IVOA 2.0, JSON o testo (D16-2).
+  IVOA 2.0, JSON o testo (D16-2); restituisce **`MocWriteResult`** (percorso,
+  formato, versione, avvisi; utilizzabile come percorso). MOC non celesti
+  solo in FITS con `A2BODY` (scelta 6).
+- **`Moc.complement(*, force_body=False)`**, **`Moc.contains(coords, *,
+  force_body=False)`** — `force_body` serve solo per un MOC misto (scelta 5);
+  complemento degli ST-MOC secondo D16-7.
 - **`Moc.describe()`** — tipo, sistema, ordini, corpo, area (steradianti e
   frazione di cielo) o durata, numero di celle, origine e versione.
 - **`query_mocserver(region, *, properties=None, intersect="overlaps",
@@ -442,9 +466,11 @@ di un dato sia sempre verificabile e confrontabile.
 | Risposta del MocServer non leggibile (es. pagina d'errore) | nessun elenco | `SERVICE_ERROR` |
 | URL di un MOC non raggiungibile e senza copia in cache | nessun MOC | `NET_TIMEOUT` |
 | JSON o testo senza prefisso di tipo e senza `kind` | nessuna lettura: il tipo non si assume | `MOC_TYPE_REQUIRED` |
-| Scrittura in formato IVOA di un MOC di un corpo diverso da `celestial` | rifiuto (lo standard è solo ICRS) | `MOC_BODY_UNSUPPORTED` |
-| File con `MOCVERS = '2.1'` | rifiuto finché D16-6 non è decisa | `MOC_VERSION_UNSUPPORTED` |
-| Complemento di un MOC spazio-temporale | non disponibile in `mocpy` 0.20.0, fermo su D16-7 | `MOC_OPERATION_UNSUPPORTED` |
+| Scrittura in JSON o testo di un MOC di un corpo diverso da `celestial` | rifiuto (il corpo non si può dichiarare in quei formati) | `MOC_BODY_UNSUPPORTED` |
+| Scrittura o lettura FITS di un MOC planetario o misto (`A2BODY`) | scritto/letto, estensione non standard dichiarata | avviso `MOC_NONSTANDARD_EXTENSION` |
+| `A2BODY = 'mixed'` senza `A2BODIES` con almeno due corpi | nessun MOC letto | `MOC_UNREADABLE` |
+| Operazione su un MOC misto senza `force_body=True` | rifiuto (scelta 5) | `BODY_MISMATCH` |
+| File con `MOCVERS = '2.1'` | rifiuto: nessuna 2.1 tra i documenti IVOA (D16-6, decisa il 2026-10-12) | `MOC_VERSION_UNSUPPORTED` |
 
 ## 11. Esposizione all'IA
 
@@ -474,6 +500,9 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T11 | Tempo e probabilità (P4) | intervalli UTC e istanti TT; ST-MOC da due osservazioni con proiezioni; mappa multi-ordine sintetica nel formato LIGO; mappa piatta RING con colonna vettoriale; somma sbagliata, densità negativa, unità mancante, `COORDSYS='G'` | celle uguali a `mocpy` sui tempi convertiti in TCB con `astropy.time` nel test; regione di credibilità uguale al calcolo indipendente del test (densità decrescente, probabilità ≥ livello) e probabilità contenuta uguale; RING→NESTED uguale ad `astropy-healpix`; errori del §10 | ricalcolo con astropy, `astropy-healpix` e `numpy` |
 | T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (k = 1) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
 | T9 | MocServer assente (H26) | `query_mocserver` senza rete | `MOCSERVER_UNAVAILABLE`, nessun elenco parziale | test di unità |
+| T12 | Corpo misto (scelta 5) | intersezione forzata celeste × Luna; poi unione, differenza, complemento, `contains` senza forzatura; con forzatura e un terzo corpo | `body = "mixed"` con i corpi ordinati; ogni operazione successiva senza forzatura → `BODY_MISMATCH`; con forzatura elenco dei corpi aggiornato e `BODY_FORCED` | test di unità |
+| T13 | MOC planetari e misti in FITS (scelta 6) | scrivere e rileggere un MOC di Marte, un MOC misto e uno ST-MOC della Luna; JSON e testo di Marte; `A2BODIES` tolto | stesso MOC e stesso corpo dopo andata e ritorno; `A2BODY`, `MOCVERS='2.0'`, `COORDSYS='C'`; `MOC_NONSTANDARD_EXTENSION` in scrittura e lettura; nessuna parola chiave per un MOC celeste; `MOC_BODY_UNSUPPORTED`; `MOC_UNREADABLE` | lettura dell'intestazione con `astropy.io.fits` |
+| T14 | Complemento ST-MOC (D16-7) | ST-MOC da due osservazioni; complemento | ordini conservati; ¬¬A = A; A ∩ ¬A = ∅; A ∪ ¬A copre tutto il cielo in tutto il tempo; su istanti e posizioni campione il complemento contiene esattamente ciò che A non contiene | ricalcolo con `mocpy` (`query_by_time`, `contains_lonlat`, `TimeMOC` di tutto il tempo) |
 
 ## 13. Decisioni aperte
 
@@ -510,31 +539,34 @@ L'IA non calcola né approssima mai superfici o coperture.
   due file si contraddicono; nessuna logica HEALPix duplicata. Applicata in
   §3 qui sopra.
 
-- **D16-6 — Versione "2.1" del formato MOC: DA DECIDERE (aperta il
-  2026-10-11, Gruppo 3).** §3 (H22, dal manuale di Aladin) chiede la lettura
-  delle versioni "da 1.0 a 2.1", ma tra i documenti IVOA (verifica del
-  2026-10-11) le versioni pubblicate sono solo 1.0, 1.1 e 2.0 (più la Note
-  STMOC 1.0); `mocpy` 0.20.0 però elenca `2.1` tra i valori ammessi di
-  `MOCVERS` (forse una bozza non pubblicata tra i documenti IVOA, da
-  verificare). Opzioni: (a) nessuna 2.1 finché l'IVOA non la pubblica: un file
-  `2.1` → `MOC_VERSION_UNSUPPORTED`; (b) leggere un file `2.1` come un 2.0,
-  con un avviso che la versione non è uno standard pubblicato; (c) cercare il
-  documento a cui si riferisce il manuale (forse una bozza di lavoro) e
-  decidere dopo. **Raccomandazione:** (a) ora, (c) prima della verifica
-  finale della parità (AP1). **Fermo solo questo pezzo:** oggi un file `2.1`
-  dà `MOC_VERSION_UNSUPPORTED`.
+- **D16-6 — Versione "2.1" del formato MOC: DECISA il 2026-10-12
+  (decisione del proprietario).** Cercare la 2.1 sul sito IVOA tra Working
+  Draft e Proposed Recommendation (non nel manuale di Aladin, regola d'oro
+  n. 8): se esiste come bozza, leggerla con l'avviso "versione non ancora
+  raccomandazione IVOA" citando il documento; se non esiste, resta
+  rifiutata. **Esito della verifica del 2026-10-12:** l'elenco dei documenti
+  IVOA (`https://www.ivoa.net/documents/`) riporta per MOC solo WD/PR/REC
+  1.0 (2013–2014), WD-MOC-1.1-20190215, PR-MOC-1.1 (2019-04-04, 2019-06-21,
+  2019-09-03), REC-MOC-1.1-20191007, WD-MOC-2.0 (2020-11-12, 2021-03-24,
+  2021-10-14, 2021-10-18), PR-MOC-2.0 (2021-11-01, 2022-01-25),
+  REC-MOC-2.0-20220727 e la Note STMOC 1.0 (2019-05-15); il repository
+  pubblico del testo dello standard (`ivoa-std/MOC`) dichiara versione 2.0,
+  REC del 2022-07-27. **Nessuna 2.1, nemmeno come bozza → un file con
+  `MOCVERS='2.1'` resta rifiutato** (`MOC_VERSION_UNSUPPORTED`, con l'esito
+  della verifica nel messaggio).
 
-- **D16-7 — Complemento dei MOC spazio-temporali: DA DECIDERE (aperta il
-  2026-10-11, Gruppo 3).** §3 prevede il complemento per tutti i MOC, ma
-  `mocpy` 0.20.0 non lo implementa per gli ST-MOC ("Complement not
-  implemented (yet) for ST-MOCs"). Opzioni: (a) nessun complemento per gli
-  ST-MOC finché `mocpy` non lo offre (`MOC_OPERATION_UNSUPPORTED`,
-  dichiarato); (b) complemento scritto da noi sugli intervalli (regola d'oro
-  n. 4: da evitare); (c) complemento come differenza tra un ST-MOC "tutto il
-  tempo × tutto il cielo" e il MOC dato, con le operazioni di `mocpy`.
-  **Raccomandazione:** (c) se il proprietario la ritiene corretta, perché usa
-  solo operazioni della libreria; altrimenti (a). **Fermo solo questo
-  pezzo:** oggi `MOC_OPERATION_UNSUPPORTED`.
+- **D16-7 — Complemento dei MOC spazio-temporali: DECISA il 2026-10-12
+  (decisione del proprietario, opzione c).** Complemento = differenza tra lo
+  ST-MOC "tutto il tempo × tutto il cielo" (agli stessi ordini del MOC dato,
+  costruito con il lettore di testo di `mocpy`: `t0/0-1 <ordine>/ s0/0-11
+  <ordine>/`) e il MOC dato, **solo con operazioni di `mocpy`**; il tempo
+  "tutto" è quello dello standard (JD 0 – circa JD 5,3 × 10⁷, uguale al
+  complemento del `TimeMOC` vuoto, verificato). **Verifica del 2026-10-12:**
+  `mocpy` 0.20.0 lascia nei risultati delle operazioni tra ST-MOC elementi
+  con un insieme di tempi vuoto (stessa copertura, rappresentazione non
+  normalizzata, per cui `==` dà falso tra MOC uguali); il 16 normalizza ogni
+  risultato spazio-temporale con la rilettura JSON di `mocpy`, che li toglie.
+  Test T14.
 
 ## 14. Registro modifiche
 
@@ -553,3 +585,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-11 | Claude Code | **P3 scritta** (`filter_by_moc`/`FilterResult`, `Moc.contains`, `healpix_map`/`HealpixMap`, `healpix_grid`/`HealpixGrid`; T4, T6): NESTED in ICRS con `astropy-healpix`; righe senza posizione mai selezionate; limite della griglia senza MOC (scelta minore, `GRID_TOO_LARGE`); verificato che `refine_to_order` di `mocpy` modifica sul posto. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P4 scritta** (`moc_from_times`, `moc_space_time`, `read_probability_map`/`ProbabilityMap`, `moc_from_probability`; metodi temporali di `Moc`; T11): TCB con `astropy.time`; formato delle mappe LIGO/Virgo/KAGRA verificato sulla guida pubblica; regione di credibilità a celle intere con probabilità ≥ livello (scelta minore da confermare), probabilità contenuta dichiarata; nuovi `TIME_RANGE_INVALID`, `PROBABILITY_SUM_INVALID`, `PROBABILITY_MAP_INVALID`. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P5 scritta — modulo 16 completo tranne i pezzi fermi D16-6 e D16-7** (`query_mocserver`/`MocServerResult`, lettura da URL in `read_moc`, `build_moc`; T8, T9): interfaccia del MocServer verificata (due comportamenti non documentati: `intersect` sconosciuto ignorato, STC con sistema rifiutato), rete e cache del 14; poligoni inviati come MOC (scelta minore); MOC da URL in cache sempre in FITS IVOA; tipo dei file di `build_moc` esplicito. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): **D16-6 decisa** — verifica sul sito IVOA, nessuna 2.1 tra WD e PR, resta rifiutata (§3, §10, §13); **D16-7 decisa** — complemento degli ST-MOC come differenza da "tutto il tempo × tutto il cielo" con `mocpy`, normalizzazione dei risultati ST (§7, §13, T14); **scelta 5 cambiata** — risultato forzato con `body = "mixed"` ed elenco dei corpi, nuova forzatura per ogni operazione successiva (§3, §10, T12); **scelta 6 cambiata** — MOC planetari e misti scritti in FITS 2.0 con `A2BODY`/`A2BODIES`, estensione non standard dichiarata (`MocWriteResult`, `MOC_NONSTANDARD_EXTENSION`), riletti dal 16; JSON e testo non celesti rifiutati (scelta minore da confermare) (§3, §7, §10, T13); scelte minori 1–4 e 7–13 confermate. Stato `approvato` invariato. |

@@ -5,6 +5,7 @@ copiati da altri programmi (regola d'oro n. 8); i valori attesi si ricalcolano c
 """
 
 import json
+from dataclasses import replace
 
 import astropy.units as u
 import numpy as np
@@ -14,6 +15,7 @@ from astropy.time import Time
 from mocpy import MOC, STMOC, TimeMOC
 
 from astrotwo.core.moc import (
+    MIXED_BODY,
     VERSION_ASSUMED_11,
     VERSION_NOT_DECLARED,
     Moc,
@@ -81,15 +83,99 @@ def test_body_rules(tmp_path):
         a.union(mars)
     assert err.value.code == "BODY_MISMATCH"
     forced = a.union(mars, force_body=True)
-    assert forced.body == "celestial" and "Mars" in dict(forced.warnings)["BODY_FORCED"]
+    assert forced.body == MIXED_BODY and forced.bodies == ("Mars", "celestial")
+    assert "Mars" in dict(forced.warnings)["BODY_FORCED"] and forced.moc == a.moc
     with pytest.raises(MocError) as err:
         Moc(moc=a.moc, kind="space", body=None, origin="x")
     assert err.value.code == "BODY_UNKNOWN"
-    with pytest.raises(MocError) as err:
-        write_moc(mars, tmp_path / "m.fits")
-    assert err.value.code == "MOC_BODY_UNSUPPORTED"
+    with pytest.raises(ValueError):
+        Moc(moc=a.moc, kind="space", body=MIXED_BODY, origin="x")  # misto senza l'elenco dei corpi
     with pytest.raises(TypeError):
         Moc(moc=a.moc, kind="time", body=None, origin="x")  # oggetto mocpy di un altro tipo
+
+
+def test_mixed_body_requires_force_again(tmp_path):
+    """Scelta 5 (2026-10-12): risultato forzato = corpo misto con l'elenco; ogni operazione successiva su un MOC
+    misto richiede di nuovo la forzatura, anche con un MOC dello stesso corpo o un altro MOC misto."""
+    a = ascii_moc(tmp_path, "a.txt", 3, [1, 2])
+    b = ascii_moc(tmp_path, "b.txt", 3, [2, 3])
+    moon = Moc(moc=b.moc, kind="space", body="Moon", origin="dati di prova")
+    mars = Moc(moc=b.moc, kind="space", body="Mars", origin="dati di prova")
+    mixed = a.intersection(moon, force_body=True)
+    assert (mixed.body, mixed.bodies) == (MIXED_BODY, ("Moon", "celestial"))
+    assert "misto (Moon, celestial)" in mixed.describe()
+    for op in (lambda: mixed.union(a), lambda: a.union(mixed), lambda: mixed.union(mixed),
+               lambda: mixed.difference(moon), lambda: mixed.complement(), lambda: mixed.union(mars)):
+        with pytest.raises(MocError) as err:
+            op()
+        assert err.value.code == "BODY_MISMATCH" and "misto" in err.value.message
+    again = mixed.union(mars, force_body=True)
+    assert again.bodies == ("Mars", "Moon", "celestial") and "BODY_FORCED" in dict(again.warnings)
+    same = mixed.union(a, force_body=True)
+    assert same.bodies == ("Moon", "celestial")
+    comp = mixed.complement(force_body=True)
+    assert comp.bodies == mixed.bodies and "BODY_FORCED" in dict(comp.warnings)
+    with pytest.raises(MocError) as err:
+        mixed.contains(SkyCoord([0.0] * u.deg, [0.0] * u.deg))
+    assert err.value.code == "BODY_MISMATCH"
+    assert list(mixed.contains(SkyCoord([0.0] * u.deg, [0.0] * u.deg), force_body=True)) == [False]
+
+
+def test_planetary_and_mixed_round_trip(tmp_path):
+    """Scelta 6 (2026-10-12): MOC planetari e misti scritti in FITS 2.0 con la parola chiave nostra A2BODY
+    (A2BODIES per i misti), dichiarata come estensione non standard, e riletti con lo stesso corpo."""
+    a = ascii_moc(tmp_path, "a.txt", 4, [5, 6, 7])
+    mars = Moc(moc=a.moc, kind="space", body="Mars", origin="dati di prova")
+    written = write_moc(mars, tmp_path / "mars.fits")
+    assert written.path == tmp_path / "mars.fits" and written.version == "2.0"
+    assert "MOC_NONSTANDARD_EXTENSION" in dict(written.warnings)
+    header = fits.getheader(tmp_path / "mars.fits", 1)
+    assert (header["A2BODY"], header["MOCVERS"], header["COORDSYS"]) == ("Mars", "2.0", "C")
+    back = read_moc(written)
+    assert back == mars and back.body == "Mars" and "MOC_NONSTANDARD_EXTENSION" in dict(back.warnings)
+    mixed = a.union(mars, force_body=True)
+    back_mixed = read_moc(write_moc(mixed, tmp_path / "mixed.fits"))
+    assert back_mixed == mixed and back_mixed.bodies == ("Mars", "celestial")
+    st = moc_space_time(Time([2459000.5], format="jd", scale="tcb"), None, SkyCoord([10.0] * u.deg, [20.0] * u.deg),
+                        time_order=30, space_order=6)
+    moon_st = replace(st, body="Moon")
+    assert read_moc(write_moc(moon_st, tmp_path / "moon_st.fits")) == moon_st
+    # MOC celeste: nessuna parola chiave nostra, nessun avviso.
+    plain = write_moc(a, tmp_path / "a.fits")
+    assert plain.warnings == () and "A2BODY" not in fits.getheader(tmp_path / "a.fits", 1)
+    for fmt in ("json", "ascii"):  # il corpo non si può dichiarare in JSON e testo
+        with pytest.raises(MocError) as err:
+            write_moc(mars, tmp_path / f"mars.{fmt}", format=fmt)
+        assert err.value.code == "MOC_BODY_UNSUPPORTED"
+    hdul = fits.open(tmp_path / "mixed.fits")
+    del hdul[1].header["A2BODIES"]
+    hdul.writeto(tmp_path / "broken.fits")
+    with pytest.raises(MocError) as err:
+        read_moc(tmp_path / "broken.fits")
+    assert err.value.code == "MOC_UNREADABLE"
+
+
+def test_d16_7_space_time_complement():
+    """D16-7 (2026-10-12): complemento di un ST-MOC = tutto il tempo × tutto il cielo meno il MOC dato, con le
+    operazioni di mocpy. Verifica indipendente su istanti e posizioni campione con query_by_time/contains."""
+    times = Time([2459000.5, 2459100.5], format="jd", scale="tcb")
+    coords = SkyCoord([10.0, 200.0] * u.deg, [20.0, -30.0] * u.deg)
+    st = moc_space_time(times, None, coords, time_order=20, space_order=5)
+    comp = st.complement()
+    assert comp.kind == "space-time" and (comp.time_order, comp.space_order) == (20, 5)
+    assert "D16-7" in comp.history[-1]
+    assert comp.complement() == st  # ¬¬A = A
+    assert comp.intersection(st).is_empty
+    full = TimeMOC.new_empty(20).complement()  # tutto il tempo dello standard, ricalcolato con mocpy
+    assert comp.union(st).space_during(Moc(moc=full, kind="time", body=None, origin="tutto")).sky_fraction == 1.0
+    probe = SkyCoord([10.0, 200.0, 100.0] * u.deg, [20.0, -30.0, 0.0] * u.deg)
+    for instant in (times[0], times[1], Time(2459050.5, format="jd", scale="tcb")):
+        tm = TimeMOC.from_times(Time([instant.jd], format="jd", scale="tcb"), order=20)
+        inside = st.moc.query_by_time(tm).contains_lonlat(lon=probe.ra, lat=probe.dec)
+        outside = comp.moc.query_by_time(tm).contains_lonlat(lon=probe.ra, lat=probe.dec)
+        assert np.array_equal(np.asarray(outside), ~np.asarray(inside))
+    empty = st.difference(st)
+    assert empty.complement().complement().is_empty
 
 
 def test_empty_moc(tmp_path):
@@ -162,9 +248,6 @@ def test_t7_versions_fits(tmp_path):
     st.save(tmp_path / "st.fits", format="fits")
     stm = read_moc(tmp_path / "st.fits")
     assert stm.kind == "space-time" and stm.moc == st and (stm.time_order, stm.space_order) == (35, 8)
-    with pytest.raises(MocError) as err:
-        stm.complement()
-    assert err.value.code == "MOC_OPERATION_UNSUPPORTED" and "D16-7" in err.value.message
 
 
 def test_t7_versions_refused(tmp_path):
@@ -724,7 +807,7 @@ def test_t9_mocserver_unavailable(cache, monkeypatch):
 
 def test_read_moc_url(service, cache, tmp_path):
     moc = ascii_moc(tmp_path, "a.txt", 5, [1, 2, 3])
-    payload = write_moc(moc, tmp_path / "a.fits").read_bytes()
+    payload = write_moc(moc, tmp_path / "a.fits").path.read_bytes()
     service.routes["/a.fits"] = lambda request: (200, "application/fits", payload)
     service.routes["/b.json"] = lambda request: (200, "application/json", '{"s": {"5": [7]}}')
     got = read_moc(service.url + "/a.fits", cache=cache)
