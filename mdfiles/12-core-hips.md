@@ -276,6 +276,41 @@ riquadro mostrato.
   pixel secondo la disposizione verificata (§3); posizioni fuori dal tile
   dato → `HIPS_OUT_OF_TILE`.
 
+**P3 — collezioni, survey attivo, copertura (scritta il 2026-10-12):**
+
+- **Verifica del 2026-10-12:** il MocServer risponde in JSON dichiarato
+  **ISO-8859-1** (`Content-Type: application/json;charset=ISO-8859-1`; es.
+  "µm" in un byte): le risposte si leggono con quella codifica
+  (`MOCSERVER_CHARSET` del 14; corretti anche `vizier_collections` del 14 e
+  `query_mocserver` del 16, che leggevano in UTF-8). Collezioni con un
+  servizio HiPS (`expr=hips_service_url=*`): 1582 record, circa 600 kB con
+  le proprietà scelte; tipi anche del WD 2.0 (`spectral-cube`, `time-cube`),
+  che restano nell'indice ma non si attivano (`HIPS_METADATA_INVALID`).
+- **`CollectionIndex(cache, timeouts)`** (H26): **`sync()`** chiede al
+  MocServer (rete del 14, sempre dalla rete) le collezioni con un servizio
+  HiPS e le proprietà **`INDEX_FIELDS`** (identificativo, titolo, banda,
+  tipo e sottotipo, URL del servizio, ordine, frame, corpo, formati,
+  `em_min`/`em_max`, frazione di cielo, categoria; **scelta minore, da
+  confermare**), ordinate per identificativo, con origine, data e richiesta
+  registrata; la risposta resta nella cache comune come **copia locale**.
+  Rete assente: si usa la copia locale con la sua data (avviso
+  `MOCSERVER_UNAVAILABLE`); senza copia → `MOCSERVER_UNAVAILABLE`.
+  **`filter(text=None, **regole)`** solo sulla copia locale: `text` = parole
+  (senza maiuscole) tutte presenti in identificativo, titolo o categoria;
+  regole = proprietà → modello con `*` e `?` (senza maiuscole), tutte vere
+  (scelta minore, da confermare).
+- **`survey_coverage(service)`** (C4) → (MOC, avvisi): il `Moc.fits` del
+  servizio (16); se manca, il MOC della collezione dal MocServer
+  (`ID=…&get=moc&fmt=fits`, verificato il 2026-10-12), avviso
+  `HIPS_COVERAGE_FROM_MOCSERVER`. Solo survey celesti (il MOC IVOA è ICRS):
+  planetari → `HIPS_FRAME_UNSUPPORTED` (anche in `service_coverage`).
+- **`set_survey(hips_id=None, *, hips_list=None, …)`** → **`ActiveSurvey`**
+  (servizio, copertura, avvisi): senza identificativo **`DEFAULT_SURVEY` =
+  `CDS/P/DSS2/color`** (avviso `HIPS_DEFAULT_SURVEY`); un survey già in
+  `hips_list` non si rilegge, altrimenti `add_hips` lo legge e lo aggiunge.
+  Una copertura non disponibile non impedisce l'attivazione (avviso
+  `HIPS_COVERAGE_UNKNOWN`).
+
 ## 4. Cosa NON fa
 
 - Non fa le trasformazioni di coordinate (10) né gestisce i file FITS locali (11).
@@ -390,6 +425,8 @@ riquadro mostrato.
 | MocServer non raggiungibile | si usa la copia locale con la sua data e un avviso; senza copia locale, errore | `MOCSERVER_UNAVAILABLE` |
 | Identificativo HiPS sconosciuto al MocServer | nessuna voce aggiunta | `HIPS_UNKNOWN` |
 | Tile non fornito dal servizio (HTTP 404) | nessun tile | `HIPS_TILE_MISSING` |
+| Copertura di un survey senza `Moc.fits` | MOC della collezione dal MocServer, dichiarato | avviso `HIPS_COVERAGE_FROM_MOCSERVER` |
+| Copertura di un survey planetario | nessun MOC (MOC IVOA solo ICRS; con il 19) | `HIPS_FRAME_UNSUPPORTED` |
 | Formato di tile non offerto dal servizio | nessun tile | `HIPS_FORMAT_UNAVAILABLE` |
 | Indice del tile fuori dall'ordine | rifiuto con l'intervallo | `HEALPIX_INDEX_INVALID` |
 | `hips_frame = ecliptic` (D12-7) o planetario (19) per campi e pixel | rifiuto | `HIPS_FRAME_UNSUPPORTED` |
@@ -490,3 +527,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti; MocServer con la rete del 14 (non `astroquery.mocserver`, §3, §8); `healpy` tolto e `healpix_map`/`healpix_grid` tolte dal §7 (solo delega al 16, §8, §11); H10 SkyView rinviato (URL SIA non documentato sul sito NASA); `tiles_for_fov` a cerchio; tile corrotto = una nuova richiesta poi `HIPS_BAD_TILE`; `build_hips` con ordine obbligatorio, tile 512 di default, FITS sempre, PNG/JPEG con parametri di visualizzazione espliciti; **A10 per gli HiPS decisa** (512 MB in memoria, un tile alla volta in `build_hips`, limite delle operazioni 4 GB). Verifiche del 2026-10-12: standard HiPS 1.0 (`properties`, URL, cubi, cataloghi), corpo dei HiPS planetari (`hips_body` del WD 2.0, regola da confermare), DSS2 a colori = `CDS/P/DSS2/color`, `cone_search_lonlat`, disposizione dei pixel nel tile (due verifiche indipendenti), funzioni HiPS di `reproject` 0.21. Nuova decisione aperta **D12-6** (nomi dei corpi, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P1 scritta** (`src/astrotwo/core/hips.py`: `parse_properties`, `read_service`, `HiPSService`, `add_hips`, `HiPSList`, `HiPSError`; T7, T8, chiavi obbligatorie, corpo, risoluzione dell'identificativo con il MocServer, errori di rete): proprietà validate secondo HiPS 1.0, solo le risposte valide in cache; nuovi avvisi in §10. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P2 scritta** (`tile_path`, `tiles_for_fov`/`TileSelection`, `order_for_resolution`, `fetch_tile`/`HiPSTile`, `service_coverage`, `TileMemory`, `pixel_values`/`tile_pixel_values`/`PixelValues`; T2–T6, T12, tile corrotti, JPEG/PNG, memoria): cache comune per i tile, una nuova richiesta per un tile corrotto, 404 = `HIPS_TILE_MISSING` (scelta minore), filtro di copertura solo equatoriale (scelta minore); nuova decisione aperta **D12-7** (`hips_frame = ecliptic`, Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **P3 scritta** (`CollectionIndex` con `sync`/`filter`, `INDEX_FIELDS`, `survey_coverage`, `set_survey`/`ActiveSurvey`, `DEFAULT_SURVEY`; T1, T10, T11): copia locale delle collezioni HiPS dal MocServer, risposte in ISO-8859-1 come dichiarato dal servizio (verifica del 2026-10-12), copertura dal `Moc.fits` del servizio o dal MocServer; campi dell'indice e regole del filtro come scelte minori. Stato `approvato` invariato. |

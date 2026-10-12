@@ -484,3 +484,124 @@ def test_order_for_resolution(service, cache):
     assert nside_to_pixel_resolution(2 ** (order + 6)) <= 1 * u.arcmin < nside_to_pixel_resolution(2 ** (order + 5))
     deepest, notes = order_for_resolution(hips, 0.001 * u.arcsec)
     assert deepest == 8 and "HIPS_RESOLUTION_LIMIT" in dict(notes)
+
+
+# =============================================================================
+# P3 — Collezioni, survey attivo, copertura (T1, T10, T11)
+
+from astrotwo.core.hips import (  # noqa: E402
+    DEFAULT_SURVEY,
+    INDEX_FIELDS,
+    CollectionIndex,
+    set_survey,
+    survey_coverage,
+)
+
+
+def mocserver_records(url):
+    return [
+        {"ID": "CDS/P/DSS2/color", "obs_title": "DSS colored", "dataproduct_type": "image",
+         "dataproduct_subtype": "color", "hips_service_url": url, "hips_frame": "equatorial", "hips_order": "9",
+         "hips_tile_format": "jpeg", "obs_regime": "Optical", "client_category": "Image/Optical/DSS"},
+        {"ID": "TEST/P/IR/K", "obs_title": "Survey K (2.2 µm)", "dataproduct_type": "image", "hips_service_url": url,
+         "hips_frame": "galactic", "obs_regime": "Infrared", "client_category": "Image/Infrared"},
+        {"ID": "TEST/P/Mars/carta", "obs_title": "Carta di Marte", "dataproduct_type": "image",
+         "hips_service_url": url, "hips_frame": "mars", "hips_body": "mars", "client_category": "Solar system/Mars"},
+    ]
+
+
+@pytest.fixture
+def mocserver(service, monkeypatch):
+    from astrotwo.core import vo_protocols as vo
+
+    state = {"up": True}
+
+    def route(request):
+        params = request["params"]
+        records = mocserver_records(service.url + "/hips")
+        if "ID" in params:
+            records = [r for r in records if r["ID"] == params["ID"]]
+        # Il MocServer risponde in ISO-8859-1 (verificato il 2026-10-12).
+        return 200, "application/json;charset=ISO-8859-1", json.dumps(records, ensure_ascii=False).encode("latin-1")
+
+    service.routes["/MocServer/query"] = lambda request: route(request) if state["up"] else (500, "text/plain", "x")
+    monkeypatch.setattr(vo, "MOCSERVER_URL", service.url + "/MocServer/query")
+    return state
+
+
+def test_t10_collection_index(service, cache, mocserver):
+    index = CollectionIndex(cache=cache).sync()
+    assert len(index.records) == 3 and index.origin.endswith("/MocServer/query") and not index.from_cache
+    assert index.synced_at is not None and index.request.rows == 3 and "3 collezioni HiPS" in index.describe()
+    sent = [r for r in service.requests if r["path"] == "/MocServer/query"][0]["params"]
+    assert sent["expr"] == "hips_service_url=*" and sent["fields"] == ",".join(INDEX_FIELDS)
+    assert [r["ID"] for r in index.filter("µm")] == ["TEST/P/IR/K"]  # testo ISO-8859-1 letto correttamente
+    assert [r["ID"] for r in index.filter("dss colored")] == ["CDS/P/DSS2/color"]
+    assert [r["ID"] for r in index.filter(hips_frame="mars")] == ["TEST/P/Mars/carta"]
+    assert [r["ID"] for r in index.filter(client_category="image/*")] == ["CDS/P/DSS2/color", "TEST/P/IR/K"]
+    assert index.filter("carta", obs_regime="*") == ()  # tutte le regole: obs_regime assente
+    assert len(index.filter()) == 3
+
+
+def test_t11_mocserver_unavailable(service, cache, mocserver, tmp_path):
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.hips import HiPSError
+
+    first = CollectionIndex(cache=cache).sync()
+    service.close()  # rete assente: copia locale con la sua data
+    fast = NetworkTimeouts(connect=0.5, read=0.5)
+    local = CollectionIndex(cache=cache, timeouts=fast).sync()
+    assert local.from_cache and local.records == first.records and local.synced_at == first.synced_at
+    note = dict(local.warnings)["MOCSERVER_UNAVAILABLE"]
+    assert first.synced_at.isoformat() in note
+    empty = SharedCache(tmp_path / "vuota")
+    with pytest.raises(HiPSError) as err:
+        CollectionIndex(cache=empty, timeouts=fast).sync()
+    assert err.value.code == "MOCSERVER_UNAVAILABLE"
+    empty.close()
+    assert vo.MOCSERVER_URL.endswith("/MocServer/query")
+
+
+def test_t1_list_and_default_survey(service, cache, mocserver):
+    """Elenco con il survey predefinito (DSS2 a colori) e metadati completi; set_survey di default."""
+    index = CollectionIndex(cache=cache).sync()
+    dss = [r for r in index.records if r["ID"] == DEFAULT_SURVEY]
+    assert dss and all(dss[0].get(k) for k in ("obs_title", "dataproduct_type", "hips_service_url", "hips_frame"))
+    serve_properties(service, "/hips", properties_text(creator_did="ivo://CDS/P/DSS2/color", hips_tile_format="jpeg",
+                                                       dataproduct_subtype="color"))
+    coverage_moc = moc_from_region(CircleRegion(SkyCoord(10 * u.deg, 0 * u.deg), 5 * u.deg), 5)
+    payload = write_moc(coverage_moc, cache.root.parent / "c.fits").path.read_bytes()
+    service.routes["/hips/Moc.fits"] = lambda request: (200, "application/fits", payload)
+    hips = HiPSList()
+    active = set_survey(hips_list=hips, cache=cache)
+    assert active.service.hips_id == DEFAULT_SURVEY and DEFAULT_SURVEY in hips
+    assert active.coverage == coverage_moc and "HIPS_DEFAULT_SURVEY" in dict(active.warnings)
+    again = set_survey(DEFAULT_SURVEY, hips_list=hips, cache=cache)
+    assert again.service is active.service
+
+
+def test_survey_coverage_fallback(service, cache, mocserver):
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.hips import HiPSError
+
+    hips = tile_service(service, cache, path="/senza-moc")
+    whole = moc_from_region(CircleRegion(SkyCoord(0 * u.deg, 0 * u.deg), 180 * u.deg), 3)
+    payload = write_moc(whole, cache.root.parent / "w.fits").path.read_bytes()
+
+    def route(request):
+        if request["params"].get("get") == "moc":
+            assert request["params"] == {"ID": hips.hips_id, "get": "moc", "fmt": "fits"}
+            return 200, "application/fits", payload
+        return 404, "text/plain", "x"
+
+    service.routes["/MocServer/query"] = route
+    moc, notes = survey_coverage(hips, cache=cache)
+    assert moc == whole and "HIPS_COVERAGE_FROM_MOCSERVER" in dict(notes) and "HIPS_COVERAGE_UNKNOWN" in dict(notes)
+    mars = read_service(serve_properties(service, "/marte", properties_text(hips_frame="mars", hips_body="mars")),
+                        cache=cache)
+    with pytest.raises(HiPSError) as err:
+        survey_coverage(mars, cache=cache)
+    assert err.value.code == "HIPS_FRAME_UNSUPPORTED"
+    active = set_survey(mars.base_url, cache=cache)
+    assert active.coverage is None and "HIPS_COVERAGE_UNKNOWN" in dict(active.warnings)
+    assert vo.MOCSERVER_URL.startswith(service.url)

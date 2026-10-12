@@ -20,7 +20,10 @@ from datetime import UTC, datetime
 import astropy.units as u
 
 __all__ = [
+    "ActiveSurvey",
     "CELESTIAL_FRAMES",
+    "CollectionIndex",
+    "DEFAULT_SURVEY",
     "DEFAULT_TILE_MEMORY_BYTES",
     "HIPS_STANDARD_VERSION",
     "MANDATORY_PROPERTIES",
@@ -38,6 +41,8 @@ __all__ = [
     "pixel_values",
     "read_service",
     "service_coverage",
+    "set_survey",
+    "survey_coverage",
     "tile_path",
     "tile_pixel_values",
     "tiles_for_fov",
@@ -313,8 +318,6 @@ def _replace(service: HiPSService, **changes) -> HiPSService:
 
 def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, tuple]:
     """URL del servizio di un identificativo HiPS dal MocServer (rete del 14)."""
-    import json
-
     from astrotwo.core import vo_protocols as vo
 
     params = {"ID": hips_id, "get": "record", "fmt": "json", "fields": "ID,hips_service_url,dataproduct_type"}
@@ -325,12 +328,7 @@ def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, t
             raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile per risolvere {hips_id!r}: "
                             f"{exc.message}") from exc
         raise _net(exc) from exc
-    try:
-        records = json.loads(response.payload.decode("utf-8"))
-        if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
-            raise ValueError("attesa una lista di record")
-    except (UnicodeDecodeError, ValueError) as exc:
-        raise HiPSError("SERVICE_ERROR", f"{vo.MOCSERVER_URL}: risposta non leggibile ({exc})") from exc
+    records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
     match = [r for r in records if r.get("ID") == hips_id]
     if not match:
         raise HiPSError("HIPS_UNKNOWN", f"identificativo {hips_id!r} sconosciuto al MocServer", hips_id=hips_id)
@@ -769,6 +767,9 @@ def service_coverage(service: HiPSService, *, cache=None, refresh: bool = False,
     IVOA). File assente → ``None`` con avviso ``HIPS_COVERAGE_UNKNOWN`` (il file è solo consigliato)."""
     from astrotwo.core.moc import MocError, read_moc
 
+    if service.body != "celestial":
+        raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"{service.hips_id}: corpo {service.body!r}; il MOC IVOA è ICRS, "
+                        "copertura dei HiPS planetari con il modulo 19")
     url = service.base_url + "/Moc.fits"
     try:
         return read_moc(url, format="fits", kind="space", cache=cache, refresh=refresh, timeouts=timeouts), ()
@@ -868,3 +869,169 @@ def pixel_values(service: HiPSService, coords, *, order: int | None = None, cach
                    f"{note}")
     return PixelValues(values=values, tile_index=tiles, x=x, y=y, order=order, unit=unit, description=description,
                        warnings=tuple(notes))
+
+
+# --------------------------------------------------------------------------
+# P3 — Elenco delle collezioni (H26), survey attivo (C1, C2), impronta (C4)
+# --------------------------------------------------------------------------
+
+#: Survey attivo di default (D12-3): DSS2 a colori, identificativo verificato nel MocServer il 2026-10-12.
+DEFAULT_SURVEY = "CDS/P/DSS2/color"
+#: Proprietà copiate nell'indice locale delle collezioni HiPS (scelta minore, da confermare).
+INDEX_FIELDS: tuple[str, ...] = (
+    "ID", "obs_title", "obs_regime", "dataproduct_type", "dataproduct_subtype", "hips_service_url", "hips_order",
+    "hips_frame", "hips_body", "hips_tile_format", "em_min", "em_max", "moc_sky_fraction", "client_category",
+)
+_INDEX_TEXT_FIELDS = ("ID", "obs_title", "client_category")
+
+
+def _mocserver_records(payload: bytes, url: str) -> list[dict]:
+    """Record del MocServer, letti con la codifica dichiarata dal servizio (``MOCSERVER_CHARSET`` del 14)."""
+    import json
+
+    from astrotwo.core.vo_protocols import MOCSERVER_CHARSET
+
+    try:
+        records = json.loads(payload.decode(MOCSERVER_CHARSET))
+        if not isinstance(records, list) or not all(isinstance(r, dict) and isinstance(r.get("ID"), str)
+                                                    for r in records):
+            raise ValueError("attesa una lista di record con ID")
+    except ValueError as exc:
+        raise HiPSError("SERVICE_ERROR", f"{url}: risposta non leggibile ({exc})", url=url) from exc
+    return records
+
+
+class CollectionIndex:
+    """Copia locale delle proprietà delle collezioni HiPS del MocServer (H26), con origine e data della
+    sincronizzazione. ``sync()`` legge il MocServer (rete e cache del 14); senza rete usa la copia in cache con
+    la sua data (avviso ``MOCSERVER_UNAVAILABLE``). ``filter`` lavora solo sulla copia locale."""
+
+    def __init__(self, *, cache=None, timeouts=None) -> None:
+        self._cache = cache
+        self._timeouts = timeouts
+        self.records: tuple[dict, ...] = ()
+        self.origin: str | None = None
+        self.synced_at: datetime | None = None
+        self.from_cache = False
+        self.request = None
+        self.warnings: tuple[tuple[str, str], ...] = ()
+
+    def sync(self) -> CollectionIndex:
+        from astrotwo.core import vo_protocols as vo
+        from astrotwo.core.cache import NETWORK_TIMEOUTS
+
+        timeouts = NETWORK_TIMEOUTS if self._timeouts is None else self._timeouts
+        params = {"expr": "hips_service_url=*", "get": "record", "fmt": "json", "fields": ",".join(INDEX_FIELDS)}
+        try:
+            response = vo._http("mocserver", vo.MOCSERVER_URL, params, cache=self._cache, refresh=True,
+                                timeouts=timeouts)
+        except vo.VoProtocolsError as exc:
+            if exc.code == "NET_TIMEOUT":
+                raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile e nessuna copia locale delle "
+                                f"collezioni: {exc.message}") from exc
+            raise _net(exc) from exc
+        records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
+        notes = []
+        if response.from_cache:  # rete assente: copia locale con la sua data
+            notes.append(("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile: copia locale delle collezioni del "
+                          f"{response.retrieved_at.isoformat()}"))
+        else:
+            notes += list(vo._store(response, "mocserver", self._cache))
+        self.records = tuple(sorted(records, key=lambda r: r["ID"]))
+        self.origin = vo.MOCSERVER_URL
+        self.synced_at = response.retrieved_at
+        self.from_cache = response.from_cache
+        self.request = vo._record("mocserver", "CollectionIndex.sync", {"fields": list(INDEX_FIELDS)}, response,
+                                  len(records))
+        self.warnings = tuple(notes)
+        return self
+
+    def filter(self, text: str | None = None, **rules: str) -> tuple[dict, ...]:
+        """Collezioni della copia locale: ``text`` = parole cercate (senza maiuscole) in identificativo, titolo e
+        categoria, tutte presenti; ``rules`` = proprietà → modello con i jolly ``*`` e ``?`` (senza maiuscole),
+        tutte vere. Nessuna rete."""
+        import fnmatch
+
+        words = text.lower().split() if text else []
+        found = []
+        for record in self.records:
+            haystack = " ".join(str(record.get(f, "")) for f in _INDEX_TEXT_FIELDS).lower()
+            if any(word not in haystack for word in words):
+                continue
+            ok = True
+            for name, pattern in rules.items():
+                value = record.get(name)
+                values = value if isinstance(value, list) else [value]
+                if not any(v is not None and fnmatch.fnmatchcase(str(v).lower(), str(pattern).lower())
+                           for v in values):
+                    ok = False
+                    break
+            if ok:
+                found.append(record)
+        return tuple(found)
+
+    def describe(self) -> str:
+        if self.synced_at is None:
+            return "indice delle collezioni non sincronizzato"
+        state = "copia locale" if self.from_cache else "sincronizzato"
+        return f"{len(self.records)} collezioni HiPS da {self.origin} ({state} del {self.synced_at.isoformat()})"
+
+
+@dataclass(frozen=True)
+class ActiveSurvey:
+    """Survey attivato (C1): metadati del servizio e copertura (C4), con gli avvisi."""
+
+    service: HiPSService
+    coverage: object | None  # Moc spaziale del 16, None se non nota
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def survey_coverage(service: HiPSService, *, cache=None, refresh: bool = False, timeouts=None) -> tuple:
+    """(MOC, avvisi): copertura del survey come MOC (C4), calcolata dal 16. Prima il ``Moc.fits`` del servizio
+    (standard HiPS 1.0 §4.4.2); se manca, il MOC della collezione dal MocServer (``get=moc``), dichiarato. Solo
+    per i survey celesti: il MOC IVOA è ICRS (planetari → ``HIPS_FRAME_UNSUPPORTED`` fino al 19)."""
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.moc import MocError, read_moc
+
+    if service.body != "celestial":
+        raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"{service.hips_id}: corpo {service.body!r}; copertura dei HiPS "
+                        "planetari con il modulo 19")
+    moc, notes = service_coverage(service, cache=cache, refresh=refresh, timeouts=timeouts)
+    if moc is not None:
+        return moc, notes
+    import urllib.parse
+
+    url = vo.MOCSERVER_URL + "?" + urllib.parse.urlencode({"ID": service.hips_id, "get": "moc", "fmt": "fits"})
+    try:
+        moc = read_moc(url, format="fits", kind="space", cache=cache, refresh=refresh, timeouts=timeouts)
+    except MocError as exc:
+        if exc.code == "NET_TIMEOUT":
+            raise HiPSError("MOCSERVER_UNAVAILABLE", f"copertura di {service.hips_id}: {exc.message}") from exc
+        raise HiPSError(exc.code, exc.message) from exc
+    return moc, tuple(notes) + (("HIPS_COVERAGE_FROM_MOCSERVER", f"{service.hips_id}: copertura dal MocServer "
+                                 f"({url}), il servizio non fornisce Moc.fits"),)
+
+
+def set_survey(hips_id: str | None = None, *, hips_list: HiPSList | None = None, cache=None, refresh: bool = False,
+               timeouts=None) -> ActiveSurvey:
+    """Attiva un survey (C1) e ne restituisce metadati e copertura; senza identificativo il default DSS2 a colori
+    (D12-3). Un survey non in ``hips_list`` si legge con ``add_hips`` (e si aggiunge all'elenco). La copertura
+    mancante non impedisce l'attivazione (avviso); un survey planetario si attiva senza copertura (19)."""
+    target = DEFAULT_SURVEY if hips_id is None else hips_id
+    notes: list[tuple[str, str]] = []
+    if hips_id is None:
+        notes.append(("HIPS_DEFAULT_SURVEY", f"survey di default {DEFAULT_SURVEY} (D12-3)"))
+    if hips_list is not None and target in hips_list and not refresh:
+        service = hips_list.get(target)
+    elif hips_list is not None:
+        service = hips_list.add_hips(target, cache=cache, refresh=refresh, timeouts=timeouts)
+    else:
+        service = add_hips(target, cache=cache, refresh=refresh, timeouts=timeouts)
+    coverage = None
+    try:
+        coverage, cov_notes = survey_coverage(service, cache=cache, refresh=refresh, timeouts=timeouts)
+        notes += cov_notes
+    except HiPSError as exc:
+        notes.append(("HIPS_COVERAGE_UNKNOWN", f"{service.hips_id}: copertura non disponibile ({exc.code}: "
+                      f"{exc.message})"))
+    return ActiveSurvey(service=service, coverage=coverage, warnings=service.warnings + tuple(notes))
