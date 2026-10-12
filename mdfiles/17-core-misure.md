@@ -76,7 +76,7 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 |---|---|---|
 | P1 | `angular_distance` (con `skydist` del 13), `position_angle` con i casi ai poli, `angular_offsets`, `apply_offsets`, `offset_position` | T1, T2, T8, T9, T13–T15 |
 | P2 | `read_pixel`, `profile_along_line`, `distance_with_profile` | T3–T6 |
-| P3 | forme (`Shape`: `Circle`, `Ellipse`, `Arrow`, `Polygon`, `Text`, `Freehand`) e tag | T7 |
+| P3 | forme (`Shape`: `Circle`, `Ellipse`, `Arrow`, `Polygon`, `Text`, `Freehand`) e tag (D17-7) | T7, T16–T19 |
 | P4 | `auto_distance` tra due sorgenti di catalogo, con epoca propagata con il 10 e controllo del corpo | T10–T12 |
 
 - **D17-5 decisa** (§13): profili con **interpolazione bilineare** tramite
@@ -85,7 +85,13 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 - **P3:** prima si verifica come calcolare area e "contiene" per ellissi e
   poligoni sferici con le librerie già presenti (`astropy`, `mocpy`); se
   serve una libreria nuova si ferma solo P3, con la proposta (libreria,
-  licenza, motivo), e si continua con P4.
+  licenza, motivo), e si continua con P4. (Fatto: libreria nuova
+  `spherical-geometry`, decisa con D17-7 il 2026-10-12.)
+- **Scelte minori di P1, P2, P4 confermate dal proprietario il 2026-10-12**,
+  con due correzioni: `read_pixel` senza `BUNIT` dà l'unità **"non
+  dichiarata"** (non "unitless": l'unità è ignota, non adimensionale);
+  `auto_distance` senza `epoch` usa l'epoca della prima sorgente e **il
+  report lo dice esplicitamente**.
 
 **Codice: `src/astrotwo/core/measures.py`**, errori `MeasuresError` con gli
 identificatori di §10. Ogni risultato porta un **report** (`MeasureReport`:
@@ -148,7 +154,8 @@ Scelte minori:
    l'immagine. I pixel si leggono con `read_region` dell'11 (pixel originali
    anche per le immagini a due livelli e in `memmap`); valore in `float64`,
    mai modificato. Unità: `BUNIT` come scritta nell'intestazione e unità di
-   `astropy` se riconosciuta; senza `BUNIT` → `"unitless"`. Valore non
+   `astropy` se riconosciuta; senza `BUNIT` → unità **"non dichiarata"**
+   (`UNDECLARED_UNIT`, `unit = None`; decisione del 2026-10-12). Valore non
    finito → restituito com'è con l'avviso `NONFINITE_PIXELS`.
 3. **`profile_along_line`:** campioni lungo il **segmento rettilineo in
    pixel** tra i due estremi, a distanza `k · step` dal primo estremo per
@@ -173,20 +180,93 @@ Scelte minori:
    valore e, con il WCS, posizione celeste, unità e metadati del report): il
    grafico è disegnato dal 41 e il file si scrive fuori da questo modulo.
 
-**P3 — forme e tag: FERMA (verifica del 2026-10-12).** Con le librerie già
-presenti non c'è un calcolo **esatto** di area e "contiene" per ellissi e
-poligoni sferici: `astropy` non ha geometria di poligoni sulla sfera; `mocpy`
-(`from_polygon`, `from_elliptical_cone`, `contains_lonlat`, `sky_fraction`)
-lavora per celle HEALPix, quindi dà una regione approssimata per eccesso alla
-risoluzione dell'ordine scelto, e per l'ellisse non dichiara la definizione
-geometrica usata. Il cerchio si calcola esattamente con Astropy (separazione
-≤ raggio; area 2π(1 − cos r)). **Proposta (da decidere, D17-7):** libreria
-**`spherical-geometry`** (Space Telescope Science Institute, licenza
-**BSD-3-Clause**, versione 1.4.0 del 2026-03, ruote per Python 3.12 su macOS
-arm64 e x86_64) per poligoni e tracciati chiusi (`SphericalPolygon`:
-`contains_point`, `area`, lati di cerchio massimo); per l'**ellisse** serve
-anche una **definizione** sulla sfera, che nessuna delle librerie fissa
-(D17-7, punto b). Fermo solo P3; P4 continua.
+**P3 — forme e tag (D17-7 decisa dal proprietario il 2026-10-12, scritta
+lo stesso giorno).** Verifica del 2026-10-12: con le librerie già presenti
+non c'era un calcolo **esatto** di area e "contiene" per ellissi e poligoni
+sferici (`astropy` non ha poligoni sulla sfera; `mocpy` lavora per celle
+HEALPix, cioè per eccesso alla risoluzione dell'ordine). Decisione:
+
+- **Poligoni e tracciati chiusi:** libreria **`spherical-geometry`** 1.4.0
+  (STScI; licenza **BSD-3-Clause** di AURA, verificata nei file di licenza
+  del pacchetto installato il 2026-10-12, che include anche la libreria QD
+  di LBNL con licenza BSD modificata: vedi §8), `SphericalPolygon`:
+  lati di **cerchio massimo**, `contains_lonlat`, `area` (teorema di Girard
+  generalizzato, steradianti).
+- **Ellisse:** **ellisse sferica**, insieme dei punti la cui **somma delle
+  distanze angolari dai due fuochi è ≤ 2a**. "Contiene" esatto con
+  `astropy.coordinates.angular_separation`; area per integrazione numerica
+  con precisione dichiarata. Il risultato dichiara sempre la definizione,
+  perché per ellissi grandi differisce dall'ellisse nel piano tangente
+  (proiezione gnomonica al centro) — test T17.
+- **Cerchio:** esatto con Astropy: "contiene" = separazione ≤ raggio;
+  area della calotta 2π(1 − cos r) sr.
+- **Freccia e testo:** `contains` e `area` → `OPERATION_UNSUPPORTED`.
+  **Tracciato libero:** trattato come poligono solo se chiuso, altrimenti
+  `OPERATION_UNSUPPORTED`.
+
+Scelte minori di P3:
+
+1. **Coordinate delle forme:** punti celesti (`SkyFrame` del 10 o
+   `SkyCoord`, regole di P1); numeri senza frame → `FRAME_UNKNOWN`. Tutti i
+   punti di una forma stanno nel **frame del primo punto** (gli altri
+   convertiti con il 10, conversione nel report). Le forme in pixel sono
+   compito del 41 (conversione con il WCS del 10). Un punto da controllare
+   con `contains` in un altro frame si converte allo stesso modo.
+2. **Parametri angolari** (raggio, semiassi, angolo di posizione): `Quantity`
+   angolari finite, altrimenti `SHAPE_INVALID` con il campo. Cerchio:
+   0 < r < 180°. Ellisse: centro, semiasse maggiore `a`, semiasse minore
+   `b`, angolo di posizione dell'asse maggiore (da nord verso est), con
+   0 < b ≤ a < 90° (sotto i 90° le due regioni delimitate dal bordo non si
+   confondono). I **fuochi** stanno sul cerchio massimo dell'asse maggiore, a
+   distanza `c` dal centro con cos c = cos a / cos b (teorema di Pitagora
+   sferico: il vertice dell'asse minore è a distanza `a` da entrambi i
+   fuochi), calcolata nella forma equivalente senza cancellazione
+   sin²(c/2) = sin((a+b)/2)·sin((a−b)/2)/cos b (con `arccos` l'errore
+   relativo arrivava a 1e-7 per ellissi di pochi secondi d'arco: verificato
+   il 2026-10-12), e posti con `offset_by` di Astropy; `a = b` dà il cerchio.
+   Le distanze usano `skydist` del 13 (D13-10).
+3. **Area dell'ellisse:** in coordinate polari attorno al centro, area =
+   ∫₀^{2π} (1 − cos ρ(θ)) dθ, con ρ(θ) distanza del bordo nella direzione θ;
+   ρ(θ) si trova per **bisezione** (vettoriale, fino alla precisione di
+   `float64`) sulla funzione "somma delle distanze − 2a" lungo il raggio
+   (punti con `offset_by`, distanze con `angular_separation`), nell'intervallo
+   [0, 2a] (a 2a la somma è già > 2a per la disuguaglianza triangolare).
+   Integrale con la **regola dei trapezi** (esponenzialmente convergente per
+   una funzione liscia e periodica), raddoppiando i campioni da 32 fino a
+   quando due stime consecutive differiscono meno di `rtol` × area
+   (**`rtol` = 1e-10 di default**, configurabile); la differenza è la
+   **stima dell'errore dichiarata** nel risultato, con il numero di
+   campioni. Oltre 2¹⁶ campioni senza raggiungere `rtol` (ellissi molto
+   allungate) → `AREA_PRECISION_NOT_REACHED` con la stima raggiunta: nessun
+   numero sotto la precisione richiesta.
+4. **Poligono:** almeno 3 vertici distinti; i vertici consecutivi uguali (e
+   un ultimo vertice uguale al primo) si tolgono, con nota. Lati =
+   archi di cerchio massimo tra vertici consecutivi. Poligono che si
+   interseca da solo (`SphericalPolygon.self_intersect`), degenere (area 0:
+   vertici su un cerchio massimo) o con area non finita → `SHAPE_INVALID`.
+   **Interno:** se è dato un punto `inside`, la regione che lo contiene;
+   altrimenti la **regione più piccola** delle due delimitate dal bordo
+   (area < 2π sr), dichiarata nel report; se le due regioni sono uguali
+   (entro 1e-12 relativo) serve `inside`, altrimenti `SHAPE_INVALID`.
+   I punti sul bordo risultano contenuti secondo il calcolo della libreria
+   (in `float64` il bordo non è garantito).
+5. **Tracciato libero** (`Freehand`): sequenza di punti con
+   `closed` esplicito (default `False`); chiuso → stesse regole del
+   poligono; aperto → `OPERATION_UNSUPPORTED` per area e "contiene".
+6. **Freccia** (`Arrow`: punto di partenza e di arrivo) e **testo** (`Text`:
+   posizione e testo non vuoto): solo geometria e attributi;
+   `contains`/`area` → `OPERATION_UNSUPPORTED`.
+7. **Risultati:** `contains(point)` e `area()` restituiscono un
+   `ShapeMeasure` (valore — `bool` o area in **steradianti** `u.sr` — e
+   report con forma, frame, definizione, libreria, precisione).
+   `describe()` dà i parametri geometrici (§11, `describe_shape`).
+8. **Tag:** `tag(point, label)` → `Tag` con punto celeste (`SkyFrame`) ed
+   etichetta non vuota (altrimenti `ValueError`); nessuna scrittura su disco
+   (D17-3).
+9. **`distance_to` (distanza tra forme): FERMA** — il significato non è
+   fissato dalla specifica (distanza minima tra i bordi? tra i centri? da
+   un punto?): **D17-8, da decidere**. Le forme non hanno ancora questo
+   metodo.
 
 **P4 — distanza automatica (scritta il 2026-10-12).** Scelte minori:
 
@@ -201,7 +281,9 @@ anche una **definizione** sulla sfera, che nessuna delle librerie fissa
    `source_epoch` della `CatalogSource` (stessa regola del 13); nessuna →
    `EPOCH_REQUIRED`.
 3. **Epoca comune:** `epoch` se dato, altrimenti l'**epoca della prima
-   sorgente selezionata**; ogni sorgente a un'epoca diversa si propaga con
+   sorgente selezionata**, e allora il report dice esplicitamente "nessuna
+   epoca richiesta: usata l'epoca della prima sorgente selezionata" e il
+   risultato ha `epoch_from_first_source = True` (decisione del 2026-10-12); ogni sorgente a un'epoca diversa si propaga con
    `propagate` del 13 (che usa `propagate_position` del 10) su una tabella
    di una sola riga, con le colonne del moto proprio indicate nella
    `CatalogSource` (`pm_ra`, `pm_dec`, `pm_ra_includes_cosdec` obbligatori;
@@ -250,9 +332,10 @@ anche una **definizione** sulla sfera, che nessuna delle librerie fissa
 | in | forma | struttura geometrica | cerchio/ellisse/freccia/poligono/testo/tracciato con coordinate | H11 |
 | out | distanza | float64 + unità (`Quantity`) | arcsec/arcmin/degree | |
 | out | position angle | float64 + unità angolare | gradi, da nord verso est | tra due punti o lungo una linea (segmento) |
-| out | valore pixel | float64 | unità della immagine (header BUNIT) | o "unitless" se assente |
+| out | valore pixel | float64 | unità della immagine (header BUNIT) | o "non dichiarata" se assente |
 | out | profilo | serie (posizione, valore) | pixel lungo il segmento + valori | campionato a passo dichiarato |
 | out | forma/tag | oggetto geometrico | coordinate + attributi | |
+| out | "contiene" / area di una forma | `ShapeMeasure` | `bool` / steradianti (`u.sr`) + report | ellisse: definizione e precisione dichiarate |
 | in | due sorgenti di catalogo | righe di `CatalogTable` | posizioni con frame, epoca e `body` | F1 automatica |
 | out | distanza automatica | struttura | distanza con unità + estremi del segmento + epoca usata | F1 automatica |
 | in | offset | due `Quantity` angolari | Δα·cos δ e Δδ, unità angolare esplicita | per `apply_offsets` |
@@ -282,8 +365,10 @@ anche una **definizione** sulla sfera, che nessuna delle librerie fissa
 - **`distance_with_profile(image, p1, p2, step)`** — misura H11: distanza +
   profilo in un'unica struttura con report (posizioni, unità, immagine, data).
 - **`Shape`** (classe base; `Circle`, `Ellipse`, `Arrow`, `Polygon`, `Text`,
-  `Freehand`) — forme H11 con metodi `contains(point)`, `area()`,
-  `distance_to(...)`; calcolo geometrico con Astropy/geometria celeste.
+  `Freehand`) — forme H11 con metodi `contains(point)`, `area()`
+  (`ShapeMeasure`) e `describe()`; cerchio ed ellisse con Astropy, poligoni
+  e tracciati chiusi con `spherical-geometry` (D17-7). `distance_to(...)`:
+  ferma su D17-8.
 - **`tag(point, label)`** — marcatura con coordinate e etichetta; la UI la
   rende, la **sessione del 24** la persiste insieme ai segnalibri di 40
   (D17-3).
@@ -312,6 +397,8 @@ anche una **definizione** sulla sfera, che nessuna delle librerie fissa
 | `scipy.ndimage.map_coordinates` | interpolazione bilineare dei profili (D17-5) | consolidato, già nel progetto |
 | `skydist` del 13 (`astropy.coordinates.angular_separation`) | distanza angolare (D13-10) | implementazione unica |
 | Convenzione astronomica del PA | angolo di posizione da nord verso est | convenzione della comunità |
+| `spherical-geometry` 1.4.0 (STScI, BSD-3-Clause; include la libreria QD di LBNL, BSD modificata) | poligoni e tracciati chiusi: `SphericalPolygon` (`contains_lonlat`, `area`, `self_intersect`) (D17-7) | area e "contiene" esatti con lati di cerchio massimo, libreria consolidata dell'STScI (Hubble/JWST); licenza compatibile. **Da verificare con A11/60:** la licenza QD inclusa chiede di riportare l'avviso nelle distribuzioni binarie e invita a contattare LBNL per usi commerciali (frase fuori dalle clausole) |
+| `astropy.coordinates` (`angular_separation`, `offset_by`) | cerchio ed ellisse sferica (D17-7) | "contiene" esatto, fuochi e bordo dell'ellisse |
 
 ## 9. Regole e vincoli
 
@@ -353,6 +440,9 @@ anche una **definizione** sulla sfera, che nessuna delle librerie fissa
 | Tabella senza colonne di posizione (F1) | nessuna misura | `NO_COORD_COLUMNS` |
 | Corpo non dichiarato in una delle due tabelle (F1) | nessuna misura | `BODY_UNKNOWN` |
 | Immagine a colori per lettura pixel o profilo | nessun valore (solo presentazione, 11) | `OPERATION_UNSUPPORTED` |
+| Area o "contiene" per freccia, testo o tracciato aperto (D17-7) | nessun valore | `OPERATION_UNSUPPORTED` |
+| Poligono che si interseca, degenere, con meno di 3 vertici distinti o con le due regioni uguali senza `inside`; ellisse con b > a, a ≥ 90°; parametri senza unità angolare | rifiuto con il campo invalido | `SHAPE_INVALID` |
+| Area dell'ellisse oltre 2¹⁶ campioni senza la precisione richiesta | nessuna area; stima raggiunta nel messaggio | `AREA_PRECISION_NOT_REACHED` |
 
 ## 11. Esposizione all'IA
 
@@ -394,6 +484,10 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | T13 | Offset tra due punti | `angular_offsets` su coppie scelte dal tester | uguali a `SkyCoord.spherical_offsets_to` ricalcolato nel test; `apply_offsets` con quegli offset torna al secondo punto entro 1e-9 gradi | ricalcolo con Astropy |
 | T14 | Calcolo inverso | `offset_position` con distanza e PA dati | uguale a `SkyCoord.directional_offset_by`; `angular_distance` e `position_angle` dal punto di partenza restituiscono distanza e PA dati entro 1e-9 gradi | ricalcolo con Astropy |
 | T15 | Input non valido | distanza negativa o senza unità | `OFFSET_INVALID` | test di unità |
+| T16 | Poligono sferico (D17-7) | ottante (0°,0°), (90°,0°), (0°,90°); punti dentro/fuori; poligono che si interseca; tracciato aperto | area π/2 sr; "contiene" giusto; `SHAPE_INVALID`; `OPERATION_UNSUPPORTED` | area dell'ottante per definizione (1/8 della sfera) |
+| T17 | Ellisse sferica contro piano tangente (D17-7) | ellisse grande (a = 30°, b = 10°) | un punto sull'asse maggiore a 0,99 a è dentro l'ellisse sferica e fuori dall'ellisse del piano tangente (proiezione TAN di `astropy.wcs` nel test); area diversa da π a b; definizione nel report | ricalcolo con `astropy.wcs` |
+| T18 | Area dell'ellisse | ellisse con a = b; ellisse generica | a = b: area della calotta 2π(1 − cos a) entro la precisione dichiarata; generica: area di `SphericalPolygon` con 150, 300 e 600 punti del bordo trovati nel test con `scipy.optimize.brentq`, estrapolata con due passi di Richardson (errore dei lati in 1/n² e 1/n⁴), entro 1e-9 relativo; ellisse molto allungata (a = 89°, b = 0,01°) → `AREA_PRECISION_NOT_REACHED` | ricalcolo indipendente |
+| T19 | Freccia, testo, tag | area/"contiene" di freccia e testo; tag con etichetta vuota | `OPERATION_UNSUPPORTED`; `ValueError` | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -426,20 +520,26 @@ arrivano solo da questi strumenti e vengono poi verificati da
   **Motivazione:** la bilineare non inventa strutture tra i pixel e coincide
   con il valore del pixel nei centri; senza un default il passo è sempre una
   scelta dichiarata dell'utente. Applicata in §3 (P2).
-- **D17-7 — Geometria sferica delle forme (P3): DA DECIDERE (aperta il
-  2026-10-12, Gruppo 3).** (a) **Libreria per poligoni e tracciati chiusi:**
-  proposta `spherical-geometry` (STScI, BSD-3-Clause, 1.4.0) per area e
-  "contiene" esatti con lati di cerchio massimo; alternativa: `mocpy`
-  (già presente) con risultato approssimato per celle, dichiarato con
-  l'ordine usato. (b) **Definizione dell'ellisse sulla sfera:** per esempio
-  insieme dei punti la cui somma delle distanze angolari dai due fuochi è
-  ≤ 2a (definizione intrinseca, "contiene" esatto con Astropy, area con
-  integrazione numerica dichiarata), oppure ellisse nel piano tangente
-  (proiezione gnomonica) al centro. (c) Senso di `contains` e `area` per
-  `Arrow`, `Text` e `Freehand` aperto (oggi non definiti: proposta
-  `OPERATION_UNSUPPORTED` per freccia e testo; tracciato libero come
-  poligono solo se chiuso). **Raccomandazione:** (a) `spherical-geometry`,
-  (b) somma delle distanze dai fuochi, (c) come proposto. Ferma solo P3.
+- **D17-7 — Geometria sferica delle forme (P3): DECISA il 2026-10-12
+  (decisione del proprietario).** (a) Poligoni e tracciati chiusi con
+  **`spherical-geometry`** (STScI, BSD-3-Clause, 1.4.0); (b) **ellisse
+  sferica** = punti con somma delle distanze angolari dai fuochi ≤ 2a,
+  "contiene" esatto con Astropy, area per integrazione numerica con
+  precisione dichiarata, definizione sempre scritta nel risultato; cerchio
+  esatto con Astropy; (c) freccia e testo → `OPERATION_UNSUPPORTED`,
+  tracciato libero come poligono solo se chiuso. **Motivazione:** risultati
+  esatti (o con errore dichiarato) invece dell'approssimazione per celle di
+  `mocpy`; la definizione intrinseca dell'ellisse non dipende da una
+  proiezione. Applicata in §3 (P3), §8, §10, §12.
+- **D17-8 — Significato di `distance_to` (distanza tra forme): DA DECIDERE
+  (aperta il 2026-10-12, Gruppo 3).** §3 e §7 citano "distanza tra forme"
+  senza dire quale: (a) distanza minima tra i bordi (0 se le forme si
+  toccano o si sovrappongono), (b) distanza tra i centri / punti di
+  riferimento, (c) distanza da un punto alla forma. **Raccomandazione:**
+  (a) e (c) — distanza minima angolare (0 se c'è sovrapposizione o il punto
+  è dentro), esatta per cerchi con Astropy (separazione − raggi), per
+  poligoni tramite la distanza punto–arco di cerchio massimo; (b) è già
+  ottenibile con `angular_distance` sui centri. Ferma solo `distance_to`.
 - **D17-6 — Tag "distanza con profilo" (H11): DECISA il 2026-10-09 (decisione
   del proprietario sulla checklist del livello 1).** **distanza + profilo di
   intensità lungo il segmento + grafico esportabile**. **Motivazione
@@ -467,3 +567,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-12 | Claude Code | **P1 scritta** (`src/astrotwo/core/measures.py`: `MeasuresError`, `MeasureReport`, `Segment`, `angular_distance`, `position_angle`, `angular_offsets`, `apply_offsets`, `offset_position`; T1, T2, T8, T9, T13–T15). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P2 scritta** (`read_pixel`/`PixelReading`, `profile_along_line`/`Profile`, `distance_with_profile`/`DistanceWithProfile` con `to_table()`; T3–T6); estremi del profilo entrambi celesti o entrambi in pixel (scelta minore, §3). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P4 scritta — modulo 17 completo tranne P3** (`auto_distance`, `CatalogSource`, `AutoDistance`; T10–T12): epoca comune con `propagate` del 13 (e `propagate_position` del 10), `EPOCH_REQUIRED` senza dati, `BODY_MISMATCH`/`BODY_UNKNOWN`. Ferma P3 (forme e tag) su D17-7. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1, P2, P4 confermate con due correzioni — `read_pixel` senza `BUNIT` → unità "non dichiarata" (`UNDECLARED_UNIT`), `auto_distance` dichiara nel report l'uso dell'epoca della prima sorgente (`epoch_from_first_source`). **D17-7 decisa:** `spherical-geometry` per poligoni e tracciati chiusi (licenza verificata, §8; avviso QD/LBNL da verificare con A11), ellisse sferica (somma delle distanze dai fuochi ≤ 2a), cerchio con Astropy, freccia/testo/tracciato aperto `OPERATION_UNSUPPORTED`. Scelte minori di P3 in §3; nuovi casi in §10 (`AREA_PRECISION_NOT_REACHED`); test T16–T19. Nuova **D17-8** (significato di `distance_to`, Gruppo 3), che ferma solo quel metodo. Stato `approvato` invariato. |

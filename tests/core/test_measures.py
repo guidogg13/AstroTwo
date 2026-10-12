@@ -10,19 +10,29 @@ import warnings
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import Distance, SkyCoord, angular_separation
+from astropy.coordinates import Distance, SkyCoord, angular_separation, offset_by
 from astropy.io import fits
 from astropy.table import Table
 from astropy.time import Time
+from astropy.wcs import WCS
 from scipy.ndimage import map_coordinates
+from scipy.optimize import brentq
+from spherical_geometry.polygon import SphericalPolygon
 
 from astrotwo.core.catalogs import confirm_position_columns, read_table
 from astrotwo.core.coordinates_wcs import PixelPosition, SkyFrame, pixel_to_sky
 from astrotwo.core.images_fits import load_image
 from astrotwo.core.measures import (
+    ELLIPSE_DEFINITION,
+    Arrow,
     CatalogSource,
+    Circle,
+    Ellipse,
+    Freehand,
     MeasuresError,
+    Polygon,
     Segment,
+    Text,
     angular_distance,
     angular_offsets,
     apply_offsets,
@@ -32,6 +42,7 @@ from astrotwo.core.measures import (
     position_angle,
     profile_along_line,
     read_pixel,
+    tag,
 )
 
 
@@ -227,12 +238,12 @@ def test_t3_read_pixel(tmp_path):
         read_pixel(image, (5, 4))
 
 
-def test_t3_unitless_and_nonfinite(tmp_path):
+def test_t3_undeclared_unit_and_nonfinite(tmp_path):
     data = np.ones((5, 5))
     data[2, 2] = np.nan
     image = write_image(tmp_path, data, bunit=None)
     reading = read_pixel(image, numpy_px(2, 2))
-    assert np.isnan(reading.value) and reading.unit_label == "unitless"
+    assert np.isnan(reading.value) and reading.unit_label == "non dichiarata" and reading.unit is None
     assert "NONFINITE_PIXELS" in dict(reading.report.warnings)
 
 
@@ -301,6 +312,186 @@ def test_t6_image_without_wcs(tmp_path):
 
 
 # =============================================================================
+# P3 — forme e tag (T7, T16–T19)
+
+
+def test_t7_circle_contains():
+    center = icrs(83.6, 22.0)
+    circle = Circle(center, 30 * u.arcmin)
+    rng = np.random.default_rng(7)
+    for _ in range(40):
+        lon, lat = 83.6 + rng.uniform(-1, 1), 22.0 + rng.uniform(-1, 1)
+        expected = SkyCoord(83.6 * u.deg, 22.0 * u.deg).separation(SkyCoord(lon * u.deg, lat * u.deg)) <= 30 * u.arcmin
+        assert circle.contains(icrs(lon, lat)).value == bool(expected)
+    # Punti a 29,9' e 30,1' dal centro (calcolo inverso di Astropy).
+    for distance, expected in ((29.9, True), (30.1, False)):
+        lon, lat = offset_by(83.6 * u.deg, 22.0 * u.deg, 40 * u.deg, distance * u.arcmin)
+        assert circle.contains(icrs(lon.deg, lat.deg)).value is expected
+    area = circle.area()
+    assert area.value.unit == u.sr
+    assert abs(area.value.value / (2 * np.pi * (1 - np.cos(np.radians(0.5)))) - 1) < 1e-12
+    # Punto in un altro frame: convertito con il modulo 10, nota nel report.
+    galactic = SkyFrame(coord=SkyCoord(83.6 * u.deg, 22.0 * u.deg).galactic)
+    result = circle.contains(galactic)
+    assert result.value and any("modulo 10" in n for n in result.report.notes)
+    for radius in (0 * u.deg, 180 * u.deg, 1.0, np.nan * u.deg, 1 * u.m):
+        with pytest.raises(MeasuresError) as exc:
+            Circle(center, radius)
+        assert exc.value.code == "SHAPE_INVALID"
+
+
+def test_t16_spherical_polygon():
+    octant = Polygon([icrs(0, 0), icrs(90, 0), icrs(0, 90)])
+    assert abs(octant.area().value.to_value(u.sr) - 4 * np.pi / 8) < 1e-12
+    assert octant.contains(icrs(30, 30)).value and not octant.contains(icrs(120, 30)).value
+    assert not octant.contains(icrs(30, -10)).value
+    assert "spherical-geometry" in octant.area().report.provenance
+    # Interno di default: la regione più piccola; con inside, la regione che lo contiene.
+    ring = [icrs(lon, -30) for lon in range(0, 360, 45)]
+    small = Polygon(ring)
+    assert small.contains(icrs(0, -90)).value and not small.contains(icrs(0, 90)).value
+    large = Polygon(ring, inside=icrs(0, 90))
+    assert large.contains(icrs(0, 90)).value
+    assert abs(small.area().value.value + large.area().value.value - 4 * np.pi) < 1e-9
+    # Vertici ripetuti tolti e dichiarati; stesso risultato.
+    repeated = Polygon([icrs(0, 0), icrs(10, 0), icrs(10, 0), icrs(10, 10), icrs(0, 10), icrs(0, 0)])
+    plain = Polygon([icrs(0, 0), icrs(10, 0), icrs(10, 10), icrs(0, 10)])
+    assert repeated.area().value == plain.area().value
+    assert any("ripetuti" in n for n in repeated.area().report.notes)
+    # Ricalcolo indipendente con la libreria.
+    expected = SphericalPolygon.from_lonlat([0, 10, 10, 0], [0, 0, 10, 10]).area()
+    assert abs(plain.area().value.value - expected) < 1e-15
+    for vertices in ([icrs(0, 0), icrs(10, 10), icrs(0, 10), icrs(10, 0)],  # si interseca
+                     [icrs(0, 0), icrs(10, 0)],  # meno di 3 vertici
+                     [icrs(0, 0), icrs(1, 0), icrs(2, 0)]):  # su un cerchio massimo
+        with pytest.raises(MeasuresError) as exc:
+            Polygon(vertices)
+        assert exc.value.code == "SHAPE_INVALID"
+    with pytest.raises(MeasuresError) as exc:
+        Polygon([(0.0, 0.0), icrs(1, 0), icrs(1, 1)])
+    assert exc.value.code == "FRAME_UNKNOWN"
+
+
+def test_t16_freehand():
+    points = [icrs(0, 0), icrs(5, 0), icrs(6, 4), icrs(1, 6)]
+    closed = Freehand(points, closed=True)
+    assert closed.area().value == Polygon(points).area().value and closed.area().shape == "freehand"
+    assert closed.contains(icrs(3, 2)).value
+    opened = Freehand(points)
+    for call in (opened.area, lambda: opened.contains(icrs(3, 2))):
+        with pytest.raises(MeasuresError) as exc:
+            call()
+        assert exc.value.code == "OPERATION_UNSUPPORTED"
+
+
+def tangent_plane_contains(center, a_deg, b_deg, pa_deg, lon, lat):
+    """Ellisse nel piano tangente (proiezione gnomonica TAN di astropy.wcs), solo per il confronto di T17."""
+    wcs = WCS(naxis=2)
+    wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    wcs.wcs.crval = center
+    wcs.wcs.crpix = [0, 0]
+    wcs.wcs.cdelt = [1, 1]  # coordinate intermedie in gradi sul piano tangente
+    x, y = wcs.wcs_world2pix([[lon, lat]], 0)[0]
+    east, north = -x, y  # asse x di RA---TAN crescente verso ovest con CDELT1 > 0
+    pa = np.radians(pa_deg)
+    major = north * np.cos(pa) + east * np.sin(pa)
+    minor = -north * np.sin(pa) + east * np.cos(pa)
+    return (major / a_deg) ** 2 + (minor / b_deg) ** 2 <= 1
+
+
+def test_t17_spherical_versus_tangent_plane_ellipse():
+    center = (40.0, 10.0)
+    ellipse = Ellipse(icrs(*center), 30 * u.deg, 10 * u.deg, 25 * u.deg)
+    lon, lat = offset_by(40 * u.deg, 10 * u.deg, 25 * u.deg, 0.99 * 30 * u.deg)
+    point = icrs(lon.wrap_at(360 * u.deg).deg, lat.deg)
+    result = ellipse.contains(point)
+    assert result.value is True
+    assert not tangent_plane_contains(center, 30.0, 10.0, 25.0, lon.deg, lat.deg)
+    assert ELLIPSE_DEFINITION in result.report.notes
+    area = ellipse.area()
+    assert ELLIPSE_DEFINITION in area.report.notes
+    planar = np.pi * np.radians(30) * np.radians(10)
+    assert abs(area.value.value - planar) / planar > 0.01
+    # Ellisse piccola: le definizioni coincidono quasi (differenza relativa dell'ordine di a², qui ~1e-9).
+    small = Ellipse(icrs(*center), 10 * u.arcsec, 5 * u.arcsec, 25 * u.deg).area()
+    planar_small = np.pi * np.radians(10 / 3600) * np.radians(5 / 3600)
+    assert abs(small.value.value - planar_small) / planar_small < 1e-8
+
+
+def test_t17_ellipse_vertices_and_foci():
+    ellipse = Ellipse(icrs(200, -35), 2 * u.deg, 1 * u.deg, 70 * u.deg)
+    for pa, distance in ((70, 2.0), (250, 2.0), (160, 1.0), (340, 1.0)):
+        for factor, expected in ((1 - 1e-9, True), (1 + 1e-9, False)):
+            lon, lat = offset_by(200 * u.deg, -35 * u.deg, pa * u.deg, factor * distance * u.deg)
+            assert ellipse.contains(icrs(lon.deg, lat.deg)).value is expected
+    f1, f2 = ellipse.foci
+    c = np.degrees(np.arccos(np.cos(np.radians(2)) / np.cos(np.radians(1))))  # cos c = cos a / cos b
+    assert abs(SkyCoord(200 * u.deg, -35 * u.deg).separation(f1.coord).deg - c) < 1e-9
+    assert abs(position_angle(icrs(200, -35), f1).value.deg - 70) < 1e-9
+    for a, b in ((1 * u.deg, 2 * u.deg), (90 * u.deg, 1 * u.deg), (1 * u.deg, 0 * u.deg), (1.0, 0.5 * u.deg)):
+        with pytest.raises(MeasuresError) as exc:
+            Ellipse(icrs(0, 0), a, b, 0 * u.deg)
+        assert exc.value.code == "SHAPE_INVALID"
+
+
+def test_t18_ellipse_area():
+    # a = b: calotta 2π(1 − cos a), entro la precisione dichiarata.
+    for radius in (0.01, 5.0, 60.0):
+        circle_like = Ellipse(icrs(10, 20), radius * u.deg, radius * u.deg, 0 * u.deg).area()
+        cap = 4 * np.pi * np.sin(np.radians(radius) / 2) ** 2  # 2π(1 − cos a) senza cancellazione
+        assert abs(circle_like.value.value - cap) <= circle_like.error.value + 1e-13 * cap
+    # Ellisse generica: poligono di molti punti del bordo trovati qui con brentq (ricalcolo indipendente).
+    a, b, pa = 20.0, 8.0, 30.0
+    ellipse = Ellipse(icrs(150, 40), a * u.deg, b * u.deg, pa * u.deg)
+    result = ellipse.area()
+    assert result.error.value <= 1e-10 * result.value.value and result.samples >= 64
+    c = np.arccos(np.cos(np.radians(a)) / np.cos(np.radians(b)))
+    foci = [offset_by(150 * u.deg, 40 * u.deg, (pa + turn) * u.deg, c * u.rad) for turn in (0, 180)]
+
+    def excess(theta, rho):
+        lon, lat = offset_by(150 * u.deg, 40 * u.deg, theta * u.rad, rho * u.rad)
+        return sum(angular_separation(lon, lat, *f).to_value(u.rad) for f in foci) - 2 * np.radians(a)
+
+    def polygon_area(n):
+        thetas = np.linspace(0, 2 * np.pi, n, endpoint=False)
+        rhos = np.array([brentq(lambda r, t=t: excess(t, r), 0, 2 * np.radians(a), xtol=1e-15) for t in thetas])
+        lon, lat = offset_by(150 * u.deg, 40 * u.deg, thetas * u.rad, rhos * u.rad)
+        return SphericalPolygon.from_lonlat(lon.deg, lat.deg, center=(150, 40)).area()
+
+    # Lati di cerchio massimo: errore in 1/n² e 1/n⁴, tolti con due passi di estrapolazione di Richardson.
+    areas = [polygon_area(n) for n in (150, 300, 600)]
+    assert abs(areas[2] - result.value.value) / result.value.value < 1e-4
+    first = [(4 * areas[i + 1] - areas[i]) / 3 for i in range(2)]
+    extrapolated = (16 * first[1] - first[0]) / 15
+    assert abs(extrapolated - result.value.value) / result.value.value < 1e-9
+    assert any("trapezi" in n and "stima dell'errore" in n for n in result.report.notes)
+    # Ellisse molto allungata: precisione non raggiunta → errore, nessun numero.
+    with pytest.raises(MeasuresError) as exc:
+        Ellipse(icrs(0, 0), 89 * u.deg, 0.01 * u.deg, 0 * u.deg).area()
+    assert exc.value.code == "AREA_PRECISION_NOT_REACHED" and "error" in exc.value.details
+
+
+def test_t19_arrow_text_tag():
+    arrow = Arrow(icrs(1, 1), icrs(2, 2))
+    text = Text(icrs(1, 1), "M1")
+    for shape in (arrow, text):
+        for call in (shape.area, lambda s=shape: s.contains(icrs(1, 1))):
+            with pytest.raises(MeasuresError) as exc:
+                call()
+            assert exc.value.code == "OPERATION_UNSUPPORTED"
+        assert shape.describe()["shape"] in ("arrow", "text")
+    with pytest.raises(ValueError):
+        Text(icrs(1, 1), " ")
+    marker = tag(icrs(83.6, 22.0), "Crab")
+    assert marker.label == "Crab" and marker.point.frame_name == "icrs" and marker.created_at.tzinfo is not None
+    with pytest.raises(ValueError):
+        tag(icrs(1, 1), "")
+    with pytest.raises(MeasuresError) as exc:
+        tag((1.0, 1.0), "x")
+    assert exc.value.code == "FRAME_UNKNOWN"
+
+
+# =============================================================================
 # P4 — distanza automatica tra due sorgenti di catalogo (T10–T12)
 
 
@@ -330,6 +521,11 @@ def test_t10_auto_distance(tmp_path):
     assert abs((result.distance - expected).to_value(u.arcsec)) < 1e-9
     assert result.segment.start.lon.to_value(u.deg) == 10.0 and result.segment.end.lat.to_value(u.deg) == -5.5
     assert result.epoch.jyear == 2016.0 and "J2016.000" in result.report.description
+    # Nessuna epoca richiesta: il report dice che è quella della prima sorgente.
+    assert result.epoch_from_first_source
+    assert "nessuna epoca richiesta" in result.report.description and "prima sorgente" in result.report.description
+    requested = auto_distance([CatalogSource(cat, 0), CatalogSource(cat, 2)], "arcsec", epoch=2016.0)
+    assert not requested.epoch_from_first_source and "epoca richiesta" in requested.report.description
 
 
 def test_t11_selection_not_two(tmp_path):

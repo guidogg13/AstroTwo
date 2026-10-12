@@ -4,8 +4,9 @@ Specifica: ``mdfiles/17-core-misure.md`` (stato ``approvato``).
 
 Il modulo si scrive in 4 parti (decisione del proprietario del 2026-10-12):
 P1 misure angolari (distanza, angolo di posizione, offset e calcolo inverso),
-P2 lettura dei pixel e profili, P3 forme e tag (ferma su D17-7), P4 distanza
-automatica tra due sorgenti di catalogo.
+P2 lettura dei pixel e profili, P3 forme e tag (D17-7: poligoni con
+``spherical-geometry``, ellisse sferica, cerchio con Astropy; ``distance_to``
+ferma su D17-8), P4 distanza automatica tra due sorgenti di catalogo.
 
 Regole applicate in tutto il modulo:
 
@@ -21,17 +22,21 @@ Regole applicate in tutto il modulo:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import importlib.metadata
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 import astropy
 import astropy.units as u
 import numpy as np
 import scipy
-from astropy.coordinates import Angle, SkyCoord
+from astropy.coordinates import Angle, SkyCoord, offset_by
 from astropy.table import Table
 from astropy.time import Time
 from scipy.ndimage import map_coordinates
+from spherical_geometry import vector as sg_vector
+from spherical_geometry.polygon import SphericalPolygon
 
 from astrotwo.core import catalogs
 from astrotwo.core.catalogs import CatalogsError, CatalogTable, skydist
@@ -49,6 +54,7 @@ from astrotwo.core.images_fits import ImagesFitsError, LargeImageLimits
 
 __all__ = [
     "DISTANCE_UNITS",
+    "UNDECLARED_UNIT",
     "MeasuresError",
     "MeasureReport",
     "Segment",
@@ -67,6 +73,17 @@ __all__ = [
     "read_pixel",
     "profile_along_line",
     "distance_with_profile",
+    "ELLIPSE_DEFINITION",
+    "ShapeMeasure",
+    "Shape",
+    "Circle",
+    "Ellipse",
+    "Polygon",
+    "Freehand",
+    "Arrow",
+    "Text",
+    "Tag",
+    "tag",
     "CatalogSource",
     "AutoDistance",
     "auto_distance",
@@ -359,8 +376,12 @@ def _image_name(image) -> str:
     return f"{image.source} (HDU {image.hdu_index})"
 
 
+#: Etichetta dell'unità di un'immagine senza ``BUNIT``: l'unità non è nota, non "adimensionale".
+UNDECLARED_UNIT = "non dichiarata"
+
+
 def _unit_label(image) -> str:
-    return image.bunit if image.bunit else "unitless"
+    return image.bunit if image.bunit else UNDECLARED_UNIT
 
 
 def _pixel_xy(image, position, what: str) -> tuple[float, float, SkyFrame | None, tuple[str, ...]]:
@@ -415,7 +436,7 @@ class PixelReading:
     sky: SkyFrame | None  # punto celeste richiesto (None: richiesta in pixel, "pixel space")
     bunit: str | None
     unit: u.UnitBase | None
-    unit_label: str  # BUNIT come scritta, o "unitless"
+    unit_label: str  # BUNIT come scritta, o "non dichiarata" (UNDECLARED_UNIT)
     report: MeasureReport
 
 
@@ -592,6 +613,371 @@ def distance_with_profile(image, p1, p2, step) -> DistanceWithProfile:
 
 
 # --------------------------------------------------------------------------
+# P3 — forme e tag (D17-7)
+# --------------------------------------------------------------------------
+
+_SG_PROVENANCE = f"spherical-geometry {importlib.metadata.version('spherical-geometry')}, {_PROVENANCE}"
+
+#: Definizione dell'ellisse usata da AstroTwo, scritta in ogni risultato (D17-7).
+ELLIPSE_DEFINITION = ("ellisse sferica: punti la cui somma delle distanze angolari dai due fuochi è ≤ 2a "
+                      "(definizione intrinseca sulla sfera; per ellissi grandi differisce dall'ellisse nel piano "
+                      "tangente al centro)")
+#: Campioni massimi della regola dei trapezi per l'area dell'ellisse (scelta minore 3 di P3).
+ELLIPSE_MAX_SAMPLES = 2**16
+_FULL_SKY_SR = 4.0 * np.pi
+
+
+@dataclass(frozen=True)
+class ShapeMeasure:
+    """Risultato di ``contains`` (``bool``) o ``area`` (``Quantity`` in sr) di una forma, con il report."""
+
+    value: object
+    shape: str
+    report: MeasureReport
+    error: u.Quantity | None = None  # stima dell'errore dell'area (solo ellisse)
+    samples: int | None = None  # campioni della regola dei trapezi (solo ellisse)
+
+
+def _unsupported(kind: str, what: str) -> MeasuresError:
+    return MeasuresError("OPERATION_UNSUPPORTED", f"{what} non definito per {kind} (D17-7)")
+
+
+def _shape_angle(value: object, what: str) -> u.Quantity:
+    if not isinstance(value, u.Quantity) or not value.unit.is_equivalent(u.deg):
+        raise MeasuresError("SHAPE_INVALID", f"{what}: serve un angolo con unità, non {value!r}", field=what)
+    if value.size != 1 or not np.isfinite(value.value):
+        raise MeasuresError("SHAPE_INVALID", f"{what}: un solo valore finito, non {value!r}", field=what)
+    return value.to(u.deg).astype(np.float64).reshape(())
+
+
+def _shape_points(points: object, what: str) -> tuple[tuple[SkyFrame, ...], tuple[str, ...]]:
+    """Punti di una forma nel frame del primo (modulo 10), con le note delle conversioni."""
+    if isinstance(points, SkyCoord) and not points.isscalar:
+        points = list(points.ravel())
+    if isinstance(points, (SkyFrame, SkyCoord)) or not isinstance(points, Sequence):
+        raise TypeError(f"{what}: serve una sequenza di punti (SkyFrame/SkyCoord)")
+    if not points:
+        raise MeasuresError("SHAPE_INVALID", f"{what}: nessun punto", field=what)
+    first = _as_point(points[0], f"{what}[0]")
+    result, notes = [first], []
+    for i, point in enumerate(points[1:], start=1):
+        converted, note = _in_frame_of(first, _as_point(point, f"{what}[{i}]"), f"{what}[{i}]")
+        result.append(converted)
+        notes.extend(note)
+    return tuple(result), tuple(notes)
+
+
+def _lonlat_deg(point: SkyFrame) -> tuple[float, float]:
+    return float(point.lon.to_value(u.deg)), float(point.lat.to_value(u.deg))
+
+
+class Shape:
+    """Forma H11 con coordinate celesti (D17-2: solo geometria, il disegno è del 41)."""
+
+    kind = "shape"
+    frame: str
+
+    def contains(self, point) -> ShapeMeasure:
+        raise _unsupported(self.kind, "contains")
+
+    def area(self) -> ShapeMeasure:
+        raise _unsupported(self.kind, "area")
+
+    def describe(self) -> dict:
+        raise NotImplementedError
+
+    def _point(self, reference: SkyFrame, point) -> tuple[SkyFrame, tuple[str, ...]]:
+        converted, notes = _in_frame_of(reference, _as_point(point, "point"), "point")
+        return converted, notes + _epoch_notes((reference, converted))
+
+    def _report(self, operation: str, points: tuple[str, ...], unit: str, notes: tuple[str, ...],
+                provenance: str = _PROVENANCE) -> MeasureReport:
+        return MeasureReport(operation=f"{self.kind}.{operation}", points=points, frame=self.frame, unit=unit,
+                             notes=notes, provenance=provenance)
+
+
+class Circle(Shape):
+    """Cerchio sulla sfera (calotta): centro e raggio angolare 0 < r < 180°; calcolo esatto con Astropy."""
+
+    kind = "circle"
+
+    def __init__(self, center, radius) -> None:
+        self.center = _as_point(center, "center")
+        self.radius = _shape_angle(radius, "radius")
+        if not 0.0 < self.radius.value < 180.0:
+            raise MeasuresError("SHAPE_INVALID", f"radius {self.radius!r}: serve 0° < r < 180°", field="radius")
+        self.frame = self.center.frame_name
+
+    def contains(self, point) -> ShapeMeasure:
+        p, notes = self._point(self.center, point)
+        separation = float(skydist(self.center.lon, self.center.lat, p.lon, p.lat))
+        inside = bool(separation <= self.radius.value)
+        return ShapeMeasure(value=inside, shape=self.kind, report=self._report(
+            "contains", (_describe(self.center), _describe(p)), "bool", notes + (
+                f"separazione dal centro {separation!r}° (skydist del 13) ≤ raggio {self.radius.value!r}°: "
+                f"{inside}",)))
+
+    def area(self) -> ShapeMeasure:
+        # Calotta sferica: 2π(1 − cos r) = 4π sin²(r/2), forma senza cancellazione per raggi piccoli.
+        value = np.float64(_FULL_SKY_SR * np.sin(self.radius.to_value(u.rad) / 2.0) ** 2) * u.sr
+        return ShapeMeasure(value=value, shape=self.kind, report=self._report(
+            "area", (_describe(self.center),), "sr", (f"raggio {self.radius.value!r}°; area della calotta "
+                                                      "2π(1 − cos r), esatta",)))
+
+    def describe(self) -> dict:
+        return {"shape": self.kind, "frame": self.frame, "center": _describe(self.center), "radius": self.radius}
+
+
+class Ellipse(Shape):
+    """Ellisse sferica (D17-7): punti con somma delle distanze angolari dai fuochi ≤ 2a.
+
+    ``a``, ``b``: semiassi (distanze angolari dal centro dei vertici degli assi), 0 < b ≤ a < 90°;
+    ``position_angle``: angolo di posizione dell'asse maggiore, da nord verso est.
+    """
+
+    kind = "ellipse"
+
+    def __init__(self, center, a, b, position_angle) -> None:
+        self.center = _as_point(center, "center")
+        self.a = _shape_angle(a, "a")
+        self.b = _shape_angle(b, "b")
+        self.position_angle = _shape_angle(position_angle, "position_angle")
+        if not 0.0 < self.b.value <= self.a.value < 90.0:
+            raise MeasuresError("SHAPE_INVALID", f"semiassi a = {self.a!r}, b = {self.b!r}: serve 0° < b ≤ a < 90°",
+                                field="a" if self.a.value >= 90.0 else "b")
+        self.frame = self.center.frame_name
+        # Fuochi sull'asse maggiore a distanza c dal centro, cos c = cos a / cos b (Pitagora sferico), scritta
+        # senza cancellazione: sin²(c/2) = (cos b − cos a) / (2 cos b) = sin((a+b)/2)·sin((a−b)/2) / cos b.
+        a_rad, b_rad = self.a.to_value(u.rad), self.b.to_value(u.rad)
+        half = np.sin((a_rad + b_rad) / 2.0) * np.sin((a_rad - b_rad) / 2.0) / np.cos(b_rad)
+        self.focal_distance = (np.float64(2.0 * np.arcsin(np.sqrt(half))) * u.rad).to(u.deg)
+        lon, lat = self.center.lon, self.center.lat
+        self._foci = tuple(offset_by(lon, lat, self.position_angle + turn, self.focal_distance)
+                           for turn in (0 * u.deg, 180 * u.deg))
+
+    @property
+    def foci(self) -> tuple[SkyFrame, SkyFrame]:
+        """I due fuochi, nel frame e all'epoca del centro."""
+        return tuple(SkyFrame(coord=SkyCoord(lon, lat, frame=self.center.coord.frame), epoch=self.center.epoch,
+                              frame_defaults_note=self.center.frame_defaults_note) for lon, lat in self._foci)
+
+    def _focal_sum(self, lon, lat):
+        (l1, b1), (l2, b2) = self._foci
+        return skydist(lon, lat, l1, b1) + skydist(lon, lat, l2, b2)
+
+    def contains(self, point) -> ShapeMeasure:
+        p, notes = self._point(self.center, point)
+        total = float(self._focal_sum(p.lon, p.lat))
+        limit = 2.0 * float(self.a.value)
+        inside = bool(total <= limit)
+        return ShapeMeasure(value=inside, shape=self.kind, report=self._report(
+            "contains", (_describe(self.center), _describe(p)), "bool", notes + (
+                ELLIPSE_DEFINITION, f"somma delle distanze dai fuochi {total!r}° (skydist del 13) ≤ 2a = {limit!r}°: "
+                f"{inside}")))
+
+    def _boundary_radius(self, theta_deg: np.ndarray) -> np.ndarray:
+        """Distanza (gradi) del bordo dal centro nelle direzioni ``theta`` (bisezione fino a ``float64``)."""
+        limit = 2.0 * float(self.a.value)
+        lo, hi = np.zeros_like(theta_deg), np.full_like(theta_deg, limit)  # a 2a la somma è già > 2a
+        theta = theta_deg * u.deg
+        for _ in range(200):
+            mid = 0.5 * (lo + hi)
+            lon, lat = offset_by(self.center.lon, self.center.lat, theta, mid * u.deg)
+            inside = self._focal_sum(lon, lat) <= limit
+            lo, hi = np.where(inside, mid, lo), np.where(inside, hi, mid)
+            if np.all(hi - lo <= 2.0 * np.finfo(np.float64).eps * hi):
+                break
+        return 0.5 * (lo + hi)
+
+    def _trapezoid(self, n: int) -> float:
+        theta = np.arange(n, dtype=np.float64) * (360.0 / n)
+        rho = np.deg2rad(self._boundary_radius(theta))
+        return float(2.0 * np.pi / n * np.sum(2.0 * np.sin(rho / 2.0) ** 2))  # ∫ (1 − cos ρ) dθ
+
+    def area(self, *, rtol: float = 1e-10) -> ShapeMeasure:
+        """Area in sr per integrazione numerica (trapezi in θ), con la stima dell'errore dichiarata."""
+        if isinstance(rtol, bool) or not isinstance(rtol, (int, float)) or not 0.0 < rtol < 1.0:
+            raise ValueError(f"rtol {rtol!r}: serve un numero in (0, 1)")
+        n, previous = 32, self._trapezoid(32)
+        while True:
+            n *= 2
+            current = self._trapezoid(n)
+            error = abs(current - previous)
+            if error <= rtol * current:
+                break
+            if n >= ELLIPSE_MAX_SAMPLES:
+                raise MeasuresError("AREA_PRECISION_NOT_REACHED", f"area {current!r} sr con stima dell'errore "
+                                    f"{error!r} sr dopo {n} campioni: rtol {rtol!r} non raggiunta",
+                                    value=current, error=error, samples=n)
+            previous = current
+        return ShapeMeasure(value=np.float64(current) * u.sr, shape=self.kind, error=np.float64(error) * u.sr,
+                            samples=n, report=self._report(
+                                "area", (_describe(self.center),), "sr", (
+                                    ELLIPSE_DEFINITION,
+                                    f"a = {self.a.value!r}°, b = {self.b.value!r}°, angolo di posizione "
+                                    f"{self.position_angle.value!r}°, distanza dei fuochi {self.focal_distance.value!r}°",
+                                    "area = ∫ (1 − cos ρ(θ)) dθ, ρ(θ) per bisezione (offset_by, skydist del 13), "
+                                    f"regola dei trapezi con {n} campioni; stima dell'errore {error!r} sr "
+                                    f"(rtol richiesta {rtol!r})")))
+
+    def describe(self) -> dict:
+        return {"shape": self.kind, "frame": self.frame, "center": _describe(self.center), "a": self.a, "b": self.b,
+                "position_angle": self.position_angle, "focal_distance": self.focal_distance,
+                "definition": ELLIPSE_DEFINITION}
+
+
+def _distinct_vertices(points: tuple[SkyFrame, ...]) -> tuple[tuple[SkyFrame, ...], tuple[str, ...]]:
+    kept = [points[0]]
+    for point in points[1:]:
+        if _lonlat_deg(point) != _lonlat_deg(kept[-1]):
+            kept.append(point)
+    if len(kept) > 1 and _lonlat_deg(kept[-1]) == _lonlat_deg(kept[0]):
+        kept.pop()
+    removed = len(points) - len(kept)
+    return tuple(kept), ((f"{removed} vertici ripetuti (consecutivi o di chiusura) tolti",) if removed else ())
+
+
+class Polygon(Shape):
+    """Poligono sferico (D17-7): lati di cerchio massimo, calcolo con ``spherical-geometry``.
+
+    Interno: la regione che contiene ``inside`` se dato, altrimenti la più piccola delle due (area < 2π sr).
+    """
+
+    kind = "polygon"
+
+    def __init__(self, vertices, *, inside=None) -> None:
+        points, notes = _shape_points(vertices, "vertices")
+        points, removed = _distinct_vertices(points)
+        if len(points) < 3:
+            raise MeasuresError("SHAPE_INVALID", f"vertices: {len(points)} vertici distinti, ne servono almeno 3",
+                                field="vertices")
+        self.vertices = points
+        self.frame = points[0].frame_name
+        self._notes = notes + removed
+        lon, lat = np.array([_lonlat_deg(p) for p in points]).T
+        x, y, z = sg_vector.lonlat_to_vector(np.r_[lon, lon[0]], np.r_[lat, lat[0]], degrees=True)
+        if SphericalPolygon.self_intersect(np.dstack((x, y, z))[0]):
+            raise MeasuresError("SHAPE_INVALID", "vertices: il poligono si interseca da solo", field="vertices")
+        self.inside = None
+        if inside is not None:
+            self.inside, inside_notes = _in_frame_of(points[0], _as_point(inside, "inside"), "inside")
+            self._notes += inside_notes
+            polygon = SphericalPolygon.from_lonlat(lon, lat, center=_lonlat_deg(self.inside), degrees=True)
+            rule = "interno: la regione che contiene il punto inside"
+        else:
+            polygon = SphericalPolygon.from_lonlat(lon, lat, degrees=True)
+        area = float(polygon.area())
+        if not np.isfinite(area) or area <= 0.0 or area >= _FULL_SKY_SR:
+            raise MeasuresError("SHAPE_INVALID", f"vertices: poligono degenere (area {area!r} sr; vertici su un "
+                                "cerchio massimo?)", field="vertices")
+        if inside is None:
+            if abs(area - _FULL_SKY_SR / 2.0) <= 1e-12 * _FULL_SKY_SR:
+                raise MeasuresError("SHAPE_INVALID", "le due regioni delimitate dal bordo hanno la stessa area: "
+                                    "serve il punto inside", field="inside")
+            if area > _FULL_SKY_SR / 2.0:
+                polygon = SphericalPolygon([next(iter(polygon.polygons)).invert_polygon()])
+                area = float(polygon.area())
+            rule = "interno: la più piccola delle due regioni delimitate dal bordo (area < 2π sr)"
+        self._polygon = polygon
+        self._area = area
+        self._notes += (rule, "lati: archi di cerchio massimo tra vertici consecutivi (spherical-geometry)")
+
+    def contains(self, point) -> ShapeMeasure:
+        p, notes = self._point(self.vertices[0], point)
+        inside = bool(self._polygon.contains_lonlat(*_lonlat_deg(p), degrees=True))
+        return ShapeMeasure(value=inside, shape=self.kind, report=self._report(
+            "contains", (f"{len(self.vertices)} vertici", _describe(p)), "bool",
+            self._notes + notes + ("calcolo: SphericalPolygon.contains_lonlat; bordo in float64 non garantito",),
+            _SG_PROVENANCE))
+
+    def area(self) -> ShapeMeasure:
+        return ShapeMeasure(value=np.float64(self._area) * u.sr, shape=self.kind, report=self._report(
+            "area", tuple(_describe(v) for v in self.vertices), "sr",
+            self._notes + ("calcolo: SphericalPolygon.area (teorema di Girard generalizzato)",), _SG_PROVENANCE))
+
+    def describe(self) -> dict:
+        return {"shape": self.kind, "frame": self.frame, "vertices": tuple(_describe(v) for v in self.vertices),
+                "inside": None if self.inside is None else _describe(self.inside)}
+
+
+class Freehand(Shape):
+    """Tracciato libero: come poligono solo se ``closed`` (D17-7), altrimenti nessuna area né "contiene"."""
+
+    kind = "freehand"
+
+    def __init__(self, points, *, closed: bool = False, inside=None) -> None:
+        if not isinstance(closed, bool):
+            raise TypeError("closed: serve True o False")
+        self.closed = closed
+        if closed:
+            self._polygon = Polygon(points, inside=inside)
+            self.points, self.frame = self._polygon.vertices, self._polygon.frame
+        else:
+            self._polygon = None
+            self.points, _ = _shape_points(points, "points")
+            self.frame = self.points[0].frame_name
+
+    def contains(self, point) -> ShapeMeasure:
+        if self._polygon is None:
+            raise _unsupported("un tracciato aperto", "contains")
+        result = self._polygon.contains(point)
+        return replace(result, shape=self.kind)
+
+    def area(self) -> ShapeMeasure:
+        if self._polygon is None:
+            raise _unsupported("un tracciato aperto", "area")
+        return replace(self._polygon.area(), shape=self.kind)
+
+    def describe(self) -> dict:
+        return {"shape": self.kind, "frame": self.frame, "closed": self.closed,
+                "points": tuple(_describe(p) for p in self.points)}
+
+
+class Arrow(Shape):
+    """Freccia da ``start`` a ``end``: solo geometria (area e "contiene" non definiti, D17-7)."""
+
+    kind = "arrow"
+
+    def __init__(self, start, end) -> None:
+        (self.start, self.end), self._notes = _shape_points([start, end], "arrow")
+        self.frame = self.start.frame_name
+
+    def describe(self) -> dict:
+        return {"shape": self.kind, "frame": self.frame, "start": _describe(self.start), "end": _describe(self.end)}
+
+
+class Text(Shape):
+    """Testo in una posizione: solo geometria e attributi (area e "contiene" non definiti, D17-7)."""
+
+    kind = "text"
+
+    def __init__(self, position, text: str) -> None:
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("text: serve un testo non vuoto")
+        self.position, self.text = _as_point(position, "position"), text
+        self.frame = self.position.frame_name
+
+    def describe(self) -> dict:
+        return {"shape": self.kind, "frame": self.frame, "position": _describe(self.position), "text": self.text}
+
+
+@dataclass(frozen=True)
+class Tag:
+    """Marcatura (H11): punto celeste ed etichetta; la persiste la sessione del 24 (D17-3)."""
+
+    point: SkyFrame
+    label: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+def tag(point, label: str) -> Tag:
+    """Marcatura di un punto d'interesse con etichetta (nessuna scrittura su disco)."""
+    if not isinstance(label, str) or not label.strip():
+        raise ValueError("label: serve un'etichetta non vuota")
+    return Tag(point=_as_point(point, "point"), label=label)
+
+
+# --------------------------------------------------------------------------
 # P4 — distanza automatica tra due sorgenti di catalogo (F1)
 # --------------------------------------------------------------------------
 
@@ -617,6 +1003,7 @@ class AutoDistance:
     distance: u.Quantity
     segment: Segment  # estremi = posizioni delle due sorgenti all'epoca usata (SkyFrame)
     epoch: Time
+    epoch_from_first_source: bool  # True: nessuna epoca richiesta, usata quella della prima sorgente
     measure: AngularDistance
     report: MeasureReport
 
@@ -717,7 +1104,9 @@ def auto_distance(selection, unit, *, epoch=None) -> AutoDistance:
     names = ("sorgente 1", "sorgente 2")
     rows = [_source_point(s, name) for s, name in zip(sources, names, strict=True)]
     if epoch is None:
-        target, target_note = rows[0][1].epoch, "epoca della prima sorgente selezionata"
+        target = rows[0][1].epoch
+        target_note = ("nessuna epoca richiesta (epoch non dato): usata l'epoca della prima sorgente selezionata; "
+                       "per un'altra epoca comune passare epoch")
     else:
         try:
             target = _to_epoch(epoch, "epoch")
@@ -738,4 +1127,4 @@ def auto_distance(selection, unit, *, epoch=None) -> AutoDistance:
         operation="auto_distance", points=measure.report.points, frame=measure.report.frame,
         unit=measure.report.unit, notes=tuple(notes) + measure.report.notes + (f"corpo {bodies[0]}",))
     return AutoDistance(distance=measure.value, segment=Segment(points[0], points[1]), epoch=target,
-                        measure=measure, report=report)
+                        epoch_from_first_source=epoch is None, measure=measure, report=report)
