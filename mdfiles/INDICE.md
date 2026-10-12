@@ -8,7 +8,13 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-12 — **modulo 12 scritto (P1–P5)** tranne i pezzi fermi H10 SkyView
+**Ultimo aggiornamento:** 2026-10-12 — **modulo 17 scritto in P1, P2, P4** (`measures.py`), **P3 (forme e
+tag) ferma su D17-7** (nuova, Gruppo 3: geometria sferica, proposta `spherical-geometry`); decise D12-6,
+D12-7, D12-8, D17-5; H10 SkyView rinviato con il motivo; codifica del MocServer scritta in 14 e 16; A10
+HiPS nella riga di `01`; scelte minori di 12 e 16 confermate; 01, 12, 14, 16, 17 modificati e restano
+`approvato`. Test 427 di default, 444 con la rete. Aperte 15. Prossimo: modulo 18 (proposta in attesa del
+proprietario). Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-12 — **modulo 12 scritto (P1–P5)** tranne i pezzi fermi H10 SkyView
 (URL SIA non documentato da NASA), D12-6, D12-7, D12-8 (nuove, Gruppo 3); **D16-6, D16-7 decise**,
 corpo misto e MOC planetari in FITS nel 16; A10 decisa per gli HiPS; 14 §12 rimanda a `02` §8; 12, 14,
 16 modificati e restano `approvato`. Test 405 di default, 422 con la rete. Aperte 18. Prossimo: modulo
@@ -268,12 +274,12 @@ Dove si trovano le decisioni:
 |---|---|---|
 | `10-core-coordinate-wcs.md` | Coordinate celesti, WCS, sistemi e epoche di riferimento | approvato |
 | `11-core-immagini-fits.md` | Lettura, gestione e visualizzazione di immagini FITS | approvato |
-| `12-core-hips.md` | Servizio HiPS per immagini all-sky, incluso aggiungere un HiPS da ID/URL (C3) (codice scritto in 5 parti il 2026-10-12, `src/astrotwo/core/hips.py`; fermi H10 SkyView, D12-6, D12-7, D12-8) | approvato |
+| `12-core-hips.md` | Servizio HiPS per immagini all-sky, incluso aggiungere un HiPS da ID/URL (C3) (codice scritto in 5 parti il 2026-10-12, `src/astrotwo/core/hips.py`; D12-6, D12-7, D12-8 decise; fermo H10 SkyView, rinviato) | approvato |
 | `13-core-cataloghi.md` | Cataloghi e tabelle: caricamento, plottaggio, filtri | approvato |
 | `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, elenco dei server e registro VO, DataLink, SIA/SIA2, SAMP (G3), spettri SSA (E4), puntatori Simbad/VizieR | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi (cross-match) | approvato |
 | `16-core-moc.md` | Mappe di copertura MOC (codice scritto in 5 parti il 2026-10-11, `src/astrotwo/core/moc.py`; D16-6 e D16-7 decise e scritte il 2026-10-12) | approvato |
-| `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura | approvato |
+| `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura (codice P1, P2, P4 scritto il 2026-10-12, `src/astrotwo/core/measures.py`; P3 forme e tag ferma su D17-7) | approvato |
 | `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo (livello 1; origine H4 di `03-parita-aladin.md`; dipende da `10`, `11`) | approvato |
 | `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari (livello 1; origine H21 di `03-parita-aladin.md`, AM1 accettata il 2026-10-08) | approvato |
 
