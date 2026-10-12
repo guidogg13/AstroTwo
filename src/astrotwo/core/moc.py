@@ -1406,7 +1406,7 @@ def query_mocserver(region, *, properties: dict | None = None, intersect: str = 
                            f"{exc.message}") from exc
         raise MocError(exc.code, exc.message) from exc
     try:
-        records = json.loads(response.payload.decode("utf-8"))
+        records = json.loads(response.payload.decode(vo.MOCSERVER_CHARSET))
         if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
             raise ValueError("attesa una lista di record")
     except (UnicodeDecodeError, ValueError) as exc:

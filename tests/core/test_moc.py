@@ -752,16 +752,19 @@ def test_probability_map_errors(tmp_path):
 from astrotwo.core.cache import NetworkTimeouts  # noqa: E402
 from astrotwo.core.moc import build_moc, query_mocserver  # noqa: E402
 
-MOCSERVER_ANSWER = '[{"ID": "CDS/II/246/out", "obs_title": "2MASS"}, {"ID": "CDS/I/355/gaiadr3", "obs_title": "Gaia"}]'
+# Come il MocServer reale: JSON in ISO-8859-1 (verificato il 2026-10-12), con un titolo non ASCII.
+MOCSERVER_ANSWER = ('[{"ID": "CDS/II/246/out", "obs_title": "2MASS 2.2 µm"}, '
+                    '{"ID": "CDS/I/355/gaiadr3", "obs_title": "Gaia"}]').encode("latin-1")
 
 
 def test_t8_mocserver_simulated(service, cache, monkeypatch):
     import astrotwo.core.vo_protocols as vo
 
-    service.routes["/ms"] = lambda request: (200, "application/json", MOCSERVER_ANSWER)
+    service.routes["/ms"] = lambda request: (200, "application/json;charset=ISO-8859-1", MOCSERVER_ANSWER)
     monkeypatch.setattr(vo, "MOCSERVER_URL", service.url + "/ms")
     center = SkyCoord(121.17 * u.deg, -21.57 * u.deg, frame=Galactic())  # convertito in ICRS
     result = query_mocserver(CircleRegion(center, 0.1 * u.deg), properties={"ID": "CDS/*"}, cache=cache)
+    assert result.records[0]["obs_title"] == "2MASS 2.2 µm"
     params = service.requests[-1]["params"]
     icrs = center.icrs
     assert float(params["RA"]) == pytest.approx(icrs.ra.deg, abs=1e-12)

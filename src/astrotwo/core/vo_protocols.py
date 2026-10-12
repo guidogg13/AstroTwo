@@ -72,6 +72,7 @@ __all__ = [
     "SIMBAD_FLUX_SYSTEMS",
     "SimbadPointer",
     "VIZIER_PHOTOMETRY_URL",
+    "MOCSERVER_CHARSET",
     "MOCSERVER_URL",
     "XMATCH_URL",
     "cds_xmatch",
@@ -1662,6 +1663,9 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
 
 #: MocServer del CDS (D13-18): elenco delle collezioni VizieR con le loro proprietà (verificato il 2026-10-11).
 MOCSERVER_URL = "https://alasky.cds.unistra.fr/MocServer/query"
+#: Il MocServer dichiara le risposte JSON in ISO-8859-1 (``Content-Type: application/json;charset=ISO-8859-1``,
+#: verificato il 2026-10-12: alcuni titoli contengono ad esempio "µm" in un byte, non UTF-8).
+MOCSERVER_CHARSET = "iso-8859-1"
 _MOCSERVER_FIELDS = "ID,obs_title,vizier_popularity"
 
 
@@ -1681,7 +1685,7 @@ def vizier_collections(*, cache: SharedCache | None = None, refresh: bool = Fals
               "fields": _MOCSERVER_FIELDS}
     response = _http("mocserver", MOCSERVER_URL, params, cache=cache, refresh=refresh, timeouts=timeouts)
     try:
-        records = json.loads(response.payload.decode("utf-8"))
+        records = json.loads(response.payload.decode(MOCSERVER_CHARSET))
         if not isinstance(records, list) or not all(isinstance(r, dict) and isinstance(r.get("ID"), str)
                                                     for r in records):
             raise ValueError("attesa una lista di record con ID")

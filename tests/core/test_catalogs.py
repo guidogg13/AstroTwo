@@ -1012,8 +1012,10 @@ def test_t15_astrores_link_refused(service, cache, tmp_path):
 
 
 def mocserver_route(records):
+    """Come il MocServer reale: JSON in ISO-8859-1 dichiarato nel Content-Type (verificato il 2026-10-12)."""
     import json
-    return lambda request: (200, "application/json", json.dumps(records))
+    payload = json.dumps(records, ensure_ascii=False).encode("latin-1")
+    return lambda request: (200, "application/json;charset=ISO-8859-1", payload)
 
 
 def test_collection_tree_popularity(service, cache, monkeypatch):
@@ -1045,6 +1047,7 @@ def test_collection_tree_popularity(service, cache, monkeypatch):
     assert [c.id for c in tree.find("I/355").children] == ["I/355/gaiadr3", "I/355/paramp"]  # pari: alfabetico
     leaf = tree.find("II/246/out")
     assert leaf.table and leaf.title == "2MASS" and leaf.popularity == 320
+    assert tree.find("I/10/x").title == "pari 50, numero più grande"  # testo ISO-8859-1 letto correttamente
     codes = dict(tree.warnings)
     assert "CDS/Simbad" in codes["COLLECTION_SKIPPED"] and "2 collezioni" in codes["POPULARITY_MISSING"]
     assert tree.request.protocol == "mocserver" and tree.find("Simbad") is None
