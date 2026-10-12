@@ -64,13 +64,163 @@ riquadro mostrato.
   del CDS, si sincronizza all'avvio e se ne conserva una copia locale nella
   cache A7 con origine e data. Il filtro **sulle proprietà** (testo, regole)
   è locale; il filtro **spaziale** per copertura è di `16-core-moc.md`
-  (`query_mocserver`). Client: `astroquery.mocserver` (astroquery, scelta S6
-  di `01-architettura.md`; copertura dell'interfaccia **da verificare prima
-  del codice**). Senza rete si usa la copia locale con la sua data.
+  (`query_mocserver`). Client: **la rete del 14** (`MOCSERVER_URL`, cache e
+  registro comuni), **non `astroquery.mocserver`** (decisione del
+  proprietario del 2026-10-12). Senza rete si usa la copia locale con la sua
+  data.
 - **Immagini di qualsiasi dimensione, parte HiPS (H27, sez. 8.3.1):** si
   scaricano solo i tile del campo visualizzato all'ordine adatto, conservati
   nella cache su disco; il valore del pixel sotto il cursore si legge dal tile
   FITS in cache, mai da una copia ridotta per la visualizzazione.
+
+### Decisioni del proprietario del 2026-10-12 e divisione in parti
+
+1. **MocServer** tramite la rete del 14, non `astroquery.mocserver`.
+2. **`healpy` tolto** (§8, §11) e **`healpix_map`/`healpix_grid` tolte dal
+   §7**: mappe e griglie HEALPix sono solo del 16 (delega, nessuna funzione
+   qui).
+3. **H10 SkyView:** tramite SIA nel 14 se l'URL SIA di SkyView è verificato
+   sul sito ufficiale NASA, altrimenti rinviato con il motivo. **Esito della
+   verifica del 2026-10-12: rinviato.** Le pagine di documentazione di
+   SkyView (`skyview.gsfc.nasa.gov`: pagina principale, `docs/batchpage.html`,
+   `docs/other_interfaces.html`, `docs/otherservices.html`, `help/help.html`)
+   non documentano un URL SIA; un indirizzo `…/current/cgi/vo/sia.pl` risponde
+   con un VOTable SIA, ma non è dichiarato sul sito ufficiale, quindi non si
+   usa (regola: niente URL non verificati). Si riprende quando l'URL è
+   documentato da NASA.
+4. **`tiles_for_fov`:** campo **a cerchio** (centro, raggio) finché non
+   esiste il 41.
+5. **Tile corrotto:** una sola nuova richiesta, poi `HIPS_BAD_TILE`.
+6. **`build_hips`:** ordine massimo **obbligatorio**; larghezza dei tile
+   **512 pixel di default**, dichiarata; tile **FITS sempre**; PNG/JPEG
+   facoltativi, con **parametri di visualizzazione espliciti obbligatori**
+   (come per l'RGB dell'11).
+7. **Memoria (A10 per gli HiPS, decisa):** tile in memoria entro **512 MB,
+   configurabili**; `build_hips` lavora **un tile alla volta** e rispetta il
+   **limite delle operazioni** (4 GB, D11-11); su disco la cache comune
+   (5 GB).
+
+**Divisione in 5 parti (approvata dal proprietario il 2026-10-12):**
+
+| Parte | Contenuto | Test |
+|---|---|---|
+| P1 | metadati e `add_hips` (C3), file `properties` dello standard HiPS 1.0, corpo da `hips_frame`, `HIPS_NOT_A_SERVICE`, `HIPS_METADATA_INVALID` | T7, T8 |
+| P2 | tile: `tiles_for_fov` (`astropy-healpix`), `fetch_tile` con cache comune e provenienza, tile FITS/PNG/JPEG, tile corrotti, fuori copertura con il MOC del servizio (16), valore del pixel dal tile FITS (H27) | T2–T6, T12 |
+| P3 | elenco delle collezioni: `CollectionIndex`, `HiPSList`, `set_survey` con default DSS2 a colori, `survey_coverage` (C4) | T1, T10, T11 |
+| P4 | cubi HiPS (H24) e cataloghi HiPS progressivi (H12) | T9 + test nuovo |
+| P5 | `build_hips` (H9) secondo HiPS 1.0 con `reproject` | test nuovi |
+
+**Verifiche del 2026-10-12 (prima del codice):**
+
+- **Standard HiPS 1.0** (REC 2017-05-19, testo PDF letto il 2026-10-12;
+  è l'ultima raccomandazione: tra i documenti IVOA c'è anche un **Working
+  Draft HiPS 2.0 del 2026-05-01**, non raccomandazione):
+  - **file `properties`** (§4.4.1): UTF-8, una proprietà per riga `chiave =
+    valore`, spazi attorno a `=` ignorati, righe che iniziano con `#` e righe
+    vuote ignorate, la chiave non contiene `=` né spazi, ordine libero, alcune
+    chiavi ripetibili. **9 chiavi obbligatorie:** `creator_did`, `obs_title`,
+    `dataproduct_type` (`image`, `catalog`, `cube`), `hips_version` (`1.4`
+    per lo standard 1.0), `hips_release_date` (ISO 8601
+    `YYYY-mm-ddTHH:MMZ`), `hips_status`, `hips_tile_format` (tra `fits`,
+    `jpeg`, `png` per immagini e cubi, `tsv` per i cataloghi; il primo è il
+    formato suggerito), `hips_order` (intero), `hips_frame` (`equatorial` =
+    ICRS, `galactic`, `ecliptic`). Obbligatorie in casi particolari:
+    `dataproduct_subtype` (`color`, `live`) e `hips_cube_depth` (cubi).
+    Facoltative usate qui: `hips_tile_width` (default 512), `obs_regime`,
+    `em_min`/`em_max` (metri), `hips_pixel_scale` (gradi), `obs_description`,
+    `hips_service_url`, `moc_sky_fraction`, `hips_cube_firstframe`,
+    `data_cube_crpix3`/`crval3`/`cdelt3`/`bunit3`.
+  - **URL** (§4.1, §6.2): tile `NorderK/DirD/NpixN.ext` con `D =
+    (N/10000)×10000` (divisione intera), estensioni minuscole `.fits`,
+    `.jpg`, `.png` (e `.tsv` per i cataloghi); `properties`, `Moc.fits`
+    (MOC del servizio, consigliato per i HiPS equatoriali o a cielo intero;
+    il MOC è solo equatoriale), `NorderK/Allsky.ext` (ordini 0–3, facoltativo);
+    numerazione HEALPix **NESTED**; ordini bassi 0–2 omissibili, albero
+    parziale ammesso.
+  - **Cubi** (§4.2.3): tile di ogni piano con il suffisso `_n` (n = indice del
+    piano, il tile senza suffisso è il piano 0), profondità in
+    `hips_cube_depth`.
+  - **Cataloghi** (§4.2.2): tile TSV UTF-8 (prima riga = nomi delle colonne,
+    `#` = commento, campo vuoto = nullo), descrizione delle colonne in
+    `metadata.xml` (VOTable); `Allsky` = concatenazione dei tile.
+- **Corpo dei HiPS planetari:** lo standard 1.0 non lo prevede; il **WD HiPS
+  2.0** (2026-05-01) aggiunge `hips_body` (nome del corpo in minuscolo, es.
+  `mars`, `moon`) e ammette in `hips_frame` il "frame del corpo". Nei HiPS
+  planetari del MocServer (verifica del 2026-10-12, es. `CDS/P/Mars/MGS-MOLA-DEM`)
+  si trovano `hips_frame = mars` e `hips_body = mars`. **Regola (scelta
+  minore, da confermare):** `hips_frame` in `equatorial`, `galactic`,
+  `ecliptic` → `body = "celestial"` (D19-3, ricavato dal sistema); altrimenti
+  `body = hips_body` se presente **e uguale** a `hips_frame`, con l'avviso
+  `HIPS_BODY_DRAFT` ("`hips_body` è del Working Draft HiPS 2.0, non ancora
+  raccomandazione IVOA"); senza `hips_body`, o con valori diversi →
+  `body = None` e `BODY_UNKNOWN` (il dato si apre da solo, mai sovrapposto).
+  Il nome resta come scritto dal servizio (minuscolo): l'eventuale
+  allineamento ai nomi del 19 si fa con il 19 (**D12-6**, da decidere).
+- **DSS2 a colori nel MocServer** (verifica del 2026-10-12): identificativo
+  **`CDS/P/DSS2/color`** (`creator_did = ivo://CDS/P/DSS2/color`), servizio
+  `https://alasky.cds.unistra.fr/DSS/DSSColor`, `hips_tile_format = jpeg`
+  (solo JPEG: il valore del pixel H27 non è disponibile su questo survey),
+  `hips_order = 9`, `hips_frame = equatorial`, `dataproduct_subtype = color`.
+- **`astropy-healpix` 2.0.1, `cone_search_lonlat`:** restituisce **tutte le
+  celle che toccano il cerchio, anche in parte** (documentazione e prova:
+  stesse celle di un conteggio indipendente con i contorni campionati);
+  quindi `tiles_for_fov` dà un insieme per eccesso.
+- **Disposizione dei pixel nel tile** (necessaria per H27, non scritta nel
+  testo dello standard 1.0): verificata il 2026-10-12 in due modi
+  indipendenti. Per un punto, la cella all'ordine K+S (S = log₂ larghezza)
+  è c; tile N = c >> 2S; sotto-indice v = c mod 4^S; a = bit pari di v,
+  b = bit dispari (de-interlacciamento dell'ordine NESTED); nell'array letto
+  con `astropy.io.fits` (indici da 0, riga = y): **colonna x = b, riga
+  y = larghezza − 1 − a**. Prove: (1) quattro stelle brillanti (Betelgeuse,
+  Rigel, Aldebaran, Antares) nei tile FITS dell'ordine 6 di
+  `CDS/P/2MASS/K`: il massimo del tile cade entro 1–4 pixel dalla posizione
+  prevista, e solo per questa delle 8 orientazioni possibili; (2) 400 punti
+  casuali: stessa colonna e riga del WCS HPX per tile calcolato da
+  `reproject` 0.21 (funzione interna, usata solo per la verifica).
+- **`reproject` 0.21.0** (funzioni HiPS pubbliche: `reproject_to_hips`,
+  `coadd_hips`, `hips_as_dask_array`): `reproject_to_hips` ricampiona **una
+  sola immagine** un tile alla volta, scrive i **tile FITS in `float32`**,
+  costruisce gli ordini inferiori con la media dei 4 sotto-tile e il file
+  `properties`, ma **non** scrive `Allsky` né `Moc.fits`; `coadd_hips` non
+  combina tile FITS sovrapposti (`NotImplementedError`). Esito per P5 da
+  fissare prima di P5 (vedi P5).
+
+**P1 — metadati e `add_hips` (scritta il 2026-10-12):**
+
+- **`parse_properties(text)`** → dizionario chiave → tupla dei valori (chiavi
+  ripetibili); una riga non vuota, non commento e non nella forma `chiave =
+  valore` (es. una pagina HTML) → `HIPS_NOT_A_SERVICE`.
+- **`read_service(url, *, cache, refresh, timeouts)`** → **`HiPSService`**:
+  legge `URL/properties` con la rete del 14 (protocollo `hips`, cache e
+  registro comuni; la risposta va in cache **solo se valida**). Risposta
+  HTTP d'errore (es. 404), non UTF-8, non `properties`, o senza nessuna delle
+  9 chiavi obbligatorie → `HIPS_NOT_A_SERVICE`; una chiave obbligatoria
+  mancante o un valore non valido (`dataproduct_type` fuori da `image`,
+  `catalog`, `cube` — i tipi del WD 2.0 non si leggono —, formati non
+  ammessi per il tipo, `hips_order` non intero o fuori da [0, 29],
+  `hips_tile_width` non potenza di 2, cubo senza `hips_cube_depth`, data non
+  ISO 8601, numeri non leggibili) → `HIPS_METADATA_INVALID` con il campo.
+  `HiPSService` porta identificativo (`creator_did` senza `ivo://`), URL di
+  base, titolo, tipo e sottotipo, versione, data di rilascio, stato,
+  formati (il primo è quello suggerito), ordine massimo, frame, larghezza dei
+  tile, corpo, profondità del cubo, banda (`obs_regime`, `em_min`/`em_max`
+  in metri), scala dei pixel, descrizione, tutte le proprietà, origine, data
+  e richiesta registrata. Avvisi: `HIPS_DEFAULT_TILE_WIDTH` (larghezza
+  assente → 512, default dello standard), `HIPS_VERSION_UNKNOWN`
+  (`hips_version` diverso da `1.4`), `HIPS_BODY_DRAFT`, `BODY_UNKNOWN`.
+- **`add_hips(id_o_url)`** (C3): un URL (`http://`, `https://`) si legge
+  direttamente; un identificativo (anche con `ivo://`) si risolve con il
+  MocServer (rete del 14, `ID=…&get=record&fmt=json`) nell'URL del servizio
+  (`hips_service_url`), poi si leggono le proprietà **dal servizio**.
+  Identificativo sconosciuto → `HIPS_UNKNOWN`; collezione senza servizio
+  HiPS → `HIPS_NOT_A_SERVICE`; MocServer non raggiungibile →
+  `MOCSERVER_UNAVAILABLE`; `creator_did` diverso dall'identificativo →
+  avviso `HIPS_ID_MISMATCH` (vale quello del servizio).
+- **`HiPSList`**: elenco dei servizi per identificativo; `add_hips` aggiunge
+  solo un servizio valido (in errore l'elenco non cambia); una voce già
+  presente si rilegge solo con `refresh=True` (altrimenti avviso
+  `HIPS_ALREADY_LISTED`); `get(id)` → `HIPS_UNKNOWN` con gli identificativi
+  noti.
 
 ## 4. Cosa NON fa
 
@@ -127,8 +277,6 @@ riquadro mostrato.
 - **`build_hips(...)`** — generazione HiPS (H9) secondo D12-1 (corretta il
   2026-10-10): standard IVOA HiPS 1.0, `reproject` dove possibile, codice
   nostro per il resto.
-- **`healpix_map(...)`** / **`healpix_grid(...)`** — mappe e griglie HEALPix
-  (H12), delegando i calcoli HEALPix a `16-core-moc.md`.
 - **`cube_planes(survey)`** (H24) — numero e descrizione dei piani di un
   cubo HiPS; `fetch_tile` accetta l'indice del piano per i cubi.
 - **`CollectionIndex`** (classe, H26) — copia locale delle proprietà delle
@@ -142,9 +290,9 @@ riquadro mostrato.
 | Standard IVOA HiPS 1.0 | formato e URL dei riquadri, generazione (H9) | standard pubblico della comunità |
 | `reproject` (D11-2, verificato con l'11) | ricampionamento delle immagini nei tile HEALPix per la generazione (H9) | già scelto dal progetto; copertura della generazione **da verificare prima del codice** |
 | `astroquery.hips2fits` (D12-4) | solo complemento per i ritagli FITS prodotti dal server; i tile si scaricano con il client diretto | vedi §13 |
-| `healpy` / `astropy-healpix` (via modulo 16) | griglie e ordini HEALPix | standard del dominio |
+| `astropy-healpix` (2.0.1, BSD) | indici dei tile (`cone_search_lonlat`, `lonlat_to_healpix`); mappe e griglie HEALPix solo nel 16 | standard del dominio; `healpy` escluso (GPL, decisione del 2026-10-11) |
 | `requests` (o libreria HTTP già usata dal progetto) | richieste HTTP con timeout | pratica consolidata |
-| `astroquery.mocserver` (astroquery, S6) | sincronizzazione delle proprietà delle collezioni (H26) | client del servizio CDS; interfaccia da verificare prima del codice |
+| rete del 14 (`MOCSERVER_URL`) | sincronizzazione delle proprietà delle collezioni (H26), identificativi → URL (C3) | cache e registro comuni; **non `astroquery.mocserver`** (decisione del 2026-10-12) |
 
 ## 9. Regole e vincoli
 
@@ -186,6 +334,10 @@ riquadro mostrato.
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
 | Piano del cubo inesistente | rifiuto con il numero di piani disponibili | `HIPS_CUBE_PLANE_INVALID` |
 | MocServer non raggiungibile | si usa la copia locale con la sua data e un avviso; senza copia locale, errore | `MOCSERVER_UNAVAILABLE` |
+| Identificativo HiPS sconosciuto al MocServer | nessuna voce aggiunta | `HIPS_UNKNOWN` |
+| `hips_tile_width` assente / `hips_version` diverso da `1.4` | 512 (default dello standard) / lettura secondo HiPS 1.0, dichiarati | avvisi `HIPS_DEFAULT_TILE_WIDTH`, `HIPS_VERSION_UNKNOWN` |
+| Corpo da `hips_body` (WD HiPS 2.0) | corpo usato, dichiarato come bozza IVOA | avviso `HIPS_BODY_DRAFT` |
+| `creator_did` diverso dall'identificativo richiesto | vale quello del servizio | avviso `HIPS_ID_MISMATCH` |
 
 ## 11. Esposizione all'IA
 
@@ -194,7 +346,7 @@ riquadro mostrato.
   stato dell'aggiunta. Nessun calcolo numerico: solo lettura/validazione
   metadati.
 - **`get_coverage(survey)`** — output: copertura del survey come MOC;
-  **calcolo: modulo 16** (healpy/astropy-healpix).
+  **calcolo: modulo 16** (`mocpy`).
 - **`get_tile_provenance(survey, order, tile)`** — output: origine e data del
   riquadro; nessun calcolo.
 
@@ -239,6 +391,13 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
   sulla checklist del livello 1).** **client HTTP diretto** secondo lo
   standard IVOA HiPS 1.0 (tile, proprietà, ordini); `astroquery.hips2fits`
   solo come complemento per i ritagli FITS prodotti dal server.
+- **D12-6 — Nomi dei corpi planetari: DA DECIDERE (aperta il 2026-10-12,
+  Gruppo 3).** I HiPS planetari scrivono il corpo in minuscolo (`mars`,
+  WD HiPS 2.0); il 19 userà nomi IAU (es. `Mars`). Opzioni: (a) il 12
+  conserva il nome del servizio e il confronto dei corpi è sensibile alle
+  maiuscole (oggi); (b) il 19 fornisce una tabella di corrispondenza e il 12
+  normalizza. **Raccomandazione:** (b) quando si scrive il 19; fino ad allora
+  (a). Non blocca il codice del 12.
 - **D12-5 — Cataloghi HiPS progressivi (H12): DECISA il 2026-10-04.**
   **Dati e computazioni HEALPix nel `16`, servizio dei tile nel `12`** (stesso
   confine scritto in `16-core-moc.md`, D16-5). **Motivazione:** un solo
@@ -259,3 +418,5 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** (regola del proprietario del 2026-10-09): modulo completato con gli esiti di AP5, nessuna decisione aperta nei Gruppi 1 e 2. |
 | 2026-10-09 | Claude Code | **Collegamento alla cache comune `04-cache.md`** (approvato il 2026-10-09; decisione CA4 del proprietario, autorizzazione esplicita a modificare il file approvato): §3, §5, §7, §9 — tolta `HiPSCache`, riquadri nella cache comune `SharedCache`; tolto da "Usato da" l'`11` per la cache. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D12-1 corretta — generazione HiPS secondo lo standard IVOA HiPS 1.0, `reproject` dove possibile, codice nostro per il resto, Hipsgen tolto (§3, §7, §8, §13); D12-3 — DSS2 a colori resta, con motivazione nostra (cielo intero, dati pubblici); §3 C2 senza elenco preso da Aladin (elenco dinamico dal MocServer); §8 "Specifica HiPS (CDS)" → standard IVOA HiPS 1.0. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti; MocServer con la rete del 14 (non `astroquery.mocserver`, §3, §8); `healpy` tolto e `healpix_map`/`healpix_grid` tolte dal §7 (solo delega al 16, §8, §11); H10 SkyView rinviato (URL SIA non documentato sul sito NASA); `tiles_for_fov` a cerchio; tile corrotto = una nuova richiesta poi `HIPS_BAD_TILE`; `build_hips` con ordine obbligatorio, tile 512 di default, FITS sempre, PNG/JPEG con parametri di visualizzazione espliciti; **A10 per gli HiPS decisa** (512 MB in memoria, un tile alla volta in `build_hips`, limite delle operazioni 4 GB). Verifiche del 2026-10-12: standard HiPS 1.0 (`properties`, URL, cubi, cataloghi), corpo dei HiPS planetari (`hips_body` del WD 2.0, regola da confermare), DSS2 a colori = `CDS/P/DSS2/color`, `cone_search_lonlat`, disposizione dei pixel nel tile (due verifiche indipendenti), funzioni HiPS di `reproject` 0.21. Nuova decisione aperta **D12-6** (nomi dei corpi, Gruppo 3). Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **P1 scritta** (`src/astrotwo/core/hips.py`: `parse_properties`, `read_service`, `HiPSService`, `add_hips`, `HiPSList`, `HiPSError`; T7, T8, chiavi obbligatorie, corpo, risoluzione dell'identificativo con il MocServer, errori di rete): proprietà validate secondo HiPS 1.0, solo le risposte valide in cache; nuovi avvisi in §10. Stato `approvato` invariato. |
