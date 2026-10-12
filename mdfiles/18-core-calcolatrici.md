@@ -99,6 +99,72 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
      scala, eseguito da `astropy.time`.
    - Il risultato riporta la scala in ogni rappresentazione.
 
+### Decisioni del proprietario del 2026-10-12 e divisione in parti
+
+**Divisione in 5 parti (approvata dal proprietario il 2026-10-12):**
+
+| Parte | Contenuto | Test |
+|---|---|---|
+| P1 | `CalculatorResult` ed `evaluate_expression` con `ast` a elenco chiuso; `skydist` chiama `angular_distance` del 17 | T1–T5 |
+| P2 | `convert_time` con scala obbligatoria | T15–T17 |
+| P3 | `convert_units` (FITS/VOUnit, equivalenze solo su richiesta come da D18-3, sessagesimali con il 10, date con P2) | T6–T9 |
+| P4 | `convert_pixel_value` (BZERO/BSCALE/BLANK, indice di colore con `set_display` dell'11, clic tramite `read_pixel` del 17) | T10–T12 |
+| P5 | `calculate_coordinates` con i moduli 10 e 17 | T13, T14, T18 |
+
+- **D18-5 decisa** (§13): espressioni lunghe al massimo **1000 caratteri**
+  e con **profondità di annidamento al massimo 50**, configurabili;
+  superamento → `CALC_TOO_COMPLEX` esplicito, prima della valutazione.
+- **D18-6 decisa** (§13): il valore **grezzo** di un pixel si legge con
+  `astropy.io.fits` e l'opzione **`do_not_scale_image_data=True`** (nessun
+  calcolo inverso dal valore fisico); verifica prima del codice di P4.
+- **T18:** finché il modulo 24 non esiste, il test **riesegue il comando
+  registrato nel `CalculatorResult`** e confronta il risultato.
+
+**Codice: `src/astrotwo/core/calculators.py`**, errori `CalculatorError` con
+gli identificatori di §10 (gli errori dei moduli 10, 13 e 17 passano con lo
+stesso identificatore).
+
+**P1 — calcolatrice algebrica (scritta il 2026-10-12).** Scelte minori:
+
+1. **`CalculatorResult`:** calcolatrice, input interpretato, valore, unità
+   (`astropy.units`, o "non dichiarata" quando la fonte non la dichiara) o
+   scala, libreria e versione, note, istante della richiesta in UTC e
+   **comando registrato** (`CalculatorCommand`: nome della funzione e
+   argomenti come interpretati, con la forma testuale `text`). Senza unità
+   né scala → `TypeError` (errore di programmazione, §9).
+   **`run_command(command)`** riesegue un comando registrato chiamando solo
+   le cinque funzioni delle calcolatrici; il formato del registro resta del
+   24.
+2. **Grammatica:** la stessa tabella `FUNCTIONS`/`CONSTANTS` del 13 (D13-8),
+   numeri solo in notazione decimale o esponenziale (`0x10`, `1_000`, `1j`
+   → `CALC_SYNTAX_ERROR`), `^` potenza (`**` rifiutato), un `=` facoltativo
+   all'inizio o alla fine. Nomi, funzioni, attributi o indici non previsti
+   (es. `__import__(...)`, `open(...)`, `True`) → `CALC_UNKNOWN_FUNCTION`;
+   altri costrutti (stringhe, confronti, `lambda`, liste) →
+   `CALC_SYNTAX_ERROR` con la posizione. L'albero si controlla tutto prima
+   di calcolare.
+3. **Limiti (D18-5):** lunghezza (`max_length`, 1000) controllata sul testo
+   ricevuto; **profondità di annidamento** = massimo numero di parentesi
+   aperte una dentro l'altra, comprese quelle delle funzioni (`max_depth`,
+   50), controllata prima dell'analisi. Una catena lunga ma non annidata
+   (`1+1+…`) è ammessa entro la lunghezza; una catena che supera la
+   ricorsione dell'analizzatore (es. 990 `-` di fila) → `CALC_TOO_COMPLEX`.
+4. **Unità del risultato:** adimensionale, o **gradi se l'espressione è una
+   sola chiamata di `skydist`**; se `skydist` o le funzioni che danno angoli
+   (`asin`, `asind`, `rad2deg`…) stanno dentro un'espressione più grande, i
+   loro valori sono numeri puri e il risultato lo dichiara in una nota.
+5. **Errori numerici** (`float64`, `numpy.errstate`): `/` e `%` per zero e
+   `0^(negativo)` → `CALC_DIVISION_BY_ZERO`; dominio non valido nelle
+   funzioni (anche `ln(0)`) o potenza non reale (`(-8)^(1/3)`) →
+   `CALC_DOMAIN_ERROR`; risultato o numero scritto oltre `float64` →
+   `CALC_OVERFLOW`; l'underflow verso 0 dà 0 (valore finito).
+6. **`skydist`:** chiama `angular_distance` del 17 (che usa `skydist` del 13,
+   D13-10) con le due coppie in gradi decimali; le due coppie si intendono
+   nello stesso sistema (la distanza non dipende da quale: il punto si crea
+   in `icrs` solo come contenitore, scritto nella nota). Coordinate fuori
+   intervallo → `COORD_OUT_OF_RANGE` del 10. **Sessagesimali con `:`:
+   FERMI su D18-7** (§13) → `CALC_SYNTAX_ERROR` che lo dice.
+
 ## 4. Cosa NON fa
 
 - Non disegna finestre né campi di input: l'interfaccia delle calcolatrici è
@@ -307,13 +373,29 @@ elementare.
   sulla checklist del livello 1).** la conversione magnitudine ↔ flusso **sta
   solo nel modulo 20**: il 18 è livello 1 e non può dipendere dal 20; il
   convertitore la rifiuta con `UNIT_ZERO_POINT_REQUIRED`.
-- **D18-5 — Limiti delle espressioni:** lunghezza massima e profondità di
-  annidamento oltre le quali vale `CALC_TOO_COMPLEX`. Valori da fissare al
-  momento del codice.
-- **D18-6 — Lettura del valore grezzo:** come ottenere il valore grezzo di un
-  pixel quando `astropy.io.fits` applica BSCALE/BZERO in lettura (lettura
-  senza scala oppure calcolo inverso con la regola FITS). Da fissare al
-  momento del codice, d'accordo con il modulo 11.
+- **D18-5 — Limiti delle espressioni: DECISA il 2026-10-12 (decisione del
+  proprietario).** Lunghezza massima **1000 caratteri**, profondità di
+  annidamento massima **50**, entrambe configurabili; superamento →
+  `CALC_TOO_COMPLEX` prima della valutazione. **Motivazione:** limiti ampi
+  per ogni uso reale della calcolatrice, che impediscono di bloccare
+  l'analizzatore con un testo patologico.
+- **D18-6 — Lettura del valore grezzo: DECISA il 2026-10-12 (decisione del
+  proprietario).** Il valore grezzo si legge con `astropy.io.fits` e
+  `do_not_scale_image_data=True`; verifica prima del codice di P4.
+  **Motivazione:** il valore grezzo è quello scritto nel file, non una
+  ricostruzione dal valore fisico (che in `float32` può non tornare
+  esatta).
+
+- **D18-7 — Sessagesimali in `skydist`: DA DECIDERE (aperta il 2026-10-12,
+  Gruppo 3).** §3 ammette coordinate "sessagesimali con `:`" in `skydist`
+  senza dire se l'ascensione retta è in ore (`h:m:s`) o in gradi
+  (`d:m:s`); `parse_sexagesimal` del 10 richiede di dichiararlo. Inoltre
+  `10:20:30` non è un'espressione valida per `ast` (va tolta dal testo
+  prima dell'analisi). **Raccomandazione:** in `skydist` il primo e il
+  terzo argomento sessagesimali in **ore** e il secondo e il quarto in
+  **gradi** (uso astronomico per RA/Dec), letti con `parse_sexagesimal` e
+  sostituiti prima dell'analisi; i decimali restano in gradi. Fermi solo i
+  sessagesimali di `skydist`.
 
 ## 14. Registro modifiche
 
@@ -324,3 +406,5 @@ elementare.
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): `coordinate_calculator` tolta dal 10; la calcolatrice delle coordinate usa `convert_coordinates`/`propagate_position` del 10 e `angular_offsets`/`apply_offsets`/`offset_position` del 17 (§3, §4, §5, §7, §11). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D18-2 corretta — niente tabella di alias di Aladin, solo i formati standard FITS e VOUnit di `astropy.units` (§3, §6, §8, §13); T16 con un esempio nostro (`2024-02-29T18:00:00` UTC → MJD 60369.75, ricalcolato con `astropy.time`) al posto di quello del manuale; `=` prima o dopo l'espressione con motivazione nostra. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti (P1 espressioni, P2 tempo, P3 unità, P4 pixel, P5 coordinate) in §3; **D18-5 decisa** (1000 caratteri, annidamento 50, configurabili, `CALC_TOO_COMPLEX`); **D18-6 decisa** (valore grezzo con `do_not_scale_image_data=True`); T18 con la riesecuzione del comando registrato finché il 24 non esiste. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **P1 scritta** (`calculators.py`: `CalculatorError`, `CalculatorCommand`, `CalculatorResult`, `run_command`, `evaluate_expression`; T1–T5 e limiti di D18-5). Scelte minori di P1 in §3. Nuova **D18-7** (sessagesimali in `skydist`, Gruppo 3), che ferma solo quel pezzo. Stato `approvato` invariato. |
