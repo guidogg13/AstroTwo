@@ -68,6 +68,153 @@ disegno — con risultati in unità esplicite e sempre verificabili.
   un'immagine con il centroide (consiglio del manuale) serve la fotometria
   del modulo 20.
 
+### Decisioni del proprietario del 2026-10-12 e divisione in parti
+
+**Divisione in 4 parti (approvata dal proprietario il 2026-10-12):**
+
+| Parte | Contenuto | Test |
+|---|---|---|
+| P1 | `angular_distance` (con `skydist` del 13), `position_angle` con i casi ai poli, `angular_offsets`, `apply_offsets`, `offset_position` | T1, T2, T8, T9, T13–T15 |
+| P2 | `read_pixel`, `profile_along_line`, `distance_with_profile` | T3–T6 |
+| P3 | forme (`Shape`: `Circle`, `Ellipse`, `Arrow`, `Polygon`, `Text`, `Freehand`) e tag | T7 |
+| P4 | `auto_distance` tra due sorgenti di catalogo, con epoca propagata con il 10 e controllo del corpo | T10–T12 |
+
+- **D17-5 decisa** (§13): profili con **interpolazione bilineare** tramite
+  `scipy.ndimage.map_coordinates` (`order=1`); **passo obbligatorio, senza
+  default**.
+- **P3:** prima si verifica come calcolare area e "contiene" per ellissi e
+  poligoni sferici con le librerie già presenti (`astropy`, `mocpy`); se
+  serve una libreria nuova si ferma solo P3, con la proposta (libreria,
+  licenza, motivo), e si continua con P4.
+
+**Codice: `src/astrotwo/core/measures.py`**, errori `MeasuresError` con gli
+identificatori di §10. Ogni risultato porta un **report** (`MeasureReport`:
+operazione, punti come scritti in ingresso, frame, unità, immagine, data
+della misura in UTC, passaggi e avvisi, librerie usate).
+
+**P1 — misure angolari (scritta il 2026-10-12).** Verifiche del 2026-10-12
+con `astropy` 8.0.1: `SkyCoord.position_angle` **restituisce sempre un
+numero**, anche quando la direzione non è definita (0° per due punti
+coincidenti, 90° per due punti antipodali, e dal polo un angolo che dipende
+solo dalla longitudine scritta del polo: (30°, 90°) e (0°, 90°) verso lo
+stesso punto danno 110° e 80°); quindi i casi di `PA_UNDEFINED` si
+controllano **prima** di chiamare Astropy. `spherical_offsets_to` rifiuta due
+frame diversi (`ValueError`): la conversione si fa prima, con il 10.
+Scelte minori:
+
+1. **Punti:** `SkyFrame` del 10 o `SkyCoord` (avvolto in `SkyFrame`, con le
+   regole del 10 sulle epoche); un punto per misura (array → `ValueError`).
+   Numeri senza frame → `FRAME_UNKNOWN` (il frame non si assume).
+2. **Frame:** le misure sono nel **frame del primo punto**; se il secondo è
+   in un altro frame si converte con `convert_coordinates` del 10 (con
+   equinozio e `obstime` del primo punto) e la conversione è scritta nel
+   report; se il 10 non la può fare, il suo errore (`FRAME_UNSUPPORTED`,
+   `EPOCH_REQUIRED`) passa con lo stesso identificatore. Le epoche dei due
+   punti (se note) sono scritte nel report; per le sorgenti di catalogo
+   l'epoca comune è imposta da `auto_distance` (P4).
+3. **Unità di `angular_distance`:** obbligatoria, `arcsec`, `arcmin` o
+   `deg`/`degree` (stringa o unità di `astropy`); altro → `ValueError`.
+   Calcolo: `skydist` del 13 sulle longitudini e latitudini nel frame del
+   primo punto (gradi), poi conversione con `astropy.units`.
+4. **`PA_UNDEFINED`** (controlli esatti, nessuna soglia): punti coincidenti
+   (separazione 0), punti **antipodali** (separazione 180°: tutte le
+   direzioni portano al secondo punto) e **primo punto esattamente al polo**
+   (latitudine ±90°: il nord locale non è definito). Il secondo punto al
+   polo non è un caso indefinito (PA = 0° verso il polo nord, 180° verso il
+   polo sud). PA in gradi in [0°, 360°).
+5. **Linea:** `Segment(start, end)`; `position_angle(segment)` dà lo stesso
+   valore di `position_angle(start, end)` (T9). Il segmento serve anche al
+   profilo (P2) e agli estremi di `auto_distance` (P4).
+6. **Offset:** Δα·cos δ e Δδ in gradi nel frame del primo punto (ruotato sul
+   primo punto, come `spherical_offsets_to`); `apply_offsets` e
+   `offset_position` danno la posizione nel frame del punto di partenza, con
+   la sua epoca. Valori senza unità angolare, non finiti, distanza negativa
+   o oltre 180° → `OFFSET_INVALID`; l'angolo di posizione è un qualsiasi
+   angolo finito (da nord verso est).
+
+**P2 — pixel e profili (scritta il 2026-10-12).** Scelte minori:
+
+1. **Posizione:** `SkyFrame`/`SkyCoord` (serve il WCS dell'immagine,
+   altrimenti `NO_WCS`; conversione con `sky_to_pixel` del 10) oppure
+   `PixelPosition` del 10 con la convenzione dichiarata (`fits` o `numpy`,
+   convertita con `convert_pixel_convention`); una tupla di numeri senza
+   convenzione → `TypeError`. Le posizioni in uscita sono in convenzione
+   numpy, dichiarata.
+2. **`read_pixel`:** il pixel che contiene la posizione (centro del pixel
+   `i` in `i`, bordi a `i ± 0,5`: indice `floor(x + 0,5)`); fuori da
+   [−0,5, n − 0,5) → `POINT_OUT_OF_IMAGE` con il riquadro dell'immagine.
+   Parametro facoltativo `half_size` (default 0) per i "valori nei pressi":
+   la finestra (2·`half_size` + 1)² centrata sul pixel, intera dentro
+   l'immagine. I pixel si leggono con `read_region` dell'11 (pixel originali
+   anche per le immagini a due livelli e in `memmap`); valore in `float64`,
+   mai modificato. Unità: `BUNIT` come scritta nell'intestazione e unità di
+   `astropy` se riconosciuta; senza `BUNIT` → `"unitless"`. Valore non
+   finito → restituito com'è con l'avviso `NONFINITE_PIXELS`.
+3. **`profile_along_line`:** campioni lungo il **segmento rettilineo in
+   pixel** tra i due estremi, a distanza `k · step` dal primo estremo per
+   k = 0 … floor(L / step) (L = lunghezza in pixel; il secondo estremo è un
+   campione solo se L è multiplo del passo); `step` in pixel (numero o
+   `Quantity` in `pix`) obbligatorio, finito e > 0, altrimenti
+   `PROFILE_STEP_INVALID`. Interpolazione bilineare con
+   `scipy.ndimage.map_coordinates(order=1, prefilter=False)` (D17-5) sui
+   pixel originali letti con `read_region`; gli estremi devono stare tra i
+   centri dei pixel del bordo, [0, n − 1] su ogni asse (dove la bilineare
+   non estrapola), altrimenti `POINT_OUT_OF_IMAGE`. Campioni con un vicino
+   non finito → NaN con l'avviso `NONFINITE_PIXELS`. Memoria: campioni e
+   regione letta entro il limite delle operazioni dell'immagine (4 GB, D11-11),
+   altrimenti `MEMORY_LIMIT_EXCEEDED` prima di leggere. Con il WCS, ogni
+   campione ha anche la sua posizione celeste (`pixel_to_sky` del 10).
+4. **`distance_with_profile`:** estremi celesti → distanza angolare con
+   `angular_distance` (in gradi) + profilo; estremi in pixel → distanza in
+   pixel (`u.pix`, dichiarata "pixel space", nessuna conversione implicita)
+   + profilo. Il "grafico esportabile" (D17-6) è dato come tabella
+   (`to_table()`: `astropy.table.Table` con offset lungo il segmento, x, y,
+   valore e, con il WCS, posizione celeste, unità e metadati del report): il
+   grafico è disegnato dal 41 e il file si scrive fuori da questo modulo.
+
+**P3 — forme e tag: FERMA (verifica del 2026-10-12).** Con le librerie già
+presenti non c'è un calcolo **esatto** di area e "contiene" per ellissi e
+poligoni sferici: `astropy` non ha geometria di poligoni sulla sfera; `mocpy`
+(`from_polygon`, `from_elliptical_cone`, `contains_lonlat`, `sky_fraction`)
+lavora per celle HEALPix, quindi dà una regione approssimata per eccesso alla
+risoluzione dell'ordine scelto, e per l'ellisse non dichiara la definizione
+geometrica usata. Il cerchio si calcola esattamente con Astropy (separazione
+≤ raggio; area 2π(1 − cos r)). **Proposta (da decidere, D17-7):** libreria
+**`spherical-geometry`** (Space Telescope Science Institute, licenza
+**BSD-3-Clause**, versione 1.4.0 del 2026-03, ruote per Python 3.12 su macOS
+arm64 e x86_64) per poligoni e tracciati chiusi (`SphericalPolygon`:
+`contains_point`, `area`, lati di cerchio massimo); per l'**ellisse** serve
+anche una **definizione** sulla sfera, che nessuna delle librerie fissa
+(D17-7, punto b). Fermo solo P3; P4 continua.
+
+**P4 — distanza automatica (scritta il 2026-10-12).** Scelte minori:
+
+1. **Ingresso:** `auto_distance(selection, unit, *, epoch=None)` con
+   `selection` = sequenza delle sorgenti selezionate (`CatalogSource(table,
+   row, …)`), così il caso di T11 è controllabile: un numero di sorgenti
+   diverso da 2 → `SELECTION_NOT_TWO_SOURCES` con il numero selezionato.
+2. **Posizioni** dalle colonne di posizione del 13 (`positions`, frame
+   dichiarato; senza colonne → `NO_COORD_COLUMNS`, senza frame →
+   `FRAME_UNKNOWN`); **epoca** di ogni sorgente dai metadati del 13
+   (colonna con UCD `time.epoch`, COOSYS) o, solo se assente, da
+   `source_epoch` della `CatalogSource` (stessa regola del 13); nessuna →
+   `EPOCH_REQUIRED`.
+3. **Epoca comune:** `epoch` se dato, altrimenti l'**epoca della prima
+   sorgente selezionata**; ogni sorgente a un'epoca diversa si propaga con
+   `propagate` del 13 (che usa `propagate_position` del 10) su una tabella
+   di una sola riga, con le colonne del moto proprio indicate nella
+   `CatalogSource` (`pm_ra`, `pm_dec`, `pm_ra_includes_cosdec` obbligatori;
+   `parallax`, `radial_velocity` facoltativi: senza parallasse solo moto
+   proprio, dichiarato). Colonne non indicate o valori mancanti →
+   `EPOCH_REQUIRED`. Epoca usata, modo e note della propagazione nel
+   risultato.
+4. **Corpo:** stesso `body` per le due tabelle, altrimenti `BODY_MISMATCH`;
+   `body` non dichiarato (`None`, es. coordinate planetarie prima del 19) →
+   `BODY_UNKNOWN`.
+5. **Risultato:** distanza (`angular_distance`, nel frame della prima
+   sorgente), estremi del segmento (`Segment` alle posizioni all'epoca
+   usata), epoca usata, report.
+
 ## 4. Cosa NON fa
 
 - Non fa la fotometria (20), né le misure da cubo (23 — spettro/profilo da
@@ -146,9 +293,13 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 - **`offset_position(p, distance, position_angle)`** — calcolo inverso:
   posizione a distanza e angolo di posizione dati da `p`. **Calcolo:
   `SkyCoord.directional_offset_by`.**
-- **`auto_distance(source_a, source_b, unit)`** (F1) — distanza tra due
-  sorgenti di catalogo selezionate; restituisce distanza, estremi del
-  segmento ed epoca usata.
+- **`auto_distance(selection, unit, *, epoch=None)`** (F1) — distanza tra
+  le due sorgenti di catalogo selezionate (`selection` = sequenza di
+  `CatalogSource`; scelta minore di P4 in §3); restituisce distanza, estremi
+  del segmento ed epoca usata.
+- **`Segment(start, end)`** — linea tra due punti (PA lungo una linea,
+  profilo, estremi della distanza automatica); **`MeasureReport`** — report
+  di ogni misura (§9).
 
 ## 8. Librerie e standard di riferimento
 
@@ -157,6 +308,8 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 | `astropy.coordinates` | distanze angolari, position angle, frame | standard del dominio |
 | `astropy.units` | unità di ogni misura | unità esplicite sempre |
 | `numpy` | campionamento dei profili, valori pixel | consolidato |
+| `scipy.ndimage.map_coordinates` | interpolazione bilineare dei profili (D17-5) | consolidato, già nel progetto |
+| `skydist` del 13 (`astropy.coordinates.angular_separation`) | distanza angolare (D13-10) | implementazione unica |
 | Convenzione astronomica del PA | angolo di posizione da nord verso est | convenzione della comunità |
 
 ## 9. Regole e vincoli
@@ -191,7 +344,14 @@ disegno — con risultati in unità esplicite e sempre verificabili.
 | Selezione diversa da due sorgenti di catalogo | nessuna misura, messaggio con il numero selezionato | `SELECTION_NOT_TWO_SOURCES` |
 | Epoche diverse senza dati per propagare | nessuna misura: l'epoca non si assume | `EPOCH_REQUIRED` |
 | Sorgenti di corpi diversi | nessuna misura | `BODY_MISMATCH` |
-| Offset, distanza o angolo senza unità, o distanza negativa | rifiuto dell'input | `OFFSET_INVALID` |
+| Offset, distanza o angolo senza unità, non finiti, distanza negativa o oltre 180° | rifiuto dell'input | `OFFSET_INVALID` |
+| Punti antipodali per la PA | errore esplicito, nessun angolo | `PA_UNDEFINED` |
+| Passo del profilo assente o non finito | rifiuto dell'input | `PROFILE_STEP_INVALID` |
+| Estremo del profilo fuori da [0, n − 1] (bilineare senza estrapolazione) | nessun profilo | `POINT_OUT_OF_IMAGE` |
+| Profilo o regione oltre il limite delle operazioni (D11-11) | nessun profilo, prima di leggere | `MEMORY_LIMIT_EXCEEDED` |
+| Tabella senza colonne di posizione (F1) | nessuna misura | `NO_COORD_COLUMNS` |
+| Corpo non dichiarato in una delle due tabelle (F1) | nessuna misura | `BODY_UNKNOWN` |
+| Immagine a colori per lettura pixel o profilo | nessun valore (solo presentazione, 11) | `OPERATION_UNSUPPORTED` |
 
 ## 11. Esposizione all'IA
 
@@ -258,8 +418,27 @@ arrivano solo da questi strumenti e vengono poi verificati da
   statistiche su cerchio/poligono comprese. **Motivazione:** la fotometria è
   livello 2 per definizione (panoramica §3), evita test duplicati e mantiene
   `17` al livello 1. Applicata in §3 qui sopra.
-- **D17-5 — Interpolazione dei profili:** metodo di campionamento
-  (nearest / linear) e passo di default.
+- **D17-5 — Interpolazione dei profili: DECISA il 2026-10-12 (decisione del
+  proprietario).** **Interpolazione bilineare** tramite
+  `scipy.ndimage.map_coordinates` (`order=1`); **passo obbligatorio, senza
+  default** (`PROFILE_STEP_INVALID` se non positivo o non finito).
+  **Motivazione:** la bilineare non inventa strutture tra i pixel e coincide
+  con il valore del pixel nei centri; senza un default il passo è sempre una
+  scelta dichiarata dell'utente. Applicata in §3 (P2).
+- **D17-7 — Geometria sferica delle forme (P3): DA DECIDERE (aperta il
+  2026-10-12, Gruppo 3).** (a) **Libreria per poligoni e tracciati chiusi:**
+  proposta `spherical-geometry` (STScI, BSD-3-Clause, 1.4.0) per area e
+  "contiene" esatti con lati di cerchio massimo; alternativa: `mocpy`
+  (già presente) con risultato approssimato per celle, dichiarato con
+  l'ordine usato. (b) **Definizione dell'ellisse sulla sfera:** per esempio
+  insieme dei punti la cui somma delle distanze angolari dai due fuochi è
+  ≤ 2a (definizione intrinseca, "contiene" esatto con Astropy, area con
+  integrazione numerica dichiarata), oppure ellisse nel piano tangente
+  (proiezione gnomonica) al centro. (c) Senso di `contains` e `area` per
+  `Arrow`, `Text` e `Freehand` aperto (oggi non definiti: proposta
+  `OPERATION_UNSUPPORTED` per freccia e testo; tracciato libero come
+  poligono solo se chiuso). **Raccomandazione:** (a) `spherical-geometry`,
+  (b) somma delle distanze dai fuochi, (c) come proposto. Ferma solo P3.
 - **D17-6 — Tag "distanza con profilo" (H11): DECISA il 2026-10-09 (decisione
   del proprietario sulla checklist del livello 1).** **distanza + profilo di
   intensità lungo il segmento + grafico esportabile**. **Motivazione
@@ -283,3 +462,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-09 | Claude Code | **Decisione del proprietario D10-8 (modulo 10) applicata** (autorizzazione esplicita a modificare il file approvato): offset angolari e calcolo inverso (posizione da distanza + angolo di posizione) spostati qui dalla calcolatrice delle coordinate del 10 — §3, §5, §6, §7 (`angular_offsets`, `apply_offsets`, `offset_position`), §10 (`OFFSET_INVALID`), §11, §12 (T13–T15). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D17-6 con motivazione nostra al posto di "come lo strumento dist di Aladin". Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **D13-10** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `angular_distance` usa l'implementazione unica di `skydist` del 13 (`astropy.coordinates.angular_separation`), nessun duplicato. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): divisione in 4 parti (P1 misure angolari, P2 pixel e profili, P3 forme e tag, P4 distanza automatica); **D17-5 decisa** (bilineare con `scipy.ndimage.map_coordinates`, passo obbligatorio senza default); verifiche di Astropy per la PA (casi indefiniti controllati prima) e per gli offset; scelte minori di P1, P2, P4 in §3; nuovi casi in §10; **P3 ferma** dopo la verifica (nessun calcolo esatto con `astropy`/`mocpy`), nuova decisione aperta **D17-7** (Gruppo 3) con la proposta `spherical-geometry` (BSD-3-Clause). Stato `approvato` invariato. |
