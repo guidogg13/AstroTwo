@@ -39,13 +39,21 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**.
   IVOA 1.0/1.1/2.0, JSON e testo, operazioni; creazione da cerchio,
   poligono, catalogo, immagine; filtro e mappe/griglie HEALPix; MOC
   temporali in TCB e spazio-temporali, mappe di probabilità e regioni di
-  credibilità; MocServer, lettura da URL, `build_moc`), fermi D16-6
-  (versione 2.1) e D16-7 (complemento degli ST-MOC). Nel 10 aggiunte
+  credibilità; MocServer, lettura da URL, `build_moc`); il 2026-10-12
+  D16-6 (nessuna 2.1 tra i documenti IVOA, resta rifiutata) e D16-7
+  (complemento degli ST-MOC con `mocpy`) decise e scritte, con il corpo
+  misto delle operazioni forzate e i MOC planetari in FITS con `A2BODY`.
+  **Modulo 12 (`hips.py`) scritto in 5 parti P1–P5 il 2026-10-12**
+  (metadati HiPS 1.0 e `add_hips`; tile, cache, copertura, memoria 512 MB e
+  valore del pixel dai tile FITS; collezioni dal MocServer e `set_survey`
+  con `CDS/P/DSS2/color`; cubi e cataloghi progressivi; `build_hips` con
+  `reproject_interp` su un WCS APE 14 del tile), fermi H10 SkyView (URL SIA
+  non documentato da NASA), D12-6, D12-7, D12-8; le risposte del MocServer
+  si leggono in ISO-8859-1 come dichiarato (corretti anche 14 e 16). Nel 10 aggiunte
   `proper_motion_only` e `parse_sexagesimal`. Dipendenze nuove:
   `defusedxml` 0.7.1 (PSF), **`mocpy` 0.20.0 e `astropy-healpix` 2.0.1
-  (BSD)**; **`healpy` escluso (GPL-2.0)**. Test: **359 di default, 373 con
-  la rete (14 test di rete, tutti superati, nessuna ripetizione reale), 0
-  saltati** (2026-10-11). Regole dei test di rete e dei commit in
+  (BSD)**; **`healpy` escluso (GPL-2.0)**. Test: **405 di default, 422 con
+  la rete (17 test di rete, tutti superati), 0 saltati** (2026-10-12). Regole dei test di rete e dei commit in
   `02-convenzioni.md` §8 punti 8–9: commit solo con
   `scripts/commit_checked.py`, che esegue i test e chiama `git commit` solo
   se l'esito lo consente.
@@ -415,6 +423,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Verifiche e scelte minori (13, 14) | Registro VO di default `https://dc.g-vo.org/tap` (HTTPS, configurabile); server esclusi confermati con il motivo, da ricontrollare; FITS esportati "FITS Standard 4.0" più versione di `astropy`; `load_catalog` senza regione solo entro `max_rows`, altrimenti `REGION_REQUIRED` o `allow_partial=True` dichiarato; altre scelte minori confermate | 2026-10-11 | decisione del proprietario, `13`, `14` | aperte D13-19 (regione) e D13-14c (UCD1 CDS, rimandata) |
 
 | D13-19, D15-6, D15-7 | `load_catalog(region=(centro, raggio))` con colonne dagli UCD di `TAP_SCHEMA` e sistema dal `COOSYS` (termini `refframe` riconosciuti); ECSV con il sistema delle posizioni nei metadati YAML; albero in ordine naturale; ripetizioni dei test di rete solo per connessione/timeout (massimo 2, dichiarate); modulo 15 in 5 parti con tutte le raccomandazioni accettate (epoche senza propagazione, `best` con pari merito e B riusato dichiarati, mancanti esclusi, `max_sep` ≤ 180° / 180″, CDS in HTTPS con cache del 14, soglia e assi delle ellissi obbligatori, tolleranza T4 1 mas) | 2026-10-11 | decisione del proprietario, `13`, `14`, `15` §13 | aperte D13-20, D15-8, D15-9 |
+| D16-6, D16-7, scelte del 16, decisioni del 12, A10 (HiPS) | 16: nessuna 2.1 tra WD/PR IVOA (resta rifiutata); complemento degli ST-MOC come differenza da "tutto il tempo × tutto il cielo" con `mocpy`; operazione forzata → corpo misto con l'elenco, nuova forzatura per ogni operazione successiva; MOC planetari in FITS 2.0 con la parola chiave `A2BODY` (estensione dichiarata); scelte minori 1–4 e 7–13 confermate. 12: 5 parti; MocServer con la rete del 14; `healpy` tolto e mappe/griglie solo nel 16; H10 SkyView solo con URL SIA verificato sul sito NASA (non trovato: rinviato); campo a cerchio; tile corrotto = una nuova richiesta; `build_hips` con ordine obbligatorio, tile 512, FITS sempre, PNG/JPEG con parametri espliciti; A10 per gli HiPS: 512 MB in memoria, un tile alla volta, limite delle operazioni 4 GB. 14: rimando a `02` §8 per le ripetizioni dei test di rete | 2026-10-12 | decisioni del proprietario | file di origine: `12`, `14`, `16` (restano `approvato`); aperte D12-6, D12-7, D12-8 |
 | D13-20, D15-8, D15-9, regola dei commit, decisioni del 16 | SIMBAD: sistema dall'`utype` MANGO, dichiarato; join per campo: corpo controllato solo se entrambe le tabelle lo hanno; CDS XMatch sempre `selection=all`, `best` in locale; commit solo se tutti i test di default passano (rete a parte, dichiarata); 16: `healpy` escluso, `order_max` obbligatorio, MOC da catalogo una cella per sorgente, da immagine dai pixel validi con il WCS dell'11, poligoni su cerchi massimi, MOC spaziali sempre ICRS, probabilità con somma = 1 entro 10⁻⁶, MocServer con la rete del 14, `build_moc` solo funzione, mappe NESTED ICRS; C4 e H12 progressivi rinviati al 12 | 2026-10-11 | decisioni del proprietario | file di origine: `02`, `13`, `15`, `16` (restano `approvato`) |
 
 ## 6. Decisioni aperte
@@ -446,8 +455,10 @@ il modulo 13 fino a P5: 17; **dopo il modulo 14 e P6 del 13: 21 aperte**
 Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 17). Il 2026-10-11, decise le cinque
 e aperte D13-19 e D13-14c: 18 aperte; poi, con il modulo 15, decise D13-19
 e D15-6 e aperte D13-20, D15-8, D15-9: 19 aperte; poi, con il modulo 16,
-decise D13-20, D15-8, D15-9 e aperte D16-6, D16-7: **18 aperte** (Gruppo 1
-= 0, Gruppo 2 = 4, Gruppo 3 = 14).
+decise D13-20, D15-8, D15-9 e aperte D16-6, D16-7: 18 aperte. Il
+2026-10-12, decise D16-6, D16-7 e A10 (HiPS) e aperte dal codice del 12
+D12-6 (nomi dei corpi), D12-7 (`hips_frame = ecliptic`), D12-8 (Allsky):
+**18 aperte** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -476,13 +487,15 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 ## 7. Prossimi passi
 
 0. **Subito (fase codice del livello 1):** completi `04`, 10, 11, 13, 14,
-   15; **modulo 16 scritto (P1–P5)**, fermi D16-6 e D16-7; **proposta di
-   divisione del modulo 12 (HiPS) consegnata al proprietario, in attesa del
-   suo ok**; poi gli altri moduli del livello 1 (17, 18, 19). Da confermare
-   le scelte minori del 16 (elenco in `16-core-moc.md` §3). Aperte anche:
-   D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca il 60). Il
-   paragrafo sulle ripetizioni dei test di rete in 14 §12 resta (uguale a
-   `02` §8): il 14 non era tra i file autorizzati il 2026-10-11.
+   15, 16; **modulo 12 scritto (P1–P5)**, fermi H10 SkyView, D12-6, D12-7,
+   D12-8; da confermare l'uso di `reproject` in `build_hips` e le scelte
+   minori del 12 (elenco in `12-core-hips.md` §3) e la scrittura solo in
+   FITS dei MOC non celesti (16). **Proposta di divisione del modulo 17
+   (misure) consegnata al proprietario, in attesa del suo ok**; poi 18 e
+   19. `01` §5 riga A10 dice ancora "HiPS: da fissare" (il 01 non era tra i
+   file autorizzati il 2026-10-12; esito scritto nel 12 e in
+   `decisioni-aperte.md`). Aperte anche: D10-9 (con il 41), D11-8 (con 20 e
+   41), A11 licenza (blocca il 60).
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -549,3 +562,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-11 | Claude Code | **Pezzi fermi di 13 e 14 chiusi** (decisioni del proprietario D14-10, D14-11, D14-12, D13-17, D13-18; autorizzazione a modificare 11, 13, 14, che restano `approvato`): esportazione ECSV e lettura nel 13; `sia_calibration` e parametro `calibration` di `load_image`; magnitudini SIMBAD; `LINK` ASTRORES; albero delle collezioni dal MocServer; registro VO di default in HTTPS; FITS Standard 4.0; `load_catalog` con `allow_partial`. Nuove aperte D13-19 e D13-14c. Test: 299 di default, 308 con la rete. Aperte **18**. Prossimo: modulo 15 (proposta in attesa). |
 | 2026-10-11 | Claude Code | **Modulo 15 scritto (P1–P5) e decisioni del proprietario applicate in 13, 14, 15** (restano `approvato`): D13-19 regione di `load_catalog`; termini `refframe` nel `COOSYS`; ECSV con il sistema delle posizioni; albero in ordine naturale; ripetizioni dei test di rete; crossmatch locale, tabella unita, per campo, ellissi (D15-6 decisa), CDS XMatch (`cds_xmatch` nel 14). Nuove aperte D13-20, D15-8, D15-9. Test: 325 di default, 337 con la rete. Aperte **19**. Prossimo: modulo 16 (proposta in attesa). |
 | 2026-10-11 | Claude Code | **Regola dei commit e modulo 16** (decisioni del proprietario del 2026-10-11; 02, 13, 15, 16 modificati e restano `approvato`): `02` §8 punti 8–9 (ripetizioni dei test di rete, commit solo se i test di default passano, `scripts/commit_checked.py` con `--no-network` per le parti intermedie); D13-20, D15-8, D15-9 decise e applicate; **modulo 16 scritto in 5 parti** con `mocpy` 0.20.0 e `astropy-healpix` 2.0.1 (`healpy` escluso); nuove aperte D16-6 (versione 2.1 del formato MOC) e D16-7 (complemento degli ST-MOC). Scelte minori della sessione precedente (moduli 13–15) confermate dal proprietario. Test 359 di default, 373 con la rete. Aperte 18. Prossimo: modulo 12 (proposta di divisione in attesa del proprietario). |
+| 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12 e modulo 12** (12, 14, 16 modificati e restano `approvato`): 14 §12 rimanda a `02` §8; 16 — D16-6 (verifica sul sito IVOA: nessuna 2.1, resta rifiutata), D16-7 (complemento ST-MOC con `mocpy`; normalizzazione dei risultati ST), corpo misto e MOC planetari in FITS con `A2BODY`, scelte minori confermate; **modulo 12 scritto in 5 parti** (`hips.py`; verifiche dello standard HiPS 1.0 e del WD 2.0 per `hips_body`, DSS2 a colori `CDS/P/DSS2/color`, `cone_search_lonlat`, disposizione dei pixel nel tile con due verifiche indipendenti, funzioni HiPS di `reproject`); H10 SkyView rinviato (URL SIA non documentato da NASA); A10 decisa per gli HiPS; nuove aperte D12-6, D12-7, D12-8; MocServer letto in ISO-8859-1 come dichiarato (correzione anche in 14 e 16). Test 405 di default, 422 con la rete. Aperte 18. Prossimo: modulo 17 (proposta di divisione in attesa del proprietario). |

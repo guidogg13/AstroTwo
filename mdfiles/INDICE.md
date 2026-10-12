@@ -8,7 +8,13 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-11 — **regola dei commit in `02` §8 e modulo 16 scritto (P1–P5)**
+**Ultimo aggiornamento:** 2026-10-12 — **modulo 12 scritto (P1–P5)** tranne i pezzi fermi H10 SkyView
+(URL SIA non documentato da NASA), D12-6, D12-7, D12-8 (nuove, Gruppo 3); **D16-6, D16-7 decise**,
+corpo misto e MOC planetari in FITS nel 16; A10 decisa per gli HiPS; 14 §12 rimanda a `02` §8; 12, 14,
+16 modificati e restano `approvato`. Test 405 di default, 422 con la rete. Aperte 18. Prossimo: modulo
+17 (proposta in attesa del proprietario). Riepilogo invariato: approvato 14, bozza 5, non esiste 23,
+totale 42.
+Prima di questo aggiornamento: 2026-10-11 — **regola dei commit in `02` §8 e modulo 16 scritto (P1–P5)**
 tranne i pezzi fermi D16-6 (versione 2.1 del formato MOC) e D16-7 (complemento degli ST-MOC);
 D13-20, D15-8, D15-9 decise; 02, 13, 15, 16 modificati e restano `approvato`. Test 359 di default,
 373 con la rete. Aperte 18. Prossimo: modulo 12 (proposta in attesa del proprietario).
@@ -254,7 +260,7 @@ Dove si trovano le decisioni:
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (18: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `decisioni-aperte.md` | Decisioni aperte (18: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14, aggiornate il 2026-10-12) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 
@@ -262,11 +268,11 @@ Dove si trovano le decisioni:
 |---|---|---|
 | `10-core-coordinate-wcs.md` | Coordinate celesti, WCS, sistemi e epoche di riferimento | approvato |
 | `11-core-immagini-fits.md` | Lettura, gestione e visualizzazione di immagini FITS | approvato |
-| `12-core-hips.md` | Servizio HiPS per immagini all-sky, incluso aggiungere un HiPS da ID/URL (C3) | approvato |
+| `12-core-hips.md` | Servizio HiPS per immagini all-sky, incluso aggiungere un HiPS da ID/URL (C3) (codice scritto in 5 parti il 2026-10-12, `src/astrotwo/core/hips.py`; fermi H10 SkyView, D12-6, D12-7, D12-8) | approvato |
 | `13-core-cataloghi.md` | Cataloghi e tabelle: caricamento, plottaggio, filtri | approvato |
 | `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, elenco dei server e registro VO, DataLink, SIA/SIA2, SAMP (G3), spettri SSA (E4), puntatori Simbad/VizieR | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi (cross-match) | approvato |
-| `16-core-moc.md` | Mappe di copertura MOC (codice scritto in 5 parti il 2026-10-11, `src/astrotwo/core/moc.py`; fermi D16-6 e D16-7) | approvato |
+| `16-core-moc.md` | Mappe di copertura MOC (codice scritto in 5 parti il 2026-10-11, `src/astrotwo/core/moc.py`; D16-6 e D16-7 decise e scritte il 2026-10-12) | approvato |
 | `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura | approvato |
 | `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo (livello 1; origine H4 di `03-parita-aladin.md`; dipende da `10`, `11`) | approvato |
 | `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari (livello 1; origine H21 di `03-parita-aladin.md`, AM1 accettata il 2026-10-08) | approvato |
