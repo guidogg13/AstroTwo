@@ -21,6 +21,8 @@ import astropy.units as u
 
 __all__ = [
     "ActiveSurvey",
+    "BUILD_METHODS",
+    "BuildResult",
     "CELESTIAL_FRAMES",
     "CatalogTiles",
     "CollectionIndex",
@@ -37,6 +39,7 @@ __all__ = [
     "TileMemory",
     "TileSelection",
     "add_hips",
+    "build_hips",
     "catalog_tiles",
     "cube_planes",
     "fetch_tile",
@@ -479,7 +482,7 @@ def _tile_cells_at(moc, order: int):
     import numpy as np
 
     native = int(moc.max_order)
-    if native >= order:
+    if native > order:
         cells = np.asarray(moc.degrade_to_order(order).flatten(), dtype=np.int64)
     else:
         cells = np.asarray(moc.flatten(), dtype=np.int64)  # celle all'ordine del MOC
@@ -1278,3 +1281,267 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
                    "non ritagliate sul cerchio" + ("" if complete else "; altre sorgenti agli ordini più profondi"))
     return CatalogTiles(table=table, order=order, tiles=tuple(read), complete=bool(complete), description=description,
                         warnings=tuple(notes) + table.warnings)
+
+
+# --------------------------------------------------------------------------
+# P5 — Generazione di HiPS (H9) secondo lo standard HiPS 1.0, ricampionamento con reproject
+# --------------------------------------------------------------------------
+
+#: Metodi di ricampionamento di ``build_hips`` (``reproject_interp``); "flux" (``reproject_exact``) richiede i
+#: contorni dei pixel di uscita, non definiti per la griglia HEALPix dei tile: non disponibile.
+BUILD_METHODS: tuple[str, ...] = ("nearest", "bilinear")
+_FLOAT64 = 8
+
+
+def _subindex(a, b, shift: int):
+    """Inverso del de-interlacciamento: sotto-indice NESTED da a (bit pari) e b (bit dispari)."""
+    import numpy as np
+
+    sub = np.zeros_like(a)
+    for bit in range(shift):
+        sub |= ((a >> bit) & 1) << (2 * bit)
+        sub |= ((b >> bit) & 1) << (2 * bit + 1)
+    return sub
+
+
+def _tile_wcs(order: int, index: int, width: int, frame: str):
+    """WCS APE 14 di un tile HiPS: ogni pixel (x, y) è il centro della sua cella HEALPix all'ordine K+S
+    (``astropy-healpix``), con la disposizione verificata (§3); posizioni fuori dal tile → NaN. Così il
+    ricampionamento resta a ``reproject`` (API pubblica) senza una proiezione HPX scritta da noi."""
+    import numpy as np
+    from astropy.coordinates import SkyCoord, frame_transform_graph
+    from astropy.wcs.wcsapi import BaseLowLevelWCS, HighLevelWCSWrapper
+    from astropy_healpix import HEALPix
+
+    shift = width.bit_length() - 1
+    hp = HEALPix(nside=2 ** (order + shift), order="nested")
+    sky_frame = frame_transform_graph.lookup_name(_astropy_frame(frame))()
+    types = ["pos.eq.ra", "pos.eq.dec"] if frame == "equatorial" else ["pos.galactic.lon", "pos.galactic.lat"]
+
+    class TileWCS(BaseLowLevelWCS):
+        pixel_n_dim = 2
+        world_n_dim = 2
+        world_axis_physical_types = types
+        world_axis_units = ["deg", "deg"]
+        world_axis_object_components = [("celestial", 0, "spherical.lon.degree"),
+                                        ("celestial", 1, "spherical.lat.degree")]
+        world_axis_object_classes = {"celestial": (SkyCoord, (), {"frame": sky_frame, "unit": u.deg})}
+        pixel_shape = (width, width)
+        array_shape = (width, width)
+
+        def pixel_to_world_values(self, x, y):
+            x = np.rint(np.asarray(x, dtype=np.float64)).astype(np.int64)
+            y = np.rint(np.asarray(y, dtype=np.float64)).astype(np.int64)
+            ok = (x >= 0) & (x < width) & (y >= 0) & (y < width)
+            b = np.where(ok, x, 0)
+            a = np.where(ok, width - 1 - y, 0)
+            lon, lat = hp.healpix_to_lonlat((index << (2 * shift)) + _subindex(a, b, shift))
+            return (np.where(ok, lon.to_value(u.deg), np.nan), np.where(ok, lat.to_value(u.deg), np.nan))
+
+        def world_to_pixel_values(self, lon, lat):
+            lon = np.asarray(lon, dtype=np.float64)
+            lat = np.asarray(lat, dtype=np.float64)
+            good = np.isfinite(lon) & np.isfinite(lat)
+            tiles, x, y = _tile_pixels(np.where(good, lon, 0.0), np.where(good, lat, 0.0), order, width)
+            inside = good & (tiles == index)
+            return (np.where(inside, x, np.nan).astype(np.float64), np.where(inside, y, np.nan).astype(np.float64))
+
+    return HighLevelWCSWrapper(TileWCS())
+
+
+@dataclass(frozen=True)
+class BuildResult:
+    """HiPS generato (H9): cartella, ordini, tile per ordine, formati, MOC, proprietà scritte e avvisi."""
+
+    path: object  # pathlib.Path della radice del HiPS
+    order: int
+    tile_width: int
+    tiles_per_order: dict[int, int]
+    formats: tuple[str, ...]
+    coverage: object  # Moc del 16 scritto in Moc.fits
+    properties: dict[str, str]
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def _write_fits_tile(path, data, bunit: str | None) -> None:
+    from astropy.io import fits
+
+    header = fits.Header()
+    if bunit:
+        header["BUNIT"] = bunit
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fits.PrimaryHDU(data, header=header).writeto(path)
+
+
+def _quadrant(q: int, half: int) -> tuple[slice, slice]:
+    """(righe, colonne) del figlio q (0–3) nel tile padre: bit alto di b = q >> 1 (colonne a destra), bit alto di
+    a = q & 1 (righe in basso, perché y = larghezza − 1 − a) — dalla disposizione verificata (§3)."""
+    rows = slice(0, half) if q & 1 else slice(half, 2 * half)
+    cols = slice(half, 2 * half) if q >> 1 else slice(0, half)
+    return rows, cols
+
+
+def build_hips(images, output, *, order: int, hips_id: str, title: str, method: str, tile_width: int = 512,
+               formats: tuple[str, ...] = (), display=None, status: str = "public master clonableOnce"
+               ) -> BuildResult:
+    """Genera un HiPS immagine (H9) secondo lo standard HiPS 1.0 da una o più immagini dell'11 con WCS.
+
+    - ``order`` (ordine più profondo) **obbligatorio**; ``tile_width`` 512 di default (potenza di 2), dichiarata.
+    - Tile **FITS sempre** (``float64``: valori ricampionati, DC6); ``formats`` facoltativi ``png``/``jpeg``
+      solo con ``display = (vmin, vmax, funzione di trasferimento)`` espliciti (come per l'RGB dell'11), palette
+      grigia; ``histeq`` non ammessa (dipende dal tile).
+    - Ricampionamento: ``reproject_interp`` (``method`` ``nearest`` o ``bilinear``, obbligatorio) sulla griglia
+      HEALPix del tile; più immagini: media pesata con la copertura (``hips_overlay = mean``).
+    - Un tile alla volta (A10); stima della memoria con il limite delle operazioni (D11-11, 4 GB).
+    - Ordini inferiori: ogni pixel è la media (``nanmean``) dei 4 pixel dell'ordine sotto (``hips_hierarchy =
+      mean``); ``Moc.fits`` con il 16 (unione dei MOC delle immagini all'ordine ``order``); ``properties``
+      scritto per ultimo. Solo frame ``equatorial``. ``Allsky`` non prodotto (facoltativo; D12-8).
+    - ``output`` deve essere una cartella nuova o vuota: nulla si sovrascrive."""
+    import warnings
+    from pathlib import Path
+
+    import numpy as np
+    from astropy.io import fits
+    from astropy.nddata import block_reduce
+    from PIL import Image
+    from reproject import reproject_interp
+
+    import astrotwo
+    from astrotwo.core.images_fits import STRETCHES, FitsImage, LargeImageLimits, set_display
+    from astrotwo.core.moc import moc_from_image, write_moc
+
+    images = list(images)
+    if not images or not all(isinstance(im, FitsImage) for im in images):
+        raise TypeError("build_hips: servono una o più immagini FitsImage (modulo 11)")
+    if isinstance(tile_width, bool) or not isinstance(tile_width, int) or tile_width < 2 or tile_width & (tile_width - 1):
+        raise ValueError(f"tile_width {tile_width!r}: potenza di 2 (default 512)")
+    shift = tile_width.bit_length() - 1
+    order = _check_space_order(order, _SPACE_MAX_ORDER - shift, f"ordine (con tile da {tile_width} pixel)")
+    if method not in BUILD_METHODS:
+        raise HiPSError("OPERATION_UNSUPPORTED", f"metodo {method!r}: ammessi {', '.join(BUILD_METHODS)} (flux non "
+                        "disponibile sulla griglia HEALPix dei tile)")
+    if not isinstance(hips_id, str) or not re.match(r"^[A-Za-z0-9._~-]+(/[A-Za-z0-9._~+-]+)+$", hips_id):
+        raise ValueError(f"hips_id {hips_id!r}: identificativo nella forma AUTORITÀ/P/nome (senza ivo://)")
+    if not isinstance(title, str) or not title.strip() or "\n" in title:
+        raise ValueError("title: testo di una riga, obbligatorio (obs_title)")
+    formats = tuple(formats)
+    if any(f not in ("png", "jpeg") for f in formats) or len(set(formats)) != len(formats):
+        raise ValueError("formats: facoltativi 'png' e/o 'jpeg' (i tile FITS si scrivono sempre)")
+    if formats:
+        if display is None or len(display) != 3:
+            raise HiPSError("HIPS_DISPLAY_REQUIRED", "tile PNG/JPEG: servono (vmin, vmax, funzione di trasferimento) "
+                            "espliciti")
+        vmin, vmax, stretch = float(display[0]), float(display[1]), display[2]
+        if stretch not in STRETCHES or stretch == "histeq":
+            raise HiPSError("HIPS_DISPLAY_INVALID", f"funzione di trasferimento {stretch!r}: ammesse "
+                            f"{', '.join(s for s in STRETCHES if s != 'histeq')} (histeq dipende dal tile)")
+        if not (np.isfinite(vmin) and np.isfinite(vmax) and vmin < vmax):
+            raise HiPSError("HIPS_DISPLAY_INVALID", "serve vmin < vmax, entrambi finiti")
+    for im in images:
+        if im.color:
+            raise HiPSError("OPERATION_UNSUPPORTED", f"{im.origin}: immagine a colori, solo presentazione")
+        if im.is_preview:
+            raise HiPSError("PREVIEW_NOT_MEASURABLE", f"{im.origin}: aperta a due livelli, in memoria c'è solo "
+                            "l'anteprima")
+        if im.wcs is None:
+            raise HiPSError("WCS_MISSING", f"{im.origin}: nessun WCS, nessuna posizione sul cielo")
+    # Memoria (A10, D11-11): copie float64 degli ingressi + lavoro di un tile (risultato e copertura per immagine,
+    # somme, tile ridotto e immagine di presentazione).
+    caps = [im.limits.operation_bytes for im in images if im.limits is not None]
+    cap = min(caps) if caps else LargeImageLimits().operation_bytes
+    tile_pixels = tile_width * tile_width
+    needed = sum(int(np.prod(im.data.shape)) for im in images) * _FLOAT64 + (2 * len(images) + 6) * tile_pixels * \
+        _FLOAT64
+    if needed > cap:
+        raise HiPSError("MEMORY_LIMIT_EXCEEDED", f"build_hips: servono circa {needed} byte, oltre il limite delle "
+                        f"operazioni di {cap} byte (D11-11)", needed_bytes=needed, limit_bytes=cap)
+    root = Path(output)
+    if root.exists() and (not root.is_dir() or any(root.iterdir())):
+        raise FileExistsError(f"{root}: la cartella del HiPS deve essere nuova o vuota (nulla si sovrascrive)")
+    notes: list[tuple[str, str]] = []
+    # Copertura e tile dell'ordine più profondo: unione dei MOC delle immagini (16, pixel validi con il WCS).
+    coverage = None
+    for im in images:
+        moc = moc_from_image(im, order)
+        notes += [n for n in moc.warnings if n[0] != "MOC_EMPTY"]
+        coverage = moc if coverage is None else coverage.union(moc)
+    candidates, _ = _tile_cells_at(coverage.moc, order)
+    inputs = [(np.asarray(im.data, dtype=np.float64), im.wcs.wcs) for im in images]
+    kwargs = {"order": "nearest-neighbor" if method == "nearest" else "bilinear"}
+    bunits = {im.bunit for im in images}
+    bunit = next(iter(bunits)) if len(bunits) == 1 else None
+    if len(bunits) > 1:
+        notes.append(("HIPS_UNIT_MIXED", f"unità diverse tra le immagini ({sorted(map(str, bunits))}): BUNIT non "
+                      "scritto"))
+    root.mkdir(parents=True, exist_ok=True)
+    written: dict[int, list[int]] = {order: []}
+    for index in candidates:
+        wcs_out = _tile_wcs(order, int(index), tile_width, "equatorial")
+        total = np.zeros((tile_width, tile_width))
+        weight = np.zeros((tile_width, tile_width))
+        for data, wcs_in in inputs:
+            array, footprint = reproject_interp((data, wcs_in), wcs_out, shape_out=(tile_width, tile_width), **kwargs)
+            valid = np.isfinite(array) & (footprint > 0)
+            total[valid] += array[valid] * footprint[valid]
+            weight[valid] += footprint[valid]
+        if not np.any(weight > 0):
+            continue
+        with np.errstate(invalid="ignore", divide="ignore"):
+            tile = np.where(weight > 0, total / weight, np.nan)
+        _write_fits_tile(root / tile_path(order, int(index), "fits"), tile, bunit)
+        written[order].append(int(index))
+    if not written[order]:
+        raise HiPSError("HIPS_EMPTY", "nessun pixel valido ricampionato: nessun tile scritto")
+    half = tile_width // 2
+    for level in range(order - 1, -1, -1):
+        parents = sorted({i >> 2 for i in written[level + 1]})
+        written[level] = []
+        for parent in parents:
+            tile = np.full((tile_width, tile_width), np.nan)
+            for q in range(4):
+                child = root / tile_path(level + 1, 4 * parent + q, "fits")
+                if child.exists():
+                    data = fits.getdata(child)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)  # blocchi tutti NaN: restano NaN
+                        tile[_quadrant(q, half)] = block_reduce(data, 2, func=np.nanmean)
+            _write_fits_tile(root / tile_path(level, parent, "fits"), tile, bunit)
+            written[level].append(parent)
+    if formats:
+        for level, indices in written.items():
+            for index in indices:
+                data = fits.getdata(root / tile_path(level, index, "fits"))
+                rgba = set_display(data, vmin, vmax, stretch=stretch).rgba[::-1]  # righe dall'alto (§4.2.1.3)
+                for fmt in formats:
+                    image = Image.fromarray(rgba, "RGBA") if fmt == "png" else \
+                        Image.fromarray(np.ascontiguousarray(rgba[:, :, :3]), "RGB")
+                    image.save(root / tile_path(level, index, _EXTENSIONS[fmt]),
+                               format="PNG" if fmt == "png" else "JPEG")
+    write_moc(coverage, root / "Moc.fits")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")
+    tile_formats = ("fits",) + formats
+    props = {
+        "creator_did": f"ivo://{hips_id}", "obs_title": title.strip(), "dataproduct_type": "image",
+        "hips_version": HIPS_STANDARD_VERSION, "hips_release_date": now, "hips_creation_date": now,
+        "hips_status": status, "hips_tile_format": " ".join(tile_formats), "hips_order": str(order),
+        "hips_frame": "equatorial", "hips_tile_width": str(tile_width), "hips_pixel_bitpix": "-64",
+        "hips_builder": f"AstroTwo {astrotwo.__version__}", "hips_sampling": method, "hips_overlay": "mean",
+        "hips_hierarchy": "mean", "moc_sky_fraction": repr(float(coverage.sky_fraction)),
+        "hips_order_min": "0",
+    }
+    if formats:
+        props["hips_pixel_cut"] = f"{vmin!r} {vmax!r}"
+    lines = [f"# HiPS generato da AstroTwo {astrotwo.__version__} secondo lo standard IVOA HiPS 1.0",
+             f"# sorgenti: {', '.join(im.origin for im in images)}"]
+    lines += [f"{key:20} = {value}" for key, value in props.items()]
+    (root / "properties").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    counts = {level: len(indices) for level, indices in sorted(written.items())}
+    notes.append(("HIPS_ALLSKY_NOT_WRITTEN", "file Allsky non scritto (facoltativo nello standard; D12-8)"))
+    description = (f"HiPS {hips_id} in {root}: {len(images)} immagini, ordine 0–{order}, tile {tile_width}×"
+                   f"{tile_width} ({sum(counts.values())} tile FITS float64" + (f" + {', '.join(formats)}" if formats
+                                                                               else "") +
+                   f"), ricampionamento reproject_interp {method}, media pesata con la copertura, ordini inferiori per "
+                   f"media di 4 pixel, Moc.fits all'ordine {order} (frazione di cielo {props['moc_sky_fraction']})")
+    return BuildResult(path=root, order=order, tile_width=tile_width, tiles_per_order=counts, formats=tile_formats,
+                       coverage=coverage, properties=props, description=description, warnings=tuple(notes))

@@ -347,6 +347,64 @@ riquadro mostrato.
   `HIPS_BAD_TILE`. Le righe **non** sono ritagliate sul cerchio (scelta
   minore, da confermare): sono tutto il contenuto dei tile.
 
+**P5 — `build_hips` (scritta il 2026-10-12):**
+
+- **Scelta dell'uso di `reproject` (da confermare dal proprietario):**
+  `reproject_to_hips` non basta per H9 (una sola immagine, tile FITS in
+  `float32` contro DC6, nessuna combinazione di tile FITS sovrapposti in
+  `coadd_hips`) e la geometria dei tile di `reproject` è in funzioni interne.
+  Quindi: per ogni tile un **WCS APE 14** nostro (`_tile_wcs`) in cui ogni
+  pixel è il centro della sua cella HEALPix all'ordine K+S
+  (`astropy-healpix`, disposizione verificata in §3), e il ricampionamento
+  con **`reproject_interp`** (API pubblica) su quella griglia. **Verifica del
+  2026-10-12:** per un tile di prova i valori coincidono entro 2 × 10⁻¹³ con
+  quelli ottenuti con il WCS HPX interno di `reproject` e in modo esatto con
+  un'interpolazione bilineare indipendente (`scipy`). `reproject_exact`
+  (metodo `flux`) richiede i contorni dei pixel di uscita, non definiti per
+  questa griglia: **non disponibile** (`OPERATION_UNSUPPORTED`).
+- **`build_hips(images, output, *, order, hips_id, title, method,
+  tile_width=512, formats=(), display=None, status="public master
+  clonableOnce")`** → **`BuildResult`** (cartella, ordine, tile per ordine,
+  formati, MOC, proprietà, descrizione, avvisi). Immagini dell'11 con WCS
+  (colori → `OPERATION_UNSUPPORTED`, due livelli →
+  `PREVIEW_NOT_MEASURABLE`, senza WCS → `WCS_MISSING`). **`order`
+  obbligatorio** (con `order + log₂ tile_width ≤ 29`), **`tile_width` 512 di
+  default**, potenza di 2; `method` obbligatorio, `nearest` o `bilinear`;
+  `hips_id` nella forma `AUTORITÀ/P/nome` (diventa `creator_did =
+  ivo://…`), `title` obbligatorio (`obs_title`). La cartella deve essere
+  **nuova o vuota** (nulla si sovrascrive). Solo frame `equatorial` (scelta
+  minore, da confermare).
+- **Tile più profondi:** i tile che toccano l'unione dei MOC delle immagini
+  (16, `moc_from_image` all'ordine `order`), **uno alla volta**: per ogni
+  immagine `reproject_interp` sul WCS del tile; più immagini → **media
+  pesata con la copertura** (`hips_overlay = mean`); tile senza pixel validi
+  non scritti. **Tile FITS sempre**, in **`float64`** (valori ricampionati,
+  DC6; `hips_pixel_bitpix = -64`), `BUNIT` se tutte le immagini hanno la
+  stessa unità (altrimenti avviso `HIPS_UNIT_MIXED`).
+- **Ordini inferiori** fino a 0: ogni pixel = **`nanmean` dei 4 pixel**
+  dell'ordine sotto (`astropy.nddata.block_reduce`), figlio q nel quadrante
+  dato dalla disposizione verificata (`hips_hierarchy = mean`); i tile padre
+  si leggono dal disco un figlio alla volta.
+- **PNG/JPEG** facoltativi (`formats`), solo con **`display = (vmin, vmax,
+  funzione di trasferimento)` espliciti** (`HIPS_DISPLAY_REQUIRED`),
+  calcolati da ogni tile FITS con `set_display` dell'11 (palette grigia,
+  righe scritte dall'alto come vuole lo standard; PNG con trasparenza dove
+  il valore non è finito); `histeq` rifiutata perché dipende dal tile
+  (`HIPS_DISPLAY_INVALID`, anche per `vmin ≥ vmax`); `hips_pixel_cut = vmin
+  vmax`.
+- **Memoria (A10, D11-11):** stima = copie `float64` delle immagini + lavoro
+  di un tile; oltre il limite delle operazioni dell'immagine (4 GB di
+  default) → `MEMORY_LIMIT_EXCEEDED` prima di scrivere.
+- **`Moc.fits`** = unione dei MOC delle immagini all'ordine `order`, scritto
+  con `write_moc` del 16 (FITS IVOA 2.0); **`properties`** scritto **per
+  ultimo** (un'interruzione non lascia un HiPS valido a metà): le 9 chiavi
+  obbligatorie (`hips_version = 1.4`) più `hips_tile_width`,
+  `hips_pixel_bitpix`, `hips_builder = AstroTwo <versione>`, date di
+  creazione e rilascio, `hips_sampling`, `hips_overlay`, `hips_hierarchy`,
+  `moc_sky_fraction`, `hips_order_min = 0`. **`Allsky` non scritto** (avviso
+  `HIPS_ALLSKY_NOT_WRITTEN`, **D12-8**). Il HiPS generato si rilegge con
+  `read_service`, `fetch_tile`, `pixel_values` (T14).
+
 ## 4. Cosa NON fa
 
 - Non fa le trasformazioni di coordinate (10) né gestisce i file FITS locali (11).
@@ -399,9 +457,11 @@ riquadro mostrato.
   un campo. Calcolo deterministico su griglia HEALPix.
 - **Cache:** nessuna classe propria (CA4): i riquadri si salvano e si
   rileggono con `SharedCache` di `04-cache.md`.
-- **`build_hips(...)`** — generazione HiPS (H9) secondo D12-1 (corretta il
-  2026-10-10): standard IVOA HiPS 1.0, `reproject` dove possibile, codice
-  nostro per il resto.
+- **`build_hips(images, output, *, order, hips_id, title, method,
+  tile_width=512, formats=(), display=None, status=…)`** — generazione HiPS
+  (H9) secondo D12-1 (corretta il 2026-10-10): standard IVOA HiPS 1.0,
+  `reproject` dove possibile, codice nostro per il resto (dettagli in §3,
+  P5).
 - **`cube_planes(survey)`** (H24) — numero e descrizione dei piani di un
   cubo HiPS; `fetch_tile` accetta l'indice del piano per i cubi.
 - **`CollectionIndex`** (classe, H26) — copia locale delle proprietà delle
@@ -465,6 +525,10 @@ riquadro mostrato.
 | Copertura di un survey planetario | nessun MOC (MOC IVOA solo ICRS; con il 19) | `HIPS_FRAME_UNSUPPORTED` |
 | Operazione per un tipo di HiPS diverso (es. tile immagine di un catalogo, piani di un'immagine) | rifiuto | `HIPS_TYPE_MISMATCH` |
 | `metadata.xml` di un catalogo HiPS assente o non leggibile | nessuna tabella | `HIPS_METADATA_INVALID` |
+| `build_hips` con tile PNG/JPEG senza parametri di visualizzazione / con `histeq` o `vmin ≥ vmax` | nessun HiPS | `HIPS_DISPLAY_REQUIRED` / `HIPS_DISPLAY_INVALID` |
+| `build_hips` con memoria stimata oltre il limite delle operazioni | nessun HiPS | `MEMORY_LIMIT_EXCEEDED` |
+| `build_hips` senza pixel validi ricampionati | nessun HiPS | `HIPS_EMPTY` |
+| `build_hips` metodo `flux` | nessun HiPS | `OPERATION_UNSUPPORTED` |
 | Formato di tile non offerto dal servizio | nessun tile | `HIPS_FORMAT_UNAVAILABLE` |
 | Indice del tile fuori dall'ordine | rifiuto con l'intervallo | `HEALPIX_INDEX_INVALID` |
 | `hips_frame = ecliptic` (D12-7) o planetario (19) per campi e pixel | rifiuto | `HIPS_FRAME_UNSUPPORTED` |
@@ -504,6 +568,9 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | T10 | Sincronizzazione delle collezioni (H26) | `CollectionIndex.sync()` contro un MocServer simulato, poi `filter` per testo | elenco filtrato corretto; origine e data della sincronizzazione presenti | servizio simulato (test di rete separato per il servizio reale) |
 | T11 | MocServer assente (H26) | sincronizzazione con rete assente e copia locale presente | copia locale usata, avviso `MOCSERVER_UNAVAILABLE` con la data della copia | test di unità |
 | T13 | Catalogo HiPS progressivo (H12) | servizio simulato con `metadata.xml` (COOSYS ICRS) e tile TSV agli ordini 0 e 1 attorno a (45°, 20°); lettura fino all'ordine 3; seconda lettura; tile con colonne sbagliate; immagine; catalogo senza `metadata.xml` | righe = tutte quelle dei tile che toccano il cerchio (ricalcolati con `astropy-healpix`); posizioni ICRS, unità e nulli dal VOTable; all'ordine 2 solo figli dei tile presenti, ordine 3 non chiesto; seconda lettura dalla cache; `HIPS_BAD_TILE` dopo una nuova richiesta; `HIPS_TYPE_MISMATCH`; `HIPS_METADATA_INVALID` | servizio simulato |
+| T14 | Generazione e rilettura (H9) | immagine TAN sintetica (11) → `build_hips` all'ordine 4, tile 64; servire la cartella da un server simulato e rileggerla | proprietà valide per `read_service`; valori ai centri delle celle uguali all'interpolazione bilineare indipendente (`scipy`) entro 10⁻⁹; ordine inferiore = media dei 4 pixel (`numpy`) nei quadranti; `Moc.fits` uguale a `moc_from_image` del 16 | ricalcolo con `scipy`, `numpy`, `mocpy` |
+| T15 | Più immagini e PNG/JPEG (H9) | due immagini sovrapposte, `nearest`, PNG e JPEG con `(−2, 12, linear)` | pixel della sovrapposizione = media delle due (ricalcolo nel test); PNG = palette grigia di `matplotlib` sul valore normalizzato, righe dall'alto, trasparente dove non finito; JPEG valido; `hips_tile_format`, `hips_pixel_cut` | ricalcolo con `matplotlib` |
+| T16 | Errori di `build_hips` | ordine mancante, `flux`, PNG senza parametri, `histeq`, `vmin ≥ vmax`, ordine troppo alto, limite di memoria piccolo, immagine senza WCS, cartella non vuota, valori non validi | `TypeError`, `OPERATION_UNSUPPORTED`, `HIPS_DISPLAY_REQUIRED`, `HIPS_DISPLAY_INVALID`, `HEALPIX_ORDER_INVALID`, `MEMORY_LIMIT_EXCEEDED`, `WCS_MISSING`, `FileExistsError` (file esistente intatto), `ValueError` | test di unità |
 | T12 | Valore del pixel su HiPS (H27) | leggere il valore sotto il cursore su un tile FITS in cache | valore uguale a quello del tile FITS letto con `astropy.io.fits` | confronto diretto |
 
 ## 13. Decisioni aperte
@@ -543,6 +610,17 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
   scelto dal proprietario, dichiarato nel risultato. **Raccomandazione:**
   (a) finché non si trova un HiPS eclittico reale da cui verificarlo.
   Fermo solo questo pezzo.
+- **D12-8 — File `Allsky` di `build_hips`: DA DECIDERE (aperta il
+  2026-10-12, Gruppo 3).** Lo standard HiPS 1.0 (§4.3.2) dice che l'Allsky
+  è facoltativo, è una matrice di tile affiancati "da sinistra a destra" di
+  larghezza `(int)sqrt(numero di tile)` e con tile ridotti a una potenza di
+  2, ma **non** dice in che verso vanno le righe della matrice né come si
+  riempie l'ultima riga, né l'orientamento dentro i tile per il FITS. Opzioni:
+  (a) nessun Allsky (oggi; è facoltativo e i client devono comunque usare i
+  tile regolari); (b) ricavare la disposizione dagli Allsky di un HiPS
+  pubblico e verificarla sui suoi tile (validazione, non copia: regola
+  d'oro n. 8), poi scriverlo. **Raccomandazione:** (a) ora, (b) se serve per
+  la velocità del 41. Fermo solo questo pezzo.
 - **D12-5 — Cataloghi HiPS progressivi (H12): DECISA il 2026-10-04.**
   **Dati e computazioni HEALPix nel `16`, servizio dei tile nel `12`** (stesso
   confine scritto in `16-core-moc.md`, D16-5). **Motivazione:** un solo
@@ -568,3 +646,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **P2 scritta** (`tile_path`, `tiles_for_fov`/`TileSelection`, `order_for_resolution`, `fetch_tile`/`HiPSTile`, `service_coverage`, `TileMemory`, `pixel_values`/`tile_pixel_values`/`PixelValues`; T2–T6, T12, tile corrotti, JPEG/PNG, memoria): cache comune per i tile, una nuova richiesta per un tile corrotto, 404 = `HIPS_TILE_MISSING` (scelta minore), filtro di copertura solo equatoriale (scelta minore); nuova decisione aperta **D12-7** (`hips_frame = ecliptic`, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P3 scritta** (`CollectionIndex` con `sync`/`filter`, `INDEX_FIELDS`, `survey_coverage`, `set_survey`/`ActiveSurvey`, `DEFAULT_SURVEY`; T1, T10, T11): copia locale delle collezioni HiPS dal MocServer, risposte in ISO-8859-1 come dichiarato dal servizio (verifica del 2026-10-12), copertura dal `Moc.fits` del servizio o dal MocServer; campi dell'indice e regole del filtro come scelte minori. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P4 scritta** (`cube_planes`/`CubePlanes`, piani in `fetch_tile` e `pixel_values`, `catalog_tiles`/`CatalogTiles`; T9, nuovo T13): cubi HiPS 1.0 con suffisso `_n` e asse fisico dalle chiavi `data_cube_*` (indice FITS dal 10); cataloghi progressivi dai tile TSV regolari con `metadata.xml`, rami chiusi dai tile assenti, righe non ritagliate (scelta minore). Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **P5 scritta — modulo 12 completo tranne i pezzi fermi** (`build_hips`/`BuildResult`, `BUILD_METHODS`; T14–T16 nuovi): WCS APE 14 del tile + `reproject_interp` (verifica del 2026-10-12 contro il WCS HPX interno di `reproject` e un'interpolazione indipendente; uso di `reproject` da confermare), tile FITS `float64`, media pesata con la copertura, ordini inferiori per media di 4 pixel, PNG/JPEG con parametri espliciti (`set_display` dell'11), `Moc.fits` dal 16, `properties` per ultimo; nuova decisione aperta **D12-8** (Allsky, Gruppo 3). Fermi: H10 SkyView (URL SIA non documentato da NASA), D12-6, D12-7, D12-8. Stato `approvato` invariato. |

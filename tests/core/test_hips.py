@@ -720,3 +720,167 @@ def test_progressive_catalog(service, cache):
     with pytest.raises(HiPSError) as err:
         catalog_tiles(nometa, center, radius, 1, cache=cache)
     assert err.value.code == "HIPS_METADATA_INVALID"
+
+
+# =============================================================================
+# P5 — build_hips (test nuovi T14–T16)
+
+from dataclasses import replace as dc_replace  # noqa: E402
+
+from astropy.wcs import WCS  # noqa: E402
+from scipy.ndimage import map_coordinates  # noqa: E402
+
+from astrotwo.core.hips import build_hips  # noqa: E402
+from astrotwo.core.images_fits import LargeImageLimits, load_image  # noqa: E402
+from astrotwo.core.moc import moc_from_image, read_moc  # noqa: E402
+
+
+def tan_image(tmp_path, name, center=(45.0, 20.0), shape=(160, 180), offset=0.0, bunit="mJy"):
+    """Immagine TAN sintetica scritta nel test (0.01°/pixel) e letta con il modulo 11."""
+    w = WCS(naxis=2)
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    w.wcs.crval = list(center)
+    w.wcs.crpix = [shape[1] / 2 + 0.5, shape[0] / 2 + 0.5]
+    w.wcs.cdelt = [-0.01, 0.01]
+    w.wcs.radesys = "ICRS"
+    yy, xx = np.mgrid[0:shape[0], 0:shape[1]]
+    data = (np.sin(xx / 17.0) + np.cos(yy / 23.0) + offset).astype(np.float32)
+    header = w.to_header()
+    header["BUNIT"] = bunit
+    path = tmp_path / name
+    fits.PrimaryHDU(data, header=header).writeto(path)
+    return load_image(path), data, w
+
+
+def serve_directory(service, root, prefix="/gen"):
+    """Serve i file di una cartella HiPS dal servizio simulato (come un server HTTP qualsiasi)."""
+    for path in root.rglob("*"):
+        if path.is_file():
+            payload = path.read_bytes()
+            service.routes[f"{prefix}/{path.relative_to(root).as_posix()}"] = \
+                lambda request, p=payload: (200, "application/octet-stream", p)
+    return service.url + prefix
+
+
+def test_t14_build_hips_round_trip(tmp_path, service, cache):
+    image, data, w = tan_image(tmp_path, "a.fits")
+    order, width = 4, 64
+    result = build_hips([image], tmp_path / "hips", order=order, hips_id="TEST/P/generato", title="HiPS generato",
+                        method="bilinear", tile_width=width)
+    assert result.order == order and result.tile_width == width and result.formats == ("fits",)
+    assert set(result.tiles_per_order) == set(range(order + 1)) and "HIPS_ALLSKY_NOT_WRITTEN" in dict(result.warnings)
+    # Il HiPS generato si rilegge con le funzioni del 12 (standard HiPS 1.0) da un server HTTP.
+    hips = read_service(serve_directory(service, result.path), cache=cache)
+    assert (hips.hips_id, hips.order, hips.tile_width, hips.tile_formats, hips.body) == \
+        ("TEST/P/generato", order, width, ("fits",), "celestial")
+    assert hips.warnings == () and hips.properties["hips_pixel_bitpix"] == ("-64",)
+    # Valori ai centri delle celle (ordine K+S) uguali all'interpolazione bilineare indipendente (scipy) dell'immagine.
+    hp = HEALPix(nside=2 ** (order + 6), order="nested")
+    cells = np.unique(hp.lonlat_to_healpix(*w.pixel_to_world_values(*np.meshgrid(np.arange(20, 160, 7),
+                                                                                  np.arange(20, 140, 7)))
+                                           * u.deg))
+    lon, lat = hp.healpix_to_lonlat(cells)
+    got = pixel_values(hips, SkyCoord(lon, lat), cache=cache)
+    px, py = w.world_to_pixel_values(lon.deg, lat.deg)
+    expected = map_coordinates(data.astype(np.float64), [py, px], order=1, mode="nearest")
+    assert got.values.dtype == np.dtype(">f8") and got.unit == "mJy"
+    assert np.allclose(got.values, expected, rtol=0, atol=1e-9)
+    # Ordine inferiore: ogni pixel = media dei 4 pixel dell'ordine sotto (ricalcolo con numpy), per ogni figlio
+    # presente di un tile dell'ordine order − 1, nel suo quadrante.
+    import warnings
+
+    deepest = sorted(int(p.stem[4:]) for p in (result.path / f"Norder{order}").rglob("Npix*.fits"))
+    parent = deepest[0] >> 2
+    upper = fits.getdata(result.path / tile_path(order - 1, parent, "fits"))
+    half = width // 2
+    quadrants = {0: (slice(half, None), slice(None, half)), 1: (slice(None, half), slice(None, half)),
+                 2: (slice(half, None), slice(half, None)), 3: (slice(None, half), slice(half, None))}
+    checked = 0
+    for q, (rows, cols) in quadrants.items():
+        child_path = result.path / tile_path(order, 4 * parent + q, "fits")
+        if not child_path.exists():
+            assert np.all(np.isnan(upper[rows, cols]))
+            continue
+        blocks = fits.getdata(child_path).reshape(half, 2, half, 2)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            mean = np.nanmean(blocks, axis=(1, 3))
+        assert np.allclose(upper[rows, cols], mean, equal_nan=True)
+        checked += 1
+    assert checked >= 1
+    # Moc.fits = MOC dei pixel validi dell'immagine all'ordine del HiPS (modulo 16).
+    assert read_moc(result.path / "Moc.fits") == moc_from_image(image, order)
+    assert float(hips.properties["moc_sky_fraction"][0]) == pytest.approx(result.coverage.sky_fraction)
+
+
+def test_t15_build_hips_two_images_and_png(tmp_path):
+    a, data_a, wa = tan_image(tmp_path, "a.fits")
+    b, data_b, wb = tan_image(tmp_path, "b.fits", center=(45.5, 20.0), offset=10.0)
+    result = build_hips([a, b], tmp_path / "hips", order=4, hips_id="TEST/P/due", title="Due immagini",
+                        method="nearest", tile_width=64, formats=("png", "jpeg"), display=(-2.0, 12.0, "linear"))
+    assert result.formats == ("fits", "png", "jpeg")
+    props = parse_properties((result.path / "properties").read_text())
+    assert props["hips_tile_format"] == ("fits png jpeg",) and props["hips_pixel_cut"] == ("-2.0 12.0",)
+    # Pixel nella sovrapposizione: media delle due immagini (copertura piena) ricalcolata con nearest.
+    hp = HEALPix(nside=2 ** (4 + 6), order="nested")
+    lon, lat = 45.25, 20.0
+    cell = int(hp.lonlat_to_healpix(lon * u.deg, lat * u.deg))
+    clon, clat = hp.healpix_to_lonlat([cell])
+    tile_index = cell >> 12
+    from astrotwo.core.hips import _tile_pixels
+
+    _, x, y = _tile_pixels(clon.deg, clat.deg, 4, 64)
+    tile = fits.getdata(result.path / tile_path(4, tile_index, "fits"))
+    values = []
+    for data, w in ((data_a, wa), (data_b, wb)):
+        px, py = w.world_to_pixel_values(clon.deg, clat.deg)
+        values.append(float(data[int(np.round(py[0])), int(np.round(px[0]))]))
+    assert tile[y[0], x[0]] == pytest.approx(np.mean(values), abs=1e-6)
+    # PNG: valore normalizzato (v − vmin) / (vmax − vmin) tagliato in [0, 1] con la palette "gray" di matplotlib a
+    # 8 bit, righe dall'alto (standard §4.2.1.3).
+    import matplotlib
+
+    with Image.open(result.path / tile_path(4, tile_index, "png")) as opened:
+        png = np.array(opened)
+    finite = np.isfinite(tile)
+    normalized = np.clip((tile.astype(np.float32) - np.float32(-2.0)) / np.float32(14.0), 0, 1)
+    level = matplotlib.colormaps["gray"](np.where(finite, normalized, 0), bytes=True)[:, :, 0]
+    assert np.array_equal(png[::-1][:, :, 0][finite], level[finite])
+    assert np.all(png[::-1][:, :, 3][~finite] == 0) and np.all(png[::-1][:, :, 3][finite] == 255)
+    with Image.open(result.path / tile_path(4, tile_index, "jpg")) as opened:
+        assert opened.format == "JPEG"
+
+
+def test_t16_build_hips_errors(tmp_path):
+    image, _, _ = tan_image(tmp_path, "a.fits")
+    out = tmp_path / "out"
+    with pytest.raises(TypeError):
+        build_hips([image], out, hips_id="TEST/P/x", title="x", method="bilinear")  # ordine obbligatorio
+    cases = [
+        (dict(method="flux"), "OPERATION_UNSUPPORTED"),
+        (dict(formats=("png",)), "HIPS_DISPLAY_REQUIRED"),
+        (dict(formats=("png",), display=(0.0, 1.0, "histeq")), "HIPS_DISPLAY_INVALID"),
+        (dict(formats=("png",), display=(1.0, 0.0, "linear")), "HIPS_DISPLAY_INVALID"),
+        (dict(order=24), "HEALPIX_ORDER_INVALID"),
+    ]
+    for change, code in cases:
+        args = dict(order=3, hips_id="TEST/P/x", title="x", method="bilinear", tile_width=64) | change
+        with pytest.raises(HiPSError) as err:
+            build_hips([image], out, **args)
+        assert err.value.code == code, change
+    tight = dc_replace(image, limits=LargeImageLimits(operation_bytes=10_000))
+    with pytest.raises(HiPSError) as err:
+        build_hips([tight], out, order=3, hips_id="TEST/P/x", title="x", method="bilinear", tile_width=64)
+    assert err.value.code == "MEMORY_LIMIT_EXCEEDED"
+    with pytest.raises(HiPSError) as err:
+        build_hips([dc_replace(image, wcs=None)], out, order=3, hips_id="TEST/P/x", title="x", method="bilinear")
+    assert err.value.code == "WCS_MISSING"
+    out.mkdir()
+    (out / "altro.txt").write_text("già qui")
+    with pytest.raises(FileExistsError):
+        build_hips([image], out, order=3, hips_id="TEST/P/x", title="x", method="bilinear", tile_width=64)
+    assert (out / "altro.txt").read_text() == "già qui"
+    for bad in ({"tile_width": 100}, {"hips_id": "ivo://TEST/P/x"}, {"title": ""}, {"formats": ("gif",)}):
+        args = dict(order=3, hips_id="TEST/P/x", title="x", method="bilinear", tile_width=64) | bad
+        with pytest.raises(ValueError):
+            build_hips([image], tmp_path / "nuova", **args)
