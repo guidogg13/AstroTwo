@@ -21,14 +21,26 @@ import astropy.units as u
 
 __all__ = [
     "CELESTIAL_FRAMES",
+    "DEFAULT_TILE_MEMORY_BYTES",
     "HIPS_STANDARD_VERSION",
     "MANDATORY_PROPERTIES",
     "HiPSError",
     "HiPSList",
     "HiPSService",
+    "HiPSTile",
+    "PixelValues",
+    "TileMemory",
+    "TileSelection",
     "add_hips",
+    "fetch_tile",
+    "order_for_resolution",
     "parse_properties",
+    "pixel_values",
     "read_service",
+    "service_coverage",
+    "tile_path",
+    "tile_pixel_values",
+    "tiles_for_fov",
 ]
 
 #: Valore di ``hips_version`` dello standard HiPS 1.0 (§4.4.1: "1.4" corrisponde al documento).
@@ -393,3 +405,466 @@ class HiPSList:
                  f"{existing.retrieved_at.isoformat()}); refresh=True per rileggerlo"),))
         self._services[service.hips_id] = service
         return service
+
+
+# --------------------------------------------------------------------------
+# P2 — Tile: campo, scaricamento con cache e provenienza, copertura, valore del pixel (H27)
+# --------------------------------------------------------------------------
+
+#: Tile tenuti in memoria (A10 per gli HiPS, decisa il 2026-10-12): 512 MB = 512 × 10⁶ byte, configurabile.
+DEFAULT_TILE_MEMORY_BYTES = 512_000_000
+_EXTENSIONS = {"fits": "fits", "jpeg": "jpg", "png": "png", "tsv": "tsv"}
+
+
+def _check_space_order(order: object, high: int = _SPACE_MAX_ORDER, what: str = "ordine HEALPix") -> int:
+    if isinstance(order, bool) or not isinstance(order, int) or not 0 <= order <= high:
+        raise HiPSError("HEALPIX_ORDER_INVALID", f"{what} {order!r}: serve un intero in [0, {high}]")
+    return order
+
+
+def _check_index(order: int, index: object) -> int:
+    import numpy as np
+
+    npix = 12 * 4 ** order
+    if isinstance(index, bool) or not isinstance(index, (int, np.integer)) or not 0 <= int(index) < npix:
+        raise HiPSError("HEALPIX_INDEX_INVALID", f"indice {index!r} all'ordine {order}: serve un intero in "
+                        f"[0, {npix - 1}]")
+    return int(index)
+
+
+def tile_path(order: int, index: int, extension: str, *, plane: int | None = None) -> str:
+    """Percorso di un tile secondo lo standard HiPS 1.0 §4.1: ``NorderK/DirD/NpixN.ext``, D = (N/10000)×10000;
+    per i cubi il suffisso ``_n`` del piano (§4.2.3; il piano 0 è il tile senza suffisso)."""
+    suffix = f"_{plane}" if plane else ""
+    return f"Norder{order}/Dir{(index // 10000) * 10000}/Npix{index}{suffix}.{extension}"
+
+
+def _astropy_frame(frame: str) -> str:
+    """Frame di ``astropy`` di un ``hips_frame``; ``ecliptic`` (frame non precisato dallo standard, D12-7) e i frame
+    planetari (modulo 19) → ``HIPS_FRAME_UNSUPPORTED``."""
+    name = CELESTIAL_FRAMES.get(frame)
+    if name is None:
+        why = ("lo standard HiPS 1.0 non precisa quale eclittica (D12-7, da decidere)" if frame == "ecliptic"
+               else "frame planetario: le posizioni planetarie arrivano con il modulo 19")
+        raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"hips_frame {frame!r}: {why}", frame=frame)
+    return name
+
+
+def _to_frame(coords, frame: str, what: str):
+    """Coordinate (``SkyFrame``/``SkyCoord``) nel frame del HiPS con il modulo 10: (lon, lat) in gradi e nota."""
+    import numpy as np
+    from astropy.coordinates import SkyCoord
+
+    from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
+
+    target = _astropy_frame(frame)
+    if isinstance(coords, SkyCoord):
+        coords = SkyFrame(coords)
+    if not isinstance(coords, SkyFrame):
+        raise TypeError(f"{what}: servono coordinate SkyFrame/SkyCoord con il sistema dichiarato (modulo 10)")
+    try:
+        converted = coords if coords.frame_name == target else coords.to(target)
+    except CoordinatesWcsError as exc:
+        raise HiPSError("REGION_INVALID", f"{what}: {exc.message}") from exc
+    lon = np.atleast_1d(converted.lon.to_value(u.deg))
+    lat = np.atleast_1d(converted.lat.to_value(u.deg))
+    note = "" if coords.frame_name == target else f" (convertite da {coords.frame_name} in {target} con il modulo 10)"
+    return lon, lat, note
+
+
+def _tile_cells_at(moc, order: int):
+    """Celle all'ordine ``order`` che toccano il MOC spaziale (``mocpy``), come insieme ordinato di indici."""
+    import numpy as np
+
+    native = int(moc.max_order)
+    if native >= order:
+        cells = np.asarray(moc.degrade_to_order(order).flatten(), dtype=np.int64)
+    else:
+        cells = np.asarray(moc.flatten(), dtype=np.int64)  # celle all'ordine del MOC
+    return cells, native
+
+
+def _in_coverage(coverage, order: int, indices):
+    """Maschera dei tile (ordine, indici NESTED in ICRS) che toccano il MOC del servizio."""
+    import numpy as np
+
+    cells, native = _tile_cells_at(coverage.moc, order)
+    indices = np.asarray(indices, dtype=np.int64)
+    if native >= order:
+        return np.isin(indices, cells)
+    return np.isin(indices >> (2 * (order - native)), cells)
+
+
+@dataclass(frozen=True)
+class TileSelection:
+    """Tile che servono per un campo circolare (decisione 4 del 2026-10-12), con la descrizione del calcolo."""
+
+    order: int
+    indices: tuple[int, ...]
+    frame: str
+    outside_coverage: int
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def tiles_for_fov(center, radius, order: int, *, frame: str = "equatorial", coverage=None) -> TileSelection:
+    """Tile (NESTED, frame del HiPS) che toccano il cerchio di centro ``center`` e raggio ``radius``, all'ordine dato.
+
+    Calcolo: ``astropy-healpix`` ``cone_search_lonlat`` (celle che toccano il cerchio, anche in parte); centro
+    convertito nel frame del HiPS con il modulo 10. Con ``coverage`` (MOC spaziale del servizio, ICRS) restano solo
+    i tile che lo toccano; nessuno → ``HIPS_OUT_OF_COVERAGE``. Il filtro di copertura vale solo per i HiPS
+    equatoriali (il MOC è ICRS): per gli altri frame non si applica e si dichiara."""
+    import numpy as np
+    from astropy_healpix import HEALPix
+
+    order = _check_space_order(order)
+    if not isinstance(radius, u.Quantity) or not radius.isscalar or not radius.unit.is_equivalent(u.deg) \
+            or not 0 < float(radius.to_value(u.deg)) <= 180:
+        raise HiPSError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità in (0°, 180°]")
+    lon, lat, note = _to_frame(center, frame, "centro del campo")
+    if lon.size != 1:
+        raise HiPSError("REGION_INVALID", "il centro del campo è una sola posizione")
+    hp = HEALPix(nside=2 ** order, order="nested")
+    found = np.sort(np.asarray(hp.cone_search_lonlat(lon[0] * u.deg, lat[0] * u.deg, radius), dtype=np.int64))
+    notes: list[tuple[str, str]] = []
+    outside = 0
+    if coverage is not None:
+        if frame != "equatorial":
+            notes.append(("HIPS_COVERAGE_NOT_CHECKED", f"hips_frame {frame!r}: il MOC del servizio è in ICRS, filtro "
+                          "di copertura non applicato"))
+        else:
+            if getattr(coverage, "kind", None) != "space":
+                raise TypeError("coverage: serve il MOC spaziale del servizio (modulo 16)")
+            inside = _in_coverage(coverage, order, found)
+            outside = int(np.count_nonzero(~inside))
+            found = found[inside]
+            if not found.size:
+                raise HiPSError("HIPS_OUT_OF_COVERAGE", f"campo fuori dalla copertura del servizio ({outside} tile "
+                                "fuori): nessun tile", outside=outside)
+    description = (f"{found.size} tile all'ordine {order} per il cerchio ({lon[0]!r}°, {lat[0]!r}°) di raggio "
+                   f"{float(radius.to_value(u.deg))!r}° nel frame {frame}{note} (calcolo: astropy-healpix "
+                   "cone_search_lonlat, celle che toccano il cerchio)"
+                   + (f"; {outside} tile fuori dalla copertura esclusi" if outside else ""))
+    return TileSelection(order=order, indices=tuple(int(i) for i in found), frame=frame, outside_coverage=outside,
+                         description=description, warnings=tuple(notes))
+
+
+def order_for_resolution(service: HiPSService, resolution) -> tuple[int, tuple[tuple[str, str], ...]]:
+    """Ordine più basso il cui pixel di tile non supera ``resolution`` (angolo); oltre l'ordine massimo del servizio
+    si resta all'ordine massimo, dichiarato (``HIPS_RESOLUTION_LIMIT``). Calcolo: ``astropy-healpix``."""
+    from astropy_healpix import nside_to_pixel_resolution
+
+    if service.tile_width is None:
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: i cataloghi non hanno pixel")
+    if not isinstance(resolution, u.Quantity) or not resolution.unit.is_equivalent(u.deg) or resolution.value <= 0:
+        raise ValueError("resolution: angolo positivo con unità")
+    shift = service.tile_width.bit_length() - 1
+    for order in range(service.order + 1):
+        if nside_to_pixel_resolution(2 ** (order + shift)) <= resolution:
+            return order, ()
+    return service.order, (("HIPS_RESOLUTION_LIMIT", f"{service.hips_id}: risoluzione richiesta {resolution} "
+                            f"oltre quella del servizio; ordine massimo {service.order}"),)
+
+
+@dataclass(frozen=True, eq=False)
+class HiPSTile:
+    """Tile di un servizio HiPS con provenienza (A7). ``data`` è nell'orientamento FITS (riga 0 = prima riga del
+    FITS); i tile JPEG/PNG, scritti dall'alto in basso (standard §4.2.1.3), sono capovolti per allinearli."""
+
+    hips_id: str
+    order: int
+    index: int
+    format: str
+    data: object  # numpy.ndarray: tipo nativo del FITS (DC6); uint8 (…, 3 o 4 canali) per JPEG/PNG
+    header: object | None  # astropy.io.fits.Header per i tile FITS
+    url: str
+    retrieved_at: datetime
+    from_cache: bool
+    body: str | None
+    plane: int | None = None
+    warnings: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def nbytes(self) -> int:
+        return int(self.data.nbytes)
+
+    def provenance(self) -> str:
+        state = "copia in cache" if self.from_cache else "scaricato"
+        return f"{self.url} ({state} il {self.retrieved_at.isoformat()})"
+
+
+class TileMemory:
+    """Tile in memoria entro un limite (A10 per gli HiPS: 512 × 10⁶ byte di default, configurabile); oltre, si
+    tolgono i tile usati meno di recente. Non è una cache su disco (quella è la cache comune del 04, CA4)."""
+
+    def __init__(self, limit_bytes: int = DEFAULT_TILE_MEMORY_BYTES) -> None:
+        from collections import OrderedDict
+
+        if isinstance(limit_bytes, bool) or not isinstance(limit_bytes, int) or limit_bytes <= 0:
+            raise ValueError("limit_bytes: intero positivo")
+        self.limit_bytes = limit_bytes
+        self._tiles: OrderedDict[str, HiPSTile] = OrderedDict()
+        self.total_bytes = 0
+        self.evicted = 0
+
+    def __len__(self) -> int:
+        return len(self._tiles)
+
+    def get(self, url: str) -> HiPSTile | None:
+        tile = self._tiles.get(url)
+        if tile is not None:
+            self._tiles.move_to_end(url)
+        return tile
+
+    def put(self, tile: HiPSTile) -> None:
+        if tile.nbytes > self.limit_bytes:
+            return  # più grande del limite da solo: non si tiene in memoria
+        old = self._tiles.pop(tile.url, None)
+        if old is not None:
+            self.total_bytes -= old.nbytes
+        self._tiles[tile.url] = tile
+        self.total_bytes += tile.nbytes
+        while self.total_bytes > self.limit_bytes:
+            _, dropped = self._tiles.popitem(last=False)
+            self.total_bytes -= dropped.nbytes
+            self.evicted += 1
+
+
+def _decode_tile(payload: bytes, fmt: str, width: int, url: str):
+    """Dati e intestazione di un tile; ``None`` se il tile è corrotto o di dimensione inattesa."""
+    import io
+
+    import numpy as np
+
+    if fmt == "fits":
+        from astropy.io import fits
+
+        try:
+            with fits.open(io.BytesIO(payload), memmap=False) as hdul:
+                hdu = next((h for h in hdul if h.data is not None), None)
+                if hdu is None:
+                    return None, "nessun dato nel FITS"
+                data, header = np.array(hdu.data), hdu.header.copy()
+        except Exception as exc:  # astropy: OSError/ValueError/TypeError per un FITS rovinato
+            return None, f"FITS non leggibile ({exc})"
+        if data.shape[-2:] != (width, width):
+            return None, f"dimensione {data.shape} invece di {width}×{width}"
+        return (data, header), None
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(payload)) as image:
+            image.load()
+            expected = "JPEG" if fmt == "jpeg" else "PNG"
+            if image.format != expected:
+                return None, f"formato {image.format} invece di {expected}"
+            array = np.array(image)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        return None, f"immagine non leggibile ({exc})"
+    if array.shape[:2] != (width, width):
+        return None, f"dimensione {array.shape[:2]} invece di {width}×{width}"
+    return (np.ascontiguousarray(array[::-1]), None), None
+
+
+def _download_tile(url: str, timeouts):
+    """Scarica tutto o niente; 404 → ``None`` (tile non fornito)."""
+    import requests
+
+    with requests.get(url, timeout=timeouts.as_requests(), stream=True) as response:
+        if response.status_code == 404:
+            return None
+        if not response.ok:
+            raise HiPSError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
+                            url=url, status=response.status_code)
+        return b"".join(response.iter_content(chunk_size=1 << 16))
+
+
+def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | None = None, plane: int | None = None,
+               coverage=None, cache=None, refresh: bool = False, timeouts=None,
+               memory: TileMemory | None = None) -> HiPSTile:
+    """Tile ``index`` all'ordine ``order`` (immagini e cubi): prima la memoria, poi la cache comune (file del
+    modulo 12, con origine e data), poi la rete. Mai un tile finto: rete assente senza copia → ``NET_TIMEOUT``;
+    tile corrotto o di dimensione inattesa → una sola nuova richiesta, poi ``HIPS_BAD_TILE`` (decisione 5);
+    tile non fornito dal servizio (HTTP 404) → ``HIPS_TILE_MISSING``; fuori dal MOC ``coverage`` del servizio →
+    ``HIPS_OUT_OF_COVERAGE`` senza richiesta."""
+    import requests
+
+    from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, SharedCache
+
+    if not isinstance(service, HiPSService):
+        raise TypeError("fetch_tile: serve un HiPSService")
+    if service.dataproduct_type == "catalog":
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: HiPS catalogo, i tile si leggono come tabelle")
+    timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
+    order = _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    index = _check_index(order, index)
+    fmt = service.tile_formats[0] if format is None else format
+    if fmt not in service.tile_formats:
+        raise HiPSError("HIPS_FORMAT_UNAVAILABLE", f"{service.hips_id}: formato {fmt!r} non offerto; formati "
+                        f"{', '.join(service.tile_formats)}", format=fmt)
+    plane = _check_plane(service, plane)
+    if coverage is not None and service.frame == "equatorial" and not _in_coverage(coverage, order, [index])[0]:
+        raise HiPSError("HIPS_OUT_OF_COVERAGE", f"{service.hips_id}: tile {index} all'ordine {order} fuori dalla "
+                        "copertura del servizio; nessun tile", order=order, index=index)
+    url = f"{service.base_url}/{tile_path(order, index, _EXTENSIONS[fmt], plane=plane)}"
+    if memory is not None and not refresh:
+        held = memory.get(url)
+        if held is not None:
+            return held
+    cache = SharedCache() if cache is None else cache
+    key = f"tile:{url}"
+    notes: list[tuple[str, str]] = []
+    cached = None if refresh else cache.get(_CACHE_MODULE, key)
+    attempts = 1  # richieste ammesse dopo un tile corrotto (decisione 5)
+    if cached is not None:
+        decoded, problem = _decode_tile(cached.data, fmt, service.tile_width, url)
+        if decoded is not None:
+            tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], url, cached.retrieved_at,
+                            True, service.body, plane, (("FROM_CACHE", f"copia in cache di {url}, scaricata il "
+                                                         f"{cached.retrieved_at.isoformat()}"),))
+            if memory is not None:
+                memory.put(tile)
+            return tile
+        notes.append(("HIPS_TILE_DISCARDED", f"copia in cache di {url} corrotta ({problem}): scartata, nuova "
+                      "richiesta"))
+        attempts = 0
+    problem = None
+    for _ in range(attempts + 1):
+        try:
+            payload = _download_tile(url, timeouts)
+        except requests.exceptions.RequestException as exc:
+            raise HiPSError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
+                            f"{timeouts.read:g} s lettura): {exc}", url=url) from exc
+        if payload is None:
+            raise HiPSError("HIPS_TILE_MISSING", f"{url}: tile non fornito dal servizio (HTTP 404; lo standard ammette "
+                            "alberi parziali e ordini bassi omessi)", url=url)
+        decoded, problem = _decode_tile(payload, fmt, service.tile_width, url)
+        if decoded is not None:
+            break
+        notes.append(("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem}), scartato"))
+    else:
+        raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem})", url=url)
+    retrieved_at = datetime.now(UTC)
+    try:
+        cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
+    except CacheError as exc:  # es. CACHE_FULL: il tile si usa comunque
+        notes.append((exc.code, exc.message))
+    tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], url, retrieved_at, False,
+                    service.body, plane, tuple(notes))
+    if memory is not None:
+        memory.put(tile)
+    return tile
+
+
+def _check_plane(service: HiPSService, plane) -> int | None:
+    if service.dataproduct_type != "cube":
+        if plane not in (None, 0):
+            raise HiPSError("HIPS_CUBE_PLANE_INVALID", f"{service.hips_id}: non è un cubo, nessun piano {plane!r}")
+        return None
+    return 0 if plane is None else plane  # controllo completo dei piani in P4
+
+
+def service_coverage(service: HiPSService, *, cache=None, refresh: bool = False, timeouts=None) -> tuple:
+    """(MOC, avvisi): MOC del servizio (``Moc.fits`` nella radice, standard HiPS 1.0 §4.4.2) letto con il modulo 16 (cache in FITS
+    IVOA). File assente → ``None`` con avviso ``HIPS_COVERAGE_UNKNOWN`` (il file è solo consigliato)."""
+    from astrotwo.core.moc import MocError, read_moc
+
+    url = service.base_url + "/Moc.fits"
+    try:
+        return read_moc(url, format="fits", kind="space", cache=cache, refresh=refresh, timeouts=timeouts), ()
+    except MocError as exc:
+        response = getattr(exc.__cause__, "response", None)
+        if exc.code == "NET_TIMEOUT" and getattr(response, "status_code", None) == 404:
+            return None, (("HIPS_COVERAGE_UNKNOWN", f"{url}: MOC del servizio assente (facoltativo per lo standard); "
+                           "copertura non nota"),)
+        raise HiPSError(exc.code, exc.message) from exc
+
+
+@dataclass(frozen=True)
+class PixelValues:
+    """Valori dei pixel di HiPS (H27) letti dai tile FITS, mai da una copia ridotta per la visualizzazione."""
+
+    values: object  # numpy.ndarray, tipo dei dati del tile (DC6)
+    tile_index: object  # numpy.ndarray di indici dei tile
+    x: object  # colonna nel tile (indice da 0, orientamento FITS)
+    y: object  # riga nel tile (indice da 0)
+    order: int
+    unit: str | None
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def _tile_pixels(lon, lat, order: int, width: int):
+    """Tile e pixel (x, y) di ogni posizione: cella all'ordine K+S (``astropy-healpix``), tile = cella >> 2S,
+    sotto-indice de-interlacciato (a = bit pari, b = bit dispari); x = b, y = larghezza − 1 − a (disposizione
+    verificata il 2026-10-12, §3)."""
+    import numpy as np
+    from astropy_healpix import HEALPix
+
+    shift = width.bit_length() - 1
+    if order + shift > _SPACE_MAX_ORDER:
+        raise HiPSError("HEALPIX_ORDER_INVALID", f"ordine {order} + log2({width}) oltre {_SPACE_MAX_ORDER}")
+    cells = np.asarray(HEALPix(nside=2 ** (order + shift), order="nested").lonlat_to_healpix(lon * u.deg, lat * u.deg),
+                       dtype=np.int64)
+    tiles = cells >> (2 * shift)
+    sub = cells & ((1 << (2 * shift)) - 1)
+    a = np.zeros_like(sub)
+    b = np.zeros_like(sub)
+    for bit in range(shift):
+        a |= ((sub >> (2 * bit)) & 1) << bit
+        b |= ((sub >> (2 * bit + 1)) & 1) << bit
+    return tiles, b, width - 1 - a
+
+
+def tile_pixel_values(tile: HiPSTile, coords, *, frame: str = "equatorial") -> PixelValues:
+    """Valori del tile FITS alle posizioni date (H27); posizioni fuori dal tile → ``HIPS_OUT_OF_TILE``."""
+    import numpy as np
+
+    if tile.format != "fits":
+        raise HiPSError("HIPS_PIXEL_UNAVAILABLE", f"{tile.url}: il valore del pixel si legge solo dai tile FITS, non da "
+                        f"un tile {tile.format} (copia per la visualizzazione)")
+    lon, lat, note = _to_frame(coords, frame, "posizioni")
+    width = tile.data.shape[-1]
+    tiles, x, y = _tile_pixels(lon, lat, tile.order, width)
+    if np.any(tiles != tile.index):
+        raise HiPSError("HIPS_OUT_OF_TILE", f"{int(np.count_nonzero(tiles != tile.index))} posizioni fuori dal tile "
+                        f"{tile.index} (ordine {tile.order})")
+    data = tile.data if tile.data.ndim == 2 else tile.data[0]
+    values = data[y, x]
+    unit = tile.header.get("BUNIT") if tile.header is not None else None
+    description = (f"{len(values)} valori dal tile FITS {tile.provenance()}{note}; pixel (x, y) da 0 in "
+                   "orientamento FITS (calcolo: astropy-healpix, disposizione dei pixel verificata)")
+    return PixelValues(values=values, tile_index=tiles, x=x, y=y, order=tile.order, unit=unit, description=description)
+
+
+def pixel_values(service: HiPSService, coords, *, order: int | None = None, cache=None, refresh: bool = False,
+                 timeouts=None, memory: TileMemory | None = None) -> PixelValues:
+    """Valore del pixel sotto le posizioni (H27): dai tile FITS del servizio all'ordine dato (default: il più
+    profondo), scaricati o letti dalla cache; mai da tile JPEG/PNG."""
+    import numpy as np
+
+    if "fits" not in service.tile_formats:
+        raise HiPSError("HIPS_PIXEL_UNAVAILABLE", f"{service.hips_id}: nessun tile FITS (formati "
+                        f"{', '.join(service.tile_formats)}); il valore del pixel non è disponibile")
+    order = service.order if order is None else order
+    _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    lon, lat, note = _to_frame(coords, service.frame, "posizioni")
+    tiles, x, y = _tile_pixels(lon, lat, order, service.tile_width)
+    values = None
+    sources = []
+    notes: list[tuple[str, str]] = []
+    for index in np.unique(tiles):
+        tile = fetch_tile(service, order, int(index), format="fits", cache=cache, refresh=refresh, timeouts=timeouts,
+                          memory=memory)
+        data = tile.data if tile.data.ndim == 2 else tile.data[0]
+        if values is None:
+            values = np.empty(len(tiles), dtype=data.dtype)
+        here = tiles == index
+        values[here] = data[y[here], x[here]]
+        sources.append(tile.provenance())
+        notes += [n for n in tile.warnings if n[0] != "FROM_CACHE"]
+        unit = tile.header.get("BUNIT") if tile.header is not None else None
+    description = (f"{len(tiles)} valori di {service.hips_id} all'ordine {order} dai tile FITS {', '.join(sources)}"
+                   f"{note}")
+    return PixelValues(values=values, tile_index=tiles, x=x, y=y, order=order, unit=unit, description=description,
+                       warnings=tuple(notes))
