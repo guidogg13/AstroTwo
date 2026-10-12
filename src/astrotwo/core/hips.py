@@ -1186,8 +1186,8 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
                   timeouts=None):
     """Catalogo HiPS progressivo (H12): sorgenti dei tile che toccano il cerchio, dall'ordine più basso fino a
     ``order`` (ogni ordine aggiunge sorgenti diverse, standard §4.2.2). Si usano i tile regolari, mai ``Allsky``
-    (che li duplica). Un tile assente (HTTP 404) dall'ordine minimo in su chiude il suo ramo (nessun figlio
-    richiesto); sotto ``hips_order_min`` gli ordini omessi si saltano. Colonne, unità, UCD e sistema delle posizioni
+    (che li duplica). Si parte da ``hips_order_min`` (gli ordini sotto sono omessi dal servizio e non si chiedono);
+    un tile assente (HTTP 404) chiude il suo ramo (nessun figlio richiesto). Colonne, unità, UCD e sistema delle posizioni
     da ``metadata.xml`` (VOTable obbligatorio per i cataloghi); la tabella si legge con il lettore del 13. Le righe
     non sono ritagliate sul cerchio (tutto il contenuto dei tile)."""
     import dataclasses
@@ -1228,10 +1228,10 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
     read: list[tuple[int, int, str, int, bool]] = []
     present: set[int] | None = None
     latest = response.retrieved_at
-    for level in range(order + 1):
+    for level in range(min(order_min, order), order + 1):  # gli ordini sotto hips_order_min sono omessi
         selection = tiles_for_fov(center, radius, level, frame=service.frame)
         indices = selection.indices
-        if present is not None and level > order_min:
+        if present is not None:
             indices = tuple(i for i in indices if (i >> 2) in present)
         found: set[int] = set()
         for index in indices:
@@ -1246,9 +1246,8 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
             latest = when if latest is None else max(latest, when)
             found.add(index)
             read.append((level, index, url, len(tile_rows), from_cache))
-        if level >= order_min:
-            present = found
-        if level >= order_min and not found:
+        present = found
+        if not found:
             break
     vtable.create_arrays(nrows=len(rows))
     for j, field in enumerate(vtable.fields):

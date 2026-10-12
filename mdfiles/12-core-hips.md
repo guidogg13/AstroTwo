@@ -335,14 +335,20 @@ riquadro mostrato.
   con URL, righe e cache, completezza, descrizione): dall'ordine 0 fino a
   `order`, i tile TSV che toccano il cerchio (`tiles_for_fov`), dalla cache
   comune o dalla rete; **solo tile regolari, mai `Allsky`** (che li
-  duplica). Dall'ordine `hips_order_min` in su un tile assente (404) chiude
-  il ramo: all'ordine successivo si chiedono solo i figli dei tile presenti;
-  se nessun tile c'è, ci si ferma. Colonne, tipi, unità, UCD e sistema delle
+  duplica). Si parte da `hips_order_min` (gli ordini sotto sono omessi e
+  **non si chiedono**: il servizio reale `CDS/VI/145/attitude` risponde HTTP
+  400, non 404, per l'ordine 0 omesso — test di rete del 2026-10-12); un
+  tile assente (404) chiude il ramo: all'ordine successivo si chiedono solo
+  i figli dei tile presenti; se nessun tile c'è, ci si ferma. Colonne, tipi, unità, UCD e sistema delle
   posizioni da **`metadata.xml`** (obbligatorio, standard §4.4.3; assente o
   non leggibile → `HIPS_METADATA_INVALID`): i valori TSV si convertono con i
   convertitori VOTable di `astropy` secondo il tipo dichiarato (campo vuoto
   = nullo) e la tabella si legge con il lettore del 13 (posizioni dagli
-  UCD, corpo, avvisi). Tile con colonne diverse da `metadata.xml` o righe
+  UCD, corpo, avvisi; il sistema delle posizioni segue le regole del 13: nel
+  servizio reale `CDS/VI/145/attitude` il `COOSYS` sta in `DEFINITIONS` e i
+  `FIELD` non lo richiamano con `ref`, quindi `FRAME_UNKNOWN` e conferma con
+  `confirm_position_columns` del 13 — test di rete del 2026-10-12). Tile con
+  colonne diverse da `metadata.xml` o righe
   con un numero di campi sbagliato: una nuova richiesta, poi
   `HIPS_BAD_TILE`. Le righe **non** sono ritagliate sul cerchio (scelta
   minore, da confermare): sono tutto il contenuto dei tile.

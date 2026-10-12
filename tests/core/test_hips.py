@@ -884,3 +884,48 @@ def test_t16_build_hips_errors(tmp_path):
         args = dict(order=3, hips_id="TEST/P/x", title="x", method="bilinear", tile_width=64) | bad
         with pytest.raises(ValueError):
             build_hips([image], tmp_path / "nuova", **args)
+
+
+# =============================================================================
+# Test di rete (servizi reali, alla fine del modulo 12)
+
+
+@pytest.mark.network
+def test_t1_network_collections_and_default(cache):
+    index = CollectionIndex(cache=cache).sync()
+    dss = index.filter(ID=DEFAULT_SURVEY)
+    assert len(dss) == 1 and dss[0]["dataproduct_type"] == "image" and dss[0]["hips_frame"] == "equatorial"
+    assert len(index.records) > 1000 and index.filter(hips_frame="mars")
+    active = set_survey(cache=cache)
+    assert active.service.hips_id == DEFAULT_SURVEY and active.service.tile_formats[0] == "jpeg"
+    assert active.coverage is not None and active.coverage.sky_fraction == pytest.approx(1.0)
+
+
+@pytest.mark.network
+def test_t12_network_pixel_value(cache):
+    """2MASS K (tile FITS): valore al centro di Betelgeuse = massimo del suo intorno nel tile (verifica della
+    disposizione dei pixel su un servizio reale)."""
+    hips = add_hips("CDS/P/2MASS/K", cache=cache)
+    star = SkyCoord(88.792939 * u.deg, 7.407064 * u.deg)
+    got = pixel_values(hips, star, order=6, cache=cache)
+    tile = fetch_tile(hips, 6, int(got.tile_index[0]), format="fits", cache=cache)
+    x, y = int(got.x[0]), int(got.y[0])
+    box = np.nan_to_num(tile.data[max(0, y - 6):y + 7, max(0, x - 6):x + 7].astype(float))
+    peak = np.unravel_index(np.argmax(box), box.shape)
+    assert abs(peak[0] - min(6, y)) <= 4 and abs(peak[1] - min(6, x)) <= 4
+    assert float(got.values[0]) == float(tile.data[y, x])
+
+
+@pytest.mark.network
+def test_network_catalog_and_cube(cache):
+    cat = add_hips("CDS/VI/145/attitude", cache=cache)
+    result = catalog_tiles(cat, SkyCoord(45 * u.deg, 20 * u.deg), 1 * u.deg, 2, cache=cache)
+    # Il metadata.xml reale dichiara il COOSYS in DEFINITIONS senza ref dai FIELD: il 13 non assume il sistema.
+    assert len(result.table.table) > 0 and result.table.positions.lon == "RAJ2000"
+    assert result.table.positions.frame is None and "FRAME_UNKNOWN" in dict(result.warnings)
+    assert all(t[0] >= 1 for t in result.tiles)  # hips_order_min = 1: ordine 0 non chiesto
+    cube = add_hips("CDS/C/HIPASS", cache=cache)
+    planes = cube_planes(cube)
+    assert planes.depth == 1024 and planes.first_frame == 512
+    tile = fetch_tile(cube, 0, 0, format="fits", plane=512, cache=cache)
+    assert tile.url.endswith("Npix0_512.fits") and tile.data.shape[-2:] == (cube.tile_width, cube.tile_width)
