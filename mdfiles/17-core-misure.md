@@ -167,7 +167,8 @@ Scelte minori:
 4. **`distance_with_profile`:** estremi celesti → distanza angolare con
    `angular_distance` (in gradi) + profilo; estremi in pixel → distanza in
    pixel (`u.pix`, dichiarata "pixel space", nessuna conversione implicita)
-   + profilo. Il "grafico esportabile" (D17-6) è dato come tabella
+   + profilo. I due estremi sono entrambi celesti o entrambi in pixel
+   (misti → `ValueError`). Il "grafico esportabile" (D17-6) è dato come tabella
    (`to_table()`: `astropy.table.Table` con offset lungo il segmento, x, y,
    valore e, con il WCS, posizione celeste, unità e metadati del report): il
    grafico è disegnato dal 41 e il file si scrive fuori da questo modulo.

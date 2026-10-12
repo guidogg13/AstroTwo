@@ -8,16 +8,22 @@ import astropy.units as u
 import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord, angular_separation
+from astropy.io import fits
+from scipy.ndimage import map_coordinates
 
-from astrotwo.core.coordinates_wcs import SkyFrame
+from astrotwo.core.coordinates_wcs import PixelPosition, SkyFrame, pixel_to_sky
+from astrotwo.core.images_fits import load_image
 from astrotwo.core.measures import (
     MeasuresError,
     Segment,
     angular_distance,
     angular_offsets,
     apply_offsets,
+    distance_with_profile,
     offset_position,
     position_angle,
+    profile_along_line,
+    read_pixel,
 )
 
 
@@ -165,3 +171,122 @@ def test_t15_invalid_offsets():
         with pytest.raises(MeasuresError) as exc:
             apply_offsets(p, *args)
         assert exc.value.code == "OFFSET_INVALID"
+
+
+# =============================================================================
+# P2 — lettura dei pixel, profili, distanza con profilo (T3–T6)
+
+def write_image(tmp_path, data, *, wcs=True, bunit="Jy/beam", name="img.fits"):
+    header = fits.Header()
+    if wcs:
+        ny, nx = data.shape
+        header.update({"CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN", "CRVAL1": 150.0, "CRVAL2": 2.0,
+                       "CRPIX1": (nx + 1) / 2, "CRPIX2": (ny + 1) / 2, "CDELT1": -1 / 3600, "CDELT2": 1 / 3600,
+                       "CUNIT1": "deg", "CUNIT2": "deg", "RADESYS": "ICRS"})
+    if bunit is not None:
+        header["BUNIT"] = bunit
+    path = tmp_path / name
+    fits.PrimaryHDU(data, header).writeto(path)
+    return load_image(str(path))
+
+
+def numpy_px(x, y):
+    return PixelPosition(x=np.float64(x), y=np.float64(y), convention="numpy")
+
+
+def test_t3_read_pixel(tmp_path):
+    data = np.arange(100, dtype=np.float32).reshape(10, 10) * 1.5
+    image = write_image(tmp_path, data)
+    reading = read_pixel(image, numpy_px(5, 4))
+    assert reading.value == np.float64(data[4, 5]) and reading.value.dtype == np.float64
+    assert (reading.x, reading.y) == (5, 4) and reading.unit_label == "Jy/beam"
+    # Convenzione FITS (indice da 1): stesso pixel; posizione frazionaria dentro il pixel.
+    assert read_pixel(image, PixelPosition(x=np.float64(6), y=np.float64(5), convention="fits")).value == data[4, 5]
+    assert read_pixel(image, numpy_px(5.49, 3.51)).value == data[4, 5]
+    # Posizione celeste con il WCS: pixel ricalcolato nel test con astropy.wcs.
+    sky = pixel_to_sky(image.wcs, 2.2, 7.8, convention="numpy").coords
+    assert read_pixel(image, sky).value == data[8, 2]
+    window = read_pixel(image, numpy_px(5, 4), half_size=1).window
+    assert np.array_equal(window, data[3:6, 4:7].astype(np.float64))
+    for x, y in ((-0.6, 0), (9.5, 0), (0, 10)):
+        with pytest.raises(MeasuresError) as exc:
+            read_pixel(image, numpy_px(x, y))
+        assert exc.value.code == "POINT_OUT_OF_IMAGE"
+    with pytest.raises(MeasuresError) as exc:
+        read_pixel(image, numpy_px(0, 0), half_size=1)
+    assert exc.value.code == "POINT_OUT_OF_IMAGE"
+    with pytest.raises(TypeError):
+        read_pixel(image, (5, 4))
+
+
+def test_t3_unitless_and_nonfinite(tmp_path):
+    data = np.ones((5, 5))
+    data[2, 2] = np.nan
+    image = write_image(tmp_path, data, bunit=None)
+    reading = read_pixel(image, numpy_px(2, 2))
+    assert np.isnan(reading.value) and reading.unit_label == "unitless"
+    assert "NONFINITE_PIXELS" in dict(reading.report.warnings)
+
+
+def test_t4_profile_on_gradient(tmp_path):
+    yy, xx = np.mgrid[0:20, 0:30]
+    data = 3.0 * xx + 7.0 * yy + 1.0  # gradiente noto: la bilineare è esatta
+    image = write_image(tmp_path, data)
+    profile = profile_along_line(image, numpy_px(2, 3), numpy_px(26, 13), 0.7)
+    length = np.hypot(24, 10)
+    n = int(np.floor(length / 0.7)) + 1
+    t = np.arange(n) * 0.7 / length
+    xs, ys = 2 + 24 * t, 3 + 10 * t
+    assert len(profile.values) == n
+    assert np.allclose(profile.values, 3.0 * xs + 7.0 * ys + 1.0, rtol=0, atol=1e-10)
+    # Ricalcolo indipendente con scipy su tutta l'immagine.
+    expected = map_coordinates(data.astype(np.float64), np.vstack([ys, xs]), order=1, prefilter=False)
+    assert np.allclose(profile.values, expected, rtol=0, atol=1e-12)
+    assert profile.offsets.unit == u.pix and profile.sky is not None and len(profile.sky.coord) == n
+    table = profile.to_table()
+    assert table["value"].unit == u.Unit("Jy/beam") and "interpolation" in table.meta
+
+
+def test_t4_profile_step_and_bounds(tmp_path):
+    image = write_image(tmp_path, np.zeros((10, 10)))
+    for step in (0, -1, np.nan, None, "1", 1 * u.arcsec):
+        with pytest.raises(MeasuresError) as exc:
+            profile_along_line(image, numpy_px(1, 1), numpy_px(5, 5), step)
+        assert exc.value.code == "PROFILE_STEP_INVALID"
+    with pytest.raises(MeasuresError) as exc:
+        profile_along_line(image, numpy_px(1, 1), numpy_px(9.2, 5), 1)
+    assert exc.value.code == "POINT_OUT_OF_IMAGE"
+    # Il secondo estremo è un campione solo se la lunghezza è multipla del passo; estremi sul bordo ammessi.
+    assert len(profile_along_line(image, numpy_px(0, 0), numpy_px(9, 0), 1 * u.pix).values) == 10
+    assert len(profile_along_line(image, numpy_px(0, 0), numpy_px(9, 0), 2).values) == 5
+
+
+def test_t5_distance_with_profile(tmp_path):
+    yy, xx = np.mgrid[0:40, 0:40]
+    image = write_image(tmp_path, (xx + yy).astype(np.float64))
+    a = pixel_to_sky(image.wcs, 5.0, 5.0, convention="numpy").coords
+    b = pixel_to_sky(image.wcs, 30.0, 20.0, convention="numpy").coords
+    result = distance_with_profile(image, a, b, 1.0)
+    assert result.distance == angular_distance(a, b, "deg").value
+    length = np.hypot(result.profile.end.x - result.profile.start.x, result.profile.end.y - result.profile.start.y)
+    assert len(result.profile.values) == int(np.floor(length)) + 1
+    assert abs(length - np.hypot(25, 15)) < 1e-6
+    pixels = distance_with_profile(image, numpy_px(5, 5), numpy_px(30, 20), 1.0)
+    assert pixels.distance.unit == u.pix and abs(pixels.distance.value - np.hypot(25, 15)) < 1e-12
+    assert pixels.report.frame is None and "pixel space" in pixels.report.description
+    assert "distance" in result.to_table().meta
+    with pytest.raises(ValueError):
+        distance_with_profile(image, a, numpy_px(30, 20), 1.0)
+
+
+def test_t6_image_without_wcs(tmp_path):
+    data = np.arange(25, dtype=np.float64).reshape(5, 5)
+    image = write_image(tmp_path, data, wcs=False)
+    for call in (lambda: read_pixel(image, icrs(150, 2)),
+                 lambda: distance_with_profile(image, icrs(150, 2), icrs(150.001, 2), 1.0),
+                 lambda: profile_along_line(image, icrs(150, 2), icrs(150.001, 2), 1.0)):
+        with pytest.raises(MeasuresError) as exc:
+            call()
+        assert exc.value.code == "NO_WCS"
+    assert read_pixel(image, numpy_px(1, 3)).value == data[3, 1]
+    assert distance_with_profile(image, numpy_px(0, 0), numpy_px(4, 0), 1).profile.sky is None
