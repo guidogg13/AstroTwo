@@ -30,13 +30,16 @@ import numpy as np
 import scipy
 from astropy.coordinates import Angle, SkyCoord
 from astropy.table import Table
+from astropy.time import Time
 from scipy.ndimage import map_coordinates
 
-from astrotwo.core.catalogs import skydist
+from astrotwo.core import catalogs
+from astrotwo.core.catalogs import CatalogsError, CatalogTable, skydist
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
     PixelPosition,
     SkyFrame,
+    _to_epoch,
     convert_coordinates,
     convert_pixel_convention,
     pixel_to_sky,
@@ -64,6 +67,9 @@ __all__ = [
     "read_pixel",
     "profile_along_line",
     "distance_with_profile",
+    "CatalogSource",
+    "AutoDistance",
+    "auto_distance",
 ]
 
 _PROVENANCE = f"astropy {astropy.__version__}"
@@ -583,3 +589,153 @@ def distance_with_profile(image, p1, p2, step) -> DistanceWithProfile:
         image=profile.report.image, notes=(what,) + profile.report.notes, warnings=profile.report.warnings,
         provenance=_PIXEL_PROVENANCE)
     return DistanceWithProfile(distance=distance, angular=angular, profile=profile, report=report)
+
+
+# --------------------------------------------------------------------------
+# P4 — distanza automatica tra due sorgenti di catalogo (F1)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CatalogSource:
+    """Una sorgente selezionata: riga di una tabella del 13, con le colonne del moto proprio se servono."""
+
+    table: CatalogTable
+    row: int
+    pm_ra: str | None = None
+    pm_dec: str | None = None
+    pm_ra_includes_cosdec: bool | None = None  # obbligatorio con pm_ra: mai assunto (regola del 13)
+    parallax: str | None = None
+    radial_velocity: str | None = None
+    source_epoch: object = None  # solo se l'epoca non è nei metadati (stessa regola del 13)
+
+
+@dataclass(frozen=True)
+class AutoDistance:
+    """Distanza automatica (F1): distanza, estremi del segmento ed epoca usata."""
+
+    distance: u.Quantity
+    segment: Segment  # estremi = posizioni delle due sorgenti all'epoca usata (SkyFrame)
+    epoch: Time
+    measure: AngularDistance
+    report: MeasureReport
+
+
+def _from_13(exc: CatalogsError, what: str) -> MeasuresError:
+    code = "EPOCH_REQUIRED" if exc.code == "EPOCH_INVALID" else exc.code
+    return MeasuresError(code, f"{what}: {exc.message}")
+
+
+def _single_row(source: CatalogSource, what: str) -> CatalogTable:
+    table = source.table
+    if not isinstance(table, CatalogTable):
+        raise TypeError(f"{what}: serve una CatalogTable del modulo 13")
+    if isinstance(source.row, bool) or not isinstance(source.row, (int, np.integer)) \
+            or not 0 <= source.row < table.rows:
+        raise ValueError(f"{what}: riga {source.row!r} fuori dalla tabella di {table.rows} righe")
+    if table.positions is None:
+        raise MeasuresError("NO_COORD_COLUMNS", f"{what}: tabella senza colonne di posizione (confermarle nel 13)")
+    if table.positions.frame is None:
+        raise MeasuresError("FRAME_UNKNOWN", f"{what}: sistema delle colonne di posizione non dichiarato")
+    mask = np.zeros(table.rows, dtype=bool)
+    mask[int(source.row)] = True
+    try:
+        return catalogs.subset(table, mask)
+    except CatalogsError as exc:
+        raise _from_13(exc, what) from exc
+
+
+def _row_position(single: CatalogTable, lon: str, lat: str, epoch, what: str) -> SkyFrame:
+    pos = single.positions
+    try:
+        lon_q, lon_ok = catalogs._quantity_column(single.table, lon, u.deg, "posizione")
+        lat_q, lat_ok = catalogs._quantity_column(single.table, lat, u.deg, "posizione")
+    except CatalogsError as exc:
+        raise _from_13(exc, what) from exc
+    if not (lon_ok[0] and lat_ok[0]):
+        raise MeasuresError("NO_COORD_COLUMNS", f"{what}: posizione mancante nella riga")
+    try:
+        return SkyFrame.from_lonlat(lon_q[0], lat_q[0], pos.frame, equinox=pos.equinox, epoch=epoch)
+    except CoordinatesWcsError as exc:
+        raise _from_10(exc, what) from exc
+
+
+def _source_point(source: CatalogSource, what: str) -> tuple[CatalogTable, SkyFrame, str]:
+    single = _single_row(source, what)
+    try:
+        epochs, epoch_source = catalogs._source_epochs(single, source.source_epoch)
+    except CatalogsError as exc:
+        raise _from_13(exc, what) from exc
+    if epochs[0] is None:
+        raise MeasuresError("EPOCH_REQUIRED", f"{what}: epoca della riga mancante ({epoch_source}): mai assunta")
+    point = _row_position(single, single.positions.lon, single.positions.lat, epochs[0], what)
+    return single, point, epoch_source
+
+
+def _same_epoch(a: Time, b: Time) -> bool:
+    return (a.tt - b.tt).to_value(u.s) == 0.0
+
+
+def _propagated(source: CatalogSource, single: CatalogTable, target: Time, what: str) -> tuple[SkyFrame, str]:
+    """Posizione all'epoca ``target`` con ``propagate`` del 13 (che usa ``propagate_position`` del 10)."""
+    if source.pm_ra is None or source.pm_dec is None or source.pm_ra_includes_cosdec is None:
+        raise MeasuresError("EPOCH_REQUIRED", f"{what}: epoca diversa da {target.jyear_str} e colonne del moto "
+                            "proprio non indicate (pm_ra, pm_dec, pm_ra_includes_cosdec): l'epoca non si assume")
+    try:
+        result = catalogs.propagate(single, target, pm_ra=source.pm_ra, pm_dec=source.pm_dec,
+                                    pm_ra_includes_cosdec=source.pm_ra_includes_cosdec, parallax=source.parallax,
+                                    radial_velocity=source.radial_velocity, source_epoch=source.source_epoch)
+    except CatalogsError as exc:
+        raise _from_13(exc, what) from exc
+    pos = single.positions
+    mode = str(result.table.table[f"{pos.lon}_prop_mode"][0])
+    if mode == "missing":
+        raise MeasuresError("EPOCH_REQUIRED", f"{what}: moto proprio, posizione o epoca mancanti nella riga: "
+                            "nessuna propagazione, mai moto proprio nullo assunto")
+    point = _row_position(result.table, f"{pos.lon}_prop", f"{pos.lat}_prop", target, what)
+    notes = "; ".join(result.notes)
+    return point, f"{what} propagata a {target.jyear_str} ({mode}) da {result.source_epoch}" + (
+        f": {notes}" if notes else "")
+
+
+def auto_distance(selection, unit, *, epoch=None) -> AutoDistance:
+    """Distanza tra le due sorgenti di catalogo selezionate (F1), alla stessa epoca e sullo stesso corpo.
+
+    Epoca comune: ``epoch`` se dato, altrimenti quella della prima sorgente; le altre si propagano con il 13/10.
+    """
+    sources = tuple(selection)
+    if len(sources) != 2:
+        raise MeasuresError("SELECTION_NOT_TWO_SOURCES", f"selezionate {len(sources)} sorgenti: ne servono 2",
+                            selected=len(sources))
+    if not all(isinstance(s, CatalogSource) for s in sources):
+        raise TypeError("selection: servono due CatalogSource")
+    bodies = [s.table.body for s in sources]
+    if any(b is None for b in bodies):
+        raise MeasuresError("BODY_UNKNOWN", "corpo non dichiarato in una delle tabelle: nessuna misura")
+    if bodies[0] != bodies[1]:
+        raise MeasuresError("BODY_MISMATCH", f"sorgenti di corpi diversi ({bodies[0]!r}, {bodies[1]!r})")
+    names = ("sorgente 1", "sorgente 2")
+    rows = [_source_point(s, name) for s, name in zip(sources, names, strict=True)]
+    if epoch is None:
+        target, target_note = rows[0][1].epoch, "epoca della prima sorgente selezionata"
+    else:
+        try:
+            target = _to_epoch(epoch, "epoch")
+        except CoordinatesWcsError as exc:
+            raise _from_10(exc, "epoch") from exc
+        target_note = "epoca richiesta (epoch)"
+    points, notes = [], [f"epoca usata {target.jyear_str} ({target.scale}): {target_note}"]
+    for source, (single, point, epoch_source), name in zip(sources, rows, names, strict=True):
+        notes.append(f"{name}: {single.source}, riga {int(source.row)}, epoca da {epoch_source}")
+        if _same_epoch(point.epoch, target):
+            points.append(point)
+        else:
+            moved, note = _propagated(source, single, target, name)
+            points.append(moved)
+            notes.append(note)
+    measure = angular_distance(points[0], points[1], unit)
+    report = MeasureReport(
+        operation="auto_distance", points=measure.report.points, frame=measure.report.frame,
+        unit=measure.report.unit, notes=tuple(notes) + measure.report.notes + (f"corpo {bodies[0]}",))
+    return AutoDistance(distance=measure.value, segment=Segment(points[0], points[1]), epoch=target,
+                        measure=measure, report=report)

@@ -4,21 +4,29 @@ I valori attesi si ricalcolano nel test con ``astropy`` (e ``numpy``/``scipy`` p
 da altri programmi (regola d'oro n. 8).
 """
 
+import dataclasses
+import warnings
+
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord, angular_separation
+from astropy.coordinates import Distance, SkyCoord, angular_separation
 from astropy.io import fits
+from astropy.table import Table
+from astropy.time import Time
 from scipy.ndimage import map_coordinates
 
+from astrotwo.core.catalogs import confirm_position_columns, read_table
 from astrotwo.core.coordinates_wcs import PixelPosition, SkyFrame, pixel_to_sky
 from astrotwo.core.images_fits import load_image
 from astrotwo.core.measures import (
+    CatalogSource,
     MeasuresError,
     Segment,
     angular_distance,
     angular_offsets,
     apply_offsets,
+    auto_distance,
     distance_with_profile,
     offset_position,
     position_angle,
@@ -290,3 +298,86 @@ def test_t6_image_without_wcs(tmp_path):
         assert exc.value.code == "NO_WCS"
     assert read_pixel(image, numpy_px(1, 3)).value == data[3, 1]
     assert distance_with_profile(image, numpy_px(0, 0), numpy_px(4, 0), 1).profile.sky is None
+
+
+# =============================================================================
+# P4 — distanza automatica tra due sorgenti di catalogo (T10–T12)
+
+
+def catalog(tmp_path, name, ra, dec, *, epoch=None, pm=None, plx=None):
+    t = Table()
+    t["RA"] = np.asarray(ra, dtype=np.float64) * u.deg
+    t["DE"] = np.asarray(dec, dtype=np.float64) * u.deg
+    t["RA"].meta["ucd"] = "pos.eq.ra;meta.main"
+    t["DE"].meta["ucd"] = "pos.eq.dec;meta.main"
+    if epoch is not None:
+        t["ep"] = np.full(len(t), epoch) * u.yr
+        t["ep"].meta["ucd"] = "meta.ref;time.epoch"
+    if pm is not None:
+        t["pmRA"] = np.asarray(pm[0], dtype=np.float64) * u.mas / u.yr
+        t["pmDE"] = np.asarray(pm[1], dtype=np.float64) * u.mas / u.yr
+    if plx is not None:
+        t["plx"] = np.asarray(plx, dtype=np.float64) * u.mas
+    path = tmp_path / f"{name}.csv"
+    path.write_text("x,y\n1,2\n")
+    return confirm_position_columns(dataclasses.replace(read_table(path), table=t), "RA", "DE", "icrs")
+
+
+def test_t10_auto_distance(tmp_path):
+    cat = catalog(tmp_path, "a", [10.0, 10.2, 11.0], [-5.0, -4.9, -5.5], epoch=2016.0)
+    result = auto_distance([CatalogSource(cat, 0), CatalogSource(cat, 2)], "arcsec")
+    expected = SkyCoord(10.0 * u.deg, -5.0 * u.deg).separation(SkyCoord(11.0 * u.deg, -5.5 * u.deg))
+    assert abs((result.distance - expected).to_value(u.arcsec)) < 1e-9
+    assert result.segment.start.lon.to_value(u.deg) == 10.0 and result.segment.end.lat.to_value(u.deg) == -5.5
+    assert result.epoch.jyear == 2016.0 and "J2016.000" in result.report.description
+
+
+def test_t11_selection_not_two(tmp_path):
+    cat = catalog(tmp_path, "a", [10.0, 10.2, 11.0], [-5.0, -4.9, -5.5], epoch=2016.0)
+    for selection in ([CatalogSource(cat, 0)], [CatalogSource(cat, i) for i in range(3)], []):
+        with pytest.raises(MeasuresError) as exc:
+            auto_distance(selection, "arcsec")
+        assert exc.value.code == "SELECTION_NOT_TWO_SOURCES" and exc.value.details["selected"] == len(selection)
+
+
+def test_t12_different_epochs_propagated(tmp_path):
+    a = catalog(tmp_path, "a", [150.0], [2.0], epoch=2000.0, pm=([500.0], [-300.0]), plx=[20.0])
+    b = catalog(tmp_path, "b", [150.01], [2.01], epoch=2016.0)
+    result = auto_distance([CatalogSource(b, 0), CatalogSource(a, 0, pm_ra="pmRA", pm_dec="pmDE",
+                                                                pm_ra_includes_cosdec=True, parallax="plx")], "arcsec")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        moved = SkyCoord(ra=150.0 * u.deg, dec=2.0 * u.deg, pm_ra_cosdec=500 * u.mas / u.yr, pm_dec=-300 * u.mas / u.yr,
+                         distance=Distance(parallax=20 * u.mas), obstime=Time(2000.0, format="jyear", scale="tt"),
+                         ).apply_space_motion(new_obstime=Time(2016.0, format="jyear", scale="tt"))
+    expected = SkyCoord(150.01 * u.deg, 2.01 * u.deg).separation(SkyCoord(moved.ra, moved.dec))
+    assert abs((result.distance - expected).to_value(u.arcsec)) < 1e-6
+    assert result.epoch.jyear == 2016.0
+    assert any("propagata" in n for n in result.report.notes)
+    # Senza colonne del moto proprio: l'epoca non si assume.
+    with pytest.raises(MeasuresError) as exc:
+        auto_distance([CatalogSource(b, 0), CatalogSource(a, 0)], "arcsec")
+    assert exc.value.code == "EPOCH_REQUIRED"
+    # Epoca non nei metadati e non data.
+    plain = catalog(tmp_path, "c", [150.0], [2.0])
+    with pytest.raises(MeasuresError) as exc:
+        auto_distance([CatalogSource(b, 0), CatalogSource(plain, 0)], "arcsec")
+    assert exc.value.code == "EPOCH_REQUIRED"
+    given = auto_distance([CatalogSource(b, 0), CatalogSource(plain, 0, source_epoch=2016.0)], "arcsec")
+    assert given.epoch.jyear == 2016.0
+    # Epoca richiesta esplicitamente: entrambe propagate se diverse.
+    with pytest.raises(MeasuresError) as exc:
+        auto_distance([CatalogSource(b, 0), CatalogSource(a, 0)], "arcsec", epoch=2000.0)
+    assert exc.value.code == "EPOCH_REQUIRED"  # b non ha il moto proprio
+
+
+def test_auto_distance_body(tmp_path):
+    a = catalog(tmp_path, "a", [10.0], [0.0], epoch=2016.0)
+    mars = dataclasses.replace(catalog(tmp_path, "m", [10.0], [0.0], epoch=2016.0), body="Mars")
+    unknown = dataclasses.replace(a, body=None)
+    with pytest.raises(MeasuresError) as exc:
+        auto_distance([CatalogSource(a, 0), CatalogSource(mars, 0)], "deg")
+    assert exc.value.code == "BODY_MISMATCH"
+    with pytest.raises(MeasuresError) as exc:
+        auto_distance([CatalogSource(a, 0), CatalogSource(unknown, 0)], "deg")
+    assert exc.value.code == "BODY_UNKNOWN"
