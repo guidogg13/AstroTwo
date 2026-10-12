@@ -20,13 +20,17 @@ Regole applicate in tutto il modulo:
 from __future__ import annotations
 
 import ast
+import math
 import re
+import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import astropy
 import astropy.units as u
 import numpy as np
+from astropy.time import Time
+from astropy.utils import iers
 
 from astrotwo.core.catalogs import CONSTANTS, FUNCTIONS
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
@@ -40,6 +44,10 @@ __all__ = [
     "CalculatorResult",
     "run_command",
     "evaluate_expression",
+    "TIME_FORMATS",
+    "TIME_SCALES",
+    "TimeRepresentations",
+    "convert_time",
 ]
 
 #: Limiti delle espressioni (D18-5, decisa il 2026-10-12), configurabili per chiamata.
@@ -348,3 +356,104 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
         scale=None, library=library, notes=tuple(notes),
         command=CalculatorCommand("evaluate_expression", (("expression", text), ("max_length", max_length),
                                                           ("max_depth", max_depth))))
+
+
+# --------------------------------------------------------------------------
+# P2 — calcolatrice del tempo (DC1: scala sempre dichiarata)
+# --------------------------------------------------------------------------
+
+#: Formati di ingresso: ISO 8601 (con ``T``, con spazio o solo data), JD, MJD, anno giuliano e besseliano.
+TIME_FORMATS = ("iso", "jd", "mjd", "jyear", "byear")
+#: Scale di tempo di ``astropy.time`` ammesse (``local`` non è una scala astronomica).
+TIME_SCALES = ("utc", "tai", "tt", "tdb", "tcb", "tcg", "ut1")
+
+
+@dataclass(frozen=True)
+class TimeRepresentations:
+    """La stessa data in tutte le rappresentazioni, tutte nella scala ``scale``."""
+
+    scale: str
+    iso: str  # ISO 8601 al nanosecondo
+    jd: np.float64
+    mjd: np.float64
+    jyear: np.float64
+    byear: np.float64
+    jd1: np.float64  # JD in due parti (jd1 + jd2) per la precisione piena di astropy.time
+    jd2: np.float64
+
+    @property
+    def text(self) -> str:
+        scale = self.scale.upper()
+        return (f"ISO 8601 {self.iso} ({scale}); JD {self.jd!r} ({scale}); MJD {self.mjd!r} ({scale}); "
+                f"anno giuliano J{self.jyear!r} ({scale}); anno besseliano B{self.byear!r} ({scale})")
+
+
+def _time_scale(scale: object, what: str) -> str:
+    if scale is None:
+        raise CalculatorError("TIME_SCALE_REQUIRED", f"{what} mancante: la scala di tempo non si assume mai (DC1); "
+                              f"scale ammesse: {', '.join(s.upper() for s in TIME_SCALES)}")
+    name = scale.lower() if isinstance(scale, str) else None
+    if name not in TIME_SCALES:
+        raise CalculatorError("TIME_SCALE_REQUIRED", f"{what} {scale!r} non riconosciuta; scale ammesse: "
+                              f"{', '.join(s.upper() for s in TIME_SCALES)}")
+    return name
+
+
+def _parse_time(time_value: object, time_format: str, scale: str) -> Time:
+    if time_format == "iso":
+        if not isinstance(time_value, str) or not time_value.strip():
+            raise CalculatorError("TIME_INVALID", f"data {time_value!r}: serve un testo ISO 8601 "
+                                  "(AAAA-MM-GGThh:mm:ss[.s], anche con spazio o solo data)")
+        errors = []
+        for fmt in ("isot", "iso"):
+            try:
+                return Time(time_value.strip(), format=fmt, scale=scale)
+            except ValueError as exc:
+                errors.append(str(exc).splitlines()[-1])
+        raise CalculatorError("TIME_INVALID", f"data {time_value!r} non valida in ISO 8601 "
+                              f"(AAAA-MM-GGThh:mm:ss[.s]): {errors[-1]}")
+    if isinstance(time_value, bool) or not isinstance(time_value, (int, float, np.integer, np.floating)) \
+            or not math.isfinite(float(time_value)):
+        raise CalculatorError("TIME_INVALID", f"valore {time_value!r}: per il formato {time_format} serve un numero "
+                              "finito")
+    try:
+        return Time(float(time_value), format=time_format, scale=scale)
+    except ValueError as exc:
+        raise CalculatorError("TIME_INVALID", f"valore {time_value!r} non valido per {time_format}: {exc}") from exc
+
+
+@_registered
+def convert_time(time_value, time_format: str, scale: str | None, target_scale: str | None = None) -> CalculatorResult:
+    """Converte una data tra ISO 8601, JD, MJD, anno giuliano e besseliano con ``astropy.time``.
+
+    ``scale`` è obbligatoria (DC1); ``target_scale`` facoltativa (cambio di scala con ``astropy.time``).
+    """
+    if time_format not in TIME_FORMATS:
+        raise CalculatorError("TIME_INVALID", f"formato {time_format!r} non previsto; formati: {', '.join(TIME_FORMATS)}")
+    source_scale = _time_scale(scale, "scale")
+    target = source_scale if target_scale is None else _time_scale(target_scale, "target_scale")
+    notes = []
+    with warnings.catch_warnings(record=True) as caught, iers.conf.set_temp("auto_download", False):
+        warnings.simplefilter("always")
+        when = _parse_time(time_value, time_format, source_scale)
+        try:
+            converted = getattr(when, target)
+        except Exception as exc:  # dati IERS mancanti per UT1, o conversione non definita
+            raise CalculatorError("TIME_INVALID", f"conversione {source_scale.upper()} → {target.upper()} non "
+                                  f"eseguibile: {exc}") from exc
+        converted.precision = 9
+        values = TimeRepresentations(
+            scale=target, iso=converted.isot, jd=np.float64(converted.jd), mjd=np.float64(converted.mjd),
+            jyear=np.float64(converted.jyear), byear=np.float64(converted.byear),
+            jd1=np.float64(converted.jd1), jd2=np.float64(converted.jd2))
+    notes.extend(dict.fromkeys(f"avviso di astropy/ERFA: {w.message}" for w in caught))
+    if target != source_scale:
+        notes.append(f"cambio di scala {source_scale.upper()} → {target.upper()} con astropy.time")
+    if "ut1" in (source_scale, target):
+        notes.append("UT1 con le tabelle IERS già disponibili ad astropy (nessuno scaricamento automatico)")
+    notes.append("JD, MJD e anni in float64 (risoluzione del JD ≈ 40 µs); jd1 + jd2 a precisione piena")
+    return CalculatorResult(
+        calculator="tempo", input=f"{time_value!r} ({time_format}, scala {source_scale.upper()})", value=values,
+        unit=None, scale=target, library=f"astropy {astropy.__version__} (astropy.time)", notes=tuple(notes),
+        command=CalculatorCommand("convert_time", (("time_value", time_value), ("time_format", time_format),
+                                                   ("scale", scale), ("target_scale", target_scale))))

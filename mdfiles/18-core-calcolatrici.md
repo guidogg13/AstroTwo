@@ -165,6 +165,27 @@ stesso identificatore).
    intervallo → `COORD_OUT_OF_RANGE` del 10. **Sessagesimali con `:`:
    FERMI su D18-7** (§13) → `CALC_SYNTAX_ERROR` che lo dice.
 
+**P2 — calcolatrice del tempo (scritta il 2026-10-12).** Scelte minori:
+
+1. **Formati di ingresso** (`time_format`): `iso` (ISO 8601 con `T`, con lo
+   spazio o solo la data; formati `isot`/`iso` di `astropy.time`), `jd`,
+   `mjd`, `jyear`, `byear` (numeri finiti; un numero scritto come testo →
+   `TIME_INVALID`). Formato non previsto, data inesistente (es. 30
+   febbraio) o testo non leggibile → `TIME_INVALID` con il formato atteso.
+2. **Scale** (`scale` obbligatoria, `target_scale` facoltativa, maiuscole o
+   minuscole): UTC, TAI, TT, TDB, TCB, TCG, UT1. Mancante, vuota o non
+   riconosciuta (anche `local`, che non è una scala astronomica) →
+   `TIME_SCALE_REQUIRED` con l'elenco.
+3. **Uscita** (`TimeRepresentations`): ISO 8601 al nanosecondo, JD, MJD,
+   anno giuliano e besseliano in `float64` (risoluzione del JD ≈ 40 µs,
+   dichiarata) e il JD in due parti `jd1 + jd2` a precisione piena; la
+   scala in ogni rappresentazione (`text`).
+4. **Avvisi** di `astropy`/ERFA (es. "dubious year" per UTC oltre la tabella
+   dei secondi intercalari) riportati nelle note, mai nascosti.
+5. **UT1:** con le tabelle IERS già disponibili ad `astropy`, **senza
+   scaricamento automatico** durante la conversione (nessun accesso alla
+   rete nascosto); se la conversione non si può fare → `TIME_INVALID`.
+
 ## 4. Cosa NON fa
 
 - Non disegna finestre né campi di input: l'interfaccia delle calcolatrici è
@@ -408,3 +429,4 @@ elementare.
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D18-2 corretta — niente tabella di alias di Aladin, solo i formati standard FITS e VOUnit di `astropy.units` (§3, §6, §8, §13); T16 con un esempio nostro (`2024-02-29T18:00:00` UTC → MJD 60369.75, ricalcolato con `astropy.time`) al posto di quello del manuale; `=` prima o dopo l'espressione con motivazione nostra. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti (P1 espressioni, P2 tempo, P3 unità, P4 pixel, P5 coordinate) in §3; **D18-5 decisa** (1000 caratteri, annidamento 50, configurabili, `CALC_TOO_COMPLEX`); **D18-6 decisa** (valore grezzo con `do_not_scale_image_data=True`); T18 con la riesecuzione del comando registrato finché il 24 non esiste. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P1 scritta** (`calculators.py`: `CalculatorError`, `CalculatorCommand`, `CalculatorResult`, `run_command`, `evaluate_expression`; T1–T5 e limiti di D18-5). Scelte minori di P1 in §3. Nuova **D18-7** (sessagesimali in `skydist`, Gruppo 3), che ferma solo quel pezzo. Stato `approvato` invariato. |
+| 2026-10-12 | Claude Code | **P2 scritta** (`convert_time`, `TimeRepresentations`; T15–T17). Scelte minori di P2 in §3. Stato `approvato` invariato. |

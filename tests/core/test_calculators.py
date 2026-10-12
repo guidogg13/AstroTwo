@@ -8,10 +8,12 @@ import astropy.units as u
 import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord
+from astropy.time import Time
 
 from astrotwo.core.calculators import (
     CalculatorError,
     CalculatorResult,
+    convert_time,
     evaluate_expression,
     run_command,
 )
@@ -136,3 +138,55 @@ def test_result_requires_unit_or_scale_and_rerun():
     with pytest.raises(TypeError):
         CalculatorResult(calculator="x", input="1", value=1.0, unit=None, scale=None, library="numpy",
                          command=result.command)
+
+
+# =============================================================================
+# P2 — calcolatrice del tempo (T15–T17)
+
+
+def test_t15_j2000():
+    result = convert_time("2000-01-01T12:00:00", "iso", "TT")
+    expected = Time("2000-01-01T12:00:00", format="isot", scale="tt")
+    values = result.value
+    assert values.jd == 2451545.0 and values.jyear == 2000.0  # definizione di J2000.0
+    assert values.byear == np.float64(expected.byear) and values.mjd == np.float64(expected.mjd)
+    assert values.iso == "2000-01-01T12:00:00.000000000" and result.scale == "tt" and values.scale == "tt"
+    assert values.text.count("(TT)") == 5  # la scala in ogni rappresentazione
+    # Da JD, anno giuliano e besseliano: stessa data.
+    assert convert_time(2451545.0, "jd", "tt").value.iso == values.iso
+    assert convert_time(2000.0, "jyear", "tt").value.jd == 2451545.0
+    assert convert_time(float(expected.byear), "byear", "tt").value.byear == np.float64(expected.byear)
+
+
+def test_t16_mjd_leap_day():
+    result = convert_time("2024-02-29T18:00:00", "iso", "utc")
+    assert result.value.mjd == np.float64(Time("2024-02-29T18:00:00", format="isot", scale="utc").mjd)
+    assert result.value.mjd == 60369.75
+    # ISO con spazio o solo data; cambio di scala con astropy.time.
+    assert convert_time("2024-02-29 18:00:00", "iso", "utc").value.mjd == 60369.75
+    assert convert_time("2024-02-29", "iso", "utc").value.mjd == 60369.0
+    tt = convert_time("2024-02-29T18:00:00", "iso", "utc", target_scale="TT")
+    assert tt.scale == "tt" and tt.value.jd == np.float64(Time("2024-02-29T18:00:00", scale="utc").tt.jd)
+    assert any("UTC → TT" in n for n in tt.notes)
+    # Secondo intercalare, data inesistente, formato errato.
+    assert convert_time("2016-12-31T23:59:60", "iso", "utc").value.iso == "2016-12-31T23:59:60.000000000"
+    for value, fmt in (("2024-02-30T00:00:00", "iso"), ("ieri", "iso"), ("2451545", "jd"), (np.nan, "mjd"),
+                       (True, "jd"), (2451545.0, "unix")):
+        with pytest.raises(CalculatorError) as exc:
+            convert_time(value, fmt, "utc")
+        assert exc.value.code == "TIME_INVALID", (value, fmt)
+
+
+def test_t17_scale_required():
+    for scale in (None, "", "local", "GPS"):
+        with pytest.raises(CalculatorError) as exc:
+            convert_time("2000-01-01T12:00:00", "iso", scale)
+        assert exc.value.code == "TIME_SCALE_REQUIRED"
+    with pytest.raises(CalculatorError) as exc:
+        convert_time("2000-01-01T12:00:00", "iso", "tt", target_scale="local")
+    assert exc.value.code == "TIME_SCALE_REQUIRED"
+    future = convert_time("2100-01-01T00:00:00", "iso", "utc", target_scale="tt")
+    assert any("dubious year" in n for n in future.notes)  # UTC oltre la tabella dei secondi intercalari
+    result = convert_time("2024-02-29T18:00:00", "iso", "utc", "tdb")
+    again = run_command(result.command)
+    assert again.value == result.value and again.scale == result.scale == "tdb"
