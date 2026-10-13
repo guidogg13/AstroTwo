@@ -107,7 +107,7 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
 | A9 | Lingua dell'interfaccia | solo inglese · solo italiano · entrambe (internazionalizzazione) | `40-ui-finestra-principale.md` | **orientamento (2026-10-09): inglese di base + italiano** con le traduzioni di Qt; blocca l'approvazione di `40-ui-finestra-principale.md` |
 | A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS (12): decisa il 2026-10-12** — tile in memoria entro **512 MB, configurabili**; `build_hips` lavora **un tile alla volta** entro il **limite delle operazioni** (4 GB, D11-11); su disco la **cache comune di 5 GB** (`04-cache.md`). **A10 interamente decisa** |
-| A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
+| A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy); elenco completo in `THIRD_PARTY_LICENSES` (§6, dal 2026-10-13) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
 
 Fuori da questo file: **AP1** validazione finale della parità con Aladin
 (`03-parita-aladin.md`, rimandata) e **AM1** aggiunta/separazione di moduli
@@ -121,6 +121,8 @@ astrotwo/
 ├── CLAUDE.md
 ├── mdfiles/                 tutte le specifiche (questa cartella)
 ├── pyproject.toml           definizione del progetto e delle dipendenze (Python 3.12, uv)
+├── THIRD_PARTY_LICENSES     licenze e avvisi di tutte le dipendenze (dal 2026-10-13)
+├── scripts/                 strumenti di sviluppo (commit con i test, file delle licenze)
 ├── src/astrotwo/
 │   ├── core/                livello 1   (moduli 10-19)
 │   ├── analysis/            livello 2   (moduli 20-24)
@@ -137,6 +139,19 @@ astrotwo/
 - I test di un modulo vivono nella stessa posizione relativa dentro `tests/`.
 - Dove vivano gli strumenti di packaging del modulo 60: da definire in
   `60-distribuzione-dmg.md`.
+- **`THIRD_PARTY_LICENSES`** (decisione del proprietario del 2026-10-13):
+  file nella radice del progetto con **nome, versione, licenza e avvisi
+  richiesti di tutte le dipendenze** di esecuzione su macOS (chiusura delle
+  dipendenze di `pyproject.toml`), con il testo integrale dei file di licenza
+  distribuiti con ogni pacchetto (compresi l'avviso della libreria **QD di
+  LBNL** inclusa in `spherical-geometry` e la **LGPL-3 di WCSLIB** inclusa in
+  astropy) e i componenti non Python inclusi nel progetto (es. kernel della
+  NAIF del 19). Si genera con `scripts/third_party_licenses.py`; il test
+  `tests/test_third_party_licenses.py` fallisce se il file non è aggiornato.
+  **Da ora ogni nuova dipendenza va aggiunta a quel file** (rigenerandolo)
+  nello stesso commit che la introduce. Serve ad A11 (licenza di AstroTwo,
+  compatibilità con le licenze elencate) e al `60` (avvisi da includere nel
+  `.dmg`).
 
 ## 7. Come si collegano i livelli
 
@@ -203,7 +218,12 @@ astrotwo/
   delle operazioni di 4 GB; cache comune di 5 GB su disco; valori nel 12).
 - **DA-08 — A11, Licenza di AstroTwo:** da decidere (Gruppo 2); blocca
   l'approvazione di `60-distribuzione-dmg.md`. Vincolo noto: WCSLIB (LGPL-3,
-  dentro astropy). Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
+  dentro astropy). **Dal 2026-10-13 l'elenco completo delle licenze delle
+  dipendenze è in `THIRD_PARTY_LICENSES`** (§6): da leggere per decidere A11;
+  punti da valutare già annotati lì: LGPL-3 di WCSLIB (con la GPL-3 per
+  riferimento), clausola di LBNL sugli usi commerciali della libreria QD
+  (fuori dalle clausole numerate), MPL-2.0 di `certifi`, testo di licenza
+  mancante nel pacchetto `pims` (da verificare). Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
   codice né dato preso da Aladin, che è GPL).
 - **DA-06 — A8, Compatibilità con lo scripting di Aladin:** rimandata a dopo il
   completamento del livello 1; la strada "scripting principale in Python" resta
@@ -228,3 +248,4 @@ astrotwo/
 | 2026-10-10 | Claude Code | **Decisioni del proprietario:** nuova decisione aperta **A11 — Licenza di AstroTwo** (Gruppo 2, blocca il 60, §5 e §9 DA-08); **A10 decisa per le immagini** (valori nell'11), resta aperta per cataloghi e HiPS. Nuova regola d'oro n. 8 in `CLAUDE.md` (AstroTwo scritto da zero, nulla preso da Aladin). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **Decisioni del proprietario** (autorizzazione esplicita a modificare il file approvato): §7 — gli strumenti per l'IA si dichiarano nel 32, non nel §11 dei moduli (da D11-9). A10 resta la strategia di caricamento delle immagini; il limite delle operazioni (4 GB) è separato, D11-11 nell'11. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **A10 per gli HiPS** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato): riga A10 di §5, §8 e DA-07 aggiornate con l'esito — tile in memoria entro 512 MB configurabili, `build_hips` un tile alla volta entro il limite delle operazioni di 4 GB, cache comune di 5 GB su disco; A10 interamente decisa. Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): creato `THIRD_PARTY_LICENSES` nella radice (nome, versione, licenza e avvisi di tutte le dipendenze, compreso l'avviso QD/LBNL di `spherical-geometry`), generato da `scripts/third_party_licenses.py` e controllato da un test; registrato in §6, annotato per A11 (§9 DA-08) e per il 60; regola: ogni nuova dipendenza va aggiunta al file. Stato `approvato` invariato. |
