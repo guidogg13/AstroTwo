@@ -29,13 +29,16 @@ from datetime import UTC, datetime
 
 import astropy
 import astropy.units as u
+import matplotlib
 import numpy as np
+from astropy.io import fits
 from astropy.time import Time
 from astropy.utils import iers
 
 from astrotwo.core.catalogs import CONSTANTS, FUNCTIONS
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, parse_sexagesimal
-from astrotwo.core.measures import MeasuresError, angular_distance
+from astrotwo.core.images_fits import FitsImage, ImagesFitsError, _section_key, pixel_scaling, set_display
+from astrotwo.core.measures import UNDECLARED_UNIT, MeasuresError, angular_distance, read_pixel
 
 __all__ = [
     "MAX_EXPRESSION_LENGTH",
@@ -51,6 +54,9 @@ __all__ = [
     "convert_time",
     "EQUIVALENCIES",
     "convert_units",
+    "DisplaySettings",
+    "PixelValues",
+    "convert_pixel_value",
 ]
 
 #: Limiti delle espressioni (D18-5, decisa il 2026-10-12), configurabili per chiamata.
@@ -632,3 +638,173 @@ def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None
     given = f"sessagesimale in {sexagesimal}" if source_format == "angolo sessagesimale" else str(source)
     return CalculatorResult(calculator="unità", input=f"{written} [{given}] → {target}", value=result, unit=target,
                             scale=None, library=library, notes=tuple(notes), command=command)
+
+
+# --------------------------------------------------------------------------
+# P4 — calcolatrice dei pixel (regola FITS, D18-6 valore grezzo dal file)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DisplaySettings:
+    """Parametri di visualizzazione passati a ``set_display`` del modulo 11 per l'indice di colore."""
+
+    vmin: float
+    vmax: float
+    gamma: float = 1.0
+    stretch: str = "linear"
+    palette: str = "gray"
+
+
+@dataclass(frozen=True)
+class PixelValues:
+    """Valori di un pixel: grezzo, fisico (``BZERO + BSCALE × grezzo``), costanti e indice di colore."""
+
+    raw: np.float64
+    physical: np.float64
+    bzero: np.float64
+    bscale: np.float64
+    blank: int | None
+    color_index: int | None  # 0–255 nella palette; None senza parametri di visualizzazione o per un pixel non finito
+    in_memory: np.float64 | None = None  # valore tenuto dal modulo 11 (clic), per il confronto
+    x: int | None = None  # colonna, convenzione numpy (clic)
+    y: int | None = None
+
+    @property
+    def fits_position(self) -> tuple[int, int] | None:
+        """Posizione mostrata all'utente in convenzione FITS (indice da 1, DC7)."""
+        return None if self.x is None else (self.x + 1, self.y + 1)
+
+
+def _fits_number(value: object, what: str) -> np.float64:
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)) \
+            or not np.isfinite(value):
+        raise ValueError(f"{what} {value!r}: serve un numero finito")
+    return np.float64(value)
+
+
+def _color_index(value: np.float64, display: DisplaySettings, image: FitsImage | None, xy) -> tuple[int | None, str]:
+    """Indice nella palette (0–255) dal valore normalizzato di ``set_display`` del modulo 11."""
+    if not isinstance(display, DisplaySettings):
+        raise TypeError("display: serve un DisplaySettings")
+    try:
+        if display.stretch == "histeq":
+            # L'equalizzazione dipende da tutta l'immagine: si calcola sull'immagine intera.
+            if image is None or image.is_preview:
+                raise CalculatorError("OPERATION_UNSUPPORTED", "stretch histeq: l'indice dipende da tutta l'immagine; "
+                                      "serve il clic su un'immagine intera in memoria")
+            plane = set_display(image, display.vmin, display.vmax, display.gamma, display.palette, display.stretch)
+            normalized = plane.values[xy[1], xy[0]]
+            how = "set_display del modulo 11 sull'immagine intera (histeq)"
+        else:
+            plane = set_display(np.array([[value]]), display.vmin, display.vmax, display.gamma, display.palette,
+                                display.stretch)
+            normalized = plane.values[0, 0]
+            how = "set_display del modulo 11 sul valore (funzione di trasferimento punto per punto)"
+    except ImagesFitsError as exc:
+        raise CalculatorError(exc.code, f"indice di colore: {exc.message}") from exc
+    if not np.isfinite(normalized):
+        return None, f"{how}: pixel non finito, trasparente (alfa 0), nessun indice"
+    size = matplotlib.colormaps[display.palette].N
+    # Regola delle palette di matplotlib per un valore in [0, 1]: indice floor(v·N), 1 → N − 1.
+    index = int(min(np.floor(np.float64(normalized) * size), size - 1))
+    return index, f"{how}; valore normalizzato {float(normalized)!r} → indice floor(v·{size}) della palette " \
+                  f"{display.palette!r} (0–{size - 1}; lo 0 non è riservato: la trasparenza è nell'alfa)"
+
+
+def _raw_from_file(image: FitsImage, x: int, y: int) -> np.float64:
+    """Valore grezzo scritto nel file (D18-6): ``astropy.io.fits`` con ``do_not_scale_image_data=True``."""
+    if not image.format.startswith("fits"):
+        raise CalculatorError("PIXEL_RAW_UNAVAILABLE", f"immagine {image.format}: nessun valore grezzo FITS")
+    if image.history:
+        raise CalculatorError("PIXEL_RAW_UNAVAILABLE", "immagine derivata (" + "; ".join(image.history)
+                              + "): i pixel non sono più quelli del file")
+    try:
+        with fits.open(image.origin, do_not_scale_image_data=True, memmap=False) as hdul:
+            section = hdul[image.hdu_index].section
+            value = np.asarray(section[_section_key(image.raw_ndim, image.dropped_axes, slice(y, y + 1),
+                                                    slice(x, x + 1))]).ravel()[0]
+    except (OSError, IndexError, ValueError, TypeError) as exc:
+        raise CalculatorError("PIXEL_RAW_UNAVAILABLE", f"{image.origin}: valore grezzo non leggibile ({exc})") from exc
+    return np.float64(value)
+
+
+@_registered
+def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, blank=None, display=None, bunit=None,
+                        image=None, position=None) -> CalculatorResult:
+    """Valore grezzo ↔ fisico con la regola FITS ``fisico = BZERO + BSCALE × grezzo`` e indice di colore.
+
+    A mano: ``raw`` o ``physical`` e ``bzero``, ``bscale`` (obbligatori), ``blank`` facoltativo. Con un clic:
+    ``image`` e ``position`` (``read_pixel`` del 17, costanti dall'intestazione con ``pixel_scaling`` dell'11,
+    grezzo dal file con ``do_not_scale_image_data=True``, D18-6).
+    """
+    notes: list[str] = []
+    in_memory = x = y = None
+    if image is not None or position is not None:
+        if image is None or position is None:
+            raise TypeError("clic: servono image e position")
+        if any(v is not None for v in (raw, physical, bzero, bscale, blank, bunit)):
+            raise TypeError("clic: raw, physical, bzero, bscale, blank e bunit vengono dall'immagine")
+        try:
+            reading = read_pixel(image, position)
+        except MeasuresError as exc:
+            raise _forwarded(exc, "clic sull'immagine") from exc
+        x, y, in_memory = reading.x, reading.y, reading.value
+        scaling = pixel_scaling(image)
+        zero = np.float64(0.0 if scaling.bzero is None else scaling.bzero)
+        scale = np.float64(1.0 if scaling.bscale is None else scaling.bscale)
+        blank = scaling.blank
+        unit = reading.unit if reading.unit is not None else reading.unit_label
+        notes.append(f"pixel ({x + 1}, {y + 1}) in convenzione FITS (numpy ({x}, {y})), letto con read_pixel del "
+                     "modulo 17; BZERO, BSCALE e BLANK dall'intestazione (pixel_scaling del modulo 11)"
+                     + ("; BZERO assente: 0 per lo standard FITS" if scaling.bzero is None else "")
+                     + ("; BSCALE assente: 1 per lo standard FITS" if scaling.bscale is None else ""))
+        raw_value = _raw_from_file(image, x, y)
+        notes.append("valore grezzo letto dal file con astropy.io.fits, do_not_scale_image_data=True (D18-6)")
+        given = "raw"
+    else:
+        if (raw is None) == (physical is None):
+            raise TypeError("a mano: serve raw oppure physical (uno solo)")
+        if bzero is None or bscale is None:
+            raise TypeError("a mano: bzero e bscale obbligatori (nessun valore assunto)")
+        zero, scale = _fits_number(bzero, "bzero"), _fits_number(bscale, "bscale")
+        if blank is not None and (isinstance(blank, bool) or not isinstance(blank, (int, np.integer))):
+            raise ValueError(f"blank {blank!r}: serve un intero (BLANK vale per i dati interi)")
+        unit = bunit if bunit is not None else UNDECLARED_UNIT
+        given = "raw" if raw is not None else "physical"
+        raw_value = _fits_number(raw, "raw") if raw is not None else None
+    if given == "raw":
+        if blank is not None and raw_value == blank:
+            raise CalculatorError("PIXEL_BLANK", f"valore grezzo {raw_value!r} uguale a BLANK: pixel senza valore, "
+                                  "nessun valore fisico", raw=raw_value, blank=int(blank))
+        physical_value = np.float64(zero + scale * raw_value)
+    else:
+        physical_value = _fits_number(physical, "physical")
+        if scale == 0.0:
+            raise CalculatorError("PIXEL_BSCALE_ZERO", "BSCALE = 0: il valore grezzo non si ricava dal fisico")
+        raw_value = np.float64((physical_value - zero) / scale)
+        if raw_value != np.floor(raw_value):
+            notes.append(f"valore grezzo {raw_value!r} non intero: non rappresentabile esattamente in un file con "
+                         "BITPIX intero (nessun arrotondamento)")
+        if blank is not None and raw_value == blank:
+            notes.append("il valore grezzo coincide con BLANK: nel file indicherebbe un pixel senza valore")
+    if not (np.isfinite(physical_value) and np.isfinite(raw_value)):
+        raise CalculatorError("CALC_OVERFLOW", "valore oltre i limiti di float64")
+    if in_memory is not None and in_memory != physical_value:
+        notes.append(f"valore tenuto dal modulo 11: {in_memory!r} (tipo prodotto da astropy.io.fits); "
+                     f"regola FITS in float64: {physical_value!r}")
+    index = None
+    if display is not None:
+        shown = in_memory if in_memory is not None else physical_value
+        index, how = _color_index(shown, display, image, (x, y))
+        notes.append(how)
+    notes.append("regola FITS: fisico = BZERO + BSCALE × grezzo, in float64")
+    values = PixelValues(raw=raw_value, physical=physical_value, bzero=zero, bscale=scale,
+                         blank=None if blank is None else int(blank), color_index=index, in_memory=in_memory, x=x, y=y)
+    arguments = (("image", image), ("position", position)) if image is not None else (
+        ("raw", raw), ("physical", physical), ("bzero", bzero), ("bscale", bscale), ("blank", blank), ("bunit", bunit))
+    return CalculatorResult(
+        calculator="pixel", input=f"{given} = {raw_value if given == 'raw' else physical_value!r}, BZERO = {zero!r}, "
+        f"BSCALE = {scale!r}, BLANK = {blank!r}", value=values, unit=unit, scale=None,
+        library=f"numpy {np.__version__}; astropy {astropy.__version__} (astropy.io.fits, modulo 11)",
+        notes=tuple(notes), command=CalculatorCommand("convert_pixel_value", arguments + (("display", display),)))

@@ -8,17 +8,22 @@ import astropy.units as u
 import numpy as np
 import pytest
 from astropy.coordinates import Angle, SkyCoord
+import matplotlib
+from astropy.io import fits
 from astropy.time import Time
 
 from astrotwo.core.calculators import (
     CalculatorError,
     CalculatorResult,
+    DisplaySettings,
+    convert_pixel_value,
     convert_time,
     convert_units,
     evaluate_expression,
     run_command,
 )
-from astrotwo.core.coordinates_wcs import SkyFrame
+from astrotwo.core.coordinates_wcs import PixelPosition, SkyFrame
+from astrotwo.core.images_fits import cutout, load_image, set_display
 from astrotwo.core.measures import angular_distance
 
 
@@ -271,3 +276,88 @@ def test_t9_incompatible_and_equivalencies():
     assert exc.value.code == "CALC_DOMAIN_ERROR"
     result = convert_units(500, "nm", "Hz", "spectral")
     assert same_result(run_command(result.command), result)
+
+
+# =============================================================================
+# P4 — calcolatrice dei pixel (T10–T12, D18-6)
+
+
+def scaled_fits(tmp_path, raw, **keys):
+    """File con i valori grezzi dati e BZERO/BSCALE/BLANK aggiunti all'intestazione dopo la scrittura."""
+    path = tmp_path / "scaled.fits"
+    fits.PrimaryHDU(raw).writeto(path)
+    for key, value in keys.items():
+        fits.setval(path, key, value=value)
+    return path
+
+
+def test_t10_raw_to_physical():
+    result = convert_pixel_value(raw=-32768, bzero=32768, bscale=1)
+    assert result.value.physical == 0.0 and result.value.raw == -32768.0
+    assert result.unit == "non dichiarata"
+    back = convert_pixel_value(physical=0.0, bzero=32768, bscale=1, bunit="adu")
+    assert back.value.raw == -32768.0 and back.unit == "adu"
+    general = convert_pixel_value(raw=100, bzero=10.0, bscale=0.5)
+    assert general.value.physical == 10.0 + 0.5 * 100
+    assert any("non intero" in n for n in convert_pixel_value(physical=10.25, bzero=10.0, bscale=0.5).notes)
+    with pytest.raises(CalculatorError) as exc:
+        convert_pixel_value(physical=5.0, bzero=1.0, bscale=0)
+    assert exc.value.code == "PIXEL_BSCALE_ZERO"
+    with pytest.raises(TypeError):
+        convert_pixel_value(raw=1)  # bzero e bscale non si assumono a mano
+    with pytest.raises(TypeError):
+        convert_pixel_value(raw=1, physical=2, bzero=0, bscale=1)
+    assert same_result(run_command(general.command), general)
+
+
+def test_t11_blank(tmp_path):
+    with pytest.raises(CalculatorError) as exc:
+        convert_pixel_value(raw=-5, bzero=10.0, bscale=0.5, blank=-5)
+    assert exc.value.code == "PIXEL_BLANK"
+    raw = np.array([[-32768, 0, 7], [100, -5, 3]], dtype=np.int16)
+    image = load_image(str(scaled_fits(tmp_path, raw, BZERO=10.0, BSCALE=0.5, BLANK=-5)))
+    with pytest.raises(CalculatorError) as exc:
+        convert_pixel_value(image=image, position=PixelPosition(x=np.float64(1), y=np.float64(1), convention="numpy"))
+    assert exc.value.code == "PIXEL_BLANK"
+
+
+def test_d18_6_raw_from_file(tmp_path):
+    raw = np.array([[-32768, 0, 7], [100, -5, 3]], dtype=np.int16)
+    image = load_image(str(scaled_fits(tmp_path, raw, BZERO=10.0, BSCALE=0.5, BLANK=-5)))
+    with fits.open(image.origin, do_not_scale_image_data=True) as hdul:
+        stored = hdul[0].data
+        assert stored.dtype.kind == "i"
+    for x, y in ((0, 0), (2, 0), (0, 1)):
+        result = convert_pixel_value(image=image, position=PixelPosition(x=np.float64(x + 1), y=np.float64(y + 1),
+                                                                         convention="fits"))
+        assert result.value.raw == stored[y, x] and result.value.physical == 10.0 + 0.5 * float(stored[y, x])
+        assert result.value.fits_position == (x + 1, y + 1)
+    # Immagine derivata: i pixel non sono più quelli del file.
+    small = cutout(image, PixelPosition(x=np.float64(1), y=np.float64(0.5), convention="numpy"), (2, 2))
+    with pytest.raises(CalculatorError) as exc:
+        convert_pixel_value(image=small, position=PixelPosition(x=np.float64(0), y=np.float64(0), convention="numpy"))
+    assert exc.value.code == "PIXEL_RAW_UNAVAILABLE"
+
+
+def test_t12_color_index(tmp_path):
+    yy, xx = np.mgrid[0:20, 0:30]
+    data = (xx * 7.0 + yy * 3.0).astype(np.float32)
+    path = tmp_path / "img.fits"
+    fits.PrimaryHDU(data).writeto(path)
+    image = load_image(str(path))
+    for stretch, palette in (("linear", "gray"), ("sqrt", "viridis"), ("histeq", "gray"), ("log", "inferno")):
+        settings = DisplaySettings(vmin=10.0, vmax=180.0, gamma=1.3, stretch=stretch, palette=palette)
+        plane = set_display(image, settings.vmin, settings.vmax, settings.gamma, settings.palette, settings.stretch)
+        colormap = matplotlib.colormaps[palette]
+        for x, y in ((0, 0), (5, 7), (17, 12), (29, 19)):
+            result = convert_pixel_value(image=image, display=settings,
+                                         position=PixelPosition(x=np.float64(x), y=np.float64(y), convention="numpy"))
+            index = result.value.color_index
+            assert 0 <= index <= 255
+            # Stesso colore che set_display del modulo 11 ha dato al pixel.
+            assert np.array_equal(colormap(index, bytes=True), plane.rgba[y, x]), (stretch, x, y)
+    with pytest.raises(CalculatorError) as exc:
+        convert_pixel_value(raw=1, bzero=0, bscale=1, display=DisplaySettings(0.0, 1.0, stretch="histeq"))
+    assert exc.value.code == "OPERATION_UNSUPPORTED"
+    manual = convert_pixel_value(raw=50, bzero=0, bscale=1, display=DisplaySettings(0.0, 100.0))
+    assert manual.value.color_index == 128  # 0,5 · 256 nella palette

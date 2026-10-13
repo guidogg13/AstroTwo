@@ -217,6 +217,41 @@ stesso identificatore).
 6. **Non finiti:** valore in ingresso o risultato non finito (es. 0 Hz in
    lunghezza d'onda) → `CALC_DOMAIN_ERROR`.
 
+**P4 — calcolatrice dei pixel (scritta il 2026-10-13).** Verifica di D18-6
+del 2026-10-13 con `astropy` 8.0.1: con `do_not_scale_image_data=True`,
+`section` restituisce il valore intero scritto nel file (anche quello
+uguale a `BLANK`), mentre il modulo 11 tiene in memoria il valore fisico nel
+tipo prodotto da `astropy.io.fits` (`float32` per `BITPIX = 16` scalato) con
+NaN al posto di `BLANK`. Scelte minori:
+
+1. **A mano:** `raw` oppure `physical` (uno solo), `bzero` e `bscale`
+   **obbligatori** (nessun valore assunto), `blank` intero facoltativo,
+   `bunit` facoltativo (senza: unità "non dichiarata"). Fisico → grezzo con
+   BSCALE = 0 → `PIXEL_BSCALE_ZERO`; grezzo non intero restituito senza
+   arrotondamento, con nota; grezzo uguale a `BLANK` → `PIXEL_BLANK`.
+2. **Clic** (`image`, `position`): posizione e valore in memoria con
+   `read_pixel` del 17; `BZERO`, `BSCALE`, `BLANK` dall'intestazione con
+   `pixel_scaling` dell'11 (assenti: 0 e 1 come da standard FITS, scritto
+   nelle note); **valore grezzo dal file** con `astropy.io.fits` e
+   `do_not_scale_image_data=True` (D18-6). Il fisico è ricalcolato con la
+   regola FITS in `float64`; se differisce dal valore tenuto dall'11 (tipo
+   di `astropy.io.fits`), entrambi sono nel risultato. Immagine non FITS o
+   **derivata** (taglio, operazioni: `history` non vuota, i pixel non sono
+   più quelli del file) → `PIXEL_RAW_UNAVAILABLE`. Posizione mostrata in
+   convenzione FITS (`fits_position`), interna numpy (DC7).
+3. **Indice di colore** (`DisplaySettings`: vmin, vmax, gamma, stretch,
+   palette): valore normalizzato di `set_display` dell'11 — sul solo valore
+   per le funzioni di trasferimento punto per punto, sull'immagine intera
+   per `histeq` (che dipende da tutta l'immagine: a mano o su
+   un'anteprima a due livelli → `OPERATION_UNSUPPORTED`); indice =
+   floor(v · N) della palette di `matplotlib` (N = 256; v = 1 → 255), la
+   regola con cui la palette sceglie il colore. **Lo 0 non è riservato:** il
+   modulo 11 rende trasparenti i pixel non finiti con l'alfa, quindi la
+   variante 1–255 non si applica; pixel non finito → nessun indice, con nota.
+4. **Lettura del file nel 18:** è l'unica eccezione al §4 ("non legge file
+   FITS"), limitata al singolo valore grezzo voluto da D18-6; tutto il resto
+   (dati, intestazione, visualizzazione) viene dall'11.
+
 ## 4. Cosa NON fa
 
 - Non disegna finestre né campi di input: l'interfaccia delle calcolatrici è
@@ -227,7 +262,8 @@ stesso identificatore).
   angolo di posizione: lo fa `17-core-misure.md`; qui si raccolgono input e
   si presentano i risultati.
 - Non legge file FITS né applica funzioni di trasferimento: lo fa
-  `11-core-immagini-fits.md`.
+  `11-core-immagini-fits.md` (unica eccezione: il singolo valore grezzo
+  di un pixel, letto con `do_not_scale_image_data=True` per D18-6, §3 P4).
 - Non misura distanze o angoli tra oggetti della vista (`17-core-misure.md`)
   né fa fotometria (`20-analisi-fotometria.md`).
 - Non calcola colonne di tabella (H8, `13-core-cataloghi.md`) né fa
@@ -357,6 +393,8 @@ VOUnit per le stringhe di unità (D18-2).
 | Scala di tempo mancante | rifiuto: la scala non si assume mai | `TIME_SCALE_REQUIRED` |
 | `BSCALE = 0` nel calcolo inverso (fisico → grezzo) | rifiuto | `PIXEL_BSCALE_ZERO` |
 | Valore grezzo uguale a `BLANK` | nessun valore fisico; dichiarato "pixel senza valore" | `PIXEL_BLANK` |
+| Clic su un'immagine non FITS o derivata (taglio, operazioni) | nessun valore grezzo | `PIXEL_RAW_UNAVAILABLE` |
+| Indice di colore con `histeq` senza l'immagine intera | rifiuto: l'equalizzazione dipende da tutta l'immagine | `OPERATION_UNSUPPORTED` |
 | Coordinate fuori intervallo, frame sconosciuto, epoca mancante | errore del modulo 10 inoltrato senza modifiche | `COORD_OUT_OF_RANGE`, `FRAME_UNSUPPORTED`, `EPOCH_REQUIRED` |
 
 ## 11. Esposizione all'IA
@@ -465,3 +503,4 @@ elementare.
 | 2026-10-12 | Claude Code | **P1 scritta** (`calculators.py`: `CalculatorError`, `CalculatorCommand`, `CalculatorResult`, `run_command`, `evaluate_expression`; T1–T5 e limiti di D18-5). Scelte minori di P1 in §3. Nuova **D18-7** (sessagesimali in `skydist`, Gruppo 3), che ferma solo quel pezzo. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P2 scritta** (`convert_time`, `TimeRepresentations`; T15–T17). Scelte minori di P2 in §3. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P3 scritta** (`convert_units`, `EQUIVALENCIES`; T6–T9). Scelte minori di P3 in §3; nuovi casi in §10 (`UNIT_EQUIVALENCY_UNKNOWN`, `UNIT_REFERENCE_REQUIRED`, `UNIT_SEXAGESIMAL_UNIT_REQUIRED`). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **P4 scritta** (`convert_pixel_value`, `DisplaySettings`, `PixelValues`; T10–T12); D18-6 verificata prima del codice. Scelte minori di P4 in §3; §4 con l'eccezione del valore grezzo (D18-6); nuovi casi in §10 (`PIXEL_RAW_UNAVAILABLE`, `histeq` senza immagine). Stato `approvato` invariato. |
