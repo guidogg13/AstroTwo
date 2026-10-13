@@ -131,7 +131,9 @@ def test_catalog_and_defaults(service, cache):
 @pytest.mark.parametrize(("frame", "body", "expected", "code"), [
     ("galactic", None, "celestial", None),
     ("ecliptic", None, "celestial", None),
-    ("mars", "mars", "mars", "HIPS_BODY_DRAFT"),
+    ("mars", "mars", "Mars", "HIPS_BODY_DRAFT"),  # nome canonico della tabella del 19 (D12-6)
+    ("moon", "moon", "Moon", "BODY_NORMALIZED"),
+    ("mars-stimson", "mars-stimson", None, "BODY_UNSUPPORTED"),  # non è un corpo: nessun codice NAIF
     ("mars", None, None, "BODY_UNKNOWN"),
     ("mars", "moon", None, "BODY_UNKNOWN"),
 ])

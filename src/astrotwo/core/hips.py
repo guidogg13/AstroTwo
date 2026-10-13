@@ -203,7 +203,8 @@ def _release_date(text: str, source: str) -> datetime:
 
 
 def _body(props, frame: str, source: str) -> tuple[str | None, list[tuple[str, str]]]:
-    """Corpo (D19-3) dal sistema dichiarato; per i HiPS planetari da ``hips_body`` (WD HiPS 2.0)."""
+    """Corpo (D19-3) dal sistema dichiarato; per i HiPS planetari da ``hips_body`` (WD HiPS 2.0), normalizzato
+    con la tabella dei nomi del 19 (D12-6)."""
     if frame in CELESTIAL_FRAMES:
         return "celestial", []
     body = _first(props, "hips_body")
@@ -213,8 +214,17 @@ def _body(props, frame: str, source: str) -> tuple[str | None, list[tuple[str, s
     if body != frame:
         return None, [("BODY_UNKNOWN", f"{source}: hips_frame {frame!r} e hips_body {body!r} diversi: corpo non "
                        "ricavabile, il dato si apre da solo")]
-    return body, [("HIPS_BODY_DRAFT", f"{source}: corpo {body!r} da hips_body, definito nel Working Draft HiPS 2.0 "
-                   "(2026-05-01), versione non ancora raccomandazione IVOA")]
+    from astrotwo.core.planetary_data import PlanetaryDataError, normalize_body_name
+
+    draft = ("HIPS_BODY_DRAFT", f"{source}: corpo {body!r} da hips_body, definito nel Working Draft HiPS 2.0 "
+             "(2026-05-01), versione non ancora raccomandazione IVOA")
+    try:
+        canonical = normalize_body_name(body)
+    except PlanetaryDataError as exc:
+        return None, [draft, ("BODY_UNSUPPORTED", f"{source}: {exc.message} (tabella dei nomi del 19, D12-6): il "
+                              "dato si apre da solo")]
+    return canonical, [draft, ("BODY_NORMALIZED", f"{source}: hips_body {body!r} → {canonical!r} (tabella dei nomi "
+                               "del modulo 19, D12-6)")]
 
 
 def _service_from_properties(props: dict[str, tuple[str, ...]], base_url: str, origin: str, retrieved_at: datetime,

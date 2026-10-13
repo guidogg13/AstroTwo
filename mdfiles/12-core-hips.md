@@ -157,9 +157,15 @@ riquadro mostrato.
   `HIPS_BODY_DRAFT` ("`hips_body` è del Working Draft HiPS 2.0, non ancora
   raccomandazione IVOA"); senza `hips_body`, o con valori diversi →
   `body = None` e `BODY_UNKNOWN` (il dato si apre da solo, mai sovrapposto).
-  Il nome resta come scritto dal servizio (minuscolo): l'eventuale
-  allineamento ai nomi del 19 si fa con il 19 (**D12-6 decisa:
-  normalizzazione con una tabella del 19, scritta insieme al 19**).
+  **Nome del corpo (D12-6, tabella del 19 approvata il 2026-10-13):**
+  `hips_body` si normalizza con `normalize_body_name` del 19
+  (`spiceypy.bodn2c` → identificativo NAIF → nome canonico IAU in inglese
+  con l'iniziale maiuscola, es. `mars` → `Mars`), con l'avviso
+  `BODY_NORMALIZED`; valore fuori dalla tabella dei corpi o senza codice
+  NAIF (es. `mars-stimson`) → `body = None` con l'avviso
+  `BODY_UNSUPPORTED` (il dato si apre da solo). La normalizzazione
+  funziona anche con l'opzione dei dati planetari spenta (è lettura di
+  metadati).
 - **DSS2 a colori nel MocServer** (verifica del 2026-10-12): identificativo
   **`CDS/P/DSS2/color`** (`creator_did = ivo://CDS/P/DSS2/color`), servizio
   `https://alasky.cds.unistra.fr/DSS/DSSColor`, `hips_tile_format = jpeg`
@@ -532,6 +538,7 @@ riquadro mostrato.
 | Cache oltre il limite | rimozione dei dati meno usati, registrata | `CACHE_FULL` |
 | Ordine HEALPix fuori intervallo | rifiuto con l'intervallo valido | `HEALPIX_ORDER_INVALID` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
+| `hips_body` fuori dalla tabella dei corpi del 19 (D12-6) | `body = None`, dato aperto da solo | avviso `BODY_UNSUPPORTED` |
 | Piano del cubo inesistente | rifiuto con il numero di piani disponibili | `HIPS_CUBE_PLANE_INVALID` |
 | MocServer non raggiungibile | si usa la copia locale con la sua data e un avviso; senza copia locale, errore | `MOCSERVER_UNAVAILABLE` |
 | Identificativo HiPS sconosciuto al MocServer | nessuna voce aggiunta | `HIPS_UNKNOWN` |
@@ -660,3 +667,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **P4 scritta** (`cube_planes`/`CubePlanes`, piani in `fetch_tile` e `pixel_values`, `catalog_tiles`/`CatalogTiles`; T9, nuovo T13): cubi HiPS 1.0 con suffisso `_n` e asse fisico dalle chiavi `data_cube_*` (indice FITS dal 10); cataloghi progressivi dai tile TSV regolari con `metadata.xml`, rami chiusi dai tile assenti, righe non ritagliate (scelta minore). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P5 scritta — modulo 12 completo tranne i pezzi fermi** (`build_hips`/`BuildResult`, `BUILD_METHODS`; T14–T16 nuovi): WCS APE 14 del tile + `reproject_interp` (verifica del 2026-10-12 contro il WCS HPX interno di `reproject` e un'interpolazione indipendente; uso di `reproject` da confermare), tile FITS `float64`, media pesata con la copertura, ordini inferiori per media di 4 pixel, PNG/JPEG con parametri espliciti (`set_display` dell'11), `Moc.fits` dal 16, `properties` per ultimo; nuova decisione aperta **D12-8** (Allsky, Gruppo 3). Fermi: H10 SkyView (URL SIA non documentato da NASA), D12-6, D12-7, D12-8. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): H10 SkyView rinviato finché NASA non documenta l'URL SIA, con il motivo (§3); **D12-6 decisa** (normalizzazione dei nomi dei corpi con una tabella del 19, scritta con il 19), **D12-7 decisa** (`hips_frame = ecliptic` non supportato finché non è verificato su un HiPS reale), **D12-8 decisa** (nessun Allsky da `build_hips` per ora) (§3, §13); uso di `reproject` in `build_hips` approvato com'è, metodo `flux` non disponibile in `build_hips` (§3); disposizione dei pixel nel tile approvata, verificata su dati reali (2MASS K, confronto con `reproject`), da ricontrollare in AP1 (§3); scelte minori del 12 tutte confermate. Nessun codice cambia. Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **D12-6 applicata** (decisione del proprietario del 2026-10-13, autorizzazione esplicita a modificare il file approvato): `hips_body` normalizzato con la tabella dei nomi del 19 (`BODY_NORMALIZED`; fuori tabella `body = None` con `BODY_UNSUPPORTED`) (§3); test aggiornati. Stato `approvato` invariato. |
