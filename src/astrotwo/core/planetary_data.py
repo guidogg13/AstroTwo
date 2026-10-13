@@ -605,7 +605,7 @@ def query_epntap(service: str, adql: str, **tap_options):
 
 
 # --------------------------------------------------------------------------
-# P4 — immagini PDS4 (pds4_tools); PDS3 fermo su D19-8, URL fermi su D19-9
+# P4 — immagini PDS4 (pds4_tools), anche da URL (D19-9); PDS3 non ancora supportato (D19-8 rimandata)
 # --------------------------------------------------------------------------
 
 
@@ -614,7 +614,7 @@ class PdsImage:
     """Immagine PDS4: valori fisici in ``float64`` (NaN per le costanti speciali), etichetta e corpo."""
 
     data: np.ndarray
-    origin: str  # percorso dell'etichetta
+    origin: str  # percorso o URL dell'etichetta
     structure: str
     structure_type: str
     body: str | None
@@ -625,30 +625,119 @@ class PdsImage:
     library: str
     command: PlanetaryCommand
     read_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    downloads: tuple[tuple[str, str, bool], ...] = ()  # da URL (D19-9): (URL, data di scaricamento ISO, da cache)
 
 
 def _pds_unreadable(source: str, reason: str) -> PlanetaryDataError:
     return PlanetaryDataError("PDS_UNREADABLE", f"{source}: {reason}; nessuna immagine aperta")
 
 
+_URL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
+_PDS3_MESSAGE = ("formato PDS3 non ancora supportato (D19-8 rimandata: nessuna libreria PDS3 adottata); "
+                 "solo PDS4")
+
+
+def _label_file_names(label: bytes, source: str) -> tuple[str, ...]:
+    """Nomi dei file di dati dell'etichetta PDS4 (``File/file_name``); solo nomi nella stessa cartella."""
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(label)
+    except ET.ParseError as exc:
+        raise _pds_unreadable(source, f"etichetta PDS4 non leggibile ({exc})") from exc
+    names = []
+    for parent in root.iter():
+        if parent.tag.rsplit("}", 1)[-1] != "File":
+            continue
+        for child in parent:
+            if child.tag.rsplit("}", 1)[-1] == "file_name" and child.text and child.text.strip():
+                name = child.text.strip()
+                if "/" in name or "\\" in name or name in (".", "..") or name.startswith("."):
+                    raise _pds_unreadable(source, f"file {name!r} fuori dalla cartella dell'etichetta: da URL si "
+                                          "scaricano solo i file nominati nella stessa cartella (D19-9)")
+                if name not in names:
+                    names.append(name)
+    if not names:
+        raise _pds_unreadable(source, "l'etichetta non nomina file di dati (File/file_name)")
+    return tuple(names)
+
+
+def _download_product(url: str, cache, refresh: bool, timeouts) -> tuple[Path, tuple[tuple[str, str, bool], ...],
+                                                                      tuple[tuple[str, str], ...]]:
+    """Scarica etichetta e file nominati dalla stessa cartella dell'URL (D19-9) con la rete del 14 e la cache
+    comune (04); li scrive in una cartella temporanea e restituisce il percorso locale dell'etichetta."""
+    import tempfile
+    import urllib.parse
+
+    from astrotwo.core import vo_protocols as vo
+
+    parts = urllib.parse.urlsplit(url)
+    label_name = urllib.parse.unquote(parts.path.rsplit("/", 1)[-1])
+    if parts.scheme.lower() not in ("http", "https") or not parts.netloc or not label_name:
+        raise _pds_unreadable(url, "da URL servono http:// o https:// e il nome del file dell'etichetta (D19-9)")
+    downloads, notes = [], []
+
+    def fetch(file_url: str) -> bytes:
+        try:
+            response = vo._http("download", file_url, cache=cache, refresh=refresh, timeouts=timeouts)
+        except vo.VoProtocolsError as exc:
+            raise PlanetaryDataError(exc.code, f"PDS {file_url}: {exc.message}", url=file_url) from exc
+        notes.extend(response.notes)
+        notes.extend(vo._store(response, "download", cache))
+        downloads.append((file_url, response.retrieved_at.isoformat(), response.from_cache))
+        return response.payload
+
+    label = fetch(url)
+    if b"PDS_VERSION_ID" in label[:200]:
+        raise _pds_unreadable(url, _PDS3_MESSAGE)
+    folder = Path(tempfile.mkdtemp(prefix="astrotwo-pds-"))
+    files = {label_name: label}
+    for name in _label_file_names(label, url):
+        if name != label_name:
+            files[name] = fetch(urllib.parse.urljoin(url, urllib.parse.quote(name)))
+    for name, payload in files.items():
+        (folder / name).write_bytes(payload)
+    return folder / label_name, tuple(downloads), tuple(notes)
+
+
 @_registered
-def load_pds_image(source: str, *, structure: str | None = None) -> PdsImage:
-    """Legge un'immagine PDS4 (etichetta ``.xml`` locale) con ``pds4_tools`` (D19-2, D19-2b; §3 scelta 9)."""
-    import pds4_tools
+def load_pds_image(source: str, *, structure: str | None = None, cache=None, refresh: bool = False,
+                   timeouts=None) -> PdsImage:
+    """Legge un'immagine PDS4 con ``pds4_tools`` (D19-2, D19-2b; §3 scelta 9).
+
+    ``source``: percorso locale dell'etichetta ``.xml`` oppure URL ``http(s)`` (D19-9): etichetta e file di dati
+    che nomina si scaricano dalla stessa cartella con la rete del 14 e la cache comune (``cache``, ``refresh``,
+    ``timeouts`` come nel 14), con origine e data nel risultato.
+    """
+    import shutil
+
+    from astrotwo.core.cache import NETWORK_TIMEOUTS
 
     _require_enabled("load_pds_image")
     if not isinstance(source, str) or not source.strip():
-        raise TypeError("source: serve il percorso dell'etichetta PDS4")
-    if re.match(r"^[a-z][a-z0-9+.-]*://", source, re.IGNORECASE):
-        raise _pds_unreadable(source, "lettura da URL ferma su D19-9 (da decidere): scaricare il prodotto e "
-                              "aprire l'etichetta locale")
-    path = Path(source)
+        raise TypeError("source: serve il percorso o l'URL dell'etichetta PDS4")
+    if not _URL_SCHEME.match(source):
+        return _read_pds_label(source, Path(source), structure)
+    path, downloads, notes = _download_product(source, cache, refresh,
+                                               NETWORK_TIMEOUTS if timeouts is None else timeouts)
+    try:
+        image = _read_pds_label(source, path, structure)
+    finally:
+        shutil.rmtree(path.parent, ignore_errors=True)
+    sources = "; ".join(f"{u} ({'copia in cache del' if c else 'scaricato il'} {t})" for u, t, c in downloads)
+    return dataclasses.replace(image, downloads=downloads, warnings=image.warnings + notes + (
+        ("PDS_DOWNLOADED", f"prodotto PDS4 da URL (D19-9): {sources}"),))
+
+
+def _read_pds_label(source: str, path: Path, structure: str | None) -> PdsImage:
+    import pds4_tools
+
     try:
         head = path.read_bytes()[:200]
     except OSError as exc:
         raise _pds_unreadable(source, f"file non leggibile ({exc})") from exc
     if b"PDS_VERSION_ID" in head:
-        raise _pds_unreadable(source, "etichetta PDS3: lettura PDS3 ferma su D19-8 (libreria pdr da decidere)")
+        raise _pds_unreadable(source, _PDS3_MESSAGE)
     try:
         products = pds4_tools.read(str(path), quiet=True, lazy_load=True)
         arrays = [st for st in products.structures if st.is_array() and st.type.startswith("Array_2D")]
@@ -692,6 +781,6 @@ def load_pds_image(source: str, *, structure: str | None = None) -> PdsImage:
     element = dict(chosen.meta_data.get("Element_Array", {}))
     library = f"pds4_tools {importlib.metadata.version('pds4-tools')}"
     command = PlanetaryCommand("load_pds_image", (("source", source), ("structure", structure)))
-    return PdsImage(data=data, origin=str(path), structure=chosen.id, structure_type=chosen.type, body=body,
+    return PdsImage(data=data, origin=source, structure=chosen.id, structure_type=chosen.type, body=body,
                     targets=targets, element_array=element, special_pixels=special, warnings=tuple(notes),
                     library=library, command=command)

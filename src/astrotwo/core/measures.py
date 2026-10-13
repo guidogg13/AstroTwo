@@ -6,8 +6,9 @@ Il modulo si scrive in 4 parti (decisione del proprietario del 2026-10-12):
 P1 misure angolari (distanza, angolo di posizione, offset e calcolo inverso),
 P2 lettura dei pixel e profili, P3 forme e tag (D17-7: poligoni con
 ``spherical-geometry``, ellisse sferica, cerchio con Astropy; ``distance_to``
-con D17-8, ferma su D17-9 per ellisse, freccia, testo e
-tracciato aperto), P4 distanza automatica tra due sorgenti di catalogo.
+con D17-8 e D17-9: freccia e tracciato aperto come archi di cerchio massimo,
+ellisse con il minimo numerico sul bordo e precisione dichiarata, testo
+escluso), P4 distanza automatica tra due sorgenti di catalogo.
 
 Regole applicate in tutto il modulo:
 
@@ -33,9 +34,12 @@ import astropy.units as u
 import numpy as np
 import scipy
 from astropy.coordinates import Angle, SkyCoord, offset_by
+from astropy.coordinates import position_angle as astropy_position_angle
 from astropy.table import Table
 from astropy.time import Time
 from scipy.ndimage import map_coordinates
+from scipy.optimize import brentq, minimize, minimize_scalar
+from spherical_geometry import great_circle_arc as sg_arc
 from spherical_geometry import vector as sg_vector
 from spherical_geometry.polygon import SphericalPolygon
 
@@ -75,6 +79,7 @@ __all__ = [
     "profile_along_line",
     "distance_with_profile",
     "ELLIPSE_DEFINITION",
+    "ELLIPSE_DISTANCE_ATOL",
     "ShapeMeasure",
     "Shape",
     "Circle",
@@ -635,8 +640,8 @@ class ShapeMeasure:
     value: object
     shape: str
     report: MeasureReport
-    error: u.Quantity | None = None  # stima dell'errore dell'area (solo ellisse)
-    samples: int | None = None  # campioni della regola dei trapezi (solo ellisse)
+    error: u.Quantity | None = None  # stima dell'errore (solo ellisse: area o distanza, calcolo numerico)
+    samples: int | None = None  # campioni del calcolo numerico (solo ellisse)
 
 
 def _unsupported(kind: str, what: str) -> MeasuresError:
@@ -674,13 +679,19 @@ def _lonlat_deg(point: SkyFrame) -> tuple[float, float]:
 
 @dataclass(frozen=True)
 class _DistanceGeometry:
-    """Forma ridotta per ``distance_to`` (D17-8): calotta (cerchio, punto con raggio 0) o poligono sferico."""
+    """Forma ridotta per ``distance_to`` (D17-8, D17-9).
 
-    kind: str  # "cap" o "polygon"
-    reference: SkyFrame  # punto di riferimento del frame (centro o primo vertice)
+    ``cap``: calotta (cerchio, punto con raggio 0); ``polygon``: poligono sferico chiuso; ``path``: sequenza
+    aperta di archi di cerchio massimo (freccia, tracciato aperto); ``ellipse``: ellisse sferica (fuochi e ``a``).
+    """
+
+    kind: str  # "cap", "polygon", "path" o "ellipse"
+    reference: SkyFrame  # punto di riferimento del frame (centro, primo vertice o primo punto)
     radius: float = 0.0  # gradi (calotta)
-    vertices: np.ndarray | None = None  # (n, 2) lon, lat in gradi (poligono)
+    vertices: np.ndarray | None = None  # (n, 2) lon, lat in gradi (poligono, tracciato)
     polygon: object = None  # SingleSphericalPolygon con l'interno scelto (poligono)
+    foci: tuple | None = None  # ((lon, lat), (lon, lat)) dei fuochi (ellisse)
+    a: float = 0.0  # semiasse maggiore in gradi (ellisse)
 
     @classmethod
     def cap(cls, center: SkyFrame, radius: float) -> _DistanceGeometry:
@@ -691,28 +702,42 @@ def _unit_vectors(lon_deg, lat_deg) -> np.ndarray:
     return np.stack(sg_vector.lonlat_to_vector(lon_deg, lat_deg, degrees=True), axis=-1)
 
 
-def _point_to_edges_deg(lon: float, lat: float, vertices: np.ndarray) -> float:
-    """Distanza minima (gradi) di un punto dai lati (archi di cerchio massimo) di un poligono chiuso.
+def _points_to_arcs_deg(lon, lat, start: np.ndarray, end: np.ndarray) -> np.ndarray:
+    """Distanza minima (gradi) di ogni punto da un insieme di archi di cerchio massimo ``start[i]``–``end[i]``.
 
-    Per ogni lato AB: se la proiezione del punto sul cerchio massimo di AB cade dentro l'arco, la distanza è
+    Per ogni arco AB: se la proiezione del punto sul cerchio massimo di AB cade dentro l'arco, la distanza è
     quella dal cerchio massimo, atan2(|P·n|, |P − (P·n) n|) con n polo di AB; altrimenti è la distanza dal
     più vicino dei due estremi (``skydist`` del 13).
     """
-    start, end = vertices, np.roll(vertices, -1, axis=0)
+    lon, lat = np.atleast_1d(np.asarray(lon, dtype=np.float64)), np.atleast_1d(np.asarray(lat, dtype=np.float64))
     a, b = _unit_vectors(start[:, 0], start[:, 1]), _unit_vectors(end[:, 0], end[:, 1])
-    p = _unit_vectors(np.float64(lon), np.float64(lat))
+    p = _unit_vectors(lon, lat)  # (k, 3)
     n = np.cross(a, b)
     norm = np.linalg.norm(n, axis=1)
-    defined = norm > 0.0  # lato con estremi antipodali: nessun cerchio massimo unico, solo gli estremi
+    defined = norm > 0.0  # arco nullo o con estremi antipodali: nessun cerchio massimo unico, solo gli estremi
     n /= np.where(defined, norm, 1.0)[:, None]
-    pn = n @ p
-    q = p[None, :] - pn[:, None] * n
-    q_norm = np.linalg.norm(q, axis=1)
-    within = ((np.einsum("ij,ij->i", np.cross(a, q), n) >= 0.0)
-              & (np.einsum("ij,ij->i", np.cross(q, b), n) >= 0.0) & (q_norm > 0.0) & defined)
+    pn = p @ n.T  # (k, archi)
+    q = p[:, None, :] - pn[..., None] * n[None, :, :]
+    q_norm = np.linalg.norm(q, axis=2)
+    within = ((np.einsum("kij,ij->ki", np.cross(a[None, :, :], q), n) >= 0.0)
+              & (np.einsum("kij,ij->ki", np.cross(q, b[None, :, :]), n) >= 0.0) & (q_norm > 0.0) & defined)
     perpendicular = np.rad2deg(np.arctan2(np.abs(pn), q_norm))
-    ends = np.minimum(skydist(lon, lat, start[:, 0], start[:, 1]), skydist(lon, lat, end[:, 0], end[:, 1]))
-    return float(np.min(np.where(within, perpendicular, ends)))
+    ends = np.minimum(skydist(lon[:, None], lat[:, None], start[None, :, 0], start[None, :, 1]),
+                      skydist(lon[:, None], lat[:, None], end[None, :, 0], end[None, :, 1]))
+    return np.min(np.where(within, perpendicular, ends), axis=1)
+
+
+def _arcs(geometry: _DistanceGeometry) -> tuple[np.ndarray, np.ndarray]:
+    """Archi di una forma ridotta: lati chiusi del poligono o archi consecutivi del tracciato aperto."""
+    vertices = geometry.vertices
+    if geometry.kind == "polygon":
+        return vertices, np.roll(vertices, -1, axis=0)
+    return vertices[:-1], vertices[1:]
+
+
+def _point_to_edges_deg(lon: float, lat: float, vertices: np.ndarray) -> float:
+    """Distanza minima (gradi) di un punto dai lati (archi di cerchio massimo) di un poligono chiuso."""
+    return float(_points_to_arcs_deg(lon, lat, vertices, np.roll(vertices, -1, axis=0))[0])
 
 
 def _point_to_polygon_deg(lon: float, lat: float, geometry: _DistanceGeometry) -> float:
@@ -721,29 +746,290 @@ def _point_to_polygon_deg(lon: float, lat: float, geometry: _DistanceGeometry) -
     return _point_to_edges_deg(lon, lat, geometry.vertices)
 
 
-def _geometry_distance(first: _DistanceGeometry, second: _DistanceGeometry) -> tuple[float, str]:
-    """Distanza minima (gradi) tra due forme ridotte, con la descrizione del calcolo."""
-    if first.kind == "cap" and second.kind == "cap":
+def _arcs_cross(first: _DistanceGeometry, second: _DistanceGeometry) -> bool:
+    """Vero se un arco della prima forma incrocia un arco della seconda (``great_circle_arc.intersects``)."""
+    def usable(start, end):
+        a, b = _unit_vectors(start[:, 0], start[:, 1]), _unit_vectors(end[:, 0], end[:, 1])
+        keep = np.linalg.norm(np.cross(a, b), axis=1) > 0.0  # archi nulli o antipodali: bastano gli estremi
+        return a[keep], b[keep]
+
+    a1, b1 = usable(*_arcs(first))
+    a2, b2 = usable(*_arcs(second))
+    if not len(a2):
+        return False
+    return any(bool(np.any(sg_arc.intersects(a, b, a2, b2))) for a, b in zip(a1, b1))
+
+
+# --- ellisse (D17-9): minimo numerico sul bordo con precisione dichiarata ---
+
+#: Precisione assoluta di default di ``distance_to`` quando c'è un'ellisse (D17-9, configurabile).
+ELLIPSE_DISTANCE_ATOL = 1e-9 * u.deg
+_DISTANCE_START_SAMPLES = 128
+_DISTANCE_MAX_SAMPLES_2D = 2**10  # ellisse–ellisse: griglia n × n
+_DISTANCE_CANDIDATES = 8
+_THETA_XATOL = 1e-10  # gradi, raffinamento della direzione θ
+
+
+def _ellipse_boundary_radius(center_lon, center_lat, foci, a_deg: float, theta_deg: np.ndarray) -> np.ndarray:
+    """Distanza (gradi) del bordo dell'ellisse sferica dal centro nelle direzioni ``theta`` (bisezione fino a
+    ``float64`` sulla funzione "somma delle distanze dai fuochi − 2a" lungo il raggio)."""
+    limit = 2.0 * a_deg
+    (l1, b1), (l2, b2) = foci
+    lo, hi = np.zeros_like(theta_deg), np.full_like(theta_deg, limit)  # a 2a la somma è già > 2a
+    theta = theta_deg * u.deg
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        lon, lat = offset_by(center_lon, center_lat, theta, mid * u.deg)
+        inside = skydist(lon, lat, l1, b1) + skydist(lon, lat, l2, b2) <= limit
+        lo, hi = np.where(inside, mid, lo), np.where(inside, hi, mid)
+        if np.all(hi - lo <= 2.0 * np.finfo(np.float64).eps * hi):
+            break
+    return 0.5 * (lo + hi)
+
+
+def _ellipse_boundary(geometry: _DistanceGeometry, theta_deg) -> tuple[np.ndarray, np.ndarray]:
+    """Punti del bordo (lon, lat in gradi) nelle direzioni ``theta`` dal centro.
+
+    Molte direzioni: bisezione vettoriale (:func:`_ellipse_boundary_radius`); una sola (raffinamenti):
+    ``scipy.optimize.brentq`` sulla stessa funzione, alla stessa precisione ``float64`` con meno passi.
+    """
+    theta_deg = np.atleast_1d(np.asarray(theta_deg, dtype=np.float64))
+    center = geometry.reference
+    if theta_deg.size == 1:
+        (l1, b1), (l2, b2) = geometry.foci
+        theta = theta_deg[0] * u.deg
+
+        def excess(rho: float) -> float:
+            lon, lat = offset_by(center.lon, center.lat, theta, rho * u.deg)
+            return float(skydist(lon, lat, l1, b1) + skydist(lon, lat, l2, b2)) - 2.0 * geometry.a
+
+        rho = np.array([brentq(excess, 0.0, 2.0 * geometry.a, xtol=1e-300, rtol=4 * np.finfo(np.float64).eps)])
+    else:
+        rho = _ellipse_boundary_radius(center.lon, center.lat, geometry.foci, geometry.a, theta_deg)
+    lon, lat = offset_by(center.lon, center.lat, theta_deg * u.deg, rho * u.deg)
+    return lon.to_value(u.deg), lat.to_value(u.deg)
+
+
+def _focal_excess(geometry: _DistanceGeometry, lon, lat) -> np.ndarray:
+    """Somma delle distanze dai fuochi − 2a (gradi): ≤ 0 dentro l'ellisse, funzione liscia fuori dai fuochi."""
+    (l1, b1), (l2, b2) = geometry.foci
+    return np.asarray(skydist(lon, lat, l1, b1) + skydist(lon, lat, l2, b2) - 2.0 * geometry.a)
+
+
+def _in_ellipse(geometry: _DistanceGeometry, lon, lat) -> np.ndarray:
+    return _focal_excess(geometry, lon, lat) <= 0.0
+
+
+_ARC_SAMPLES = 64
+
+
+def _arcs_enter_ellipse(ellipse: _DistanceGeometry, other: _DistanceGeometry) -> bool:
+    """Vero se un arco dell'altra forma entra nell'ellisse: minimo della funzione liscia "somma delle distanze
+    dai fuochi − 2a" lungo l'arco (punti con ``offset_by``, minimi locali raffinati con ``minimize_scalar``) ≤ 0.
+
+    Così l'incrocio dei bordi si riconosce senza cercare uno zero della distanza, che è uno spigolo e non si
+    raggiunge con la precisione dichiarata.
+    """
+    fractions = np.linspace(0.0, 1.0, _ARC_SAMPLES + 1)
+    for (lon1, lat1), (lon2, lat2) in zip(*_arcs(other)):
+        length = float(skydist(lon1, lat1, lon2, lat2))
+        if length == 0.0 or length >= 180.0:  # arco nullo o antipodale: bastano gli estremi, già controllati
+            continue
+        pa = astropy_position_angle(lon1 * u.deg, lat1 * u.deg, lon2 * u.deg, lat2 * u.deg)
+
+        def excess(f, pa=pa, lon1=lon1, lat1=lat1, length=length):
+            lon, lat = offset_by(lon1 * u.deg, lat1 * u.deg, pa, np.asarray(f) * length * u.deg)
+            return _focal_excess(ellipse, lon, lat)
+
+        values = excess(fractions)
+        if np.any(values <= 0.0):
+            return True
+        local = np.flatnonzero((values <= np.r_[np.inf, values[:-1]]) & (values <= np.r_[values[1:], np.inf]))
+        for i in local:
+            bounds = (fractions[max(i - 1, 0)], fractions[min(i + 1, _ARC_SAMPLES)])
+            refined = minimize_scalar(lambda f: float(excess(f)), bounds=bounds, method="bounded",
+                                      options={"xatol": 1e-12})
+            if refined.fun <= 0.0:
+                return True
+    return False
+
+
+def _precision_not_reached(value: float, error: float, samples: int, atol: float) -> MeasuresError:
+    return MeasuresError("DISTANCE_PRECISION_NOT_REACHED", f"distanza {value!r}° con stima dell'errore {error!r}° "
+                         f"dopo {samples} campioni: precisione {atol!r}° non raggiunta",
+                         value=value, error=error, samples=samples)
+
+
+def _cyclic_minima(values: np.ndarray, threshold: float) -> list[tuple[int, ...]]:
+    """Indici dei minimi locali (vicini ciclici) con valore ≤ ``threshold``, i migliori per primi."""
+    is_min = values <= threshold
+    for axis in range(values.ndim):
+        for shift in (1, -1):
+            is_min &= values <= np.roll(values, shift, axis=axis)
+    indices = np.argwhere(is_min)
+    order = np.argsort(values[tuple(indices.T)])
+    return [tuple(int(i) for i in indices[k]) for k in order[:_DISTANCE_CANDIDATES]]
+
+
+def _ellipse_minimum(geometry: _DistanceGeometry, g, atol: float) -> tuple[float, float, int]:
+    """Minimo di ``g`` (distanza in gradi, vettoriale in lon, lat) sul bordo dell'ellisse.
+
+    Campioni di θ raddoppiati da 128 finché due stime consecutive differiscono meno di ``atol`` (la differenza
+    è la stima dell'errore); a ogni passo i minimi locali dei campioni vicini al minimo (entro la massima
+    distanza tra campioni consecutivi del bordo) si raffinano con ``scipy.optimize.minimize_scalar``.
+    """
+    def estimate(n: int) -> float:
+        step = 360.0 / n
+        theta = np.arange(n, dtype=np.float64) * step
+        lon, lat = _ellipse_boundary(geometry, theta)
+        values = g(lon, lat)
+        spacing = float(np.max(skydist(lon, lat, np.roll(lon, -1), np.roll(lat, -1))))
+        best = float(values.min())
+        for (i,) in _cyclic_minima(values, best + spacing):
+            refined = minimize_scalar(lambda t: float(g(*_ellipse_boundary(geometry, t))[0]),
+                                      bounds=(theta[i] - step, theta[i] + step), method="bounded",
+                                      options={"xatol": _THETA_XATOL})
+            best = min(best, float(refined.fun))
+        return best
+
+    n, previous = _DISTANCE_START_SAMPLES, estimate(_DISTANCE_START_SAMPLES)
+    while True:
+        n *= 2
+        current = estimate(n)
+        error = abs(current - previous)
+        if error <= atol:
+            return current, error, n
+        if n >= ELLIPSE_MAX_SAMPLES:
+            raise _precision_not_reached(current, error, n, atol)
+        previous = current
+
+
+def _ellipses_minimum(first: _DistanceGeometry, second: _DistanceGeometry, atol: float) -> tuple[float, float, int]:
+    """Minimo della distanza tra i bordi di due ellissi: griglia n × n di direzioni (θ₁, θ₂) raddoppiata come in
+    :func:`_ellipse_minimum`, minimi locali raffinati con ``scipy.optimize.minimize`` (Nelder-Mead)."""
+    def pair_distance(x) -> float:
+        lon1, lat1 = _ellipse_boundary(first, x[0])
+        lon2, lat2 = _ellipse_boundary(second, x[1])
+        return float(skydist(lon1, lat1, lon2, lat2)[0])
+
+    def estimate(n: int) -> float:
+        step = 360.0 / n
+        theta = np.arange(n, dtype=np.float64) * step
+        (lon1, lat1), (lon2, lat2) = _ellipse_boundary(first, theta), _ellipse_boundary(second, theta)
+        values = skydist(lon1[:, None], lat1[:, None], lon2[None, :], lat2[None, :])
+        spacing = sum(float(np.max(skydist(lo, la, np.roll(lo, -1), np.roll(la, -1))))
+                      for lo, la in ((lon1, lat1), (lon2, lat2)))
+        best = float(values.min())
+        for i, j in _cyclic_minima(values, best + spacing):
+            start = np.array([theta[i], theta[j]])
+            refined = minimize(pair_distance, start, method="Nelder-Mead", options={
+                "xatol": _THETA_XATOL, "fatol": 1e-15,
+                "initial_simplex": [start, start + [step, 0.0], start + [0.0, step]]})
+            best = min(best, float(refined.fun))
+        return best
+
+    n, previous = _DISTANCE_START_SAMPLES, estimate(_DISTANCE_START_SAMPLES)
+    while True:
+        n *= 2
+        current = estimate(n)
+        error = abs(current - previous)
+        if error <= atol:
+            return current, error, n
+        if n >= _DISTANCE_MAX_SAMPLES_2D:
+            raise _precision_not_reached(current, error, n, atol)
+        previous = current
+
+
+_KIND_ORDER = {"cap": 0, "polygon": 1, "path": 2, "ellipse": 3}
+
+
+def _geometry_distance(first: _DistanceGeometry, second: _DistanceGeometry,
+                       atol: float) -> tuple[float, str, float | None, int | None]:
+    """Distanza minima (gradi) tra due forme ridotte, con la descrizione del calcolo, la stima dell'errore e i
+    campioni (solo con un'ellisse: calcolo numerico, D17-9)."""
+    first, second = sorted((first, second), key=lambda g: _KIND_ORDER[g.kind])
+    pair = (first.kind, second.kind)
+    if pair == ("cap", "cap"):
         lon1, lat1 = _lonlat_deg(first.reference)
         lon2, lat2 = _lonlat_deg(second.reference)
         separation = float(skydist(lon1, lat1, lon2, lat2))
         return max(0.0, separation - first.radius - second.radius), (
             f"calotte: separazione dei centri {separation!r}° (skydist del 13) − raggi {first.radius!r}° e "
-            f"{second.radius!r}°, minimo 0; esatta")
-    if first.kind == "polygon" and second.kind == "polygon":
+            f"{second.radius!r}°, minimo 0; esatta"), None, None
+    if pair == ("polygon", "polygon"):
         if first.polygon.intersects_poly(second.polygon):
-            return 0.0, "poligoni sovrapposti (SphericalPolygon.intersects_poly): 0"
+            return 0.0, "poligoni sovrapposti (SphericalPolygon.intersects_poly): 0", None, None
         distance = min(min(_point_to_edges_deg(lon, lat, second.vertices) for lon, lat in first.vertices),
                        min(_point_to_edges_deg(lon, lat, first.vertices) for lon, lat in second.vertices))
         return distance, ("poligoni disgiunti: minimo delle distanze vertice–arco di cerchio massimo nei due versi "
-                          "(il minimo tra due archi disgiunti cade in un estremo)")
-    cap, polygon = (first, second) if first.kind == "cap" else (second, first)
-    lon, lat = _lonlat_deg(cap.reference)
-    to_polygon = _point_to_polygon_deg(lon, lat, polygon)
-    return max(0.0, to_polygon - cap.radius), (
-        f"calotta e poligono: distanza del centro dal poligono {to_polygon!r}° (0 se dentro, "
-        f"SphericalPolygon.contains_lonlat; altrimenti distanza punto–arco di cerchio massimo) − raggio "
-        f"{cap.radius!r}°, minimo 0")
+                          "(il minimo tra due archi disgiunti cade in un estremo)"), None, None
+    if pair == ("cap", "polygon"):
+        lon, lat = _lonlat_deg(first.reference)
+        to_polygon = _point_to_polygon_deg(lon, lat, second)
+        return max(0.0, to_polygon - first.radius), (
+            f"calotta e poligono: distanza del centro dal poligono {to_polygon!r}° (0 se dentro, "
+            f"SphericalPolygon.contains_lonlat; altrimenti distanza punto–arco di cerchio massimo) − raggio "
+            f"{first.radius!r}°, minimo 0"), None, None
+    if pair == ("cap", "path"):
+        lon, lat = _lonlat_deg(first.reference)
+        to_path = float(_points_to_arcs_deg(lon, lat, *_arcs(second))[0])
+        return max(0.0, to_path - first.radius), (
+            f"calotta e archi di cerchio massimo (D17-9): distanza punto–arco del centro {to_path!r}° − raggio "
+            f"{first.radius!r}°, minimo 0"), None, None
+    if pair in (("polygon", "path"), ("path", "path")):
+        inside = (pair == ("polygon", "path")
+                  and any(first.polygon.contains_lonlat(lon, lat, degrees=True) for lon, lat in second.vertices))
+        if inside or _arcs_cross(first, second):
+            return 0.0, ("archi di cerchio massimo (D17-9) che incrociano l'altra forma (great_circle_arc.intersects)"
+                         " o con un punto dentro il poligono: 0"), None, None
+        distance = min(float(np.min(_points_to_arcs_deg(first.vertices[:, 0], first.vertices[:, 1],
+                                                         *_arcs(second)))),
+                       float(np.min(_points_to_arcs_deg(second.vertices[:, 0], second.vertices[:, 1],
+                                                        *_arcs(first)))))
+        return distance, ("archi di cerchio massimo (D17-9) disgiunti: minimo delle distanze estremo–arco nei due "
+                          "versi (il minimo tra due archi disgiunti cade in un estremo)"), None, None
+    return _ellipse_distance(first, second, atol)
+
+
+def _ellipse_distance(other: _DistanceGeometry, ellipse: _DistanceGeometry,
+                      atol: float) -> tuple[float, str, float | None, int | None]:
+    """Distanza tra un'ellisse (D17-9) e un'altra forma ridotta: 0 se un punto dell'una è dentro l'altra,
+    altrimenti minimo numerico sul bordo dell'ellisse, 0 se non supera la precisione (forme che si toccano o
+    i cui bordi si incrociano)."""
+    method = ("ellisse (D17-9): minimo numerico sul bordo (bordo per bisezione in float64 con offset_by e "
+              "skydist del 13; campioni di θ raddoppiati da 128, minimi locali raffinati con scipy.optimize; "
+              f"precisione assoluta richiesta {atol!r}°, stima dell'errore = differenza tra due stime consecutive)")
+    center = _lonlat_deg(ellipse.reference)
+    if other.kind == "cap":
+        point = _lonlat_deg(other.reference)
+        if _in_ellipse(ellipse, *point):
+            return 0.0, "centro della calotta dentro l'ellisse: 0", None, None
+        value, error, samples = _ellipse_minimum(ellipse, lambda lon, lat: skydist(lon, lat, *point), atol)
+        value -= other.radius
+        method += f"; meno il raggio della calotta {other.radius!r}°"
+    elif other.kind in ("polygon", "path"):
+        vertices = other.vertices
+        if np.any(_in_ellipse(ellipse, vertices[:, 0], vertices[:, 1])) or (
+                other.kind == "polygon" and other.polygon.contains_lonlat(*center, degrees=True)):
+            return 0.0, "un vertice dentro l'ellisse o il centro dell'ellisse dentro il poligono: 0", None, None
+        if _arcs_enter_ellipse(ellipse, other):
+            return 0.0, ("un arco entra nell'ellisse (minimo di \"somma delle distanze dai fuochi − 2a\" lungo "
+                         "l'arco ≤ 0, scipy.optimize.minimize_scalar): 0"), None, None
+        value, error, samples = _ellipse_minimum(
+            ellipse, lambda lon, lat: _points_to_arcs_deg(lon, lat, *_arcs(other)), atol)
+        method += "; distanza di ogni punto del bordo dagli archi di cerchio massimo dell'altra forma"
+    else:
+        if _in_ellipse(ellipse, *_lonlat_deg(other.reference)) or _in_ellipse(other, *center):
+            return 0.0, "centro di un'ellisse dentro l'altra: 0", None, None
+        excess, _, _ = _ellipse_minimum(other, lambda lon, lat: _focal_excess(ellipse, lon, lat), atol)
+        if excess <= 0.0:
+            return 0.0, ("il bordo di un'ellisse entra nell'altra (minimo di \"somma delle distanze dai fuochi − 2a\" "
+                         "lungo il bordo ≤ 0): 0"), None, None
+        value, error, samples = _ellipses_minimum(other, ellipse, atol)
+        method += "; ellisse–ellisse: griglia di coppie di direzioni (θ₁, θ₂), raffinata con Nelder-Mead"
+    if value <= atol:
+        return 0.0, method + "; minimo entro la precisione: le forme si toccano o si sovrappongono, 0", error, samples
+    return value, method, error, samples
 
 
 class Shape:
@@ -762,15 +1048,21 @@ class Shape:
         raise NotImplementedError
 
     def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
-        raise MeasuresError("OPERATION_UNSUPPORTED", f"distance_to non definita per {self.kind}: ferma su D17-9 "
-                            "(da decidere)")
+        raise NotImplementedError
 
-    def distance_to(self, other) -> ShapeMeasure:
-        """Distanza angolare minima (D17-8) da un'altra forma o da un punto, in gradi.
+    def distance_to(self, other, *, atol: u.Quantity = ELLIPSE_DISTANCE_ATOL) -> ShapeMeasure:
+        """Distanza angolare minima (D17-8, D17-9) da un'altra forma o da un punto, in gradi.
 
         0 se le forme si sovrappongono o se il punto è dentro; cerchi esatti con Astropy (separazione − raggi),
-        poligoni con la distanza punto–arco di cerchio massimo. Nel frame di questa forma.
+        poligoni, frecce e tracciati con la distanza punto–arco di cerchio massimo; con un'ellisse minimo
+        numerico sul bordo con precisione assoluta ``atol`` (stima dell'errore e campioni nel risultato). Il
+        testo non ha distanza (``OPERATION_UNSUPPORTED``). Nel frame di questa forma.
         """
+        if not isinstance(atol, u.Quantity) or not atol.unit.is_equivalent(u.deg) or atol.size != 1:
+            raise ValueError(f"atol {atol!r}: serve un angolo positivo con unità")
+        atol_deg = float(atol.to_value(u.deg))
+        if not 0.0 < atol_deg < 1.0:
+            raise ValueError(f"atol {atol!r}: serve un angolo in (0°, 1°)")
         mine, notes = self._distance_geometry(None)
         if isinstance(other, Shape):
             theirs, other_notes = other._distance_geometry(mine.reference)
@@ -778,13 +1070,19 @@ class Shape:
         else:
             point, other_notes = self._point(mine.reference, other)
             theirs, other_kind = _DistanceGeometry.cap(point, 0.0), "point"
-        value, method = _geometry_distance(mine, theirs)
-        provenance = _SG_PROVENANCE if "polygon" in (mine.kind, theirs.kind) else _PROVENANCE
-        return ShapeMeasure(value=np.float64(value) * u.deg, shape=self.kind, report=self._report(
-            "distance_to", (f"{self.kind}: {_describe(mine.reference)}", f"{other_kind}: {_describe(theirs.reference)}"),
-            "deg", notes + other_notes + (
-                "distanza angolare minima tra le forme (D17-8): 0 se si sovrappongono o se il punto è dentro",
-                method), provenance))
+        value, method, error, samples = _geometry_distance(mine, theirs, atol_deg)
+        kinds = {mine.kind, theirs.kind}
+        provenance = _SG_PROVENANCE if kinds & {"polygon", "path"} else _PROVENANCE
+        if "ellipse" in kinds:
+            provenance += f", scipy {scipy.__version__}"
+        return ShapeMeasure(
+            value=np.float64(value) * u.deg, shape=self.kind,
+            error=None if error is None else np.float64(error) * u.deg, samples=samples, report=self._report(
+                "distance_to", (f"{self.kind}: {_describe(mine.reference)}",
+                                f"{other_kind}: {_describe(theirs.reference)}"),
+                "deg", notes + other_notes + (
+                    "distanza angolare minima tra le forme (D17-8, D17-9): 0 se si sovrappongono o se il punto è "
+                    "dentro", method), provenance))
 
     def _point(self, reference: SkyFrame, point) -> tuple[SkyFrame, tuple[str, ...]]:
         converted, notes = _in_frame_of(reference, _as_point(point, "point"), "point")
@@ -882,17 +1180,7 @@ class Ellipse(Shape):
 
     def _boundary_radius(self, theta_deg: np.ndarray) -> np.ndarray:
         """Distanza (gradi) del bordo dal centro nelle direzioni ``theta`` (bisezione fino a ``float64``)."""
-        limit = 2.0 * float(self.a.value)
-        lo, hi = np.zeros_like(theta_deg), np.full_like(theta_deg, limit)  # a 2a la somma è già > 2a
-        theta = theta_deg * u.deg
-        for _ in range(200):
-            mid = 0.5 * (lo + hi)
-            lon, lat = offset_by(self.center.lon, self.center.lat, theta, mid * u.deg)
-            inside = self._focal_sum(lon, lat) <= limit
-            lo, hi = np.where(inside, mid, lo), np.where(inside, hi, mid)
-            if np.all(hi - lo <= 2.0 * np.finfo(np.float64).eps * hi):
-                break
-        return 0.5 * (lo + hi)
+        return _ellipse_boundary_radius(self.center.lon, self.center.lat, self._foci, float(self.a.value), theta_deg)
 
     def _trapezoid(self, n: int) -> float:
         theta = np.arange(n, dtype=np.float64) * (360.0 / n)
@@ -929,6 +1217,18 @@ class Ellipse(Shape):
         return {"shape": self.kind, "frame": self.frame, "center": _describe(self.center), "a": self.a, "b": self.b,
                 "position_angle": self.position_angle, "focal_distance": self.focal_distance,
                 "definition": ELLIPSE_DEFINITION}
+
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        # L'ellisse sferica dipende solo dai fuochi e da a: in un altro frame si convertono centro e fuochi.
+        if reference is None or reference.coord.frame.is_equivalent_frame(self.center.coord.frame):
+            center, foci, notes = self.center, self._foci, ()
+        else:
+            center = _in_frame_of(reference, self.center, "centro dell'ellisse")[0]
+            converted = [_in_frame_of(reference, f, "fuoco dell'ellisse")[0] for f in self.foci]
+            foci = tuple((f.lon, f.lat) for f in converted)
+            notes = (f"ellisse convertita da {self.frame} a {reference.frame_name} con il modulo 10 "
+                     "(convert_coordinates): centro e fuochi, stesso a",)
+        return _DistanceGeometry("ellipse", center, foci=foci, a=float(self.a.value)), notes
 
 
 def _distinct_vertices(points: tuple[SkyFrame, ...]) -> tuple[tuple[SkyFrame, ...], tuple[str, ...]]:
@@ -1051,9 +1351,20 @@ class Freehand(Shape):
 
     def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
         if self._polygon is None:
-            raise MeasuresError("OPERATION_UNSUPPORTED", "distance_to non definita per un tracciato aperto: ferma su "
-                                "D17-9 (da decidere)")
+            return _path_geometry(self.points, reference, "tracciato aperto")
         return self._polygon._distance_geometry(reference)
+
+
+def _path_geometry(points: tuple[SkyFrame, ...], reference: SkyFrame | None,
+                   what: str) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+    """Archi di cerchio massimo tra punti consecutivi (D17-9), nel frame di ``reference`` se dato."""
+    notes = ()
+    if reference is not None and not reference.coord.frame.is_equivalent_frame(points[0].coord.frame):
+        points = tuple(_in_frame_of(reference, p, f"punto del {what}")[0] for p in points)
+        notes = (f"{what} convertito a {reference.frame_name} con il modulo 10 (convert_coordinates)",)
+    vertices = np.array([_lonlat_deg(p) for p in points])
+    return _DistanceGeometry("path", points[0], vertices=vertices), notes + (
+        f"{what}: archi di cerchio massimo tra punti consecutivi (D17-9)",)
 
 
 class Arrow(Shape):
@@ -1067,6 +1378,9 @@ class Arrow(Shape):
 
     def describe(self) -> dict:
         return {"shape": self.kind, "frame": self.frame, "start": _describe(self.start), "end": _describe(self.end)}
+
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        return _path_geometry((self.start, self.end), reference, "freccia")
 
 
 class Text(Shape):
@@ -1082,6 +1396,10 @@ class Text(Shape):
 
     def describe(self) -> dict:
         return {"shape": self.kind, "frame": self.frame, "position": _describe(self.position), "text": self.text}
+
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        raise MeasuresError("OPERATION_UNSUPPORTED", "distance_to non definita per un testo: un'etichetta non è "
+                            "una regione (D17-9)")
 
 
 @dataclass(frozen=True)

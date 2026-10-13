@@ -42,9 +42,10 @@ NOTES: dict[str, str] = {
         "riferimento la GPL-3, il cui testo va aggiunto nella distribuzione (modulo 60). Include anche ERFA, "
         "CFITSIO, expat e le altre componenti elencate nei file di licenza sotto."),
     "pims": (
-        "Il pacchetto installato non contiene un file di licenza: licenza dichiarata nei metadati "
-        "BSD-3-Clause; testo integrale da recuperare dal repository sorgente prima della distribuzione "
-        "(da verificare, modulo 60)."),
+        "La ruota installata non contiene un file di licenza: testo integrale (BSD-3-Clause) preso dal "
+        "license.txt del sorgente ufficiale pims-0.7.tar.gz su PyPI, identico a quello del repository "
+        "(verificato il 2026-10-13, sotto). Il testo lascia non compilato il segnaposto <COPYRIGHT HOLDER> "
+        "della clausola di esclusione di garanzia: da valutare con A11 e con il modulo 60."),
     "matplotlib": "Licenza basata sulla PSF; il file sotto contiene anche le licenze delle componenti incluse.",
     "numpy": "Le librerie compilate incluse nella ruota (OpenBLAS e runtime GCC) sono descritte nel LICENSE.txt.",
     "scipy": "Le librerie compilate incluse nella ruota (OpenBLAS e runtime GCC) sono descritte nel LICENSE.txt.",
@@ -99,6 +100,46 @@ AND NASA FOR ALL THIRD-PARTY CLAIMS RESULTING FROM THE ACTIONS OF RECIPIENT IN T
 
 Acknowledgement: AstroTwo uses NASA's SPICE system (NAIF, JPL) for planetary body names and constants.
 """
+
+
+#: Testi di licenza presi fuori dal pacchetto installato, quando la ruota non li contiene: nome del pacchetto →
+#: (fonte, testo integrale).
+EXTERNAL_LICENSE_TEXTS: dict[str, tuple[str, str]] = {
+    "pims": (
+        "license.txt del sorgente ufficiale https://files.pythonhosted.org/packages/b8/02/"
+        "5bf3639f5b77e9b183011c08541c5039ba3d04f5316c70312b48a8e003a9/pims-0.7.tar.gz (SHA-256 "
+        "55907a4c301256086d2aa4e34a5361b9109f24e375c2071e1117b9491e82946b, uguale a quello pubblicato da PyPI), "
+        "identico a https://github.com/soft-matter/pims/blob/main/license.txt; letto il 2026-10-13",
+        """Copyright Notice and Statement for the PIMS Project
+===================================================
+
+   Copyright (c) 2013-2014 PIMS contributors
+   https://github.com/soft-matter/pims
+   All rights reserved
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the soft-matter organization nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.""",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -214,7 +255,10 @@ def render() -> str:
         if note:
             lines.append(f"Nota: {note}")
         files = _license_files(distribution)
-        if not files:
+        external = EXTERNAL_LICENSE_TEXTS.get(canonicalize_name(name))
+        if not files and external:
+            lines += ["", f"--- testo di licenza (fonte: {external[0]}) ---", "", external[1].rstrip()]
+        elif not files:
             lines.append("Testo di licenza: non incluso nel pacchetto installato (vedi la nota).")
         for filename, text in files:
             lines += ["", f"--- {filename} ---", "", text.rstrip()]

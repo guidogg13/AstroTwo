@@ -383,7 +383,7 @@ def test_t8_pds4_errors(tmp_path, planetary_on):
     pds3.write_text("PDS_VERSION_ID = PDS3\nEND\n")
     garbage = tmp_path / "bad.xml"
     garbage.write_text("non è xml")
-    for source, hint in ((str(pds3), "D19-8"), ("https://example.invalid/img.xml", "D19-9"),
+    for source, hint in ((str(pds3), "PDS3 non ancora supportato"), ("ftp://example.invalid/img.xml", "D19-9"),
                          (str(garbage), "pds4_tools"), (str(tmp_path / "missing.xml"), "non leggibile")):
         with pytest.raises(PlanetaryDataError) as exc:
             load_pds_image(source)
@@ -392,6 +392,41 @@ def test_t8_pds4_errors(tmp_path, planetary_on):
     with pytest.raises(PlanetaryDataError) as exc:
         load_pds_image(str(two))
     assert exc.value.code == "PLANETARY_DATA_DISABLED"
+
+
+def test_t8_pds4_from_url(tmp_path, service, cache, planetary_on):
+    """D19-9: etichetta e file nominati dalla stessa cartella dell'URL, rete del 14, cache comune."""
+    path, raw = pds4_product(tmp_path)
+    label, data = path.read_bytes(), (tmp_path / "img.dat").read_bytes()
+    service.routes["/pds/img.xml"] = lambda request: (200, "application/xml", label)
+    service.routes["/pds/img.dat"] = lambda request: (200, "application/octet-stream", data)
+    url = service.url + "/pds/img.xml"
+    image = load_pds_image(url, cache=cache)
+    local = load_pds_image(str(path))
+    assert np.array_equal(image.data, local.data, equal_nan=True) and image.body == "Mars"
+    assert image.origin == url and [d[0] for d in image.downloads] == [url, service.url + "/pds/img.dat"]
+    assert not any(d[2] for d in image.downloads) and "PDS_DOWNLOADED" in dict(image.warnings)
+    again = load_pds_image(url, cache=cache)  # dalla cache comune: nessuna nuova richiesta
+    assert service.hits("/pds/img.xml") == 1 and service.hits("/pds/img.dat") == 1
+    assert all(d[2] for d in again.downloads) and "FROM_CACHE" in dict(again.warnings)
+    assert np.array_equal(again.data, image.data, equal_nan=True)
+    refreshed = load_pds_image(url, cache=cache, refresh=True)
+    assert service.hits("/pds/img.dat") == 2 and not any(d[2] for d in refreshed.downloads)
+    # Etichetta PDS3 da URL, file fuori dalla cartella, file di dati mancante, servizio non raggiungibile.
+    service.routes["/pds/old.lbl"] = lambda request: (200, "text/plain", b"PDS_VERSION_ID = PDS3\nEND\n")
+    outside = label.replace(b"<file_name>img.dat</file_name>", b"<file_name>../img.dat</file_name>")
+    service.routes["/pds/outside.xml"] = lambda request: (200, "application/xml", outside)
+    missing = label.replace(b"<file_name>img.dat</file_name>", b"<file_name>none.dat</file_name>")
+    service.routes["/pds/missing.xml"] = lambda request: (200, "application/xml", missing)
+    for name, code, hint in (("old.lbl", "PDS_UNREADABLE", "PDS3 non ancora supportato"),
+                             ("outside.xml", "PDS_UNREADABLE", "stessa cartella"),
+                             ("missing.xml", "SERVICE_ERROR", "404")):
+        with pytest.raises(PlanetaryDataError) as exc:
+            load_pds_image(f"{service.url}/pds/{name}", cache=cache)
+        assert exc.value.code == code and hint in exc.value.message
+    with pytest.raises(PlanetaryDataError) as exc:
+        load_pds_image("http://127.0.0.1:9/pds/img.xml", cache=cache)
+    assert exc.value.code == "NET_TIMEOUT"
 
 
 

@@ -8,7 +8,13 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-13 — **livello 1 scritto per intero (04, 10–19)**: D17-8 e D18-7
+**Ultimo aggiornamento:** 2026-10-13 — **livello 1 chiuso** (decisioni del proprietario del 2026-10-13): D17-9
+decisa e scritta (`distance_to` per ellisse, freccia, tracciato aperto; testo escluso), D19-9 decisa e scritta
+(PDS4 da URL), D19-8 rimandata (PDS3 non ancora supportato); scelte minori di 18 e 19 confermate; 04 con 18 e
+19 tra gli utenti della cache; testo di licenza di `pims` trovato e aggiunto a `THIRD_PARTY_LICENSES`; 04, 17, 19
+modificati e restano `approvato`. Test 491 di default. Aperte 13. Riepilogo invariato: approvato 14, bozza 5,
+non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-13 — **livello 1 scritto per intero (04, 10–19)**: D17-8 e D18-7
 decise e scritte; `THIRD_PARTY_LICENSES` creato (01 §6); `read_raw_pixel` nell'11; UT1 con le tabelle IERS
 incluse; **modulo 19 scritto in P0–P4** (`planetary_data.py`, tabella dei nomi D12-6 anche nel 12); nuove aperte
 D17-9, D19-8, D19-9 (Gruppo 3); 01, 11, 12, 17, 18, 19 modificati e restano `approvato`. Test 485 di default,
@@ -270,8 +276,8 @@ Dove si trovano le decisioni:
 | `01-architettura.md` | Architettura generale, scelte tecniche e motivazioni; decisioni `A1`–`A9` (prese, aperte, rimandate) | approvato |
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
-| `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14 e 16 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (15: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 11, aggiornate il 2026-10-13) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14, 16, 18 e 19 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
+| `decisioni-aperte.md` | Decisioni aperte (13: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 9, aggiornate il 2026-10-13) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 
@@ -284,9 +290,9 @@ Dove si trovano le decisioni:
 | `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, elenco dei server e registro VO, DataLink, SIA/SIA2, SAMP (G3), spettri SSA (E4), puntatori Simbad/VizieR | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi (cross-match) | approvato |
 | `16-core-moc.md` | Mappe di copertura MOC (codice scritto in 5 parti il 2026-10-11, `src/astrotwo/core/moc.py`; D16-6 e D16-7 decise e scritte il 2026-10-12) | approvato |
-| `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura (codice completo, `src/astrotwo/core/measures.py`; `distance_to` con D17-8 il 2026-10-13, fermo solo per ellisse, freccia, testo e tracciato aperto, D17-9) | approvato |
+| `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura (codice completo, `src/astrotwo/core/measures.py`; `distance_to` con D17-8 e D17-9 il 2026-10-13: tutte le forme, testo escluso) | approvato |
 | `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo (livello 1; origine H4 di `03-parita-aladin.md`; codice P1–P5 scritto il 2026-10-12/13, `src/astrotwo/core/calculators.py`; completo il 2026-10-13 con D18-7, UT1 con le tabelle IERS incluse) | approvato |
-| `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari (livello 1; origine H21 di `03-parita-aladin.md`, AM1 accettata il 2026-10-08; codice P0–P4 scritto il 2026-10-13, `src/astrotwo/core/planetary_data.py`; fermi PDS3, D19-8, e PDS da URL, D19-9) | approvato |
+| `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari (livello 1; origine H21 di `03-parita-aladin.md`, AM1 accettata il 2026-10-08; codice P0–P4 scritto il 2026-10-13, `src/astrotwo/core/planetary_data.py`; PDS4 anche da URL (D19-9); PDS3 non ancora supportato, D19-8 rimandata) | approvato |
 
 ## Analisi (livello 2)
 

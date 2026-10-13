@@ -73,7 +73,7 @@ AstroTwo applica regole più severe (§9).
 | P1 | `PlanetaryBody`, tabella dei nomi (D12-6), `body_of`, `check_overlay` con forzatura esplicita, opzione disattivata per default (D19-5) | T1, T2, T3, T9, T11 |
 | P2 | `PlanetaryPosition`, `convert_planetary_coordinates` con `spiceypy` (est/ovest, planetocentrica/planetografica) | T4, T5, T6, T10 |
 | P3 | `list_planetary_collections` (tramite il 12) e `query_epntap` (tramite il 14) | T7 |
-| P4 | `load_pds_image`: PDS4 con `pds4_tools`; PDS3 con `pdr` solo se la verifica di P0 lo ammette | T8 |
+| P4 | `load_pds_image`: PDS4 con `pds4_tools`, anche da URL (D19-9); PDS3 non ancora supportato (D19-8 rimandata) | T8 |
 
 **Codice: `src/astrotwo/core/planetary_data.py`**, errori `PlanetaryDataError`
 con gli identificatori di §10 (gli errori dei moduli 12, 13, 14 passano con
@@ -114,8 +114,10 @@ lo stesso identificatore).
    **classificato "Beta"** dagli autori e con dipendenze in più (`pandas`,
    `dustgoggles`, `multidict` Apache-2.0, `rms-vax` Apache-2.0); include una
    propria copia di `pds4_tools`. La verifica **non basta da sola** a dire
-   che sia una "libreria consolidata" (D19-2): **PDS3 fermo su D19-8** (da
-   decidere), `pdr` non aggiunto alle dipendenze.
+   che sia una "libreria consolidata" (D19-2): `pdr` non aggiunto alle
+   dipendenze; **PDS3 rimandato** (D19-8, decisione del proprietario del
+   2026-10-13, bassa priorità): un'etichetta PDS3 dà un errore esplicito
+   "formato PDS3 non ancora supportato".
 5. **Corpo nei HiPS:** proprietà **`hips_body`** (Working Draft HiPS 2.0,
    già verificata con il 12 il 2026-10-12). MocServer, 2026-10-13: 78 HiPS
    con `hips_frame` non celeste; i valori di `hips_body` sono in
@@ -160,7 +162,7 @@ La tabella si applica anche al **12** (`_body` di `hips.py`): `hips_body`
 normalizzato al nome canonico; valore fuori tabella → `body = None` con
 l'avviso `BODY_UNSUPPORTED` (il dato si apre da solo).
 
-**Scelte minori (proposte da Claude Code il 2026-10-13, da confermare):**
+**Scelte minori (proposte da Claude Code il 2026-10-13, confermate tutte dal proprietario il 2026-10-13):**
 
 1. **Opzione D19-5:** stato del modulo (`set_planetary_data_enabled`,
    `planetary_data_enabled`), **spento all'avvio**; l'impostazione delle
@@ -220,9 +222,19 @@ l'avviso `BODY_UNSUPPORTED` (il dato si apre da solo).
    (scala dell'etichetta applicata da `pds4_tools`), costanti speciali →
    NaN (maschera di `as_masked`), il conteggio nel risultato; corpo da
    `Target_Identification/name` normalizzato (più corpi o nessuno →
-   `body = None` con `BODY_UNKNOWN`). **URL: fermo su D19-9** (un prodotto
-   PDS4 è etichetta + file di dati: lo scaricamento di più file con la rete
-   del 14 non è descritto) → `PDS_UNREADABLE` che lo dice.
+   `body = None` con `BODY_UNKNOWN`). **Da URL (D19-9, decisa il
+   2026-10-13):** solo `http(s)`; si scarica l'etichetta e poi **tutti i
+   file nominati** in `File/file_name`, **dalla stessa cartella dell'URL**
+   (un nome con `/`, `\`, `..` o che inizia con `.` → `PDS_UNREADABLE`: si
+   scarica solo dalla cartella dell'etichetta), con la rete del 14
+   (`_http`, timeout comuni, `refresh`) e la **cache comune** (04, tabella
+   delle risposte del 14); i file si scrivono in una cartella temporanea
+   cancellata dopo la lettura; nel risultato `origin` = URL, `downloads` =
+   (URL, data di scaricamento, da cache) di ogni file e l'avviso
+   `PDS_DOWNLOADED`; errori di rete del 14 con lo stesso identificatore
+   (`NET_TIMEOUT`, `SERVICE_ERROR`…). `cache`, `refresh`, `timeouts` come
+   nel 14. **PDS3** (locale o da URL): `PDS_UNREADABLE` "formato PDS3 non
+   ancora supportato" (D19-8 rimandata).
 
 ## 4. Cosa NON fa
 
@@ -263,7 +275,7 @@ l'avviso `BODY_UNSUPPORTED` (il dato si apre da solo).
 | in | `longitude_direction` | enumerativo | `east` / `west` positiva | obbligatorio |
 | in | collezione HiPS, tabella, MOC | oggetti dei moduli 12, 13, 16 | come nei moduli di origine | con corpo dichiarato |
 | in | query EPN-TAP | stringa ADQL + servizio | standard EPN-TAP | eseguita dal modulo 14 |
-| in | file PDS | percorso o URL | PDS4 (obbligatorio); PDS3 solo con libreria consolidata (D19-2) | |
+| in | file PDS | percorso o URL `http(s)` (D19-9) | PDS4 (obbligatorio); PDS3 non ancora supportato (D19-8 rimandata) | da URL: etichetta + file nominati nella stessa cartella |
 | out | coordinate planetarie convertite | float64 | gradi + corpo + convenzioni dichiarati | mai coordinate "nude" |
 | out | esito del controllo di sovrapposizione | struttura | compatibile / errore con i corpi coinvolti | |
 | out | elenco delle collezioni per corpo | lista | identificativi e proprietà delle collezioni | per il ramo "Sistema solare" |
@@ -293,8 +305,9 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
   dai metadati delle collezioni (moduli 12 e 14).
 - **`query_epntap(service, query)`** — prepara e passa al modulo 14 una query
   EPN-TAP; restituisce la tabella con corpo e convenzioni dichiarati.
-- **`load_pds_image(source)`** — legge un'immagine PDS4 (PDS3 se ammesso da
-  D19-2b) in questo modulo; restituisce immagine, metadati e corpo.
+- **`load_pds_image(source)`** — legge un'immagine PDS4 da percorso o da URL
+  (D19-9) in questo modulo; restituisce immagine, metadati, corpo e, da URL,
+  origine e data di ogni file; PDS3 non ancora supportato (D19-8).
 
 ## 8. Librerie e standard di riferimento
 
@@ -307,7 +320,8 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | Formato PDS (Planetary Data System) | immagini planetarie | formato standard degli archivi planetari della NASA |
 | `spiceypy` 8.3.0 (MIT, con il toolkit CSPICE N0067 della NAIF) + kernel PCK `pck00011.tpc` della NAIF incluso nel progetto (D19-1) | nomi e identificativi NAIF, raggi, conversioni di latitudine | verificati il 2026-10-13 (§3, P0); avvisi in `THIRD_PARTY_LICENSES` |
 | `pds4_tools` 1.4 (BSD-3-Clause) (D19-2b) | lettura delle immagini PDS4 | verificato il 2026-10-13 (§3, P0) |
-| `pdr` (PDS3) (D19-2b) | lettura PDS3 | verificato il 2026-10-13 ma **non adottato**: fermo su D19-8 |
+| `pdr` (PDS3) (D19-2b) | lettura PDS3 | verificato il 2026-10-13 ma **non adottato**: PDS3 rimandato (D19-8, bassa priorità) |
+| Rete del 14 (`vo_protocols._http`, `_store`) e cache comune (04) | PDS4 da URL (D19-9) | una sola implementazione della rete e della cache |
 | `astropy.units` | unità di angoli e distanze | regola d'oro n. 4 |
 
 ## 9. Regole e vincoli
@@ -342,7 +356,8 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | Corpo non supportato dalla libreria scelta | rifiuto con l'elenco dei corpi supportati | `BODY_UNSUPPORTED` |
 | Convenzione di latitudine o longitudine mancante | rifiuto: la convenzione non si assume | `PLANETARY_CONVENTION_REQUIRED` |
 | Latitudine fuori [−90, +90] | rifiuto prima del calcolo | `COORD_OUT_OF_RANGE` |
-| File PDS illeggibile o versione non supportata | nessuna immagine aperta | `PDS_UNREADABLE` |
+| File PDS illeggibile o versione non supportata (PDS3: "formato PDS3 non ancora supportato", D19-8); da URL, file nominato fuori dalla cartella dell'etichetta o schema diverso da `http(s)` | nessuna immagine aperta | `PDS_UNREADABLE` |
+| PDS4 da URL: file non raggiungibile o risposta HTTP di errore (D19-9) | nessuna immagine aperta; errore del 14 inoltrato | `NET_TIMEOUT`, `SERVICE_ERROR` |
 | Servizio EPN-TAP non raggiungibile | errore del modulo 14 inoltrato | `NET_TIMEOUT` |
 | Pixel con costanti speciali PDS4 (`missing_constant`…) | NaN nell'immagine, conteggio nel risultato | avviso `PDS_SPECIAL_CONSTANTS` |
 | Opzione dei dati planetari disattivata | rifiuto con indicazione della preferenza | `PLANETARY_DATA_DISABLED` |
@@ -377,7 +392,7 @@ corpo di un dato né calcola coordinate.
 | T5 | Latitudine planetocentrica ↔ planetografica | convertire una latitudine scelta dal tester per un corpo con schiacciamento noto | coincide con la libreria di D19-1 e con la definizione sulla superficie dello sferoide tan φg = tan φc / (1 − f)² entro 1e-9 gradi; ritorno entro 1e-9 gradi | ricalcolo con la libreria e con la definizione |
 | T6 | Convenzione mancante | posizione senza tipo di latitudine | `PLANETARY_CONVENTION_REQUIRED` | test di unità |
 | T7 | EPN-TAP e collezioni | query EPN-TAP su un servizio simulato (un corpo; corpi diversi; `celestial`; tabella non `epn_core`; servizio irraggiungibile); collezioni per corpo da una copia locale del 12 | tabella con corpo e convenzioni dichiarati (planetocentrica, est, 0–360°); corpi diversi → `body = None` con `BODY_UNKNOWN`; `ADQL_INVALID` senza rete; `NET_TIMEOUT` del 14; collezioni raggruppate per nome canonico, corpi ignoti a parte | servizio simulato (test di rete separati per i servizi reali) |
-| T8 | Immagine PDS | leggere un file PDS4 di esempio (`pds4_tools` non ne fornisce: prodotto generato nel test, §3 P0 punto 3); più immagini, più corpi, PDS3, URL, file illeggibile | immagine aperta con metadati del corpo; valori uguali a quelli letti dalla libreria | confronto con la libreria di D19-2 |
+| T8 | Immagine PDS | leggere un file PDS4 di esempio (`pds4_tools` non ne fornisce: prodotto generato nel test, §3 P0 punto 3); più immagini, più corpi, PDS3, file illeggibile; **da URL (D19-9)** con un server HTTP locale: prima lettura, seconda dalla cache, `refresh`, PDS3 da URL, file fuori dalla cartella, file di dati mancante, servizio non raggiungibile | immagine aperta con metadati del corpo; valori uguali a quelli letti dalla libreria; da URL valori uguali alla lettura locale, origine e date dei file, nessuna nuova richiesta dalla cache; PDS3 → "non ancora supportato"; errori `PDS_UNREADABLE`, `SERVICE_ERROR`, `NET_TIMEOUT` | confronto con la libreria di D19-2 |
 | T9 | Opzione disattivata | chiamare una funzione del modulo con l'opzione disattivata | `PLANETARY_DATA_DISABLED`; funzioni celesti non toccate | test di unità |
 | T11 | Sovrapposizione forzata | ripetere T1 con l'opzione di forzatura | sovrapposizione eseguita, avviso `BODY_MISMATCH_FORCED` nel risultato e nel comando registrato | test di unità |
 | T10 | Riproducibilità | rieseguire il comando registrato di T4 e T5 | risultati identici | confronto con il registro del modulo 24 |
@@ -427,7 +442,10 @@ corpo di un dato né calcola coordinate.
   MOC HEALPix con metadato `body` (D19-3), dichiarato come estensione di
   AstroTwo.
 
-- **D19-8 — PDS3 con `pdr`: DA DECIDERE (aperta il 2026-10-13, Gruppo 3).**
+- **D19-8 — PDS3 con `pdr`: RIMANDATA, bassa priorità (decisione del
+  proprietario del 2026-10-13).** Per ora niente `pdr`: un'etichetta PDS3 dà
+  `PDS_UNREADABLE` con "formato PDS3 non ancora supportato". Resta nel
+  Gruppo 3 come rimandata. Testo della domanda (aperta lo stesso giorno):
   La verifica di P0 (§3 punto 4) trova licenze compatibili, installazione
   semplice e manutenzione attiva, ma gli autori classificano `pdr` come
   **"Beta"** e porta `pandas` e altre tre dipendenze. D19-2 ammette PDS3
@@ -436,8 +454,10 @@ corpo di un dato né calcola coordinate.
   l'avviso nel risultato che la lettura è di una libreria Beta e un test
   su file PDS3 reali piccoli prima dell'adozione; in alternativa, PDS3 non
   supportato nel livello 1. Ferma solo la lettura PDS3 di P4.
-- **D19-9 — `load_pds_image` da URL: DA DECIDERE (aperta il 2026-10-13,
-  Gruppo 3).** §6 ammette "percorso o URL", ma un prodotto PDS4 è
+- **D19-9 — `load_pds_image` da URL: DECISA il 2026-10-13 (decisione del
+  proprietario: la raccomandazione).** Etichetta e file nominati dalla stessa
+  cartella dell'URL, rete del 14, cache comune, origine e data; applicata in
+  §3 (scelta 9), §6, §7, §8, §10, T8. Testo della domanda: §6 ammette "percorso o URL", ma un prodotto PDS4 è
   un'etichetta più uno o più file di dati: non è descritto come scaricarli
   (tutti i file nominati nell'etichetta, dalla stessa cartella dell'URL,
   con la rete e la cache del 14?). **Raccomandazione:** sì, scaricare
@@ -458,3 +478,4 @@ corpo di un dato né calcola coordinate.
 | 2026-10-13 | Claude Code | **P2 scritta** (`PlanetaryPosition`, `convert_planetary_coordinates`, `LATITUDE_TYPES`, `LONGITUDE_DIRECTIONS`; T4, T5, T6, T10): latitudine con `spiceypy` sullo sferoide del kernel, verso della longitudine per definizione confrontato con `recpgr` per Marte. T5 precisato con il controllo sulla definizione. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P3 scritta** (`list_planetary_collections`/`PlanetaryCollections` con la copia locale delle collezioni del 12, `query_epntap` con `tap_query` del 14 ed `EPNTAP_CONVENTIONS`; T7 esteso alle collezioni). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P4 scritta — modulo 19 completo tranne PDS3 (D19-8) e PDS da URL (D19-9)** (`load_pds_image`/`PdsImage`, `body_of` sulle immagini PDS; T8). Test di rete: tabella dei corpi contro il MocServer (ogni corpo ha un HiPS), EPN-TAP reale (`mars_craters.epn_core` del servizio TAP di VO-Paris). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori 1–9 di §3 confermate; **D19-9 decisa e scritta** (PDS4 da URL: etichetta + file nominati nella stessa cartella, rete del 14, cache comune, `downloads` e `PDS_DOWNLOADED` nel risultato; T8 esteso con un server HTTP locale); **D19-8 rimandata** (bassa priorità): PDS3 → `PDS_UNREADABLE` "formato PDS3 non ancora supportato". Stato `approvato` invariato. |

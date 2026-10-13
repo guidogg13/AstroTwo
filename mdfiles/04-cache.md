@@ -89,7 +89,11 @@ viene e quando è stato preso.
 - **Usato da:** `10-core-coordinate-wcs.md` (risoluzione dei nomi, D10-3),
   `11-core-immagini-fits.md` (immagini e tagli), `12-core-hips.md` (riquadri
   HiPS), `13-core-cataloghi.md` (interrogazioni ai cataloghi),
-  `14-core-protocolli-vo.md` (query VO), `16-core-moc.md` (MOC);
+  `14-core-protocolli-vo.md` (query VO), `16-core-moc.md` (MOC),
+  `18-core-calcolatrici.md` (tabella IERS aggiornata su richiesta con
+  `update_iers_table`, file nella sottocartella del modulo `18`; aggiunto il
+  2026-10-13), `19-core-dati-planetari.md` (prodotti PDS4 da URL, D19-9,
+  tramite le risposte del 14);
   impostazioni in `40-ui-finestra-principale.md`; origine e data riportate da
   `24-analisi-pipeline-riproducibili.md`. Tutti questi moduli rimandano a
   questo file (collegamento completato il 2026-10-09).
@@ -206,3 +210,4 @@ Nessuna decisione aperta. Decise dal proprietario il 2026-10-09:
 | 2026-10-09 | Claude Code | **Decisioni del proprietario CA1–CA4 applicate:** timeout 10 s/60 s configurabili (§3, §7), un solo limite di 5 GB (§3), codice in `src/astrotwo/core/cache.py` (§7), nessuna cache propria nei moduli (§3, §13). Collegati 10, 11, 12, 13, 14, 16 (§5). **Stato portato ad `approvato`** su decisione del proprietario. |
 | 2026-10-09 | Claude Code | **Precisazioni del proprietario prima del codice:** il totale del limite è la somma dei dati delle voci (overhead di SQLite escluso); 5 GB = 5 × 10⁹ byte; descritti chiavi uniche con modulo proprietario, righe con colonne dichiarate dal modulo, ricreazione della cache corrotta e cache disattivata se la cartella non è scrivibile (§3, §9, §12-T3). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | **Codice scritto:** `src/astrotwo/core/cache.py` (`SharedCache`, `CacheTable`, `CachedValue`, `CacheUsage`, `NETWORK_TIMEOUTS`) con i test T1–T8 di §12 e casi aggiuntivi in `tests/core/test_cache.py` (18 superati; sempre in cartella temporanea o home simulata). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): §5 "Usato da" con `18-core-calcolatrici.md` (tabella IERS di `update_iers_table`) e `19-core-dati-planetari.md` (PDS4 da URL, D19-9, attraverso la rete e la cache del 14). Nessun altro cambiamento. Stato `approvato` invariato. |

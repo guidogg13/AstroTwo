@@ -283,8 +283,52 @@ Scelte minori di P3:
    minimo delle distanze vertice–lato nei due versi (tra due archi
    disgiunti il minimo cade in un estremo). Test T20 contro un minimo
    ricalcolato nel test con `offset_by`/`angular_separation` e `scipy`.
-   **Ellisse, freccia, testo e tracciato aperto: FERMI su D17-9** (la
-   decisione non li copre) → `OPERATION_UNSUPPORTED` che lo dice.
+   Ellisse, freccia, testo e tracciato aperto: scelta 10 (D17-9).
+10. **`distance_to` per ellisse, freccia, testo e tracciato aperto (D17-9
+   decisa dal proprietario il 2026-10-13, scritta lo stesso giorno):**
+   - **Freccia e tracciato aperto:** sequenza **aperta** di archi di cerchio
+     massimo tra punti consecutivi (la freccia è un solo arco), con la
+     stessa distanza punto–arco della scelta 9. Con una calotta: distanza
+     del centro dagli archi meno il raggio, minimo 0. Con un poligono o un
+     altro tracciato: **0** se un punto del tracciato è dentro il poligono
+     (`contains_lonlat`) o se due archi si incrociano
+     (`spherical_geometry.great_circle_arc.intersects`); altrimenti minimo
+     delle distanze estremo–arco nei due versi. Archi nulli o con estremi
+     antipodali: contano solo gli estremi.
+   - **Ellisse:** **0** se il punto (o il centro della calotta, un vertice
+     dell'altra forma, il centro dell'altra ellisse) è dentro l'ellisse, se
+     il centro dell'ellisse è dentro il poligono, o se un arco o il bordo
+     dell'altra ellisse **entra** nell'ellisse. L'ingresso si riconosce col
+     minimo della funzione liscia "somma delle distanze dai fuochi − 2a"
+     lungo l'arco (64 campioni con `offset_by`, minimi locali raffinati con
+     `scipy.optimize.minimize_scalar`) o lungo il bordo dell'altra ellisse
+     (stesso calcolo del punto seguente): ≤ 0 → 0. **Motivazione:** la
+     distanza tra bordi che si incrociano ha uno zero a spigolo, che la
+     minimizzazione raggiunge solo con errore ~1e-8 relativo in θ (oltre la
+     precisione dichiarata: trovato dal test T21 il 2026-10-13); la funzione
+     dei fuochi è liscia. Altrimenti **minimo numerico sul bordo
+     dell'ellisse**: punti del bordo nella direzione θ dal centro trovati
+     come per l'area (scelta 3: bisezione vettoriale in `float64`; per un
+     solo punto, nei raffinamenti, `scipy.optimize.brentq` sulla stessa
+     funzione e alla stessa precisione); campioni di θ **raddoppiati da 128**
+     finché due stime consecutive differiscono meno di **`atol`** (precisione
+     assoluta, **1e-9° di default**, parametro di `distance_to`, angolo in
+     (0°, 1°)); a ogni passo i minimi locali dei campioni entro il minimo più
+     la distanza massima tra campioni consecutivi del bordo (al più 8) si
+     raffinano con `scipy.optimize.minimize_scalar` (θ entro 1e-10°). La
+     funzione minimizzata è la distanza dal punto (`skydist`), dal centro
+     della calotta (poi meno il raggio) o dagli archi dell'altra forma.
+     **Ellisse–ellisse:** griglia n × n di coppie (θ₁, θ₂), raddoppiata da
+     128 fino a 2¹⁰, minimi locali raffinati con `scipy.optimize.minimize`
+     (Nelder-Mead). La **differenza tra le due ultime stime è la stima
+     dell'errore dichiarata** (`error` del risultato, con `samples`); oltre
+     2¹⁶ campioni (2¹⁰ per ellisse–ellisse) senza `atol` →
+     `DISTANCE_PRECISION_NOT_REACHED` con la stima raggiunta. Un minimo
+     ≤ `atol` dà **0** con la nota "le forme si toccano o si sovrappongono
+     entro la precisione". L'ellisse in un altro frame si converte con
+     **centro e fuochi** (l'ellisse sferica dipende solo dai fuochi e da `a`).
+   - **Testo:** nessuna distanza (`OPERATION_UNSUPPORTED`: un'etichetta non
+     è una regione).
 
 **P4 — distanza automatica (scritta il 2026-10-12).** Scelte minori:
 
@@ -386,9 +430,10 @@ Scelte minori di P3:
   `Freehand`) — forme H11 con metodi `contains(point)`, `area()`
   (`ShapeMeasure`) e `describe()`; cerchio ed ellisse con Astropy, poligoni
   e tracciati chiusi con `spherical-geometry` (D17-7). `distance_to(altro)`:
-  distanza angolare minima da un'altra forma o da un punto (D17-8; cerchi,
-  poligoni, tracciati chiusi; ellisse, freccia, testo e tracciato aperto
-  fermi su D17-9).
+  distanza angolare minima da un'altra forma o da un punto (D17-8, D17-9:
+  cerchi esatti; poligoni, tracciati, frecce con archi di cerchio massimo;
+  ellisse con minimo numerico, parametro `atol` = 1e-9° di default, stima
+  dell'errore e campioni nel risultato; testo escluso).
 - **`tag(point, label)`** — marcatura con coordinate e etichetta; la UI la
   rende, la **sessione del 24** la persiste insieme ai segnalibri di 40
   (D17-3).
@@ -419,6 +464,7 @@ Scelte minori di P3:
 | Convenzione astronomica del PA | angolo di posizione da nord verso est | convenzione della comunità |
 | `spherical-geometry` 1.4.0 (STScI, BSD-3-Clause; include la libreria QD di LBNL, BSD modificata) | poligoni e tracciati chiusi: `SphericalPolygon` (`contains_lonlat`, `area`, `self_intersect`) (D17-7) | area e "contiene" esatti con lati di cerchio massimo, libreria consolidata dell'STScI (Hubble/JWST); licenza compatibile. **Da verificare con A11/60:** la licenza QD inclusa chiede di riportare l'avviso nelle distribuzioni binarie e invita a contattare LBNL per usi commerciali (frase fuori dalle clausole) |
 | `astropy.coordinates` (`angular_separation`, `offset_by`) | cerchio ed ellisse sferica (D17-7) | "contiene" esatto, fuochi e bordo dell'ellisse |
+| `spherical_geometry.great_circle_arc.intersects`; `scipy.optimize` (`minimize_scalar`, `minimize`, `brentq`) | `distance_to` con frecce, tracciati aperti ed ellissi (D17-9) | incrocio di archi della stessa libreria dei poligoni; minimi e radici numeriche con librerie consolidate, già nel progetto |
 
 ## 9. Regole e vincoli
 
@@ -461,7 +507,9 @@ Scelte minori di P3:
 | Corpo non dichiarato in una delle due tabelle (F1) | nessuna misura | `BODY_UNKNOWN` |
 | Immagine a colori per lettura pixel o profilo | nessun valore (solo presentazione, 11) | `OPERATION_UNSUPPORTED` |
 | Area o "contiene" per freccia, testo o tracciato aperto (D17-7) | nessun valore | `OPERATION_UNSUPPORTED` |
-| `distance_to` con ellisse, freccia, testo o tracciato aperto (fermo su D17-9) | nessun valore, messaggio con D17-9 | `OPERATION_UNSUPPORTED` |
+| `distance_to` con un testo (D17-9) | nessun valore, messaggio con D17-9 | `OPERATION_UNSUPPORTED` |
+| `distance_to` con un'ellisse oltre 2¹⁶ campioni (2¹⁰ per ellisse–ellisse) senza la precisione `atol` | nessuna distanza; stima raggiunta nel messaggio | `DISTANCE_PRECISION_NOT_REACHED` |
+| `atol` di `distance_to` senza unità angolare o fuori da (0°, 1°) | rifiuto dell'input | `ValueError` |
 | Poligono che si interseca, degenere, con meno di 3 vertici distinti o con le due regioni uguali senza `inside`; ellisse con b > a, a ≥ 90°; parametri senza unità angolare | rifiuto con il campo invalido | `SHAPE_INVALID` |
 | Area dell'ellisse oltre 2¹⁶ campioni senza la precisione richiesta | nessuna area; stima raggiunta nel messaggio | `AREA_PRECISION_NOT_REACHED` |
 
@@ -508,7 +556,8 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | T16 | Poligono sferico (D17-7) | ottante (0°,0°), (90°,0°), (0°,90°); punti dentro/fuori; poligono che si interseca; tracciato aperto | area π/2 sr; "contiene" giusto; `SHAPE_INVALID`; `OPERATION_UNSUPPORTED` | area dell'ottante per definizione (1/8 della sfera) |
 | T17 | Ellisse sferica contro piano tangente (D17-7) | ellisse grande (a = 30°, b = 10°) | un punto sull'asse maggiore a 0,99 a è dentro l'ellisse sferica e fuori dall'ellisse del piano tangente (proiezione TAN di `astropy.wcs` nel test); area diversa da π a b; definizione nel report | ricalcolo con `astropy.wcs` |
 | T18 | Area dell'ellisse | ellisse con a = b; ellisse generica | a = b: area della calotta 2π(1 − cos a) entro la precisione dichiarata; generica: area di `SphericalPolygon` con 150, 300 e 600 punti del bordo trovati nel test con `scipy.optimize.brentq`, estrapolata con due passi di Richardson (errore dei lati in 1/n² e 1/n⁴), entro 1e-9 relativo; ellisse molto allungata (a = 89°, b = 0,01°) → `AREA_PRECISION_NOT_REACHED` | ricalcolo indipendente |
-| T20 | Distanza tra forme (D17-8) | cerchio–cerchio, cerchio–punto, poligono–punto, poligono–poligono (disgiunti, lati incrociati, uno dentro l'altro), cerchio–poligono, forma in un altro frame; ellisse, freccia, testo, tracciato aperto | cerchi: separazione − raggi (`SkyCoord.separation`) entro 1e-12°; poligoni: minimo ricalcolato nel test (punti dei lati con `offset_by`, `angular_separation`, raffinato con `scipy.optimize.minimize_scalar`) entro 1e-9°; sovrapposti o punto dentro → 0; altro frame = stesso valore; `OPERATION_UNSUPPORTED` con D17-9 | ricalcolo indipendente |
+| T20 | Distanza tra forme (D17-8) | cerchio–cerchio, cerchio–punto, poligono–punto, poligono–poligono (disgiunti, lati incrociati, uno dentro l'altro), cerchio–poligono, forma in un altro frame | cerchi: separazione − raggi (`SkyCoord.separation`) entro 1e-12°; poligoni: minimo ricalcolato nel test (punti dei lati con `offset_by`, `angular_separation`, raffinato con `scipy.optimize.minimize_scalar`) entro 1e-9°; sovrapposti o punto dentro → 0; altro frame = stesso valore | ricalcolo indipendente |
+| T21 | Distanza per freccia, tracciato aperto, ellisse e testo (D17-9) | freccia e tracciato aperto con punto, cerchio, poligono (disgiunto, attraversato con estremi fuori, con un punto dentro) e tra loro (disgiunti, incrociati); ellisse con punto, cerchio, freccia, poligono, tracciato, altra ellisse (disgiunte, una con a = b, bordi incrociati con i centri fuori), in un altro frame; testo; `atol` invalida; massimo di campioni ridotto | archi: minimo ricalcolato come in T20 entro 1e-9°; ellisse: bordo ricalcolato nel test con `brentq` e minimo con `scipy` entro 1e-9°, errore dichiarato ≤ `atol`; a = b = cerchio (separazione − raggi, distanza esatta di D17-8); sovrapposizioni → 0; i due versi e i due frame danno lo stesso valore; testo → `OPERATION_UNSUPPORTED` con D17-9; `ValueError`; `DISTANCE_PRECISION_NOT_REACHED` | ricalcolo indipendente |
 | T19 | Freccia, testo, tag | area/"contiene" di freccia e testo; tag con etichetta vuota | `OPERATION_UNSUPPORTED`; `ValueError` | test di unità |
 
 ## 13. Decisioni aperte
@@ -561,7 +610,12 @@ arrivano solo da questi strumenti e vengono poi verificati da
   diceva "distanza tra forme" senza dire quale; la distanza tra i centri resta
   `angular_distance`.) Applicata in §3 (P3, scelta 9), §7, §10, §12 (T20).
 - **D17-9 — `distance_to` per ellisse, freccia, testo e tracciato aperto:
-  DA DECIDERE (aperta il 2026-10-13, Gruppo 3).** D17-8 fissa il calcolo per
+  DECISA il 2026-10-13 (decisione del proprietario: la raccomandazione).**
+  Ellisse = distanza dal bordo calcolata numericamente con precisione
+  dichiarata; freccia e tracciato aperto = archi di cerchio massimo; testo →
+  `OPERATION_UNSUPPORTED`. Test. Applicata in §3 (P3, scelta 10), §7, §8,
+  §10, §12 (T21). Testo della domanda (aperta lo stesso giorno, Gruppo 3):
+  D17-8 fissa il calcolo per
   cerchi e poligoni, non per le altre forme. **Raccomandazione:** ellisse con
   la distanza dal bordo trovata numericamente (stessa bisezione dell'area,
   minimo lungo θ) con precisione dichiarata, 0 se dentro; freccia e tracciato
@@ -599,3 +653,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1, P2, P4 confermate con due correzioni — `read_pixel` senza `BUNIT` → unità "non dichiarata" (`UNDECLARED_UNIT`), `auto_distance` dichiara nel report l'uso dell'epoca della prima sorgente (`epoch_from_first_source`). **D17-7 decisa:** `spherical-geometry` per poligoni e tracciati chiusi (licenza verificata, §8; avviso QD/LBNL da verificare con A11), ellisse sferica (somma delle distanze dai fuochi ≤ 2a), cerchio con Astropy, freccia/testo/tracciato aperto `OPERATION_UNSUPPORTED`. Scelte minori di P3 in §3; nuovi casi in §10 (`AREA_PRECISION_NOT_REACHED`); test T16–T19. Nuova **D17-8** (significato di `distance_to`, Gruppo 3), che ferma solo quel metodo. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D17-8 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: `distance_to` = distanza angolare minima (0 se sovrapposte o punto dentro), cerchi esatti con Astropy, poligoni e tracciati chiusi con la distanza punto–arco di cerchio massimo (§3 P3 scelta 9, §7, §10, T20). Nuova **D17-9** (Gruppo 3): `distance_to` per ellisse, freccia, testo e tracciato aperto, ferma (`OPERATION_UNSUPPORTED`). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | Scelte minori di P3 **confermate dal proprietario il 2026-10-13** (§3). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **D17-9 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: freccia e tracciato aperto come archi di cerchio massimo, ellisse con minimo numerico sul bordo e precisione dichiarata (`atol` 1e-9° di default, stima dell'errore e campioni nel risultato, `DISTANCE_PRECISION_NOT_REACHED`), incroci con l'ellisse riconosciuti con la funzione liscia dei fuochi (lo zero a spigolo della distanza non raggiungeva la precisione dichiarata: trovato da T21), testo `OPERATION_UNSUPPORTED` (§3 P3 scelta 10, §7, §8, §10, T20 ridotto, nuovo T21). Stato `approvato` invariato. |

@@ -37,7 +37,12 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-13, con i pezzi fermi di 17 e 18 chiusi e il modulo 19: 15 aperte** — Gruppo 1: **0** · Gruppo 2:
+**Dal 2026-10-13, livello 1 chiuso (decisioni del proprietario su D17-9, D19-8, D19-9): 13 aperte** — Gruppo 1:
+**0** · Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **9** (decise `D17-9` `distance_to` per ellisse,
+freccia, testo e tracciato aperto e `D19-9` PDS da URL; `D19-8` PDS3 **rimandata, bassa priorità**, resta nel
+Gruppo 3 come `D13-14c`).
+
+Prima, **dal 2026-10-13, con i pezzi fermi di 17 e 18 chiusi e il modulo 19: 15 aperte** — Gruppo 1: **0** · Gruppo 2:
 **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **11** (decise dal proprietario il 2026-10-13 `D17-8` significato di
 `distance_to` e `D18-7` sessagesimali in `skydist`; nuove `D17-9` `distance_to` per le altre forme, `D19-8` PDS3
 con `pdr`, `D19-9` PDS da URL, che fermano solo quei pezzi).
@@ -236,10 +241,10 @@ gruppi successivi, A8 dopo il livello 1).
 |---|---|---|
 | `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
-| `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10. **Dal 2026-10-13 elenco completo delle licenze in `THIRD_PARTY_LICENSES`** (punti da valutare: LGPL-3 di WCSLIB, clausola LBNL della libreria QD, MPL-2.0 di `certifi`, testo mancante di `pims`) | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
+| `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10. **Dal 2026-10-13 elenco completo delle licenze in `THIRD_PARTY_LICENSES`** (punti da valutare: LGPL-3 di WCSLIB, clausola LBNL della libreria QD, MPL-2.0 di `certifi`; testo di `pims` trovato il 2026-10-13 nel sorgente ufficiale su PyPI e aggiunto, ma con il segnaposto `<COPYRIGHT HOLDER>` non compilato) | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (11)
+## 5. GRUPPO 3 — rimandabili al momento del codice (9)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -250,9 +255,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
-| `D17-9` | `distance_to` del 17 per ellisse, freccia, testo e tracciato aperto (D17-8 copre solo cerchi e poligoni)? **Raccomandazione:** ellisse con la distanza dal bordo trovata numericamente con precisione dichiarata (0 se dentro); freccia e tracciato aperto come archi di cerchio massimo (stessa distanza punto–arco); testo escluso (`OPERATION_UNSUPPORTED`). Ferma solo `distance_to` per quelle forme | `17-core-misure.md` §13 |
-| `D19-8` | PDS3 con `pdr` (licenze compatibili, mantenuto, ma "Beta" e con `pandas`): ammetterlo? **Raccomandazione:** dipendenza facoltativa, avviso "libreria Beta" nel risultato, test su file PDS3 reali piccoli prima dell'adozione; in alternativa PDS3 non supportato nel livello 1. Ferma solo PDS3 | `19-core-dati-planetari.md` §13 |
-| `D19-9` | `load_pds_image` da URL: come scaricare un prodotto PDS4 (etichetta + file di dati)? **Raccomandazione:** etichetta e file nominati dalla stessa cartella dell'URL, con la rete del 14 e la cache comune, origine e data. Ferma solo gli URL | `19-core-dati-planetari.md` §13 |
+| `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
 ## 6. Note
@@ -317,3 +320,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-12 | Claude Code | **Decise dal proprietario** `D12-6` (normalizzazione dei nomi dei corpi con una tabella del 19, da scrivere con il 19), `D12-7` (`hips_frame = ecliptic` non supportato finché non verificato su un HiPS reale), `D12-8` (nessun Allsky da `build_hips` per ora) e `D17-5` (bilineare con `scipy.ndimage.map_coordinates`, passo obbligatorio senza default) e tolte dal Gruppo 3 (prima nei file di origine 12 e 17). Nuova nel Gruppo 3, dalla verifica di P3 del 17: `D17-7` (geometria sferica delle forme). Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 11). |
 | 2026-10-13 | Claude Code | **Decise dal proprietario** (2026-10-12) `D17-7` (`spherical-geometry` per poligoni e tracciati chiusi, ellisse sferica, freccia/testo `OPERATION_UNSUPPORTED`), `D18-5` (1000 caratteri, annidamento 50, configurabili) e `D18-6` (valore grezzo con `do_not_scale_image_data=True`) e tolte dal Gruppo 3 (prima nei file di origine 17 e 18). Nuove nel Gruppo 3: `D17-8` (significato di `distance_to`) e `D18-7` (sessagesimali in `skydist`). Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10). |
 | 2026-10-13 | Claude Code | **Decise dal proprietario il 2026-10-13** `D17-8` (`distance_to` = distanza angolare minima, cerchi con Astropy, poligoni con la distanza punto–arco) e `D18-7` (unità scritta nel testo, due punti solo con un parametro esplicito, nessuna convenzione sulla posizione) e tolte dal Gruppo 3 (prima nei file di origine 17 e 18). Nuove nel Gruppo 3: `D17-9` (`distance_to` per ellisse, freccia, testo, tracciato aperto), `D19-8` (PDS3 con `pdr`), `D19-9` (PDS da URL). `A11` annotata con `THIRD_PARTY_LICENSES`. Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 11). |
+| 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (prima nei file di origine 17 e 19): `D17-9` decisa (ellisse numerica con precisione dichiarata, freccia e tracciato aperto come archi di cerchio massimo, testo `OPERATION_UNSUPPORTED`) e `D19-9` decisa (PDS da URL con la rete del 14 e la cache comune), tolte dal Gruppo 3; `D19-8` **rimandata, bassa priorità** (PDS3 non ancora supportato), resta nel Gruppo 3. `A11` annotata: testo di licenza di `pims` trovato (segnaposto non compilato da valutare). Conteggi: aperte **13** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 9). |

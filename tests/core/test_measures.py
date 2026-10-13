@@ -574,15 +574,191 @@ def test_t20_distance_other_frame_converted():
     assert result.report.frame == "galactic" and "convertito" in result.report.description
 
 
-def test_t20_distance_unsupported_shapes_d17_9():
-    circle = Circle(icrs(0, 0), 1 * u.deg)
-    others = (Ellipse(icrs(5, 0), 2 * u.deg, 1 * u.deg, 0 * u.deg), Arrow(icrs(1, 1), icrs(2, 2)),
-              Text(icrs(1, 1), "M1"), Freehand([icrs(5, 0), icrs(6, 1), icrs(7, 0)]))
-    for shape in others:
-        for call in (lambda s=shape: s.distance_to(circle), lambda s=shape: circle.distance_to(s)):
-            with pytest.raises(MeasuresError) as exc:
-                call()
-            assert exc.value.code == "OPERATION_UNSUPPORTED" and "D17-9" in exc.value.message
+# =============================================================================
+# P3 — distance_to per freccia, tracciato aperto, ellisse e testo (D17-9, decisa il 2026-10-13): T21
+
+
+def _brute_distance_to_arcs(lon, lat, vertices):
+    """Minimo ricalcolato su archi aperti (vertici consecutivi), stesso metodo indipendente di T20."""
+    return min(_brute_distance_to_polygon(lon, lat, [v1, v2]) for v1, v2 in zip(vertices, vertices[1:]))
+
+
+def _brute_ellipse_boundary(center, a, b, pa, theta_deg):
+    """Bordo dell'ellisse sferica ricalcolato nel test: fuochi con offset_by (cos c = cos a / cos b), raggio per
+    ogni direzione con scipy.optimize.brentq (indipendente dalla bisezione del modulo)."""
+    c = np.rad2deg(np.arccos(np.cos(np.deg2rad(a)) / np.cos(np.deg2rad(b))))
+    lon0, lat0 = center[0] * u.deg, center[1] * u.deg
+    foci = [offset_by(lon0, lat0, (pa + turn) * u.deg, c * u.deg) for turn in (0, 180)]
+
+    def point(theta, rho):
+        return offset_by(lon0, lat0, theta * u.deg, rho * u.deg)
+
+    def excess(rho, theta):
+        lo, la = point(theta, rho)
+        return sum(angular_separation(lo, la, fl, fb).to_value(u.deg) for fl, fb in foci) - 2 * a
+
+    lons, lats = [], []
+    for theta in np.atleast_1d(theta_deg):
+        lo, la = point(theta, brentq(excess, 0.0, 2 * a, args=(theta,), xtol=1e-15))
+        lons.append(lo.to_value(u.deg))
+        lats.append(la.to_value(u.deg))
+    return np.array(lons), np.array(lats)
+
+
+def _brute_ellipse_to_point(center, a, b, pa, lon, lat):
+    from scipy.optimize import minimize_scalar
+
+    def f(theta):
+        lo, la = _brute_ellipse_boundary(center, a, b, pa, theta)
+        return angular_separation(lo * u.deg, la * u.deg, lon * u.deg, lat * u.deg).to_value(u.deg)[0]
+
+    grid = np.linspace(0.0, 360.0, 181)
+    values = [f(t) for t in grid]
+    i = int(np.argmin(values))
+    return float(minimize_scalar(f, bounds=(grid[i] - 2.0, grid[i] + 2.0), method="bounded",
+                                 options={"xatol": 1e-11}).fun)
+
+
+def test_t21_text_has_no_distance():
+    circle, text = Circle(icrs(0, 0), 1 * u.deg), Text(icrs(1, 1), "M1")
+    for call in (lambda: text.distance_to(circle), lambda: circle.distance_to(text), lambda: text.distance_to(icrs(0, 0))):
+        with pytest.raises(MeasuresError) as exc:
+            call()
+        assert exc.value.code == "OPERATION_UNSUPPORTED" and "D17-9" in exc.value.message
+
+
+def test_t21_arrow_and_open_path_as_great_circle_arcs():
+    arrow = Arrow(icrs(10, -5), icrs(14, 8))
+    path_vertices = [(30, 0), (34, 6), (31, 12), (36, 15)]
+    path = Freehand([icrs(*v) for v in path_vertices])
+    for lon, lat in [(0, 0), (12, 20), (20, -10)]:
+        result = arrow.distance_to(icrs(lon, lat))
+        assert result.value.value == pytest.approx(_brute_distance_to_arcs(lon, lat, [(10, -5), (14, 8)]), abs=1e-9)
+        assert "D17-9" in result.report.description and result.error is None
+        assert path.distance_to(icrs(lon, lat)).value.value == pytest.approx(
+            _brute_distance_to_arcs(lon, lat, path_vertices), abs=1e-9)
+    assert arrow.distance_to(icrs(10, -5)).value.value == pytest.approx(0.0, abs=1e-12)  # estremo
+    # Calotta: distanza del centro dagli archi meno il raggio (simmetrica).
+    to_center = _brute_distance_to_arcs(20, 0, path_vertices)
+    assert path.distance_to(Circle(icrs(20, 0), 2 * u.deg)).value.value == pytest.approx(to_center - 2, abs=1e-9)
+    assert Circle(icrs(20, 0), 2 * u.deg).distance_to(path).value.value == pytest.approx(to_center - 2, abs=1e-9)
+    # Archi disgiunti: minimo estremo–arco nei due versi.
+    expected = min(min(_brute_distance_to_arcs(lo, la, path_vertices) for lo, la in [(10, -5), (14, 8)]),
+                   min(_brute_distance_to_arcs(lo, la, [(10, -5), (14, 8)]) for lo, la in path_vertices))
+    assert arrow.distance_to(path).value.value == pytest.approx(expected, abs=1e-9)
+    assert path.distance_to(arrow).value.value == pytest.approx(expected, abs=1e-9)
+    # Poligono: disgiunto, incrociato senza vertici dentro, con un punto dentro.
+    square_vertices = [(0, 0), (6, 0), (6, 6), (0, 6)]
+    square = Polygon([icrs(*v) for v in square_vertices])
+    expected = min(min(_brute_distance_to_polygon(lo, la, square_vertices) for lo, la in [(10, -5), (14, 8)]),
+                   min(_brute_distance_to_arcs(lo, la, [(10, -5), (14, 8)]) for lo, la in square_vertices))
+    assert arrow.distance_to(square).value.value == pytest.approx(expected, abs=1e-9)
+    assert square.distance_to(arrow).value.value == pytest.approx(expected, abs=1e-9)
+    assert Arrow(icrs(358, 3), icrs(8, 3)).distance_to(square).value.value == 0.0  # attraversa, estremi fuori
+    assert Arrow(icrs(3, 3), icrs(8, 3)).distance_to(square).value.value == 0.0  # parte da dentro
+    assert Arrow(icrs(3, -3), icrs(3, 9)).distance_to(Arrow(icrs(357, 3), icrs(9, 3))).value.value == 0.0  # incrocio
+
+
+def test_t21_ellipse_point_and_circle_against_independent_minimum():
+    center, a, b, pa = (40.0, 10.0), 4.0, 1.5, 30.0
+    ellipse = Ellipse(icrs(*center), a * u.deg, b * u.deg, pa * u.deg)
+    for lon, lat in [(48, 14), (40, 3), (35, 16)]:
+        result = ellipse.distance_to(icrs(lon, lat))
+        assert result.value.value == pytest.approx(_brute_ellipse_to_point(center, a, b, pa, lon, lat), abs=1e-9)
+        assert result.error is not None and result.error.value <= 1e-9 and result.samples >= 256
+        assert "D17-9" in result.report.description and "scipy" in result.report.provenance
+    assert ellipse.distance_to(icrs(40.5, 10.5)).value.value == 0.0  # dentro
+    # Calotta: distanza dal centro meno il raggio, nei due versi.
+    to_center = _brute_ellipse_to_point(center, a, b, pa, 48, 14)
+    circle = Circle(icrs(48, 14), 1 * u.deg)
+    assert ellipse.distance_to(circle).value.value == pytest.approx(to_center - 1, abs=1e-9)
+    assert circle.distance_to(ellipse).value.value == pytest.approx(to_center - 1, abs=1e-9)
+    # a = b: l'ellisse è il cerchio di raggio a (separazione − a, esatta con Astropy).
+    round_ellipse = Ellipse(icrs(*center), 2 * u.deg, 2 * u.deg, 0 * u.deg)
+    separation = SkyCoord(40 * u.deg, 10 * u.deg).separation(SkyCoord(55 * u.deg, -3 * u.deg)).to_value(u.deg)
+    assert round_ellipse.distance_to(icrs(55, -3)).value.value == pytest.approx(separation - 2, abs=1e-9)
+
+
+def test_t21_ellipse_with_arcs_and_polygons():
+    center, a, b, pa = (40.0, 10.0), 4.0, 1.5, 30.0
+    ellipse = Ellipse(icrs(*center), a * u.deg, b * u.deg, pa * u.deg)
+    # a = b contro un poligono: uguale al cerchio (calcolo esatto di D17-8).
+    polygon = Polygon([icrs(50, 0), icrs(56, 0), icrs(56, 6), icrs(50, 6)])
+    round_ellipse = Ellipse(icrs(*center), 2 * u.deg, 2 * u.deg, 0 * u.deg)
+    exact = Circle(icrs(*center), 2 * u.deg).distance_to(polygon).value.value
+    assert round_ellipse.distance_to(polygon).value.value == pytest.approx(exact, abs=1e-9)
+    assert polygon.distance_to(round_ellipse).value.value == pytest.approx(exact, abs=1e-9)
+    # Ellisse generica contro una freccia: minimo su (θ, posizione lungo l'arco) ricalcolato nel test.
+    from scipy.optimize import minimize as sp_minimize
+
+    start, end = SkyCoord(47 * u.deg, 2 * u.deg), SkyCoord(50 * u.deg, 16 * u.deg)
+    arc_pa, arc_len = start.position_angle(end), start.separation(end)
+
+    def pair(x):
+        lo, la = _brute_ellipse_boundary(center, a, b, pa, x[0])
+        alo, ala = offset_by(start.ra, start.dec, arc_pa, np.clip(x[1], 0, 1) * arc_len)
+        return angular_separation(lo[0] * u.deg, la[0] * u.deg, alo, ala).to_value(u.deg)
+
+    thetas, fractions = np.linspace(0, 360, 181), np.linspace(0, 1, 101)
+    blo, bla = _brute_ellipse_boundary(center, a, b, pa, thetas)
+    alo, ala = offset_by(start.ra, start.dec, arc_pa, fractions * arc_len)
+    grid = angular_separation(blo[:, None] * u.deg, bla[:, None] * u.deg, alo[None, :], ala[None, :]).to_value(u.deg)
+    i, j = np.unravel_index(np.argmin(grid), grid.shape)
+    expected = sp_minimize(pair, [thetas[i], fractions[j]], method="Nelder-Mead",
+                           options={"xatol": 1e-12, "fatol": 1e-15}).fun
+    arrow = Arrow(SkyFrame(coord=start), SkyFrame(coord=end))
+    assert ellipse.distance_to(arrow).value.value == pytest.approx(expected, abs=1e-9)
+    assert arrow.distance_to(ellipse).value.value == pytest.approx(expected, abs=1e-9)
+    # Sovrapposizioni: freccia che attraversa (estremi fuori), vertice dentro, ellisse dentro il poligono.
+    crossing = ellipse.distance_to(Arrow(icrs(30, 10), icrs(50, 10)))
+    assert crossing.value.value == 0.0 and "entra nell'ellisse" in crossing.report.description
+    assert ellipse.distance_to(Polygon([icrs(40, 10), icrs(60, 10), icrs(60, 20)])).value.value == 0.0
+    assert ellipse.distance_to(Polygon([icrs(30, 0), icrs(50, 0), icrs(50, 20), icrs(30, 20)])).value.value == 0.0
+    assert ellipse.distance_to(Freehand([icrs(40, 10), icrs(60, 30)])).value.value == 0.0
+
+
+def test_t21_ellipse_ellipse_and_other_frame():
+    center, a, b, pa = (40.0, 10.0), 4.0, 1.5, 30.0
+    ellipse = Ellipse(icrs(*center), a * u.deg, b * u.deg, pa * u.deg)
+    # Due ellissi con a = b: separazione − raggi.
+    e1 = Ellipse(icrs(10, 0), 2 * u.deg, 2 * u.deg, 0 * u.deg)
+    e2 = Ellipse(icrs(20, 3), 1 * u.deg, 1 * u.deg, 0 * u.deg)
+    separation = SkyCoord(10 * u.deg, 0 * u.deg).separation(SkyCoord(20 * u.deg, 3 * u.deg)).to_value(u.deg)
+    assert e1.distance_to(e2).value.value == pytest.approx(separation - 3, abs=1e-9)
+    # Ellisse generica contro un'ellisse con a = b: uguale alla distanza dalla calotta (via 1D).
+    round_far = Ellipse(icrs(52, 8), 1.5 * u.deg, 1.5 * u.deg, 0 * u.deg)
+    via_cap = ellipse.distance_to(Circle(icrs(52, 8), 1.5 * u.deg)).value.value
+    assert ellipse.distance_to(round_far).value.value == pytest.approx(via_cap, abs=1e-9)
+    assert ellipse.distance_to(Ellipse(icrs(42, 11), 3 * u.deg, 1 * u.deg, 120 * u.deg)).value.value == 0.0
+    # Bordi incrociati con i centri fuori dall'altra: il test controlla l'incrocio con il bordo ricalcolato.
+    thin = (41.0, 4.0, 8.0, 0.3, 0.0)
+    blo, bla = _brute_ellipse_boundary(thin[:2], *thin[2:], np.linspace(0, 360, 361))
+    inside = [ellipse.contains(icrs(lo % 360, la)).value for lo, la in zip(blo, bla)]
+    assert any(inside) and not ellipse.contains(icrs(*thin[:2])).value
+    thin_ellipse = Ellipse(icrs(*thin[:2]), thin[2] * u.deg, thin[3] * u.deg, thin[4] * u.deg)
+    assert not thin_ellipse.contains(icrs(*center)).value
+    assert ellipse.distance_to(thin_ellipse).value.value == 0.0
+    # Altro frame: ellisse in galattico convertita con centro e fuochi; i due versi danno lo stesso valore.
+    gal = SkyCoord(40 * u.deg, 10 * u.deg).galactic
+    ellipse_gal = Ellipse(SkyFrame(coord=gal), a * u.deg, b * u.deg, pa * u.deg)
+    polygon = Polygon([icrs(50, 0), icrs(56, 0), icrs(56, 6), icrs(50, 6)])
+    forward, backward = ellipse_gal.distance_to(polygon), polygon.distance_to(ellipse_gal)
+    assert forward.value.value == pytest.approx(backward.value.value, abs=1e-9)
+    assert forward.report.frame == "galactic" and "convertit" in backward.report.description
+
+
+def test_t21_ellipse_precision_declared_and_not_reached(monkeypatch):
+    from astrotwo.core import measures
+
+    ellipse = Ellipse(icrs(0, 0), 60 * u.deg, 0.001 * u.deg, 0 * u.deg)
+    with pytest.raises(ValueError):
+        ellipse.distance_to(icrs(0.3, 59.9), atol=0 * u.deg)
+    with pytest.raises(ValueError):
+        ellipse.distance_to(icrs(0.3, 59.9), atol=1e-9)
+    monkeypatch.setattr(measures, "ELLIPSE_MAX_SAMPLES", 256)
+    with pytest.raises(MeasuresError) as exc:
+        ellipse.distance_to(icrs(0.3, 59.9), atol=1e-14 * u.deg)
+    assert exc.value.code == "DISTANCE_PRECISION_NOT_REACHED" and "non raggiunta" in exc.value.message
 
 
 # =============================================================================
