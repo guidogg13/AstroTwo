@@ -92,6 +92,7 @@ disegno — con risultati in unità esplicite e sempre verificabili.
   dichiarata"** (non "unitless": l'unità è ignota, non adimensionale);
   `auto_distance` senza `epoch` usa l'epoca della prima sorgente e **il
   report lo dice esplicitamente**.
+- **Scelte minori di P3 confermate dal proprietario il 2026-10-13.**
 
 **Codice: `src/astrotwo/core/measures.py`**, errori `MeasuresError` con gli
 identificatori di §10. Ogni risultato porta un **report** (`MeasureReport`:
@@ -597,3 +598,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-12 | Claude Code | **P4 scritta — modulo 17 completo tranne P3** (`auto_distance`, `CatalogSource`, `AutoDistance`; T10–T12): epoca comune con `propagate` del 13 (e `propagate_position` del 10), `EPOCH_REQUIRED` senza dati, `BODY_MISMATCH`/`BODY_UNKNOWN`. Ferma P3 (forme e tag) su D17-7. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1, P2, P4 confermate con due correzioni — `read_pixel` senza `BUNIT` → unità "non dichiarata" (`UNDECLARED_UNIT`), `auto_distance` dichiara nel report l'uso dell'epoca della prima sorgente (`epoch_from_first_source`). **D17-7 decisa:** `spherical-geometry` per poligoni e tracciati chiusi (licenza verificata, §8; avviso QD/LBNL da verificare con A11), ellisse sferica (somma delle distanze dai fuochi ≤ 2a), cerchio con Astropy, freccia/testo/tracciato aperto `OPERATION_UNSUPPORTED`. Scelte minori di P3 in §3; nuovi casi in §10 (`AREA_PRECISION_NOT_REACHED`); test T16–T19. Nuova **D17-8** (significato di `distance_to`, Gruppo 3), che ferma solo quel metodo. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D17-8 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: `distance_to` = distanza angolare minima (0 se sovrapposte o punto dentro), cerchi esatti con Astropy, poligoni e tracciati chiusi con la distanza punto–arco di cerchio massimo (§3 P3 scelta 9, §7, §10, T20). Nuova **D17-9** (Gruppo 3): `distance_to` per ellisse, freccia, testo e tracciato aperto, ferma (`OPERATION_UNSUPPORTED`). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | Scelte minori di P3 **confermate dal proprietario il 2026-10-13** (§3). Stato `approvato` invariato. |

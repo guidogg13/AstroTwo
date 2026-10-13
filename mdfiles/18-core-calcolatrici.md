@@ -182,9 +182,28 @@ stesso identificatore).
    scala in ogni rappresentazione (`text`).
 4. **Avvisi** di `astropy`/ERFA (es. "dubious year" per UTC oltre la tabella
    dei secondi intercalari) riportati nelle note, mai nascosti.
-5. **UT1:** con le tabelle IERS già disponibili ad `astropy`, **senza
-   scaricamento automatico** durante la conversione (nessun accesso alla
-   rete nascosto); se la conversione non si può fare → `TIME_INVALID`.
+5. **UT1 (decisione del proprietario del 2026-10-13):** UT1 − UTC dalle
+   **tabelle IERS incluse in astropy** (pacchetto `astropy-iers-data`),
+   **senza rete**: per ogni data prima l'IERS-A `finals2000A.all` (valori
+   finali del Bulletin B, rapidi e predizioni del Bulletin A), poi, prima del
+   suo inizio (1973), l'IERS-B `eopc04` (dal 1962). Data fuori dalla
+   copertura delle tabelle → **`IERS_RANGE`** con l'intervallo coperto,
+   **mai estrapolazione**; anche il limite trovato da `astropy` durante la
+   conversione (`IERSRangeError`) dà `IERS_RANGE`. Il risultato **dichiara la
+   tabella usata** (`iers`: file, pacchetto e versione o URL e data dello
+   scaricamento, intervallo MJD) e il tipo di valore (finale, rapido o
+   predizione pubblicata dall'IERS, scritta come tale). **Aggiornamento solo
+   su richiesta esplicita:** `update_iers_table()` scarica `finals2000A.all`
+   dall'IERS con la rete del modulo 14 (timeout e errori del 14, es.
+   `NET_TIMEOUT`), la controlla leggendola con `astropy.utils.iers`
+   (illeggibile → `IERS_TABLE_INVALID`) e la salva nella cache comune (04,
+   modulo `18`, con origine e data); `convert_time(..., iers_table=
+   "updated")` la usa (assente → `IERS_TABLE_MISSING`), il default
+   `iers_table="bundled"` usa quelle incluse. `iers_table` è nel comando
+   registrato. Nessuno scaricamento automatico durante le conversioni.
+
+**Scelte minori di P1–P5 (§3) confermate dal proprietario il 2026-10-13**,
+tranne UT1 (scelta 5 di P2), riscritta sopra con la sua decisione.
 
 **P3 — convertitore di unità (scritta il 2026-10-12/13).** Scelte minori:
 
@@ -374,6 +393,7 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 |---|---|---|
 | `astropy.units` | convertitore di unità, prefissi, equivalenze | regola d'oro n. 4; stessa libreria di unità di tutto il progetto (`02-convenzioni.md` §4) |
 | `astropy.time` | calcolatrice del tempo, cambi di scala | regola DC1 del progetto |
+| `astropy.utils.iers` + `astropy-iers-data` | tabelle IERS per UT1 − UTC (incluse, senza rete) | dati ufficiali dell'IERS distribuiti con astropy; aggiornamento solo su richiesta |
 | `astropy.coordinates` (tramite il modulo 10) | sessagesimali, coordinate, epoche | nessuna conversione scritta a mano |
 | `astropy.io.fits` (tramite il modulo 11) | BZERO, BSCALE, BLANK | standard FITS |
 | `numpy` | funzioni matematiche della calcolatrice algebrica in `float64` | base dell'ecosistema scientifico |
@@ -424,6 +444,10 @@ VOUnit per le stringhe di unità (D18-2).
 | Unità non convertibili tra loro senza equivalenza | rifiuto con le due dimensioni fisiche | `UNIT_INCOMPATIBLE` |
 | Magnitudine verso flusso senza punto zero | rifiuto | `UNIT_ZERO_POINT_REQUIRED` |
 | Data non valida | rifiuto con il formato atteso | `TIME_INVALID` |
+| UT1 per una data fuori dalla copertura delle tabelle IERS | rifiuto con l'intervallo coperto, nessuna estrapolazione | `IERS_RANGE` |
+| `iers_table="updated"` senza un aggiornamento nella cache | rifiuto con l'indicazione di `update_iers_table` | `IERS_TABLE_MISSING` |
+| Tabella IERS scaricata non leggibile | nessun aggiornamento | `IERS_TABLE_INVALID` |
+| Aggiornamento IERS senza rete | errore del 14 inoltrato, nessuna tabella nuova | `NET_TIMEOUT` |
 | Scala di tempo mancante | rifiuto: la scala non si assume mai | `TIME_SCALE_REQUIRED` |
 | `BSCALE = 0` nel calcolo inverso (fisico → grezzo) | rifiuto | `PIXEL_BSCALE_ZERO` |
 | Valore grezzo uguale a `BLANK` | nessun valore fisico; dichiarato "pixel senza valore" | `PIXEL_BLANK` |
@@ -474,7 +498,7 @@ elementare.
 | T14 | Epoca mancante | propagazione senza epoca di origine | `EPOCH_REQUIRED` | test di unità |
 | T15 | Tempo | `2000-01-01T12:00:00` in scala TT | JD 2451545.0 e anno giuliano 2000.0 (definizione di J2000.0); anno besseliano come calcolato da `astropy.time` | `astropy.time` |
 | T16 | Data in MJD | `2024-02-29T18:00:00` in scala UTC (giorno bisestile, frazione di giorno) | MJD 60369.75, ricalcolato nel test con `astropy.time.Time(..., scale="utc").mjd` | `astropy.time` |
-| T17 | Scala mancante | data senza scala | `TIME_SCALE_REQUIRED` | test di unità |
+| T17 | Scala mancante; UT1 | data senza scala; UTC ↔ UT1 nel 2020 (IERS-A), nel 1965 (IERS-B), in predizione e fuori copertura, senza rete; tabella aggiornata da un servizio simulato (e dall'IERS nel test di rete) | `TIME_SCALE_REQUIRED`; UT1 uguale ad `astropy.time` con `delta_ut1_utc` della stessa tabella, tabella e tipo di valore dichiarati; `IERS_RANGE` fuori copertura; `IERS_TABLE_MISSING` prima dell'aggiornamento | ricalcolo con Astropy |
 | T18 | Riproducibilità | rieseguire il comando registrato di T1–T16 | risultati identici | confronto con il registro del modulo 24 |
 
 ## 13. Decisioni aperte
@@ -539,3 +563,4 @@ elementare.
 | 2026-10-13 | Claude Code | **P5 scritta — modulo 18 completo tranne i sessagesimali in `skydist` (D18-7)** (`calculate_coordinates`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, `CoordinatesOutput`; T13, T14, T18 con la riesecuzione dei comandi registrati). Scelte minori di P5 in §3. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D18-7 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: sessagesimali di `skydist` con l'unità scritta nel testo (h/m/s, d/m/s, °′″) letti con `parse_sexagesimal` del 10; due punti → `UNIT_SEXAGESIMAL_UNIT_REQUIRED` salvo il parametro esplicito `colon_units`; nessuna convenzione sulla posizione; sessagesimali solo negli argomenti di `skydist` (§3 P1 scelta 6, §10, T5). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo passa all'11 (`read_raw_pixel`); il 18 la richiama; tolta l'eccezione dal §4 (§3 P4 scelte 2 e 4, §5). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1–P5 confermate; **UT1** con le tabelle IERS incluse in astropy (IERS-A, poi IERS-B), senza rete, `IERS_RANGE` fuori copertura, tabella dichiarata nel risultato, aggiornamento solo su richiesta con `update_iers_table` tramite la rete del 14 (§3 P2 scelta 5, §8, §10, T17). Stato `approvato` invariato. |

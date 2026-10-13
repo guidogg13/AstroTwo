@@ -21,11 +21,15 @@ from __future__ import annotations
 
 import ast
 import difflib
+import functools
+import importlib.metadata
 import math
 import re
+import tempfile
 import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 import astropy
 import astropy.units as u
@@ -34,6 +38,8 @@ import numpy as np
 from astropy.time import Time
 from astropy.utils import iers
 
+from astrotwo.core import vo_protocols
+from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts, SharedCache
 from astrotwo.core.catalogs import CONSTANTS, FUNCTIONS
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
@@ -67,6 +73,9 @@ __all__ = [
     "TIME_FORMATS",
     "TIME_SCALES",
     "TimeRepresentations",
+    "IERS_TABLES",
+    "IersTable",
+    "update_iers_table",
     "convert_time",
     "EQUIVALENCIES",
     "convert_units",
@@ -134,6 +143,7 @@ class CalculatorResult:
     command: CalculatorCommand
     notes: tuple[str, ...] = ()
     requested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    iers: IersTable | None = None  # tabella IERS usata (solo calcolatrice del tempo con UT1)
 
     def __post_init__(self) -> None:
         if self.unit is None and self.scale is None:
@@ -549,23 +559,130 @@ def _parse_time(time_value: object, time_format: str, scale: str) -> Time:
         raise CalculatorError("TIME_INVALID", f"valore {time_value!r} non valido per {time_format}: {exc}") from exc
 
 
+#: Tabelle IERS per UT1 (decisione del proprietario del 2026-10-13): ``bundled`` = quelle incluse in astropy
+#: (pacchetto ``astropy-iers-data``), ``updated`` = la tabella scaricata su richiesta con ``update_iers_table``.
+IERS_TABLES = ("bundled", "updated")
+_IERS_CACHE_MODULE = "18"
+_IERS_CACHE_KEY = "iers:finals2000A.all"
+_IERS_STATUS = {iers.FROM_IERS_B: "valore finale (Bulletin B)", iers.FROM_IERS_A: "valore rapido (Bulletin A)",
+                iers.FROM_IERS_A_PREDICTION: "predizione pubblicata dall'IERS (Bulletin A), non misurata"}
+
+
+@dataclass(frozen=True)
+class IersTable:
+    """Tabella IERS usata per UT1 − UTC: file, fonte, data e intervallo coperto (MJD)."""
+
+    name: str  # file della tabella (es. finals2000A.all)
+    source: str  # pacchetto e versione, oppure URL e data dello scaricamento
+    mjd_start: float
+    mjd_end: float
+
+    @property
+    def text(self) -> str:
+        return f"{self.name} ({self.source}), MJD {self.mjd_start:g}–{self.mjd_end:g}"
+
+
+def _iers_info(table, name: str, source: str) -> IersTable:
+    return IersTable(name, source, float(table["MJD"][0].to_value(u.d)), float(table["MJD"][-1].to_value(u.d)))
+
+
+@functools.lru_cache(maxsize=1)
+def _bundled_iers() -> list[tuple[object, IersTable]]:
+    """IERS-A (``finals2000A.all``, con i valori finali del Bulletin B) e IERS-B (``eopc04``) di astropy."""
+    source = f"incluso in astropy-iers-data {importlib.metadata.version('astropy-iers-data')}"
+    a = iers.IERS_A.open(iers.IERS_A_FILE)
+    b = iers.IERS_B.open(iers.IERS_B_FILE)
+    return [(a, _iers_info(a, Path(iers.IERS_A_FILE).name, source)),
+            (b, _iers_info(b, Path(iers.IERS_B_FILE).name, source))]
+
+
+def _read_iers_a(payload: bytes):
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "finals2000A.all"
+        path.write_bytes(payload)
+        return iers.IERS_A.open(str(path))
+
+
+def _updated_iers(cache: SharedCache | None) -> list[tuple[object, IersTable]]:
+    cached = (SharedCache() if cache is None else cache).get(_IERS_CACHE_MODULE, _IERS_CACHE_KEY)
+    if cached is None:
+        raise CalculatorError("IERS_TABLE_MISSING", "nessuna tabella IERS aggiornata nella cache: aggiornarla con "
+                              "update_iers_table (richiesta esplicita, rete del modulo 14) o usare iers_table='bundled'")
+    table = _read_iers_a(cached.data)
+    updated = (table, _iers_info(table, "finals2000A.all", f"scaricato da {cached.origin} il "
+                                 f"{cached.retrieved_at.isoformat()}"))
+    return [updated, *_bundled_iers()[1:]]  # prima del suo inizio vale l'IERS-B incluso
+
+
+def update_iers_table(*, cache: SharedCache | None = None, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+                      url: str = iers.IERS_A_URL) -> IersTable:
+    """Scarica la tabella IERS-A (``finals2000A.all``) **solo su richiesta esplicita**, con la rete del modulo 14.
+
+    La tabella si controlla leggendola con ``astropy.utils.iers`` prima di salvarla nella cache comune (04); poi
+    ``convert_time(..., iers_table="updated")`` la usa. Rete assente → errore del 14 (``NET_TIMEOUT``).
+    """
+    try:
+        response = vo_protocols._http("IERS", url, cache=cache, refresh=True, timeouts=timeouts)
+    except vo_protocols.VoProtocolsError as exc:
+        raise CalculatorError(exc.code, f"aggiornamento della tabella IERS: {exc.message}") from exc
+    if response.from_cache:
+        raise CalculatorError("NET_TIMEOUT", f"aggiornamento della tabella IERS: {url} non raggiungibile, nessuna "
+                              "tabella nuova")
+    try:
+        table = _read_iers_a(response.payload)
+    except Exception as exc:  # contenuto non leggibile come tabella IERS-A
+        raise CalculatorError("IERS_TABLE_INVALID", f"{url}: contenuto non leggibile come tabella IERS-A ({exc})") \
+            from exc
+    (SharedCache() if cache is None else cache).put(_IERS_CACHE_MODULE, _IERS_CACHE_KEY, response.payload,
+                                                    origin=url, retrieved_at=response.retrieved_at)
+    return _iers_info(table, "finals2000A.all", f"scaricato da {url} il {response.retrieved_at.isoformat()}")
+
+
+def _iers_for(when: Time, iers_table: str, cache: SharedCache | None) -> tuple[object, IersTable, str]:
+    """Tabella che copre la data (prima l'IERS-A, poi l'IERS-B); fuori dalla copertura → ``IERS_RANGE``."""
+    tables = _bundled_iers() if iers_table == "bundled" else _updated_iers(cache)
+    for table, info in tables:
+        _, status = table.ut1_utc(when.jd1, when.jd2, return_status=True)
+        if int(status) >= 0:
+            return table, info, _IERS_STATUS[int(status)]
+    covered = "; ".join(info.text for _, info in tables)
+    raise CalculatorError("IERS_RANGE", f"data MJD {float(when.mjd)!r} fuori dalla copertura delle tabelle IERS ({covered}): "
+                          "UT1 non calcolabile, nessuna estrapolazione", mjd=float(when.mjd))
+
+
 @_registered
-def convert_time(time_value, time_format: str, scale: str | None, target_scale: str | None = None) -> CalculatorResult:
+def convert_time(time_value, time_format: str, scale: str | None, target_scale: str | None = None, *,
+                 iers_table: str = "bundled", cache: SharedCache | None = None) -> CalculatorResult:
     """Converte una data tra ISO 8601, JD, MJD, anno giuliano e besseliano con ``astropy.time``.
 
-    ``scale`` è obbligatoria (DC1); ``target_scale`` facoltativa (cambio di scala con ``astropy.time``).
+    ``scale`` è obbligatoria (DC1); ``target_scale`` facoltativa (cambio di scala con ``astropy.time``). Con UT1,
+    UT1 − UTC dalle tabelle IERS (``iers_table``: ``bundled`` incluse in astropy, ``updated`` scaricata con
+    ``update_iers_table``), senza rete; data fuori dalla copertura → ``IERS_RANGE``. ``cache`` serve solo a
+    trovare la tabella aggiornata (non entra nel comando registrato).
     """
     if time_format not in TIME_FORMATS:
         raise CalculatorError("TIME_INVALID", f"formato {time_format!r} non previsto; formati: {', '.join(TIME_FORMATS)}")
+    if iers_table not in IERS_TABLES:
+        raise ValueError(f"iers_table {iers_table!r}: valori ammessi {', '.join(IERS_TABLES)}")
     source_scale = _time_scale(scale, "scale")
     target = source_scale if target_scale is None else _time_scale(target_scale, "target_scale")
     notes = []
     with warnings.catch_warnings(record=True) as caught, iers.conf.set_temp("auto_download", False):
         warnings.simplefilter("always")
         when = _parse_time(time_value, time_format, source_scale)
+        used = None
+        if "ut1" in (source_scale, target) and source_scale != target:
+            table, used, status = _iers_for(when, iers_table, cache)
         try:
-            converted = getattr(when, target)
-        except Exception as exc:  # dati IERS mancanti per UT1, o conversione non definita
+            if used is not None:
+                with iers.earth_orientation_table.set(table):
+                    converted = getattr(when, target)
+            else:
+                converted = getattr(when, target)
+        except iers.IERSRangeError as exc:  # al bordo della tabella (UT1 → UTC itera sulla data)
+            raise CalculatorError("IERS_RANGE", f"conversione {source_scale.upper()} → {target.upper()}: {used.text}, "
+                                  f"data al limite della copertura ({exc}); nessuna estrapolazione") from exc
+        except Exception as exc:  # conversione non definita
             raise CalculatorError("TIME_INVALID", f"conversione {source_scale.upper()} → {target.upper()} non "
                                   f"eseguibile: {exc}") from exc
         converted.precision = 9
@@ -576,14 +693,16 @@ def convert_time(time_value, time_format: str, scale: str | None, target_scale: 
     notes.extend(dict.fromkeys(f"avviso di astropy/ERFA: {w.message}" for w in caught))
     if target != source_scale:
         notes.append(f"cambio di scala {source_scale.upper()} → {target.upper()} con astropy.time")
-    if "ut1" in (source_scale, target):
-        notes.append("UT1 con le tabelle IERS già disponibili ad astropy (nessuno scaricamento automatico)")
+    if used is not None:
+        notes.append(f"UT1 − UTC dalla tabella IERS {used.text}: {status}; nessun accesso alla rete (aggiornamento "
+                     "solo su richiesta con update_iers_table)")
     notes.append("JD, MJD e anni in float64 (risoluzione del JD ≈ 40 µs); jd1 + jd2 a precisione piena")
+    arguments = (("time_value", time_value), ("time_format", time_format), ("scale", scale),
+                 ("target_scale", target_scale), ("iers_table", iers_table))
     return CalculatorResult(
         calculator="tempo", input=f"{time_value!r} ({time_format}, scala {source_scale.upper()})", value=values,
         unit=None, scale=target, library=f"astropy {astropy.__version__} (astropy.time)", notes=tuple(notes),
-        command=CalculatorCommand("convert_time", (("time_value", time_value), ("time_format", time_format),
-                                                   ("scale", scale), ("target_scale", target_scale))))
+        command=CalculatorCommand("convert_time", arguments), iers=used)
 
 
 # --------------------------------------------------------------------------

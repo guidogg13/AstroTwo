@@ -25,9 +25,11 @@ from astrotwo.core.calculators import (
     convert_units,
     evaluate_expression,
     run_command,
+    update_iers_table,
 )
 import dataclasses
 import warnings
+from pathlib import Path
 
 from astropy.coordinates import Distance
 from astropy.table import Table
@@ -248,6 +250,78 @@ def test_t17_scale_required():
     result = convert_time("2024-02-29T18:00:00", "iso", "utc", "tdb")
     again = run_command(result.command)
     assert again.value == result.value and again.scale == result.scale == "tdb"
+
+
+def test_t17_ut1_bundled_iers_tables(monkeypatch):
+    from astropy.utils import iers
+
+    # Nessuna rete: ogni tentativo di aprire una connessione fa fallire il test.
+    import socket
+
+    def no_network(*args, **kwargs):
+        raise AssertionError("accesso alla rete durante la conversione UT1")
+
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    table_a = iers.IERS_A.open(iers.IERS_A_FILE)
+    table_b = iers.IERS_B.open(iers.IERS_B_FILE)
+    # Data coperta dall'IERS-A incluso: UT1 ricalcolato con delta_ut1_utc della stessa tabella.
+    result = convert_time("2020-01-01T00:00:00", "iso", "utc", "ut1")
+    reference = Time("2020-01-01T00:00:00", scale="utc")
+    reference.delta_ut1_utc = table_a.ut1_utc(reference)
+    assert result.value.jd1 + result.value.jd2 == pytest.approx(reference.ut1.jd1 + reference.ut1.jd2, abs=1e-12)
+    assert result.iers.name == "finals2000A.all" and "astropy-iers-data" in result.iers.source
+    assert any("finals2000A.all" in n and "Bulletin B" in n and "rete" in n for n in result.notes)
+    assert run_command(result.command).value == result.value
+    # Prima dell'IERS-A: IERS-B incluso (eopc04).
+    old = convert_time("1965-06-01T00:00:00", "iso", "utc", "ut1")
+    reference = Time("1965-06-01T00:00:00", scale="utc")
+    reference.delta_ut1_utc = table_b.ut1_utc(reference)
+    assert old.value.jd1 + old.value.jd2 == pytest.approx(reference.ut1.jd1 + reference.ut1.jd2, abs=1e-12)
+    assert old.iers.name == Path(iers.IERS_B_FILE).name
+    # Predizione dell'IERS dichiarata come tale; UT1 → UTC.
+    end = float(table_a["MJD"][-1].to_value(u.d))
+    predicted = convert_time(end - 30, "mjd", "ut1", "utc")
+    assert any("predizione" in n for n in predicted.notes)
+    # Fuori dalla copertura: errore esplicito, mai estrapolazione.
+    for value in (end + 400, 30000.0):
+        for scales in (("utc", "ut1"), ("ut1", "tt")):
+            with pytest.raises(CalculatorError) as exc:
+                convert_time(value, "mjd", *scales)
+            assert exc.value.code == "IERS_RANGE" and "finals2000A.all" in exc.value.message
+    # Senza UT1 nessuna tabella IERS.
+    assert convert_time("2020-01-01T00:00:00", "iso", "utc", "tt").iers is None
+
+
+def test_t17_ut1_updated_table_on_request(service, cache):
+    from astropy.utils import iers
+
+    payload = Path(iers.IERS_A_FILE).read_bytes()
+    service.routes["/finals2000A.all"] = lambda request: (200, "text/plain", payload)
+    with pytest.raises(CalculatorError) as exc:  # nessun aggiornamento chiesto: nessuna tabella aggiornata
+        convert_time("2020-01-01T00:00:00", "iso", "utc", "ut1", iers_table="updated", cache=cache)
+    assert exc.value.code == "IERS_TABLE_MISSING"
+    info = update_iers_table(cache=cache, url=f"{service.url}/finals2000A.all")
+    assert service.hits("/finals2000A.all") == 1 and "scaricato da" in info.source
+    updated = convert_time("2020-01-01T00:00:00", "iso", "utc", "ut1", iers_table="updated", cache=cache)
+    bundled = convert_time("2020-01-01T00:00:00", "iso", "utc", "ut1")
+    assert updated.value == bundled.value and "scaricato da" in updated.iers.source
+    assert ("iers_table", "updated") in updated.command.arguments
+    assert service.hits("/finals2000A.all") == 1  # la conversione non usa la rete
+    service.routes["/bad"] = lambda request: (200, "text/plain", b"non una tabella")
+    with pytest.raises(CalculatorError) as exc:
+        update_iers_table(cache=cache, url=f"{service.url}/bad")
+    assert exc.value.code == "IERS_TABLE_INVALID"
+    with pytest.raises(CalculatorError) as exc:
+        update_iers_table(cache=cache, url="http://127.0.0.1:9/finals2000A.all")
+    assert exc.value.code == "NET_TIMEOUT"
+
+
+@pytest.mark.network
+def test_t17_ut1_update_from_iers_network(cache):
+    info = update_iers_table(cache=cache)
+    assert info.name == "finals2000A.all" and info.mjd_end > 61000
+    result = convert_time("2020-01-01T00:00:00", "iso", "utc", "ut1", iers_table="updated", cache=cache)
+    assert result.iers == info or "scaricato da" in result.iers.source
 
 
 # =============================================================================
