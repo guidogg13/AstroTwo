@@ -23,12 +23,16 @@ Passi (modulo di AstroTwo usato):
 4. frecce del moto proprio con `proper_motion_arrows` (13), scala dichiarata nella figura (spostamento in 5000 anni);
    medie con `column_statistics` (13), anche sui probabili membri scelti con `search` per parallasse (criterio
    dichiarato);
+4b. epoca di visualizzazione (D10-2): posizioni Gaia propagate all'epoca dell'immagine DSS (`MJD-OBS`, 1989-12-17)
+    con `propagate` (13); spostamento medio e massimo con `skydist` in `calculated_column` e `column_statistics` (13).
+    Le stelle si disegnano alle posizioni propagate; frecce, crossmatch, distanza Alcyone–Atlas e MOC restano
+    all'epoca dei dati, dichiarata nel report;
 5. crossmatch con 2MASS (`tap_query` su IRSA, `crossmatch` del 15 con raggio esplicito di 2″); percentuale con la
    calcolatrice algebrica del 18;
 6. distanza angolare e angolo di posizione Alcyone–Atlas con `angular_distance` e `position_angle` (17);
 7. MOC del campo dell'immagine con `moc_from_image` e controllo delle stelle con `filter_by_moc` (16);
 8. figura con matplotlib e assi WCS (`astropy.visualization.wcsaxes`): presentazione con `set_display` (11),
-   posizioni in pixel con `sky_to_pixel` (10), dimensione dei cerchi con `set_plot_rules` (13);
+   posizioni in pixel con `sky_to_pixel` (10) all'epoca dell'immagine, dimensione dei cerchi con `set_plot_rules` (13);
 9. report `examples/output/demo_pleiadi.txt`: ogni numero con unità, sistema/epoca, funzione e libreria.
 
 Uscite: `examples/output/demo_pleiadi.png`, `examples/output/demo_pleiadi.txt`.

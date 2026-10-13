@@ -30,5 +30,7 @@ def test_demo_pleiadi_creates_figure_and_report(tmp_path):
     for expected in ("resolve_name (modulo 10)", "sia_search (modulo 14)", "DSS2-red", "epoca J2016.0",
                      "proper_motion_arrows", "column_statistics del 13", "max_sep = 2.0 arcsec",
                      "calcolatrice algebrica del 18", "distanza Alcyone–Atlas:", "angolo di posizione di Atlas",
-                     "stelle Gaia dentro il MOC:", "— tutte dentro", "set_display dell'11"):
+                     "stelle Gaia dentro il MOC:", "— tutte dentro", "set_display dell'11",
+                     "epoca di visualizzazione = epoca dell'immagine 1989-12-17", "spostamento J2016.0 → epoca "
+                     "dell'immagine: media", "stelle Gaia all'epoca dell'immagine"):
         assert expected in text, expected
