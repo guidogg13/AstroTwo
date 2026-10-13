@@ -332,6 +332,17 @@ pixel memorizzati.
   convenzione numpy, conversione FITS solo con `convert_pixel_convention` del
   modulo 10 (DC7); `BZERO`, `BSCALE`, `BLANK` e unità dei pixel sono esposti a
   `18-core-calcolatrici.md` per la calcolatrice dei pixel.
+- **Valore grezzo di un pixel (D18-6; spostato qui dal 18 per decisione del
+  proprietario del 2026-10-13):** `read_raw_pixel(image, x, y)` legge dal
+  file il valore **scritto nel file**, senza `BZERO`/`BSCALE`, con
+  `astropy.io.fits` e l'opzione **`do_not_scale_image_data=True`**, solo la
+  regione 1 × 1 (`section`, anche per le immagini con assi degeneri tolti).
+  `x`, `y` interi in convenzione numpy (DC7). Il valore uguale a `BLANK` è
+  restituito com'è (lo interpreta chi chiama). Immagine non FITS, a colori o
+  **derivata** (`history` non vuota: taglio, operazioni H5, calibrazione
+  esterna — i pixel non sono più quelli del file), posizione fuori
+  dall'immagine o file non leggibile → `PIXEL_RAW_UNAVAILABLE`. Il modulo 18
+  la richiama per la calcolatrice dei pixel.
 
 ## 4. Cosa NON fa
 
@@ -453,6 +464,8 @@ pixel memorizzati.
   correzione del fondo.
 - **`pixel_scaling(image)`** — restituisce `BZERO`, `BSCALE`, `BLANK` e unità
   dei pixel (per il modulo 18).
+- **`read_raw_pixel(image, x, y)`** — valore grezzo di un pixel letto dal file
+  con `do_not_scale_image_data=True` (D18-6), `float64`; per il modulo 18.
 
 ## 8. Librerie e standard di riferimento
 
@@ -521,6 +534,7 @@ pixel memorizzati.
 | Calibrazione esterna (D14-11) usata su un'immagine senza WCS | WCS dalla calibrazione, fonte dichiarata | avviso `EXTERNAL_CALIBRATION_USED` |
 | Calibrazione esterna data per un'immagine che ha già il WCS | vale il WCS proprio | avviso `EXTERNAL_CALIBRATION_IGNORED` |
 | Calibrazione esterna assente, con dimensioni diverse o non valida | immagine senza WCS, motivo nell'avviso | `WCS_MISSING` |
+| Valore grezzo chiesto per un'immagine non FITS, a colori o derivata, fuori dall'immagine o con indici non interi | nessun valore | `PIXEL_RAW_UNAVAILABLE` |
 
 ## 11. Esposizione all'IA
 
@@ -570,6 +584,7 @@ funzioni di §7.
 | T33 | Limite delle operazioni (D11-11) | limite piccolo configurato nel test; ogni operazione sull'immagine intera; immagine in `memmap` | `MEMORY_LIMIT_EXCEEDED` con la stima della tabella di §3 e il limite; nessun dato caricato; taglio piccolo e `save_fits` sotto il limite riescono; con il limite di default le stesse operazioni riescono e l'immagine in `memmap` si visualizza (strategia A10 e limite separati) | test di unità |
 | T34 | Visualizzazione a blocchi in `float32` | `set_display` su un array 6000 × 6000 con il limite di default; `histeq` con blocchi piccoli | si visualizza; valori uguali ad `astropy.visualization` in `float32`; picco di memoria (misurato con `tracemalloc`) sotto 8 byte per pixel + 64 MB, cioè senza copia `float64` dell'immagine; `histeq` a blocchi uguale all'equalizzazione su tutto il piano | ricalcolo con Astropy, `tracemalloc` |
 | T35 | Calibrazione esterna (D14-11) | FITS senza WCS caricato con una calibrazione esterna; stessa calibrazione su un FITS con WCS; oggetto senza `source`; nel 14 (T11) calibrazione della lista SIA su un'immagine scaricata | WCS uguale ad `astropy.wcs` costruito dall'intestazione del test, `EXTERNAL_CALIBRATION_USED`; con WCS proprio `EXTERNAL_CALIBRATION_IGNORED`; senza `source` errore; dimensioni diverse → `WCS_MISSING` | ricalcolo con Astropy |
+| T36 | Valore grezzo (D18-6) | FITS `int16` con `BZERO`, `BSCALE`, `BLANK`; stesso dato con un asse degenere; posizioni fuori, non intere; immagine derivata | `read_raw_pixel` uguale a `astropy.io.fits` con `do_not_scale_image_data=True` in ogni pixel (anche quello uguale a `BLANK`); `PIXEL_RAW_UNAVAILABLE` negli altri casi | confronto con Astropy |
 | T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
@@ -670,3 +685,4 @@ funzioni di §7.
 | 2026-10-10 | Claude Code | **Decisioni del proprietario dopo il codice** (autorizzazione esplicita a modificare il file approvato): confermate le scelte di P1–P7 (D11-10); avviso `HHH_WCS_DIFFERS` quando commento e `.hhh` hanno WCS diversi (criterio: parole chiave normalizzate da `WCS.to_header`); tetto di memoria A10 con stima prima delle operazioni sull'immagine intera e del taglio, errore `MEMORY_LIMIT_EXCEEDED` (tabella delle stime in §3); §11 spostato nel 32 (D11-9); regola d'oro n. 8: tolti i motivi "come Aladin" (§2, ricampionamento esplicito, righe dal basso, mosaico senza correzione del fondo, D11-2, D11-4). Codice e test T32–T33 in `images_fits.py` / `test_images_fits.py`. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **D11-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): limite delle operazioni separato da A10, 4 GB di default, configurabile (`LargeImageLimits.operation_bytes`); `set_display` a blocchi di righe in `float32` senza copia intera (eccezione dichiarata: `histeq` raccoglie i valori del piano); stima di `set_display` aggiornata in §3; criterio commento/`.hhh` confermato; test T33 aggiornato, nuovo T34 (6000 × 6000, picco di memoria con `tracemalloc`). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D14-11** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): parametro facoltativo `calibration` di `load_image` (calibrazione esterna con `header` e `source`, es. `SiaCalibration` del 14), usata solo se l'immagine non ha WCS proprio, con le regole del `.hhh` (dimensioni, WCS celeste valido); avvisi `EXTERNAL_CALIBRATION_USED` e `EXTERNAL_CALIBRATION_IGNORED`, `calibration_source = "external"`, voce nella storia (§3, §7, §10, §12 T35). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo di un pixel (D18-6) passa dal 18 all'11 come funzione pubblica `read_raw_pixel` (§3, §7, §10, T36); il 18 la richiama. Stato `approvato` invariato. |

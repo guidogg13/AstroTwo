@@ -31,7 +31,6 @@ import astropy
 import astropy.units as u
 import matplotlib
 import numpy as np
-from astropy.io import fits
 from astropy.time import Time
 from astropy.utils import iers
 
@@ -44,7 +43,7 @@ from astrotwo.core.coordinates_wcs import (
     parse_sexagesimal,
     propagate_position,
 )
-from astrotwo.core.images_fits import FitsImage, ImagesFitsError, _section_key, pixel_scaling, set_display
+from astrotwo.core.images_fits import FitsImage, ImagesFitsError, pixel_scaling, read_raw_pixel, set_display
 from astrotwo.core import measures
 from astrotwo.core.measures import (
     UNDECLARED_UNIT,
@@ -831,23 +830,6 @@ def _color_index(value: np.float64, display: DisplaySettings, image: FitsImage |
                   f"{display.palette!r} (0–{size - 1}; lo 0 non è riservato: la trasparenza è nell'alfa)"
 
 
-def _raw_from_file(image: FitsImage, x: int, y: int) -> np.float64:
-    """Valore grezzo scritto nel file (D18-6): ``astropy.io.fits`` con ``do_not_scale_image_data=True``."""
-    if not image.format.startswith("fits"):
-        raise CalculatorError("PIXEL_RAW_UNAVAILABLE", f"immagine {image.format}: nessun valore grezzo FITS")
-    if image.history:
-        raise CalculatorError("PIXEL_RAW_UNAVAILABLE", "immagine derivata (" + "; ".join(image.history)
-                              + "): i pixel non sono più quelli del file")
-    try:
-        with fits.open(image.origin, do_not_scale_image_data=True, memmap=False) as hdul:
-            section = hdul[image.hdu_index].section
-            value = np.asarray(section[_section_key(image.raw_ndim, image.dropped_axes, slice(y, y + 1),
-                                                    slice(x, x + 1))]).ravel()[0]
-    except (OSError, IndexError, ValueError, TypeError) as exc:
-        raise CalculatorError("PIXEL_RAW_UNAVAILABLE", f"{image.origin}: valore grezzo non leggibile ({exc})") from exc
-    return np.float64(value)
-
-
 @_registered
 def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, blank=None, display=None, bunit=None,
                         image=None, position=None) -> CalculatorResult:
@@ -878,8 +860,11 @@ def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, bla
                      "modulo 17; BZERO, BSCALE e BLANK dall'intestazione (pixel_scaling del modulo 11)"
                      + ("; BZERO assente: 0 per lo standard FITS" if scaling.bzero is None else "")
                      + ("; BSCALE assente: 1 per lo standard FITS" if scaling.bscale is None else ""))
-        raw_value = _raw_from_file(image, x, y)
-        notes.append("valore grezzo letto dal file con astropy.io.fits, do_not_scale_image_data=True (D18-6)")
+        try:
+            raw_value = read_raw_pixel(image, x, y)
+        except ImagesFitsError as exc:
+            raise CalculatorError(exc.code, exc.message) from exc
+        notes.append("valore grezzo letto dal file con read_raw_pixel del modulo 11 (astropy.io.fits, do_not_scale_image_data=True, D18-6)")
         given = "raw"
     else:
         if (raw is None) == (physical is None):

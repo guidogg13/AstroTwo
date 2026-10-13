@@ -99,6 +99,7 @@ __all__ = [
     "list_image_hdus",
     "load_image",
     "pixel_scaling",
+    "read_raw_pixel",
     "star_centroid",
 ]
 
@@ -1574,6 +1575,37 @@ def pixel_scaling(image: FitsImage) -> PixelScaling:
         blank=number("BLANK", int),
         bunit=header.get("BUNIT"),
     )
+
+
+def read_raw_pixel(image: FitsImage, x: int, y: int) -> np.float64:
+    """Valore **grezzo** di un pixel come è scritto nel file FITS (D18-6), senza ``BZERO``/``BSCALE``.
+
+    Lettura con ``astropy.io.fits`` e ``do_not_scale_image_data=True`` della sola regione 1 × 1
+    (``section``); ``x``, ``y`` in convenzione numpy (DC7). Il valore uguale a ``BLANK`` è restituito com'è.
+    Immagine non FITS o derivata (``history`` non vuota: i pixel non sono più quelli del file), posizione
+    fuori dall'immagine o file non leggibile → ``PIXEL_RAW_UNAVAILABLE``.
+    """
+    if not image.format.startswith("fits"):
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"immagine {image.format}: nessun valore grezzo FITS")
+    if image.color:
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", "immagine a colori: solo presentazione")
+    if image.history:
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", "immagine derivata (" + "; ".join(image.history)
+                              + "): i pixel non sono più quelli del file")
+    ny, nx = image.shape
+    if any(isinstance(v, bool) or not isinstance(v, (int, np.integer)) for v in (x, y)) \
+            or not (0 <= x < nx and 0 <= y < ny):
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"posizione ({x!r}, {y!r}): servono indici interi dentro "
+                              f"l'immagine {nx}×{ny} (convenzione numpy)")
+    x, y = int(x), int(y)
+    try:
+        with fits.open(image.origin, do_not_scale_image_data=True, memmap=False) as hdul:
+            section = hdul[image.hdu_index].section
+            value = np.asarray(section[_section_key(image.raw_ndim, image.dropped_axes, slice(y, y + 1),
+                                                    slice(x, x + 1))]).ravel()[0]
+    except (OSError, IndexError, ValueError, TypeError) as exc:
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"{image.origin}: valore grezzo non leggibile ({exc})") from exc
+    return np.float64(value)
 
 
 @dataclass(frozen=True)

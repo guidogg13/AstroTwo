@@ -232,8 +232,9 @@ NaN al posto di `BLANK`. Scelte minori:
 2. **Clic** (`image`, `position`): posizione e valore in memoria con
    `read_pixel` del 17; `BZERO`, `BSCALE`, `BLANK` dall'intestazione con
    `pixel_scaling` dell'11 (assenti: 0 e 1 come da standard FITS, scritto
-   nelle note); **valore grezzo dal file** con `astropy.io.fits` e
-   `do_not_scale_image_data=True` (D18-6). Il fisico è ricalcolato con la
+   nelle note); **valore grezzo dal file** con `read_raw_pixel` dell'11
+   (`astropy.io.fits` e `do_not_scale_image_data=True`, D18-6; errori
+   dell'11 inoltrati con lo stesso identificatore). Il fisico è ricalcolato con la
    regola FITS in `float64`; se differisce dal valore tenuto dall'11 (tipo
    di `astropy.io.fits`), entrambi sono nel risultato. Immagine non FITS o
    **derivata** (taglio, operazioni: `history` non vuota, i pixel non sono
@@ -248,9 +249,9 @@ NaN al posto di `BLANK`. Scelte minori:
    regola con cui la palette sceglie il colore. **Lo 0 non è riservato:** il
    modulo 11 rende trasparenti i pixel non finiti con l'alfa, quindi la
    variante 1–255 non si applica; pixel non finito → nessun indice, con nota.
-4. **Lettura del file nel 18:** è l'unica eccezione al §4 ("non legge file
-   FITS"), limitata al singolo valore grezzo voluto da D18-6; tutto il resto
-   (dati, intestazione, visualizzazione) viene dall'11.
+4. **Nessuna lettura di file nel 18** (decisione del proprietario del
+   2026-10-13): il valore grezzo lo legge `read_raw_pixel` dell'11; dati,
+   intestazione e visualizzazione vengono dall'11.
 
 **P5 — calcolatrice delle coordinate (scritta il 2026-10-13).** Scelte
 minori:
@@ -294,8 +295,8 @@ minori:
   angolo di posizione: lo fa `17-core-misure.md`; qui si raccolgono input e
   si presentano i risultati.
 - Non legge file FITS né applica funzioni di trasferimento: lo fa
-  `11-core-immagini-fits.md` (unica eccezione: il singolo valore grezzo
-  di un pixel, letto con `do_not_scale_image_data=True` per D18-6, §3 P4).
+  `11-core-immagini-fits.md` (anche il valore grezzo di un pixel, D18-6:
+  `read_raw_pixel` dell'11).
 - Non misura distanze o angoli tra oggetti della vista (`17-core-misure.md`)
   né fa fotometria (`20-analisi-fotometria.md`).
 - Non calcola colonne di tabella (H8, `13-core-cataloghi.md`) né fa
@@ -312,8 +313,8 @@ minori:
 - **Livello:** 1
 - **Dipende da:** `10-core-coordinate-wcs.md` (conversioni e propagazione,
   interpretazione dei sessagesimali, conversione dei pixel DC7),
-  `11-core-immagini-fits.md` (BZERO, BSCALE, BLANK, parametri di
-  visualizzazione), `13-core-cataloghi.md` (moto proprio, velocità radiale ed
+  `11-core-immagini-fits.md` (BZERO, BSCALE, BLANK, valore grezzo con
+  `read_raw_pixel`, parametri di visualizzazione), `13-core-cataloghi.md` (moto proprio, velocità radiale ed
   epoca di una riga di catalogo), `17-core-misure.md` (`angular_distance` per
   `skydist`, `read_pixel`, offset e calcolo inverso per la calcolatrice delle
   coordinate).
@@ -537,3 +538,4 @@ elementare.
 | 2026-10-13 | Claude Code | **P4 scritta** (`convert_pixel_value`, `DisplaySettings`, `PixelValues`; T10–T12); D18-6 verificata prima del codice. Scelte minori di P4 in §3; §4 con l'eccezione del valore grezzo (D18-6); nuovi casi in §10 (`PIXEL_RAW_UNAVAILABLE`, `histeq` senza immagine). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P5 scritta — modulo 18 completo tranne i sessagesimali in `skydist` (D18-7)** (`calculate_coordinates`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, `CoordinatesOutput`; T13, T14, T18 con la riesecuzione dei comandi registrati). Scelte minori di P5 in §3. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D18-7 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: sessagesimali di `skydist` con l'unità scritta nel testo (h/m/s, d/m/s, °′″) letti con `parse_sexagesimal` del 10; due punti → `UNIT_SEXAGESIMAL_UNIT_REQUIRED` salvo il parametro esplicito `colon_units`; nessuna convenzione sulla posizione; sessagesimali solo negli argomenti di `skydist` (§3 P1 scelta 6, §10, T5). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo passa all'11 (`read_raw_pixel`); il 18 la richiama; tolta l'eccezione dal §4 (§3 P4 scelte 2 e 4, §5). Stato `approvato` invariato. |

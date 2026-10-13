@@ -127,6 +127,7 @@ from astrotwo.core.images_fits import (
     list_image_hdus,
     load_image,
     pixel_scaling,
+    read_raw_pixel,
 )
 
 
@@ -224,6 +225,35 @@ def test_t15_pixel_scaling_constants(tmp_path):
     assert scaling.bzero == raw_header["BZERO"] and scaling.bscale == raw_header["BSCALE"]
     assert scaling.blank is None and scaling.bunit == "ADU"
     assert np.array_equal(image.data, data)
+
+
+def test_t36_read_raw_pixel(tmp_path):
+    raw = np.array([[-32768, 0, 7], [100, -5, 3]], dtype=np.int16)
+    header = fits.Header({"BZERO": 10.0, "BSCALE": 0.5, "BLANK": -5})
+    path = tmp_path / "scaled.fits"
+    fits.PrimaryHDU(raw, header=header).writeto(path)
+    image = load_image(str(path))
+    with fits.open(path, do_not_scale_image_data=True) as hdul:  # riferimento: astropy senza scala
+        stored = np.array(hdul[0].data)
+    assert stored.dtype.kind == "i"
+    for y in range(2):
+        for x in range(3):
+            value = read_raw_pixel(image, x, y)
+            assert isinstance(value, np.float64) and value == stored[y, x]
+    assert read_raw_pixel(image, 1, 1) == -5  # uguale a BLANK: restituito com'è
+    # Assi degeneri tolti (D11-4): stessa lettura sull'asse di lunghezza 1.
+    cube_path = tmp_path / "degenerate.fits"
+    fits.PrimaryHDU(raw[np.newaxis], header=header).writeto(cube_path)
+    degenerate = load_image(str(cube_path))
+    assert read_raw_pixel(degenerate, 2, 0) == stored[0, 2]
+    # Fuori dall'immagine, indici non interi, immagine derivata o non FITS: errore.
+    for x, y in ((3, 0), (0, 2), (-1, 0), (0.5, 0), (True, 0)):
+        with pytest.raises(ImagesFitsError) as exc:
+            read_raw_pixel(image, x, y)
+        assert exc.value.code == "PIXEL_RAW_UNAVAILABLE"
+    with pytest.raises(ImagesFitsError) as exc:
+        read_raw_pixel(image.with_operation("add", 1.0), 0, 0)
+    assert exc.value.code == "PIXEL_RAW_UNAVAILABLE"
 
 
 def test_t28_multiple_image_hdus(tmp_path):
