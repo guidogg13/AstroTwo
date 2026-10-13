@@ -15,16 +15,27 @@ from astropy.time import Time
 from astrotwo.core.calculators import (
     CalculatorError,
     CalculatorResult,
+    CoordinateInput,
+    CoordinateTarget,
     DisplaySettings,
+    ProperMotion,
+    calculate_coordinates,
     convert_pixel_value,
     convert_time,
     convert_units,
     evaluate_expression,
     run_command,
 )
-from astrotwo.core.coordinates_wcs import PixelPosition, SkyFrame
+import dataclasses
+import warnings
+
+from astropy.coordinates import Distance
+from astropy.table import Table
+
+from astrotwo.core.catalogs import confirm_position_columns, read_table
+from astrotwo.core.coordinates_wcs import PixelPosition, SkyFrame, convert_coordinates
 from astrotwo.core.images_fits import cutout, load_image, set_display
-from astrotwo.core.measures import angular_distance
+from astrotwo.core.measures import CatalogSource, angular_distance, offset_position
 
 
 def same_result(a: CalculatorResult, b: CalculatorResult) -> bool:
@@ -361,3 +372,123 @@ def test_t12_color_index(tmp_path):
     assert exc.value.code == "OPERATION_UNSUPPORTED"
     manual = convert_pixel_value(raw=50, bzero=0, bscale=1, display=DisplaySettings(0.0, 100.0))
     assert manual.value.color_index == 128  # 0,5 · 256 nella palette
+
+
+# =============================================================================
+# P5 — calcolatrice delle coordinate (T13, T14, T18)
+
+
+def test_t13_icrs_to_galactic():
+    start = SkyFrame.from_lonlat(83.6331 * u.deg, 22.0145 * u.deg, "icrs", epoch=Time(2000.0, format="jyear",
+                                                                                       scale="tt"))
+    result = calculate_coordinates(start, [CoordinateTarget("galactic"), CoordinateTarget("fk5", equinox="J2000"),
+                                           CoordinateTarget("icrs")])
+    galactic, fk5, icrs = result.value.representations
+    expected = convert_coordinates(start, "galactic")
+    assert galactic.lon_deg == np.float64(expected.lon.to_value(u.deg))
+    assert galactic.lat_deg == np.float64(expected.lat.to_value(u.deg))
+    fk5_expected = convert_coordinates(start, "fk5", equinox="J2000")
+    assert (fk5.lon_deg, fk5.lat_deg) == (fk5_expected.lon.to_value(u.deg), fk5_expected.lat.to_value(u.deg))
+    assert icrs.lon_in_hours and not galactic.lon_in_hours
+    assert icrs.lon_sexagesimal == Angle(83.6331 * u.deg).to_string(unit=u.hourangle, sep=":", precision=5, pad=True)
+    assert icrs.lat_sexagesimal.startswith("+22:00:52")
+    assert result.unit == u.deg and "J2000.000" in icrs.text
+    # Coordinate scritte in sessagesimale, ore dichiarate; equinozio storico.
+    written = CoordinateInput("05:34:31.94", "+22:00:52.2", "icrs", lon_sexagesimal="hours")
+    from_text = calculate_coordinates(written, [CoordinateTarget("fk4", equinox="B1875", obstime="B1875")])
+    direct = convert_coordinates(SkyFrame.from_lonlat(Angle("05:34:31.94", unit=u.hourangle), Angle("+22:00:52.2",
+                                                      unit=u.deg), "icrs"), "fk4", equinox="B1875", obstime="B1875")
+    first = from_text.value.representations[0]
+    assert (first.lon_deg, first.lat_deg) == (direct.lon.to_value(u.deg), direct.lat.to_value(u.deg))
+    with pytest.raises(CalculatorError) as exc:
+        calculate_coordinates(CoordinateInput("05:34:31.94", 22.0, "icrs"), [CoordinateTarget("icrs")])
+    assert exc.value.code == "UNIT_SEXAGESIMAL_UNIT_REQUIRED"
+    with pytest.raises(CalculatorError) as exc:
+        calculate_coordinates(start, [CoordinateTarget("fk5")])  # equinozio non assunto
+    assert exc.value.code == "EPOCH_REQUIRED"
+    with pytest.raises(CalculatorError) as exc:
+        calculate_coordinates(CoordinateInput(10.0, 95.0, "icrs"), [CoordinateTarget("icrs")])
+    assert exc.value.code == "COORD_OUT_OF_RANGE"
+
+
+def test_t13_offsets_and_inverse():
+    start = SkyFrame.from_lonlat(150.0 * u.deg, 2.2 * u.deg, "icrs")
+    inverse = calculate_coordinates(start, [CoordinateTarget("icrs")], direction=(30 * u.arcmin, 135 * u.deg))
+    expected = offset_position(start, 30 * u.arcmin, 135 * u.deg).position
+    assert inverse.value.base.coord.separation(expected.coord).deg == 0.0
+    moved = calculate_coordinates(start, [CoordinateTarget("icrs")], offsets=(1 * u.arcmin, -2 * u.arcmin),
+                                  to_point=start)
+    back = moved.value.offsets_to
+    d_lon, d_lat = moved.value.base.coord.spherical_offsets_to(start.coord)
+    assert back.d_lon == d_lon and back.d_lat == d_lat
+    assert moved.value.base.coord.separation(start.coord.spherical_offsets_by(1 * u.arcmin, -2 * u.arcmin)).deg < 1e-12
+
+
+def test_t14_missing_epoch():
+    motion = ProperMotion(pm_ra_cosdec=500 * u.mas / u.yr, pm_dec=-300 * u.mas / u.yr, parallax=20 * u.mas)
+    no_epoch = SkyFrame.from_lonlat(150.0 * u.deg, 2.0 * u.deg, "icrs")
+    with pytest.raises(CalculatorError) as exc:
+        calculate_coordinates(no_epoch, [CoordinateTarget("icrs")], epoch=2016.0, motion=motion)
+    assert exc.value.code == "EPOCH_REQUIRED"
+    with pytest.raises(CalculatorError) as exc:  # senza moto proprio: nessun moto nullo assunto
+        calculate_coordinates(dataclasses.replace(no_epoch, epoch=Time(2000.0, format="jyear", scale="tt")),
+                              [CoordinateTarget("icrs")], epoch=2016.0)
+    assert exc.value.code == "EPOCH_REQUIRED"
+    start = dataclasses.replace(no_epoch, epoch=Time(2000.0, format="jyear", scale="tt"))
+    result = calculate_coordinates(start, [CoordinateTarget("icrs")], epoch=2016.0, motion=motion)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        expected = SkyCoord(ra=150.0 * u.deg, dec=2.0 * u.deg, pm_ra_cosdec=500 * u.mas / u.yr,
+                            pm_dec=-300 * u.mas / u.yr, distance=Distance(parallax=20 * u.mas),
+                            obstime=Time(2000.0, format="jyear", scale="tt"),
+                            ).apply_space_motion(new_obstime=Time(2016.0, format="jyear", scale="tt"))
+    assert result.value.base.coord.separation(SkyCoord(expected.ra, expected.dec)).to_value(u.mas) < 1e-6
+    assert result.value.base.epoch.jyear == 2016.0
+
+
+def catalog_row(tmp_path):
+    t = Table()
+    t["RA"] = np.array([150.0]) * u.deg
+    t["DE"] = np.array([2.0]) * u.deg
+    t["RA"].meta["ucd"] = "pos.eq.ra;meta.main"
+    t["DE"].meta["ucd"] = "pos.eq.dec;meta.main"
+    t["ep"] = np.array([2000.0]) * u.yr
+    t["ep"].meta["ucd"] = "meta.ref;time.epoch"
+    t["pmRA"] = np.array([500.0]) * u.mas / u.yr
+    t["pmDE"] = np.array([-300.0]) * u.mas / u.yr
+    t["plx"] = np.array([20.0]) * u.mas
+    path = tmp_path / "cat.csv"
+    path.write_text("x,y\n1,2\n")
+    return confirm_position_columns(dataclasses.replace(read_table(path), table=t), "RA", "DE", "icrs")
+
+
+def test_t14_catalog_row(tmp_path):
+    table = catalog_row(tmp_path)
+    source = CatalogSource(table, 0, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, parallax="plx")
+    result = calculate_coordinates(source, [CoordinateTarget("icrs")], epoch=2016.0)
+    assert result.value.base.epoch.jyear == 2016.0 and any("propagata" in n for n in result.notes)
+    with pytest.raises(CalculatorError) as exc:
+        calculate_coordinates(CatalogSource(table, 0), [CoordinateTarget("icrs")], epoch=2016.0)
+    assert exc.value.code == "EPOCH_REQUIRED"
+
+
+def test_t18_rerun_registered_commands(tmp_path):
+    """T18: finché il 24 non esiste, si riesegue il comando registrato nel CalculatorResult (T1–T16)."""
+    raw = np.array([[-32768, 0, 7], [100, -5, 3]], dtype=np.int16)
+    image = load_image(str(scaled_fits(tmp_path, raw, BZERO=10.0, BSCALE=0.5, BLANK=-5)))
+    start = SkyFrame.from_lonlat(83.6331 * u.deg, 22.0145 * u.deg, "icrs")
+    results = [
+        evaluate_expression("3*8"), evaluate_expression("sind(30)"), evaluate_expression("skydist(10, 20, 10.5, 20.5)"),
+        convert_units(0.1, "m", "nm"), convert_units(2, "a", "d"),
+        convert_units("10:10:08", None, "deg", sexagesimal="degrees"),
+        convert_pixel_value(raw=-32768, bzero=32768, bscale=1),
+        convert_pixel_value(image=image, position=PixelPosition(x=np.float64(1), y=np.float64(1), convention="fits"),
+                            display=DisplaySettings(0.0, 100.0)),
+        calculate_coordinates(start, [CoordinateTarget("galactic")]),
+        convert_time("2000-01-01T12:00:00", "iso", "TT"), convert_time("2024-02-29T18:00:00", "iso", "utc"),
+    ]
+    for result in results:
+        again = run_command(result.command)
+        assert (again.input, again.unit, again.scale, again.calculator) == \
+            (result.input, result.unit, result.scale, result.calculator), result.command.text
+        assert again.value == result.value or np.array_equal(again.value, result.value), result.command.text

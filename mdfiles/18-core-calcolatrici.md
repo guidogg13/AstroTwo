@@ -252,6 +252,38 @@ NaN al posto di `BLANK`. Scelte minori:
    FITS"), limitata al singolo valore grezzo voluto da D18-6; tutto il resto
    (dati, intestazione, visualizzazione) viene dall'11.
 
+**P5 — calcolatrice delle coordinate (scritta il 2026-10-13).** Scelte
+minori:
+
+1. **Firma:** `calculate_coordinates(position, targets, *, epoch=None,
+   motion=None, offsets=None, direction=None, to_point=None)`.
+   `position`: `SkyFrame`/`SkyCoord`, `CoordinateInput` (coordinate scritte:
+   numeri in gradi o testo sessagesimale; per la longitudine in testo si
+   dichiara `lon_sexagesimal="hours"` o `"degrees"`, altrimenti
+   `UNIT_SEXAGESIMAL_UNIT_REQUIRED`; latitudine sessagesimale in gradi;
+   lettura con `parse_sexagesimal` del 10) oppure `CatalogSource` del 17
+   (riga di catalogo: epoca e moto proprio dai metadati del 13, come
+   `auto_distance`). `targets`: almeno un `CoordinateTarget(frame,
+   equinox, obstime)`.
+2. **Ordine fisso:** propagazione all'`epoch` (coordinate scritte:
+   `ProperMotion` + `propagate_position` del 10; riga di catalogo:
+   `propagate` del 13); poi **offset** (`offsets` = Δα·cos δ, Δδ con
+   `apply_offsets` del 17) **oppure** calcolo inverso (`direction` =
+   distanza, angolo di posizione con `offset_position` del 17), non entrambi;
+   poi la conversione in ogni sistema richiesto con `convert_coordinates` del
+   10; `to_point` dà gli offset verso quel punto (`angular_offsets` del 17).
+   `epoch` senza moto proprio → `EPOCH_REQUIRED` (nessun moto nullo
+   assunto); `motion` senza `epoch` → `TypeError`.
+3. **Uscita** (`CoordinatesOutput`): posizione di base e, per ogni sistema,
+   `CoordinateRepresentation` con gradi decimali (`float64`) e
+   sessagesimale — longitudine in **h:m:s** nei sistemi equatoriali (che
+   hanno `ra`, precisione 0,00001 s) e in d:m:s negli altri (0,0001″),
+   latitudine d:m:s con segno (0,0001″) — con frame ed epoca dichiarati.
+   Unità del risultato: gradi.
+4. **T18:** il test riesegue con `run_command` i comandi registrati dei
+   risultati di T1–T16 (espressioni, unità, pixel anche con clic, coordinate,
+   tempo) e confronta input interpretato, valore, unità e scala.
+
 ## 4. Cosa NON fa
 
 - Non disegna finestre né campi di input: l'interfaccia delle calcolatrici è
@@ -504,3 +536,4 @@ elementare.
 | 2026-10-12 | Claude Code | **P2 scritta** (`convert_time`, `TimeRepresentations`; T15–T17). Scelte minori di P2 in §3. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P3 scritta** (`convert_units`, `EQUIVALENCIES`; T6–T9). Scelte minori di P3 in §3; nuovi casi in §10 (`UNIT_EQUIVALENCY_UNKNOWN`, `UNIT_REFERENCE_REQUIRED`, `UNIT_SEXAGESIMAL_UNIT_REQUIRED`). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P4 scritta** (`convert_pixel_value`, `DisplaySettings`, `PixelValues`; T10–T12); D18-6 verificata prima del codice. Scelte minori di P4 in §3; §4 con l'eccezione del valore grezzo (D18-6); nuovi casi in §10 (`PIXEL_RAW_UNAVAILABLE`, `histeq` senza immagine). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **P5 scritta — modulo 18 completo tranne i sessagesimali in `skydist` (D18-7)** (`calculate_coordinates`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, `CoordinatesOutput`; T13, T14, T18 con la riesecuzione dei comandi registrati). Scelte minori di P5 in §3. Stato `approvato` invariato. |

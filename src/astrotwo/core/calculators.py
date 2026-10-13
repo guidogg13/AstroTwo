@@ -36,9 +36,26 @@ from astropy.time import Time
 from astropy.utils import iers
 
 from astrotwo.core.catalogs import CONSTANTS, FUNCTIONS
-from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, parse_sexagesimal
+from astrotwo.core.coordinates_wcs import (
+    CoordinatesWcsError,
+    SkyFrame,
+    _to_epoch,
+    convert_coordinates,
+    parse_sexagesimal,
+    propagate_position,
+)
 from astrotwo.core.images_fits import FitsImage, ImagesFitsError, _section_key, pixel_scaling, set_display
-from astrotwo.core.measures import UNDECLARED_UNIT, MeasuresError, angular_distance, read_pixel
+from astrotwo.core import measures
+from astrotwo.core.measures import (
+    UNDECLARED_UNIT,
+    CatalogSource,
+    MeasuresError,
+    angular_distance,
+    angular_offsets,
+    apply_offsets,
+    offset_position,
+    read_pixel,
+)
 
 __all__ = [
     "MAX_EXPRESSION_LENGTH",
@@ -57,6 +74,12 @@ __all__ = [
     "DisplaySettings",
     "PixelValues",
     "convert_pixel_value",
+    "CoordinateInput",
+    "CoordinateTarget",
+    "ProperMotion",
+    "CoordinateRepresentation",
+    "CoordinatesOutput",
+    "calculate_coordinates",
 ]
 
 #: Limiti delle espressioni (D18-5, decisa il 2026-10-12), configurabili per chiamata.
@@ -808,3 +831,177 @@ def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, bla
         f"BSCALE = {scale!r}, BLANK = {blank!r}", value=values, unit=unit, scale=None,
         library=f"numpy {np.__version__}; astropy {astropy.__version__} (astropy.io.fits, modulo 11)",
         notes=tuple(notes), command=CalculatorCommand("convert_pixel_value", arguments + (("display", display),)))
+
+
+# --------------------------------------------------------------------------
+# P5 — calcolatrice delle coordinate (moduli 10 e 17, D10-8: nessun calcolo riscritto qui)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CoordinateInput:
+    """Coordinate scritte: numeri in gradi o testo sessagesimale; per il testo della longitudine si dichiara
+    ``lon_sexagesimal`` (``"hours"`` per h:m:s, ``"degrees"`` per d:m:s); la latitudine sessagesimale è in gradi."""
+
+    lon: object
+    lat: object
+    frame: str
+    lon_sexagesimal: str | None = None
+    equinox: object = None
+    obstime: object = None
+    epoch: object = None  # epoca delle posizioni, se nota (mai assunta)
+
+
+@dataclass(frozen=True)
+class CoordinateTarget:
+    """Sistema richiesto in uscita, con equinozio e ``obstime`` se il sistema li prevede (modulo 10)."""
+
+    frame: str
+    equinox: object = None
+    obstime: object = None
+
+
+@dataclass(frozen=True)
+class ProperMotion:
+    """Moto proprio per ``propagate_position`` del modulo 10 (coordinate scritte)."""
+
+    pm_ra_cosdec: u.Quantity
+    pm_dec: u.Quantity
+    parallax: u.Quantity | None = None
+    radial_velocity: u.Quantity | None = None
+    proper_motion_only: bool = False
+
+
+@dataclass(frozen=True)
+class CoordinateRepresentation:
+    """Una posizione in un sistema: decimale e sessagesimale, con frame ed epoca dichiarati."""
+
+    position: SkyFrame
+    lon_deg: np.float64
+    lat_deg: np.float64
+    lon_sexagesimal: str
+    lat_sexagesimal: str
+    lon_in_hours: bool
+
+    @property
+    def text(self) -> str:
+        epoch = "non nota" if self.position.epoch is None else self.position.epoch.jyear_str
+        unit = "h:m:s" if self.lon_in_hours else "d:m:s"
+        return (f"{self.position.frame_name}: {self.lon_deg!r}° {self.lat_deg!r}° = {self.lon_sexagesimal} ({unit}) "
+                f"{self.lat_sexagesimal} (d:m:s); epoca delle posizioni {epoch}")
+
+
+@dataclass(frozen=True)
+class CoordinatesOutput:
+    """Risultato della calcolatrice delle coordinate."""
+
+    base: SkyFrame  # posizione dopo propagazione e offset, nel suo frame
+    representations: tuple[CoordinateRepresentation, ...]
+    offsets_to: measures.AngularOffsets | None = None
+
+
+def _point_from_input(value: CoordinateInput) -> tuple[SkyFrame, str]:
+    def angle(component, what: str, hours: bool) -> u.Quantity:
+        if isinstance(component, str):
+            return parse_sexagesimal(component, hours=hours)[0]
+        if isinstance(component, u.Quantity):
+            return component
+        if isinstance(component, bool) or not isinstance(component, (int, float, np.integer, np.floating)):
+            raise TypeError(f"{what}: numero in gradi, Quantity angolare o testo sessagesimale")
+        return np.float64(component) * u.deg
+
+    if isinstance(value.lon, str) and value.lon_sexagesimal not in ("hours", "degrees"):
+        raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"longitudine {value.lon!r}: dichiarare "
+                              "lon_sexagesimal='hours' (h:m:s) o 'degrees' (d:m:s)")
+    lon = angle(value.lon, "lon", value.lon_sexagesimal == "hours")
+    lat = angle(value.lat, "lat", False)
+    point = SkyFrame.from_lonlat(lon, lat, value.frame, equinox=value.equinox, obstime=value.obstime,
+                                 epoch=value.epoch)
+    return point, f"coordinate scritte {value.lon!r}, {value.lat!r} in {value.frame}"
+
+
+def _representation(point: SkyFrame) -> CoordinateRepresentation:
+    in_hours = "ra" in point.coord.frame.representation_component_names
+    lon, lat = point.coord.spherical.lon, point.coord.spherical.lat
+    lon_text = lon.to_string(unit=u.hourangle, sep=":", precision=5, pad=True) if in_hours \
+        else lon.to_string(unit=u.deg, sep=":", precision=4, pad=True)
+    lat_text = lat.to_string(unit=u.deg, sep=":", precision=4, pad=True, alwayssign=True)
+    return CoordinateRepresentation(position=point, lon_deg=np.float64(lon.deg), lat_deg=np.float64(lat.deg),
+                                    lon_sexagesimal=lon_text, lat_sexagesimal=lat_text, lon_in_hours=in_hours)
+
+
+@_registered
+def calculate_coordinates(position, targets, *, epoch=None, motion=None, offsets=None, direction=None,
+                          to_point=None) -> CalculatorResult:
+    """Raccoglie gli input e chiama i moduli 10 e 17; restituisce le rappresentazioni richieste.
+
+    ``position``: ``SkyFrame``/``SkyCoord``, ``CoordinateInput`` o ``CatalogSource`` (riga di catalogo, epoca e
+    moto proprio dai metadati del 13). ``targets``: sequenza di ``CoordinateTarget``. Ordine: propagazione
+    all'``epoch`` (10), offset (``offsets`` = Δα·cos δ, Δδ) o calcolo inverso (``direction`` = distanza, angolo
+    di posizione) del 17, conversione in ogni sistema richiesto (10); ``to_point``: offset verso quel punto (17).
+    """
+    notes: list[str] = []
+    try:
+        if isinstance(position, CatalogSource):
+            single, base, epoch_source = measures._source_point(position, "riga di catalogo")
+            notes.append(f"riga {int(position.row)} di {single.source}, epoca da {epoch_source}")
+            if epoch is not None:
+                target_epoch = _to_epoch(epoch, "epoch")
+                if not measures._same_epoch(base.epoch, target_epoch):
+                    base, note = measures._propagated(position, single, target_epoch, "riga di catalogo")
+                    notes.append(note + " (propagate del 13 → propagate_position del 10)")
+            if motion is not None:
+                raise TypeError("con una riga di catalogo il moto proprio viene dai suoi metadati: motion non si passa")
+        else:
+            if isinstance(position, CoordinateInput):
+                base, note = _point_from_input(position)
+                notes.append(note)
+            else:
+                base = measures._as_point(position, "position")
+            if epoch is not None:
+                if not isinstance(motion, ProperMotion):
+                    raise CalculatorError("EPOCH_REQUIRED", "propagazione: serve il moto proprio (ProperMotion); "
+                                          "nessun moto proprio nullo assunto")
+                moved = propagate_position(base, pm_ra_cosdec=motion.pm_ra_cosdec, pm_dec=motion.pm_dec,
+                                           parallax=motion.parallax, target_epoch=epoch,
+                                           radial_velocity=motion.radial_velocity,
+                                           proper_motion_only=motion.proper_motion_only)
+                base = moved.position
+                notes.append(f"propagata da {moved.source_epoch.jyear_str} a {moved.target_epoch.jyear_str} con "
+                             "propagate_position del modulo 10" + "".join(f"; {n}" for n in moved.notes))
+            elif motion is not None:
+                raise TypeError("motion senza epoch: nessuna propagazione richiesta")
+        if offsets is not None and direction is not None:
+            raise TypeError("offsets oppure direction, non entrambi")
+        if offsets is not None:
+            moved = apply_offsets(base, *offsets)
+            base = moved.position
+            notes.append("offset applicati con apply_offsets del modulo 17: " + "; ".join(moved.report.notes))
+        if direction is not None:
+            moved = offset_position(base, *direction)
+            base = moved.position
+            notes.append("calcolo inverso con offset_position del modulo 17: " + "; ".join(moved.report.notes))
+        targets = tuple(targets)
+        if not targets or not all(isinstance(t, CoordinateTarget) for t in targets):
+            raise TypeError("targets: almeno un CoordinateTarget")
+        representations = []
+        for target in targets:
+            converted = convert_coordinates(base, target.frame, equinox=target.equinox, obstime=target.obstime)
+            representations.append(_representation(converted))
+        offsets_to = angular_offsets(base, to_point) if to_point is not None else None
+    except CoordinatesWcsError as exc:
+        raise _forwarded(exc, "calcolatrice delle coordinate") from exc
+    except MeasuresError as exc:
+        raise _forwarded(exc, "calcolatrice delle coordinate") from exc
+    notes.append("conversioni con convert_coordinates del modulo 10; sessagesimale: longitudine in h:m:s nei "
+                 "sistemi equatoriali (0,00001 s), altrimenti d:m:s (0,0001″); latitudine d:m:s (0,0001″)")
+    if offsets_to is not None:
+        notes.append(f"offset verso to_point con angular_offsets del modulo 17: Δα·cos δ = {offsets_to.d_lon}, "
+                     f"Δδ = {offsets_to.d_lat}")
+    output = CoordinatesOutput(base=base, representations=tuple(representations), offsets_to=offsets_to)
+    return CalculatorResult(
+        calculator="coordinate", input=measures._describe(base), value=output, unit=u.deg, scale=None,
+        library=f"astropy {astropy.__version__} (astropy.coordinates, moduli 10 e 17)", notes=tuple(notes),
+        command=CalculatorCommand("calculate_coordinates", (
+            ("position", position), ("targets", targets), ("epoch", epoch), ("motion", motion),
+            ("offsets", offsets), ("direction", direction), ("to_point", to_point))))
