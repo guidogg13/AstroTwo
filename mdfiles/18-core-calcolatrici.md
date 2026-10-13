@@ -186,6 +186,37 @@ stesso identificatore).
    scaricamento automatico** durante la conversione (nessun accesso alla
    rete nascosto); se la conversione non si può fare → `TIME_INVALID`.
 
+**P3 — convertitore di unità (scritta il 2026-10-12/13).** Scelte minori:
+
+1. **Firma:** `convert_units(value, from_unit, to_unit, equivalency=None, *,
+   reference=None, sexagesimal=None, scale=None, target_scale=None)`.
+2. **Unità (D18-2):** prima formato FITS, poi VOUnit; il formato usato è
+   nelle note. Non valida in entrambi → `UNIT_UNKNOWN` con fino a 5 **unità
+   simili** (l'unità come la legge il formato generico di `astropy`, se la
+   riconosce, e le più vicine del registro di `astropy.units` con
+   `difflib`, purché valide in FITS o VOUnit).
+3. **Valore:** numero finito; testo = espressione della calcolatrice
+   algebrica (P1; se è una sola `skydist`, in gradi, `from_unit` deve essere
+   un angolo); **angolo sessagesimale** (`d:m:s` o `h:m:s`): `hourangle` non
+   esiste in FITS/VOUnit, quindi si dichiara `sexagesimal="degrees"` o
+   `"hours"` (mancante → `UNIT_SEXAGESIMAL_UNIT_REQUIRED`), `from_unit=None`,
+   lettura con `parse_sexagesimal` del 10; **data ISO 8601**:
+   `from_unit=None`, `to_unit` ∈ `iso`, `jd`, `mjd`, `jyear`, `byear`,
+   `scale` obbligatoria, calcolo di `convert_time` (P2), risultato con scala.
+4. **Equivalenze (D18-3)** solo con `equivalency` esplicita: `spectral`,
+   `spectral_density`, `temperature`, `parallax`, `doppler_radio`,
+   `doppler_optical`, `doppler_relativistic`; per densità spettrale e
+   Doppler il riferimento (`reference`, `Quantity`) è obbligatorio
+   (`UNIT_REFERENCE_REQUIRED`); nome sconosciuto →
+   `UNIT_EQUIVALENCY_UNKNOWN`. Senza equivalenza, unità di dimensioni
+   diverse (anche °C ↔ K) → `UNIT_INCOMPATIBLE` con le due grandezze
+   fisiche.
+5. **Magnitudini (D18-4):** un lato logaritmico (`mag`, `dex`: in `astropy`
+   si decompongono in `dex`) e l'altro no → `UNIT_ZERO_POINT_REQUIRED`;
+   `mag` ↔ `mmag` ammessa.
+6. **Non finiti:** valore in ingresso o risultato non finito (es. 0 Hz in
+   lunghezza d'onda) → `CALC_DOMAIN_ERROR`.
+
 ## 4. Cosa NON fa
 
 - Non disegna finestre né campi di input: l'interfaccia delle calcolatrici è
@@ -317,6 +348,9 @@ VOUnit per le stringhe di unità (D18-2).
 | Risultato oltre i limiti di `float64` | nessun risultato | `CALC_OVERFLOW` |
 | Espressione oltre il limite di lunghezza o complessità | rifiuto prima della valutazione | `CALC_TOO_COMPLEX` (limite: D18-5) |
 | Unità sconosciuta | elenco delle unità simili note ad `astropy.units` | `UNIT_UNKNOWN` |
+| Equivalenza non offerta | rifiuto con l'elenco di D18-3 | `UNIT_EQUIVALENCY_UNKNOWN` |
+| Densità spettrale o Doppler senza riferimento | rifiuto: il riferimento è obbligatorio | `UNIT_REFERENCE_REQUIRED` |
+| Angolo sessagesimale senza `sexagesimal` (gradi o ore) | rifiuto | `UNIT_SEXAGESIMAL_UNIT_REQUIRED` |
 | Unità non convertibili tra loro senza equivalenza | rifiuto con le due dimensioni fisiche | `UNIT_INCOMPATIBLE` |
 | Magnitudine verso flusso senza punto zero | rifiuto | `UNIT_ZERO_POINT_REQUIRED` |
 | Data non valida | rifiuto con il formato atteso | `TIME_INVALID` |
@@ -430,3 +464,4 @@ elementare.
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): divisione in 5 parti (P1 espressioni, P2 tempo, P3 unità, P4 pixel, P5 coordinate) in §3; **D18-5 decisa** (1000 caratteri, annidamento 50, configurabili, `CALC_TOO_COMPLEX`); **D18-6 decisa** (valore grezzo con `do_not_scale_image_data=True`); T18 con la riesecuzione del comando registrato finché il 24 non esiste. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P1 scritta** (`calculators.py`: `CalculatorError`, `CalculatorCommand`, `CalculatorResult`, `run_command`, `evaluate_expression`; T1–T5 e limiti di D18-5). Scelte minori di P1 in §3. Nuova **D18-7** (sessagesimali in `skydist`, Gruppo 3), che ferma solo quel pezzo. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **P2 scritta** (`convert_time`, `TimeRepresentations`; T15–T17). Scelte minori di P2 in §3. Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **P3 scritta** (`convert_units`, `EQUIVALENCIES`; T6–T9). Scelte minori di P3 in §3; nuovi casi in §10 (`UNIT_EQUIVALENCY_UNKNOWN`, `UNIT_REFERENCE_REQUIRED`, `UNIT_SEXAGESIMAL_UNIT_REQUIRED`). Stato `approvato` invariato. |

@@ -20,6 +20,7 @@ Regole applicate in tutto il modulo:
 from __future__ import annotations
 
 import ast
+import difflib
 import math
 import re
 import warnings
@@ -33,7 +34,7 @@ from astropy.time import Time
 from astropy.utils import iers
 
 from astrotwo.core.catalogs import CONSTANTS, FUNCTIONS
-from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
+from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, parse_sexagesimal
 from astrotwo.core.measures import MeasuresError, angular_distance
 
 __all__ = [
@@ -48,6 +49,8 @@ __all__ = [
     "TIME_SCALES",
     "TimeRepresentations",
     "convert_time",
+    "EQUIVALENCIES",
+    "convert_units",
 ]
 
 #: Limiti delle espressioni (D18-5, decisa il 2026-10-12), configurabili per chiamata.
@@ -457,3 +460,175 @@ def convert_time(time_value, time_format: str, scale: str | None, target_scale: 
         unit=None, scale=target, library=f"astropy {astropy.__version__} (astropy.time)", notes=tuple(notes),
         command=CalculatorCommand("convert_time", (("time_value", time_value), ("time_format", time_format),
                                                    ("scale", scale), ("target_scale", target_scale))))
+
+
+# --------------------------------------------------------------------------
+# P3 — convertitore di unità (D18-2 formati FITS/VOUnit, D18-3 equivalenze, D18-4 magnitudini)
+# --------------------------------------------------------------------------
+
+#: Equivalenze offerte solo su richiesta esplicita (D18-3): nome → (funzione di astropy, parametro richiesto).
+EQUIVALENCIES: dict[str, tuple[object, str | None]] = {
+    "spectral": (u.spectral, None),
+    "spectral_density": (u.spectral_density, "lunghezza d'onda o frequenza di riferimento"),
+    "temperature": (u.temperature, None),
+    "parallax": (u.parallax, None),
+    "doppler_radio": (u.doppler_radio, "frequenza o lunghezza d'onda a riposo"),
+    "doppler_optical": (u.doppler_optical, "frequenza o lunghezza d'onda a riposo"),
+    "doppler_relativistic": (u.doppler_relativistic, "frequenza o lunghezza d'onda a riposo"),
+}
+_SEXAGESIMAL = re.compile(r"[+-]?\d+(?::\d+){1,2}(?:\.\d*)?")
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d*)?)?)?")
+_TIME_TARGETS = ("iso", "jd", "mjd", "jyear", "byear")
+
+
+def _similar_units(text: str) -> list[str]:
+    """Unità simili note ad ``astropy.units`` e valide in FITS o VOUnit (per il messaggio di ``UNIT_UNKNOWN``)."""
+    found: list[str] = []
+    try:
+        found.append(u.Unit(text).to_string("fits"))  # nota al formato generico di astropy
+    except (ValueError, TypeError):
+        pass
+    names = list(u.get_current_unit_registry().registry)
+    lowered = {n.lower(): n for n in names}
+    for match in difflib.get_close_matches(text.lower(), list(lowered), n=10, cutoff=0.6):
+        name = lowered[match]
+        for fmt in ("fits", "vounit"):
+            try:
+                u.Unit(name, format=fmt)
+            except ValueError:
+                continue
+            found.append(name)
+            break
+    return list(dict.fromkeys(found))[:5]
+
+
+def _standard_unit(text: object, what: str) -> tuple[u.UnitBase, str]:
+    """Unità nel formato FITS o, se non lo è, VOUnit (D18-2): (unità, formato usato)."""
+    if not isinstance(text, str) or not text.strip():
+        raise CalculatorError("UNIT_UNKNOWN", f"{what} {text!r}: serve una stringa di unità FITS o VOUnit")
+    errors = []
+    for fmt in ("fits", "vounit"):
+        try:
+            return u.Unit(text.strip(), format=fmt), fmt.upper() if fmt == "fits" else "VOUnit"
+        except ValueError as exc:
+            errors.append(str(exc).split(".")[0])
+    similar = _similar_units(text.strip())
+    raise CalculatorError("UNIT_UNKNOWN", f"{what} {text!r} non valida nei formati FITS e VOUnit"
+                          + (f"; unità simili note ad astropy.units: {', '.join(similar)}" if similar else ""),
+                          similar=similar, errors=errors)
+
+
+def _is_logarithmic(unit: u.UnitBase) -> bool:
+    """Unità logaritmica (``mag``, ``dex``…): in ``astropy`` si decompone in ``dex``."""
+    return any(base == u.dex for base in unit.decompose().bases)
+
+
+def _equivalency(name: object, reference: object) -> tuple[list, str]:
+    if name not in EQUIVALENCIES:
+        raise CalculatorError("UNIT_EQUIVALENCY_UNKNOWN", f"equivalenza {name!r} non offerta; equivalenze: "
+                              f"{', '.join(EQUIVALENCIES)} (D18-3)")
+    function, parameter = EQUIVALENCIES[name]
+    if parameter is None:
+        if reference is not None:
+            raise ValueError(f"l'equivalenza {name!r} non usa reference")
+        return function(), f"equivalenza {name} (astropy.units.{function.__name__}), richiesta esplicitamente"
+    if not isinstance(reference, u.Quantity) or reference.size != 1:
+        raise CalculatorError("UNIT_REFERENCE_REQUIRED", f"equivalenza {name!r}: serve reference, {parameter}, "
+                              "con unità (obbligatoria, D18-3)")
+    try:
+        return function(reference), (f"equivalenza {name} (astropy.units.{function.__name__}) con riferimento "
+                                     f"{reference}, richiesta esplicitamente")
+    except (u.UnitsError, ValueError, TypeError) as exc:
+        raise CalculatorError("UNIT_INCOMPATIBLE", f"reference {reference}: {exc}") from exc
+
+
+def _units_command(**arguments) -> CalculatorCommand:
+    return CalculatorCommand("convert_units", tuple(arguments.items()))
+
+
+@_registered
+def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None, sexagesimal=None, scale=None,
+                  target_scale=None) -> CalculatorResult:
+    """Converte un valore tra unità con ``astropy.units`` (formati FITS e VOUnit, D18-2).
+
+    ``value``: numero, espressione della calcolatrice algebrica, angolo sessagesimale (``sexagesimal`` =
+    ``"degrees"`` o ``"hours"``, ``from_unit=None``) o data ISO 8601 (``scale`` obbligatoria,
+    ``from_unit=None``, ``to_unit`` = ``iso``/``jd``/``mjd``/``jyear``/``byear``, calcolo di ``convert_time``).
+    Equivalenze solo se richieste (D18-3); magnitudini ↔ flussi rifiutate (D18-4).
+    """
+    command = _units_command(value=value, from_unit=from_unit, to_unit=to_unit, equivalency=equivalency,
+                             reference=reference, sexagesimal=sexagesimal, scale=scale, target_scale=target_scale)
+    text = value.strip() if isinstance(value, str) else None
+    if text is not None and _ISO_DATE.fullmatch(text):
+        if from_unit is not None or equivalency is not None or sexagesimal is not None:
+            raise ValueError("una data si converte senza from_unit, equivalenza o sexagesimal")
+        if to_unit not in _TIME_TARGETS:
+            raise CalculatorError("TIME_INVALID", f"data {text!r}: to_unit {to_unit!r} non è una rappresentazione "
+                                  f"del tempo ({', '.join(_TIME_TARGETS)})")
+        timed = convert_time(text, "iso", scale, target_scale)
+        return CalculatorResult(
+            calculator="unità", input=f"{timed.input} → {to_unit}", value=getattr(timed.value, to_unit), unit=None,
+            scale=timed.scale, library=timed.library, command=command,
+            notes=("data convertita con la calcolatrice del tempo (convert_time)",) + timed.notes)
+    if scale is not None or target_scale is not None:
+        raise ValueError("scale e target_scale solo per le date")
+    notes: list[str] = []
+    library = f"astropy {astropy.__version__} (astropy.units)"
+    if text is not None and _SEXAGESIMAL.fullmatch(text):
+        if sexagesimal not in ("degrees", "hours"):
+            raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"angolo sessagesimale {text!r}: dichiarare "
+                                  "sexagesimal='degrees' (d:m:s) o 'hours' (h:m:s)")
+        if from_unit is not None:
+            raise ValueError("con un angolo sessagesimale from_unit non si passa: l'angolo è in gradi")
+        try:
+            number = np.float64(parse_sexagesimal(text, hours=sexagesimal == "hours")[0].to_value(u.deg))
+        except CoordinatesWcsError as exc:
+            raise _forwarded(exc, "angolo sessagesimale") from exc
+        source, source_format = u.deg, "angolo sessagesimale"
+        notes.append(f"{text} letto in {'ore' if sexagesimal == 'hours' else 'gradi'} con parse_sexagesimal "
+                     f"del modulo 10 (astropy Angle): {number!r} deg")
+    else:
+        if sexagesimal is not None:
+            raise ValueError("sexagesimal solo per un angolo sessagesimale scritto come d:m:s o h:m:s")
+        source, source_format = _standard_unit(from_unit, "from_unit")
+        if text is not None:
+            expression = evaluate_expression(text)
+            number = np.float64(expression.value)
+            if expression.unit == u.deg and not source.is_equivalent(u.deg):
+                raise CalculatorError("UNIT_INCOMPATIBLE", f"{text!r} dà gradi (skydist): from_unit {from_unit!r} "
+                                      "non è un angolo")
+            notes.append(f"valore dall'espressione {expression.input!r} = {number!r} (calcolatrice algebrica)")
+            library += f", {expression.library}"
+        elif isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
+            raise TypeError("value: numero, espressione, angolo sessagesimale o data ISO 8601")
+        else:
+            number = np.float64(value)
+        notes.append(f"from_unit {from_unit!r} letta nel formato {source_format}")
+    if not np.isfinite(number):
+        raise CalculatorError("CALC_DOMAIN_ERROR", f"valore {number!r} non finito")
+    target, target_format = _standard_unit(to_unit, "to_unit")
+    notes.append(f"to_unit {to_unit!r} letta nel formato {target_format}")
+    if _is_logarithmic(source) != _is_logarithmic(target):
+        raise CalculatorError("UNIT_ZERO_POINT_REQUIRED", f"{source} → {target}: magnitudine (unità logaritmica) ↔ "
+                              "flusso richiede punto zero e sistema fotometrico: conversione del modulo 20 (D18-4)")
+    equivalencies = []
+    if equivalency is not None:
+        equivalencies, note = _equivalency(equivalency, reference)
+        notes.append(note)
+    elif reference is not None:
+        raise ValueError("reference solo con un'equivalenza")
+    try:
+        with np.errstate(all="ignore"):
+            converted = (number * source).to(target, equivalencies=equivalencies)
+    except u.UnitConversionError as exc:
+        hint = "" if equivalency is not None else " (equivalenze solo su richiesta esplicita, D18-3)"
+        raise CalculatorError("UNIT_INCOMPATIBLE", f"{source} ({source.physical_type}) e {target} "
+                              f"({target.physical_type}) non convertibili{hint}",
+                              physical_types=(str(source.physical_type), str(target.physical_type))) from exc
+    result = np.float64(converted.value)
+    if not np.isfinite(result):
+        raise CalculatorError("CALC_DOMAIN_ERROR", f"{number!r} {source} → {target}: risultato non finito ({result!r})")
+    written = text if text is not None else repr(number)
+    given = f"sessagesimale in {sexagesimal}" if source_format == "angolo sessagesimale" else str(source)
+    return CalculatorResult(calculator="unità", input=f"{written} [{given}] → {target}", value=result, unit=target,
+                            scale=None, library=library, notes=tuple(notes), command=command)

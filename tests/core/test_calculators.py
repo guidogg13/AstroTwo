@@ -7,13 +7,14 @@ altri programmi (regola d'oro n. 8).
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Angle, SkyCoord
 from astropy.time import Time
 
 from astrotwo.core.calculators import (
     CalculatorError,
     CalculatorResult,
     convert_time,
+    convert_units,
     evaluate_expression,
     run_command,
 )
@@ -190,3 +191,83 @@ def test_t17_scale_required():
     result = convert_time("2024-02-29T18:00:00", "iso", "utc", "tdb")
     again = run_command(result.command)
     assert again.value == result.value and again.scale == result.scale == "tdb"
+
+
+# =============================================================================
+# P3 — convertitore di unità (T6–T9)
+
+
+def test_t6_length():
+    result = convert_units(0.1, "m", "nm")
+    assert result.value == (0.1 * u.m).to_value(u.nm) and abs(result.value - 1e8) < 1e-6
+    assert result.unit == u.nm and any("FITS" in n for n in result.notes)
+    # Composte, prefissi, espressioni e formato VOUnit dichiarato.
+    assert convert_units(1, "km/s", "m/s").value == 1000.0
+    assert convert_units(2, "mHz", "Hz").value == (2 * u.mHz).to_value(u.Hz)
+    assert convert_units("3*8", "km", "m").value == 24000.0
+    vo = convert_units(1, "au", "km")
+    assert vo.value == (1 * u.AU).to_value(u.km) and any("VOUnit" in n for n in vo.notes)
+
+
+def test_t7_julian_years():
+    result = convert_units(2, "a", "d")
+    assert result.value == 730.5 and result.value == (2 * u.yr).to_value(u.d)
+    assert convert_units(2, "yr", "d").value == 730.5
+
+
+def test_t8_sexagesimal_angle():
+    result = convert_units("10:10:08", None, "deg", sexagesimal="degrees")
+    expected = Angle("10:10:08", unit=u.deg).deg
+    assert result.value == expected and abs(result.value - (10 + 10 / 60 + 8 / 3600)) < 1e-13
+    hours = convert_units("12:30:15.5", None, "deg", sexagesimal="hours")
+    assert hours.value == Angle("12:30:15.5", unit=u.hourangle).deg
+    assert convert_units("-05:06:07", None, "arcsec", sexagesimal="degrees").value \
+        == Angle("-05:06:07", unit=u.deg).to_value(u.arcsec)
+    with pytest.raises(CalculatorError) as exc:
+        convert_units("10:10:08", None, "deg")
+    assert exc.value.code == "UNIT_SEXAGESIMAL_UNIT_REQUIRED"
+    # Date con la calcolatrice del tempo (P2).
+    date = convert_units("2024-02-29T18:00:00", None, "mjd", scale="utc")
+    assert date.value == 60369.75 and date.scale == "utc" and date.unit is None
+    with pytest.raises(CalculatorError) as exc:
+        convert_units("2024-02-29T18:00:00", None, "mjd")
+    assert exc.value.code == "TIME_SCALE_REQUIRED"
+
+
+def test_t9_incompatible_and_equivalencies():
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(1, "m", "s")
+    assert exc.value.code == "UNIT_INCOMPATIBLE" and exc.value.details["physical_types"] == ("length", "time")
+    # Equivalenze solo su richiesta esplicita (D18-3).
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(500, "nm", "Hz")
+    assert exc.value.code == "UNIT_INCOMPATIBLE"
+    spectral = convert_units(500, "nm", "Hz", "spectral")
+    assert spectral.value == (500 * u.nm).to_value(u.Hz, equivalencies=u.spectral())
+    assert any("spectral" in n for n in spectral.notes)
+    assert convert_units(0, "Celsius", "K", "temperature").value == 273.15
+    assert convert_units(10, "mas", "pc", "parallax").value == (10 * u.mas).to_value(u.pc, equivalencies=u.parallax())
+    rest = 115.27 * u.GHz
+    assert convert_units(1, "km/s", "GHz", "doppler_radio", reference=rest).value \
+        == (1 * u.km / u.s).to_value(u.GHz, equivalencies=u.doppler_radio(rest))
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(1, "km/s", "GHz", "doppler_optical")
+    assert exc.value.code == "UNIT_REFERENCE_REQUIRED"
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(1, "m", "nm", "magic")
+    assert exc.value.code == "UNIT_EQUIVALENCY_UNKNOWN"
+    # Unità fuori dai formati standard, con le unità simili.
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(1, "arcsecs", "deg")
+    assert exc.value.code == "UNIT_UNKNOWN" and "arcsec" in exc.value.details["similar"]
+    # Magnitudini ↔ flussi: solo nel modulo 20 (D18-4); mag ↔ mmag ammessa.
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(10, "mag", "Jy")
+    assert exc.value.code == "UNIT_ZERO_POINT_REQUIRED"
+    assert convert_units(1, "mag", "mmag").value == 1000.0
+    # Nessun valore non finito.
+    with pytest.raises(CalculatorError) as exc:
+        convert_units(0, "Hz", "m", "spectral")
+    assert exc.value.code == "CALC_DOMAIN_ERROR"
+    result = convert_units(500, "nm", "Hz", "spectral")
+    assert same_result(run_command(result.command), result)
