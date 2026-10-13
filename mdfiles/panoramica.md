@@ -14,6 +14,25 @@ funzioni avanzate, consegnata come file `.dmg`.
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
 tutti gli altri livelli restano in **FASE: SPECIFICHE**.
 
+- **Stato al 2026-10-13 (decisioni del proprietario del 2026-10-13):
+  livello 1 scritto per intero, moduli 04 e 10–19.** Chiusi D17-8
+  (`distance_to`: distanza angolare minima, cerchi con Astropy, poligoni
+  con la distanza punto–arco) e D18-7 (sessagesimali di `skydist` con
+  l'unità scritta nel testo, due punti solo con `colon_units`); creato
+  **`THIRD_PARTY_LICENSES`** nella radice (generato da
+  `scripts/third_party_licenses.py`, controllato da un test; regola: ogni
+  nuova dipendenza va aggiunta lì, `01` §6); lettura del valore grezzo di
+  un pixel spostata nell'11 (`read_raw_pixel`); UT1 con le tabelle IERS
+  incluse in astropy, `IERS_RANGE` fuori copertura, aggiornamento solo su
+  richiesta (`update_iers_table`, rete del 14); **modulo 19 scritto in
+  P0–P4** (`planetary_data.py`; nuove dipendenze `spiceypy` 8.3.0 MIT e
+  `pds4-tools` 1.4 BSD-3, kernel `pck00011.tpc` della NAIF incluso senza
+  modifiche; tabella dei nomi dei corpi D12-6, applicata anche al 12).
+  Pezzi fermi: nel 12 H10 SkyView; nel 17 `distance_to` per ellisse,
+  freccia, testo e tracciato aperto (D17-9); nel 19 PDS3 (D19-8) e PDS da
+  URL (D19-9). Test: **485 di default, 505 con la rete**, tutti superati.
+  Decisioni aperte: **15** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 11).
+
 - Stato del codice al 2026-10-10: base del progetto (`pyproject.toml` con
   Python 3.12 e `uv`, `uv.lock`, `src/astrotwo/` con i sotto-pacchetti,
   `tests/` specchiato). **Completi secondo la definizione di "fatto" di
@@ -318,9 +337,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `14-core-protocolli-vo.md` | Protocolli Virtual Observatory (VOTable, TAP, cone search, SAMP, SSA) | 1 | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi | 1 | approvato |
 | `16-core-moc.md` | Mappe di copertura MOC | 1 | approvato |
-| `17-core-misure.md` | Misure angolari e strumenti di misura | 1 | approvato |
-| `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo — origine: H4 di `03-parita-aladin.md`; dipende da `10` (coordinate/tempo) e `11` (pixel) | 1 | approvato |
-| `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari — origine: H21 di `03-parita-aladin.md` (AM1 accettata il 2026-10-08) | 1 | approvato |
+| `17-core-misure.md` | Misure angolari e strumenti di misura (codice completo il 2026-10-13; fermo `distance_to` per ellisse, freccia, testo, tracciato aperto, D17-9) | 1 | approvato |
+| `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo — origine: H4 di `03-parita-aladin.md`; dipende da `10` (coordinate/tempo) e `11` (pixel); codice completo il 2026-10-13 | 1 | approvato |
+| `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari — origine: H21 di `03-parita-aladin.md` (AM1 accettata il 2026-10-08); codice P0–P4 scritto il 2026-10-13 (`planetary_data.py`), fermi PDS3 (D19-8) e PDS da URL (D19-9) | 1 | approvato |
 | **Analisi (livello 2)** | | | |
 | `20-analisi-fotometria.md` | Fotometria | 2 | non esiste |
 | `21-analisi-spettroscopia.md` | Spettroscopia | 2 | non esiste |
@@ -444,6 +463,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D16-6, D16-7, scelte del 16, decisioni del 12, A10 (HiPS) | 16: nessuna 2.1 tra WD/PR IVOA (resta rifiutata); complemento degli ST-MOC come differenza da "tutto il tempo × tutto il cielo" con `mocpy`; operazione forzata → corpo misto con l'elenco, nuova forzatura per ogni operazione successiva; MOC planetari in FITS 2.0 con la parola chiave `A2BODY` (estensione dichiarata); scelte minori 1–4 e 7–13 confermate. 12: 5 parti; MocServer con la rete del 14; `healpy` tolto e mappe/griglie solo nel 16; H10 SkyView solo con URL SIA verificato sul sito NASA (non trovato: rinviato); campo a cerchio; tile corrotto = una nuova richiesta; `build_hips` con ordine obbligatorio, tile 512, FITS sempre, PNG/JPEG con parametri espliciti; A10 per gli HiPS: 512 MB in memoria, un tile alla volta, limite delle operazioni 4 GB. 14: rimando a `02` §8 per le ripetizioni dei test di rete | 2026-10-12 | decisioni del proprietario | file di origine: `12`, `14`, `16` (restano `approvato`); aperte D12-6, D12-7, D12-8 |
 | D12-6, D12-7, D12-8, H10, scelte del 12 e del 16, D17-5, divisione del 17 | 12: nomi dei corpi normalizzati con una tabella del 19 (scritta con il 19); `hips_frame = ecliptic` non supportato finché non verificato su un HiPS reale; nessun Allsky da `build_hips` per ora; H10 SkyView rinviato finché NASA non documenta l'URL SIA (motivo scritto); `reproject` in `build_hips` approvato, metodo `flux` non disponibile; disposizione dei pixel nel tile approvata (verificata su 2MASS K e con `reproject`, da ricontrollare in AP1); scelte minori di 12 e 16 confermate. 14 e 16: codifica del MocServer (ISO-8859-1 dichiarata) scritta nelle specifiche. 01: riga A10 con l'esito per gli HiPS. 17: 4 parti; profili bilineari con `scipy.ndimage.map_coordinates`, passo obbligatorio senza default; P3 solo dopo la verifica delle librerie | 2026-10-12 | decisioni del proprietario | file di origine: `01`, `12`, `14`, `16`, `17` (restano `approvato`); aperta D17-7 |
 | D17-7, D18-5, D18-6, scelte minori del 17, divisione del 18 | 17: `spherical-geometry` per poligoni e tracciati chiusi; ellisse sferica (somma delle distanze dai fuochi ≤ 2a, definizione sempre dichiarata, area integrata con precisione dichiarata); cerchio esatto con Astropy; freccia e testo `OPERATION_UNSUPPORTED`, tracciato libero come poligono solo se chiuso; scelte minori di P1/P2/P4 confermate, con `read_pixel` senza `BUNIT` → unità "non dichiarata" e `auto_distance` che dichiara l'uso dell'epoca della prima sorgente. 18: 5 parti; espressioni al massimo 1000 caratteri e annidamento 50, configurabili; valore grezzo con `do_not_scale_image_data=True`; T18 con la riesecuzione del comando registrato finché il 24 non esiste | 2026-10-12 | decisioni del proprietario | file di origine: `17`, `18` (restano `approvato`); aperte D17-8, D18-7 |
+| D17-8, D18-7, licenze, lettura FITS nell'11, scelte di 17 e 18, UT1, modulo 19 (divisione, tabella dei nomi D12-6) | 17: `distance_to` = distanza angolare minima (0 se sovrapposte o punto dentro), cerchi esatti con Astropy, poligoni con la distanza punto–arco di cerchio massimo; 18: sessagesimali con l'unità scritta nel testo, due punti ambigui (errore) salvo parametro esplicito, nessuna convenzione sulla posizione; `THIRD_PARTY_LICENSES` con tutte le dipendenze e l'avviso QD/LBNL; valore grezzo letto dall'11 (`read_raw_pixel`); scelte minori di 17 e 18 confermate; UT1 con le tabelle IERS di astropy senza rete, `IERS_RANGE`, aggiornamento solo su richiesta con la rete del 14, tabella dichiarata; 19 in P0–P4; nomi canonici IAU inglesi con iniziale maiuscola via `spiceypy.bodn2c`, solo corpi con HiPS e nel PCK, applicata al 12 | 2026-10-13 | decisioni del proprietario | file di origine: `01`, `11`, `12`, `17`, `18`, `19` (restano `approvato`) |
 | D13-20, D15-8, D15-9, regola dei commit, decisioni del 16 | SIMBAD: sistema dall'`utype` MANGO, dichiarato; join per campo: corpo controllato solo se entrambe le tabelle lo hanno; CDS XMatch sempre `selection=all`, `best` in locale; commit solo se tutti i test di default passano (rete a parte, dichiarata); 16: `healpy` escluso, `order_max` obbligatorio, MOC da catalogo una cella per sorgente, da immagine dai pixel validi con il WCS dell'11, poligoni su cerchi massimi, MOC spaziali sempre ICRS, probabilità con somma = 1 entro 10⁻⁶, MocServer con la rete del 14, `build_moc` solo funzione, mappe NESTED ICRS; C4 e H12 progressivi rinviati al 12 | 2026-10-11 | decisioni del proprietario | file di origine: `02`, `13`, `15`, `16` (restano `approvato`) |
 
 ## 6. Decisioni aperte
@@ -481,8 +501,11 @@ D12-6 (nomi dei corpi), D12-7 (`hips_frame = ecliptic`), D12-8 (Allsky):
 18 aperte; poi, sempre il 2026-10-12, decise D12-6, D12-7, D12-8 e D17-5 e
 aperta dal 17 D17-7 (geometria sferica delle forme): 15 aperte. Il
 2026-10-13 (decisioni del 2026-10-12), decise D17-7, D18-5, D18-6 e aperte
-D17-8 (`distance_to`) e D18-7 (sessagesimali in `skydist`): **14 aperte**
-(Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10).
+D17-8 (`distance_to`) e D18-7 (sessagesimali in `skydist`): 14 aperte. Il
+2026-10-13 (decisioni del 2026-10-13), decise D17-8 e D18-7 e aperte D17-9
+(`distance_to` per ellisse, freccia, testo, tracciato aperto), D19-8 (PDS3
+con `pdr`) e D19-9 (PDS da URL): **15 aperte** (Gruppo 1 = 0, Gruppo 2 = 4,
+Gruppo 3 = 11).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -510,14 +533,14 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** completi `04`, 10, 11, 12
-   (fermo solo H10 SkyView, rinviato), 13, 14, 15, 16, **17** (fermo solo
-   `distance_to`, D17-8) e **18** (fermi solo i sessagesimali in `skydist`,
-   D18-7). **Proposta di divisione del modulo 19 (dati planetari), con la
-   tabella dei nomi dei corpi di D12-6, consegnata al proprietario, in
-   attesa del suo ok.** Aperte
-   anche: D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca il
-   60).
+0. **Subito (fase codice del livello 1):** livello 1 scritto per intero
+   (04, 10–19). Da decidere per chiudere i pezzi fermi: **D17-9**
+   (`distance_to` per le altre forme), **D19-8** (PDS3 con `pdr`), **D19-9**
+   (PDS da URL); H10 SkyView resta rinviato. Da confermare: le **scelte
+   minori del 19** (§3 del 19). Aperte anche: D10-9 (con il 41), D11-8 (con
+   20 e 41), A11 licenza (blocca il 60; elenco delle licenze in
+   `THIRD_PARTY_LICENSES`). Poi: decidere A8 e chiedere la fase codice dei
+   livelli successivi dopo le loro specifiche.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -587,3 +610,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12 e modulo 12** (12, 14, 16 modificati e restano `approvato`): 14 §12 rimanda a `02` §8; 16 — D16-6 (verifica sul sito IVOA: nessuna 2.1, resta rifiutata), D16-7 (complemento ST-MOC con `mocpy`; normalizzazione dei risultati ST), corpo misto e MOC planetari in FITS con `A2BODY`, scelte minori confermate; **modulo 12 scritto in 5 parti** (`hips.py`; verifiche dello standard HiPS 1.0 e del WD 2.0 per `hips_body`, DSS2 a colori `CDS/P/DSS2/color`, `cone_search_lonlat`, disposizione dei pixel nel tile con due verifiche indipendenti, funzioni HiPS di `reproject`); H10 SkyView rinviato (URL SIA non documentato da NASA); A10 decisa per gli HiPS; nuove aperte D12-6, D12-7, D12-8; MocServer letto in ISO-8859-1 come dichiarato (correzione anche in 14 e 16). Test 405 di default, 422 con la rete. Aperte 18. Prossimo: modulo 17 (proposta di divisione in attesa del proprietario). |
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12 e modulo 17** (01, 12, 14, 16, 17 modificati e restano `approvato`): codifica del MocServer scritta in 14 e 16; A10 per gli HiPS nella riga di `01`; 12 — H10 rinviato con il motivo, D12-6/D12-7/D12-8 decise, `reproject` e disposizione dei pixel approvati, scelte minori confermate (anche del 16); 17 — divisione in 4 parti, D17-5 decisa, **P1, P2, P4 scritte** (`measures.py`, T1–T6, T8–T15), **P3 ferma** con la nuova D17-7 (proposta `spherical-geometry`, BSD-3-Clause). §2, §5, §6, §7 aggiornati; aperte 15 (Gruppo 2 = 4, Gruppo 3 = 11); test 427 di default, 444 con la rete. |
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-12, modulo 17 completato e modulo 18 scritto** (17 e 18 modificati e restano `approvato`): 17 — scelte minori B, **P3 scritta** con D17-7 (forme sferiche, `spherical-geometry` 1.4.0 nuova dipendenza, licenza verificata; T7, T16–T19), nuova D17-8 (`distance_to`); 18 — divisione in 5 parti, D18-5 e D18-6 decise, **P1–P5 scritte** (`calculators.py`, T1–T18), nuova D18-7 (sessagesimali in `skydist`). §2, §5, §6, §7 aggiornati; aperte 14 (Gruppo 2 = 4, Gruppo 3 = 10); test 457 di default, 474 con la rete. Prossimo: modulo 19 (proposta di divisione in attesa del proprietario). |
+| 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13: pezzi fermi di 17 e 18, licenze, modulo 19** (01, 11, 12, 17, 18, 19 modificati e restano `approvato`): D17-8 e D18-7 decise e scritte; `THIRD_PARTY_LICENSES` creato (con script e test), registrato nel 01 e annotato per A11 e il 60; `read_raw_pixel` nell'11; UT1 con le tabelle IERS incluse (`IERS_RANGE`, `update_iers_table`); scelte minori di 17 e 18 confermate; **modulo 19 scritto in P0–P4** (spiceypy, pds4-tools, kernel NAIF `pck00011.tpc`; tabella dei nomi D12-6 applicata al 12). Nuove aperte D17-9, D19-8, D19-9 (Gruppo 3). Test 485 di default, 505 con la rete. Aperte 15. Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42. |
