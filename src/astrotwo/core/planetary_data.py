@@ -57,6 +57,8 @@ __all__ = [
     "list_planetary_collections",
     "EPNTAP_CONVENTIONS",
     "query_epntap",
+    "PdsImage",
+    "load_pds_image",
 ]
 
 #: Valore del campo ``body`` per i dati astronomici (D19-3): non è un corpo.
@@ -252,6 +254,10 @@ def _bodies_of(layer) -> tuple[tuple[str, ...] | None, str]:
     from astrotwo.core.moc import MIXED_BODY, Moc
 
     name = _describe_layer(layer)
+    if isinstance(layer, PdsImage):
+        if layer.body is None:
+            return None, f"{name}: corpo non dichiarato o non normalizzabile nell'etichetta PDS"
+        return (layer.body,), f"{name}: corpo dall'etichetta PDS"
     if isinstance(layer, FitsImage):
         if layer.wcs is not None:
             return (CELESTIAL,), f"{name}: WCS celeste"
@@ -593,5 +599,99 @@ def query_epntap(service: str, adql: str, **tap_options):
     body, notes, conventions = _epntap_body(result.table.table)
     table = result.table
     table.table.meta.update({"body": body, **{f"planetary_{k}": v for k, v in conventions.items()}})
-    table = dataclasses.replace(table, body=body, warnings=table.warnings + tuple(notes))
+    previous = table.warnings if body is None else tuple(w for w in table.warnings if w[0] != "BODY_UNKNOWN")
+    table = dataclasses.replace(table, body=body, warnings=previous + tuple(notes))
     return dataclasses.replace(result, table=table)
+
+
+# --------------------------------------------------------------------------
+# P4 — immagini PDS4 (pds4_tools); PDS3 fermo su D19-8, URL fermi su D19-9
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PdsImage:
+    """Immagine PDS4: valori fisici in ``float64`` (NaN per le costanti speciali), etichetta e corpo."""
+
+    data: np.ndarray
+    origin: str  # percorso dell'etichetta
+    structure: str
+    structure_type: str
+    body: str | None
+    targets: tuple[str, ...]
+    element_array: dict
+    special_pixels: int
+    warnings: tuple[tuple[str, str], ...]
+    library: str
+    command: PlanetaryCommand
+    read_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+def _pds_unreadable(source: str, reason: str) -> PlanetaryDataError:
+    return PlanetaryDataError("PDS_UNREADABLE", f"{source}: {reason}; nessuna immagine aperta")
+
+
+@_registered
+def load_pds_image(source: str, *, structure: str | None = None) -> PdsImage:
+    """Legge un'immagine PDS4 (etichetta ``.xml`` locale) con ``pds4_tools`` (D19-2, D19-2b; §3 scelta 9)."""
+    import pds4_tools
+
+    _require_enabled("load_pds_image")
+    if not isinstance(source, str) or not source.strip():
+        raise TypeError("source: serve il percorso dell'etichetta PDS4")
+    if re.match(r"^[a-z][a-z0-9+.-]*://", source, re.IGNORECASE):
+        raise _pds_unreadable(source, "lettura da URL ferma su D19-9 (da decidere): scaricare il prodotto e "
+                              "aprire l'etichetta locale")
+    path = Path(source)
+    try:
+        head = path.read_bytes()[:200]
+    except OSError as exc:
+        raise _pds_unreadable(source, f"file non leggibile ({exc})") from exc
+    if b"PDS_VERSION_ID" in head:
+        raise _pds_unreadable(source, "etichetta PDS3: lettura PDS3 ferma su D19-8 (libreria pdr da decidere)")
+    try:
+        products = pds4_tools.read(str(path), quiet=True, lazy_load=True)
+        arrays = [st for st in products.structures if st.is_array() and st.type.startswith("Array_2D")]
+    except Exception as exc:  # pds4_tools segnala con eccezioni generiche
+        raise _pds_unreadable(source, f"etichetta PDS4 non leggibile con pds4_tools ({exc})") from exc
+    names = [st.id for st in arrays]
+    if not arrays:
+        raise _pds_unreadable(source, "nessuna immagine Array_2D nel prodotto")
+    if structure is None:
+        if len(arrays) > 1:
+            raise PlanetaryDataError("PDS_STRUCTURE_CHOICE_REQUIRED", f"{source}: più immagini nel prodotto "
+                                     f"({', '.join(names)}): indicare structure", structures=tuple(names))
+        chosen = arrays[0]
+    elif structure in names:
+        chosen = arrays[names.index(structure)]
+    else:
+        raise PlanetaryDataError("PDS_STRUCTURE_CHOICE_REQUIRED", f"{source}: struttura {structure!r} assente; "
+                                 f"immagini: {', '.join(names)}", structures=tuple(names))
+    try:
+        masked = np.ma.masked_array(chosen.as_masked().data)
+    except Exception as exc:
+        raise _pds_unreadable(source, f"dati di {chosen.id!r} non leggibili ({exc})") from exc
+    data = np.ma.filled(masked.astype(np.float64), np.nan)
+    special = int(np.ma.count_masked(masked))
+    targets = tuple(e.text.strip() for e in products.label.findall(".//Target_Identification/name")
+                    if e.text and e.text.strip())
+    notes: list[tuple[str, str]] = []
+    body = None
+    if len(set(targets)) == 1:
+        try:
+            body = normalize_body_name(targets[0])
+            notes.append(("BODY_NORMALIZED", f"Target_Identification {targets[0]!r} → {body!r} (D12-6)"))
+        except PlanetaryDataError as exc:
+            notes.append(("BODY_UNKNOWN", f"Target_Identification {targets[0]!r}: {exc.message}; l'immagine si "
+                          "apre da sola"))
+    else:
+        notes.append(("BODY_UNKNOWN", f"Target_Identification {list(targets)}: serve un solo corpo; l'immagine "
+                      "si apre da sola"))
+    if special:
+        notes.append(("PDS_SPECIAL_CONSTANTS", f"{special} pixel con costanti speciali dell'etichetta → NaN"))
+    element = dict(chosen.meta_data.get("Element_Array", {}))
+    library = f"pds4_tools {importlib.metadata.version('pds4-tools')}"
+    command = PlanetaryCommand("load_pds_image", (("source", source), ("structure", structure)))
+    return PdsImage(data=data, origin=str(path), structure=chosen.id, structure_type=chosen.type, body=body,
+                    targets=targets, element_array=element, special_pixels=special, warnings=tuple(notes),
+                    library=library, command=command)

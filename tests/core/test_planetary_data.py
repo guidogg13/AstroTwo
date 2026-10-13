@@ -286,7 +286,7 @@ def test_t7_epntap_simulated_service(service, cache, planetary_on):
     assert result.table.body == "Mars" and result.table.rows == 2
     meta = result.table.table.meta
     assert meta["planetary_latitude_type"] == "planetocentric" and meta["planetary_longitude_direction"] == "east"
-    assert "PLANETARY_CONVENTIONS" in dict(result.table.warnings)
+    assert "PLANETARY_CONVENTIONS" in dict(result.table.warnings) and "BODY_UNKNOWN" not in dict(result.table.warnings)
     current["name"] = "mixed"
     mixed = query_epntap(service.url + "/epn", adql.replace("'Mars'", "'Moon'"), cache=cache)
     assert mixed.table.body is None and "BODY_UNKNOWN" in dict(mixed.table.warnings)
@@ -299,3 +299,123 @@ def test_t7_epntap_simulated_service(service, cache, planetary_on):
     with pytest.raises(PlanetaryDataError) as exc:  # servizio non raggiungibile: errore del 14
         query_epntap("http://127.0.0.1:9/epn", adql, cache=cache)
     assert exc.value.code == "NET_TIMEOUT"
+
+
+# =============================================================================
+# P4 — immagini PDS4 (T8). pds4_tools non fornisce file di esempio: prodotto PDS4 scritto nel test.
+
+from astrotwo.core.planetary_data import PdsImage, load_pds_image  # noqa: E402
+
+_ARRAY = """    <Array_2D_Image>
+      <name>{name}</name>
+      <offset unit="byte">{offset}</offset>
+      <axes>2</axes>
+      <axis_index_order>Last Index Fastest</axis_index_order>
+      <Element_Array><data_type>SignedMSB2</data_type><scaling_factor>0.5</scaling_factor><value_offset>10</value_offset></Element_Array>
+      <Axis_Array><axis_name>Line</axis_name><elements>3</elements><sequence_number>1</sequence_number></Axis_Array>
+      <Axis_Array><axis_name>Sample</axis_name><elements>4</elements><sequence_number>2</sequence_number></Axis_Array>
+      <Special_Constants><missing_constant>-20</missing_constant></Special_Constants>
+    </Array_2D_Image>
+"""
+
+
+def pds4_product(folder, targets=("Mars",), images=1):
+    raw = (np.arange(12).reshape(3, 4) * 7 - 20).astype(">i2")
+    (folder / "img.dat").write_bytes(raw.tobytes() * images)
+    arrays = "".join(_ARRAY.format(name=f"IMAGE{k + 1}" if images > 1 else "IMAGE", offset=k * raw.nbytes)
+                     for k in range(images))
+    target_xml = "".join(f"<Target_Identification><name>{t}</name><type>Planet</type></Target_Identification>"
+                         for t in targets)
+    label = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Product_Observational xmlns="http://pds.nasa.gov/pds4/pds/v1">
+  <Identification_Area>
+    <logical_identifier>urn:nasa:pds:astrotwo_test:data:img</logical_identifier>
+    <version_id>1.0</version_id><title>Test</title>
+    <information_model_version>1.20.0.0</information_model_version>
+    <product_class>Product_Observational</product_class>
+  </Identification_Area>
+  <Observation_Area>
+    <Time_Coordinates><start_date_time>2020-01-01T00:00:00Z</start_date_time><stop_date_time>2020-01-01T00:00:00Z</stop_date_time></Time_Coordinates>
+    {target_xml}
+  </Observation_Area>
+  <File_Area_Observational>
+    <File><file_name>img.dat</file_name></File>
+{arrays}  </File_Area_Observational>
+</Product_Observational>
+"""
+    path = folder / "img.xml"
+    path.write_text(label)
+    return path, raw
+
+
+def test_t8_pds4_image(tmp_path, planetary_on):
+    import pds4_tools
+
+    path, raw = pds4_product(tmp_path)
+    image = load_pds_image(str(path))
+    reference = pds4_tools.read(str(path), quiet=True)[0].as_masked().data  # stessa libreria (D19-2b)
+    expected = np.where(raw == -20, np.nan, 10.0 + 0.5 * raw.astype(np.float64))  # valori scritti nel test
+    assert image.data.dtype == np.float64 and image.data.shape == (3, 4)
+    assert np.array_equal(image.data, np.ma.filled(reference.astype(np.float64), np.nan), equal_nan=True)
+    assert np.array_equal(image.data, expected, equal_nan=True)
+    assert image.body == "Mars" and image.special_pixels == 1 and image.structure == "IMAGE"
+    assert image.element_array["scaling_factor"] == 0.5 and "pds4_tools" in image.library
+    assert body_of(image) == "Mars" and check_overlay([image, hips("mars", "mars", "marte")]).body == "Mars"
+    assert np.array_equal(run_command(image.command).data, image.data, equal_nan=True)
+
+
+def test_t8_pds4_errors(tmp_path, planetary_on):
+    (tmp_path / "two").mkdir()
+    two, _ = pds4_product(tmp_path / "two", images=2)
+    with pytest.raises(PlanetaryDataError) as exc:
+        load_pds_image(str(two))
+    assert exc.value.code == "PDS_STRUCTURE_CHOICE_REQUIRED" and exc.value.details["structures"] == ("IMAGE1",
+                                                                                                    "IMAGE2")
+    assert load_pds_image(str(two), structure="IMAGE2").structure == "IMAGE2"
+    (tmp_path / "multi").mkdir()
+    multi, _ = pds4_product(tmp_path / "multi", targets=("Mars", "Phobos"))
+    unknown = load_pds_image(str(multi))
+    assert unknown.body is None and "BODY_UNKNOWN" in dict(unknown.warnings)
+    with pytest.raises(PlanetaryDataError) as exc:
+        body_of(unknown)
+    assert exc.value.code == "BODY_UNKNOWN"
+    pds3 = tmp_path / "old.lbl"
+    pds3.write_text("PDS_VERSION_ID = PDS3\nEND\n")
+    garbage = tmp_path / "bad.xml"
+    garbage.write_text("non è xml")
+    for source, hint in ((str(pds3), "D19-8"), ("https://example.invalid/img.xml", "D19-9"),
+                         (str(garbage), "pds4_tools"), (str(tmp_path / "missing.xml"), "non leggibile")):
+        with pytest.raises(PlanetaryDataError) as exc:
+            load_pds_image(source)
+        assert exc.value.code == "PDS_UNREADABLE" and hint in exc.value.message
+    pd.set_planetary_data_enabled(False)
+    with pytest.raises(PlanetaryDataError) as exc:
+        load_pds_image(str(two))
+    assert exc.value.code == "PLANETARY_DATA_DISABLED"
+
+
+
+# =============================================================================
+# Test di rete (alla fine del modulo 19)
+
+
+@pytest.mark.network
+def test_body_table_against_mocserver(cache):
+    index = CollectionIndex(cache=cache).sync()
+    found = {}
+    for record in index.records:
+        frames, bodies = record.get("hips_frame"), record.get("hips_body")
+        if isinstance(frames, str) and frames == bodies:
+            try:
+                found[normalize_body_name(frames)] = record["ID"]
+            except PlanetaryDataError:
+                pass
+    assert set(BODY_TABLE.values()) <= set(found)  # ogni corpo della tabella ha un HiPS (D19-6)
+
+
+@pytest.mark.network
+def test_t7_epntap_real_service(cache, planetary_on):
+    adql = "SELECT TOP 5 target_name, spatial_frame_type, c1min, c2min FROM mars_craters.epn_core"
+    result = query_epntap("http://voparis-tap-planeto.obspm.fr/tap", adql, cache=cache)
+    assert result.table.rows == 5 and result.table.body == "Mars"
+    assert result.table.table.meta["planetary_longitude_direction"] == "east"

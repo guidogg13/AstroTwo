@@ -344,6 +344,7 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | Latitudine fuori [−90, +90] | rifiuto prima del calcolo | `COORD_OUT_OF_RANGE` |
 | File PDS illeggibile o versione non supportata | nessuna immagine aperta | `PDS_UNREADABLE` |
 | Servizio EPN-TAP non raggiungibile | errore del modulo 14 inoltrato | `NET_TIMEOUT` |
+| Pixel con costanti speciali PDS4 (`missing_constant`…) | NaN nell'immagine, conteggio nel risultato | avviso `PDS_SPECIAL_CONSTANTS` |
 | Opzione dei dati planetari disattivata | rifiuto con indicazione della preferenza | `PLANETARY_DATA_DISABLED` |
 | Più immagini nel prodotto PDS4 senza `structure` | rifiuto con l'elenco delle strutture | `PDS_STRUCTURE_CHOICE_REQUIRED` |
 | Kernel PCK incluso alterato (SHA-256 diverso) | nessuna costante dei corpi | `PLANETARY_KERNEL_INVALID` |
@@ -376,7 +377,7 @@ corpo di un dato né calcola coordinate.
 | T5 | Latitudine planetocentrica ↔ planetografica | convertire una latitudine scelta dal tester per un corpo con schiacciamento noto | coincide con la libreria di D19-1 e con la definizione sulla superficie dello sferoide tan φg = tan φc / (1 − f)² entro 1e-9 gradi; ritorno entro 1e-9 gradi | ricalcolo con la libreria e con la definizione |
 | T6 | Convenzione mancante | posizione senza tipo di latitudine | `PLANETARY_CONVENTION_REQUIRED` | test di unità |
 | T7 | EPN-TAP e collezioni | query EPN-TAP su un servizio simulato (un corpo; corpi diversi; `celestial`; tabella non `epn_core`; servizio irraggiungibile); collezioni per corpo da una copia locale del 12 | tabella con corpo e convenzioni dichiarati (planetocentrica, est, 0–360°); corpi diversi → `body = None` con `BODY_UNKNOWN`; `ADQL_INVALID` senza rete; `NET_TIMEOUT` del 14; collezioni raggruppate per nome canonico, corpi ignoti a parte | servizio simulato (test di rete separati per i servizi reali) |
-| T8 | Immagine PDS | leggere un file PDS4 di esempio (`pds4_tools` non ne fornisce: prodotto generato nel test, §3 P0 punto 3) | immagine aperta con metadati del corpo; valori uguali a quelli letti dalla libreria | confronto con la libreria di D19-2 |
+| T8 | Immagine PDS | leggere un file PDS4 di esempio (`pds4_tools` non ne fornisce: prodotto generato nel test, §3 P0 punto 3); più immagini, più corpi, PDS3, URL, file illeggibile | immagine aperta con metadati del corpo; valori uguali a quelli letti dalla libreria | confronto con la libreria di D19-2 |
 | T9 | Opzione disattivata | chiamare una funzione del modulo con l'opzione disattivata | `PLANETARY_DATA_DISABLED`; funzioni celesti non toccate | test di unità |
 | T11 | Sovrapposizione forzata | ripetere T1 con l'opzione di forzatura | sovrapposizione eseguita, avviso `BODY_MISMATCH_FORCED` nel risultato e nel comando registrato | test di unità |
 | T10 | Riproducibilità | rieseguire il comando registrato di T4 e T5 | risultati identici | confronto con il registro del modulo 24 |
@@ -456,3 +457,4 @@ corpo di un dato né calcola coordinate.
 | 2026-10-13 | Claude Code | **P1 scritta** (`planetary_data.py`: `PlanetaryDataError`, `BODY_TABLE`, `normalize_body_name`, `PlanetaryBody.from_name`, `body_of`, `check_overlay`/`OverlayCheck`, opzione D19-5, `PlanetaryCommand`/`run_command`; T1, T2, T3, T9, T11, tabella dei nomi e integrità del kernel); tabella applicata al 12. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P2 scritta** (`PlanetaryPosition`, `convert_planetary_coordinates`, `LATITUDE_TYPES`, `LONGITUDE_DIRECTIONS`; T4, T5, T6, T10): latitudine con `spiceypy` sullo sferoide del kernel, verso della longitudine per definizione confrontato con `recpgr` per Marte. T5 precisato con il controllo sulla definizione. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P3 scritta** (`list_planetary_collections`/`PlanetaryCollections` con la copia locale delle collezioni del 12, `query_epntap` con `tap_query` del 14 ed `EPNTAP_CONVENTIONS`; T7 esteso alle collezioni). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **P4 scritta — modulo 19 completo tranne PDS3 (D19-8) e PDS da URL (D19-9)** (`load_pds_image`/`PdsImage`, `body_of` sulle immagini PDS; T8). Test di rete: tabella dei corpi contro il MocServer (ogni corpo ha un HiPS), EPN-TAP reale (`mars_craters.epn_core` del servizio TAP di VO-Paris). Stato `approvato` invariato. |
