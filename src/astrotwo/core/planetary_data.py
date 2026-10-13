@@ -19,8 +19,10 @@ Regole applicate in tutto il modulo:
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib.metadata
+import re
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -51,6 +53,10 @@ __all__ = [
     "LONGITUDE_DIRECTIONS",
     "PlanetaryPosition",
     "convert_planetary_coordinates",
+    "PlanetaryCollections",
+    "list_planetary_collections",
+    "EPNTAP_CONVENTIONS",
+    "query_epntap",
 ]
 
 #: Valore del campo ``body`` per i dati astronomici (D19-3): non è un corpo.
@@ -460,3 +466,132 @@ def convert_planetary_coordinates(position: PlanetaryPosition, latitude_type: st
     return PlanetaryPosition(lon=lon * u.deg, lat=lat * u.deg, body=body, latitude_type=latitude_type,
                              longitude_direction=longitude_direction, notes=tuple(notes), library=_library(),
                              command=command)
+
+
+# --------------------------------------------------------------------------
+# P3 — collezioni per corpo (12) ed EPN-TAP (14)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PlanetaryCollections:
+    """Collezioni HiPS per corpo (ramo "Sistema solare"), dalla copia locale delle collezioni del 12."""
+
+    by_body: dict[str, tuple[dict, ...]]
+    unknown: tuple[tuple[dict, str], ...]  # collezioni non celesti con corpo ignoto, con il motivo
+    origin: str | None
+    synced_at: datetime | None
+    command: PlanetaryCommand
+
+    def for_body(self, body: str) -> tuple[dict, ...]:
+        return self.by_body.get(normalize_body_name(body), ())
+
+
+def _record_values(record: dict, key: str) -> tuple[str, ...]:
+    value = record.get(key)
+    if value is None:
+        return ()
+    return tuple(str(v) for v in value) if isinstance(value, list) else (str(value),)
+
+
+def list_planetary_collections(body: str | None = None, *, index) -> PlanetaryCollections:
+    """Collezioni planetarie per corpo dalla copia locale ``CollectionIndex`` del 12 (nessuna rete qui).
+
+    Il corpo di ogni collezione segue la regola del 12 (``hips_frame`` non celeste e ``hips_body`` uguale, poi la
+    tabella dei nomi, D12-6); con ``body`` si restituiscono solo le collezioni di quel corpo.
+    """
+    from astrotwo.core.hips import CollectionIndex, _body
+
+    _require_enabled("list_planetary_collections")
+    if not isinstance(index, CollectionIndex):
+        raise TypeError("index: serve un CollectionIndex del modulo 12")
+    if index.synced_at is None:
+        raise ValueError("index: copia locale delle collezioni non sincronizzata (CollectionIndex.sync del 12)")
+    wanted = None if body is None else normalize_body_name(body)
+    by_body: dict[str, list[dict]] = {}
+    unknown = []
+    for record in index.records:
+        frames = _record_values(record, "hips_frame")
+        if len(frames) != 1:
+            continue
+        props = {key: _record_values(record, key) for key in ("hips_body",)}
+        found, notes = _body(props, frames[0], record["ID"])
+        if found == CELESTIAL:
+            continue
+        if found is None:
+            unknown.append((record, "; ".join(text for code, text in notes if code != "HIPS_BODY_DRAFT")))
+            continue
+        if wanted is None or found == wanted:
+            by_body.setdefault(found, []).append(record)
+    command = PlanetaryCommand("list_planetary_collections", (("body", body),))
+    return PlanetaryCollections({k: tuple(v) for k, v in sorted(by_body.items())},
+                                tuple(unknown) if wanted is None else (), index.origin, index.synced_at, command)
+
+
+#: Convenzioni delle coordinate EPN-TAP 2.0 con ``spatial_frame_type = body`` (Raccomandazione IVOA 2022-08-22).
+EPNTAP_CONVENTIONS = {"latitude_type": "planetocentric", "longitude_direction": "east",
+                      "longitude_range": "0-360 deg", "source": "EPN-TAP 2.0 (IVOA REC 2022-08-22), "
+                      "spatial_frame_type = body: c1 longitudine, c2 latitudine"}
+_EPN_CORE = re.compile(r"\bepn_core\b", re.IGNORECASE)
+
+
+def _column(table, name: str):
+    lower = {c.lower(): c for c in table.colnames}
+    return table[lower[name]] if name in lower else None
+
+
+def _distinct(column) -> set[str]:
+    values = set()
+    for value in column:
+        if value is np.ma.masked or value is None:
+            values.add("")
+            continue
+        text = value.decode() if isinstance(value, bytes) else str(value)
+        values.add(text.strip())
+    return values
+
+
+def _epntap_body(table) -> tuple[str | None, list[tuple[str, str]], dict]:
+    """Corpo della tabella EPN-TAP (§3 scelta 8) e convenzioni da dichiarare nei metadati."""
+    frames_col, targets_col = _column(table, "spatial_frame_type"), _column(table, "target_name")
+    if frames_col is None or targets_col is None:
+        missing = [n for n, c in (("spatial_frame_type", frames_col), ("target_name", targets_col)) if c is None]
+        return None, [("BODY_UNKNOWN", f"colonne EPN-TAP mancanti nel risultato ({', '.join(missing)}): corpo non "
+                       "ricavabile, la tabella si apre da sola")], {}
+    frames = {f.lower() for f in _distinct(frames_col)}
+    if frames == {"celestial"}:
+        return CELESTIAL, [], {}
+    targets = _distinct(targets_col)
+    if frames != {"body"} or len(targets) != 1 or "" in targets or any("#" in t for t in targets):
+        return None, [("BODY_UNKNOWN", f"spatial_frame_type {sorted(frames)} e target_name {sorted(targets)[:5]}: "
+                       "un solo corpo con spatial_frame_type = body è richiesto per dichiararlo; la tabella si apre "
+                       "da sola")], {}
+    target = targets.pop()
+    try:
+        canonical = normalize_body_name(target)
+    except PlanetaryDataError as exc:
+        return None, [("BODY_UNKNOWN", f"target_name {target!r}: {exc.message}; la tabella si apre da sola")], {}
+    return canonical, [("BODY_NORMALIZED", f"target_name {target!r} → {canonical!r} (tabella dei nomi, D12-6)"),
+                       ("PLANETARY_CONVENTIONS", "coordinate planetocentriche, longitudine positiva verso est in "
+                        "0–360° (EPN-TAP 2.0, spatial_frame_type = body)")], dict(EPNTAP_CONVENTIONS)
+
+
+def query_epntap(service: str, adql: str, **tap_options):
+    """Query ADQL su una tabella ``epn_core`` eseguita con ``tap_query`` del 14; tabella con corpo e convenzioni.
+
+    ``tap_options``: le opzioni di ``tap_query`` (``max_rows``, ``mode``, ``cache``, ``refresh``, ``timeouts``…).
+    """
+    from astrotwo.core import vo_protocols as vo
+
+    _require_enabled("query_epntap")
+    if not isinstance(adql, str) or not _EPN_CORE.search(adql):
+        raise PlanetaryDataError("ADQL_INVALID", "query EPN-TAP: serve una tabella <schema>.epn_core (EPN-TAP 2.0)")
+    try:
+        result = vo.tap_query(service, adql, **tap_options)
+    except vo.VoProtocolsError as exc:
+        raise PlanetaryDataError(exc.code, f"EPN-TAP {service}: {exc.message}") from exc
+    body, notes, conventions = _epntap_body(result.table.table)
+    table = result.table
+    table.table.meta.update({"body": body, **{f"planetary_{k}": v for k, v in conventions.items()}})
+    table = dataclasses.replace(table, body=body, warnings=table.warnings + tuple(notes))
+    return dataclasses.replace(result, table=table)

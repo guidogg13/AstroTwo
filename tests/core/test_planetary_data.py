@@ -224,3 +224,78 @@ def test_t10_rerun_recorded_commands(planetary_on):
         again = run_command(result.command)
         assert again.lon == result.lon and again.lat == result.lat and again.body == result.body
         assert (again.latitude_type, again.longitude_direction) == (result.latitude_type, result.longitude_direction)
+
+
+# =============================================================================
+# P3 — collezioni per corpo (12) ed EPN-TAP (14) (T7)
+
+import io  # noqa: E402
+
+from astropy.io.votable import from_table  # noqa: E402
+
+from astrotwo.core.hips import CollectionIndex  # noqa: E402
+from astrotwo.core.planetary_data import list_planetary_collections, query_epntap  # noqa: E402
+
+
+def local_index(records):
+    index = CollectionIndex()
+    index.records, index.origin, index.synced_at = tuple(records), "test", datetime.now(UTC)
+    return index
+
+
+def test_list_planetary_collections(planetary_on):
+    records = [
+        {"ID": "T/P/DSS", "hips_frame": "equatorial"},
+        {"ID": "T/P/Mars/a", "hips_frame": "mars", "hips_body": "mars"},
+        {"ID": "T/P/Mars/b", "hips_frame": "mars", "hips_body": "mars"},
+        {"ID": "T/P/Mars/c", "hips_frame": "mars"},  # senza hips_body: corpo ignoto
+        {"ID": "T/P/Moon/a", "hips_frame": "moon", "hips_body": "moon"},
+        {"ID": "T/P/Mars/pano", "hips_frame": "mars-stimson", "hips_body": "mars-stimson"},
+    ]
+    all_bodies = list_planetary_collections(index=local_index(records))
+    assert list(all_bodies.by_body) == ["Mars", "Moon"]
+    assert [r["ID"] for r in all_bodies.for_body("mars")] == ["T/P/Mars/a", "T/P/Mars/b"]
+    assert {r["ID"] for r, _ in all_bodies.unknown} == {"T/P/Mars/c", "T/P/Mars/pano"}
+    only_moon = list_planetary_collections("Moon", index=local_index(records))
+    assert list(only_moon.by_body) == ["Moon"] and only_moon.unknown == ()
+    pd.set_planetary_data_enabled(False)
+    with pytest.raises(PlanetaryDataError) as exc:
+        list_planetary_collections(index=local_index(records))
+    assert exc.value.code == "PLANETARY_DATA_DISABLED"
+
+
+def epn_votable(targets, frames):
+    n = len(targets)
+    table = Table({"granule_uid": [f"g{k}" for k in range(n)], "target_name": targets,
+                   "spatial_frame_type": frames, "c1min": np.linspace(10, 20, n), "c1max": np.linspace(11, 21, n),
+                   "c2min": np.full(n, -5.0), "c2max": np.full(n, 5.0)})
+    buffer = io.BytesIO()
+    from_table(table).to_xml(buffer)
+    return buffer.getvalue()
+
+
+def test_t7_epntap_simulated_service(service, cache, planetary_on):
+    payloads = {"mars": epn_votable(["Mars", "Mars"], ["body", "body"]),
+                "mixed": epn_votable(["Mars", "Moon"], ["body", "body"]),
+                "sky": epn_votable(["Ceres", "Ceres"], ["celestial", "celestial"])}
+    current = {"name": "mars"}
+    service.routes["/epn/sync"] = lambda request: (200, "application/x-votable+xml", payloads[current["name"]])
+    adql = "SELECT * FROM mars_data.epn_core WHERE target_name = 'Mars'"
+    result = query_epntap(service.url + "/epn", adql, cache=cache)
+    assert service.requests[-1]["params"]["QUERY"] == adql
+    assert result.table.body == "Mars" and result.table.rows == 2
+    meta = result.table.table.meta
+    assert meta["planetary_latitude_type"] == "planetocentric" and meta["planetary_longitude_direction"] == "east"
+    assert "PLANETARY_CONVENTIONS" in dict(result.table.warnings)
+    current["name"] = "mixed"
+    mixed = query_epntap(service.url + "/epn", adql.replace("'Mars'", "'Moon'"), cache=cache)
+    assert mixed.table.body is None and "BODY_UNKNOWN" in dict(mixed.table.warnings)
+    current["name"] = "sky"
+    sky = query_epntap(service.url + "/epn", adql.replace("'Mars'", "'Ceres'"), cache=cache)
+    assert sky.table.body == CELESTIAL
+    with pytest.raises(PlanetaryDataError) as exc:  # non è una tabella EPN-TAP: nessuna rete
+        query_epntap(service.url + "/epn", "SELECT * FROM stelle", cache=cache)
+    assert exc.value.code == "ADQL_INVALID"
+    with pytest.raises(PlanetaryDataError) as exc:  # servizio non raggiungibile: errore del 14
+        query_epntap("http://127.0.0.1:9/epn", adql, cache=cache)
+    assert exc.value.code == "NET_TIMEOUT"
