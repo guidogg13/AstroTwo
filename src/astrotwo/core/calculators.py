@@ -173,8 +173,32 @@ def _syntax(message: str, position: int, expression: str) -> CalculatorError:
                            position=position)
 
 
-def _prepare(expression: str) -> tuple[str, str, list[int]]:
-    """Toglie un ``=`` iniziale o finale e traduce ``^`` in ``**``, con la mappa delle posizioni."""
+#: Angoli sessagesimali in ``skydist`` (D18-7, decisa il 2026-10-13): unità scritta nel testo — ore ``h``/``m``/``s``,
+#: gradi ``d``/``m``/``s`` o ``°``/``′``/``″`` (anche ``'`` e ``"``) — oppure due punti con l'unità dichiarata
+#: nel parametro ``colon_units``. Il segno è il ``-`` unario dell'espressione.
+_NUM = r"\d+(?:\.\d*)?"
+_SEXAGESIMAL_TOKEN = re.compile(
+    rf"(?<![\w.])(?:"
+    rf"(?P<hours>{_NUM}h(?:{_NUM}m(?:{_NUM}s)?)?)"
+    rf"|(?P<degrees>{_NUM}d(?:{_NUM}m(?:{_NUM}s)?)?|{_NUM}°(?:{_NUM}[′'](?:{_NUM}[″\"])?)?)"
+    rf"|(?P<colon>{_NUM}:{_NUM}(?::{_NUM})?)"
+    rf")(?![\w.:])")
+_SEXAGESIMAL_PREFIX = "_sx_"
+SEXAGESIMAL_UNITS = ("hours", "degrees")
+
+
+@dataclass(frozen=True)
+class _Sexagesimal:
+    text: str
+    position: int  # carattere nell'espressione originale
+    hours: bool | None  # None: due punti, unità dal parametro colon_units
+
+
+def _prepare(expression: str) -> tuple[str, str, list[int], dict[str, _Sexagesimal]]:
+    """Toglie un ``=`` iniziale o finale, traduce ``^`` in ``**`` e i sessagesimali in nomi segnaposto.
+
+    Restituisce anche la mappa delle posizioni (carattere tradotto → carattere originale).
+    """
     start = len(expression) - len(expression.lstrip())
     text = expression.strip()
     if text.startswith("="):
@@ -183,21 +207,72 @@ def _prepare(expression: str) -> tuple[str, str, list[int]]:
         text = text[:-1]
     lead = len(text) - len(text.lstrip())
     text, start = text.strip(), start + lead
-    out, origin = [], []
-    for i, char in enumerate(text):
-        position = start + i
+    if _SEXAGESIMAL_PREFIX in text:
+        position = start + text.index(_SEXAGESIMAL_PREFIX)
+        raise CalculatorError("CALC_UNKNOWN_FUNCTION", f"nome non previsto (carattere {position}): {expression!r}; "
+                              "nulla è stato eseguito", position=position)
+    tokens = {m.start(): m for m in _SEXAGESIMAL_TOKEN.finditer(text)}
+    out, origin, sexagesimal = [], [], {}
+    i = 0
+    while i < len(text):
+        char, position = text[i], start + i
+        if i in tokens:
+            match = tokens[i]
+            name = f"{_SEXAGESIMAL_PREFIX}{len(sexagesimal)}"
+            kind = match.lastgroup
+            sexagesimal[name] = _Sexagesimal(match.group(), position, None if kind == "colon" else kind == "hours")
+            out.append(name)
+            origin.extend([position] * len(name))
+            i = match.end()
+            continue
         if text.startswith("**", i):
             raise _syntax("'**' non previsto: la potenza si scrive '^'", position, expression)
         if char == ":":
-            raise _syntax("angoli sessagesimali nelle espressioni non ancora previsti (D18-7, da decidere): "
-                          "usare gradi decimali", position, expression)
+            raise _syntax("':' fuori da un angolo sessagesimale", position, expression)
         if char == "^":
             out.append("**")
             origin.extend([position, position])
         else:
             out.append(char)
             origin.append(position)
-    return text, "".join(out), origin
+        i += 1
+    return text, "".join(out), origin, sexagesimal
+
+
+def _sexagesimal_degrees(sexagesimal: dict[str, _Sexagesimal], colon_units, expression: str
+                         ) -> tuple[dict[str, np.float64], list[str]]:
+    """Valori in gradi con ``parse_sexagesimal`` del 10 (D18-7) e le note che dicono l'unità usata."""
+    colons = [name for name, item in sexagesimal.items() if item.hours is None]
+    if colon_units is None:
+        declared = [None] * len(colons)
+    elif isinstance(colon_units, str):
+        declared = [colon_units] * len(colons)
+    elif isinstance(colon_units, (tuple, list)):
+        declared = list(colon_units)
+    else:
+        raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"colon_units {colon_units!r}: serve 'hours', "
+                              "'degrees' o una sequenza con una voce per ogni valore con i due punti")
+    if colons and colon_units is None:
+        first = sexagesimal[colons[0]]
+        raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"{first.text!r} (carattere {first.position}): "
+                              "con i due punti l'unità è ambigua (D18-7); scriverla nel testo (h/m/s per le ore, "
+                              "d/m/s o °′″ per i gradi) o dichiararla con colon_units='hours' o 'degrees'",
+                              position=first.position)
+    if len(declared) != len(colons) or any(d not in SEXAGESIMAL_UNITS for d in declared):
+        raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"colon_units {colon_units!r}: serve 'hours' o "
+                              f"'degrees' per ognuno dei {len(colons)} valori con i due punti ({expression!r})")
+    units = dict(zip(colons, declared))
+    values, notes = {}, []
+    for name, item in sexagesimal.items():
+        hours = item.hours if item.hours is not None else units[name] == "hours"
+        try:
+            values[name] = np.float64(parse_sexagesimal(item.text, hours=hours)[0].to_value(u.deg))
+        except CoordinatesWcsError as exc:
+            raise _forwarded(exc, f"{item.text!r} (carattere {item.position})") from exc
+        source = "unità scritta nel testo" if item.hours is not None else "due punti, unità dichiarata in colon_units"
+        notes.append(f"{item.text!r} = {float(values[name])!r}° ({'ore' if hours else 'gradi'}, {source}; "
+                     "parse_sexagesimal del modulo 10)")
+    return values, notes
 
 
 def _nesting_depth(text: str) -> int:
@@ -214,8 +289,10 @@ def _nesting_depth(text: str) -> int:
 class _Evaluator:
     """Validazione completa dell'albero (elenco chiuso) e valutazione in ``float64``."""
 
-    def __init__(self, expression: str, text: str, origin: list[int]) -> None:
+    def __init__(self, expression: str, text: str, origin: list[int],
+                 sexagesimal: dict[str, np.float64] | None = None) -> None:
         self.expression, self.text, self.origin = expression, text, origin
+        self.sexagesimal = sexagesimal or {}
         self.used: set[str] = set()
 
     def position(self, node) -> int:
@@ -245,6 +322,9 @@ class _Evaluator:
         if isinstance(node, ast.Name):
             if node.id in CONSTANTS:
                 return None
+            if node.id in self.sexagesimal:
+                raise _syntax("angoli sessagesimali ammessi solo come argomenti di skydist (D18-7)",
+                              self.position(node), self.expression)
             raise self.unknown(f"nome {node.id!r} non previsto (costanti: {', '.join(CONSTANTS)})", node)
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in FUNCTIONS:
@@ -258,11 +338,19 @@ class _Evaluator:
                 raise _syntax(f"{node.func.id}: servono {expected} argomenti, non {len(node.args)}",
                               self.position(node), self.expression)
             for arg in node.args:
+                if node.func.id == "skydist" and self._sexagesimal_argument(arg):
+                    continue
                 self.check(arg)
             return None
         if isinstance(node, (ast.Attribute, ast.Subscript)):
             raise self.unknown(f"costrutto {type(node).__name__} non previsto", node)
         raise _syntax(f"costrutto {type(node).__name__} non previsto", self.position(node), self.expression)
+
+    def _sexagesimal_argument(self, node) -> bool:
+        """Un argomento di ``skydist`` che è un angolo sessagesimale, eventualmente con segno."""
+        while isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            node = node.operand
+        return isinstance(node, ast.Name) and node.id in self.sexagesimal
 
     def fail_fp(self, kind: str, what: str, node, *, operator: bool) -> CalculatorError:
         position = self.position(node)
@@ -298,6 +386,8 @@ class _Evaluator:
                 raise self.fail_fp("overflow", "numero scritto", node, operator=False)
             return value
         if isinstance(node, ast.Name):
+            if node.id in self.sexagesimal:
+                return self.sexagesimal[node.id]
             return np.float64(CONSTANTS[node.id])
         if isinstance(node, ast.UnaryOp):
             value = self.evaluate(node.operand)
@@ -337,10 +427,12 @@ def _limit(value: object, what: str) -> int:
 
 @_registered
 def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LENGTH,
-                        max_depth: int = MAX_NESTING_DEPTH) -> CalculatorResult:
+                        max_depth: int = MAX_NESTING_DEPTH, colon_units=None) -> CalculatorResult:
     """Valuta un'espressione della calcolatrice algebrica (grammatica chiusa, nessun ``eval``).
 
-    Risultato adimensionale, o in gradi se l'espressione è una sola chiamata di ``skydist``.
+    Risultato adimensionale, o in gradi se l'espressione è una sola chiamata di ``skydist``. Negli argomenti di
+    ``skydist`` gli angoli sessagesimali hanno l'unità scritta nel testo (D18-7); con i due punti l'unità si
+    dichiara in ``colon_units`` (``"hours"``/``"degrees"`` per tutti, o una voce per valore nell'ordine del testo).
     """
     max_length, max_depth = _limit(max_length, "max_length"), _limit(max_depth, "max_depth")
     if not isinstance(expression, str):
@@ -348,7 +440,7 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
     if len(expression) > max_length:
         raise CalculatorError("CALC_TOO_COMPLEX", f"espressione di {len(expression)} caratteri, oltre il limite "
                               f"di {max_length} (D18-5)", length=len(expression), limit=max_length)
-    text, translated, origin = _prepare(expression)
+    text, translated, origin, sexagesimal = _prepare(expression)
     if not text:
         raise _syntax("espressione vuota", 0, expression)
     depth = _nesting_depth(text)
@@ -363,9 +455,10 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
         raise _syntax("sintassi non valida", position, expression) from exc
     except (RecursionError, MemoryError) as exc:
         raise CalculatorError("CALC_TOO_COMPLEX", "espressione troppo complessa per l'analizzatore") from exc
-    evaluator = _Evaluator(expression, translated, origin)
+    evaluator = _Evaluator(expression, translated, origin, dict.fromkeys(sexagesimal, np.float64(0.0)))
     try:
         evaluator.check(tree)
+        evaluator.sexagesimal, sexagesimal_notes = _sexagesimal_degrees(sexagesimal, colon_units, expression)
         value = evaluator.evaluate(tree)
     except RecursionError as exc:
         raise CalculatorError("CALC_TOO_COMPLEX", "espressione troppo complessa (catena di operazioni troppo "
@@ -376,8 +469,10 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
              "in gradi"]
     if "skydist" in evaluator.used:
         library += f", astropy {astropy.__version__} (angular_distance del modulo 17)"
-        notes.append("skydist: distanza sferica con angular_distance del modulo 17, coordinate in gradi; le due "
+        notes.append("skydist: distanza sferica con angular_distance del modulo 17, coordinate in gradi decimali "
+                     "o sessagesimali convertite in gradi (D18-7); le due "
                      "coppie si intendono nello stesso sistema (la distanza non dipende da quale)")
+    notes.extend(sexagesimal_notes)
     if "round" in evaluator.used:
         notes.append("round: numpy.round, metà al pari (D13-15)")
     angles = sorted(evaluator.used.intersection(_ANGLE_FUNCTIONS))
@@ -386,8 +481,9 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
     return CalculatorResult(
         calculator="algebrica", input=text, value=value, unit=u.deg if single_skydist else u.dimensionless_unscaled,
         scale=None, library=library, notes=tuple(notes),
-        command=CalculatorCommand("evaluate_expression", (("expression", text), ("max_length", max_length),
-                                                          ("max_depth", max_depth))))
+        command=CalculatorCommand("evaluate_expression", (
+            ("expression", text), ("max_length", max_length), ("max_depth", max_depth),
+            ("colon_units", tuple(colon_units) if isinstance(colon_units, list) else colon_units))))
 
 
 # --------------------------------------------------------------------------

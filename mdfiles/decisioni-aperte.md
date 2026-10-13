@@ -245,8 +245,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
-| `D17-8` | Significato di `distance_to` (distanza tra forme) del 17: distanza minima tra i bordi, tra i centri o da un punto? **Raccomandazione:** distanza minima angolare (0 se sovrapposte o se il punto è dentro), esatta per i cerchi con Astropy, per i poligoni con la distanza punto–arco di cerchio massimo; tra i centri c'è già `angular_distance`. Ferma solo `distance_to` | `17-core-misure.md` §13 |
-| `D18-7` | Sessagesimali in `skydist` della calcolatrice: ascensione retta in ore o in gradi? **Raccomandazione:** 1° e 3° argomento in ore, 2° e 4° in gradi (uso RA/Dec), letti con `parse_sexagesimal` del 10 prima dell'analisi; decimali in gradi. Ferma solo i sessagesimali di `skydist` | `18-core-calcolatrici.md` §13 |
+| `D17-9` | `distance_to` del 17 per ellisse, freccia, testo e tracciato aperto (D17-8 copre solo cerchi e poligoni)? **Raccomandazione:** ellisse con la distanza dal bordo trovata numericamente con precisione dichiarata (0 se dentro); freccia e tracciato aperto come archi di cerchio massimo (stessa distanza punto–arco); testo escluso (`OPERATION_UNSUPPORTED`). Ferma solo `distance_to` per quelle forme | `17-core-misure.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
 ## 6. Note

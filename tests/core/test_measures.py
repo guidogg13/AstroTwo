@@ -492,6 +492,100 @@ def test_t19_arrow_text_tag():
 
 
 # =============================================================================
+# P3 — distance_to (D17-8, decisa il 2026-10-13)
+
+
+def _brute_distance_to_polygon(lon, lat, vertices):
+    """Minimo ricalcolato con Astropy: punti degli archi con offset_by, raffinato con scipy (indipendente)."""
+    from scipy.optimize import minimize_scalar
+
+    point = SkyCoord(lon * u.deg, lat * u.deg)
+    best = np.inf
+    for (l1, b1), (l2, b2) in zip(vertices, vertices[1:] + vertices[:1]):
+        start = SkyCoord(l1 * u.deg, b1 * u.deg)
+        end = SkyCoord(l2 * u.deg, b2 * u.deg)
+        pa, length = start.position_angle(end), start.separation(end)
+
+        def along(f):
+            lo, la = offset_by(start.ra, start.dec, pa, f * length)
+            return angular_separation(lo, la, point.ra, point.dec).to_value(u.deg)
+
+        grid = np.linspace(0.0, 1.0, 2001)
+        values = along(grid)
+        i = int(np.argmin(values))
+        refined = minimize_scalar(along, bounds=(grid[max(i - 1, 0)], grid[min(i + 1, 2000)]), method="bounded",
+                                  options={"xatol": 1e-14})
+        best = min(best, values.min(), float(refined.fun))
+    return best
+
+
+def test_t20_distance_circles_exact():
+    c1, c2 = Circle(icrs(10, 20), 1 * u.deg), Circle(icrs(14, 22), 0.5 * u.deg)
+    separation = SkyCoord(10 * u.deg, 20 * u.deg).separation(SkyCoord(14 * u.deg, 22 * u.deg)).to_value(u.deg)
+    result = c1.distance_to(c2)
+    assert result.value.unit == u.deg
+    assert result.value.value == pytest.approx(separation - 1.5, abs=1e-12)
+    assert "D17-8" in result.report.description
+    assert c2.distance_to(c1).value.value == pytest.approx(separation - 1.5, abs=1e-12)
+    assert c1.distance_to(Circle(icrs(11, 20), 1 * u.deg)).value.value == 0.0  # sovrapposti
+    assert c1.distance_to(icrs(10.2, 20.1)).value.value == 0.0  # punto dentro
+    far = icrs(30, -10)
+    expected = SkyCoord(10 * u.deg, 20 * u.deg).separation(SkyCoord(30 * u.deg, -10 * u.deg)).to_value(u.deg) - 1
+    assert c1.distance_to(far).value.value == pytest.approx(expected, abs=1e-12)
+
+
+def test_t20_distance_polygon_point_matches_brute_force():
+    vertices = [(10, -5), (25, -3), (22, 12), (8, 6)]
+    polygon = Polygon([icrs(*v) for v in vertices])
+    for lon, lat in [(0, 0), (40, 30), (16, -20), (17, 40), (5, 5)]:
+        result = polygon.distance_to(icrs(lon, lat))
+        assert result.value.value == pytest.approx(_brute_distance_to_polygon(lon, lat, vertices), abs=1e-9)
+        assert "SphericalPolygon" in result.report.description
+    assert polygon.distance_to(icrs(15, 2)).value.value == 0.0  # punto dentro
+
+
+def test_t20_distance_between_polygons_and_circle_polygon():
+    a_vertices = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    b_vertices = [(20, 2), (30, 4), (25, 15)]
+    a, b = Polygon([icrs(*v) for v in a_vertices]), Polygon([icrs(*v) for v in b_vertices])
+    expected = min(min(_brute_distance_to_polygon(lon, lat, b_vertices) for lon, lat in a_vertices),
+                   min(_brute_distance_to_polygon(lon, lat, a_vertices) for lon, lat in b_vertices))
+    assert a.distance_to(b).value.value == pytest.approx(expected, abs=1e-9)
+    assert b.distance_to(a).value.value == pytest.approx(expected, abs=1e-9)
+    crossing = Polygon([icrs(358, 4), icrs(12, 4), icrs(12, 6), icrs(358, 6)])  # solo i lati si incrociano
+    nested = Polygon([icrs(4, 4), icrs(6, 4), icrs(6, 6)])
+    assert a.distance_to(crossing).value.value == 0.0 and a.distance_to(nested).value.value == 0.0
+    circle = Circle(icrs(40, 5), 2 * u.deg)
+    to_center = _brute_distance_to_polygon(40, 5, b_vertices)
+    assert circle.distance_to(b).value.value == pytest.approx(to_center - 2, abs=1e-9)
+    assert b.distance_to(circle).value.value == pytest.approx(to_center - 2, abs=1e-9)
+    assert Circle(icrs(5, 5), 1 * u.deg).distance_to(a).value.value == 0.0
+    closed = Freehand([icrs(*v) for v in b_vertices], closed=True)
+    assert closed.distance_to(a).value.value == pytest.approx(expected, abs=1e-9)
+
+
+def test_t20_distance_other_frame_converted():
+    gal = SkyCoord(10 * u.deg, 20 * u.deg).galactic
+    circle_gal = Circle(SkyFrame(coord=gal), 1 * u.deg)
+    polygon = Polygon([icrs(20, 18), icrs(25, 18), icrs(25, 24), icrs(20, 24)])
+    in_icrs = Circle(icrs(10, 20), 1 * u.deg).distance_to(polygon).value.value
+    result = circle_gal.distance_to(polygon)
+    assert result.value.value == pytest.approx(in_icrs, abs=1e-9)
+    assert result.report.frame == "galactic" and "convertito" in result.report.description
+
+
+def test_t20_distance_unsupported_shapes_d17_9():
+    circle = Circle(icrs(0, 0), 1 * u.deg)
+    others = (Ellipse(icrs(5, 0), 2 * u.deg, 1 * u.deg, 0 * u.deg), Arrow(icrs(1, 1), icrs(2, 2)),
+              Text(icrs(1, 1), "M1"), Freehand([icrs(5, 0), icrs(6, 1), icrs(7, 0)]))
+    for shape in others:
+        for call in (lambda s=shape: s.distance_to(circle), lambda s=shape: circle.distance_to(s)):
+            with pytest.raises(MeasuresError) as exc:
+                call()
+            assert exc.value.code == "OPERATION_UNSUPPORTED" and "D17-9" in exc.value.message
+
+
+# =============================================================================
 # P4 — distanza automatica tra due sorgenti di catalogo (T10–T12)
 
 

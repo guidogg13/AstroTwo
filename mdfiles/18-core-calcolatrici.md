@@ -31,7 +31,7 @@ e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
      `atand`, `atan2d`; iperboliche `sinh`, `cosh`, `tanh`; conversioni
      `rad2deg`, `deg2rad`; `dist(x1, y1, x2, y2)` (distanza cartesiana);
      `skydist(ra1, dec1, ra2, dec2)` (distanza sferica, coordinate in gradi o
-     sessagesimali con `:`).
+     sessagesimali con l'unità scritta nel testo, D18-7).
    - Regola senza eccezioni sugli angoli: **le funzioni senza `d` lavorano in
      radianti, quelle con `d` in gradi**. Il manuale di Aladin contiene una
      descrizione incoerente (`tan` "in gradi"): AstroTwo non la segue.
@@ -419,6 +419,7 @@ VOUnit per le stringhe di unità (D18-2).
 | Equivalenza non offerta | rifiuto con l'elenco di D18-3 | `UNIT_EQUIVALENCY_UNKNOWN` |
 | Densità spettrale o Doppler senza riferimento | rifiuto: il riferimento è obbligatorio | `UNIT_REFERENCE_REQUIRED` |
 | Angolo sessagesimale senza `sexagesimal` (gradi o ore) | rifiuto | `UNIT_SEXAGESIMAL_UNIT_REQUIRED` |
+| Sessagesimale con i due punti in `skydist` senza `colon_units`, o `colon_units` non valido (D18-7) | rifiuto: con i due punti l'unità è ambigua | `UNIT_SEXAGESIMAL_UNIT_REQUIRED` |
 | Unità non convertibili tra loro senza equivalenza | rifiuto con le due dimensioni fisiche | `UNIT_INCOMPATIBLE` |
 | Magnitudine verso flusso senza punto zero | rifiuto | `UNIT_ZERO_POINT_REQUIRED` |
 | Data non valida | rifiuto con il formato atteso | `TIME_INVALID` |
@@ -460,7 +461,7 @@ elementare.
 | T2 | Gradi e radianti | `sind(30)` e `sin(pi/6)` | entrambi 0.5 entro 1e-15 | ricalcolo con `numpy` |
 | T3 | Nessuna esecuzione di codice | espressione che contiene un nome non previsto (es. una chiamata di funzione Python) | errore `CALC_UNKNOWN_FUNCTION`, nulla eseguito | test di unità |
 | T4 | Dominio non valido | `sqrt(-1)`, `ln(0)`, `1/0` | `CALC_DOMAIN_ERROR`, `CALC_DOMAIN_ERROR`, `CALC_DIVISION_BY_ZERO`; nessun `NaN` | test di unità |
-| T5 | `skydist` | `skydist` su due coppie di coordinate scelte dal tester | coincide con `angular_distance` del modulo 17 e con `SkyCoord.separation` | ricalcolo con Astropy |
+| T5 | `skydist` | `skydist` su due coppie di coordinate scelte dal tester; anche sessagesimali con l'unità nel testo (ore e gradi, `d/m/s` e `°′″`) e con i due punti con e senza `colon_units` (D18-7) | coincide con `angular_distance` del modulo 17 e con `SkyCoord.separation`; due punti senza unità → `UNIT_SEXAGESIMAL_UNIT_REQUIRED` | ricalcolo con Astropy |
 | T6 | Conversione di lunghezza | 0.1 m in nm | 1e8 nm | `astropy.units` |
 | T7 | Conversione di tempo | 2 anni giuliani in giorni | 730.5 d (anno giuliano = 365.25 d) | `astropy.units` |
 | T8 | Angolo sessagesimale | `10:10:08` (gradi) in gradi decimali | 10 + 10/60 + 8/3600 gradi | `astropy.coordinates.Angle` |
@@ -511,16 +512,14 @@ elementare.
   ricostruzione dal valore fisico (che in `float32` può non tornare
   esatta).
 
-- **D18-7 — Sessagesimali in `skydist`: DA DECIDERE (aperta il 2026-10-12,
-  Gruppo 3).** §3 ammette coordinate "sessagesimali con `:`" in `skydist`
-  senza dire se l'ascensione retta è in ore (`h:m:s`) o in gradi
-  (`d:m:s`); `parse_sexagesimal` del 10 richiede di dichiararlo. Inoltre
-  `10:20:30` non è un'espressione valida per `ast` (va tolta dal testo
-  prima dell'analisi). **Raccomandazione:** in `skydist` il primo e il
-  terzo argomento sessagesimali in **ore** e il secondo e il quarto in
-  **gradi** (uso astronomico per RA/Dec), letti con `parse_sexagesimal` e
-  sostituiti prima dell'analisi; i decimali restano in gradi. Fermi solo i
-  sessagesimali di `skydist`.
+- **D18-7 — Sessagesimali in `skydist`: DECISA il 2026-10-13 (decisione
+  del proprietario).** Nei sessagesimali **l'unità deve essere scritta nel
+  testo** (`h`/`m`/`s` per le ore, `d`/`m`/`s` o `°′″` per i gradi), letti
+  con `parse_sexagesimal` del 10. Il formato con i due punti (es.
+  `10:30:00`) è ambiguo: **errore**, a meno che l'unità sia dichiarata con
+  un **parametro esplicito** (`colon_units`). **Nessuna convenzione basata
+  sulla posizione dell'argomento** (la raccomandazione "1° e 3° in ore" non
+  è stata adottata). Test. Applicata in §3 (P1, scelta 6), §10, §12 (T5).
 
 ## 14. Registro modifiche
 
@@ -537,3 +536,4 @@ elementare.
 | 2026-10-13 | Claude Code | **P3 scritta** (`convert_units`, `EQUIVALENCIES`; T6–T9). Scelte minori di P3 in §3; nuovi casi in §10 (`UNIT_EQUIVALENCY_UNKNOWN`, `UNIT_REFERENCE_REQUIRED`, `UNIT_SEXAGESIMAL_UNIT_REQUIRED`). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P4 scritta** (`convert_pixel_value`, `DisplaySettings`, `PixelValues`; T10–T12); D18-6 verificata prima del codice. Scelte minori di P4 in §3; §4 con l'eccezione del valore grezzo (D18-6); nuovi casi in §10 (`PIXEL_RAW_UNAVAILABLE`, `histeq` senza immagine). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P5 scritta — modulo 18 completo tranne i sessagesimali in `skydist` (D18-7)** (`calculate_coordinates`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, `CoordinatesOutput`; T13, T14, T18 con la riesecuzione dei comandi registrati). Scelte minori di P5 in §3. Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **D18-7 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: sessagesimali di `skydist` con l'unità scritta nel testo (h/m/s, d/m/s, °′″) letti con `parse_sexagesimal` del 10; due punti → `UNIT_SEXAGESIMAL_UNIT_REQUIRED` salvo il parametro esplicito `colon_units`; nessuna convenzione sulla posizione; sessagesimali solo negli argomenti di `skydist` (§3 P1 scelta 6, §10, T5). Stato `approvato` invariato. |

@@ -122,10 +122,51 @@ def test_t5_skydist():
     with pytest.raises(CalculatorError) as exc:
         evaluate_expression("skydist(10, 95, 10, 20)")
     assert exc.value.code == "COORD_OUT_OF_RANGE"
-    # Sessagesimali: fermi su D18-7.
+    # Due punti senza unità dichiarata: ambiguo (D18-7).
     with pytest.raises(CalculatorError) as exc:
         evaluate_expression("skydist(10:20:30, 20, 10, 20)")
-    assert exc.value.code == "CALC_SYNTAX_ERROR" and "D18-7" in exc.value.message
+    assert exc.value.code == "UNIT_SEXAGESIMAL_UNIT_REQUIRED" and "D18-7" in exc.value.message
+
+
+def test_t5_skydist_sexagesimal_d18_7():
+    a = SkyCoord("10h30m00s", "-20d15m30s")
+    b = SkyCoord("10h31m12.5s", "-20d05m00s")
+    expected = a.separation(b).deg
+    written = ("skydist(10h30m00s, -20d15m30s, 10h31m12.5s, -20d05m00s)",
+               "skydist(10h30m00s, -20°15′30″, 10h31m12.5s, -20°05′00″)",
+               "skydist(10h30m00s, -20°15'30\", 10h31m12.5s, -20°05'00\")")
+    for text in written:
+        result = evaluate_expression(text)
+        assert abs(result.value - expected) < 1e-12 and result.unit == u.deg
+        assert any("unità scritta nel testo" in n and "parse_sexagesimal" in n for n in result.notes)
+        assert run_command(result.command).value == result.value
+    # Gradi per tutte e quattro: l'unità nel testo decide, non la posizione dell'argomento.
+    in_degrees = evaluate_expression("skydist(157d30m, -20d15m30s, 157d48m07.5s, -20d05m)")
+    assert abs(in_degrees.value - expected) < 1e-12
+    # Due punti: solo con l'unità dichiarata nel parametro (tutti uguali o uno per valore, in ordine).
+    colon = "skydist(10:30:00, -20:15:30, 10:31:12.5, -20:05:00)"
+    for units in (None, "hours", ("hours", "degrees"), ("hours", "degrees", "hours", "minutes")):
+        with pytest.raises(CalculatorError) as exc:
+            evaluate_expression(colon, colon_units=units)
+        if units is None or units == "hours":
+            assert exc.value.code in ("UNIT_SEXAGESIMAL_UNIT_REQUIRED", "COORD_OUT_OF_RANGE")
+        else:
+            assert exc.value.code == "UNIT_SEXAGESIMAL_UNIT_REQUIRED"
+    declared = evaluate_expression(colon, colon_units=("hours", "degrees", "hours", "degrees"))
+    assert abs(declared.value - expected) < 1e-12
+    assert any("unità dichiarata in colon_units" in n for n in declared.notes)
+    assert run_command(declared.command).value == declared.value
+    all_degrees = evaluate_expression("skydist(157:30:00, 10, 157:48:07.5, 10)", colon_units="degrees")
+    assert abs(all_degrees.value - SkyCoord(157.5, 10, unit="deg").separation(SkyCoord(157.8020833333333, 10,
+                                                                                         unit="deg")).deg) < 1e-12
+    # Sessagesimali fuori da skydist o due punti isolati: errore di sintassi; testo illeggibile: errore del 10.
+    for text in ("10h30m + 1", "1:2 * 3", "skydist(1, 2, 3, 4) + 2d"):
+        with pytest.raises(CalculatorError) as exc:
+            evaluate_expression(text, colon_units="degrees")
+        assert exc.value.code == "CALC_SYNTAX_ERROR"
+    with pytest.raises(CalculatorError) as exc:
+        evaluate_expression("skydist(10h75m, 0, 0, 0)")
+    assert exc.value.code in ("COORD_FORMAT_INVALID", "COORD_OUT_OF_RANGE")
 
 
 def test_d18_5_limits():

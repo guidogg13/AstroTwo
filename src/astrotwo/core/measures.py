@@ -6,7 +6,8 @@ Il modulo si scrive in 4 parti (decisione del proprietario del 2026-10-12):
 P1 misure angolari (distanza, angolo di posizione, offset e calcolo inverso),
 P2 lettura dei pixel e profili, P3 forme e tag (D17-7: poligoni con
 ``spherical-geometry``, ellisse sferica, cerchio con Astropy; ``distance_to``
-ferma su D17-8), P4 distanza automatica tra due sorgenti di catalogo.
+con D17-8, ferma su D17-9 per ellisse, freccia, testo e
+tracciato aperto), P4 distanza automatica tra due sorgenti di catalogo.
 
 Regole applicate in tutto il modulo:
 
@@ -671,6 +672,80 @@ def _lonlat_deg(point: SkyFrame) -> tuple[float, float]:
     return float(point.lon.to_value(u.deg)), float(point.lat.to_value(u.deg))
 
 
+@dataclass(frozen=True)
+class _DistanceGeometry:
+    """Forma ridotta per ``distance_to`` (D17-8): calotta (cerchio, punto con raggio 0) o poligono sferico."""
+
+    kind: str  # "cap" o "polygon"
+    reference: SkyFrame  # punto di riferimento del frame (centro o primo vertice)
+    radius: float = 0.0  # gradi (calotta)
+    vertices: np.ndarray | None = None  # (n, 2) lon, lat in gradi (poligono)
+    polygon: object = None  # SingleSphericalPolygon con l'interno scelto (poligono)
+
+    @classmethod
+    def cap(cls, center: SkyFrame, radius: float) -> _DistanceGeometry:
+        return cls("cap", center, radius)
+
+
+def _unit_vectors(lon_deg, lat_deg) -> np.ndarray:
+    return np.stack(sg_vector.lonlat_to_vector(lon_deg, lat_deg, degrees=True), axis=-1)
+
+
+def _point_to_edges_deg(lon: float, lat: float, vertices: np.ndarray) -> float:
+    """Distanza minima (gradi) di un punto dai lati (archi di cerchio massimo) di un poligono chiuso.
+
+    Per ogni lato AB: se la proiezione del punto sul cerchio massimo di AB cade dentro l'arco, la distanza è
+    quella dal cerchio massimo, atan2(|P·n|, |P − (P·n) n|) con n polo di AB; altrimenti è la distanza dal
+    più vicino dei due estremi (``skydist`` del 13).
+    """
+    start, end = vertices, np.roll(vertices, -1, axis=0)
+    a, b = _unit_vectors(start[:, 0], start[:, 1]), _unit_vectors(end[:, 0], end[:, 1])
+    p = _unit_vectors(np.float64(lon), np.float64(lat))
+    n = np.cross(a, b)
+    norm = np.linalg.norm(n, axis=1)
+    defined = norm > 0.0  # lato con estremi antipodali: nessun cerchio massimo unico, solo gli estremi
+    n /= np.where(defined, norm, 1.0)[:, None]
+    pn = n @ p
+    q = p[None, :] - pn[:, None] * n
+    q_norm = np.linalg.norm(q, axis=1)
+    within = ((np.einsum("ij,ij->i", np.cross(a, q), n) >= 0.0)
+              & (np.einsum("ij,ij->i", np.cross(q, b), n) >= 0.0) & (q_norm > 0.0) & defined)
+    perpendicular = np.rad2deg(np.arctan2(np.abs(pn), q_norm))
+    ends = np.minimum(skydist(lon, lat, start[:, 0], start[:, 1]), skydist(lon, lat, end[:, 0], end[:, 1]))
+    return float(np.min(np.where(within, perpendicular, ends)))
+
+
+def _point_to_polygon_deg(lon: float, lat: float, geometry: _DistanceGeometry) -> float:
+    if geometry.polygon.contains_lonlat(lon, lat, degrees=True):
+        return 0.0
+    return _point_to_edges_deg(lon, lat, geometry.vertices)
+
+
+def _geometry_distance(first: _DistanceGeometry, second: _DistanceGeometry) -> tuple[float, str]:
+    """Distanza minima (gradi) tra due forme ridotte, con la descrizione del calcolo."""
+    if first.kind == "cap" and second.kind == "cap":
+        lon1, lat1 = _lonlat_deg(first.reference)
+        lon2, lat2 = _lonlat_deg(second.reference)
+        separation = float(skydist(lon1, lat1, lon2, lat2))
+        return max(0.0, separation - first.radius - second.radius), (
+            f"calotte: separazione dei centri {separation!r}° (skydist del 13) − raggi {first.radius!r}° e "
+            f"{second.radius!r}°, minimo 0; esatta")
+    if first.kind == "polygon" and second.kind == "polygon":
+        if first.polygon.intersects_poly(second.polygon):
+            return 0.0, "poligoni sovrapposti (SphericalPolygon.intersects_poly): 0"
+        distance = min(min(_point_to_edges_deg(lon, lat, second.vertices) for lon, lat in first.vertices),
+                       min(_point_to_edges_deg(lon, lat, first.vertices) for lon, lat in second.vertices))
+        return distance, ("poligoni disgiunti: minimo delle distanze vertice–arco di cerchio massimo nei due versi "
+                          "(il minimo tra due archi disgiunti cade in un estremo)")
+    cap, polygon = (first, second) if first.kind == "cap" else (second, first)
+    lon, lat = _lonlat_deg(cap.reference)
+    to_polygon = _point_to_polygon_deg(lon, lat, polygon)
+    return max(0.0, to_polygon - cap.radius), (
+        f"calotta e poligono: distanza del centro dal poligono {to_polygon!r}° (0 se dentro, "
+        f"SphericalPolygon.contains_lonlat; altrimenti distanza punto–arco di cerchio massimo) − raggio "
+        f"{cap.radius!r}°, minimo 0")
+
+
 class Shape:
     """Forma H11 con coordinate celesti (D17-2: solo geometria, il disegno è del 41)."""
 
@@ -685,6 +760,31 @@ class Shape:
 
     def describe(self) -> dict:
         raise NotImplementedError
+
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        raise MeasuresError("OPERATION_UNSUPPORTED", f"distance_to non definita per {self.kind}: ferma su D17-9 "
+                            "(da decidere)")
+
+    def distance_to(self, other) -> ShapeMeasure:
+        """Distanza angolare minima (D17-8) da un'altra forma o da un punto, in gradi.
+
+        0 se le forme si sovrappongono o se il punto è dentro; cerchi esatti con Astropy (separazione − raggi),
+        poligoni con la distanza punto–arco di cerchio massimo. Nel frame di questa forma.
+        """
+        mine, notes = self._distance_geometry(None)
+        if isinstance(other, Shape):
+            theirs, other_notes = other._distance_geometry(mine.reference)
+            other_kind = other.kind
+        else:
+            point, other_notes = self._point(mine.reference, other)
+            theirs, other_kind = _DistanceGeometry.cap(point, 0.0), "point"
+        value, method = _geometry_distance(mine, theirs)
+        provenance = _SG_PROVENANCE if "polygon" in (mine.kind, theirs.kind) else _PROVENANCE
+        return ShapeMeasure(value=np.float64(value) * u.deg, shape=self.kind, report=self._report(
+            "distance_to", (f"{self.kind}: {_describe(mine.reference)}", f"{other_kind}: {_describe(theirs.reference)}"),
+            "deg", notes + other_notes + (
+                "distanza angolare minima tra le forme (D17-8): 0 se si sovrappongono o se il punto è dentro",
+                method), provenance))
 
     def _point(self, reference: SkyFrame, point) -> tuple[SkyFrame, tuple[str, ...]]:
         converted, notes = _in_frame_of(reference, _as_point(point, "point"), "point")
@@ -726,6 +826,11 @@ class Circle(Shape):
 
     def describe(self) -> dict:
         return {"shape": self.kind, "frame": self.frame, "center": _describe(self.center), "radius": self.radius}
+
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        center, notes = (self.center, ()) if reference is None else _in_frame_of(reference, self.center,
+                                                                                 "centro del cerchio")
+        return _DistanceGeometry.cap(center, float(self.radius.value)), notes
 
 
 class Ellipse(Shape):
@@ -899,6 +1004,18 @@ class Polygon(Shape):
         return {"shape": self.kind, "frame": self.frame, "vertices": tuple(_describe(v) for v in self.vertices),
                 "inside": None if self.inside is None else _describe(self.inside)}
 
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        polygon, notes = self, ()
+        if reference is not None and not reference.coord.frame.is_equivalent_frame(self.vertices[0].coord.frame):
+            converted = [_in_frame_of(reference, v, "vertice del poligono")[0] for v in self.vertices]
+            inside = None if self.inside is None else _in_frame_of(reference, self.inside, "inside")[0]
+            polygon = Polygon(converted, inside=inside)
+            notes = (f"poligono convertito da {self.frame} a {reference.frame_name} con il modulo 10 "
+                     "(convert_coordinates), stessa regola per l'interno",)
+        vertices = np.array([_lonlat_deg(v) for v in polygon.vertices])
+        return _DistanceGeometry("polygon", polygon.vertices[0], vertices=vertices,
+                                 polygon=next(iter(polygon._polygon.polygons))), notes
+
 
 class Freehand(Shape):
     """Tracciato libero: come poligono solo se ``closed`` (D17-7), altrimenti nessuna area né "contiene"."""
@@ -931,6 +1048,12 @@ class Freehand(Shape):
     def describe(self) -> dict:
         return {"shape": self.kind, "frame": self.frame, "closed": self.closed,
                 "points": tuple(_describe(p) for p in self.points)}
+
+    def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
+        if self._polygon is None:
+            raise MeasuresError("OPERATION_UNSUPPORTED", "distance_to non definita per un tracciato aperto: ferma su "
+                                "D17-9 (da decidere)")
+        return self._polygon._distance_geometry(reference)
 
 
 class Arrow(Shape):
