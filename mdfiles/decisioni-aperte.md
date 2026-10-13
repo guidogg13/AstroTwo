@@ -37,7 +37,12 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-12, con il modulo 17: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`,
+**Dal 2026-10-13, con P3 del 17 e il modulo 18: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`,
+`A11`) · Gruppo 3: **10** (decise dal proprietario il 2026-10-12 `D17-7` geometria sferica delle forme, `D18-5`
+limiti delle espressioni, `D18-6` valore grezzo con `do_not_scale_image_data`; nuove `D17-8` significato di
+`distance_to` e `D18-7` sessagesimali in `skydist`, che fermano solo quei pezzi).
+
+Prima, **dal 2026-10-12, con il modulo 17: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`,
 `A11`) · Gruppo 3: **11** (decise dal proprietario `D12-6` nomi dei corpi con una tabella del 19, `D12-7`
 eclittica non supportata finché non verificata, `D12-8` nessun Allsky per ora, `D17-5` profili bilineari
 con passo obbligatorio; nuova dal 17 `D17-7` geometria sferica delle forme, che ferma solo P3).
@@ -229,7 +234,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10 | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 | `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (11)
+## 5. GRUPPO 3 — rimandabili al momento del codice (10)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -237,12 +242,11 @@ gruppi successivi, A8 dopo il livello 1).
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
 | `AP4` | AstroTwo esegue gli script di Aladin o ha solo il proprio formato di pipeline? (rinvia ad `A8`: si decide insieme, dopo il livello 1) | `03-parita-aladin.md` §6 (e `24-analisi-pipeline-riproducibili.md`) |
-| `D18-5` | Limiti di lunghezza e annidamento delle espressioni (`CALC_TOO_COMPLEX`)? | `18-core-calcolatrici.md` |
-| `D18-6` | Come leggere il valore grezzo di un pixel quando `astropy.io.fits` applica BSCALE/BZERO? | `18-core-calcolatrici.md` |
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
-| `D17-7` | Geometria sferica delle forme (P3 del 17): (a) libreria per area e "contiene" esatti di poligoni e tracciati chiusi — proposta `spherical-geometry` (STScI, BSD-3-Clause, 1.4.0), alternativa `mocpy` approssimato per celle; (b) definizione dell'ellisse sulla sfera (somma delle distanze dai fuochi ≤ 2a, raccomandata, oppure ellisse nel piano tangente); (c) `contains`/`area` di freccia e testo non definiti (`OPERATION_UNSUPPORTED`), tracciato libero come poligono solo se chiuso. Ferma solo P3 | `17-core-misure.md` §13 |
+| `D17-8` | Significato di `distance_to` (distanza tra forme) del 17: distanza minima tra i bordi, tra i centri o da un punto? **Raccomandazione:** distanza minima angolare (0 se sovrapposte o se il punto è dentro), esatta per i cerchi con Astropy, per i poligoni con la distanza punto–arco di cerchio massimo; tra i centri c'è già `angular_distance`. Ferma solo `distance_to` | `17-core-misure.md` §13 |
+| `D18-7` | Sessagesimali in `skydist` della calcolatrice: ascensione retta in ore o in gradi? **Raccomandazione:** 1° e 3° argomento in ore, 2° e 4° in gradi (uso RA/Dec), letti con `parse_sexagesimal` del 10 prima dell'analisi; decimali in gradi. Ferma solo i sessagesimali di `skydist` | `18-core-calcolatrici.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
 ## 6. Note
@@ -305,3 +309,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-11 | Claude Code | **Decise dal proprietario** `D13-20` (sistema di SIMBAD dall'`utype` MANGO, dichiarato), `D15-8` (corpo nella correlazione per campo controllato solo se entrambe le tabelle ne hanno uno), `D15-9` (servizio CDS sempre `selection=all`, `best` in locale) e tolte dal Gruppo 3 (prima nei file di origine 13 e 15). Nuove nel Gruppo 3, dal codice del modulo 16: `D16-6` (versione 2.1 del formato MOC) e `D16-7` (complemento dei MOC spazio-temporali). Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14). |
 | 2026-10-12 | Claude Code | **Decise dal proprietario** `D16-6` (verifica sul sito IVOA: nessuna 2.1 tra WD e PR, resta rifiutata), `D16-7` (complemento degli ST-MOC come differenza da "tutto il tempo × tutto il cielo" con `mocpy`) e `A10` per gli HiPS (tile in memoria entro 512 MB configurabili, `build_hips` un tile alla volta entro il limite delle operazioni di 4 GB, su disco la cache comune di 5 GB; scritta nel `12`) e tolte dal Gruppo 3 (prima nei file di origine 16 e 12). Nuove nel Gruppo 3, dal codice del 12: `D12-6` (nomi dei corpi), `D12-7` (`hips_frame = ecliptic`), `D12-8` (Allsky). Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 14). |
 | 2026-10-12 | Claude Code | **Decise dal proprietario** `D12-6` (normalizzazione dei nomi dei corpi con una tabella del 19, da scrivere con il 19), `D12-7` (`hips_frame = ecliptic` non supportato finché non verificato su un HiPS reale), `D12-8` (nessun Allsky da `build_hips` per ora) e `D17-5` (bilineare con `scipy.ndimage.map_coordinates`, passo obbligatorio senza default) e tolte dal Gruppo 3 (prima nei file di origine 12 e 17). Nuova nel Gruppo 3, dalla verifica di P3 del 17: `D17-7` (geometria sferica delle forme). Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 11). |
+| 2026-10-13 | Claude Code | **Decise dal proprietario** (2026-10-12) `D17-7` (`spherical-geometry` per poligoni e tracciati chiusi, ellisse sferica, freccia/testo `OPERATION_UNSUPPORTED`), `D18-5` (1000 caratteri, annidamento 50, configurabili) e `D18-6` (valore grezzo con `do_not_scale_image_data=True`) e tolte dal Gruppo 3 (prima nei file di origine 17 e 18). Nuove nel Gruppo 3: `D17-8` (significato di `distance_to`) e `D18-7` (sessagesimali in `skydist`). Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10). |

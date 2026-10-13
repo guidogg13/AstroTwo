@@ -279,8 +279,8 @@ Dove si trovano le decisioni:
 | `14-core-protocolli-vo.md` | Protocolli Virtual Observatory: VOTable, cone search, TAP/ADQL, esportazione, elenco dei server e registro VO, DataLink, SIA/SIA2, SAMP (G3), spettri SSA (E4), puntatori Simbad/VizieR | approvato |
 | `15-core-crossmatch.md` | Incrocio tra cataloghi (cross-match) | approvato |
 | `16-core-moc.md` | Mappe di copertura MOC (codice scritto in 5 parti il 2026-10-11, `src/astrotwo/core/moc.py`; D16-6 e D16-7 decise e scritte il 2026-10-12) | approvato |
-| `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura (codice P1, P2, P4 scritto il 2026-10-12, `src/astrotwo/core/measures.py`; P3 forme e tag ferma su D17-7) | approvato |
-| `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo (livello 1; origine H4 di `03-parita-aladin.md`; dipende da `10`, `11`) | approvato |
+| `17-core-misure.md` | Misure angolari: distanza, position angle, strumenti di misura (codice P1–P4 scritto il 2026-10-12, `src/astrotwo/core/measures.py`; fermo solo `distance_to`, D17-8) | approvato |
+| `18-core-calcolatrici.md` | Calcolatrici: algebrica, unità, pixel, coordinate, tempo (livello 1; origine H4 di `03-parita-aladin.md`; codice P1–P5 scritto il 2026-10-12/13, `src/astrotwo/core/calculators.py`; fermi solo i sessagesimali in `skydist`, D18-7) | approvato |
 | `19-core-dati-planetari.md` | Dati planetari: superfici, cataloghi e coperture planetarie, sistemi di riferimento planetari (livello 1; origine H21 di `03-parita-aladin.md`, AM1 accettata il 2026-10-08) | approvato |
 
 ## Analisi (livello 2)
