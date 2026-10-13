@@ -148,3 +148,79 @@ def test_t11_forced_overlay(planetary_on):
     with pytest.raises(PlanetaryDataError) as exc:
         body_of(mixed)
     assert exc.value.code == "BODY_MISMATCH"
+
+
+# =============================================================================
+# P2 — posizioni e conversioni di convenzione (T4, T5, T6, T10)
+
+from astrotwo.core.planetary_data import PlanetaryPosition, convert_planetary_coordinates, run_command  # noqa: E402
+
+
+def position(lon, lat, body="Mars", latitude_type="planetocentric", direction="east"):
+    return PlanetaryPosition(lon=lon * u.deg, lat=lat * u.deg, body=body, latitude_type=latitude_type,
+                             longitude_direction=direction)
+
+
+def test_t4_longitude_east_west(planetary_on):
+    pd._load_kernel()
+    mars = PlanetaryBody.from_name("Mars")
+    a, f = mars.radii[0].to_value(u.km), float(mars.flattening)
+    for lon in (0.0, 1e-9, 45.0, 137.4, 180.0, 359.5):
+        start = position(lon, 12.0)
+        west = convert_planetary_coordinates(start, "planetocentric", "west")
+        # Marte ruota in senso progrado: la longitudine planetografica di spiceypy è positiva verso ovest.
+        rect = spiceypy.latrec(a, np.deg2rad(lon), np.deg2rad(12.0))
+        spice_west = np.rad2deg(spiceypy.recpgr("MARS", rect, a, f)[0]) % 360.0
+        assert (west.lon.value - spice_west + 180.0) % 360.0 - 180.0 == pytest.approx(0.0, abs=1e-9)  # modulo 360°
+        assert west.longitude_direction == "west" and west.lat.value == 12.0
+        back = convert_planetary_coordinates(west, "planetocentric", "east")
+        assert back.lon.value == pytest.approx(lon % 360.0, abs=1e-9)
+    assert position(-90.0, 0.0).lon.value == 270.0  # [−180°, 360°] in ingresso, [0°, 360°) in uscita
+
+
+def test_t5_latitude_centric_graphic(planetary_on):
+    mars = PlanetaryBody.from_name("Mars")
+    f = float(mars.flattening)
+    assert f > 0.005  # corpo con schiacciamento noto (raggi del kernel)
+    for lat in (-89.0, -45.0, -4.6, 0.0, 30.0, 60.0, 90.0):
+        graphic = convert_planetary_coordinates(position(137.4, lat), "planetographic", "east")
+        # Sulla superficie dello sferoide: tan φg = tan φc / (1 − f)² (definizione), ricalcolata nel test.
+        expected = np.rad2deg(np.arctan2(np.tan(np.deg2rad(lat)), (1 - f) ** 2)) if abs(lat) < 90 else lat
+        assert graphic.lat.value == pytest.approx(expected, abs=1e-9)
+        assert any("spiceypy" in n for n in graphic.notes) and "pck00011.tpc" in graphic.library
+        back = convert_planetary_coordinates(graphic, "planetocentric", "east")
+        assert abs(back.lat.value - lat) < 1e-9
+    # Sfera (Luna): le due latitudini coincidono.
+    moon = convert_planetary_coordinates(position(10.0, 33.0, "Moon"), "planetographic", "east")
+    assert moon.lat.value == pytest.approx(33.0, abs=1e-12)
+    # Corpo triassiale: dichiarato che RADII[1] non entra.
+    io = convert_planetary_coordinates(position(10.0, 33.0, "Io"), "planetographic", "east")
+    assert any("triassiale" in n for n in io.notes)
+
+
+def test_t6_convention_required(planetary_on):
+    for kwargs in ({"latitude_type": None}, {"latitude_type": "geodetic"}, {"direction": None}):
+        with pytest.raises(PlanetaryDataError) as exc:
+            position(10.0, 10.0, **kwargs)
+        assert exc.value.code == "PLANETARY_CONVENTION_REQUIRED"
+    with pytest.raises(PlanetaryDataError) as exc:
+        convert_planetary_coordinates(position(10.0, 10.0), None, "east")
+    assert exc.value.code == "PLANETARY_CONVENTION_REQUIRED"
+    for lon, lat in ((10.0, 90.5), (10.0, -91.0), (-181.0, 0.0), (361.0, 0.0), (np.nan, 0.0)):
+        with pytest.raises(PlanetaryDataError) as exc:
+            position(lon, lat)
+        assert exc.value.code == "COORD_OUT_OF_RANGE"
+    with pytest.raises(PlanetaryDataError) as exc:
+        position(10.0, 10.0, body="Bennu")
+    assert exc.value.code == "BODY_UNSUPPORTED"
+    with pytest.raises(TypeError):
+        PlanetaryPosition(lon=10.0, lat=10.0, body="Mars", latitude_type="planetocentric", longitude_direction="east")
+
+
+def test_t10_rerun_recorded_commands(planetary_on):
+    first = convert_planetary_coordinates(position(137.4, -4.6), "planetographic", "west")
+    second = convert_planetary_coordinates(first, "planetocentric", "east")
+    for result in (first, second):
+        again = run_command(result.command)
+        assert again.lon == result.lon and again.lat == result.lat and again.body == result.body
+        assert (again.latitude_type, again.longitude_direction) == (result.latitude_type, result.longitude_direction)

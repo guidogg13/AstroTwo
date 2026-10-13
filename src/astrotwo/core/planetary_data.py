@@ -47,6 +47,10 @@ __all__ = [
     "body_of",
     "OverlayCheck",
     "check_overlay",
+    "LATITUDE_TYPES",
+    "LONGITUDE_DIRECTIONS",
+    "PlanetaryPosition",
+    "convert_planetary_coordinates",
 ]
 
 #: Valore del campo ``body`` per i dati astronomici (D19-3): non è un corpo.
@@ -332,3 +336,127 @@ def check_overlay(layers, force: bool = False) -> OverlayCheck:
     warning = ("BODY_MISMATCH_FORCED", f"sovrapposizione forzata dall'utente tra corpi diversi ({involved}): la "
                "coerenza della vista non è garantita")
     return OverlayCheck(None, all_bodies, True, names, (warning,), command)
+
+
+# --------------------------------------------------------------------------
+# P2 — posizioni planetarie e conversioni di convenzione (spiceypy)
+# --------------------------------------------------------------------------
+
+LATITUDE_TYPES = ("planetocentric", "planetographic")
+LONGITUDE_DIRECTIONS = ("east", "west")
+
+
+def _convention(value: object, allowed: tuple[str, ...], what: str) -> str:
+    if value not in allowed:
+        raise PlanetaryDataError("PLANETARY_CONVENTION_REQUIRED", f"{what} {value!r}: la convenzione non si assume "
+                                 f"mai; valori: {', '.join(allowed)}")
+    return value
+
+
+def _angle_deg(value: object, what: str) -> np.float64:
+    if not isinstance(value, u.Quantity) or not value.unit.is_equivalent(u.deg) or value.size != 1:
+        raise TypeError(f"{what}: serve un angolo con unità (Quantity), non {value!r}")
+    number = np.float64(value.to_value(u.deg))
+    if not np.isfinite(number):
+        raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"{what} {value!r}: non finita")
+    return number
+
+
+@dataclass(frozen=True)
+class PlanetaryPosition:
+    """Posizione sulla superficie di un corpo, con corpo e convenzioni sempre dichiarati (§6).
+
+    ``lon`` in [0°, 360°) nel verso ``longitude_direction`` (in ingresso ammessa [−180°, 360°], riportata in
+    [0°, 360°)), ``lat`` in [−90°, +90°] del tipo ``latitude_type``; ``body`` = ``PlanetaryBody`` o nome.
+    """
+
+    lon: u.Quantity
+    lat: u.Quantity
+    body: PlanetaryBody
+    latitude_type: str
+    longitude_direction: str
+    notes: tuple[str, ...] = ()
+    library: str | None = None
+    command: PlanetaryCommand | None = None
+
+    def __post_init__(self) -> None:
+        _require_enabled("PlanetaryPosition")
+        _convention(self.latitude_type, LATITUDE_TYPES, "latitude_type")
+        _convention(self.longitude_direction, LONGITUDE_DIRECTIONS, "longitude_direction")
+        if isinstance(self.body, str):
+            object.__setattr__(self, "body", PlanetaryBody.from_name(self.body))
+        if not isinstance(self.body, PlanetaryBody):
+            raise TypeError("body: serve un PlanetaryBody o il nome del corpo (il corpo non si assume)")
+        lon, lat = _angle_deg(self.lon, "lon"), _angle_deg(self.lat, "lat")
+        if not -90.0 <= lat <= 90.0:
+            raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"latitudine {lat!r}° fuori da [−90°, +90°]")
+        if not -180.0 <= lon <= 360.0:
+            raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"longitudine {lon!r}° fuori da [−180°, 360°]")
+        object.__setattr__(self, "lon", np.float64(lon % 360.0) * u.deg)
+        object.__setattr__(self, "lat", lat * u.deg)
+
+    @property
+    def text(self) -> str:
+        return (f"{self.body.name}: longitudine {float(self.lon.value)!r}° ({self.longitude_direction}, [0°, 360°)), "
+                f"latitudine {float(self.lat.value)!r}° ({self.latitude_type})")
+
+
+def _flip(lon_deg: np.float64) -> np.float64:
+    """Cambio di verso della longitudine: λ' = (360° − λ) mod 360° (definizione delle due convenzioni)."""
+    return np.float64((360.0 - lon_deg) % 360.0)
+
+
+def _latitude(body: PlanetaryBody, lat_deg: np.float64, source: str, target: str) -> np.float64:
+    """Latitudine sullo sferoide del kernel (a = RADII[0], c = RADII[2]) con ``spiceypy`` (§3 scelta 5).
+
+    Sullo sferoide la relazione tra le latitudini non dipende dalla longitudine: si calcola al meridiano 0.
+    """
+    if source == target:
+        return lat_deg
+    a = body.equatorial_radius.to_value(u.km)
+    c = body.polar_radius.to_value(u.km)
+    f = float(body.flattening)
+    lat = np.deg2rad(lat_deg)
+    if source == "planetocentric":
+        direction = spiceypy.latrec(1.0, 0.0, float(lat))
+        point = spiceypy.surfpt([0.0, 0.0, 0.0], direction, a, a, c)
+        point = point[0] if isinstance(point, tuple) else point
+        _, out, _ = spiceypy.recpgr(body.name, point, a, f)
+    else:
+        point = spiceypy.pgrrec(body.name, 0.0, float(lat), 0.0, a, f)
+        _, _, out = spiceypy.reclat(point)
+    return np.float64(np.rad2deg(out))
+
+
+@_registered
+def convert_planetary_coordinates(position: PlanetaryPosition, latitude_type: str,
+                                  longitude_direction: str) -> PlanetaryPosition:
+    """Cambia convenzione di latitudine e/o di longitudine; restituisce una nuova ``PlanetaryPosition``."""
+    _require_enabled("convert_planetary_coordinates")
+    if not isinstance(position, PlanetaryPosition):
+        raise TypeError("position: serve una PlanetaryPosition (corpo e convenzioni dichiarati)")
+    _convention(latitude_type, LATITUDE_TYPES, "latitude_type")
+    _convention(longitude_direction, LONGITUDE_DIRECTIONS, "longitude_direction")
+    _load_kernel()
+    body = position.body
+    lat = _latitude(body, np.float64(position.lat.to_value(u.deg)), position.latitude_type, latitude_type)
+    lon = np.float64(position.lon.to_value(u.deg))
+    if longitude_direction != position.longitude_direction:
+        lon = _flip(lon)
+    notes = [f"da: {position.text}"]
+    if latitude_type != position.latitude_type:
+        notes.append(f"latitudine {position.latitude_type} → {latitude_type} con spiceypy (surfpt/recpgr o "
+                     f"pgrrec/reclat) sullo sferoide del kernel: raggio equatoriale {float(body.radii[0].value)!r} km "
+                     f"(RADII[0]), polare {float(body.radii[2].value)!r} km (RADII[2]), schiacciamento "
+                     f"{float(body.flattening)!r}"
+                     + ("; corpo triassiale: RADII[1] non usato" if body.radii[0] != body.radii[1] else ""))
+    if longitude_direction != position.longitude_direction:
+        notes.append(f"longitudine {position.longitude_direction} → {longitude_direction}: (360° − λ) mod 360° "
+                     "(definizione delle due convenzioni)")
+    if len(notes) == 1:
+        notes.append("convenzioni uguali: nessuna conversione")
+    command = PlanetaryCommand("convert_planetary_coordinates", (
+        ("position", position), ("latitude_type", latitude_type), ("longitude_direction", longitude_direction)))
+    return PlanetaryPosition(lon=lon * u.deg, lat=lat * u.deg, body=body, latitude_type=latitude_type,
+                             longitude_direction=longitude_direction, notes=tuple(notes), library=_library(),
+                             command=command)
