@@ -535,6 +535,9 @@ def test_t4_filter_by_moc(tmp_path):
     outside = filter_by_moc(table, moc, inside=False)
     assert outside.count == 1000 - inside.count and not outside.mask[1000]
     assert list(inside.indices) == list(np.flatnonzero(expected)) and table.rows == 1001  # tabella invariata
+    # Difetto trovato dalla demo delle Pleiadi (2026-10-13): la descrizione diceva "righe dentrol MOC".
+    assert inside.description.startswith("righe dentro il MOC ") and "dentrol" not in inside.description
+    assert outside.description.startswith("righe fuori dal MOC ")
     assert np.array_equal(moc.contains(SkyCoord(ra * u.deg, dec * u.deg)), expected)
     import dataclasses
 

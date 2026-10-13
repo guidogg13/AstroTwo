@@ -927,7 +927,7 @@ def filter_by_moc(table, moc: Moc, inside: bool = True, *, force_body: bool = Fa
     if excluded:
         notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione: mai selezionate"))
     epoch = table.positions.epoch
-    description = (f"righe {'dentro' if inside else 'fuori da'}l MOC {moc.origin}: {int(np.count_nonzero(mask))} su "
+    description = (f"righe {'dentro il' if inside else 'fuori dal'} MOC {moc.origin}: {int(np.count_nonzero(mask))} su "
                    f"{len(mask)}{note}; epoca delle posizioni {epoch if epoch else 'non dichiarata'}, non propagata "
                    f"(calcolo: {moc.provenance}, contains_lonlat)")
     return FilterResult(mask=mask, inside=bool(inside), excluded=excluded, moc_origin=moc.origin,

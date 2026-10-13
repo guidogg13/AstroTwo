@@ -8,7 +8,10 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-13 — **livello 1 chiuso** (decisioni del proprietario del 2026-10-13): D17-9
+**Ultimo aggiornamento:** 2026-10-13 — **demo delle Pleiadi** (`examples/`, primo test con dati veri); difetto
+del 16 trovato e corretto (testo di `filter_by_moc`), 16 modificato nel registro e resta `approvato`. Riepilogo
+invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-13 — **livello 1 chiuso** (decisioni del proprietario del 2026-10-13): D17-9
 decisa e scritta (`distance_to` per ellisse, freccia, tracciato aperto; testo escluso), D19-9 decisa e scritta
 (PDS4 da URL), D19-8 rimandata (PDS3 non ancora supportato); scelte minori di 18 e 19 confermate; 04 con 18 e
 19 tra gli utenti della cache; testo di licenza di `pims` trovato e aggiunto a `THIRD_PARTY_LICENSES`; 04, 17, 19

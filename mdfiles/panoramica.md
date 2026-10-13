@@ -14,6 +14,18 @@ funzioni avanzate, consegnata come file `.dmg`.
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
 tutti gli altri livelli restano in **FASE: SPECIFICHE**.
 
+- **Primo test con dati veri (2026-10-13): demo delle Pleiadi** in
+  `examples/demo_pleiadi.py` (con `examples/README.md`; uscite in
+  `examples/output/`, esclusa da git): solo funzioni pubbliche del livello 1
+  (10, 11, 13, 14, 15, 16, 17, 18), nessun calcolo nello script. Immagine
+  DSS2-red con il SIA del 14 (servizio dell'ESO trovato nel registro VO) e
+  `load_image` dell'11; Gaia DR3 e 2MASS con `tap_query`; crossmatch 2″:
+  190 su 193 (98,45 %); Alcyone–Atlas 23,185′, PA 97,61°; moto proprio medio
+  dei probabili membri (parallasse 6,5–8,5 mas, 95 stelle) +19,28 / −44,54
+  mas/anno; 193 stelle su 193 nel MOC dell'immagine. **Difetto trovato:** testo
+  di `filter_by_moc` (16) "righe dentrol MOC", riprodotto con un test e
+  corretto. Test di rete della demo in `tests/test_demo_pleiadi.py`.
+
 - **Stato al 2026-10-13, dopo le ultime decisioni del proprietario: livello 1
   chiuso.** D17-9 decisa e scritta (`distance_to` per freccia e tracciato
   aperto come archi di cerchio massimo, per l'ellisse minimo numerico sul
@@ -550,7 +562,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 0. **Subito (fase codice del livello 1):** livello 1 chiuso il 2026-10-13
    (04, 10–19; rinviati solo H10 SkyView e PDS3, D19-8). Primo test con
-   dati veri: demo delle Pleiadi in `examples/` (parte B del 2026-10-13).
+   dati veri fatto: demo delle Pleiadi in `examples/` (2026-10-13).
    Aperte anche: D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca
    il 60; elenco delle licenze in `THIRD_PARTY_LICENSES`). Poi: decidere A8 e
    chiedere la fase codice dei livelli successivi dopo le loro specifiche.
@@ -625,3 +637,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-12, modulo 17 completato e modulo 18 scritto** (17 e 18 modificati e restano `approvato`): 17 — scelte minori B, **P3 scritta** con D17-7 (forme sferiche, `spherical-geometry` 1.4.0 nuova dipendenza, licenza verificata; T7, T16–T19), nuova D17-8 (`distance_to`); 18 — divisione in 5 parti, D18-5 e D18-6 decise, **P1–P5 scritte** (`calculators.py`, T1–T18), nuova D18-7 (sessagesimali in `skydist`). §2, §5, §6, §7 aggiornati; aperte 14 (Gruppo 2 = 4, Gruppo 3 = 10); test 457 di default, 474 con la rete. Prossimo: modulo 19 (proposta di divisione in attesa del proprietario). |
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13: pezzi fermi di 17 e 18, licenze, modulo 19** (01, 11, 12, 17, 18, 19 modificati e restano `approvato`): D17-8 e D18-7 decise e scritte; `THIRD_PARTY_LICENSES` creato (con script e test), registrato nel 01 e annotato per A11 e il 60; `read_raw_pixel` nell'11; UT1 con le tabelle IERS incluse (`IERS_RANGE`, `update_iers_table`); scelte minori di 17 e 18 confermate; **modulo 19 scritto in P0–P4** (spiceypy, pds4-tools, kernel NAIF `pck00011.tpc`; tabella dei nomi D12-6 applicata al 12). Nuove aperte D17-9, D19-8, D19-9 (Gruppo 3). Test 485 di default, 505 con la rete. Aperte 15. Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42. |
 | 2026-10-13 | Claude Code | **Chiusura del livello 1 (decisioni del proprietario del 2026-10-13)** (04, 17, 19 modificati e restano `approvato`): D17-9 decisa e scritta (`distance_to` per freccia, tracciato aperto ed ellisse, testo escluso; T21; il test ha trovato che lo zero a spigolo della distanza tra bordi incrociati non raggiungeva la precisione dichiarata: incroci riconosciuti con la funzione liscia dei fuochi); D19-9 decisa e scritta (PDS4 da URL, T8 esteso); D19-8 rimandata (PDS3 non ancora supportato); scelte minori di 18 e 19 confermate; 04 con 18 e 19 tra gli utenti della cache; licenza di `pims` dal sorgente ufficiale su PyPI in `THIRD_PARTY_LICENSES` (script aggiornato). Test 491 di default. Aperte 13 (Gruppo 3 = 9). |
+| 2026-10-13 | Claude Code | **Demo delle Pleiadi (primo test con dati veri)**: `examples/demo_pleiadi.py`, `examples/README.md`, test di rete `tests/test_demo_pleiadi.py`, `examples/output/` in `.gitignore`; matplotlib era già una dipendenza (licenza già in `THIRD_PARTY_LICENSES`). Difetto trovato: testo di `filter_by_moc` del 16 ("dentrol"), test e correzione, registro del 16. Valori principali in §2. |
