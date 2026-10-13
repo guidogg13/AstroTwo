@@ -12,12 +12,14 @@ dependencies = [
     "matplotlib>=3.11.2",
     "mocpy>=0.20.0",
     "numpy>=2.5.3",
+    "pds4-tools>=1.4",
     "pillow>=12.3.0",
     "pyvo>=1.9.1",
     "reproject>=0.21.0",
     "requests>=2.34.2",
     "scipy>=1.18.1",
     "spherical-geometry>=1.4.0",
+    "spiceypy>=8.3.0",
 ]
 
 [dependency-groups]

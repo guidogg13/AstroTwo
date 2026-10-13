@@ -63,6 +63,167 @@ AstroTwo applica regole più severe (§9).
    preferenze (`40-ui-finestra-principale.md`); **disattivato per default**
    (D19-5, decisa il 2026-10-09; motivazione nostra in §13).
 
+### Decisioni del proprietario del 2026-10-13, verifiche di P0 e divisione in parti
+
+**Divisione in parti (approvata dal proprietario il 2026-10-13):**
+
+| Parte | Contenuto | Test |
+|---|---|---|
+| P0 | verifiche prima del codice (licenze e installazione di `spiceypy`, kernel PCK, `pds4_tools`, `pdr`; nome della proprietà del corpo nei HiPS; schema EPN-TAP; nessun sistema solidale ai corpi in astropy); nuove dipendenze in `THIRD_PARTY_LICENSES` | — |
+| P1 | `PlanetaryBody`, tabella dei nomi (D12-6), `body_of`, `check_overlay` con forzatura esplicita, opzione disattivata per default (D19-5) | T1, T2, T3, T9, T11 |
+| P2 | `PlanetaryPosition`, `convert_planetary_coordinates` con `spiceypy` (est/ovest, planetocentrica/planetografica) | T4, T5, T6, T10 |
+| P3 | `list_planetary_collections` (tramite il 12) e `query_epntap` (tramite il 14) | T7 |
+| P4 | `load_pds_image`: PDS4 con `pds4_tools`; PDS3 con `pdr` solo se la verifica di P0 lo ammette | T8 |
+
+**Codice: `src/astrotwo/core/planetary_data.py`**, errori `PlanetaryDataError`
+con gli identificatori di §10 (gli errori dei moduli 12, 13, 14 passano con
+lo stesso identificatore).
+
+**Esiti delle verifiche di P0 (2026-10-13):**
+
+1. **`spiceypy` 8.3.0** (Andrew Annex): licenza **MIT** (file di licenza
+   del pacchetto); ruote per macOS arm64 e x86_64, installata con `uv`;
+   include il **toolkit CSPICE N0067** della NAIF. Regole d'uso della NAIF
+   (pagina "Rules Regarding Use of SPICE", letta il 2026-10-13): uso anche
+   commerciale ammesso senza licenze né costi; includere i moduli del
+   toolkit in un programma che li usa è ammesso; si riporta la clausola di
+   esclusione di garanzia di Caltech/JPL/NASA. Unica dipendenza: `numpy`.
+   `bodn2c`/`bodc2n` funzionano con la tabella dei nomi interna del
+   toolkit, senza kernel.
+2. **Kernel PCK della NAIF:** **`pck00011.tpc`** (NAIF, 27 dicembre 2022,
+   basato sul rapporto IAU WGCCRE 2015, Archinal et al. 2018), il più
+   recente dei PCK generici, compatibile con il toolkit N0067. **Incluso nel
+   progetto senza modifiche** in `src/astrotwo/core/data/naif/pck00011.tpc`
+   (SHA-256 `3dff7b1dbeceaa01f25467767d3fa25816051c85d162d1edf04acb310ee28bb1`,
+   controllato a ogni caricamento: diverso → `PLANETARY_KERNEL_INVALID`),
+   scaricato una sola volta da
+   `https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/` per la
+   verifica; **nessuna rete** in esecuzione. Regole NAIF: la
+   ridistribuzione dei kernel della NAIF è ammessa se **non modificati**.
+3. **`pds4_tools` 1.4** (Small Bodies Node, University of Maryland):
+   licenza **BSD-3-Clause**; pacchetto Python puro (dipende da `numpy`),
+   installato con `uv`. **Non contiene file PDS di esempio**: T8 usa un
+   prodotto PDS4 generato nel test (etichetta XML + dati binari) e confronta
+   i valori con quelli letti da `pds4_tools` e con i valori scritti.
+   Verifica del comportamento: `scaling_factor` e `value_offset`
+   dell'`Element_Array` applicati da `pds4_tools`; le costanti speciali
+   (`missing_constant`…) restano col valore grezzo non scalato
+   nell'array, mascherate da `as_masked()`.
+4. **`pdr` 1.4.4** (Million Concepts): licenza **BSD-3-Clause**,
+   pacchetto Python puro, ultima versione del 2026-06-24 (mantenuto), ma
+   **classificato "Beta"** dagli autori e con dipendenze in più (`pandas`,
+   `dustgoggles`, `multidict` Apache-2.0, `rms-vax` Apache-2.0); include una
+   propria copia di `pds4_tools`. La verifica **non basta da sola** a dire
+   che sia una "libreria consolidata" (D19-2): **PDS3 fermo su D19-8** (da
+   decidere), `pdr` non aggiunto alle dipendenze.
+5. **Corpo nei HiPS:** proprietà **`hips_body`** (Working Draft HiPS 2.0,
+   già verificata con il 12 il 2026-10-12). MocServer, 2026-10-13: 78 HiPS
+   con `hips_frame` non celeste; i valori di `hips_body` sono in
+   **minuscolo** e uguali a `hips_frame` (`mars`, `moon`, `ceres`…); 13 HiPS
+   di Marte hanno `hips_frame = mars` senza `hips_body`; tre valori non
+   sono corpi (`mars-pia20284`, `mars-stimson`, `moon-pan1`: nessun codice
+   NAIF).
+6. **EPN-TAP 2.0** (Raccomandazione IVOA del 22 agosto 2022, letta il
+   2026-10-13): tabella `<schema>.epn_core`; corpo nel parametro
+   obbligatorio **`target_name`** (con `target_class`); tipo di sistema in
+   **`spatial_frame_type`** (obbligatorio): con `body`, `c1` = longitudine,
+   `c2` = latitudine, **planetocentriche**, **longitudine positiva verso est
+   in (0, 360)°** (convenzione IAU 2009), sistema IAU corrente salvo
+   diversa indicazione in `spatial_coordinate_description`; con `celestial`
+   ascensione retta e declinazione (ICRS di default).
+7. **Astropy 8.0.1:** i 28 sistemi del grafo delle trasformazioni sono
+   celesti, terrestri (`itrs`, `altaz`, `hadec`) o eclittici; **nessun
+   sistema solidale a un altro corpo**: la scelta di `spiceypy` (D19-1)
+   resta necessaria.
+
+**Tabella dei nomi dei corpi (D12-6, approvata il 2026-10-13):** nome
+canonico = **nome IAU in inglese con l'iniziale maiuscola**;
+normalizzazione di un nome scritto (anche in minuscolo, come nei HiPS) con
+**`spiceypy.bodn2c` → identificativo NAIF → nome canonico** della tabella.
+Nella tabella **solo i corpi con un HiPS nel MocServer e presenti nel
+kernel PCK** (D19-6; verificato il 2026-10-13: raggi `RADII` e meridiano `PM`
+presenti per tutti), **Luna e Marte obbligatori** per i test;
+**`celestial` non è un corpo** (D19-3) e non si normalizza. Nome fuori
+tabella o senza codice NAIF → `BODY_UNSUPPORTED` con l'elenco.
+
+| NAIF | Nome canonico | NAIF | Nome canonico | NAIF | Nome canonico | NAIF | Nome canonico |
+|---|---|---|---|---|---|---|---|
+| 10 | Sun | 501 | Io | 603 | Tethys | 703 | Titania |
+| 199 | Mercury | 502 | Europa | 604 | Dione | 704 | Oberon |
+| 299 | Venus | 503 | Ganymede | 605 | Rhea | 705 | Miranda |
+| 399 | Earth | 504 | Callisto | 606 | Titan | 801 | Triton |
+| 301 | Moon | 599 | Jupiter | 608 | Iapetus | 899 | Neptune |
+| 499 | Mars | 601 | Mimas | 701 | Ariel | 901 | Charon |
+| 2000001 | Ceres | 602 | Enceladus | 702 | Umbriel | 999 | Pluto |
+
+La tabella si applica anche al **12** (`_body` di `hips.py`): `hips_body`
+normalizzato al nome canonico; valore fuori tabella → `body = None` con
+l'avviso `BODY_UNSUPPORTED` (il dato si apre da solo).
+
+**Scelte minori (proposte da Claude Code il 2026-10-13, da confermare):**
+
+1. **Opzione D19-5:** stato del modulo (`set_planetary_data_enabled`,
+   `planetary_data_enabled`), **spento all'avvio**; l'impostazione delle
+   preferenze del 40 lo accende. Con l'opzione spenta, ogni funzione che
+   tocca dati planetari dà `PLANETARY_DATA_DISABLED`; restano attivi solo
+   `normalize_body_name` (lettura dei metadati del 12) e `body_of` /
+   `check_overlay` **quando tutti i livelli sono celesti** (il livello 1
+   celeste funziona come sempre).
+2. **`PlanetaryBody.from_name(name)`:** nome normalizzato con la tabella,
+   identificativo NAIF, raggi `RADII` (km) letti dal kernel con
+   `bodvrd`, fonte (`pck00011.tpc`, SHA-256, `spiceypy` e CSPICE con le
+   versioni); nessun altro modo di crearlo.
+3. **`body_of(dataset)`:** `HiPSService` (12), `CatalogTable` (13),
+   `Moc` (16), `FitsImage` (11: `celestial` solo con un WCS celeste),
+   `PdsImage` (19); restituisce `celestial` o il nome canonico; corpo
+   assente o non normalizzabile → `BODY_UNKNOWN` (con il motivo); MOC misto
+   (`mixed`) → `BODY_MISMATCH` (più corpi in un livello).
+4. **`check_overlay(layers, force=False)`:** un solo livello → sempre
+   compatibile (anche senza corpo: il dato si apre da solo); due o più:
+   corpo ignoto → `BODY_UNKNOWN` (non forzabile); corpi diversi o celeste +
+   planetario → `BODY_MISMATCH` con i corpi coinvolti, oppure, con
+   `force=True`, esito `OverlayCheck` con l'avviso `BODY_MISMATCH_FORCED`,
+   i corpi e il **comando registrato** con `force=True`.
+5. **Conversioni (P2):** latitudine planetocentrica ↔ planetografica con
+   `spiceypy` sullo **sferoide** del kernel (raggio equatoriale `RADII[0]`,
+   polare `RADII[2]`, schiacciamento `(RADII[0] − RADII[2]) / RADII[0]`;
+   per i corpi triassiali il secondo raggio equatoriale non entra, scritto
+   nel risultato): planetocentrica → punto della superficie con `surfpt`
+   lungo la direzione (`latrec`) → `recpgr`; planetografica → `pgrrec` a
+   quota 0 → `reclat`. Il verso della longitudine (est ↔ ovest) è una
+   **definizione** (λ_ovest = (360° − λ_est) mod 360°), non un modello: si
+   applica così, e il test la confronta con la longitudine planetografica di
+   `recpgr` per un corpo a rotazione prograda (Marte, dove è positiva verso
+   ovest). Longitudine in ingresso in [−180°, 360°], in uscita in
+   **[0°, 360°)** (dichiarato); fuori → `COORD_OUT_OF_RANGE`.
+6. **Comandi registrati:** ogni risultato porta il comando
+   (`PlanetaryCommand`, funzione e argomenti) rieseguibile con
+   `run_command`, come nel 18 (T10).
+7. **`list_planetary_collections(body=None, *, index)`:** usa la copia
+   locale delle collezioni del 12 (`CollectionIndex`, già sincronizzata dal
+   chiamante; nessuna rete qui); corpo di ogni collezione con la stessa
+   regola del 12 (`hips_frame` non celeste e `hips_body` uguale, poi
+   tabella dei nomi); senza `body` → dizionario corpo → collezioni (ramo
+   "Sistema solare"); collezioni con corpo ignoto elencate a parte.
+8. **`query_epntap(service, adql, ...)`:** ADQL su una tabella
+   `epn_core` (altrimenti `ADQL_INVALID`), eseguita con `tap_query` del 14;
+   corpo della tabella = nome canonico di `target_name` se tutte le righe
+   hanno lo stesso corpo e `spatial_frame_type = body` (convenzioni
+   dichiarate nei metadati della tabella: planetocentrica, est, 0–360°,
+   fonte EPN-TAP 2.0); tutte `celestial` → `celestial`; altrimenti (corpi o
+   tipi diversi, colonne mancanti) → `body = None` con `BODY_UNKNOWN` e il
+   motivo (la tabella si apre da sola).
+9. **`load_pds_image(source, *, structure=None)`:** percorso locale
+   dell'etichetta PDS4 (`.xml`); immagini = strutture `Array_2D*` lette con
+   `pds4_tools`; più immagini senza `structure` →
+   `PDS_STRUCTURE_CHOICE_REQUIRED` con l'elenco; valori fisici in `float64`
+   (scala dell'etichetta applicata da `pds4_tools`), costanti speciali →
+   NaN (maschera di `as_masked`), il conteggio nel risultato; corpo da
+   `Target_Identification/name` normalizzato (più corpi o nessuno →
+   `body = None` con `BODY_UNKNOWN`). **URL: fermo su D19-9** (un prodotto
+   PDS4 è etichetta + file di dati: lo scaricamento di più file con la rete
+   del 14 non è descritto) → `PDS_UNREADABLE` che lo dice.
+
 ## 4. Cosa NON fa
 
 - Non calcola posizioni o effemeridi dei corpi del Sistema solare nel cielo
@@ -113,7 +274,12 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 `src/astrotwo/core/planetary_data.py`.
 
 - **`PlanetaryBody`** (classe): nome IAU del corpo e costanti di forma e
-  rotazione lette dalla libreria scelta (D19-1); non si crea senza fonte.
+  rotazione lette dalla libreria scelta (D19-1); non si crea senza fonte
+  (`from_name`, §3 scelta 2).
+- **`normalize_body_name(name)`** — nome canonico della tabella dei corpi
+  (D12-6, §3), usato anche dal 12.
+- **`set_planetary_data_enabled(flag)`**, **`planetary_data_enabled()`** —
+  opzione D19-5 (§3 scelta 1).
 - **`PlanetaryPosition`** (classe): longitudine, latitudine, corpo e
   convenzioni; non si crea senza corpo e convenzioni.
 - **`body_of(dataset)`** — restituisce il corpo dichiarato nei metadati di un
@@ -139,8 +305,9 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | HiPS (standard IVOA) | superfici planetarie | stesso formato dei HiPS celesti; metadati del corpo **da verificare** nello standard |
 | MOC (standard IVOA) | coperture planetarie | supporto planetario **da verificare** (D19-7) |
 | Formato PDS (Planetary Data System) | immagini planetarie | formato standard degli archivi planetari della NASA |
-| `spiceypy` + kernel PCK generici della NAIF (D19-1) | conversioni di convenzione, costanti dei corpi | licenze e installazione **da verificare prima del codice** |
-| `pds4_tools` (PDS4), `pdr` da valutare (PDS3) (D19-2b) | lettura delle immagini PDS | licenze e installazione **da verificare prima del codice** |
+| `spiceypy` 8.3.0 (MIT, con il toolkit CSPICE N0067 della NAIF) + kernel PCK `pck00011.tpc` della NAIF incluso nel progetto (D19-1) | nomi e identificativi NAIF, raggi, conversioni di latitudine | verificati il 2026-10-13 (§3, P0); avvisi in `THIRD_PARTY_LICENSES` |
+| `pds4_tools` 1.4 (BSD-3-Clause) (D19-2b) | lettura delle immagini PDS4 | verificato il 2026-10-13 (§3, P0) |
+| `pdr` (PDS3) (D19-2b) | lettura PDS3 | verificato il 2026-10-13 ma **non adottato**: fermo su D19-8 |
 | `astropy.units` | unità di angoli e distanze | regola d'oro n. 4 |
 
 ## 9. Regole e vincoli
@@ -178,6 +345,9 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | File PDS illeggibile o versione non supportata | nessuna immagine aperta | `PDS_UNREADABLE` |
 | Servizio EPN-TAP non raggiungibile | errore del modulo 14 inoltrato | `NET_TIMEOUT` |
 | Opzione dei dati planetari disattivata | rifiuto con indicazione della preferenza | `PLANETARY_DATA_DISABLED` |
+| Più immagini nel prodotto PDS4 senza `structure` | rifiuto con l'elenco delle strutture | `PDS_STRUCTURE_CHOICE_REQUIRED` |
+| Kernel PCK incluso alterato (SHA-256 diverso) | nessuna costante dei corpi | `PLANETARY_KERNEL_INVALID` |
+| Query EPN-TAP non rivolta a una tabella `epn_core` | rifiuto prima della rete | `ADQL_INVALID` |
 | Sovrapposizione forzata con l'opzione esplicita | eseguita; il risultato e il comando registrato citano la forzatura e i corpi coinvolti | avviso `BODY_MISMATCH_FORCED` |
 
 ## 11. Esposizione all'IA
@@ -206,7 +376,7 @@ corpo di un dato né calcola coordinate.
 | T5 | Latitudine planetocentrica ↔ planetografica | convertire una latitudine scelta dal tester per un corpo con schiacciamento noto | coincide con la libreria di D19-1; ritorno entro 1e-9 gradi | ricalcolo con la libreria |
 | T6 | Convenzione mancante | posizione senza tipo di latitudine | `PLANETARY_CONVENTION_REQUIRED` | test di unità |
 | T7 | EPN-TAP | query EPN-TAP su un servizio simulato | tabella con corpo e convenzioni dichiarati | servizio simulato (test di rete separato per il servizio reale) |
-| T8 | Immagine PDS | leggere un file PDS di esempio fornito dalla libreria scelta | immagine aperta con metadati del corpo; valori uguali a quelli letti dalla libreria | confronto con la libreria di D19-2 |
+| T8 | Immagine PDS | leggere un file PDS4 di esempio (`pds4_tools` non ne fornisce: prodotto generato nel test, §3 P0 punto 3) | immagine aperta con metadati del corpo; valori uguali a quelli letti dalla libreria | confronto con la libreria di D19-2 |
 | T9 | Opzione disattivata | chiamare una funzione del modulo con l'opzione disattivata | `PLANETARY_DATA_DISABLED`; funzioni celesti non toccate | test di unità |
 | T11 | Sovrapposizione forzata | ripetere T1 con l'opzione di forzatura | sovrapposizione eseguita, avviso `BODY_MISMATCH_FORCED` nel risultato e nel comando registrato | test di unità |
 | T10 | Riproducibilità | rieseguire il comando registrato di T4 e T5 | risultati identici | confronto con il registro del modulo 24 |
@@ -218,13 +388,16 @@ corpo di un dato né calcola coordinate.
   **kernel PCK generici della NAIF**, versione dichiarata nel risultato. **Da
   verificare prima del codice:** licenze di `spiceypy` e dei kernel,
   installazione su macOS, assenza di sistemi fissi ai corpi in Astropy.
+  **Verificato il 2026-10-13** (§3, P0 punti 1, 2, 7).
 - **D19-2 — Formato PDS: DECISA il 2026-10-08 (decisione del proprietario).**
   Lettura PDS **nel modulo 19**, non nell'11; **PDS4 obbligatorio**; PDS3 solo
   se esiste una libreria consolidata.
 - **D19-2b — Libreria PDS e licenza: DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** **`pds4_tools`** per PDS4;
   per PDS3 si valuta **`pdr`**. **Da verificare prima del codice:** licenze,
-  manutenzione e installazione su macOS di entrambe.
+  manutenzione e installazione su macOS di entrambe. **Verificato il
+  2026-10-13** (§3, P0 punti 3, 4): `pds4_tools` adottato; `pdr` lecito
+  ma "Beta" → D19-8.
 - **D19-3 — Metadati del corpo: DECISA il 2026-10-08 (decisione del
   proprietario).** Campo `body` obbligatorio nei metadati dei moduli 12, 13,
   14 e 16; per i dati astronomici vale `celestial` (sfera celeste), ricavato
@@ -245,12 +418,30 @@ corpo di un dato né calcola coordinate.
 - **D19-6 — Corpi supportati inizialmente: DECISA il 2026-10-09 (decisione del
   proprietario sulla checklist del livello 1).** i corpi che hanno un HiPS nel
   MocServer e sono presenti nel kernel PCK; **Luna e Marte obbligatori** per i
-  test.
+  test. **Tabella (28 corpi) approvata il 2026-10-13** con la regola dei
+  nomi di D12-6 (§3).
 - **D19-7 — MOC planetari: DECISA il 2026-10-09 (decisione del proprietario
   sulla checklist del livello 1).** **prima verificare** lo standard MOC 2.0 e
   `mocpy` (vincolo prima del codice); se non supportano coperture planetarie,
   MOC HEALPix con metadato `body` (D19-3), dichiarato come estensione di
   AstroTwo.
+
+- **D19-8 — PDS3 con `pdr`: DA DECIDERE (aperta il 2026-10-13, Gruppo 3).**
+  La verifica di P0 (§3 punto 4) trova licenze compatibili, installazione
+  semplice e manutenzione attiva, ma gli autori classificano `pdr` come
+  **"Beta"** e porta `pandas` e altre tre dipendenze. D19-2 ammette PDS3
+  "solo con libreria consolidata". **Raccomandazione:** ammetterlo come
+  **dipendenza facoltativa** (installata solo se l'utente apre PDS3), con
+  l'avviso nel risultato che la lettura è di una libreria Beta e un test
+  su file PDS3 reali piccoli prima dell'adozione; in alternativa, PDS3 non
+  supportato nel livello 1. Ferma solo la lettura PDS3 di P4.
+- **D19-9 — `load_pds_image` da URL: DA DECIDERE (aperta il 2026-10-13,
+  Gruppo 3).** §6 ammette "percorso o URL", ma un prodotto PDS4 è
+  un'etichetta più uno o più file di dati: non è descritto come scaricarli
+  (tutti i file nominati nell'etichetta, dalla stessa cartella dell'URL,
+  con la rete e la cache del 14?). **Raccomandazione:** sì, scaricare
+  l'etichetta e i file che nomina dalla stessa cartella con la rete del 14
+  e la cache comune (04), con origine e data. Ferma solo gli URL.
 
 ## 14. Registro modifiche
 
@@ -261,3 +452,4 @@ corpo di un dato né calcola coordinate.
 | 2026-10-09 | Claude Code | **D19-1, D19-2b, D19-5, D19-6, D19-7 DECISE** (checklist del livello 1): `spiceypy` + kernel PCK della NAIF; `pds4_tools` (PDS4) e `pdr` da valutare (PDS3); dati planetari disattivati per default; corpi con HiPS nel MocServer e nel kernel PCK, Luna e Marte obbligatori per i test; MOC planetari da verificare, altrimenti estensione con `body`. Le verifiche di licenza e supporto restano vincoli prima del codice. §3, §8 aggiornati. |
 | 2026-10-09 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-09. |
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): D19-5 (dati planetari disattivati per default) resta, con motivazione nostra al posto di "come in Aladin" (§3 punto 9, §13); formato PDS motivato come standard degli archivi planetari (§3, §8). Stato `approvato` invariato. |
+| 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): divisione in P0–P4; **tabella dei nomi (D12-6)** approvata e scritta (28 corpi, nome IAU inglese con iniziale maiuscola, `bodn2c` → NAIF → nome canonico), applicata anche al 12. **Esiti di P0** in §3 (spiceypy MIT con CSPICE e regole NAIF; kernel `pck00011.tpc` incluso con SHA-256; `pds4_tools` BSD-3 senza file di esempio; `pdr` Beta; `hips_body` minuscolo nel MocServer; EPN-TAP 2.0; nessun sistema solidale ai corpi in astropy); scelte minori proposte in §3; nuove `PDS_STRUCTURE_CHOICE_REQUIRED`, `PLANETARY_KERNEL_INVALID` (§10); nuove **D19-8** (PDS3 con `pdr`) e **D19-9** (PDS da URL), Gruppo 3. Stato `approvato` invariato. |

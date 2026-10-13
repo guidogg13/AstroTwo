@@ -49,7 +49,56 @@ NOTES: dict[str, str] = {
     "numpy": "Le librerie compilate incluse nella ruota (OpenBLAS e runtime GCC) sono descritte nel LICENSE.txt.",
     "scipy": "Le librerie compilate incluse nella ruota (OpenBLAS e runtime GCC) sono descritte nel LICENSE.txt.",
     "pillow": "Il file sotto contiene anche le licenze delle librerie di immagini incluse nella ruota.",
+    "spiceypy": (
+        "La ruota include il toolkit CSPICE (N0067) della NAIF (Caltech/JPL per la NASA), soggetto alle regole "
+        "d'uso della NAIF riportate sotto nella voce del kernel pck00011.tpc (uso anche commerciale ammesso senza "
+        "licenze né costi; inclusione dei moduli del toolkit in un programma che li usa ammessa; clausola di "
+        "esclusione di garanzia da riportare)."),
+    "pds4-tools": "Small Bodies Node della NASA PDS (University of Maryland).",
 }
+
+#: Regole d'uso della NAIF (https://naif.jpl.nasa.gov/naif/rules.html, lette il 2026-10-13): estratti pertinenti.
+NAIF_RULES = """Rules Regarding Use of SPICE (NAIF, https://naif.jpl.nasa.gov/naif/rules.html), estratti letti il
+2026-10-13:
+
+Toolkit Redistribution
+Redistribution of the unmodified SPICE Toolkit, such as from a mirror site, is prohibited without prior,
+written clearance from the NAIF manager. However, including the SPICE Toolkit modules (source and object
+code), documentation, and relevant SPICE Toolkit programs and allied User Guides as part of a package
+supporting a customer-built SPICE-based tool is entirely appropriate. This includes providing a new 3rd party
+interface to the SPICE Toolkit, subject to the relevant rules listed elsewhere on this webpage.
+
+Kernels Distribution
+SPICE kernels placed on the NAIF server may be downloaded and used by anyone, consistent with the other rules
+found on this web page.
+
+Kernels Redistribution
+Redistribution of SPICE kernels distributed by NAIF is permitted as long as they have not been modified. If a
+kernel distributed by NAIF has been modified in any way, any embedded or otherwise allied attribution of the
+original kernel producer must be replaced with the name and institution of whomever has made the last
+modification. Redistribution of kernels distributed by any other entity is subject to the rules on and of
+that entity.
+
+Commercial Use of SPICE
+Use of SPICE components in commercial products is allowed, subject to the substantial restrictions on user
+support noted under "Getting Help from NAIF" above. No fees or licensing are required. Acknowledgement of the
+use of NASA's SPICE system is encouraged.
+
+Disclaimer applicable to all NAIF-provided software
+THIS SOFTWARE AND ANY RELATED MATERIALS WERE CREATED BY THE CALIFORNIA INSTITUTE OF TECHNOLOGY (CALTECH) UNDER
+A U.S. GOVERNMENT CONTRACT WITH THE NATIONAL AERONAUTICS AND SPACE ADMINISTRATION (NASA). THE SOFTWARE IS
+TECHNOLOGY AND SOFTWARE PUBLICLY AVAILABLE UNDER U.S. EXPORT LAWS AND IS PROVIDED "AS-IS" TO THE RECIPIENT
+WITHOUT WARRANTY OF ANY KIND, INCLUDING ANY WARRANTIES OF PERFORMANCE OR MERCHANTABILITY OR FITNESS FOR A
+PARTICULAR USE OR PURPOSE (AS SET FORTH IN UNITED STATES UCC§2312-§2313) OR FOR ANY PURPOSE WHATSOEVER, FOR THE
+SOFTWARE AND RELATED MATERIALS, HOWEVER USED. IN NO EVENT SHALL CALTECH, ITS JET PROPULSION LABORATORY, OR NASA
+BE LIABLE FOR ANY DAMAGES AND/OR COSTS, INCLUDING, BUT NOT LIMITED TO, INCIDENTAL OR CONSEQUENTIAL DAMAGES OF
+ANY KIND, INCLUDING ECONOMIC DAMAGE OR INJURY TO PROPERTY AND LOST PROFITS, REGARDLESS OF WHETHER CALTECH, JPL,
+OR NASA BE ADVISED, HAVE REASON TO KNOW, OR, IN FACT, SHALL KNOW OF THE POSSIBILITY. RECIPIENT BEARS ALL RISK
+RELATING TO QUALITY AND PERFORMANCE OF THE SOFTWARE AND ANY RELATED MATERIALS, AND AGREES TO INDEMNIFY CALTECH
+AND NASA FOR ALL THIRD-PARTY CLAIMS RESULTING FROM THE ACTIONS OF RECIPIENT IN THE USE OF THE SOFTWARE.
+
+Acknowledgement: AstroTwo uses NASA's SPICE system (NAIF, JPL) for planetary body names and constants.
+"""
 
 
 @dataclass(frozen=True)
@@ -64,7 +113,18 @@ class Component:
 
 
 #: Componenti non Python inclusi nel progetto (es. kernel della NAIF), con il testo dell'avviso.
-EXTRA_COMPONENTS: tuple[Component, ...] = ()
+EXTRA_COMPONENTS: tuple[Component, ...] = (
+    Component(
+        name="pck00011.tpc (kernel PCK generico della NAIF)",
+        version="2022-12-27",
+        license="regole d'uso della NAIF (ridistribuzione ammessa solo senza modifiche)",
+        source=("https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc, incluso senza modifiche in "
+                "src/astrotwo/core/data/naif/ (SHA-256 "
+                "3dff7b1dbeceaa01f25467767d3fa25816051c85d162d1edf04acb310ee28bb1); dati del rapporto IAU WGCCRE "
+                "2015 (Archinal et al. 2018)"),
+        license_text=NAIF_RULES,
+    ),
+)
 
 
 def _roots() -> list[Requirement]:

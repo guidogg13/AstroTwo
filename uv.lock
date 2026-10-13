@@ -82,12 +82,14 @@ dependencies = [
     { name = "matplotlib" },
     { name = "mocpy" },
     { name = "numpy" },
+    { name = "pds4-tools" },
     { name = "pillow" },
     { name = "pyvo" },
     { name = "reproject" },
     { name = "requests" },
     { name = "scipy" },
     { name = "spherical-geometry" },
+    { name = "spiceypy" },
 ]
 
 [package.dev-dependencies]
@@ -104,12 +106,14 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "mocpy", specifier = ">=0.20.0" },
     { name = "numpy", specifier = ">=2.5.3" },
+    { name = "pds4-tools", specifier = ">=1.4" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pyvo", specifier = ">=1.9.1" },
     { name = "reproject", specifier = ">=0.21.0" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "scipy", specifier = ">=1.18.1" },
     { name = "spherical-geometry", specifier = ">=1.4.0" },
+    { name = "spiceypy", specifier = ">=8.3.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -666,6 +670,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pds4-tools"
+version = "1.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/45/5e/b01c83301a3f9e1c278effbde2fd0b2cc19aeab91195c02ab41b52caeebc/pds4_tools-1.4.tar.gz", hash = "sha256:8fb2d16d767cde6d15c2afb234372b9d6ade31d896ed4f73d6d3886950eed228", size = 430705, upload-time = "2025-03-16T17:16:45.465Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/a1/bc01d4ba74b66bb19a45a66a109b74944f0fc62d0d5281cb2a4abdcba24b/pds4_tools-1.4-py2.py3-none-any.whl", hash = "sha256:a1f5cbcf8d2ee62a7e3ae2168d8434ccfb621eb727342973207c80f9e32e06d9", size = 280653, upload-time = "2025-03-16T17:16:44.134Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "12.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -942,6 +958,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/a7/e9bae57613edc36210bec2595c37b64b9cb795705d92a5f435f108370386/spherical_geometry-1.4.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:229caa398562fe88df6b9ee55cfea263ee8db86958e23d827fd9a096817598ad", size = 9610361, upload-time = "2026-03-11T16:58:12.706Z" },
     { url = "https://files.pythonhosted.org/packages/a5/8f/c044508941546d25f823ebe9a7a7ae3912a186e41a81a8a06e75cc1e2ceb/spherical_geometry-1.4.0-cp312-cp312-win32.whl", hash = "sha256:72ff1fe7c3690b078ab3c60e4de4086f7fa45381930620341c5a99a2071313aa", size = 7701493, upload-time = "2026-03-11T16:58:15.02Z" },
     { url = "https://files.pythonhosted.org/packages/ed/03/b3836d3c1f5d44e57684b3e9e68b9a765426523c3f724440223fe1447c83/spherical_geometry-1.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:82f24bf6c2ca92776957a410771e2d90b663b4c3c026e78ea5da051234d2d424", size = 7703212, upload-time = "2026-03-11T16:58:16.733Z" },
+]
+
+[[package]]
+name = "spiceypy"
+version = "8.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5e/80/b2b113e9efffb29faf6c231354643763ef3a204137aeada78d9e27a2e568/spiceypy-8.3.0.tar.gz", hash = "sha256:abe5223a80c253c5fa3318a52e80789807d0b1f4dbbc464dc92b35b83024b018", size = 652647, upload-time = "2026-10-11T21:21:21.69Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/36/071ce8f94f6ac9eca3a9cbb125cac186642543d36687ee547e41c3322e4e/spiceypy-8.3.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:b19e8d182907ee87f5526e06155ecd62ce21ab9aab109ba57d81cdefddc8d476", size = 2138979, upload-time = "2026-10-11T21:20:41.975Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/4d/4eb03083f0f20a58de4423064618b22302b0cb4ba693004e3d9501097a01/spiceypy-8.3.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:82b4975268d7acb7514ec0bc0f78500975ece13ee882f6382d0dbdfeead84623", size = 1911050, upload-time = "2026-10-11T21:20:43.779Z" },
+    { url = "https://files.pythonhosted.org/packages/73/41/edea4241c7b12c625581b3f9b8b505d123e03fac3a861548c83843a856b4/spiceypy-8.3.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:62168bd511e438040d7b2389c546e2635717410a6a108036febb3e1c1ca0cb7b", size = 2334729, upload-time = "2026-10-11T21:20:45.412Z" },
+    { url = "https://files.pythonhosted.org/packages/73/6b/892861d97617d164220402ddae2f797a592b2d1685fb4e9775988847caca/spiceypy-8.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:4fe34342b561b01657573f925d5a602fff295d4cb0f81afdab3a7d0c9fbef6b2", size = 2427159, upload-time = "2026-10-11T21:20:47.184Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/5b/68c5df8f2951a0725997e33e5f13929fc0f031feaf47f397ff4e838099e2/spiceypy-8.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:94c6125ae9e78d39eb5f626d646854f9c3a8736184a0ba07294b5842c0e52309", size = 2009224, upload-time = "2026-10-11T21:20:49.034Z" },
 ]
 
 [[package]]
