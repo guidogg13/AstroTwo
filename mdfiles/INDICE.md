@@ -8,7 +8,11 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-14 — **`display_positions` nel 13** (D10-2 in un passo; T34) usata dalla demo
+**Ultimo aggiornamento:** 2026-10-14 — **D16-8 decisa e applicata** (MOC da immagine: blocchi più angoli di
+contorno; `moc_from_image` sulla DSS da 10,3 a 0,2 s) e **D14-13 aperta** (reindirizzamento http → https
+dell'ESO); 16 e 14 modificati nel registro e restano `approvato`. Test 494 di default. Aperte 14. Riepilogo
+invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-14 — **`display_positions` nel 13** (D10-2 in un passo; T34) usata dalla demo
 delle Pleiadi; **D16-8 aperta** (MOC da immagine con i blocchi: la regola decisa perde celle sul bordo, regola e
 codice non applicati); 13 e 16 modificati nel registro e restano `approvato`. Test 492 di default. Aperte 14.
 Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.

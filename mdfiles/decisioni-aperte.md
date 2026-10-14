@@ -37,8 +37,11 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-14: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **10**
-(nuova `D16-8`, MOC da immagine con i blocchi).
+**Dal 2026-10-14, dopo la decisione su D16-8: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`,
+`A11`) · Gruppo 3: **10** (decisa `D16-8`, MOC da immagine con i blocchi più gli angoli di contorno; nuova `D14-13`,
+reindirizzamento http → https dell'ESO).
+
+Prima, **sempre il 2026-10-14: 14 aperte** — Gruppo 3: **10** (nuova `D16-8`).
 
 Prima, **dal 2026-10-13, livello 1 chiuso (decisioni del proprietario su D17-9, D19-8, D19-9): 13 aperte** — Gruppo 1:
 **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`, `A11`) · Gruppo 3: **9** (decise `D17-9` `distance_to` per ellisse,
@@ -259,7 +262,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
 | `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
 | `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
-| `D16-8` | MOC da immagine con i blocchi di b × b pixel (decisi il 2026-10-14): la regola perde celle sul bordo (DSS: 4,1104 contro 4,1399 deg²; 15 immagini casuali su 30). Raccomandazione: aggiungere gli angoli dei pixel sul contorno della regione dei blocchi validi (0 su 30, DSS identico in 0,26 s) | `16-core-moc.md` §13 |
+| `D14-13` | URL dei servizi dell'ESO in http (dal registro VO e nelle risposte SIA): il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata; oggi la demo usa https direttamente, nessuna modifica al codice del 14 | `14-core-protocolli-vo.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
 ## 6. Note
@@ -326,3 +329,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-13 | Claude Code | **Decise dal proprietario il 2026-10-13** `D17-8` (`distance_to` = distanza angolare minima, cerchi con Astropy, poligoni con la distanza punto–arco) e `D18-7` (unità scritta nel testo, due punti solo con un parametro esplicito, nessuna convenzione sulla posizione) e tolte dal Gruppo 3 (prima nei file di origine 17 e 18). Nuove nel Gruppo 3: `D17-9` (`distance_to` per ellisse, freccia, testo, tracciato aperto), `D19-8` (PDS3 con `pdr`), `D19-9` (PDS da URL). `A11` annotata con `THIRD_PARTY_LICENSES`. Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 11). |
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (prima nei file di origine 17 e 19): `D17-9` decisa (ellisse numerica con precisione dichiarata, freccia e tracciato aperto come archi di cerchio massimo, testo `OPERATION_UNSUPPORTED`) e `D19-9` decisa (PDS da URL con la rete del 14 e la cache comune), tolte dal Gruppo 3; `D19-8` **rimandata, bassa priorità** (PDS3 non ancora supportato), resta nel Gruppo 3. `A11` annotata: testo di licenza di `pims` trovato (segnaposto non compilato da valutare). Conteggi: aperte **13** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 9). |
 | 2026-10-14 | Claude Code | **Nuova nel Gruppo 3: `D16-8`** (prima nel file di origine 16 §13): la regola dei blocchi per `moc_from_image` decisa il 2026-10-14 perde celle sul bordo; raccomandazione con le misure. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10). |
+| 2026-10-14 | Claude Code | **Decisa dal proprietario `D16-8`** (blocchi più angoli dei pixel lungo il contorno della regione dei blocchi validi; crescita ≤ b − 1 pixel) e tolta dal Gruppo 3 (prima nel file di origine 16). **Nuova nel Gruppo 3: `D14-13`** (prima nel file di origine 14): reindirizzamento http → https dell'ESO che codifica due volte l'URL. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10). |

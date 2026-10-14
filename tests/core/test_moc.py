@@ -483,7 +483,7 @@ def check_against_polygon(moc: Moc, poly: Moc, order: int) -> None:
     assert abs(moc.area.to_value(u.sr) - poly.area.to_value(u.sr)) <= n_border * cell_area(order)
 
 
-@pytest.mark.parametrize("order", [9, 14])  # pixel più piccolo di metà cella (k = 1) e più grande (k > 1)
+@pytest.mark.parametrize("order", [9, 14])  # pixel più piccolo di metà cella (blocchi) e più grande (k > 1)
 def test_moc_from_image(tmp_path, order):
     ny, nx = (100, 200) if order == 9 else (10, 20)
     image = write_image(tmp_path / "i.fits", np.ones((ny, nx), dtype=np.float32))
@@ -495,6 +495,109 @@ def test_moc_from_image(tmp_path, order):
     data[:, nx // 2:] = np.nan
     half = moc_from_image(write_image(tmp_path / "h.fits", data), order)
     check_against_polygon(half, footprint_polygon(image, nx // 2 - 0.5, ny - 0.5, order), order)
+
+
+def pixel_corner_moc(image, valid: np.ndarray, order: int) -> MOC:
+    """MOC calcolato pixel per pixel (ricalcolo nel test con astropy.wcs e mocpy): angoli di ogni pixel valido."""
+    ny, nx = valid.shape
+    corner = np.zeros((ny + 1, nx + 1), dtype=bool)
+    for dy in (0, 1):
+        for dx in (0, 1):
+            corner[dy:dy + ny, dx:dx + nx] |= valid
+    yy, xx = np.nonzero(corner)
+    world = image.wcs.wcs.pixel_to_world(xx - 0.5, yy - 0.5).icrs
+    return MOC.from_lonlat(lon=world.ra, lat=world.dec, max_norder=order)
+
+
+def grown_to_blocks(valid: np.ndarray, b: int) -> np.ndarray:
+    """Maschera estesa ai blocchi validi interi (ricalcolo nel test): limite della crescita, b − 1 pixel."""
+    ny, nx = valid.shape
+    nby, nbx = -(-ny // b), -(-nx // b)
+    blocks = np.zeros((nby * b, nbx * b), dtype=bool)
+    blocks[:ny, :nx] = valid
+    any_valid = blocks.reshape(nby, b, nbx, b).any(axis=(1, 3))
+    return np.repeat(np.repeat(any_valid, b, axis=0), b, axis=1)[:ny, :nx]
+
+
+def test_moc_from_image_blocks(tmp_path):
+    """Pixel piccolo (decisione del 2026-10-14, D16-8): blocchi di b × b pixel più angoli di contorno."""
+    order, ny, nx = 9, 103, 201  # pixel 0.01°, cella ≈ 0.1145° → b = 5; blocchi parziali sui due bordi
+    cell = float(MOC.order_to_spatial_resolution(order).to_value(u.deg))
+    b = int(np.floor(cell / (2 * 0.01)))
+    assert b == 5 and b * 0.01 <= cell / 2  # passo atteso, mai oltre metà cella
+    full = moc_from_image(write_image(tmp_path / "f.fits", np.ones((ny, nx), dtype=np.float32)), order)
+    n_blocks = (-(-nx // b) + 1) * (-(-ny // b) + 1)  # bordi dei blocchi, l'ultimo parziale
+    n_contour = 2 * (nx + ny)  # angoli dei pixel sul bordo dell'immagine
+    text = full.history[-1]
+    assert f"blocchi di {b} × {b} pixel" in text and f"passo {b * 0.01!r}°" in text
+    assert f"{n_blocks + n_contour} punti ({n_blocks} angoli dei blocchi, {n_contour} angoli di contorno)" in text
+    full_image = write_image(tmp_path / "g.fits", np.ones((ny, nx), dtype=np.float32))
+    assert pixel_corner_moc(full_image, np.ones((ny, nx), dtype=bool), order) == full.moc  # uguale pixel per pixel
+    # Pixel grande: resta la formula k (nessun blocco).
+    big = moc_from_image(write_image(tmp_path / "k.fits", np.ones((10, 20), dtype=np.float32)), 14)
+    assert "passi per pixel" in big.history[-1] and "blocchi" not in big.history[-1]
+
+
+def random_mask(rng, ny: int, nx: int, b: int) -> np.ndarray:
+    """Maschere difficili: strisce sottili sul bordo, buchi interni, dischi, pixel isolati, diagonali sottili."""
+    yy, xx = np.mgrid[:ny, :nx]
+    kind = rng.integers(5)
+    if kind == 0:  # striscia di 1–2 pixel lungo un bordo, eventualmente solo per un tratto
+        valid = np.zeros((ny, nx), dtype=bool)
+        w, side = int(rng.integers(1, 3)), int(rng.integers(4))
+        a, z = sorted(rng.integers(0, max(ny, nx), 2))
+        if side == 0:
+            valid[:w, a:z + 1] = True
+        elif side == 1:
+            valid[-w:, a:z + 1] = True
+        elif side == 2:
+            valid[a:z + 1, :w] = True
+        else:
+            valid[a:z + 1, -w:] = True
+    elif kind == 1:  # tutta valida con buchi interni (anche più piccoli di un blocco)
+        valid = np.ones((ny, nx), dtype=bool)
+        for _ in range(int(rng.integers(1, 6))):
+            y0, x0 = rng.integers(0, ny), rng.integers(0, nx)
+            valid[y0:y0 + int(rng.integers(1, 3 * b)), x0:x0 + int(rng.integers(1, 3 * b))] = False
+    elif kind == 2:  # disco con buco
+        cy, cx, r = rng.uniform(0, ny), rng.uniform(0, nx), rng.uniform(3, max(ny, nx) / 2)
+        valid = (yy - cy) ** 2 + (xx - cx) ** 2 < r ** 2
+        valid &= ~((yy - cy) ** 2 + (xx - cx) ** 2 < (r * rng.uniform(0, 0.6)) ** 2)
+    elif kind == 3:  # pixel isolati
+        valid = rng.random((ny, nx)) < rng.uniform(0.001, 0.02)
+    else:  # diagonale sottile
+        valid = np.abs((yy - rng.uniform(0, ny)) - rng.uniform(-2, 2) * (xx - rng.uniform(0, nx))) < rng.uniform(0.3, 1.5)
+    if not valid.any():
+        valid[int(rng.integers(ny)), int(rng.integers(nx))] = True
+    return valid
+
+
+def test_moc_from_image_blocks_random_masks(tmp_path):
+    """D16-8: 300 maschere casuali contro il MOC pixel per pixel: nessuna cella persa, crescita ≤ b − 1 pixel."""
+    rng = np.random.default_rng(20261014)
+    sizes = []
+    for case in range(300):
+        order = int(rng.integers(7, 11))
+        cell = float(MOC.order_to_spatial_resolution(order).to_value(u.deg))
+        b = int(rng.integers(2, 9))
+        pixel = cell / (2 * (b + 0.5))  # b = ⌊cella / (2 × pixel)⌋
+        ny, nx = (int(v) for v in rng.integers(8, 60, 2))  # dimensioni non multiple di b: blocchi parziali
+        header = fits.Header({"CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN", "CRVAL1": float(rng.uniform(0, 360)),
+                              "CRVAL2": float(rng.uniform(-85, 85)), "CRPIX1": nx / 2, "CRPIX2": ny / 2,
+                              "CDELT1": -pixel, "CDELT2": pixel, "CROTA2": float(rng.uniform(0, 360)),
+                              "CUNIT1": "deg", "CUNIT2": "deg", "RADESYS": "ICRS"})
+        valid = random_mask(rng, ny, nx, b)
+        path = tmp_path / f"r{case}.fits"
+        fits.PrimaryHDU(data=np.where(valid, 1.0, np.nan).astype(np.float32), header=header).writeto(path)
+        from astrotwo.core.images_fits import load_image
+
+        image = load_image(path)
+        moc = moc_from_image(image, order)
+        assert f"blocchi di {b} × {b} pixel" in moc.history[-1], case
+        assert pixel_corner_moc(image, valid, order).difference(moc.moc).empty(), case  # nessuna cella persa
+        assert moc.moc.difference(pixel_corner_moc(image, grown_to_blocks(valid, b), order)).empty(), case
+        sizes.append(b)
+    assert set(sizes) == set(range(2, 9))
 
 
 def test_moc_from_image_errors(tmp_path):
@@ -868,3 +971,31 @@ def test_read_moc_url_network(cache):
     url = "https://alasky.cds.unistra.fr/MocServer/query?ID=CDS/II/246/out&get=moc&order=3&fmt=fits"
     moc = read_moc(url, cache=cache)
     assert moc.kind == "space" and moc.body == "celestial" and moc.space_order <= 3 and moc.sky_fraction > 0.9
+
+
+@pytest.mark.network
+def test_moc_from_image_blocks_dss_network():
+    """D16-8 su dati veri: immagine DSS2-red della demo delle Pleiadi (2° × 2°, ordine 11, b = 51): MOC identico a
+    quello calcolato pixel per pixel nel test (angoli di ogni pixel, astropy.wcs e mocpy, a blocchi di righe)."""
+    from astrotwo.core.coordinates_wcs import resolve_name
+    from astrotwo.core.images_fits import load_image
+    from astrotwo.core.vo_protocols import sia_search
+
+    center = resolve_name("M45").coords
+    table = sia_search(center, 1.0 * u.deg, version=1, max_rows=100,
+                       service="https://archive.eso.org/bin/dss_sia/dss.sia?VERSION=1.0&").table.table
+    row = next(k for k in range(len(table))
+               if str(table["SurveyName"][k]) == "DSS2-red" and str(table["Format"][k]) == "image/gz-fits")
+    image = load_image(str(table["Url"][row]).replace("http://archive.eso.org/", "https://archive.eso.org/", 1))
+    moc = moc_from_image(image, 11)
+    assert "blocchi di 51 × 51 pixel" in moc.history[-1]
+    ny, nx = image.data.shape
+    assert np.all(np.isfinite(image.data))  # tutta valida: angoli di tutti i pixel
+    reference = MOC.new_empty(11)
+    x = np.arange(nx + 1) - 0.5
+    for start in range(0, ny + 1, 256):
+        y = np.arange(start, min(start + 256, ny + 1)) - 0.5
+        world = image.wcs.wcs.pixel_to_world(*np.meshgrid(x, y)).icrs
+        reference = reference.union(MOC.from_lonlat(lon=world.ra.ravel(), lat=world.dec.ravel(), max_norder=11))
+    assert moc.moc == reference
+    assert moc.area.to_value(u.deg ** 2) == pytest.approx(4.1399, abs=5e-5)

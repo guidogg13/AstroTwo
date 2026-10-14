@@ -187,12 +187,45 @@ di un dato sia sempre verificabile e confrontabile.
   posizioni riportata, mai propagata.
 - **Immagine (scelta minore, confermata il 2026-10-12):** `moc_from_image(image,
   order_max)`. Pixel validi = valori finiti, non mascherati e diversi da
-  `BLANK` per i dati interi. Per ogni pixel valido si campionano **angoli e
-  punti interni** a passo non più grande di **metà del lato di una cella**
-  all'ordine dato (`k` passi per pixel, `k` = ⌈2 × pixel / cella⌉, almeno 1;
-  i punti sul bordo tra un pixel valido e uno non valido contano); i punti
-  si convertono con il WCS dell'11 (`pixel_to_sky` del 10) e in ICRS; il MOC
-  contiene **ogni cella che contiene un punto**. Motivo: un poligono per
+  `BLANK` per i dati interi. Si campiona a passo non più grande di **metà
+  del lato di una cella** all'ordine dato (pixel = lato più grande del pixel
+  dal WCS, cella = risoluzione dell'ordine):
+  - **pixel grande (pixel ≥ cella / 2):** per ogni pixel valido si
+    campionano **angoli e punti interni**, `k` passi per pixel,
+    `k` = ⌈2 × pixel / cella⌉ (i punti sul bordo tra un pixel valido e uno
+    non valido contano);
+  - **pixel piccolo (pixel < cella / 2; decisione del proprietario del
+    2026-10-14):** si lavora su **blocchi di b × b pixel**,
+    `b` = ⌊cella / (2 × pixel)⌋ (almeno 1), a partire dal pixel (0, 0); sul
+    bordo destro e superiore restano **blocchi parziali**, più piccoli. Un
+    blocco è **valido se contiene almeno un pixel valido**; si campionano
+    gli **angoli dei blocchi validi**, compresi i blocchi parziali (un
+    angolo comune a più blocchi conta se almeno uno è valido). Passo = b ×
+    pixel ≤ cella / 2. **Contorno (D16-8, decisa il 2026-10-14):** si
+    aggiungono gli **angoli dei pixel lungo il contorno della regione dei
+    blocchi validi** (angoli di pixel che toccano sia un pixel di un blocco
+    valido sia un pixel di un blocco non valido o l'esterno dell'immagine),
+    pixel per pixel solo lì: senza di essi le celle che toccano il contorno
+    con una striscia più stretta del passo andrebbero perse (misure in §13).
+    Punti: angoli dei blocchi, al massimo (⌈nx / b⌉ + 1) × (⌈ny / b⌉ + 1),
+    più angoli di contorno, 2 × (nx + ny) per un'immagine tutta valida;
+    un punto presente in entrambi gli insiemi si conta due volte.
+    Conseguenza dichiarata: ai bordi della maschera dei pixel validi il MOC
+    **può crescere, mai perdere celle**: un blocco valido è campionato
+    intero, quindi i punti stanno al massimo **b − 1 pixel** oltre i pixel
+    validi (meno di un blocco, cioè meno di metà cella; non "mezzo blocco").
+    Il riferimento è il MOC calcolato pixel per pixel (angoli di ogni pixel
+    valido): il MOC a blocchi lo contiene e sta dentro quello della maschera
+    estesa ai blocchi validi interi.
+  Il risultato dichiara il modo usato (`k` passi per pixel, oppure blocchi
+  di b × b pixel con la **dimensione del blocco** b), il passo e il numero di
+  punti (con i blocchi: angoli dei blocchi e angoli di contorno). I punti si
+  convertono con il WCS dell'11 (`pixel_to_sky` del 10) e in ICRS; il MOC
+  contiene **ogni cella che contiene un punto**. Motivo dei blocchi:
+  campionare ogni pixel quando il pixel è molto più piccolo della cella
+  converte decine di milioni di punti senza cambiare il risultato (10 s per
+  l'immagine DSS2 di 2° × 2° della demo delle Pleiadi all'ordine 11, misura
+  del 2026-10-13). Motivo del campionamento: un poligono per
   pixel con `mocpy.MOC.from_polygons` è troppo lento (oltre 200 s per 200 000
   pixel in una prova del 2026-10-11) e `mocpy.MOC.from_fits_image` con
   maschera usa solo i centri dei pixel (approssimazione dichiarata dalla sua
@@ -502,7 +535,7 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T7 | Versioni MOC (H22) | file di prova **scritti nel test secondo il testo dello standard** (mai file di Aladin): FITS 1.x (intestazioni di 1.0/1.1, colonna `UNIQ` `1J`), 2.0 `NUNIQ` e `RANGE` (spaziale, temporale, spazio-temporale), JSON con e senza prefisso, testo; `MOCVERS='2.1'`; versione sconosciuta; `kind` mancante | stesse celle lette da `mocpy`; versione riportata ("1.1, assunta…", "2.0", "non dichiarata nel formato"); 2.1 → `MOC_VERSION_UNSUPPORTED` (D16-6); `MOC_TYPE_REQUIRED`; andata e ritorno in scrittura | confronto con `mocpy` |
 | T8 | Filtro MocServer (H26) | `query_mocserver` con un cerchio galattico e con un MOC su un servizio simulato; seconda richiesta uguale; `intersect` sconosciuto; proprietà riservata; poligono; risposta HTML d'errore; lettura di un MOC da URL (FITS e JSON, poi servizio spento); `build_moc` | parametri inviati (centro convertito in ICRS uguale ad astropy, `intersect`, `spacesys=C`, `moc` in POST); elenco delle collezioni con origine e data; seconda dalla cache; errori del §10; in cache solo FITS IVOA; `build_moc` uguale all'unione dei costruttori | servizio simulato (test di rete separati sul MocServer vero: collezioni attorno a M31 e lettura di un MOC da URL) |
 | T11 | Tempo e probabilità (P4) | intervalli UTC e istanti TT; ST-MOC da due osservazioni con proiezioni; mappa multi-ordine sintetica nel formato LIGO; mappa piatta RING con colonna vettoriale; somma sbagliata, densità negativa, unità mancante, `COORDSYS='G'` | celle uguali a `mocpy` sui tempi convertiti in TCB con `astropy.time` nel test; regione di credibilità uguale al calcolo indipendente del test (densità decrescente, probabilità ≥ livello) e probabilità contenuta uguale; RING→NESTED uguale ad `astropy-healpix`; errori del §10 | ricalcolo con astropy, `astropy-healpix` e `numpy` |
-| T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (k = 1) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
+| T10 | Creazione da catalogo e immagine (P2) | catalogo galattico con una riga senza posizione; immagine TAN tutta valida e con metà NaN, agli ordini 9 (blocchi) e 14 (k > 1); immagine intera con `BLANK`; immagine senza WCS; con i blocchi (D16-8): almeno 300 maschere casuali piccole (strisce sottili sul bordo, buchi interni, pixel isolati, blocchi parziali, rotazioni e ordini diversi) e, nei test di rete, l'immagine DSS della demo delle Pleiadi all'ordine 11 | celle uguali a `mocpy.MOC.from_lonlat` sulle posizioni ICRS ricalcolate con astropy; MOC dell'immagine tra il poligono degli angoli ristretto e allargato di una cella, area entro le celle di bordo; con i blocchi: b, passo e punti attesi dichiarati, nessuna cella persa rispetto al MOC pixel per pixel (angoli di ogni pixel valido) in nessun caso, MOC dentro quello pixel per pixel della maschera estesa ai blocchi validi (crescita ≤ b − 1 pixel); DSS: MOC identico al calcolo pixel per pixel (area 4,1399 deg²); `ROWS_EXCLUDED`, `WCS_MISSING`, `MOC_BODY_UNSUPPORTED` | ricalcolo con astropy e `mocpy` |
 | T9 | MocServer assente (H26) | `query_mocserver` senza rete | `MOCSERVER_UNAVAILABLE`, nessun elenco parziale | test di unità |
 | T12 | Corpo misto (scelta 5) | intersezione forzata celeste × Luna; poi unione, differenza, complemento, `contains` senza forzatura; con forzatura e un terzo corpo | `body = "mixed"` con i corpi ordinati; ogni operazione successiva senza forzatura → `BODY_MISMATCH`; con forzatura elenco dei corpi aggiornato e `BODY_FORCED` | test di unità |
 | T13 | MOC planetari e misti in FITS (scelta 6) | scrivere e rileggere un MOC di Marte, un MOC misto e uno ST-MOC della Luna; JSON e testo di Marte; `A2BODIES` tolto | stesso MOC e stesso corpo dopo andata e ritorno; `A2BODY`, `MOCVERS='2.0'`, `COORDSYS='C'`; `MOC_NONSTANDARD_EXTENSION` in scrittura e lettura; nessuna parola chiave per un MOC celeste; `MOC_BODY_UNSUPPORTED`; `MOC_UNREADABLE` | lettura dell'intestazione con `astropy.io.fits` |
@@ -572,7 +605,14 @@ L'IA non calcola né approssima mai superfici o coperture.
   risultato spazio-temporale con la rilettura JSON di `mocpy`, che li toglie.
   Test T14.
 
-- **D16-8 — MOC da immagine con i blocchi: celle perse al bordo — DA DECIDERE** (aperta il 2026-10-14). La regola decisa dal proprietario il 2026-10-14 (blocchi di b × b pixel, b = ⌊cella / (2 × pixel)⌋, angoli dei blocchi validi) **non garantisce "mai perdere celle"**: una cella che tocca il contorno solo con una striscia più stretta del passo non contiene angoli di blocco. Misure del 2026-10-14 (non nel codice): immagine DSS2 della demo all'ordine 11, 0,02 s ma area 4,1104 deg² contro 4,1399 deg² del calcolo attuale (celle perse sul bordo); su 30 immagini TAN casuali (rotazione, centro, maschere a disco) celle perse in 15. **Raccomandazione:** aggiungere ai punti dei blocchi gli **angoli dei pixel sul contorno della regione dei blocchi validi** (pixel per pixel solo lì): 0 casi con celle perse su 30, DSS in 0,26 s con MOC identico a quello attuale (28 544 punti di contorno). La crescita massima resta b − 1 pixel (meno di un blocco, non "mezzo blocco"). Finché è aperta, `moc_from_image` resta com'è (`k` passi per pixel).
+- **D16-8 — MOC da immagine con i blocchi: celle perse al bordo — DECISA il 2026-10-14.** La regola dei
+  blocchi (b × b pixel, b = ⌊cella / (2 × pixel)⌋, angoli dei blocchi validi) da sola non garantisce "mai
+  perdere celle": una cella che tocca il contorno solo con una striscia più stretta del passo non contiene
+  angoli di blocco (misure del 2026-10-14: DSS2 della demo all'ordine 11, area 4,1104 deg² contro 4,1399;
+  celle perse in 15 immagini casuali su 30). **Decisione del proprietario:** al MOC a blocchi si aggiungono
+  gli **angoli dei pixel lungo il contorno della regione dei blocchi validi**; crescita massima ai bordi
+  **b − 1 pixel** (non mezzo blocco); il risultato dichiara la dimensione del blocco. Applicata in §3,
+  test in §12 (T10).
 
 ## 14. Registro modifiche
 
@@ -595,3 +635,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-12 | Claude Code | **Allineamento specifica–codice** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato): §3 P5 — risposte del MocServer dichiarate ISO-8859-1 e lette secondo la codifica dichiarata (`MOCSERVER_CHARSET` del 14), regola già applicata nel codice di `query_mocserver`; **scelte minori del 16 tutte confermate** dal proprietario (le voci "da confermare" di §3 diventano confermate). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Difetto trovato dalla demo delle Pleiadi** (correzione che rispetta la specifica; registrata su indicazione del proprietario): la descrizione di `FilterResult` diceva "righe dentrol MOC" per `inside=True`; ora "righe dentro il MOC" ("fuori dal MOC" invariato). Test T4 esteso col controllo del testo. Nessun cambiamento di comportamento o di valori. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **D16-8 aperta (Gruppo 3)**: la regola dei blocchi per `moc_from_image` decisa il 2026-10-14 perde celle sul bordo (misure in §13); regola e codice dei blocchi non applicati, in attesa della decisione del proprietario. §3 invariato. Stato `approvato` invariato. |
+| 2026-10-14 | Claude Code | **D16-8 decisa e applicata** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 — MOC da immagine con pixel piccolo su blocchi di b × b pixel (regola del proprietario del 2026-10-14) più gli angoli dei pixel lungo il contorno della regione dei blocchi validi; crescita massima ai bordi b − 1 pixel (corretto "mezzo blocco"); dimensione del blocco, passo e punti dichiarati nel risultato. §12 T10 esteso (300 maschere casuali contro il MOC pixel per pixel; immagine DSS della demo con test di rete). §13 D16-8 decisa. Stato `approvato` invariato. |

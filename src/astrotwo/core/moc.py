@@ -787,9 +787,14 @@ def _sample_axis(n: int, k: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 def moc_from_image(image, order_max: int, *, block_rows: int = 512) -> Moc:
     """MOC da un'immagine (E6): dai **pixel validi** con il WCS dell'11 (non solo i quattro angoli).
 
-    Per ogni pixel valido si campionano angoli e punti interni a passo non più grande di metà del lato di una
-    cella all'ordine ``order_max`` (obbligatorio); i punti si convertono in ICRS con il WCS (modulo 10) e il MOC
-    contiene ogni cella che contiene un punto. Lo scarto dal contorno vero è limitato alle celle di bordo."""
+    Passo non più grande di metà del lato di una cella all'ordine ``order_max`` (obbligatorio). Pixel grande
+    (pixel ≥ cella / 2): angoli e punti interni di ogni pixel valido, ``k`` = ⌈2 × pixel / cella⌉ passi per pixel.
+    Pixel piccolo (decisione del 2026-10-14): blocchi di b × b pixel, b = ⌊cella / (2 × pixel)⌋, valido se contiene
+    almeno un pixel valido, angoli dei blocchi validi (anche parziali sul bordo), più gli angoli dei pixel lungo il
+    contorno della regione dei blocchi validi (D16-8). I punti si convertono in ICRS con
+    il WCS (modulo 10) e il MOC contiene ogni cella che contiene un punto. Lo scarto dal contorno vero è limitato
+    alle celle di bordo; con i blocchi il MOC può crescere (punti al massimo b − 1 pixel oltre i pixel validi), mai
+    perdere celle."""
     from astropy.wcs.utils import proj_plane_pixel_scales
 
     from astrotwo.core.coordinates_wcs import pixel_to_sky
@@ -806,34 +811,69 @@ def moc_from_image(image, order_max: int, *, block_rows: int = 512) -> Moc:
     ny, nx = valid.shape
     pixel = float(np.max(proj_plane_pixel_scales(image.wcs.wcs.celestial)))  # gradi per pixel
     cell = float(_cell_size(order).value)
-    k = max(1, math.ceil(2.0 * pixel / cell))
-    xs, x_before, x_after = _sample_axis(nx, k)
-    ys, y_before, y_after = _sample_axis(ny, k)
-    padded = np.zeros((ny + 2, nx + 2), dtype=bool)
-    padded[1:-1, 1:-1] = valid
+    if pixel < cell / 2.0:  # blocchi di b × b pixel: angoli dei blocchi validi
+        k, b = 1, max(1, math.floor(cell / (2.0 * pixel)))
+        nby, nbx = -(-ny // b), -(-nx // b)
+        blocks = np.zeros((nby * b, nbx * b), dtype=bool)
+        blocks[:ny, :nx] = valid
+        mask = blocks.reshape(nby, b, nbx, b).any(axis=(1, 3))
+        xs, x_before, x_after = _sample_axis(nbx, 1)
+        ys, y_before, y_after = _sample_axis(nby, 1)
+        xs = np.minimum(np.arange(nbx + 1) * b, nx) - 0.5  # bordi dei blocchi, l'ultimo parziale
+        ys = np.minimum(np.arange(nby + 1) * b, ny) - 0.5
+        sampling = (f"blocchi di {b} × {b} pixel (b = ⌊cella / (2 × pixel)⌋; {int(np.count_nonzero(mask))} blocchi "
+                    f"validi su {mask.size}, valido se contiene almeno un pixel valido), angoli dei blocchi validi, "
+                    f"passo {b * pixel!r}°")
+    else:  # k passi per pixel: angoli e punti interni dei pixel validi
+        k, b = max(1, math.ceil(2.0 * pixel / cell)), None
+        mask = valid
+        xs, x_before, x_after = _sample_axis(nx, k)
+        ys, y_before, y_after = _sample_axis(ny, k)
+        sampling = f"{k} passi per pixel, passo {pixel / k!r}°"
+    padded = np.zeros((mask.shape[0] + 2, mask.shape[1] + 2), dtype=bool)
+    padded[1:-1, 1:-1] = mask
     result = MOC.new_empty(order)
-    points = outside = 0
+    outside = 0
+
+    def add(x: np.ndarray, y: np.ndarray) -> int:
+        """Converte i punti (pixel, convenzione numpy) e aggiunge le loro celle; restituisce i punti convertiti."""
+        nonlocal result, outside
+        sky = pixel_to_sky(image.wcs, x, y, convention="numpy").coords
+        lon, lat, _ = _to_icrs_finite(sky)
+        outside += x.size - lon.size
+        if lon.size:
+            result = result.union(MOC.from_lonlat(lon=lon * u.deg, lat=lat * u.deg, max_norder=order))
+        return int(lon.size)
+
+    points = 0
     step_rows = max(1, block_rows * k)
     for start in range(0, ys.size, step_rows):
         sl = slice(start, start + step_rows)
         yb, ya = y_before[sl][:, None], y_after[sl][:, None]
         keep = (padded[yb, x_before] | padded[yb, x_after] | padded[ya, x_before] | padded[ya, x_after])
         rows, cols = np.nonzero(keep)
-        if rows.size == 0:
-            continue
-        sky = pixel_to_sky(image.wcs, xs[cols], ys[sl][rows], convention="numpy").coords
-        lon, lat, _ = _to_icrs_finite(sky)
-        outside += rows.size - lon.size
-        points += lon.size
-        if lon.size:
-            result = result.union(MOC.from_lonlat(lon=lon * u.deg, lat=lat * u.deg, max_norder=order))
+        if rows.size:
+            points += add(xs[cols], ys[sl][rows])
+    counted = f"{points} punti"
+    if b is not None:  # D16-8: angoli dei pixel lungo il contorno della regione dei blocchi validi
+        grown = np.repeat(np.repeat(mask, b, axis=0), b, axis=1)[:ny, :nx]
+        around = np.zeros((ny + 2, nx + 2), dtype=np.int8)
+        around[1:-1, 1:-1] = grown
+        touching = around[:-1, :-1] + around[:-1, 1:] + around[1:, :-1] + around[1:, 1:]  # pixel attorno all'angolo
+        cy, cx = np.nonzero((touching > 0) & (touching < 4))
+        contour = 0
+        for start in range(0, cy.size, 1_000_000):
+            sl = slice(start, start + 1_000_000)
+            contour += add(cx[sl] - 0.5, cy[sl] - 0.5)
+        counted = f"{points + contour} punti ({points} angoli dei blocchi, {contour} angoli di contorno)"
+        sampling += ", più gli angoli dei pixel lungo il contorno della regione dei blocchi validi (D16-8)"
     notes = []
     if outside:
         notes.append(("POINTS_OUTSIDE_PROJECTION", f"{outside} punti di campionamento senza posizione sul cielo "
                       "(fuori dalla proiezione) esclusi"))
     invalid = int(valid.size - np.count_nonzero(valid))
     step = (f"MOC da immagine all'ordine {order}: {int(np.count_nonzero(valid))} pixel validi ({invalid} non validi: "
-            f"NaN, mascherati o BLANK), {k} passi per pixel (pixel {pixel!r}°, cella {cell!r}°), {points} punti "
+            f"NaN, mascherati o BLANK), {sampling} (pixel {pixel!r}°, cella {cell!r}°), {counted} "
             f"convertiti con il WCS dell'11 ({image.wcs.projection}, {image.wcs.frame_name}) e il modulo 10; "
             "celle che contengono almeno un punto (mocpy.MOC.from_lonlat)")
     return _created(result, f"immagine {image.origin}", step, notes)

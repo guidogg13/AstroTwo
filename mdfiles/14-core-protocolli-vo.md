@@ -652,6 +652,18 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
   2026-10-10: opzioni tutte le bande, banda scelta dall'utente, banda
   fissa; raccomandazione tutte le bande.)
 
+- **D14-13 — URL in http con reindirizzamento a https che codifica due volte l'URL (servizi dell'ESO) —
+  DA DECIDERE** (aperta il 2026-10-14, Gruppo 3). Il registro VO dà per la DSS dell'ESO
+  (`ivo://eso.org/dss`) l'URL del servizio SIA in `http://archive.eso.org/…`, e il servizio restituisce
+  anche gli URL delle immagini in http. Dal 2026-10-14 (verifica con `curl` lo stesso giorno) il server
+  risponde `307` verso `https://…` codificando una seconda volta l'URL (`%2C` → `%252C`, `%20` → `%2520`):
+  la richiesta SIA viene rifiutata (`POS` non nella forma "ra,de", `SERVICE_ERROR`) e il download
+  dell'immagine non restituisce un FITS (`FORMAT_UNSUPPORTED` dall'11). Con `https://` direttamente entrambe
+  funzionano. **Oggi:** la demo delle Pleiadi usa https direttamente (servizio e immagine), dichiarato nel
+  report; **nessuna modifica al codice del 14**. Da decidere se e come il 14 debba gestire il caso (per
+  esempio provare https per un URL http dello stesso host, oppure non seguire un reindirizzamento che
+  cambia la richiesta e segnalarlo con un errore dedicato), sempre dichiarato nel risultato.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -690,3 +702,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-11 | Claude Code | **Per il modulo 15** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): `cds_xmatch`, `XMATCH_URL` — CDS XMatch con `astroquery.xmatch` in HTTPS, timeout di `04`, cache di astroquery disattivata, risposta nella cache del 14 con l'impronta delle tabelle caricate; limiti verificati (180″, 100 MB) (§3, §7, §8). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | §12: il paragrafo sulle ripetizioni dei test di rete sostituito da un rimando a `02-convenzioni.md` §8 (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Allineamento specifica–codice** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato; regola: le specifiche si aggiornano sempre insieme al codice): §3 e §7 — risposte del MocServer dichiarate ISO-8859-1 e lette secondo la codifica dichiarata (`MOCSERVER_CHARSET`, usata anche da 12 e 16), regola già applicata nel codice con il modulo 12. Stato `approvato` invariato. |
+| 2026-10-14 | Claude Code | **D14-13 aperta (Gruppo 3)** (indicazione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): servizi dell'ESO in http con reindirizzamento a https che codifica due volte l'URL (richiesta SIA rifiutata, immagine non scaricata); la demo usa https direttamente; nessuna modifica al codice. Stato `approvato` invariato. |
