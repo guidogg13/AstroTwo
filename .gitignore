@@ -4,3 +4,12 @@ __pycache__/
 .pytest_cache/
 *.pdf
 examples/output/
+.DS_Store
+._*
+# cartelle di cache
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.cache/
+.uv-cache/
+*.egg-info/
