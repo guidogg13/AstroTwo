@@ -28,9 +28,11 @@ def test_demo_pleiadi_creates_figure_and_report(tmp_path):
     assert figure.stat().st_size > 100_000 and figure.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     text = report.read_text(encoding="utf-8")
     for expected in ("resolve_name (modulo 10)", "sia_search (modulo 14)", "DSS2-red", "epoca J2016.0",
-                     "proper_motion_arrows", "column_statistics del 13", "max_sep = 2.0 arcsec",
+                     "display_positions (modulo 13, D10-2)", "column_statistics del 13", "max_sep = 2.0 arcsec",
                      "calcolatrice algebrica del 18", "distanza Alcyone–Atlas:", "angolo di posizione di Atlas",
                      "stelle Gaia dentro il MOC:", "— tutte dentro", "set_display dell'11",
-                     "epoca di visualizzazione = epoca dell'immagine 1989-12-17", "spostamento J2016.0 → epoca "
-                     "dell'immagine: media", "stelle Gaia all'epoca dell'immagine"):
+                     "epoca di visualizzazione 1989-12-17T00:00:00.000 (utc), fonte: epoca dell'immagine",
+                     "spostamento epoca della tabella → epoca di visualizzazione: media",
+                     "frecce del moto proprio: dalla posizione all'epoca di visualizzazione",
+                     "stelle Gaia e frecce all'epoca di visualizzazione", "SIMBAD (J2000"):
         assert expected in text, expected

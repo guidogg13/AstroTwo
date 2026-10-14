@@ -8,7 +8,11 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-13 — **demo delle Pleiadi** (`examples/`, primo test con dati veri); difetto
+**Ultimo aggiornamento:** 2026-10-14 — **`display_positions` nel 13** (D10-2 in un passo; T34) usata dalla demo
+delle Pleiadi; **D16-8 aperta** (MOC da immagine con i blocchi: la regola decisa perde celle sul bordo, regola e
+codice non applicati); 13 e 16 modificati nel registro e restano `approvato`. Test 492 di default. Aperte 14.
+Riepilogo invariato: approvato 14, bozza 5, non esiste 23, totale 42.
+Prima di questo aggiornamento: 2026-10-13 — **demo delle Pleiadi** (`examples/`, primo test con dati veri); difetto
 del 16 trovato e corretto (testo di `filter_by_moc`), 16 modificato nel registro e resta `approvato`. Riepilogo
 invariato: approvato 14, bozza 5, non esiste 23, totale 42.
 Prima di questo aggiornamento: 2026-10-13 — **livello 1 chiuso** (decisioni del proprietario del 2026-10-13): D17-9

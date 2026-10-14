@@ -28,18 +28,14 @@ from pathlib import Path
 import astropy.units as u
 import matplotlib
 import numpy as np
-from astropy.coordinates import SkyCoord
-from astropy.time import Time
 
 from astrotwo.core.calculators import evaluate_expression
 from astrotwo.core.catalogs import (
     PlotRule,
     SizeScale,
-    calculated_column,
     column_statistics,
     confirm_position_columns,
-    propagate,
-    proper_motion_arrows,
+    display_positions,
     search,
     set_plot_rules,
     subset,
@@ -56,7 +52,7 @@ OUTPUT = Path(__file__).resolve().parent / "output"
 # --- Parametri dichiarati dall'utente (non calcolati: scritti nel report) ---------------------------------------
 TARGET = "M45"
 IMAGE_RADIUS = 1.0 * u.deg  # SIA: regione di lato 2 × raggio = 2° × 2°
-DSS_SIA = "http://archive.eso.org/bin/dss_sia/dss.sia?VERSION=1.0&"  # ivo://eso.org/dss (registro VO)
+DSS_SIA = "https://archive.eso.org/bin/dss_sia/dss.sia?VERSION=1.0&"  # ivo://eso.org/dss (registro VO); https: dal 2026-10-14 il reindirizzamento da http codifica due volte la virgola di POS
 DSS_SURVEY, DSS_FORMAT = "DSS2-red", "image/gz-fits"
 GAIA_RADIUS_DEG, GAIA_G_MAX = 1.0, 11.0
 TWOMASS_FRAME = "icrs"  # 2MASS PSC: astrometria riferita a Tycho-2, cioè all'ICRS (2MASS Explanatory Supplement)
@@ -95,17 +91,6 @@ def _deg(angle) -> str:
     return f"{float(angle.to_value(u.deg))!r}°"
 
 
-def _sky_frame(table, lon, lat, *, at_table_epoch: bool = True, epoch: Time | None = None) -> SkyFrame:
-    """Posizioni (gradi) come SkyFrame nel sistema della tabella; epoca dai metadati letti dal 13, mai assunta
-    (``at_table_epoch=False`` per le punte delle frecce, che non sono all'epoca della tabella; ``epoch`` per le
-    posizioni propagate, all'epoca dichiarata da propagate)."""
-    positions = table.positions
-    if epoch is None:
-        epoch = Time(positions.epoch) if positions.epoch and at_table_epoch else None
-    return SkyFrame(coord=SkyCoord(u.Quantity(lon, u.deg), u.Quantity(lat, u.deg), frame=positions.frame),
-                    epoch=epoch)
-
-
 def run(output: Path, show: bool) -> tuple[Path, Path]:
     output.mkdir(parents=True, exist_ok=True)
     report = Report()
@@ -126,7 +111,11 @@ def run(output: Path, show: bool) -> tuple[Path, Path]:
             if str(table["SurveyName"][k]) == DSS_SURVEY and str(table["Format"][k]) == DSS_FORMAT]
     if not rows:
         raise SystemExit(f"nessuna immagine {DSS_SURVEY} ({DSS_FORMAT}) dal servizio SIA {DSS_SIA}")
-    image = load_image(str(table["Url"][rows[0]]))
+    url = str(table["Url"][rows[0]])
+    # Dal 2026-10-14 il reindirizzamento http → https dell'ESO codifica due volte gli spazi e le virgole dell'URL:
+    # si chiede direttamente l'indirizzo https (stesso server, stesso prodotto), dichiarato nel report.
+    url_https = url.replace("http://archive.eso.org/", "https://archive.eso.org/", 1)
+    image = load_image(url_https)
     wcs = image.wcs
     report.add(f"servizio SIA 1.0 {DSS_SIA}: {len(table)} prodotti, scelto {DSS_SURVEY} ({DSS_FORMAT}); "
                f"regione richiesta: lato 2 × {IMAGE_RADIUS}")
@@ -136,6 +125,9 @@ def run(output: Path, show: bool) -> tuple[Path, Path]:
                f"{wcs.image_epoch.iso if wcs.image_epoch is not None else 'non dichiarata'}; {wcs.provenance}")
     for fix in wcs.fixes:
         report.add(f"  nota WCS: {' '.join(fix.split())}")
+    if url_https != url:
+        report.add(f"URL dell'immagine dal servizio in http, scaricato in https (il reindirizzamento dell'ESO codifica due "
+                   f"volte l'URL): {url}")
     report.add(f"origine: {image.origin}")
 
     # 3. Stelle Gaia DR3 entro 1° e G < 11 (tap_query del 14, tabella del 13).
@@ -149,12 +141,8 @@ def run(output: Path, show: bool) -> tuple[Path, Path]:
                f"{gaia.positions.lon}/{gaia.positions.lat} nel sistema {gaia.positions.system} all'epoca "
                f"{gaia.positions.epoch} (dai metadati del servizio); origine {gaia.origin}")
 
-    # 4. Moto proprio: frecce (modulo 13) e medie (column_statistics del 13).
-    report.section("4. Moto proprio: proper_motion_arrows e column_statistics (modulo 13)")
-    arrows = proper_motion_arrows(gaia, ARROW_YEARS, pm_ra="pmra", pm_dec="pmdec", pm_ra_includes_cosdec=True)
-    report.add(f"frecce: spostamento in {arrows.scale} (scala dichiarata nella figura); conteggi {arrows.counts}")
-    for note in arrows.notes:
-        report.add(f"  nota: {note}")
+    # 4. Moto proprio: medie (column_statistics del 13).
+    report.section("4. Moto proprio: column_statistics (modulo 13)")
     members = subset(gaia, search(gaia, MEMBER_SELECTION))
     for label, table_pm in (("tutte le stelle selezionate (anche di campo)", gaia),
                             (f"probabili membri ({MEMBER_SELECTION} mas, {members.rows} stelle)", members)):
@@ -165,27 +153,30 @@ def run(output: Path, show: bool) -> tuple[Path, Path]:
                        f"(column_statistics del 13, numpy){'; include cos(Dec) (Gaia DR3)' if column == 'pmra' else ''}; "
                        f"epoca {gaia.positions.epoch}")
 
-    # 4b. Epoca di visualizzazione (D10-2): posizioni Gaia propagate all'epoca dell'immagine con propagate del 13.
-    report.section("4b. Epoca di visualizzazione: propagate (modulo 13) all'epoca dell'immagine (D10-2)")
-    if wcs.image_epoch is None:
-        raise SystemExit("epoca dell'immagine non dichiarata: la demo non sceglie un'epoca di visualizzazione")
-    shown = propagate(gaia, wcs.image_epoch, pm_ra="pmra", pm_dec="pmdec", pm_ra_includes_cosdec=True,
-                      parallax="parallax")
-    shift = column_statistics(calculated_column(shown.table, "display_shift",
-                                                "skydist(${ra}, ${dec}, ${ra_prop}, ${dec_prop})", unit="arcsec"),
-                              "display_shift")
-    report.add(f"epoca di visualizzazione = epoca dell'immagine {shown.target_epoch.isot} ({shown.target_epoch.scale}) "
-               f"(D10-2); origine {shown.source_epoch}; cos δ incluso; righe {shown.counts} (full = moto proprio e "
-               "parallasse, pm_only = solo moto proprio, missing = non disegnate)")
+    # 4b. Epoca di visualizzazione (D10-2): display_positions del 13, epoca dell'immagine se nota, altrimenti J2000.
+    report.section("4b. Epoca di visualizzazione: display_positions (modulo 13, D10-2)")
+    motion = {"pm_ra": "pmra", "pm_dec": "pmdec", "pm_ra_includes_cosdec": True, "parallax": "parallax"}
+    shown = display_positions(gaia, image, **motion)
+    report.add(f"epoca di visualizzazione {shown.epoch.isot} ({shown.epoch.scale}), fonte: {shown.epoch_source}; "
+               f"origine {shown.source_epoch}; cos δ incluso; righe {shown.counts} (full = moto proprio e parallasse, "
+               f"pm_only = solo moto proprio, missing = non disegnate); disegnabili {int(shown.drawable.sum())} su "
+               f"{gaia.rows}")
     for note in shown.notes:
         report.add(f"  nota: {note}")
-    report.add(f"spostamento J2016.0 → epoca dell'immagine: media {float(shift.mean)!r} {shift.unit}, massimo "
-               f"{float(shift.maximum)!r} {shift.unit} su {shift.valid} stelle ({shift.missing} senza posizione propagata) "
-               "(skydist in calculated_column e column_statistics del 13, astropy)")
-    report.add("cerchi della figura alle posizioni propagate; le frecce del moto proprio partono dall'epoca della "
-               f"tabella ({gaia.positions.epoch}, scarto dal cerchio pari allo spostamento sopra, trascurabile rispetto "
-               f"alla freccia di {ARROW_YEARS}); misure (crossmatch, Alcyone–Atlas, MOC) all'epoca dei dati, non "
-               "propagate")
+    report.add(f"spostamento epoca della tabella → epoca di visualizzazione: media {float(shown.shift_mean.value)!r} "
+               f"{shown.shift_mean.unit}, massimo {float(shown.shift_max.value)!r} {shown.shift_max.unit} su "
+               f"{int(shown.drawable.sum())} stelle (display_positions del 13, astropy)")
+    # Frecce: dalla posizione all'epoca di visualizzazione a quella ARROW_YEARS dopo (stesse regole, modulo 13).
+    arrow_epoch = shown.epoch.tt + ARROW_YEARS
+    arrows = display_positions(gaia, arrow_epoch, **motion)
+    report.add(f"frecce del moto proprio: dalla posizione all'epoca di visualizzazione a quella all'epoca "
+               f"{arrow_epoch.jyear_str} ({arrow_epoch.scale}), cioè lo spostamento in {ARROW_YEARS} (scala dichiarata "
+               f"nella figura; display_positions del 13 con epoca {arrows.epoch_source}, moto proprio e parallasse, "
+               f"senza velocità radiale); righe {arrows.counts}")
+    for note in arrows.notes:
+        report.add(f"  nota (frecce): {note}")
+    report.add("cerchi e frecce della figura all'epoca di visualizzazione; misure (crossmatch, Alcyone–Atlas, MOC) "
+               "all'epoca dei dati, non propagate")
 
     # 5. Crossmatch con 2MASS (tap_query del 14 su IRSA, crossmatch del 15).
     report.section("5. Crossmatch Gaia DR3 – 2MASS: crossmatch (modulo 15)")
@@ -233,14 +224,14 @@ def run(output: Path, show: bool) -> tuple[Path, Path]:
     # 8. Figura (solo disegno: posizioni in pixel con sky_to_pixel del 10, presentazione con set_display dell'11).
     report.section("8. Figura")
     figure = output / "demo_pleiadi.png"
-    _draw(figure, image, shown.table, arrows, (alcyone, atlas), show)
+    _draw(figure, image, gaia, shown, arrows, (alcyone, atlas), show)
     report.add(f"figura: {figure}")
     report.add(f"presentazione: set_display dell'11 con vmin {DISPLAY['vmin']}, vmax {DISPLAY['vmax']} (valori grezzi, "
                f"scelta dell'utente), funzione {DISPLAY['stretch']}, palette {DISPLAY['palette']}; dimensione dei "
                f"cerchi da set_plot_rules del 13 ({SIZE_SCALE}); posizioni in pixel con sky_to_pixel del 10 "
-               f"(conversione {gaia.positions.system} → {wcs.frame_name} di astropy); stelle Gaia all'epoca "
-               f"dell'immagine {shown.target_epoch.isot} ({shown.target_epoch.scale}), Alcyone e Atlas alla posizione "
-               "SIMBAD (J2000, resolve_name non dà il moto proprio)")
+               f"(conversione {gaia.positions.system} → {wcs.frame_name} di astropy); stelle Gaia e frecce all'epoca "
+               f"di visualizzazione {shown.epoch.isot} ({shown.epoch.scale}, {shown.epoch_source}); Alcyone e Atlas "
+               "alla posizione SIMBAD (J2000, resolve_name non dà il moto proprio), dichiarato")
 
     text = output / "demo_pleiadi.txt"
     report.write(text)
@@ -253,8 +244,8 @@ def _pixels(wcs, frame: SkyFrame):
     return pixels.x, pixels.y
 
 
-def _draw(path: Path, image, shown, arrows, named, show: bool) -> None:
-    """``shown``: tabella di propagate (colonne ``ra_prop``/``dec_prop`` all'epoca dell'immagine)."""
+def _draw(path: Path, image, gaia, shown, arrows, named, show: bool) -> None:
+    """``shown`` e ``arrows``: ``DisplayPositions`` del 13 all'epoca di visualizzazione e ARROW_YEARS dopo."""
     if not show:
         matplotlib.use("Agg")
     import matplotlib.patheffects as effects
@@ -263,7 +254,7 @@ def _draw(path: Path, image, shown, arrows, named, show: bool) -> None:
 
     wcs = image.wcs
     plane = set_display(image, **DISPLAY)
-    style = set_plot_rules(shown, [PlotRule(shape="circle", color=STAR_COLOR, size=SIZE_SCALE)])
+    style = set_plot_rules(gaia, [PlotRule(shape="circle", color=STAR_COLOR, size=SIZE_SCALE)])
     halo = [effects.withStroke(linewidth=3, foreground="black")]
 
     figure = plt.figure(figsize=(10, 10.5))
@@ -273,16 +264,16 @@ def _draw(path: Path, image, shown, arrows, named, show: bool) -> None:
     ax.coords[0].set_axislabel(f"RA ({wcs.frame_name.upper()} J2000)")
     ax.coords[1].set_axislabel(f"Dec ({wcs.frame_name.upper()} J2000)")
 
-    drawn = np.flatnonzero(style.drawn & (np.asarray(shown.table["ra_prop_mode"]) != "missing"))
-    x, y = _pixels(wcs, _sky_frame(shown, np.asarray(shown.table["ra_prop"][drawn]),
-                                   np.asarray(shown.table["dec_prop"][drawn]), epoch=wcs.image_epoch))
-    ax.scatter(x, y, s=style.size[drawn] ** 2, facecolors="none", edgecolors=STAR_COLOR, linewidths=1.2)
+    rows = np.flatnonzero(shown.drawable)  # ordine di shown.coords
+    x, y = _pixels(wcs, shown.coords)
+    sized = style.drawn[rows]
+    ax.scatter(x[sized], y[sized], s=style.size[rows][sized] ** 2, facecolors="none", edgecolors=STAR_COLOR,
+               linewidths=1.2)
 
-    valid = arrows.mode != "missing"
-    x0, y0 = _pixels(wcs, _sky_frame(shown, arrows.lon_start[valid], arrows.lat_start[valid]))
-    x1, y1 = _pixels(wcs, _sky_frame(shown, arrows.lon_end[valid], arrows.lat_end[valid],
-                                     at_table_epoch=False))
-    for xs, ys, xe, ye in zip(x0, y0, x1, y1):
+    if not np.array_equal(arrows.drawable, shown.drawable):  # stesse regole del 13: stesse righe
+        raise SystemExit("frecce e stelle con righe disegnabili diverse")
+    x1, y1 = _pixels(wcs, arrows.coords)
+    for xs, ys, xe, ye in zip(x, y, x1, y1):
         ax.annotate("", xy=(xe, ye), xytext=(xs, ys),
                     arrowprops={"arrowstyle": "-|>", "color": ARROW_COLOR, "lw": 1.2, "mutation_scale": 8})
 
@@ -295,10 +286,10 @@ def _draw(path: Path, image, shown, arrows, named, show: bool) -> None:
 
     legend = [
         Line2D([], [], marker="o", linestyle="none", markerfacecolor="none", markeredgecolor=STAR_COLOR,
-               markersize=9, label=f"Gaia DR3, G < {GAIA_G_MAX:g}, all'epoca dell'immagine {wcs.image_epoch.iso[:10]} "
+               markersize=9, label=f"Gaia DR3, G < {GAIA_G_MAX:g}, all'epoca di visualizzazione {shown.epoch.iso[:10]} "
                      "(cerchio più grande = più brillante)"),
         Line2D([], [], color=ARROW_COLOR, marker=">", markersize=6,
-               label=f"moto proprio: spostamento in {ARROW_YEARS.value:g} anni"),
+               label=f"moto proprio: spostamento in {ARROW_YEARS.value:g} anni dall'epoca di visualizzazione"),
     ]
     ax.legend(handles=legend, loc="lower left", fontsize=10, framealpha=0.85)
     ax.set_title(f"Pleiadi (M45) — DSS2 red (ESO SIA), stelle Gaia DR3 entro {GAIA_RADIUS_DEG:g}°\n"

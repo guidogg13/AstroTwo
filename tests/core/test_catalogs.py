@@ -584,6 +584,57 @@ def test_t23_missing_parallax_and_proper_motion(tmp_path):
     assert bool(t["pmDE"].mask[3]) and np.isnan(t["pmRA"][4])  # colonne originali intatte
 
 
+def test_t34_display_positions(tmp_path):
+    """D10-2 in un passo: epoca dell'immagine se nota, altrimenti J2000; spostamento ricalcolato con astropy."""
+    from types import SimpleNamespace
+
+    from astropy.coordinates import angular_separation
+
+    from astrotwo.core.catalogs import display_positions
+    from astrotwo.core.coordinates_wcs import wcs_from_header
+
+    cat = motion_table(tmp_path, n=6)
+    t = cat.table
+    t["plx"] = MaskedColumn(t["plx"].value, mask=[False, True, False, False, False, False], unit=u.mas)
+    t["pmDE"] = MaskedColumn(t["pmDE"].value, mask=[False, False, False, True, False, False], unit=u.mas / u.yr)
+    kwargs = dict(pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, parallax="plx", source_epoch=2016.0)
+    header = fits.Header({"CTYPE1": "RA---TAN", "CTYPE2": "DEC--TAN", "CRVAL1": 10.0, "CRVAL2": 20.0, "CRPIX1": 5.0,
+                          "CRPIX2": 5.0, "CDELT1": -0.01, "CDELT2": 0.01, "RADESYS": "ICRS", "MJD-OBS": 47877.5})
+    solution = wcs_from_header(header)
+    image = SimpleNamespace(wcs=solution)  # un'immagine si riconosce dal suo attributo wcs (nessuna dipendenza dall'11)
+    shown = display_positions(cat, image, **kwargs)
+    assert shown.epoch.mjd == pytest.approx(47877.5) and shown.epoch.scale == "utc"
+    assert "epoca dell'immagine" in shown.epoch_source
+    reference = propagate(cat, Time(47877.5, format="mjd", scale="utc"), **kwargs).table.table
+    drawable = np.array([True, True, True, False, True, True])
+    assert np.array_equal(shown.drawable, drawable) and list(shown.mode) == list(reference["RA_prop_mode"])
+    assert shown.counts == {"full": 4, "pm_only": 1, "missing": 1}
+    assert np.array_equal(shown.lon[drawable], np.asarray(reference["RA_prop"])[drawable])
+    assert np.isnan(shown.lon[3]) and np.isnan(shown.shift[3].value)
+    expected = angular_separation(t["RA"].quantity[drawable], t["DE"].quantity[drawable],
+                                  np.asarray(reference["RA_prop"])[drawable] * u.deg,
+                                  np.asarray(reference["DE_prop"])[drawable] * u.deg).to(u.arcsec)
+    assert np.allclose(shown.shift[drawable].value, expected.value, rtol=0, atol=1e-9)
+    assert shown.shift_mean.value == pytest.approx(np.mean(expected.value), rel=1e-12)
+    assert shown.shift_max.value == pytest.approx(np.max(expected.value), rel=1e-12)
+    assert np.allclose(shown.coords.lon.to_value(u.deg), shown.lon[drawable], rtol=0, atol=1e-12)
+    assert shown.coords.epoch == shown.epoch and "RA_prop" in shown.table.table.colnames
+    assert display_positions(cat, solution, **kwargs).epoch == shown.epoch  # anche il WCS del 10 da solo
+    # Senza epoca dell'immagine, senza WCS o senza immagine: J2000 (TT), fonte dichiarata.
+    no_epoch = wcs_from_header(fits.Header({k: v for k, v in header.items() if k != "MJD-OBS"}))
+    for given, words in ((no_epoch, "non dichiarata"), (SimpleNamespace(wcs=None), "senza WCS"),
+                         (None, "nessuna immagine")):
+        out = display_positions(cat, given, **kwargs)
+        assert out.epoch == Time("J2000.0", scale="tt") and out.epoch.scale == "tt"
+        assert "J2000" in out.epoch_source and words in out.epoch_source
+    user = display_positions(cat, Time(2030.0, format="jyear", scale="tt"), **kwargs)
+    assert user.epoch_source == "indicata dall'utente" and user.epoch.jyear == pytest.approx(2030.0)
+    for bad in (True, [2030.0], object()):
+        with pytest.raises(CatalogsError) as info:
+            display_positions(cat, bad, **kwargs)
+        assert info.value.code == "EPOCH_INVALID"
+
+
 def test_proper_motion_arrows(tmp_path):
     cat = motion_table(tmp_path, n=4)
     arrows = proper_motion_arrows(cat, 1000 * u.yr, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True,

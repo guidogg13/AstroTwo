@@ -14,6 +14,18 @@ funzioni avanzate, consegnata come file `.dmg`.
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
 tutti gli altri livelli restano in **FASE: SPECIFICHE**.
 
+- **Stato al 2026-10-14:** **`display_positions` nel 13** (decisione del
+  proprietario del 2026-10-14; 13 modificato e resta `approvato`): D10-2 in
+  un passo (epoca dell'immagine se nota, altrimenti J2000, o dell'utente,
+  con la fonte), posizioni, righe disegnabili, conteggi per modo e
+  spostamento; T34. La demo delle Pleiadi la usa per stelle e frecce del
+  moto proprio (frecce dalle posizioni all'epoca di visualizzazione);
+  valori del report invariati (spostamento medio 0,880″, massimo 2,165″).
+  **MOC da immagine con i blocchi (16): non applicato**, la regola decisa
+  perde celle sul bordo → **D16-8 aperta** (Gruppo 3) con raccomandazione
+  (aggiungere gli angoli dei pixel sul contorno). Test: **492 di default**.
+  Decisioni aperte: **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10).
+
 - **Primo test con dati veri (2026-10-13): demo delle Pleiadi** in
   `examples/demo_pleiadi.py` (con `examples/README.md`; uscite in
   `examples/output/`, esclusa da git): solo funzioni pubbliche del livello 1
@@ -531,8 +543,9 @@ D17-8 (`distance_to`) e D18-7 (sessagesimali in `skydist`): 14 aperte. Il
 2026-10-13 (decisioni del 2026-10-13), decise D17-8 e D18-7 e aperte D17-9
 (`distance_to` per ellisse, freccia, testo, tracciato aperto), D19-8 (PDS3
 con `pdr`) e D19-9 (PDS da URL): 15 aperte. Lo stesso giorno decise D17-9 e
-D19-9, D19-8 rimandata (resta nel Gruppo 3): **13 aperte** (Gruppo 1 = 0,
-Gruppo 2 = 4, Gruppo 3 = 9).
+D19-9, D19-8 rimandata (resta nel Gruppo 3): 13 aperte. Il 2026-10-14 aperta
+D16-8 (MOC da immagine con i blocchi): **14 aperte** (Gruppo 1 = 0,
+Gruppo 2 = 4, Gruppo 3 = 10).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -543,6 +556,7 @@ poi `decisioni-aperte.md`.
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
 | A9 | Lingua dell'interfaccia | `01-architettura.md`, `40-ui-finestra-principale.md` | orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt; blocca l'approvazione di `40` |
 | AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md` |
+| D16-8 | MOC da immagine con i blocchi di b × b pixel: la regola decisa il 2026-10-14 perde celle sul bordo | `16-core-moc.md` §13 | **da decidere** (aperta il 2026-10-14); raccomandazione: aggiungere gli angoli dei pixel sul contorno della regione dei blocchi validi |
 | AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
 
 Le altre decisioni aperte di `03-parita-aladin.md` (AP2 profondità della
@@ -563,6 +577,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 0. **Subito (fase codice del livello 1):** livello 1 chiuso il 2026-10-13
    (04, 10–19; rinviati solo H10 SkyView e PDS3, D19-8). Primo test con
    dati veri fatto: demo delle Pleiadi in `examples/` (2026-10-13).
+   **Decidere D16-8** (MOC da immagine con i blocchi), poi scrivere regola,
+   test e codice nel 16 e rimisurare i tempi della demo.
    Aperte anche: D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca
    il 60; elenco delle licenze in `THIRD_PARTY_LICENSES`). Poi: decidere A8 e
    chiedere la fase codice dei livelli successivi dopo le loro specifiche.
@@ -639,3 +655,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-13 | Claude Code | **Chiusura del livello 1 (decisioni del proprietario del 2026-10-13)** (04, 17, 19 modificati e restano `approvato`): D17-9 decisa e scritta (`distance_to` per freccia, tracciato aperto ed ellisse, testo escluso; T21; il test ha trovato che lo zero a spigolo della distanza tra bordi incrociati non raggiungeva la precisione dichiarata: incroci riconosciuti con la funzione liscia dei fuochi); D19-9 decisa e scritta (PDS4 da URL, T8 esteso); D19-8 rimandata (PDS3 non ancora supportato); scelte minori di 18 e 19 confermate; 04 con 18 e 19 tra gli utenti della cache; licenza di `pims` dal sorgente ufficiale su PyPI in `THIRD_PARTY_LICENSES` (script aggiornato). Test 491 di default. Aperte 13 (Gruppo 3 = 9). |
 | 2026-10-13 | Claude Code | **Demo delle Pleiadi (primo test con dati veri)**: `examples/demo_pleiadi.py`, `examples/README.md`, test di rete `tests/test_demo_pleiadi.py`, `examples/output/` in `.gitignore`; matplotlib era già una dipendenza (licenza già in `THIRD_PARTY_LICENSES`). Difetto trovato: testo di `filter_by_moc` del 16 ("dentrol"), test e correzione, registro del 16. Valori principali in §2. |
 | 2026-10-13 | Claude Code | **Demo delle Pleiadi, epoca di visualizzazione (D10-2)** (nessuna specifica cambiata): le stelle Gaia (J2016.0) si disegnano propagate all'epoca dell'immagine DSS (1989-12-17, da `MJD-OBS`) con `propagate` del 13; report con epoca usata e spostamento medio (0,88″, massimo 2,17″) da `skydist` in `calculated_column` e `column_statistics`; misure all'epoca dei dati, dichiarata. README e test di rete aggiornati. |
+| 2026-10-14 | Claude Code | **`display_positions` nel 13** (decisione del proprietario del 2026-10-14, autorizzazione esplicita; 13 resta `approvato`): §3, §7, §10, T34; codice in `catalogs.py`. Demo delle Pleiadi con `display_positions` per stelle e frecce (frecce dalle posizioni all'epoca di visualizzazione; Alcyone e Atlas a J2000 SIMBAD, dichiarato); report invariato nei valori. **MOC da immagine con i blocchi non applicato:** la regola decisa perde celle sul bordo (DSS 4,1104 contro 4,1399 deg²; 15 immagini casuali su 30) → **D16-8 aperta** nel 16 §13 e nel Gruppo 3, con raccomandazione e misure. Test 492 di default. Aperte 14. |

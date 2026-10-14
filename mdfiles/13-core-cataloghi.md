@@ -326,6 +326,30 @@ suo VOTable.
     alla posizione propagata di `scale` anni (**parametro obbligatorio**,
     un intervallo di tempo con unità, non nullo), con le stesse regole di
     `propagate` per parallasse e righe mancanti.
+  - **Posizioni all'epoca di visualizzazione (`display_positions`,
+    decisione del proprietario del 2026-10-14):** applica **D10-2** in un
+    solo passo, perché chi disegna un catalogo su un'immagine non debba
+    ricomporre a mano epoca, propagazione e conteggi. Epoca di
+    visualizzazione: **l'epoca dell'immagine se nota** (`image_epoch` del
+    WCS del 10, cioè `MJD-OBS`/`DATE-OBS`, con la sua scala di tempo);
+    **altrimenti J2000** (`J2000.0`, scala TT), anche senza immagine; oppure
+    un'epoca **indicata dall'utente**. L'epoca usata e la sua **fonte**
+    (immagine, J2000 per epoca dell'immagine non dichiarata, J2000 senza
+    immagine, utente) sono sempre scritte nel risultato. Il calcolo è
+    quello di `propagate` (stesse regole per epoca di origine, cos δ,
+    parallasse e righe mancanti; modulo 10). Il risultato dà in un passo:
+    le **posizioni all'epoca di visualizzazione** (gradi, nel sistema della
+    tabella), **quali righe si possono disegnare** (quelle non `missing`),
+    il **modo** di ogni riga e i **conteggi per modo**, l'epoca usata con
+    la sua fonte, l'epoca di origine con la sua fonte, e lo **spostamento**
+    di ogni riga tra l'epoca della tabella e quella di visualizzazione
+    (separazione angolare in arcosecondi con `astropy`, mancante per le
+    righe non disegnabili), con media e massimo sulle righe disegnabili.
+    Le posizioni disegnabili sono date anche come coordinate del 10
+    (`SkyFrame`) all'epoca di visualizzazione, pronte per la conversione in
+    pixel. Le colonne originali restano intatte (nuova tabella come in
+    `propagate`). Le misure (crossmatch, distanze, MOC) **non** usano le
+    posizioni di visualizzazione: restano all'epoca dei dati.
   - **Filtro temporale `time_filter` (D13-16, decisa il 2026-10-10):**
     colonna **indicata dall'utente**; formato e scala di tempo dal
     **`TIMESYS`** del VOTable collegato alla colonna (`timeorigin`
@@ -558,6 +582,23 @@ suo VOTable.
   pm_ra_includes_cosdec, parallax=None, radial_velocity=None,
   source_epoch=None)`** — dati per le frecce del moto proprio (D10, P5);
   `scale` intervallo di tempo obbligatorio; il disegno è della UI.
+- **`display_positions(table, image_or_epoch, *, pm_ra, pm_dec,
+  pm_ra_includes_cosdec, parallax=None, radial_velocity=None,
+  source_epoch=None)`** — posizioni all'epoca di visualizzazione (D10-2,
+  decisione del proprietario del 2026-10-14; regola in §3).
+  `image_or_epoch`: un'immagine con WCS (attributo `wcs`), il WCS del 10
+  (`WcsSolution`), un'epoca (`astropy.time.Time` o valore accettato da
+  `propagate`, "utente") oppure `None` (nessuna immagine → J2000).
+  Restituisce **`DisplayPositions`**: `table` (nuova tabella con le colonne
+  di `propagate`), `lon`, `lat` (gradi, NaN per le righe non disegnabili),
+  `frame`, `drawable` (maschera), `mode`, `counts`, `epoch`,
+  `epoch_source`, `source_epoch`, `pm_ra_includes_cosdec`, `shift`
+  (arcosecondi per riga, NaN se non disegnabile), `shift_mean`,
+  `shift_max` (`None` se nessuna riga è disegnabile), `coords` (`SkyFrame`
+  del 10 delle sole righe disegnabili, nell'ordine di
+  `numpy.flatnonzero(drawable)`, all'epoca di visualizzazione), `notes`.
+  Nessuna dipendenza dal modulo 11: l'immagine si riconosce dal suo
+  attributo `wcs`. **Calcolo: modulo 10 / Astropy.**
 - **`calculated_column(table, name, expression, unit=None, ucd=None,
   decimals=None, inplace=False)`** / **`subset(table, selection,
   inplace=False)`** — colonne calcolate e sottoinsiemi (H8, P4);
@@ -652,6 +693,8 @@ suo VOTable.
 | Regola di disegno non valida (forma o colore fuori elenco, intervallo della dimensione non valido) | rifiuto con il campo non valido | `PLOT_RULE_INVALID` |
 | Mancano le colonne di moto proprio per la propagazione | errore che indica le colonne mancanti | `PROPER_MOTION_MISSING` |
 | Epoca richiesta non valida | rifiuto dell'input | `EPOCH_INVALID` |
+| `display_positions` con un'immagine senza epoca dichiarata (o senza WCS) o senza immagine | epoca di visualizzazione J2000 (D10-2), fonte dichiarata nel risultato | — |
+| `display_positions` con `image_or_epoch` di tipo non riconosciuto | rifiuto, nessuna epoca assunta | `EPOCH_INVALID` |
 | Tipo colonna non supportato per un'operazione | errore con tipo atteso e trovato | `COLUMN_TYPE_UNSUPPORTED` |
 | Corpo (`body`) non ricavabile dai metadati né dal sistema di coordinate | dato aperto da solo, non sovrapposto né combinato | `BODY_UNKNOWN` |
 | File ASTRORES non conforme alla DTD | rifiuto esplicito con la causa | `ASTRORES_UNREADABLE` |
@@ -713,6 +756,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T32 | `load_catalog` senza regione | TAP VizieR simulato con 3 righe e `max_rows` 2 e 3; con `allow_partial=True`; test di rete su 2MASS con `max_rows` 5 | `max_rows` 2 → `REGION_REQUIRED`; con `allow_partial=True` 2 righe, `PARTIAL_CATALOG`, `ROW_LIMIT_EXCEEDED` e voce nella storia; `max_rows` 3 → catalogo intero senza avvisi; in rete stesso comportamento | test con servizio simulato (più un test di rete) |
 | T33 | `load_catalog` con regione (D13-19) | TAP simulato con `TAP_SCHEMA` (nomi tra virgolette) e `COOSYS` `FK5` equinozio `2000.0`; centro ICRS; poi senza `COOSYS`, con due RA senza `meta.main`, raggi non validi, regione oltre `max_rows`; termini `refframe` nel `COOSYS`; SIMBAD simulato con l'`utype` MANGO e senza `COOSYS` (D13-20), poi con `utype` diversi sulle due colonne e con `FK5`; test di rete su 2MASS attorno a M31 e su SIMBAD | ADQL con il centro convertito in FK5 J2000 uguale ad astropy; sistema e colonne dichiarati; `FRAME_UNKNOWN`, `NO_COORD_COLUMNS`, `REGION_INVALID`, `REGION_TOO_LARGE`; in rete tutte le righe entro il raggio (separazione ricalcolata con astropy); SIMBAD: centro convertito in ICRS, sistema ICRS epoca J2000 dichiarato (`POSITIONS_FROM_MANGO`), `utype` diversi o `FK5` → `FRAME_UNKNOWN` | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
+| T34 | Posizioni all'epoca di visualizzazione (D10-2) | tabella con righe `full`, `pm_only` e `missing`; immagine con `MJD-OBS`, immagine senza epoca, nessuna immagine, epoca dell'utente, tipo non valido | con l'immagine: epoca = `MJD-OBS` (scala del WCS), fonte "immagine"; senza epoca o senza immagine: J2000 (TT) con la fonte dichiarata; posizioni uguali a `propagate` alla stessa epoca; `drawable` = righe non `missing`; conteggi per modo; spostamento uguale ad `astropy.coordinates.angular_separation` ricalcolato nel test, media e massimo sulle righe disegnabili; `coords` alle stesse posizioni con l'epoca di visualizzazione; tipo non valido → `EPOCH_INVALID` | ricalcolo con Astropy |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
 | T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
@@ -917,3 +961,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-11 | Claude Code | **Scelte minori del 2026-10-11 cambiate dal proprietario** (autorizzazione esplicita a modificare il file approvato): ECSV scritto da AstroTwo con colonne, sistema, equinozio ed epoca delle posizioni nei metadati YAML `A2POSITIONS`, riletti senza `FRAME_UNKNOWN` (avvisi `POSITIONS_FROM_ECSV`, `ECSV_POSITIONS_INVALID`); albero delle collezioni in ordine naturale a pari popolarità (e per le collezioni senza popolarità); regola delle ripetizioni dei test di rete (solo connessione o timeout, al massimo 2, dichiarate). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | Regola delle ripetizioni dei test di rete spostata in `02-convenzioni.md` §8 (punto 8) insieme alla regola dei commit (punto 9); qui resta il rimando (decisione del proprietario del 2026-10-11, autorizzazione esplicita). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-20 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): sistema delle posizioni dall'`utype` MANGO (ICRS, epoca J2000 per SIMBAD) quando manca il `COOSYS`, dichiarato con l'avviso `POSITIONS_FROM_MANGO`; regione su SIMBAD attiva; T33 esteso. Stato `approvato` invariato. |
+| 2026-10-14 | Claude Code | **`display_positions` aggiunta** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 (regola: D10-2 in un passo, epoca dell'immagine se nota altrimenti J2000 o epoca dell'utente, fonte dichiarata, calcolo di `propagate`, posizioni, righe disegnabili, conteggi per modo e spostamento), §7 (firma e `DisplayPositions`, nessuna dipendenza dall'11), §10 (epoca dell'immagine assente; tipo non riconosciuto → `EPOCH_INVALID`), §12 (T34). Stato `approvato` invariato. |

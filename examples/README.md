@@ -20,19 +20,20 @@ Passi (modulo di AstroTwo usato):
 2. immagine DSS2-red di 2° × 2° con WCS: `sia_search` sul servizio SIA della DSS dell'ESO (14, trovato nel registro VO)
    e `load_image` (11). Il 12 non offre una funzione pubblica "HiPS → immagine con WCS" e SkyView (H10) è rinviato;
 3. stelle Gaia DR3 entro 1° con G < 11: `tap_query` sull'archivio Gaia dell'ESA (14), tabella del 13;
-4. frecce del moto proprio con `proper_motion_arrows` (13), scala dichiarata nella figura (spostamento in 5000 anni);
-   medie con `column_statistics` (13), anche sui probabili membri scelti con `search` per parallasse (criterio
-   dichiarato);
-4b. epoca di visualizzazione (D10-2): posizioni Gaia propagate all'epoca dell'immagine DSS (`MJD-OBS`, 1989-12-17)
-    con `propagate` (13); spostamento medio e massimo con `skydist` in `calculated_column` e `column_statistics` (13).
-    Le stelle si disegnano alle posizioni propagate; frecce, crossmatch, distanza Alcyone–Atlas e MOC restano
-    all'epoca dei dati, dichiarata nel report;
+4. medie del moto proprio con `column_statistics` (13), anche sui probabili membri scelti con `search` per
+   parallasse (criterio dichiarato);
+4b. epoca di visualizzazione (D10-2) con `display_positions` (13): epoca dell'immagine DSS (`MJD-OBS`, 1989-12-17)
+    perché nota (altrimenti J2000), con la sua fonte; in un passo posizioni Gaia a quell'epoca, righe disegnabili,
+    conteggi per modo e spostamento medio e massimo. Le frecce del moto proprio partono dalle posizioni all'epoca di
+    visualizzazione e arrivano a quelle 5000 anni dopo (ancora `display_positions`, epoca indicata; scala dichiarata
+    nella figura). Crossmatch, distanza Alcyone–Atlas e MOC restano all'epoca dei dati, dichiarata nel report;
 5. crossmatch con 2MASS (`tap_query` su IRSA, `crossmatch` del 15 con raggio esplicito di 2″); percentuale con la
    calcolatrice algebrica del 18;
 6. distanza angolare e angolo di posizione Alcyone–Atlas con `angular_distance` e `position_angle` (17);
 7. MOC del campo dell'immagine con `moc_from_image` e controllo delle stelle con `filter_by_moc` (16);
 8. figura con matplotlib e assi WCS (`astropy.visualization.wcsaxes`): presentazione con `set_display` (11),
-   posizioni in pixel con `sky_to_pixel` (10) all'epoca dell'immagine, dimensione dei cerchi con `set_plot_rules` (13);
+   posizioni in pixel con `sky_to_pixel` (10) all'epoca di visualizzazione (Alcyone e Atlas alla posizione SIMBAD J2000,
+   dichiarato), dimensione dei cerchi con `set_plot_rules` (13);
 9. report `examples/output/demo_pleiadi.txt`: ogni numero con unità, sistema/epoca, funzione e libreria.
 
 Uscite: `examples/output/demo_pleiadi.png`, `examples/output/demo_pleiadi.txt`.

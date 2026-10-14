@@ -72,6 +72,7 @@ __all__ = [
     "TimeSelection",
     "UCD1_TRANSLATIONS",
     "PositionColumns",
+    "DisplayPositions",
     "Propagation",
     "ProperMotionArrows",
     "PositionSuggestion",
@@ -81,6 +82,7 @@ __all__ = [
     "confirm_position_columns",
     "detect_table_format",
     "list_tables",
+    "display_positions",
     "propagate",
     "proper_motion_arrows",
     "calculated_column",
@@ -1852,6 +1854,88 @@ def proper_motion_arrows(table: CatalogTable, scale, *, pm_ra: str, pm_dec: str,
     return ProperMotionArrows(lon_start=lon.to_value(u.deg), lat_start=lat.to_value(u.deg), lon_end=end_lon,
                               lat_end=end_lat, mode=mode.astype(str), scale=scale.to(u.yr), counts=counts,
                               notes=tuple(notes) + (f"epoca di origine da {source}",))
+
+
+@dataclass(frozen=True, eq=False)
+class DisplayPositions:
+    """Posizioni all'epoca di visualizzazione (D10-2): epoca usata con la fonte, righe disegnabili, spostamento."""
+
+    table: CatalogTable  # nuova tabella con le colonne di propagate
+    lon: np.ndarray  # gradi, nel sistema della tabella; NaN per le righe non disegnabili
+    lat: np.ndarray
+    frame: str
+    drawable: np.ndarray  # righe non ``missing``
+    mode: np.ndarray
+    counts: dict[str, int]
+    epoch: Time
+    epoch_source: str
+    source_epoch: str
+    pm_ra_includes_cosdec: bool
+    shift: u.Quantity  # arcosecondi per riga, NaN se non disegnabile
+    shift_mean: u.Quantity | None
+    shift_max: u.Quantity | None
+    coords: SkyFrame | None  # righe disegnabili (ordine di numpy.flatnonzero(drawable)), all'epoca di visualizzazione
+    notes: tuple[str, ...]
+
+
+_J2000 = "J2000.0"
+
+
+def _display_epoch(image_or_epoch) -> tuple[object, str]:
+    """Epoca di visualizzazione e sua fonte (D10-2): epoca dell'immagine se nota, altrimenti J2000; o dell'utente."""
+    if image_or_epoch is None:
+        return Time(_J2000, scale="tt"), "J2000 (nessuna immagine, D10-2)"
+    if isinstance(image_or_epoch, (Time, str, int, float)) and not isinstance(image_or_epoch, bool):
+        return image_or_epoch, "indicata dall'utente"
+    solution = image_or_epoch
+    if not hasattr(solution, "image_epoch") and hasattr(solution, "wcs"):  # immagine (modulo 11) con il suo WCS
+        solution = solution.wcs
+        if solution is None:
+            return Time(_J2000, scale="tt"), "J2000 (immagine senza WCS né epoca dichiarata, D10-2)"
+    if hasattr(solution, "image_epoch"):
+        if solution.image_epoch is None:
+            return Time(_J2000, scale="tt"), "J2000 (epoca dell'immagine non dichiarata, D10-2)"
+        return solution.image_epoch, "epoca dell'immagine (MJD-OBS/DATE-OBS del WCS, D10-2)"
+    raise CatalogsError("EPOCH_INVALID", f"display_positions: image_or_epoch di tipo {type(image_or_epoch).__name__} "
+                        "non riconosciuto (immagine con WCS, WCS del 10, epoca o None): nessuna epoca assunta")
+
+
+def display_positions(table: CatalogTable, image_or_epoch, *, pm_ra: str, pm_dec: str, pm_ra_includes_cosdec,
+                      parallax=None, radial_velocity=None, source_epoch=None) -> DisplayPositions:
+    """Posizioni all'epoca di visualizzazione (D10-2, decisione del 2026-10-14) con il calcolo di ``propagate``."""
+    epoch, epoch_source = _display_epoch(image_or_epoch)
+    moved = propagate(table, epoch, pm_ra=pm_ra, pm_dec=pm_dec, pm_ra_includes_cosdec=pm_ra_includes_cosdec,
+                      parallax=parallax, radial_velocity=radial_velocity, source_epoch=source_epoch)
+    pos = table.positions
+    t = moved.table.table
+    mode = np.asarray(t[f"{pos.lon}_prop_mode"]).astype(str)
+    drawable = mode != "missing"
+    lon = np.full(len(t), np.nan)
+    lat = np.full(len(t), np.nan)
+    lon[drawable] = (np.asarray(t[f"{pos.lon}_prop"].data, dtype=np.float64)[drawable]
+                     * t[f"{pos.lon}_prop"].unit).to_value(u.deg)
+    lat[drawable] = (np.asarray(t[f"{pos.lat}_prop"].data, dtype=np.float64)[drawable]
+                     * t[f"{pos.lat}_prop"].unit).to_value(u.deg)
+    lon0, _ = _quantity_column(t, pos.lon, u.deg, "posizione")
+    lat0, _ = _quantity_column(t, pos.lat, u.deg, "posizione")
+    shift = np.full(len(t), np.nan)
+    shift[drawable] = angular_separation(lon0[drawable], lat0[drawable], lon[drawable] * u.deg,
+                                         lat[drawable] * u.deg).to_value(u.arcsec)
+    shift = shift * u.arcsec
+    any_drawable = bool(np.any(drawable))
+    coords = (SkyFrame.from_lonlat(lon[drawable] * u.deg, lat[drawable] * u.deg, pos.frame, equinox=pos.equinox,
+                                   epoch=moved.target_epoch) if any_drawable else None)
+    step = (f"posizioni all'epoca di visualizzazione {moved.target_epoch.isot} ({moved.target_epoch.scale}), "
+            f"{epoch_source}; disegnabili {int(np.count_nonzero(drawable))} su {len(t)}")
+    result = dataclasses.replace(moved.table, history=moved.table.history + (step,))
+    return DisplayPositions(
+        table=result, lon=lon, lat=lat, frame=pos.frame, drawable=drawable, mode=mode, counts=moved.counts,
+        epoch=moved.target_epoch, epoch_source=epoch_source, source_epoch=moved.source_epoch,
+        pm_ra_includes_cosdec=moved.pm_ra_includes_cosdec, shift=shift,
+        shift_mean=np.mean(shift[drawable]) if any_drawable else None,
+        shift_max=np.max(shift[drawable]) if any_drawable else None, coords=coords,
+        notes=moved.notes + ("spostamento: separazione angolare tra l'epoca della tabella e quella di "
+                             "visualizzazione (astropy.coordinates.angular_separation)",))
 
 
 # --------------------------------------------------------------------------
