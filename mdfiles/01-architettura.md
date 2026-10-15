@@ -41,7 +41,8 @@ Livello 2   Analisi               fotometria, spettri, curve di luce, cubi,
                 |                  pipeline riproducibili
                 |
 Livello 1   Nucleo                coordinate/WCS, FITS, HiPS, cataloghi, VO,
-                                  cross-match, MOC, misure
+                                  cross-match, MOC, misure; generali: cache (04),
+                                  comandi e sessione (05)
 
 Interfaccia  UI (40-45)           chiama i livelli, non contiene scienza
 ```
@@ -79,6 +80,7 @@ Regole strutturali:
 | **A4** | 2026-10-04 | Python **3.12**; file del progetto `pyproject.toml`; gestore pacchetti **`uv`** | versione stabile e diffusa nell'ecosistema scientifico; `uv` rende creazione dell'ambiente, installazione delle dipendenze ed esecuzione dei test rapide e riproducibili; scelta registrata dal proprietario |
 | **A7** | 2026-10-04 | Cache con due media: **SQLite** per le interrogazioni ai cataloghi, **file su disco** per i riquadri HiPS e FITS; **limite di spazio configurabile** con eliminazione dei dati meno usati; ogni dato servito dalla cache espone **origine e data di scaricamento** | SQLite è interrogabile e portabile per le tabelle; i file singoli permettono lettura diretta dei riquadri senza deserializzazione; il limite configurabile impedisce che la cache cresca senza controllo; origine e data garantiscono tracciabilità e riproducibilità dei dati mostrati |
 | **A1** | 2026-10-04 | Interfaccia grafica scritta con **PySide6 (Qt)**; il rendering delle mappe con **OpenGL si specifica in `41-ui-visualizzatore-cielo.md`** | un solo ambiente Python coerente con A3/A4, widget maturi per la visualizzazione scientifica; orientamento già espresso qui, confermato dal proprietario prima dei moduli 40–45 |
+| **A9** | 2026-10-15 | Lingua dell'interfaccia: **testi in inglese nel codice con `tr()`**, **traduzione italiana nostra** con Qt Linguist, **traduzioni di Qt** per i dialoghi standard; lingua presa dal sistema e cambiabile nelle preferenze; **numeri scientifici sempre con il punto decimale in ogni lingua** | inglese come lingua comune della comunità, italiano per il proprietario; strumenti standard di Qt; il punto decimale evita ambiguità e rende i valori copiabili in modo riproducibile (dettagli in `40-ui-finestra-principale.md` §3.9) |
 | **A5** | 2026-10-04 | Interfaccia IA **a capacità** (chiamata di strumenti + streaming) con due implementazioni iniziali: **provider cloud** e **endpoint compatibile OpenAI** (che copre anche i modelli locali) | conforme a `CLAUDE.md` (l'utente sceglie il provider e inserisce la propria chiave), un solo contratto da testare, copertura di cloud e modelli locali; confermata dal proprietario prima dei moduli 30–35 |
 
 Note residue di A3/A4/A7:
@@ -105,7 +107,6 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 | A2 | Strumento che produce il `.dmg` | PyInstaller/briefcase + script di creazione dmg · pacchetto nativo Xcode · altro | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): PyInstaller + dmgbuild**; non blocca il livello 1, blocca l'approvazione di `60-distribuzione-dmg.md` |
 | A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): sì**, firma e notarizzazione con account Apple Developer **solo al momento della distribuzione**; blocca l'approvazione di `60-distribuzione-dmg.md` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
-| A9 | Lingua dell'interfaccia | solo inglese · solo italiano · entrambe (internazionalizzazione) | `40-ui-finestra-principale.md` | **orientamento (2026-10-09): inglese di base + italiano** con le traduzioni di Qt; blocca l'approvazione di `40-ui-finestra-principale.md` |
 | A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS (12): decisa il 2026-10-12** — tile in memoria entro **512 MB, configurabili**; `build_hips` lavora **un tile alla volta** entro il **limite delle operazioni** (4 GB, D11-11); su disco la **cache comune di 5 GB** (`04-cache.md`). **A10 interamente decisa** |
 | A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy); elenco completo in `THIRD_PARTY_LICENSES` (§6, dal 2026-10-13) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
 
@@ -163,17 +164,26 @@ astrotwo/
 - **Verifica risultati (livello 3):** ogni valore numerico prodotto su richiesta
   dell'IA passa da un calcolo deterministico del livello 1/2 e viene
   ri-verificato da `34-ia-verifica-risultati.md` prima di essere mostrato.
-- **Riproducibilità (livello 2):** ogni operazione registrata da
-  `24-analisi-pipeline-riproducibili.md` richiama moduli del livello 1/2 per
-  nome e parametri, così può essere rieseguita.
+- **Riproducibilità (livello 1, dal 2026-10-15):** ogni azione
+  dell'interfaccia è un comando del registro di `05-comandi-sessione.md`
+  (livello 1, AM1 accettata il 2026-10-15), con nome, parametri tipizzati con
+  unità e risultato strutturato, registrato e rieseguibile; la sessione si
+  riapre rieseguendo i comandi. `24-analisi-pipeline-riproducibili.md`
+  (livello 2) costruirà pipeline, scripting e API Python sopra il `05`; il
+  `32` userà lo schema JSON dei comandi del `05`.
 - **Interfaccia:** la UI legge gli stati dei moduli e invoca le loro funzioni
   pubbliche; non conserva copie di dati scientifici con logica propria.
 
 ## 8. Prestazioni e risorse (vincoli generali)
 
 - Il livello 1 deve restare interattivo: zoom/pan e sovrapposizione cataloghi
-  senza attese percepite su dati già in memoria. Valori quantitativi: da
-  decidere nel file `41-ui-visualizzatore-cielo.md` con test misurabili.
+  senza attese percepite su dati già in memoria. **Valori quantitativi
+  decisi il 2026-10-15 (decisione del proprietario) in
+  `41-ui-visualizzatore-cielo.md` §3.15** (obiettivi P1–P7 con test
+  marcati `perf`: es. ≤ 16,7 ms per fotogramma al 95° percentile con 1
+  milione di sorgenti, thread principale mai fermo più di 100 ms); se un
+  obiettivo non si raggiunge si misura e si riporta, mai abbassarlo in
+  silenzio.
 - Le reti sono sempre considerate non disponibili: ogni funzione di rete ha un
   timeout dichiarato e un messaggio d'errore esplicito (vedi moduli 11–14).
 - **Obiettivi di prestazioni (requisito non funzionale):** devono essere
@@ -204,9 +214,11 @@ astrotwo/
 - **DA-03 — A6, Firma Apple:** orientamento del 2026-10-09: sì, firma e
   notarizzazione con account Apple Developer solo al momento della
   distribuzione; si decide con l'approvazione di `60-distribuzione-dmg.md`.
-- **DA-04 — A9, Lingua dell'interfaccia:** orientamento del 2026-10-09:
-  inglese di base + italiano con le traduzioni di Qt; si decide con
-  l'approvazione di `40-ui-finestra-principale.md`.
+- **DA-04 — A9, Lingua dell'interfaccia: DECISA il 2026-10-15** (decisione
+  del proprietario): testi in inglese con `tr()`, traduzione italiana nostra
+  con Qt Linguist, traduzioni di Qt per i dialoghi standard, lingua dal
+  sistema cambiabile nelle preferenze, numeri scientifici sempre con il
+  punto decimale; spostata in §4.2, dettagli in `40-ui-finestra-principale.md`.
 - **DA-05 — A2, Strumento di packaging del `.dmg`:** orientamento del
   2026-10-09: PyInstaller + dmgbuild; si decide con l'approvazione di
   `60-distribuzione-dmg.md`, insieme ad A6.
@@ -223,7 +235,11 @@ astrotwo/
   punti da valutare già annotati lì: LGPL-3 di WCSLIB (con la GPL-3 per
   riferimento), clausola di LBNL sugli usi commerciali della libreria QD
   (fuori dalle clausole numerate), MPL-2.0 di `certifi`, testo di licenza
-  mancante nel pacchetto `pims` (da verificare). Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
+  mancante nel pacchetto `pims` (da verificare). **Dal 2026-10-15:** con
+  l'interfaccia entreranno **PySide6 e Qt** (licenza LGPL-3 per l'uso
+  previsto, **da verificare** prima del codice dell'interfaccia) e, per i
+  test, **pytest-qt** (da verificare): vanno aggiunti a
+  `THIRD_PARTY_LICENSES` e valutati per A11 e per il `60`. Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
   codice né dato preso da Aladin, che è GPL).
 - **DA-06 — A8, Compatibilità con lo scripting di Aladin:** rimandata a dopo il
   completamento del livello 1; la strada "scripting principale in Python" resta
@@ -249,3 +265,4 @@ astrotwo/
 | 2026-10-10 | Claude Code | **Decisioni del proprietario** (autorizzazione esplicita a modificare il file approvato): §7 — gli strumenti per l'IA si dichiarano nel 32, non nel §11 dei moduli (da D11-9). A10 resta la strategia di caricamento delle immagini; il limite delle operazioni (4 GB) è separato, D11-11 nell'11. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **A10 per gli HiPS** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato): riga A10 di §5, §8 e DA-07 aggiornate con l'esito — tile in memoria entro 512 MB configurabili, `build_hips` un tile alla volta entro il limite delle operazioni di 4 GB, cache comune di 5 GB su disco; A10 interamente decisa. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): creato `THIRD_PARTY_LICENSES` nella radice (nome, versione, licenza e avvisi di tutte le dipendenze, compreso l'avviso QD/LBNL di `spherical-geometry`), generato da `scripts/third_party_licenses.py` e controllato da un test; registrato in §6, annotato per A11 (§9 DA-08) e per il 60; regola: ogni nuova dipendenza va aggiunta al file. Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): **A9 decisa** (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, lingua dal sistema, punto decimale sempre) e spostata da §5 a §4.2, DA-04 chiusa; §8 — valori quantitativi delle prestazioni decisi nel `41` §3.15; §7 — riproducibilità con il registro dei comandi di `05-comandi-sessione.md` (livello 1, AM1 accettata), il `24` sopra il `05`; §3 — livello 1 con i file generali 04 e 05; DA-08 — PySide6/Qt e pytest-qt da verificare per A11. Stato `approvato` invariato. |

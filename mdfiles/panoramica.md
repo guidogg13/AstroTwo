@@ -12,7 +12,43 @@ funzioni avanzate, consegnata come file `.dmg`.
 ## 2. Fase attuale
 
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
-tutti gli altri livelli restano in **FASE: SPECIFICHE**.
+tutti gli altri livelli restano in **FASE: SPECIFICHE**. Per l'interfaccia
+la formula è a parte: **"FASE: CODICE – interfaccia v1"** (regola del
+proprietario del 2026-10-15, in `CLAUDE.md`), valida solo per 40, 41, 42
+`approvato` e per il `05`; **non ancora dichiarata**.
+
+- **Stato al 2026-10-15: specifiche della prima versione dell'interfaccia
+  (nessun codice).** Proposta della fase 1 approvata dal proprietario il
+  2026-10-15 con precisazioni. **AM1 accettata:** nuovo file generale
+  **`05-comandi-sessione.md`** (livello 1, codice previsto in
+  `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri
+  tipizzati con unità, descrizioni EN/IT, risultato strutturato e
+  indicatori; schema JSON per il 32; sessione JSON senza pixel, riapertura
+  = riesecuzione, stop se lo SHA di un file è cambiato; gesti registrati a
+  fine gesto dopo 300 ms fermo; `run_command` del 18 come adattatore.
+  **Scritti in `bozza`:** `05`, `40` (finestra, menu, barra di stato,
+  preferenze essenziali, cronologia, messaggi, coda dei comandi in un
+  thread di lavoro con avanzamento e Annulla, spazio per il 44), `41`
+  (immagine, HiPS, cataloghi, MOC, griglia, coordinate sotto il mouse,
+  distanza, puntatore Simbad, livelli minimi, PNG; `QOpenGLWidget` dietro
+  un'interfaccia di disegno nostra; obiettivi P1–P7 con marcatori `perf` e
+  `gl`; lista di controllo manuale), `42` minimo (tabella ordinabile,
+  selezione sincronizzata, record). **Decise:** A9, D10-9 (30°, ±10 % nel
+  41), D11-8 (corona 1 × / 1,5 × `box_size`, box 15 pixel), raggio del
+  puntatore Simbad (12 pixel logici, 500 ms, una richiesta alla volta).
+  **File approvati modificati** (restano `approvato`): 01 (A9, prestazioni
+  nel 41, riproducibilità nel 05), 02 (tabella specifica ↔ codice, test
+  dell'interfaccia; corretto `measures.py`), 03 (note v1, `05` in A12, E8,
+  H13), 10 (`make_view_wcs`, default 30°), 11 (default della corona), 12
+  (P6, tile sulla vista), 13 e 17 (sessione del 05 per D17-3), 18
+  (adattatore); `CLAUDE.md` (formula di fase dell'interfaccia). **Codice
+  da allineare** quando il proprietario lo chiede: `make_view_wcs` e
+  default di `choose_projection` (10), default della corona (11), P6 (12);
+  adattatore del 18 dopo l'approvazione del 05. **Verifiche prima del
+  codice:** cache del 04 da più thread (05, 41), funzioni OpenGL di
+  PySide6, funzioni HiPS di `reproject`, licenze di PySide6/Qt e pytest-qt.
+  Decisioni aperte: **20** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11).
+  Test: 494 di default (nessun codice cambiato).
 
 - **Stato al 2026-10-14, dopo D16-8:** **MOC da immagine con i blocchi
   (16, D16-8 decisa):** blocchi di b × b pixel più gli angoli dei pixel lungo
@@ -378,6 +414,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, test | — | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo coprente | — | approvato |
 | `04-cache.md` | Cache A7 comune (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s, origine e data; nessuna cache propria nei moduli), usata da 10–14, 16, 18 e 19 | 1 (generale) | approvato |
+| `05-comandi-sessione.md` | Registro dei comandi e sessione (AM1 accettata il 2026-10-15): comandi tipizzati con unità e risultato strutturato, sessione JSON rieseguibile senza pixel, schema JSON per il 32; usato da 40, 41, 42 | 1 (generale) | bozza |
 | `decisioni-aperte.md` | Decisioni aperte, smistate in tre gruppi; §3 = esiti delle decisioni prese il 2026-10-04 | — | bozza |
 | **Nucleo (livello 1)** | | | |
 | `10-core-coordinate-wcs.md` | Coordinate, WCS, sistemi di riferimento | 1 | approvato |
@@ -395,7 +432,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `21-analisi-spettroscopia.md` | Spettroscopia | 2 | non esiste |
 | `22-analisi-curve-di-luce.md` | Curve di luce | 2 | non esiste |
 | `23-analisi-cubi-di-dati.md` | Cubi di dati (λ o velocità) | 2 | non esiste |
-| `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili e registro operazioni | 2 | non esiste |
+| `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili, scripting e API Python, costruiti sopra il registro dei comandi e la sessione del `05` (dal 2026-10-15) | 2 | non esiste |
 | **IA (livello 3)** | | | |
 | `30-ia-adattatore-provider.md` | Adattatore per provider IA | 3 | non esiste |
 | `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS | 3 | non esiste |
@@ -404,9 +441,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `34-ia-verifica-risultati.md` | Verifica indipendente dei risultati dell'IA | 3 | non esiste |
 | `35-ia-assistente-chat.md` | Assistente conversazionale | 3 | non esiste |
 | **Interfaccia** | | | |
-| `40-ui-finestra-principale.md` | Finestra, menu, barre di stato | — | non esiste |
-| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo | — | non esiste |
-| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle | — | non esiste |
+| `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1) | — | bozza |
+| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | bozza |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record) | — | bozza |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
 | `44-ui-pannello-ia.md` | Pannello IA / chat | — | non esiste |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
@@ -516,6 +553,16 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D17-8, D18-7, licenze, lettura FITS nell'11, scelte di 17 e 18, UT1, modulo 19 (divisione, tabella dei nomi D12-6) | 17: `distance_to` = distanza angolare minima (0 se sovrapposte o punto dentro), cerchi esatti con Astropy, poligoni con la distanza punto–arco di cerchio massimo; 18: sessagesimali con l'unità scritta nel testo, due punti ambigui (errore) salvo parametro esplicito, nessuna convenzione sulla posizione; `THIRD_PARTY_LICENSES` con tutte le dipendenze e l'avviso QD/LBNL; valore grezzo letto dall'11 (`read_raw_pixel`); scelte minori di 17 e 18 confermate; UT1 con le tabelle IERS di astropy senza rete, `IERS_RANGE`, aggiornamento solo su richiesta con la rete del 14, tabella dichiarata; 19 in P0–P4; nomi canonici IAU inglesi con iniziale maiuscola via `spiceypy.bodn2c`, solo corpi con HiPS e nel PCK, applicata al 12 | 2026-10-13 | decisioni del proprietario | file di origine: `01`, `11`, `12`, `17`, `18`, `19` (restano `approvato`) |
 | D17-9, D19-8, D19-9, scelte minori di 18 e 19, 04, `pims` | 17: `distance_to` per freccia e tracciato aperto = archi di cerchio massimo; ellisse = distanza dal bordo calcolata numericamente con precisione dichiarata (`atol` 1e-9° di default, stima dell'errore nel risultato); testo `OPERATION_UNSUPPORTED`; 19: PDS3 **rimandato** (bassa priorità, errore "formato PDS3 non ancora supportato"); PDS4 da URL con etichetta + file nominati nella stessa cartella, rete del 14, cache comune; 18: `colon_units` e UT1 con `iers_table` confermati; 19: scelte minori 1–9 confermate; 04: 18 tra gli utenti della cache; `pims`: testo di licenza dal sorgente ufficiale | 2026-10-13 | decisione del proprietario, `17` §13, `19` §13, `04` §5 | prese |
 | D13-20, D15-8, D15-9, regola dei commit, decisioni del 16 | SIMBAD: sistema dall'`utype` MANGO, dichiarato; join per campo: corpo controllato solo se entrambe le tabelle lo hanno; CDS XMatch sempre `selection=all`, `best` in locale; commit solo se tutti i test di default passano (rete a parte, dichiarata); 16: `healpy` escluso, `order_max` obbligatorio, MOC da catalogo una cella per sorgente, da immagine dai pixel validi con il WCS dell'11, poligoni su cerchi massimi, MOC spaziali sempre ICRS, probabilità con somma = 1 entro 10⁻⁶, MocServer con la rete del 14, `build_moc` solo funzione, mappe NESTED ICRS; C4 e H12 progressivi rinviati al 12 | 2026-10-11 | decisioni del proprietario | file di origine: `02`, `13`, `15`, `16` (restano `approvato`) |
+| AM1 (05) | **Nuovo file generale `05-comandi-sessione.md`, livello 1** (registro dei comandi e sessione), codice in `src/astrotwo/core/commands.py`; `run_command` del 18 diventa un adattatore del formato del 05; gesti registrati a fine gesto (300 ms fermo) come `view.set_center`/`view.set_zoom` | 2026-10-15 | decisione del proprietario, `05` | il `24` costruirà pipeline e scripting sopra il 05 |
+| Interfaccia v1 (perimetro) | 40, 41, 42 minimo; fuori: A7, A8, G4, G5, E7, H1, H3, tag, segnalibri, 43, 44, 45 | 2026-10-15 | decisione del proprietario, `40`, `41`, `42` §3.1 | |
+| Interfaccia (architettura) | Tutto passa dal registro del 05; coda dei comandi in un thread di lavoro; gruppo di thread separato per i tile HiPS; risultati con i segnali di Qt; annullamento cooperativo; ogni comando lungo con avanzamento e Annulla; verifica della cache del 04 da più thread prima del codice | 2026-10-15 | decisione del proprietario, `05` §3.2, `40` §3.8, `41` §3.13 | |
+| Interfaccia (rendering) | `QOpenGLWidget` dietro un'interfaccia di disegno nostra (passaggio futuro a QRhi); funzioni OpenGL di PySide6, PyOpenGL solo se non bastano; `make_view_wcs` nel 10 e tile sulla vista nel 12; traslazione e scala dello schermo = disegno; obiettivi P1–P7 con test, mai abbassati in silenzio | 2026-10-15 | decisione del proprietario, `41` §3.2–§3.15, `10`, `12` | |
+| Interfaccia (test) | pytest-qt (licenza da verificare), piattaforma `offscreen`, disegno entro 1 pixel dalle posizioni del 10, niente confronti di immagini intere, lista di controllo manuale nel 41 | 2026-10-15 | decisione del proprietario, `02` §8 punto 10, `41` §12 | |
+| D10-9 | Soglia `TAN`/`AIT` = **30°**, scarto ±10 % (33°/27°) gestito nel 41 | 2026-10-15 | decisione del proprietario, `10` §13, `41` §3.3 | |
+| D11-8 | Corona del centroide: interno **1 × `box_size`**, esterno **1,5 × `box_size`**; `box_size` iniziale 15 pixel nel 41, modificabile e dichiarato | 2026-10-15 | decisione del proprietario, `11` §13, `41` §3.12 | |
+| Puntatore Simbad | Raggio **12 pixel logici** convertiti in angolo dal 10 (con il 17 per la distanza); richiesta dopo 500 ms fermo, una alla volta | 2026-10-15 | decisione del proprietario, `41` §3.12 | D14-9 punto 2 lo assegnava al 41 |
+| A9 | Testi in inglese con `tr()`, traduzione italiana nostra (Qt Linguist), traduzioni di Qt per i dialoghi standard, lingua dal sistema cambiabile nelle preferenze; **numeri scientifici sempre con il punto decimale** | 2026-10-15 | decisione del proprietario, `01` §4.2, `40` §3.9 | |
+| Fase codice dell'interfaccia | Formula "FASE: CODICE – interfaccia v1", valida solo per i moduli di interfaccia `approvato` (40, 41, 42) e per il 05 | 2026-10-15 | regola del proprietario, `CLAUDE.md` | non ancora dichiarata |
 
 ## 6. Decisioni aperte
 
@@ -558,8 +605,10 @@ D17-8 (`distance_to`) e D18-7 (sessagesimali in `skydist`): 14 aperte. Il
 con `pdr`) e D19-9 (PDS da URL): 15 aperte. Lo stesso giorno decise D17-9 e
 D19-9, D19-8 rimandata (resta nel Gruppo 3): 13 aperte. Il 2026-10-14 aperta
 D16-8 (MOC da immagine con i blocchi): 14 aperte. Lo stesso giorno decisa
-D16-8 e aperta D14-13 (reindirizzamento http → https dell'ESO): **14 aperte**
-(Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10).
+D16-8 e aperta D14-13 (reindirizzamento http → https dell'ESO): 14 aperte.
+Il 2026-10-15, con le specifiche della prima versione dell'interfaccia,
+decise A9, D10-9 e D11-8 e aperte D05-1, D05-2, D05-3, D40-1, D40-2,
+D41-1…D41-4: **20 aperte** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -568,8 +617,11 @@ poi `decisioni-aperte.md`.
 | A2 | Strumento di packaging del `.dmg` | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): PyInstaller + dmgbuild; non blocca il livello 1, blocca l'approvazione di `60` |
 | A6 | Firma e notarizzazione Apple | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): sì, notarizzazione con account Apple Developer solo al momento della distribuzione; blocca l'approvazione di `60` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
-| A9 | Lingua dell'interfaccia | `01-architettura.md`, `40-ui-finestra-principale.md` | orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt; blocca l'approvazione di `40` |
-| AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md` |
+| D05-1, D05-2 | Classi dei comandi e letture passive; dati di rete diversi alla riapertura | `05-comandi-sessione.md` §13 | **da decidere** (Gruppo 2, aperte il 2026-10-15): bloccano l'approvazione del 05 |
+| D40-1 | Lingua dei messaggi dei moduli con l'interfaccia in inglese | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 2): blocca l'approvazione del 40 |
+| D41-1, D41-2, D41-3 | Thread delle letture passive di rete; scrittura dei numeri mostrati (funzione nel 10); limiti iniziali di visualizzazione (funzione nell'11) | `41-ui-visualizzatore-cielo.md` §13 | **da decidere** (Gruppo 2): bloccano l'approvazione del 41 |
+| D05-3, D40-2, D41-4 | Adattatore del 19; avvio tramite URL (H18); Mac di riferimento e test `perf`/`gl` | `05`, `40`, `41` §13 | **da decidere** (Gruppo 3) |
+| AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md`. **Proposta del 2026-10-15, ACCETTATA lo stesso giorno:** nuovo file generale `05-comandi-sessione.md` (livello 1, registro dei comandi e sessione), scritto in `bozza` |
 | D14-13 | URL dei servizi dell'ESO in http: il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata | `14-core-protocolli-vo.md` §13 | **da decidere** (aperta il 2026-10-14); oggi la demo usa https, nessuna modifica al codice del 14 |
 | AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
 
@@ -588,7 +640,16 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (fase codice del livello 1):** livello 1 chiuso il 2026-10-13
+0. **Subito (interfaccia v1, 2026-10-15):** il proprietario valida le
+   bozze 05, 40, 41, 42 e decide le aperte del Gruppo 2 che le bloccano
+   (D05-1, D05-2, D40-1, D41-1, D41-2, D41-3) e le scelte minori elencate
+   nei §13; autorizza le modifiche a 10 e 11 richieste da D41-2 e D41-3;
+   poi approvazione dei quattro file e dichiarazione "FASE: CODICE –
+   interfaccia v1". Prima del codice: verifiche (cache da più thread,
+   OpenGL di PySide6, `reproject` per i HiPS, licenze di PySide6/Qt e
+   pytest-qt) e codice del livello 1 da allineare (`make_view_wcs`,
+   default di `choose_projection` e della corona, P6 del 12).
+   **Fase codice del livello 1:** livello 1 chiuso il 2026-10-13
    (04, 10–19; rinviati solo H10 SkyView e PDS3, D19-8). Primo test con
    dati veri fatto: demo delle Pleiadi in `examples/` (2026-10-13).
    D16-8 decisa e scritta il 2026-10-14; da decidere D14-13
@@ -618,8 +679,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (13): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 4, Gruppo 3 = 9); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (20, al 2026-10-15): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 9, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -671,3 +732,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-13 | Claude Code | **Demo delle Pleiadi, epoca di visualizzazione (D10-2)** (nessuna specifica cambiata): le stelle Gaia (J2016.0) si disegnano propagate all'epoca dell'immagine DSS (1989-12-17, da `MJD-OBS`) con `propagate` del 13; report con epoca usata e spostamento medio (0,88″, massimo 2,17″) da `skydist` in `calculated_column` e `column_statistics`; misure all'epoca dei dati, dichiarata. README e test di rete aggiornati. |
 | 2026-10-14 | Claude Code | **`display_positions` nel 13** (decisione del proprietario del 2026-10-14, autorizzazione esplicita; 13 resta `approvato`): §3, §7, §10, T34; codice in `catalogs.py`. Demo delle Pleiadi con `display_positions` per stelle e frecce (frecce dalle posizioni all'epoca di visualizzazione; Alcyone e Atlas a J2000 SIMBAD, dichiarato); report invariato nei valori. **MOC da immagine con i blocchi non applicato:** la regola decisa perde celle sul bordo (DSS 4,1104 contro 4,1399 deg²; 15 immagini casuali su 30) → **D16-8 aperta** nel 16 §13 e nel Gruppo 3, con raccomandazione e misure. Test 492 di default. Aperte 14. |
 | 2026-10-14 | Claude Code | **D16-8 decisa e applicata** (decisione del proprietario del 2026-10-14; 16 resta `approvato`): §3 (blocchi più angoli dei pixel lungo il contorno della regione dei blocchi validi, crescita ≤ b − 1 pixel, dimensione del blocco dichiarata), §12 T10, §13; codice in `moc.py`; test su 300 maschere casuali e test di rete sulla DSS (MOC identico, 4,1399 deg²). Tempi a cache calda: `moc_from_image` 10,3 → 0,21–0,27 s, demo 18,5–19,5 → 8,5–9,5 s; valori del report invariati. **D14-13 aperta** nel 14 (Gruppo 3; 14 resta `approvato`). Test 494 di default. Aperte 14. |
+| 2026-10-15 | Claude Code | **Specifiche della prima versione dell'interfaccia** (proposta della fase 1 approvata dal proprietario il 2026-10-15; nessun codice): **AM1 accettata, creato `05-comandi-sessione.md`** (bozza); **scritti `40`, `41`, `42`** (bozza, 14 sezioni); decise A9, D10-9, D11-8, raggio del puntatore Simbad; modificati i file approvati 01, 02, 03, 10, 11, 12, 13, 17, 18 (restano `approvato`) e `CLAUDE.md` (formula "FASE: CODICE – interfaccia v1"); nuove aperte D05-1, D05-2, D05-3, D40-1, D40-2, D41-1…D41-4. §2, §4, §5, §6, §7 aggiornati. Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11). Stati: approvato 14, bozza 9, non esiste 20, totale 43. |

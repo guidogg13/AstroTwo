@@ -154,7 +154,9 @@ pixel memorizzati.
   corona circolare attorno alla stella con sigma clipping**
   (`astropy.stats.sigma_clipped_stats`, parametri di default della libreria
   `sigma = 3`, `maxiters = 5`, scritti nel risultato); raggi interno ed
-  esterno della corona sono parametri obbligatori. Il
+  esterno della corona **facoltativi, con default raggio interno = 1 ×
+  `box_size` ed esterno = 1,5 × `box_size`** (D11-8, decisa il 2026-10-15),
+  sempre scritti nel risultato; chi li passa (es. il `20`) usa i propri. Il
   centroide qui serve solo alla calibrazione: la fotometria resta nel `20`
   (D17-4).
 - **Cache su disco (A7):** i riquadri di immagine (tagli, HiPS richiesti,
@@ -360,7 +362,9 @@ pixel memorizzati.
   `10-core-coordinate-wcs.md` (WCS, tagli coerenti).
 - **Usato da:** `17-core-misure.md`, `18-core-calcolatrici.md`,
   `19-core-dati-planetari.md`, `20-analisi-fotometria.md`,
-  `23-analisi-cubi-di-dati.md`, `41-ui-visualizzatore-cielo.md`,
+  `23-analisi-cubi-di-dati.md`, `41-ui-visualizzatore-cielo.md`
+  (`set_display`, `star_centroid` con la corona di default),
+  `05-comandi-sessione.md` (comandi delle immagini),
   `43-ui-pannello-analisi.md`.
 
 ## 6. Input e output
@@ -423,12 +427,13 @@ pixel memorizzati.
 - **`contours(image, levels)`** — isofote (H7) con `contourpy`; `levels` in
   unità dell'immagine; restituisce le curve in pixel (convenzione numpy),
   con il metodo `to_sky(image)` per averle in coordinate celesti (modulo 10).
-- **`star_centroid(image, position, box_size, annulus_inner, annulus_outer)`**
+- **`star_centroid(image, position, box_size, annulus_inner=None, annulus_outer=None)`**
   — baricentro pesato sull'intensità, dopo la sottrazione del fondo (D11-7),
   nella finestra quadrata di lato `box_size` pixel (intero dispari ≥ 3)
   centrata sul pixel più vicino a `position` (convenzione numpy); il fondo è
   la mediana con sigma clipping dei pixel a distanza da `position` in
-  [`annulus_inner`, `annulus_outer`) pixel; `image` è un array 2-D o un
+  [`annulus_inner`, `annulus_outer`) pixel (omessi: 1 × e 1,5 × `box_size`,
+  D11-8); `image` è un array 2-D o un
   oggetto con l'attributo `data` (`FitsImage`). Restituisce la posizione in
   convenzione numpy, dichiarata, con la finestra, il fondo, la sua
   deviazione standard, il numero di pixel della corona e i parametri del
@@ -585,6 +590,7 @@ funzioni di §7.
 | T34 | Visualizzazione a blocchi in `float32` | `set_display` su un array 6000 × 6000 con il limite di default; `histeq` con blocchi piccoli | si visualizza; valori uguali ad `astropy.visualization` in `float32`; picco di memoria (misurato con `tracemalloc`) sotto 8 byte per pixel + 64 MB, cioè senza copia `float64` dell'immagine; `histeq` a blocchi uguale all'equalizzazione su tutto il piano | ricalcolo con Astropy, `tracemalloc` |
 | T35 | Calibrazione esterna (D14-11) | FITS senza WCS caricato con una calibrazione esterna; stessa calibrazione su un FITS con WCS; oggetto senza `source`; nel 14 (T11) calibrazione della lista SIA su un'immagine scaricata | WCS uguale ad `astropy.wcs` costruito dall'intestazione del test, `EXTERNAL_CALIBRATION_USED`; con WCS proprio `EXTERNAL_CALIBRATION_IGNORED`; senza `source` errore; dimensioni diverse → `WCS_MISSING` | ricalcolo con Astropy |
 | T36 | Valore grezzo (D18-6) | FITS `int16` con `BZERO`, `BSCALE`, `BLANK`; stesso dato con un asse degenere; posizioni fuori, non intere; immagine derivata | `read_raw_pixel` uguale a `astropy.io.fits` con `do_not_scale_image_data=True` in ogni pixel (anche quello uguale a `BLANK`); `PIXEL_RAW_UNAVAILABLE` negli altri casi | confronto con Astropy |
+| T37 | Corona di default (D11-8) | `star_centroid` della stella di T16 con `box_size` 15 senza raggi, poi con raggi espliciti 15 e 22,5 | risultati identici; raggi usati (15 e 22,5 pixel) scritti nel risultato | confronto diretto |
 | T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
@@ -626,11 +632,18 @@ funzioni di §7.
   proprietario).** Mediana in una corona attorno alla stella con sigma
   clipping (`astropy.stats.sigma_clipped_stats`); applicata in §3, §7, §8,
   §10, §12.
-- **D11-8 — Valori di default dei raggi della corona del centroide:** oggi
-  `annulus_inner` e `annulus_outer` sono parametri obbligatori. Da decidere
-  (Gruppo 3) **insieme a `20-analisi-fotometria.md` e
-  `41-ui-visualizzatore-cielo.md`** (decisione del proprietario del
-  2026-10-09).
+- **D11-8 — Valori di default dei raggi della corona del centroide: DECISA
+  il 2026-10-15 (decisione del proprietario, con il `41`).** Raggio interno
+  = **1 × `box_size`**, esterno = **1,5 × `box_size`**, usati quando i raggi
+  sono omessi e sempre scritti nel risultato; il `20` potrà passare valori
+  propri. Il `box_size` resta obbligatorio: il valore iniziale dello
+  strumento di misura del `41` è **15 pixel**, modificabile e dichiarato.
+  **Motivazione (nostra):** il raggio interno supera la semidiagonale della
+  finestra (≈ 0,71 × `box_size`), quindi la luce della stella cercata nella
+  finestra non entra nella corona; la corona ha un'area di circa 3,9 volte
+  la finestra, abbastanza pixel per la mediana con sigma clipping.
+  Applicata in §3, §7, §12 (T37). **Codice da aggiornare** (oggi i raggi
+  sono obbligatori in `star_centroid`) quando il proprietario lo chiede.
 - **D11-9 — Decisioni del 2026-10-10 sulla divisione in parti (proprietario):**
   funzioni di trasferimento di `astropy.visualization`; contorni con
   `contourpy`; elenco chiuso delle operazioni H5 con specchiature che
@@ -686,3 +699,4 @@ funzioni di §7.
 | 2026-10-10 | Claude Code | **D11-11** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): limite delle operazioni separato da A10, 4 GB di default, configurabile (`LargeImageLimits.operation_bytes`); `set_display` a blocchi di righe in `float32` senza copia intera (eccezione dichiarata: `histeq` raccoglie i valori del piano); stima di `set_display` aggiornata in §3; criterio commento/`.hhh` confermato; test T33 aggiornato, nuovo T34 (6000 × 6000, picco di memoria con `tracemalloc`). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D14-11** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): parametro facoltativo `calibration` di `load_image` (calibrazione esterna con `header` e `source`, es. `SiaCalibration` del 14), usata solo se l'immagine non ha WCS proprio, con le regole del `.hhh` (dimensioni, WCS celeste valido); avvisi `EXTERNAL_CALIBRATION_USED` e `EXTERNAL_CALIBRATION_IGNORED`, `calibration_source = "external"`, voce nella storia (§3, §7, §10, §12 T35). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo di un pixel (D18-6) passa dal 18 all'11 come funzione pubblica `read_raw_pixel` (§3, §7, §10, T36); il 18 la richiama. Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **D11-8 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): raggi della corona del centroide facoltativi con default 1 × e 1,5 × `box_size`, sempre dichiarati; `box_size` iniziale dello strumento del `41` 15 pixel (§3, §7, §13); test T37 (§12). Codice di `star_centroid` da aggiornare. Stato `approvato` invariato. |

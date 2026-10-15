@@ -15,11 +15,12 @@ Principio P11: **la parità con Aladin è il minimo, non il traguardo.** Tutte l
 **FASE: SPECIFICHE (nessun codice)** — per tutti i livelli finché il proprietario non dichiara la fase codice di un livello.
 
 - La fase codice si dichiara **per livello**: il proprietario scrive testualmente "FASE: CODICE – livello N". Da quel momento si può scrivere codice **solo per i moduli `approvato` di quel livello**; tutti gli altri livelli restano in fase specifiche.
+- **Per l'interfaccia** (regola del proprietario del 2026-10-15) c'è una formula a parte: "FASE: CODICE – interfaccia v1". Vale **solo** per i moduli di interfaccia `approvato` nella loro prima versione (40, 41, 42) e per il modulo generale `05-comandi-sessione.md`; non autorizza codice di altri moduli. "FASE: CODICE – livello 1" non basta per il `05`.
 - Senza quella dichiarazione non si scrive codice applicativo, nemmeno per moduli `approvato`.
 - Nei livelli in fase specifiche si lavora solo sui file `.md` in `mdfiles/`.
 - Se ti viene chiesto codice per un livello ancora in fase specifiche, ricorda la regola e proponi di completare prima il `.md` del modulo.
 - Solo i file con stato `approvato` autorizzano a scrivere il codice di quel modulo; le verifiche segnate "da verificare prima del codice" nel `.md` si fanno prima di scriverlo.
-- Livelli in fase codice: **livello 1** (dichiarato dal proprietario il 2026-10-09).
+- Livelli in fase codice: **livello 1** (dichiarato dal proprietario il 2026-10-09). Interfaccia v1: **non dichiarata** (05, 40, 41, 42 in `bozza`).
 
 ## Regole d'oro (non negoziabili)
 
@@ -72,7 +73,7 @@ Struttura del codice (già decisa, A3/A4) — da creare solo in FASE: CODICE:
 ```
 ├── pyproject.toml       Python 3.12, gestore pacchetti uv
 ├── src/astrotwo/
-│   ├── core/            livello 1  (moduli 10-19)
+│   ├── core/            livello 1  (generali 04, 05 e moduli 10-19)
 │   ├── analysis/        livello 2  (moduli 20-24)
 │   ├── ai/              livello 3  (moduli 30-35)
 │   ├── ui/              interfaccia (moduli 40-45)

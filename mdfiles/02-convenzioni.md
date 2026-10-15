@@ -55,6 +55,7 @@ specifica.
 | Specifica | File Python | Test |
 |---|---|---|
 | `04-cache.md` | `src/astrotwo/core/cache.py` | `tests/core/test_cache.py` |
+| `05-comandi-sessione.md` | `src/astrotwo/core/commands.py` (decisione del proprietario del 2026-10-15) | `tests/core/test_commands.py` |
 | `10-core-coordinate-wcs.md` | `src/astrotwo/core/coordinates_wcs.py` | `tests/core/test_coordinates_wcs.py` |
 | `11-core-immagini-fits.md` | `src/astrotwo/core/images_fits.py` | `tests/core/test_images_fits.py` |
 | `12-core-hips.md` | `src/astrotwo/core/hips.py` | `tests/core/test_hips.py` |
@@ -62,9 +63,12 @@ specifica.
 | `14-core-protocolli-vo.md` | `src/astrotwo/core/vo_protocols.py` | `tests/core/test_vo_protocols.py` |
 | `15-core-crossmatch.md` | `src/astrotwo/core/crossmatch.py` | `tests/core/test_crossmatch.py` |
 | `16-core-moc.md` | `src/astrotwo/core/moc.py` | `tests/core/test_moc.py` |
-| `17-core-misure.md` | `src/astrotwo/core/measurements.py` | `tests/core/test_measurements.py` |
+| `17-core-misure.md` | `src/astrotwo/core/measures.py` (nome del file scritto il 2026-10-12; tabella corretta il 2026-10-15) | `tests/core/test_measures.py` |
 | `18-core-calcolatrici.md` | `src/astrotwo/core/calculators.py` | `tests/core/test_calculators.py` |
 | `19-core-dati-planetari.md` | `src/astrotwo/core/planetary_data.py` | `tests/core/test_planetary_data.py` |
+| `40-ui-finestra-principale.md` | `src/astrotwo/ui/main_window.py` (traduzioni in `src/astrotwo/ui/i18n/`) | `tests/ui/test_main_window.py` |
+| `41-ui-visualizzatore-cielo.md` | `src/astrotwo/ui/sky_viewer.py` e `src/astrotwo/ui/sky_renderer_gl.py` (implementazione OpenGL dell'interfaccia di disegno; due file, scelta minore 9 del 41 da confermare) | `tests/ui/test_sky_viewer.py` |
+| `42-ui-pannello-cataloghi.md` | `src/astrotwo/ui/catalog_panel.py` | `tests/ui/test_catalog_panel.py` |
 
 ## 4. Unità di misura
 
@@ -214,6 +218,15 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
    Nelle parti intermedie di un modulo, se il proprietario chiede i test di
    rete solo alla fine del modulo, si usa `--no-network`: il messaggio di
    commit dichiara che i test di rete non sono stati eseguiti.
+10. **Test dell'interfaccia (decisione del proprietario del 2026-10-15):**
+    **pytest-qt** (licenza da verificare e da aggiungere a
+    `THIRD_PARTY_LICENSES`) con la piattaforma Qt **`offscreen`** (senza
+    schermo); il disegno si controlla **entro 1 pixel** dalle posizioni
+    calcolate dal modulo 10, **mai con confronti di immagini intere**;
+    marcatori **`perf`** (prestazioni, sul Mac di riferimento) e **`gl`**
+    (test che richiedono la GPU); come entrano nella regola dei commit del
+    punto 9: D41-4 di `41-ui-visualizzatore-cielo.md`. Ciò che non si
+    automatizza va nella lista di controllo manuale del `41`.
 
 ## 9. Decisioni aperte
 
@@ -281,3 +294,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-09 | Claude Code | §8: **framework dei test = `pytest`** (decisione del proprietario), anticipata da `61-strategia-test.md`. Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | §3: **nomi dei file Python confermati in inglese** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): regola = traduzione inglese del nome della specifica in `snake_case`; tabella con il file Python e il file di test di `04` e dei moduli 10–19. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | §8: **ripetizione dei test di rete** (punto 8) e **regola dei commit** (punto 9, con lo script `scripts/commit_checked.py` e l'opzione `--no-network`) (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato); esempio del punto 2 aggiornato (`astropy-healpix` al posto di `healpy`, escluso per la licenza GPL). Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per `05` (`core/commands.py`), `40`, `41`, `42`; corretto il file del 17 (`measures.py`, come scritto nel codice, non `measurements.py`); §8 punto 10 — test dell'interfaccia con pytest-qt in `offscreen`, controllo entro 1 pixel, marcatori `perf` e `gl`. Stato `approvato` invariato. |

@@ -112,6 +112,7 @@ riquadro mostrato.
 | P3 | elenco delle collezioni: `CollectionIndex`, `HiPSList`, `set_survey` con default DSS2 a colori, `survey_coverage` (C4) | T1, T10, T11 |
 | P4 | cubi HiPS (H24) e cataloghi HiPS progressivi (H12) | T9 + test nuovo |
 | P5 | `build_hips` (H9) secondo HiPS 1.0 con `reproject` | test nuovi |
+| P6 | **riproiezione dei tile sulla vista del `41`** (aggiunta il 2026-10-15 su decisione del proprietario): `view_sampling`, `fill_view` | T17, T18 |
 
 **Verifiche del 2026-10-12 (prima del codice):**
 
@@ -426,6 +427,47 @@ riquadro mostrato.
   `HIPS_ALLSKY_NOT_WRITTEN`, **D12-8 decisa: per ora nessun Allsky**). Il HiPS generato si rilegge con
   `read_service`, `fetch_tile`, `pixel_values` (T14).
 
+**P6 — riproiezione dei tile sulla vista (specifica del 2026-10-15, codice
+da scrivere).** Decisione del proprietario del 2026-10-15: il visualizzatore
+(`41`) non riproietta da sé; i tile si portano sulla finestra della vista
+qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
+
+- **Metodo: campionamento al più vicino sulla griglia HEALPix.** Per ogni
+  pixel della finestra (centro, convenzione numpy) si prende il valore del
+  **pixel HiPS che contiene quel punto del cielo** all'ordine scelto:
+  cielo con `window_to_sky` di `ViewGeometry` (10), cella all'ordine K + S
+  con `lonlat_to_healpix` di `astropy-healpix` nel frame del HiPS
+  (conversione del frame con il 10), tile e colonna/riga nel tile con la
+  **disposizione dei pixel verificata** (§3) — la stessa regola di
+  `pixel_values`. Così non ci sono fasce vuote tra tile adiacenti (ogni
+  pixel della finestra appartiene a un solo tile) e nessun valore è
+  inventato. Il metodo usato (`nearest`) è dichiarato nel risultato;
+  l'interpolazione bilineare tra tile non è prevista nella prima versione.
+- **`view_sampling(service, view, *, order=None, plane=None,
+  coverage=None)`** → **`ViewSampling`**: ordine (di default
+  `order_for_resolution` alla scala della finestra, con
+  `HIPS_RESOLUTION_LIMIT` se serve), elenco dei **tile necessari** (solo
+  quelli che contengono almeno un pixel della finestra; con `coverage` solo
+  quelli dentro il MOC del servizio) e, per ogni pixel della finestra,
+  indice del tile e colonna/riga nel tile, oppure "nessun dato" per i pixel
+  fuori dalla proiezione o fuori copertura; frame del HiPS, metodo,
+  descrizione. Frame non supportati: come `tiles_for_fov`
+  (`HIPS_FRAME_UNSUPPORTED`).
+- **`fill_view(sampling, tile)`** → **`ViewTile`**: i valori del tile
+  (`HiPSTile` di `fetch_tile`) per i soli pixel della finestra che cadono in
+  quel tile, con il riquadro della finestra che li contiene e la maschera;
+  tile FITS nel **tipo nativo** (DC6), tile JPEG/PNG come colori RGB(A) a 8
+  bit nell'orientamento già capovolto da `fetch_tile`; provenienza del tile
+  (URL, data, dalla cache sì/no). Il `41` chiama `fill_view` per ogni tile
+  appena arriva (riempimento progressivo).
+- **Da verificare prima del codice:** se le funzioni HiPS pubbliche di
+  `reproject` (es. `hips_as_dask_array` con `reproject_interp`) possono
+  servire lo stesso scopo **scaricando i tile con la rete del 14 e la
+  cache del 04**; se no, si usa il metodo descritto qui (raccomandato).
+  Misurare il tempo di `view_sampling` per una finestra di 2560 × 1600
+  pixel fisici (obiettivo P6 del `41`: primi tile visibili in ≤ 2 s con la
+  cache calda).
+
 ## 4. Cosa NON fa
 
 - Non fa le trasformazioni di coordinate (10) né gestisce i file FITS locali (11).
@@ -443,7 +485,8 @@ riquadro mostrato.
   `10-core-coordinate-wcs.md` (calcolo del campo e delle
   coordinate dei tile), `16-core-moc.md` (formati HEALPix condivisi per H12).
 - **Usato da:** `16-core-moc.md`, `19-core-dati-planetari.md`,
-  `41-ui-visualizzatore-cielo.md`.
+  `41-ui-visualizzatore-cielo.md` (survey, tile, P6), `05-comandi-sessione.md`
+  (comandi dei survey e letture sotto il cursore).
 
 ## 6. Input e output
 
@@ -488,6 +531,10 @@ riquadro mostrato.
 - **`CollectionIndex`** (classe, H26) — copia locale delle proprietà delle
   collezioni: `sync()` dal MocServer, `filter(rules)` sulle proprietà;
   espone origine e data della sincronizzazione.
+- **`view_sampling(service, view, …)`** e **`fill_view(sampling, tile)`**
+  (P6, aggiunte il 2026-10-15) — tile necessari per la finestra della
+  vista e riempimento dei suoi pixel con i valori del HiPS (campionamento
+  al più vicino sulla griglia HEALPix); dettagli in §3, P6.
 
 ## 8. Librerie e standard di riferimento
 
@@ -594,9 +641,14 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | T15 | Più immagini e PNG/JPEG (H9) | due immagini sovrapposte, `nearest`, PNG e JPEG con `(−2, 12, linear)` | pixel della sovrapposizione = media delle due (ricalcolo nel test); PNG = palette grigia di `matplotlib` sul valore normalizzato, righe dall'alto, trasparente dove non finito; JPEG valido; `hips_tile_format`, `hips_pixel_cut` | ricalcolo con `matplotlib` |
 | T16 | Errori di `build_hips` | ordine mancante, `flux`, PNG senza parametri, `histeq`, `vmin ≥ vmax`, ordine troppo alto, limite di memoria piccolo, immagine senza WCS, cartella non vuota, valori non validi | `TypeError`, `OPERATION_UNSUPPORTED`, `HIPS_DISPLAY_REQUIRED`, `HIPS_DISPLAY_INVALID`, `HEALPIX_ORDER_INVALID`, `MEMORY_LIMIT_EXCEEDED`, `WCS_MISSING`, `FileExistsError` (file esistente intatto), `ValueError` | test di unità |
 | T12 | Valore del pixel su HiPS (H27) | leggere il valore sotto il cursore su un tile FITS in cache | valore uguale a quello del tile FITS letto con `astropy.io.fits` | confronto diretto |
+| T17 | Campionamento della vista (P6) | survey FITS simulato; finestre `TAN` e `AIT` (`make_view_wcs` del 10) a scale diverse, anche a cavallo di più tile e del bordo dell'`AIT` | per ogni pixel della finestra valore uguale a `pixel_values` nel suo centro (ricalcolo nel test); tile necessari = insieme dei tile di quei pixel; pixel fuori dal cielo "nessun dato"; nessuna fascia vuota tra tile adiacenti | ricalcolo con `pixel_values` e `astropy-healpix` |
+| T18 | Riempimento progressivo e colori (P6) | tile arrivati in ordine diverso; survey JPEG simulato | stesso risultato finale in qualunque ordine; colori uguali a quelli del tile letti con Pillow e capovolti come in `fetch_tile` | confronto diretto |
 
 ## 13. Decisioni aperte
 
+- **P6 — Riproiezione dei tile sulla vista (decisione del proprietario
+  del 2026-10-15):** aggiunta al 12 per il `41`; metodo e verifica in §3
+  (P6). Codice da scrivere quando il proprietario lo chiede.
 - **D12-1 — Generazione HiPS (H9): DECISA il 2026-10-09, CORRETTA il
   2026-10-10 (decisione del proprietario, regola d'oro n. 8).** La generazione
   segue lo **standard pubblico IVOA HiPS 1.0**, con **`reproject`** dove
@@ -668,3 +720,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **P5 scritta — modulo 12 completo tranne i pezzi fermi** (`build_hips`/`BuildResult`, `BUILD_METHODS`; T14–T16 nuovi): WCS APE 14 del tile + `reproject_interp` (verifica del 2026-10-12 contro il WCS HPX interno di `reproject` e un'interpolazione indipendente; uso di `reproject` da confermare), tile FITS `float64`, media pesata con la copertura, ordini inferiori per media di 4 pixel, PNG/JPEG con parametri espliciti (`set_display` dell'11), `Moc.fits` dal 16, `properties` per ultimo; nuova decisione aperta **D12-8** (Allsky, Gruppo 3). Fermi: H10 SkyView (URL SIA non documentato da NASA), D12-6, D12-7, D12-8. Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): H10 SkyView rinviato finché NASA non documenta l'URL SIA, con il motivo (§3); **D12-6 decisa** (normalizzazione dei nomi dei corpi con una tabella del 19, scritta con il 19), **D12-7 decisa** (`hips_frame = ecliptic` non supportato finché non è verificato su un HiPS reale), **D12-8 decisa** (nessun Allsky da `build_hips` per ora) (§3, §13); uso di `reproject` in `build_hips` approvato com'è, metodo `flux` non disponibile in `build_hips` (§3); disposizione dei pixel nel tile approvata, verificata su dati reali (2MASS K, confronto con `reproject`), da ricontrollare in AP1 (§3); scelte minori del 12 tutte confermate. Nessun codice cambia. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D12-6 applicata** (decisione del proprietario del 2026-10-13, autorizzazione esplicita a modificare il file approvato): `hips_body` normalizzato con la tabella dei nomi del 19 (`BODY_NORMALIZED`; fuori tabella `body = None` con `BODY_UNSUPPORTED`) (§3); test aggiornati. Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova parte **P6, riproiezione dei tile sulla vista del `41`** — `view_sampling` e `fill_view` con campionamento al più vicino sulla griglia HEALPix (disposizione dei pixel verificata, nessuna fascia tra tile), geometria da `make_view_wcs` del 10; verifica delle funzioni HiPS pubbliche di `reproject` prima del codice (§3, §7, §12 T17–T18, §13). Stato `approvato` invariato. |

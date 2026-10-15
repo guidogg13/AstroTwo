@@ -423,8 +423,8 @@ suo VOTable.
   in **VOTable con provenienza** (origine e data della tabella di partenza,
   operazioni, selezione usata, data del salvataggio come `INFO`; UCD e
   `COOSYS` delle colonne di posizione conservati, così il file riletto con
-  `read_table` ha le stesse posizioni). La sessione del `24`, quando
-  esisterà, conterrà solo il riferimento al file (D17-3).
+  `read_table` ha le stesse posizioni). La sessione di
+  `05-comandi-sessione.md` conterrà solo il riferimento al file (D17-3).
 
 ## 4. Cosa NON fa
 
@@ -448,8 +448,9 @@ suo VOTable.
 - **Usato da:** `15-core-crossmatch.md`, `16-core-moc.md`,
   `18-core-calcolatrici.md` (anche la tabella delle funzioni, D13-8),
   `19-core-dati-planetari.md`, `20-analisi-fotometria.md`,
-  `42-ui-pannello-cataloghi.md`, `41-ui-visualizzatore-cielo.md`,
-  `33-ia-query-adql.md`.
+  `42-ui-pannello-cataloghi.md`, `41-ui-visualizzatore-cielo.md`
+  (`display_positions`, `set_plot_rules`, `record_view`),
+  `05-comandi-sessione.md` (comandi dei cataloghi), `33-ia-query-adql.md`.
 
 ## 6. Input e output
 
@@ -854,8 +855,8 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
   originali intatte.
 - **D13-13 — Sottoinsiemi salvati: DECISA il 2026-10-10 (decisione del
   proprietario).** In un file scelto dall'utente, VOTable con provenienza;
-  mai nella cache; la sessione del 24 conterrà solo il riferimento al file
-  (D17-3).
+  mai nella cache; la sessione del `05` conterrà solo il riferimento al
+  file (D17-3; prima "del 24", aggiornato il 2026-10-15).
 - **D13-14 — Lettura ASTRORES: DECISA il 2026-10-10 (decisione del
   proprietario), tranne il punto b.** (a) sessagesimali in campi in gradi
   convertiti con il modulo 10, colonna di testo conservata, avviso; (c)
@@ -962,3 +963,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-11 | Claude Code | Regola delle ripetizioni dei test di rete spostata in `02-convenzioni.md` §8 (punto 8) insieme alla regola dei commit (punto 9); qui resta il rimando (decisione del proprietario del 2026-10-11, autorizzazione esplicita). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D13-20 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): sistema delle posizioni dall'`utype` MANGO (ICRS, epoca J2000 per SIMBAD) quando manca il `COOSYS`, dichiarato con l'avviso `POSITIONS_FROM_MANGO`; regione su SIMBAD attiva; T33 esteso. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **`display_positions` aggiunta** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 (regola: D10-2 in un passo, epoca dell'immagine se nota altrimenti J2000 o epoca dell'utente, fonte dichiarata, calcolo di `propagate`, posizioni, righe disegnabili, conteggi per modo e spostamento), §7 (firma e `DisplayPositions`, nessuna dipendenza dall'11), §10 (epoca dell'immagine assente; tipo non riconosciuto → `EPOCH_INVALID`), §12 (T34). Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica): D17-3 rimanda alla sessione di `05-comandi-sessione.md` invece che al `24` (§3, §13); `05` e funzioni usate dal `41` in "Usato da" (§5). Stato `approvato` invariato. |

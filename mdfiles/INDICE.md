@@ -8,7 +8,13 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-14 — **D16-8 decisa e applicata** (MOC da immagine: blocchi più angoli di
+**Ultimo aggiornamento:** 2026-10-15 — **specifiche della prima versione dell'interfaccia** (proposta della fase 1
+approvata dal proprietario il 2026-10-15): nuovo file generale **`05-comandi-sessione.md`** (AM1 accettata, livello 1)
+e **`40`, `41`, `42`** scritti in `bozza`; decise A9, D10-9, D11-8 e il raggio del puntatore Simbad; modificati i file
+approvati 01, 02, 03, 10, 11, 12, 13, 17, 18 (restano `approvato`) e `CLAUDE.md` (formula "FASE: CODICE –
+interfaccia v1"). Nessun codice. Aperte 20 (Gruppo 2 = 9, Gruppo 3 = 11). Riepilogo: approvato 14, bozza 9, non
+esiste 20, totale 43.
+Prima di questo aggiornamento: 2026-10-14 — **D16-8 decisa e applicata** (MOC da immagine: blocchi più angoli di
 contorno; `moc_from_image` sulla DSS da 10,3 a 0,2 s) e **D14-13 aperta** (reindirizzamento http → https
 dell'ESO); 16 e 14 modificati nel registro e restano `approvato`. Test 494 di default. Aperte 14. Riepilogo
 invariato: approvato 14, bozza 5, non esiste 23, totale 42.
@@ -288,7 +294,8 @@ Dove si trovano le decisioni:
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14, 16, 18 e 19 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (13: Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 9, aggiornate il 2026-10-13) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `05-comandi-sessione.md` | Registro dei comandi e sessione (livello 1, file generale come il 04; AM1 accettata il 2026-10-15; codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore; aperte D05-1, D05-2, D05-3 | bozza |
+| `decisioni-aperte.md` | Decisioni aperte (20: Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11, aggiornate il 2026-10-15) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 
@@ -313,7 +320,7 @@ Dove si trovano le decisioni:
 | `21-analisi-spettroscopia.md` | Analisi degli spettri: lettura, dereddening, misure di linea | non esiste |
 | `22-analisi-curve-di-luce.md` | Curve di luce: fasi, detrending, periodogrammi | non esiste |
 | `23-analisi-cubi-di-dati.md` | Cubi di dati: estrazione spettri, maschere, moment maps | non esiste |
-| `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili, registro e riesecuzione delle operazioni. In Aladin la cronologia dei comandi registra anche le azioni fatte con il mouse come comandi di script; **AstroTwo adotta lo stesso principio: ogni azione dell'interfaccia = un comando registrato** | non esiste |
+| `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili, registro e riesecuzione delle operazioni. In Aladin la cronologia dei comandi registra anche le azioni fatte con il mouse come comandi di script; **AstroTwo adotta lo stesso principio: ogni azione dell'interfaccia = un comando registrato** (dal 2026-10-15 registro dei comandi e sessione nel `05-comandi-sessione.md`, livello 1; il 24 costruirà pipeline e scripting sopra il 05) | non esiste |
 
 ## IA (livello 3)
 
@@ -330,9 +337,9 @@ Dove si trovano le decisioni:
 
 | File | Descrizione | Stato |
 |---|---|---|
-| `40-ui-finestra-principale.md` | Finestra principale, menu, barre di stato, preferenze | non esiste |
-| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo: pan, zoom, layer, strumenti | non esiste |
-| `42-ui-pannello-cataloghi.md` | Pannello cataloghi: tabelle, filtri, selezioni | non esiste |
+| `40-ui-finestra-principale.md` | Finestra principale (v1): menu, barra di stato, campo "Vai a", preferenze essenziali, pannelli Comandi e Messaggi, coda dei comandi in un thread di lavoro con avanzamento e Annulla, spazio per il 44; A9 decisa (inglese con `tr()`, italiano nostro, punto decimale sempre); aperte D40-1, D40-2 | bozza |
+| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine FITS, sfondo HiPS, cataloghi, MOC, griglia, coordinate sotto il mouse, distanza, puntatore Simbad, livelli minimi, PNG; geometria da `make_view_wcs` (10) e tile dal 12 (P6); OpenGL dietro un'interfaccia di disegno nostra; obiettivi di prestazione P1–P7; D10-9 e D11-8 decise; aperte D41-1…D41-4 | bozza |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi (v1 minima): tabella in sola lettura con ordinamento, selezione sincronizzata con la vista, vista del record; colonne di posizione e moto proprio | bozza |
 | `43-ui-pannello-analisi.md` | Pannello analisi: grafici e risultati dei moduli di livello 2 | non esiste |
 | `44-ui-pannello-ia.md` | Pannello IA: chat, strumenti invocati, chiavi e provider | non esiste |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature (interfaccia; origine H2 di `03-parita-aladin.md`; dipende da `41`, `40`) | non esiste |
@@ -357,8 +364,8 @@ Dove si trovano le decisioni:
 
 | Stato | Quanti |
 |---|---|
-| bozza | 5 |
+| bozza | 9 |
 | in revisione | 0 |
 | approvato | 14 |
-| non esiste | 23 |
-| **Totale file in `mdfiles/`** | **42** |
+| non esiste | 20 |
+| **Totale file in `mdfiles/`** | **43** |

@@ -17,7 +17,9 @@ utente ed. giugno 2022, sezioni 5.7.1–5.7.5); modulo accettato in AM1 il
 ripetuto così come è stato interpretato, il valore in `float64` (o la data),
 l'unità o la scala, la libreria che ha eseguito il calcolo con la sua versione
 e l'istante della richiesta. Ogni uso è registrato come comando rieseguibile
-(regola d'oro n. 6; il registro è di `24-analisi-pipeline-riproducibili.md`).
+(regola d'oro n. 6; dal 2026-10-15 il formato dei comandi e il registro sono
+quelli di `05-comandi-sessione.md`, prima previsti nel `24`, che costruirà
+pipeline e scripting sopra il `05`).
 
 1. **Calcolatrice algebrica (sez. 5.7.1).** Valuta un'espressione numerica
    scritta dall'utente.
@@ -133,8 +135,17 @@ stesso identificatore).
    argomenti come interpretati, con la forma testuale `text`). Senza unità
    né scala → `TypeError` (errore di programmazione, §9).
    **`run_command(command)`** riesegue un comando registrato chiamando solo
-   le cinque funzioni delle calcolatrici; il formato del registro resta del
-   24.
+   le cinque funzioni delle calcolatrici. **Dal 2026-10-15 (decisione del
+   proprietario) il formato è quello del `05` e `run_command` è un
+   adattatore:** accetta un comando nel formato del `05` (nome
+   `calc.evaluate_expression`, `calc.convert_units`,
+   `calc.convert_pixel_value`, `calc.calculate_coordinates` o
+   `calc.convert_time`, versione, parametri tipizzati con unità) e chiama la
+   funzione della calcolatrice; continua ad accettare un `CalculatorCommand`
+   (T18). Il `CalculatorResult` dà il comando anche nel formato del `05`.
+   Il formato del `05` è un dato semplice (JSON): il 18 non importa il
+   registro, quindi non c'è dipendenza circolare (il `05` chiama il 18).
+   **Codice da scrivere** dopo l'approvazione del `05`.
 2. **Grammatica:** la stessa tabella `FUNCTIONS`/`CONSTANTS` del 13 (D13-8),
    numeri solo in notazione decimale o esponenziale (`0x10`, `1_000`, `1j`
    → `CALC_SYNTAX_ERROR`), `^` potenza (`**` rifiutato), un `=` facoltativo
@@ -337,7 +348,9 @@ minori:
   epoca di una riga di catalogo), `17-core-misure.md` (`angular_distance` per
   `skydist`, `read_pixel`, offset e calcolo inverso per la calcolatrice delle
   coordinate).
-- **Usato da:** `24-analisi-pipeline-riproducibili.md` (comandi `=` e
+- **Usato da:** `05-comandi-sessione.md` (comandi `calc.*`, con
+  `run_command` come adattatore del formato del `05`),
+  `24-analisi-pipeline-riproducibili.md` (comandi `=` e
   `convert` negli script e nel registro), `32-ia-registro-strumenti.md`
   (strumenti per l'IA), `40-ui-finestra-principale.md` (finestre delle
   calcolatrici), `41-ui-visualizzatore-cielo.md` (riempimento al clic).
@@ -386,6 +399,9 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 - **`convert_time(time_value, time_format, scale, target_scale)`** —
   restituisce ISO 8601, JD, MJD, anno giuliano e anno besseliano, tutti con
   la scala dichiarata.
+- **`run_command(command)`** — riesegue un comando delle calcolatrici:
+  `CalculatorCommand` oppure comando nel formato del `05` (adattatore,
+  decisione del proprietario del 2026-10-15; §3, P1 punto 1).
 
 ## 8. Librerie e standard di riferimento
 
@@ -499,7 +515,7 @@ elementare.
 | T15 | Tempo | `2000-01-01T12:00:00` in scala TT | JD 2451545.0 e anno giuliano 2000.0 (definizione di J2000.0); anno besseliano come calcolato da `astropy.time` | `astropy.time` |
 | T16 | Data in MJD | `2024-02-29T18:00:00` in scala UTC (giorno bisestile, frazione di giorno) | MJD 60369.75, ricalcolato nel test con `astropy.time.Time(..., scale="utc").mjd` | `astropy.time` |
 | T17 | Scala mancante; UT1 | data senza scala; UTC ↔ UT1 nel 2020 (IERS-A), nel 1965 (IERS-B), in predizione e fuori copertura, senza rete; tabella aggiornata da un servizio simulato (e dall'IERS nel test di rete) | `TIME_SCALE_REQUIRED`; UT1 uguale ad `astropy.time` con `delta_ut1_utc` della stessa tabella, tabella e tipo di valore dichiarati; `IERS_RANGE` fuori copertura; `IERS_TABLE_MISSING` prima dell'aggiornamento | ricalcolo con Astropy |
-| T18 | Riproducibilità | rieseguire il comando registrato di T1–T16 | risultati identici | confronto con il registro del modulo 24 |
+| T18 | Riproducibilità | rieseguire il comando registrato di T1–T16, come `CalculatorCommand` e (dopo il codice del `05`) nel formato del `05` | risultati identici nei due casi | confronto diretto; il registro è quello del `05` (T9 del `05`) |
 
 ## 13. Decisioni aperte
 
@@ -564,3 +580,4 @@ elementare.
 | 2026-10-13 | Claude Code | **D18-7 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: sessagesimali di `skydist` con l'unità scritta nel testo (h/m/s, d/m/s, °′″) letti con `parse_sexagesimal` del 10; due punti → `UNIT_SEXAGESIMAL_UNIT_REQUIRED` salvo il parametro esplicito `colon_units`; nessuna convenzione sulla posizione; sessagesimali solo negli argomenti di `skydist` (§3 P1 scelta 6, §10, T5). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo passa all'11 (`read_raw_pixel`); il 18 la richiama; tolta l'eccezione dal §4 (§3 P4 scelte 2 e 4, §5). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1–P5 confermate; **UT1** con le tabelle IERS incluse in astropy (IERS-A, poi IERS-B), senza rete, `IERS_RANGE` fuori copertura, tabella dichiarata nel risultato, aggiornamento solo su richiesta con `update_iers_table` tramite la rete del 14 (§3 P2 scelta 5, §8, §10, T17). Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): formato dei comandi = quello di `05-comandi-sessione.md` (prima "del 24"); `run_command` diventa un adattatore del formato del `05` e accetta ancora `CalculatorCommand`; nessuna dipendenza circolare (§3, §5, §7, §12 T18). Codice da scrivere dopo l'approvazione del `05`. Stato `approvato` invariato. |

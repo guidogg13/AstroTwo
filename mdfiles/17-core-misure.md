@@ -50,8 +50,10 @@ disegno — con risultati in unità esplicite e sempre verificabili.
   schermo è di `41-ui-visualizzatore-cielo.md`.
 - **Tag / marcature (H11):** marcare punti d'interesse con etichetta e
   coordinate; la persistenza è **nel file di sessione di
-  `24-analisi-pipeline-riproducibili.md`, condiviso con i segnalibri di
-  `40-ui-finestra-principale.md`** (D17-3, decisa il 2026-10-04). **La
+  `05-comandi-sessione.md`, condiviso con i segnalibri di
+  `40-ui-finestra-principale.md`** (D17-3, decisa il 2026-10-04; la
+  sessione è passata dal `24` al `05` il 2026-10-15; tag e segnalibri vi
+  entreranno con le versioni successive dell'interfaccia). **La
   sessione salva riferimenti ai file e operazioni eseguite (non i pixel) e
   deve poter essere rieseguita**; questo modulo non scrive su disco.
 - **Unità e frame:** ogni misura dichiara sistema di riferimento (ICRS di
@@ -368,7 +370,7 @@ Scelte minori di P3:
 - Non converte coordinate né calcola WCS (10); le misure in gradi passano per
   il modulo 10.
 - Non carica le immagini (11) né le tabelle (13).
-- Non salva la sessione né le marcature su disco (24, 40).
+- Non salva la sessione né le marcature su disco (05, 40).
 - Non gestisce MOC, cataloghi HiPS o query (16, 12, 14).
 
 ## 5. Livello e dipendenze
@@ -380,7 +382,9 @@ Scelte minori di P3:
 - **Usato da:** `18-core-calcolatrici.md` (`skydist`, lettura pixel, offset
   e calcolo inverso per la calcolatrice delle coordinate),
   `20-analisi-fotometria.md` (lettura pixel), `41-ui-visualizzatore-cielo.md`
-  (forme, tag, distanza con profilo), `42-ui-pannello-cataloghi.md`,
+  (forme, tag, distanza con profilo; nella prima versione
+  `angular_distance` e `read_pixel`), `42-ui-pannello-cataloghi.md`,
+  `05-comandi-sessione.md` (comandi di misura e letture sotto il cursore),
   `34-ia-verifica-risultati.md`.
 
 ## 6. Input e output
@@ -435,7 +439,7 @@ Scelte minori di P3:
   ellisse con minimo numerico, parametro `atol` = 1e-9° di default, stima
   dell'errore e campioni nel risultato; testo escluso).
 - **`tag(point, label)`** — marcatura con coordinate e etichetta; la UI la
-  rende, la **sessione del 24** la persiste insieme ai segnalibri di 40
+  rende, la **sessione del `05`** la persiste insieme ai segnalibri di 40
   (D17-3).
 - **`angular_offsets(p1, p2)`** — offset Δα·cos δ e Δδ da `p1` a `p2` nel
   frame di `p1`. **Calcolo: `SkyCoord.spherical_offsets_to` (Astropy).**
@@ -573,8 +577,10 @@ arrivano solo da questi strumenti e vengono poi verificati da
   forme geometriche da parte di `16-core-moc.md` e `20-analisi-fotometria.md`.
   Conferma §3/§4/§9 di questo file.
 - **D17-3 — Persistenza dei tag/marcature: DECISA il 2026-10-04.** Tag
-  **nel file di sessione di `24-analisi-pipeline-riproducibili.md`,
-  condiviso con i segnalibri di `40-ui-finestra-principale.md`**; la sessione
+  **nel file di sessione** (dal 2026-10-15 quello di
+  `05-comandi-sessione.md`, prima previsto nel `24`; decisione del
+  proprietario del 2026-10-15), **condiviso con i segnalibri di
+  `40-ui-finestra-principale.md`**; la sessione
   salva **riferimenti ai file e operazioni eseguite (non i pixel) e deve
   poter essere rieseguita**. **Motivazione:** A12 e H13 prevedono persistenza
   insieme alla sessione, un formato unico evita divergenze e il 17 resta senza
@@ -654,3 +660,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-13 | Claude Code | **D17-8 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: `distance_to` = distanza angolare minima (0 se sovrapposte o punto dentro), cerchi esatti con Astropy, poligoni e tracciati chiusi con la distanza punto–arco di cerchio massimo (§3 P3 scelta 9, §7, §10, T20). Nuova **D17-9** (Gruppo 3): `distance_to` per ellisse, freccia, testo e tracciato aperto, ferma (`OPERATION_UNSUPPORTED`). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | Scelte minori di P3 **confermate dal proprietario il 2026-10-13** (§3). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D17-9 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: freccia e tracciato aperto come archi di cerchio massimo, ellisse con minimo numerico sul bordo e precisione dichiarata (`atol` 1e-9° di default, stima dell'errore e campioni nel risultato, `DISTANCE_PRECISION_NOT_REACHED`), incroci con l'ellisse riconosciuti con la funzione liscia dei fuochi (lo zero a spigolo della distanza non raggiungeva la precisione dichiarata: trovato da T21), testo `OPERATION_UNSUPPORTED` (§3 P3 scelta 10, §7, §8, §10, T20 ridotto, nuovo T21). Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica): D17-3 rimanda alla sessione di `05-comandi-sessione.md` invece che al `24` (§3, §4, §7, §13); `05` in "Usato da" (§5). Stato `approvato` invariato. |

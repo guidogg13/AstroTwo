@@ -37,7 +37,14 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-14, dopo la decisione su D16-8: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`,
+**Dal 2026-10-15, con le specifiche della prima versione dell'interfaccia (05, 40, 41, 42): 20 aperte** — Gruppo 1:
+**0** · Gruppo 2: **9** (`A2`, `A6`, `A11`; decisa `A9`; nuove `D05-1` classi dei comandi e letture passive, `D05-2`
+dati di rete diversi alla riapertura, `D40-1` lingua dei messaggi dei moduli, `D41-1` thread delle letture passive
+di rete, `D41-2` scrittura dei numeri mostrati, `D41-3` limiti iniziali di visualizzazione) · Gruppo 3: **11**
+(decise `D10-9` soglia `TAN`/`AIT` 30° e `D11-8` corona del centroide 1 × / 1,5 × `box_size`; nuove `D05-3` adattatore
+del 19, `D40-2` avvio tramite URL, `D41-4` Mac di riferimento e test `perf`/`gl`).
+
+Prima, **dal 2026-10-14, dopo la decisione su D16-8: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **4** (`A2`, `A6`, `A9`,
 `A11`) · Gruppo 3: **10** (decisa `D16-8`, MOC da immagine con i blocchi più gli angoli di contorno; nuova `D14-13`,
 reindirizzamento http → https dell'ESO).
 
@@ -241,16 +248,21 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (4)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (9)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10. **Dal 2026-10-13 elenco completo delle licenze in `THIRD_PARTY_LICENSES`** (punti da valutare: LGPL-3 di WCSLIB, clausola LBNL della libreria QD, MPL-2.0 di `certifi`; testo di `pims` trovato il 2026-10-13 nel sorgente ufficiale su PyPI e aggiunto, ma con il segnaposto `<COPYRIGHT HOLDER>` non compilato) | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
-| `A9` | Qual è la lingua dell'interfaccia? **Orientamento (2026-10-09): inglese di base + italiano con le traduzioni di Qt** | `40-ui-finestra-principale.md` (blocca solo l'approvazione del 40) |
+| `D05-1` | Classi dei comandi: `session` (in cronologia e rieseguiti), `passive` (letture al passaggio del mouse: dal registro ma non registrate; senza rete nel thread principale, con rete nel gruppo di thread del 41), `application` (in cronologia, non rieseguiti)? **Raccomandazione: sì, tre classi** | `05-comandi-sessione.md` §13 (blocca l'approvazione del 05) |
+| `D05-2` | Alla riapertura di una sessione, dati di rete con impronta diversa da quella registrata: avviso e si continua, stop, o nessun controllo? **Raccomandazione: avviso `SESSION_NETWORK_DATA_DIFFERS`** | `05-comandi-sessione.md` §13 (blocca l'approvazione del 05) |
+| `D40-1` | Lingua dei messaggi dei moduli (oggi in italiano) con l'interfaccia in inglese? **Raccomandazione: nella v1 codice + testo del modulo invariato; traduzione con tabelle nei moduli da valutare dopo** | `40-ui-finestra-principale.md` §13 (blocca l'approvazione del 40) |
+| `D41-1` | Dove si eseguono le letture passive di rete (puntatore Simbad)? **Raccomandazione: nel gruppo di thread dei tile** | `41-ui-visualizzatore-cielo.md` §13 (blocca l'approvazione del 41) |
+| `D41-2` | Scrittura dei numeri mostrati (sessagesimali con le cifre di DC3): nuova funzione nel 10, `calculate_coordinates` del 18 o conversione nella UI? **Raccomandazione: nuova funzione nel 10 (modifica da autorizzare)** | `41-ui-visualizzatore-cielo.md` §13 (blocca l'approvazione del 41) |
+| `D41-3` | Limiti iniziali di visualizzazione (vmin, vmax) di immagini e tile FITS: nuova funzione nell'11, minimo/massimo, o `DATAMIN`/`DATAMAX`? **Raccomandazione: nuova funzione nell'11 con `ZScaleInterval` di default (modifica da autorizzare)** | `41-ui-visualizzatore-cielo.md` §13 (blocca l'approvazione del 41) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (10)
+## 5. GRUPPO 3 — rimandabili al momento del codice (11)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -259,8 +271,9 @@ gruppi successivi, A8 dopo il livello 1).
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
 | `AP4` | AstroTwo esegue gli script di Aladin o ha solo il proprio formato di pipeline? (rinvia ad `A8`: si decide insieme, dopo il livello 1) | `03-parita-aladin.md` §6 (e `24-analisi-pipeline-riproducibili.md`) |
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
-| `D11-8` | Valori di default dei raggi della corona del centroide (`annulus_inner`, `annulus_outer`; oggi obbligatori)? **Si decide con `20` e `41`** | `11-core-immagini-fits.md` §13 |
-| `D10-9` | Soglia di campo di vista di `choose_projection` oltre la quale si passa da `TAN` ad `AIT`? (finché aperta, la soglia è un parametro obbligatorio; **si decide con il `41`**) | `10-core-coordinate-wcs.md` §13 |
+| `D05-3` | Adattatore del 19 (`PlanetaryCommand`) al formato del 05: modifica del 19 da autorizzare quando l'interfaccia userà i dati planetari | `05-comandi-sessione.md` §13 |
+| `D40-2` | Avvio tramite URL (H18): equivalente in AstroTwo, fuori dalla v1 (raccomandazione: rimandare alla versione successiva del 40) | `40-ui-finestra-principale.md` §13 |
+| `D41-4` | Mac di riferimento (modello, processore, memoria, macOS) per i test `perf` e uso dei marcatori `perf`/`gl` nella regola dei commit (raccomandazione: esclusi di default, eseguiti a parte; `gl` blocca, `perf` si riporta) | `41-ui-visualizzatore-cielo.md` §13 (e `02` §8) |
 | `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
 | `D14-13` | URL dei servizi dell'ESO in http (dal registro VO e nelle risposte SIA): il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata; oggi la demo usa https direttamente, nessuna modifica al codice del 14 | `14-core-protocolli-vo.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
@@ -330,3 +343,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (prima nei file di origine 17 e 19): `D17-9` decisa (ellisse numerica con precisione dichiarata, freccia e tracciato aperto come archi di cerchio massimo, testo `OPERATION_UNSUPPORTED`) e `D19-9` decisa (PDS da URL con la rete del 14 e la cache comune), tolte dal Gruppo 3; `D19-8` **rimandata, bassa priorità** (PDS3 non ancora supportato), resta nel Gruppo 3. `A11` annotata: testo di licenza di `pims` trovato (segnaposto non compilato da valutare). Conteggi: aperte **13** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 9). |
 | 2026-10-14 | Claude Code | **Nuova nel Gruppo 3: `D16-8`** (prima nel file di origine 16 §13): la regola dei blocchi per `moc_from_image` decisa il 2026-10-14 perde celle sul bordo; raccomandazione con le misure. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10). |
 | 2026-10-14 | Claude Code | **Decisa dal proprietario `D16-8`** (blocchi più angoli dei pixel lungo il contorno della regione dei blocchi validi; crescita ≤ b − 1 pixel) e tolta dal Gruppo 3 (prima nel file di origine 16). **Nuova nel Gruppo 3: `D14-13`** (prima nel file di origine 14): reindirizzamento http → https dell'ESO che codifica due volte l'URL. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 4, Gruppo 3 = 10). |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia; prima nei file di origine 01, 10, 11, 40, 41): decise e tolte `A9` (Gruppo 2; inglese con `tr()`, italiano nostro, punto decimale sempre), `D10-9` (30°, scarto ±10 % nel 41) e `D11-8` (corona 1 × / 1,5 × `box_size`, box 15 pixel nel 41) (Gruppo 3). Nuove dalle specifiche 05, 40, 41: Gruppo 2 `D05-1`, `D05-2`, `D40-1`, `D41-1`, `D41-2`, `D41-3`; Gruppo 3 `D05-3`, `D40-2`, `D41-4`. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11). |

@@ -38,8 +38,20 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   `choose_grid_spacing` in base al campo visibile, così la griglia resta
   leggibile a ogni ingrandimento senza che l'utente scelga il passo;
   **scelta della proiezione del campo** con `choose_projection` — `TAN` per i
-  campi piccoli, `AIT` per i campi grandi, con la soglia che è la decisione
-  D10-9, da decidere con il `41` (D10-8, decisa il 2026-10-09).
+  campi piccoli, `AIT` per i campi grandi, con **soglia di default 30°**
+  (D10-9, decisa dal proprietario il 2026-10-15 con il `41`; lo scarto di
+  ±10 % attorno alla soglia, per evitare cambi continui, è gestito dal
+  `41`, che passa la soglia esplicita) (D10-8, decisa il 2026-10-09).
+- **Geometria della vista (`make_view_wcs`, aggiunta il 2026-10-15 su
+  decisione del proprietario, per il `41`):** il visualizzatore non
+  calcola proiezioni; questo modulo costruisce il piano su cui si
+  disegna (**base**: il WCS di un'immagine, oppure un WCS del cielo con
+  punto di tangenza, proiezione, frame e scala dati) e la **finestra**
+  visibile su quel piano a una scala data, con le funzioni finestra ↔
+  cielo, il fattore e lo spostamento tra pixel della base e della
+  finestra, il WCS della regione visibile (per la griglia) e il **raggio
+  del campo** (per i tile del 12, per `choose_projection` e per il
+  catalogo nel campo). Dettagli in §7.
 - **WCS (World Coordinate System):** leggere, validare e applicare la soluzione
   astrometrica (`WCS`) di un'immagine FITS: da pixel a coordinate e viceversa;
   verificare che la soluzione sia internally consistente.
@@ -130,8 +142,10 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
 - **Usato da:** `11-core-immagini-fits.md`, `12-core-hips.md`,
   `13-core-cataloghi.md`, `14-core-protocolli-vo.md`, `15-core-crossmatch.md`,
   `16-core-moc.md`, `17-core-misure.md`, `18-core-calcolatrici.md`,
-  `19-core-dati-planetari.md`, tutti i moduli di analisi (20–24),
-  `33-ia-query-adql.md`, `41-ui-visualizzatore-cielo.md`,
+  `19-core-dati-planetari.md`, `05-comandi-sessione.md` (comandi di vista
+  e di coordinate), tutti i moduli di analisi (20–24),
+  `33-ia-query-adql.md`, `41-ui-visualizzatore-cielo.md` (`make_view_wcs`,
+  `choose_projection`, griglia, coordinate sotto il cursore),
   `42-ui-pannello-cataloghi.md`.
 
 ## 6. Input e output
@@ -152,7 +166,10 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
 | in | soglie di calibrazione | struttura | stelle minime, pixel | default D10-7, configurabili |
 | in | passo della griglia | `Quantity` angolare | gradi (o altra unità angolare) | uno per le longitudini, uno per le latitudini; se omessi, scelti da `choose_grid_spacing` |
 | in | `target_lines` | intero ≥ 1 | numero di linee desiderate per asse | default 5 (vedi §9) |
-| in | campo di vista, soglia | `Quantity` angolare | gradi | per `choose_projection` (soglia: D10-9) |
+| in | campo di vista, soglia | `Quantity` angolare | gradi | per `choose_projection` (soglia di default 30°, D10-9) |
+| in | centro, scala, dimensioni della finestra | posizione celeste; `Quantity` angolare per pixel; interi | gradi; pixel | per `make_view_wcs` |
+| in | base o proiezione | WCS del 10 oppure codice di proiezione (+ frame, punto di tangenza) | — | per `make_view_wcs` |
+| out | `ViewGeometry` | struttura | base, finestra, fattore e spostamento, raggio del campo in gradi | geometria per il `41` e per il 12 |
 | out | residui calibrazione | float64 | pixel e arcosecondi | RMS e massimo dichiarati, con le soglie usate |
 | out | soluzioni astrometriche | lista | — | le precedenti + la nuova in coda |
 | out | linee della griglia | lista | tratti in pixel (convenzione numpy) + valore della coordinata | geometria per il `41` |
@@ -231,9 +248,50 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   estensione / linee desiderate** dagli elenchi di §9; restituisce i due
   passi, le estensioni misurate e l'elenco usato (orario o in arco).
 - **`choose_projection(...)`** — sceglie la proiezione del campo: `TAN` se
-  il campo di vista è minore della soglia, `AIT` altrimenti; la soglia è un
-  parametro obbligatorio finché D10-9 non ne fissa il valore (si decide con
-  il `41`).
+  il campo di vista è minore della soglia, `AIT` altrimenti; **soglia di
+  default 30°** (D10-9, decisa il 2026-10-15), sempre scritta nel risultato;
+  una soglia esplicita resta possibile (il `41` passa 33° o 27° per lo
+  scarto di ±10 %). Campo di vista = diametro del cerchio che contiene la
+  vista (due volte il raggio del campo di `ViewGeometry`).
+- **`make_view_wcs(center, scale, shape, *, projection=None, frame="icrs",
+  tangent_point=None, base=None)`** (aggiunta il 2026-10-15) — geometria
+  della vista per il `41`, restituita come **`ViewGeometry`**. Parametri:
+  `center` posizione celeste del centro della finestra (con frame);
+  `scale` angolo per pixel della finestra (`Quantity` angolare > 0),
+  riferito al pixel di riferimento della base; `shape` dimensioni della
+  finestra in pixel (righe, colonne; interi ≥ 1). Due modi:
+  - **senza `base`** (vista del cielo): crea una base nuova con
+    `projection` obbligatoria tra `TAN`, `SIN`, `AIT`, `ZEA`, `STG`, `CAR`
+    (elenco D10-4 senza `NCP`, forma storica di `SIN`, e senza `ZPN`, che
+    richiede coefficienti: `PROJECTION_UNSUPPORTED` con il motivo), `frame`
+    `icrs` o `galactic`, punto di tangenza `tangent_point` (di default il
+    centro), scala della base = `scale`, nord in alto ed est a sinistra
+    (`CDELT1` = −scala, `CDELT2` = +scala), pixel di riferimento nel pixel
+    (0, 0) in convenzione numpy (FITS (1, 1), DC7), `LONPOLE`/`LATPOLE`
+    secondo le regole di default dello standard FITS WCS (Paper II),
+    applicate da WCSLIB e dichiarate;
+  - **con `base`** (il WCS di un'immagine dell'11, o una base creata prima
+    con il primo modo): la base non cambia; `projection`, `frame` e
+    `tangent_point` non si danno (altrimenti `VIEW_PARAMETERS_INVALID`).
+  In entrambi i modi `ViewGeometry` contiene: la **base**; proiezione,
+  frame e punto di tangenza; la **scala della base** al suo pixel di
+  riferimento (per un'immagine da `astropy.wcs.utils.proj_plane_pixel_scales`,
+  media geometrica dei due assi, metodo dichiarato); centro, scala e
+  dimensioni della finestra; il **fattore** (pixel della finestra per pixel
+  della base = scala della base / `scale`) e l'**origine** (pixel della
+  base, convenzione numpy, che corrisponde al pixel (0, 0) della finestra,
+  scelta in modo che `center` cada al centro della finestra); le funzioni
+  **`window_to_sky`** e **`sky_to_window`** (trasformazione lineare verso i
+  pixel della base, poi `pixel_to_sky`/`sky_to_pixel` della base: esatte
+  anche con le distorsioni del WCS dell'immagine, es. SIP o DSS → TPD);
+  il **WCS della regione visibile** (la base con il pixel di riferimento
+  spostato all'origine della regione visibile in pixel della base, senza
+  cambiare scala né distorsioni) e le sue dimensioni, per
+  `compute_grid_lines`; il **raggio del campo** = massima distanza
+  angolare (`astropy.coordinates`) tra il centro e i punti del bordo della
+  finestra campionati con 64 punti per lato, oppure **180°** se un punto
+  del bordo è fuori dalla proiezione (es. bordo dell'`AIT`), con il metodo
+  dichiarato. Nessun disegno (`41`).
 
 La calcolatrice delle coordinate (A5) non è più in questo modulo (D10-8): le
 sue funzioni sono `convert_coordinates` e `propagate_position` qui, gli
@@ -339,6 +397,8 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 | Soluzione finale incoerente con la `TAN` al centro del campo | nessuna soluzione; messaggio con scostamento e soglia | `CALIB_INCONSISTENT` |
 | Adattamento che non converge | nessuna soluzione, messaggio della libreria | `CALIB_FIT_FAILED` |
 | Passo della griglia non positivo o senza unità | rifiuto | `GRID_SPACING_INVALID` |
+| `make_view_wcs` con scala non positiva o senza unità, dimensioni non intere o < 1, `base` insieme a `projection`/`frame`/`tangent_point`, `projection` mancante senza `base` | rifiuto con il parametro | `VIEW_PARAMETERS_INVALID` |
+| `make_view_wcs` con `NCP` o `ZPN` | rifiuto con il motivo (forma storica di `SIN`; coefficienti richiesti) | `PROJECTION_UNSUPPORTED` |
 
 ## 11. Esposizione all'IA
 
@@ -383,6 +443,11 @@ propone i parametri e interpreta il risultato.
 | T24 | Propagazione solo con moto proprio | `propagate_position(..., parallax=None, proper_motion_only=True)` su posizioni con moto proprio noto; poi con una parallasse passata | posizioni uguali ad `apply_space_motion` di `SkyCoord` senza distanza (ricalcolo nel test, 1e-12 gradi); risultato marcato con nota; con parallasse `PROPAGATION_MODE_CONFLICT`; senza l'opzione la parallasse mancante resta un errore | ricalcolo con Astropy |
 | T25 | Sessagesimali | `parse_sexagesimal` su ore (`00 13 00.93`, `12:30:15.5`) e gradi (`+72 31 19.9`, `-05:06:07`); testo non valido | gradi uguali ad `astropy.coordinates.Angle` ricalcolato nel test; `COORD_FORMAT_INVALID` | ricalcolo con Astropy |
 | T22 | Fuori campo | `pixel_to_sky` su un pixel fuori dall'immagine | valore restituito con avviso `OUT_OF_FIELD` | test di unità |
+| T26 | Vista del cielo (`make_view_wcs` senza base) | per `TAN`, `SIN`, `AIT`, `ZEA`, `STG`, `CAR`, in ICRS e galattico | base uguale al WCS costruito nel test con `astropy.wcs` sulle stesse parole chiave (1e-9 gradi su una griglia di pixel); `window_to_sky` del centro della finestra = `center` entro 1e-9 gradi; ritorno finestra → cielo → finestra entro 1e-6 pixel | ricalcolo con `astropy.wcs` |
+| T27 | Vista su un'immagine con distorsioni | WCS con SIP e WCS DSS1 (T12); varie scale e centri | `window_to_sky(x, y)` = `pixel_to_sky` della base in `origine + (x, y) / fattore` entro 1e-12 gradi; WCS della regione visibile e base danno lo stesso cielo per pixel corrispondenti entro 1e-9 gradi | ricalcolo con il 10 e `astropy.wcs` |
+| T28 | Raggio del campo | finestra `TAN` di campo noto; finestra `AIT` che mostra tutto il cielo | raggio = massimo delle distanze ricalcolate nel test con `astropy.coordinates` sugli stessi 4 × 64 punti del bordo; `AIT` con un angolo fuori dal cielo → 180° dichiarato | ricalcolo con Astropy |
+| T29 | Soglia di default (D10-9) | `choose_projection` senza soglia con campo 29.999° e 30°; con soglia esplicita 33° | `TAN` e `AIT`; soglia usata scritta nel risultato; la soglia esplicita vale | test di unità |
+| T30 | Errori di `make_view_wcs` | scala 0, scala senza unità, dimensioni 0, `base` con `projection`, `NCP`, `ZPN` | `VIEW_PARAMETERS_INVALID`; `PROJECTION_UNSUPPORTED` | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -451,11 +516,19 @@ propone i parametri e interpreta il risultato.
   annulla/ripeti in `24` e `40`. (4) `coordinate_calculator` tolta: offset e
   calcolo inverso nel `17`, la calcolatrice del `18` usa `10` e `17`.
   Applicata in §3–§7, §10, §12.
-- **D10-9 — Soglia di `choose_projection`:** campo di vista oltre il quale
-  si passa da `TAN` ad `AIT`. Da decidere (Gruppo 3) **insieme al modulo
-  `41-ui-visualizzatore-cielo.md`** (indicazione del proprietario del
-  2026-10-09); fino ad allora la soglia è un parametro obbligatorio della
-  funzione, senza valore di default.
+- **D10-9 — Soglia di `choose_projection`: DECISA il 2026-10-15
+  (decisione del proprietario, con il `41`).** **30°** di campo di vista
+  (diametro del cerchio che contiene la vista), default della funzione e
+  scritto nel risultato; lo **scarto di ±10 %** (33° in uscita da `TAN`, 27°
+  in uscita da `AIT`) per evitare cambi continui vicino alla soglia è
+  gestito dal `41`. **Motivazione (nostra):** la scala radiale della `TAN`
+  cresce come 1/cos²θ (θ = metà campo): a 30° di campo l'aumento al bordo è
+  del 7,2 %, a 60° del 33 %; oltre i 30° la distorsione diventa evidente.
+  Applicata in §3, §6, §7, §12 (T29).
+- **`make_view_wcs` (2026-10-15, decisione del proprietario sulla
+  proposta della fase 1 dell'interfaccia):** aggiunta perché il `41` non
+  calcoli proiezioni; §3, §6, §7, §10, §12 (T26–T30). **Codice da scrivere**
+  (con il default di D10-9) quando il proprietario lo chiede.
 
 ## 14. Registro modifiche
 
@@ -484,3 +557,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-10 | Claude Code | **Regola d'oro n. 8** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): tolti i "come Aladin" usati come motivo — `choose_grid_spacing` (§3, §7, §9, con motivazione nostra degli elenchi di valori tondi e delle 5 linee) e calibrazioni storiche DSS1 (§3, motivazione: lastre d'archivio calibrate solo così); resta il confronto finale con AP1, che è validazione e non copia. Docstring di `choose_grid_spacing` in `coordinates_wcs.py` allineata. Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **D13-12** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `propagate_position` con l'opzione esplicita `proper_motion_only` (astropy senza distanza, nessun effetto prospettico, risultato marcato); nuovo errore `PROPAGATION_MODE_CONFLICT` (§10), test T24 (§12). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **D13-14 (a)** (decisione del proprietario: sessagesimali ASTRORES convertiti con il modulo 10; autorizzazione esplicita a modificare il file approvato): nuova `parse_sexagesimal` (§7) con `astropy.coordinates.Angle`, errore `COORD_FORMAT_INVALID` (§10), test T25 (§12). Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): **D10-9 decisa** (soglia di default 30°, scarto ±10 % nel `41`); nuova **`make_view_wcs`** con `ViewGeometry` (base e finestra, funzioni finestra ↔ cielo esatte anche con distorsioni, WCS della regione visibile, raggio del campo) in §3, §6, §7; errori `VIEW_PARAMETERS_INVALID` e `PROJECTION_UNSUPPORTED` (§10); test T26–T30 (§12). Codice da scrivere (`make_view_wcs` e default di `choose_projection`). Stato `approvato` invariato. |
