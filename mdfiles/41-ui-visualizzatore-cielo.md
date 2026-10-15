@@ -131,8 +131,11 @@ nasce da queste trasformazioni:
   (valori `float32` e colori RGBA a 8 bit) come texture sulla GPU, in più
   texture se l'immagine supera la dimensione massima della GPU.
 - **Regolazioni:** una barra con vmin, vmax, funzione di trasferimento,
-  palette e gamma → `image.set_display`. **Limiti iniziali:** D41-3 (nell'11
-  manca una funzione che li proponga).
+  palette e gamma → `image.set_display`. **Limiti iniziali (D41-3, decisa
+  il 2026-10-15):** `suggest_display_limits` dell'11 con `ZScaleInterval` di
+  astropy; i limiti scelti, il metodo e i suoi parametri sono dichiarati nel
+  risultato di `image.open` e registrati nel comando, così la riapertura
+  della sessione dà la stessa visualizzazione.
 - **Immagini a due livelli** (anteprima dell'11 per le immagini enormi):
   si disegna l'anteprima con la dichiarazione dell'11 nel pannello dei
   livelli; le letture sotto il cursore seguono le regole dell'11
@@ -149,7 +152,10 @@ nasce da queste trasformazioni:
   arriva, riempie i suoi pixel della finestra (funzione del 12).
 - **Tile FITS:** valori portati a colori con `set_display` dell'11; limiti
   iniziali da `hips_pixel_cut` del servizio se dichiarato, altrimenti
-  D41-3. **Tile JPEG o PNG:** colori del tile.
+  `suggest_display_limits` dell'11 (D41-3) sui valori del **tile che
+  contiene il centro della prima vista** del survey (scelta fissa, così il
+  risultato non dipende dall'ordine di arrivo dei tile), dichiarati nel
+  risultato di `hips.set_survey`. **Tile JPEG o PNG:** colori del tile.
 - Un cambio di finestra **annulla le richieste di tile non più
   necessarie** (annullamento cooperativo: i risultati si scartano).
 - Tile mancanti o scartati (`HIPS_TILE_MISSING`, `HIPS_BAD_TILE` del 12):
@@ -201,7 +207,9 @@ nasce da queste trasformazioni:
 `ViewGeometry`, con il passo scelto da `choose_grid_spacing` (5 linee per
 asse, elenchi del 10), nel frame scelto (ICRS o galattico); ricalcolata a
 ogni comando di vista. Le etichette usano il valore della coordinata
-restituito dal 10, scritto con le regole di D41-2.
+restituito dal 10, scritto con `format_coordinates` del 10 (D41-2) con
+la precisione uguale al passo della griglia (es. passo di 10′ → gradi e
+primi, senza secondi).
 
 ### 3.11 Coordinate e valore sotto il mouse (A4)
 
@@ -214,7 +222,7 @@ restituito dal 10, scritto con le regole di D41-2.
   survey; nessun valore per i survey a colori (`HIPS_PIXEL_UNAVAILABLE`).
 - Fuori dalla proiezione (bordo dell'`AIT`): "fuori dal cielo".
 - Il risultato va nella barra di stato del `40`; il formato dei numeri
-  segue D41-2 e DC3.
+  è quello di `format_coordinates` del 10 con le cifre di DC3 (D41-2).
 
 ### 3.12 Strumenti
 
@@ -239,7 +247,8 @@ restituito dal 10, scritto con le regole di D41-2.
   in un riquadro vicino al cursore: identificatore, tipo, coordinate,
   magnitudini con banda e sistema, numero di citazioni (dal 14), con il
   collegamento alla pagina SIMBAD; nessun oggetto → testo del 14. Dove si
-  esegue: D41-1.
+  esegue: nel **gruppo di thread dei tile**, come comando `passive`
+  (D41-1, decisa il 2026-10-15).
 
 ### 3.13 Rendering e thread
 
@@ -262,6 +271,13 @@ restituito dal 10, scritto con le regole di D41-2.
   texture `float32`.
 - **Retina:** si disegna in pixel fisici (rapporto dei pixel dello
   schermo); dimensioni dei simboli e tolleranze in pixel logici.
+- **Temi e modalità notte** (linee guida visive, `40` §3.11): colori di
+  griglia, simboli ed etichette dal tema; in **modalità notte rossa** il
+  renderer porta ogni colore disegnato (anche il piano dell'immagine e dei
+  tile) sulla sua luminosità in una scala di rossi: è una trasformazione
+  di disegno, i valori e i risultati non cambiano; i cataloghi si
+  distinguono per forma del simbolo. I colori dei cataloghi nei temi
+  normali sono la tavolozza di Okabe e Ito (scelta minore 4).
 - **Thread** (architettura approvata il 2026-10-15): i comandi passano
   dalla coda del `40`; i **tile HiPS** (richiesta e riempimento) girano in
   un **gruppo di thread separato** (`QThreadPool`, 6 thread: scelta minore
@@ -282,7 +298,17 @@ non sono dati scientifici. Altri formati e stampa: fuori dalla v1.
 
 ### 3.15 Obiettivi di prestazione (approvati il 2026-10-15)
 
-Misurati sul **Mac di riferimento** (D41-4) con test marcati `perf`:
+Misurati sul **Mac di riferimento** con test marcati `perf` (D41-4):
+
+| Mac di riferimento | Valore |
+|---|---|
+| Modello | **da compilare** (lo indica il proprietario) |
+| Processore | **da compilare** |
+| Memoria | **da compilare** |
+| Versione di macOS | **da compilare** |
+| Schermo (rapporto dei pixel) | **da compilare** |
+
+
 
 | # | Obiettivo | Condizioni |
 |---|---|---|
@@ -333,8 +359,9 @@ Simbad). Le altre righe assegnate al 41 sono fuori dalla v1 (§3.1).
 - **Livello:** interfaccia; nella v1 usa solo il livello 1.
 - **Dipende da:** `05-comandi-sessione.md`; `10-core-coordinate-wcs.md`
   (`make_view_wcs`, `choose_projection`, `pixel_to_sky`, `sky_to_pixel`,
-  `convert_pixel_convention`, griglia), `11-core-immagini-fits.md`
-  (`set_display`, `star_centroid`), `12-core-hips.md` (survey, tile,
+  `convert_pixel_convention`, `format_coordinates`, griglia),
+  `11-core-immagini-fits.md` (`set_display`, `suggest_display_limits`,
+  `star_centroid`), `12-core-hips.md` (survey, tile,
   campionamento della vista, valori dei pixel), `13-core-cataloghi.md`
   (`display_positions`, `set_plot_rules`, `record_view`),
   `14-core-protocolli-vo.md` (`simbad_pointer`), `16-core-moc.md`
@@ -439,7 +466,12 @@ sono del `05` e potranno essere esposti dal `32`.
 
 Con **pytest-qt** e piattaforma `offscreen`; servizi e tile simulati.
 Marcatori: `gl` per i test che richiedono la GPU, `perf` per le
-prestazioni (§3.15); uso dei marcatori nella regola dei commit: D41-4.
+prestazioni (§3.15). **Regola (D41-4, decisa il 2026-10-15):** `perf` e
+`gl` sono **esclusi dai test di default** (come `network`) e si eseguono a
+parte; **un test `gl` che fallisce blocca il commit** quando è eseguito;
+**i test `perf` si riportano** (valori ottenuti nel messaggio di commit e
+nella panoramica), senza bloccare, secondo la regola "misurare e riportare,
+mai abbassare in silenzio".
 
 | # | Descrizione | Passi | Atteso | Verifica |
 |---|---|---|---|---|
@@ -460,9 +492,15 @@ prestazioni (§3.15); uso dei marcatori nella regola dei commit: D41-4.
 | T15 | Livelli | ordine, visibilità, opacità, rimozione | comandi registrati; ordine di disegno e opacità applicati | ispezione del renderer |
 | T16 | Clic su una sorgente | clic a 2 pixel logici da una sorgente e lontano da tutte | `catalog.select` della riga giusta; nessuna selezione lontano | test |
 | T17 | Cambio di base in un passo | spostare la vista finché il punto di tangenza esce dalla finestra | per tutto il cambio, nessun fotogramma con livelli su basi diverse | ispezione del renderer |
+| T18 | Numeri scritti dal 10 | coordinate sotto il cursore, etichette della griglia, coordinate nel puntatore Simbad | testi identici a quelli di `format_coordinates` del 10 sugli stessi valori; punto decimale anche in italiano | confronto diretto |
+| T19 | Limiti iniziali | apertura di un FITS sintetico; survey FITS simulato senza `hips_pixel_cut` | limiti uguali a `suggest_display_limits` dell'11 (sull'immagine; sul tile che contiene il centro della prima vista), dichiarati e registrati nel comando; stessi limiti alla riapertura della sessione | ricalcolo con l'11 |
+| T20 | Modalità notte (`gl`) | vista con immagine, HiPS a colori, due cataloghi, griglia, in modalità notte, disegnata fuori schermo | nessun pixel con componente verde o blu sopra la soglia bassa dichiarata nel test; posizioni invariate (T1) | lettura dell'immagine fuori schermo |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
 ## 13. Decisioni aperte
+
+Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Resta da
+compilare il Mac di riferimento (§3.15).
 
 - **D10-9 — Soglia `TAN`/`AIT`: DECISA il 2026-10-15** (decisione del
   proprietario): 30°, con lo scarto di ±10 % gestito qui (§3.3).
@@ -474,48 +512,24 @@ prestazioni (§3.15); uso dei marcatori nella regola dei commit: D41-4.
   proprietario; D14-9 punto 2 lo assegnava al 41): 12 pixel logici
   convertiti in angolo, richiesta dopo 500 ms fermo, una alla volta
   (§3.12).
-- **D41-1 — Dove si eseguono le letture passive con rete (puntatore
-  Simbad):** l'architettura approvata prevede la coda dei comandi e un
-  gruppo di thread separato per i tile. Se il puntatore passasse dalla coda,
-  un comando lungo (es. una query TAP di 60 s) lo bloccherebbe. Opzioni:
-  (a) **nel gruppo di thread dei tile**, che diventa il gruppo delle
-  "letture passive di rete"; (b) nella coda dei comandi, con il puntatore
-  in attesa finché la coda è occupata; (c) un terzo gruppo di thread.
-  **Raccomandazione: (a)** — stesse regole dei tile (non registrate,
-  annullabili, risultati con i segnali), nessun elemento nuovo
-  nell'architettura. Gruppo 2 (blocca l'approvazione del 41).
-- **D41-2 — Scrittura dei numeri mostrati (sessagesimali e cifre):**
-  coordinate sotto il cursore, etichette della griglia e misure vanno
-  mostrate in sessagesimale o decimale con le cifre di DC3. La conversione
-  gradi → h:m:s è un calcolo e nessuna funzione pubblica del 10 la fa con
-  le cifre di DC3 (`calculate_coordinates` del 18 dà sempre 0,00001 s ed
-  è pensata per la calcolatrice). Opzioni: (a) **nuova funzione nel 10**
-  (es. `format_coordinates`, con `astropy.coordinates.Angle.to_string` e
-  le cifre di DC3; modifica del 10 da autorizzare); (b) usare
-  `calculate_coordinates` del 18 e arrotondare nella UI (arrotondamento di
-  presentazione, `02` §6); (c) `Angle.to_string` nella UI. **Raccomandazione:
-  (a)** — un solo punto per la scrittura delle coordinate, testato, e
-  nessuna conversione nell'interfaccia. Gruppo 2.
-- **D41-3 — Limiti iniziali di visualizzazione (vmin, vmax):** `set_display`
-  dell'11 richiede vmin e vmax, ma l'11 non ha una funzione che li proponga
-  all'apertura di un'immagine (né per i tile FITS senza `hips_pixel_cut`).
-  Opzioni: (a) **nuova funzione nell'11** (es. `suggest_display_limits`,
-  con gli intervalli di `astropy.visualization`: `ZScaleInterval` o
-  `PercentileInterval`, metodo dichiarato; modifica dell'11 da
-  autorizzare); (b) minimo e massimo dei valori finiti; (c) `DATAMIN`/
-  `DATAMAX` dell'intestazione se presenti, altrimenti chiedere all'utente.
-  **Raccomandazione: (a)** con `ZScaleInterval` di default — calcolo di
-  libreria consolidata, metodo e valori scritti nel risultato. Gruppo 2.
-- **D41-4 — Mac di riferimento e test `perf`/`gl`:** gli obiettivi di
-  §3.15 si misurano "sul Mac del proprietario come riferimento": servono
-  modello, processore, memoria e versione di macOS da scrivere qui; e va
-  detto come i marcatori `perf` e `gl` entrano nella regola dei commit
-  (`02` §8). **Raccomandazione:** registrare i dati del Mac del
-  proprietario; `perf` e `gl` esclusi dai test di default (come `network`)
-  ed eseguiti a parte su quel Mac prima di ogni commit dell'interfaccia,
-  con l'esito scritto nel messaggio di commit (`gl` che fallisce blocca il
-  commit, `perf` si riporta). Gruppo 3.
-- **Scelte minori da confermare:** (1) una sola immagine FITS alla volta
+- **D41-1 — Letture passive con rete: DECISA il 2026-10-15** (decisione
+  del proprietario): il puntatore Simbad è un comando `passive` eseguito nel
+  **gruppo di thread dei tile**, con le stesse regole dei tile (non
+  registrato, annullabile, risultati con i segnali di Qt). Applicata in
+  §3.12, §3.13.
+- **D41-2 — Scrittura dei numeri mostrati: DECISA il 2026-10-15**
+  (decisione del proprietario): nuova funzione **`format_coordinates`** nel
+  10, che scrive le coordinate in sessagesimale (o decimale) con le cifre
+  di DC3; nessuna conversione nell'interfaccia. Applicata in §3.10, §3.11.
+- **D41-3 — Limiti iniziali di visualizzazione: DECISA il 2026-10-15**
+  (decisione del proprietario): nuova funzione
+  **`suggest_display_limits`** nell'11 con `ZScaleInterval` di astropy; i
+  limiti scelti sono dichiarati nel risultato. Applicata in §3.6, §3.7.
+- **D41-4 — Test `perf` e `gl`: DECISA il 2026-10-15** (decisione del
+  proprietario): esclusi di default; `gl` blocca il commit quando eseguito,
+  `perf` si riporta (§12). **Dati del Mac di riferimento: da compilare**
+  (§3.15), li indica il proprietario.
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) una sola immagine FITS alla volta
   nella v1; (2) ricentramento della base quando il punto di tangenza esce
   dalla finestra; (3) catalogo senza moto proprio disegnato alle posizioni
   della tabella, epoca del catalogo dichiarata, "non propagato"; (4) una
@@ -535,3 +549,4 @@ prestazioni (§3.15); uso dei marcatori nella regola dei commit: D41-4.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 approvata dal proprietario il 2026-10-15: perimetro v1; geometria con base e finestra da `make_view_wcs` del 10 e campionamento dei tile del 12; traslazione e scala dello schermo scritte esplicitamente come disegno; D10-9 (30° con scarto ±10 %), D11-8 (corona 1×/1,5× `box_size`, box 15 pixel) e raggio Simbad (12 pixel logici, 500 ms, una richiesta alla volta) decisi; rendering con `QOpenGLWidget` dietro un'interfaccia di disegno nostra, funzioni OpenGL di PySide6; obiettivi di prestazione P1–P7 con marcatori `perf` e `gl` e regola "misurare e riportare"; test con pytest-qt in `offscreen` e controllo entro 1 pixel; lista di controllo manuale; verifica della cache da più thread. Nuove decisioni D41-1…D41-4. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D41-1 (puntatore Simbad `passive` nel gruppo di thread dei tile), D41-2 (`format_coordinates` nel 10), D41-3 (`suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati e registrati; per i survey FITS senza `hips_pixel_cut`, sul tile del centro della prima vista), D41-4 (`perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta; Mac di riferimento da compilare) decise; scelte minori confermate; temi e modalità notte rossa nel renderer (linee guida visive del `40` §3.11), colori dei cataloghi di Okabe e Ito; test T18–T20. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |

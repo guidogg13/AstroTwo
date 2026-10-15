@@ -52,6 +52,13 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   finestra, il WCS della regione visibile (per la griglia) e il **raggio
   del campo** (per i tile del 12, per `choose_projection` e per il
   catalogo nel campo). Dettagli in §7.
+- **Scrittura delle coordinate per l'interfaccia (`format_coordinates`,
+  aggiunta il 2026-10-15, D41-2 decisa dal proprietario):** coordinate
+  sotto il cursore, etichette della griglia e coordinate nei risultati
+  mostrati si scrivono qui, in sessagesimale (o decimale) con le **cifre di
+  DC3** (`02-convenzioni.md` §9: RA 0.01 s, Dec 0.1″), con
+  `astropy.coordinates.Angle`: l'interfaccia non converte né arrotonda
+  coordinate. Dettagli in §7.
 - **WCS (World Coordinate System):** leggere, validare e applicare la soluzione
   astrometrica (`WCS`) di un'immagine FITS: da pixel a coordinate e viceversa;
   verificare che la soluzione sia internally consistente.
@@ -170,6 +177,9 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
 | in | centro, scala, dimensioni della finestra | posizione celeste; `Quantity` angolare per pixel; interi | gradi; pixel | per `make_view_wcs` |
 | in | base o proiezione | WCS del 10 oppure codice di proiezione (+ frame, punto di tangenza) | — | per `make_view_wcs` |
 | out | `ViewGeometry` | struttura | base, finestra, fattore e spostamento, raggio del campo in gradi | geometria per il `41` e per il 12 |
+| in | posizioni o valori di un asse da scrivere | `SkyFrame` / `Quantity` angolare + frame + asse | gradi | per `format_coordinates` |
+| in | stile, precisione, separatori | enumerativo; `Quantity` di tempo (RA) o angolare; enumerativo | — | default: sessagesimale con le cifre di DC3 |
+| out | `FormattedCoordinates` | testi | sessagesimale o decimale, con frame, epoca e precisione usata | per il `41` e il `40` |
 | out | residui calibrazione | float64 | pixel e arcosecondi | RMS e massimo dichiarati, con le soglie usate |
 | out | soluzioni astrometriche | lista | — | le precedenti + la nuova in coda |
 | out | linee della griglia | lista | tratti in pixel (convenzione numpy) + valore della coordinata | geometria per il `41` |
@@ -292,6 +302,38 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   finestra campionati con 64 punti per lato, oppure **180°** se un punto
   del bordo è fuori dalla proiezione (es. bordo dell'`AIT`), con il metodo
   dichiarato. Nessun disegno (`41`).
+- **`format_coordinates(coords=None, *, values=None, frame=None,
+  axis=None, style="sexagesimal", precision=None, separators="symbols")`**
+  (aggiunta il 2026-10-15, D41-2) — scrive coordinate come testo per
+  l'interfaccia e restituisce **`FormattedCoordinates`**. Ingresso:
+  posizioni con frame (`coords`, anche più di una) oppure i valori di un
+  solo asse (`values`, `Quantity` angolare) con `frame` e `axis`
+  (`lon` o `lat`), per le etichette della griglia. Regole:
+  - **frame equatoriali** (`icrs`, `fk5`, `fk4`): longitudine in **ore**
+    (h m s, in [0h, 24h)), latitudine in **gradi** con segno (± d ′ ″);
+    **altri frame** (galattico, eclittici): longitudine in gradi in [0°,
+    360°) senza segno, latitudine in gradi con segno;
+  - **precisione di default = DC3:** RA a **0.01 s**, Dec a **0.1″**;
+    longitudini e latitudini degli altri frame a **0.1″** (scelta minore 1
+    di questa funzione); stile `decimal`: gradi con **6 decimali** (≈
+    0.0036″, non meno fine di DC3; scelta minore 2);
+  - **`precision` esplicita** (es. il passo della griglia): si scrive la
+    forma più corta il cui ultimo campo non è più grossolano della
+    precisione (passo 10′ → gradi e primi; passo 1 s → h m s senza
+    decimali; 0.01 s → due decimali);
+  - **arrotondamento** di presentazione (`02` §6) con riporto tra i campi
+    (59.996 s → minuto successivo) e **ritorno a 0h** a 24h e a 0° a 360°;
+    il **segno** della latitudine è quello del valore prima
+    dell'arrotondamento (−0.04″ → "−00°00′00.0″", l'emisfero non si perde);
+  - **separatori:** simboli (`h m s`, `° ′ ″`) di default, oppure i due punti
+    (`separators="colons"`); **punto decimale** sempre (A9);
+  - il risultato porta i testi per asse, frame ed epoca dei dati (mai
+    assunta), stile e precisione usati. **Calcolo:**
+    `astropy.coordinates.Angle.wrap_at` e `Angle.to_string`; nessuna
+    formula scritta a mano. **Da verificare prima del codice:** che
+    `Angle.to_string` faccia il riporto e il ritorno a 0h come scritto qui;
+    se no, il caso si gestisce prima della scrittura con `Angle` e si
+    dichiara nel codice.
 
 La calcolatrice delle coordinate (A5) non è più in questo modulo (D10-8): le
 sue funzioni sono `convert_coordinates` e `propagate_position` qui, gli
@@ -399,6 +441,8 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 | Passo della griglia non positivo o senza unità | rifiuto | `GRID_SPACING_INVALID` |
 | `make_view_wcs` con scala non positiva o senza unità, dimensioni non intere o < 1, `base` insieme a `projection`/`frame`/`tangent_point`, `projection` mancante senza `base` | rifiuto con il parametro | `VIEW_PARAMETERS_INVALID` |
 | `make_view_wcs` con `NCP` o `ZPN` | rifiuto con il motivo (forma storica di `SIN`; coefficienti richiesti) | `PROJECTION_UNSUPPORTED` |
+| `format_coordinates` con precisione non positiva, senza unità o di unità non adatta (tempo per una latitudine) | rifiuto con il parametro | `FORMAT_PRECISION_INVALID` |
+| `format_coordinates` senza frame, con `values` senza `axis`, o con frame sconosciuto | rifiuto | `FRAME_UNSUPPORTED` / `COORD_UNIT_MISSING` |
 
 ## 11. Esposizione all'IA
 
@@ -447,6 +491,9 @@ propone i parametri e interpreta il risultato.
 | T27 | Vista su un'immagine con distorsioni | WCS con SIP e WCS DSS1 (T12); varie scale e centri | `window_to_sky(x, y)` = `pixel_to_sky` della base in `origine + (x, y) / fattore` entro 1e-12 gradi; WCS della regione visibile e base danno lo stesso cielo per pixel corrispondenti entro 1e-9 gradi | ricalcolo con il 10 e `astropy.wcs` |
 | T28 | Raggio del campo | finestra `TAN` di campo noto; finestra `AIT` che mostra tutto il cielo | raggio = massimo delle distanze ricalcolate nel test con `astropy.coordinates` sugli stessi 4 × 64 punti del bordo; `AIT` con un angolo fuori dal cielo → 180° dichiarato | ricalcolo con Astropy |
 | T29 | Soglia di default (D10-9) | `choose_projection` senza soglia con campo 29.999° e 30°; con soglia esplicita 33° | `TAN` e `AIT`; soglia usata scritta nel risultato; la soglia esplicita vale | test di unità |
+| T31 | Scrittura con le cifre di DC3 (`format_coordinates`) | 1000 posizioni ICRS e galattiche casuali (semina fissa) | testi uguali a quelli prodotti nel test con `Angle.to_string` alle precisioni di DC3 (0.01 s, 0.1″); punto decimale; frame ed epoca nel risultato | ricalcolo con Astropy |
+| T32 | Riporto, 24h e segno | RA 23h59m59.996s, RA 10h59m59.996s, Dec −0.04″, Dec +89°59′59.96″, l = 359.99999999° | "00h00m00.00s", "11h00m00.00s", "−00°00′00.0″", "+90°00′00.0″", "0°00′00.0″" | valori attesi scritti dalla regola di §7 |
+| T33 | Precisione esplicita e stile decimale | etichette della griglia con passi 10′, 1 s, 0.01 s; stile `decimal`; separatori a due punti | forma più corta coerente con il passo; 6 decimali in gradi; due punti; precisione sbagliata → `FORMAT_PRECISION_INVALID` | test di unità |
 | T30 | Errori di `make_view_wcs` | scala 0, scala senza unità, dimensioni 0, `base` con `projection`, `NCP`, `ZPN` | `VIEW_PARAMETERS_INVALID`; `PROJECTION_UNSUPPORTED` | test di unità |
 
 ## 13. Decisioni aperte
@@ -525,6 +572,12 @@ propone i parametri e interpreta il risultato.
   cresce come 1/cos²θ (θ = metà campo): a 30° di campo l'aumento al bordo è
   del 7,2 %, a 60° del 33 %; oltre i 30° la distorsione diventa evidente.
   Applicata in §3, §6, §7, §12 (T29).
+- **`format_coordinates` (D41-2, decisa dal proprietario il 2026-10-15):**
+  nuova funzione per scrivere le coordinate con le cifre di DC3; §3, §6,
+  §7, §10, §12 (T31–T33). **Scelte minori da confermare:** (1) 0.1″ anche
+  per longitudini e latitudini dei frame non equatoriali (DC3 fissa solo RA
+  e Dec); (2) 6 decimali in gradi nello stile decimale. Codice da scrivere
+  quando il proprietario lo chiede.
 - **`make_view_wcs` (2026-10-15, decisione del proprietario sulla
   proposta della fase 1 dell'interfaccia):** aggiunta perché il `41` non
   calcoli proiezioni; §3, §6, §7, §10, §12 (T26–T30). **Codice da scrivere**
@@ -558,3 +611,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-10 | Claude Code | **D13-12** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): `propagate_position` con l'opzione esplicita `proper_motion_only` (astropy senza distanza, nessun effetto prospettico, risultato marcato); nuovo errore `PROPAGATION_MODE_CONFLICT` (§10), test T24 (§12). Stato `approvato` invariato. |
 | 2026-10-10 | Claude Code | **D13-14 (a)** (decisione del proprietario: sessagesimali ASTRORES convertiti con il modulo 10; autorizzazione esplicita a modificare il file approvato): nuova `parse_sexagesimal` (§7) con `astropy.coordinates.Angle`, errore `COORD_FORMAT_INVALID` (§10), test T25 (§12). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): **D10-9 decisa** (soglia di default 30°, scarto ±10 % nel `41`); nuova **`make_view_wcs`** con `ViewGeometry` (base e finestra, funzioni finestra ↔ cielo esatte anche con distorsioni, WCS della regione visibile, raggio del campo) in §3, §6, §7; errori `VIEW_PARAMETERS_INVALID` e `PROJECTION_UNSUPPORTED` (§10); test T26–T30 (§12). Codice da scrivere (`make_view_wcs` e default di `choose_projection`). Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **D41-2 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`format_coordinates`** (sessagesimale o decimale con le cifre di DC3, ore per i frame equatoriali, riporto e ritorno a 0h, segno dell'emisfero conservato, precisione esplicita per la griglia, `Angle.to_string` di astropy) in §3, §6, §7; errore `FORMAT_PRECISION_INVALID` (§10); test T31–T33 (§12); due scelte minori da confermare (§13). Stato `approvato` invariato. |

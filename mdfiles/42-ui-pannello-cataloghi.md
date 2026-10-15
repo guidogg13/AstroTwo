@@ -165,9 +165,9 @@ Con **pytest-qt** e piattaforma `offscreen`, in `tests/ui/`.
 
 ## 13. Decisioni aperte
 
-Nessuna decisione aperta nuova oltre alle scelte minori.
+Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) valori mostrati come sono nella
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) valori mostrati come sono nella
   tabella (formato della colonna o rappresentazione più breve), senza
   sessagesimali nella v1; (2) ordine delle righe mostrate calcolato nel 42
   con `numpy.argsort(kind="stable")`: è un ordine di presentazione, non un
@@ -175,11 +175,15 @@ Nessuna decisione aperta nuova oltre alle scelte minori.
   ordinamento nel 13 (modifica da autorizzare); (3) selezione e ordinamento
   registrati come comandi di classe `session` (rieseguiti alla
   riapertura).
-- **Da verificare prima del codice:** licenze di PySide6/Qt e di
-  pytest-qt (`40` §8).
+- **Da verificare prima del codice:** testi delle licenze di PySide6/Qt
+  (LGPL-3) e di pytest-qt (`40` §8).
+- **Linee guida visive:** valgono quelle del `40` §3.11 (cifre tabulari
+  nelle colonne numeriche, spaziature di 4 punti, accento unico per la
+  selezione, modalità notte rossa).
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) come versione minima approvata dal proprietario il 2026-10-15: tabella in sola lettura con ordinamento (D8), selezione sincronizzata con la vista (D7), vista del record con `record_view` del 13, dialoghi delle colonne di posizione e di moto proprio; fuori dalla v1 ricerca, editor delle regole, colonne calcolate, grafici, SAMP. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** scelte minori confermate; rimando alle linee guida visive del `40` §3.11. Nessuna decisione dei Gruppi 1 e 2 aperta. |

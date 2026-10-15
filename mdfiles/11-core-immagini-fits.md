@@ -95,6 +95,19 @@ pixel memorizzati.
     valore inventato; la disposizione delle righe è quella dei dati (dal
     basso). Per le immagini a colori la funzione di trasferimento si
     applica a ogni piano con lo stesso intervallo e la palette non si usa.
+  - **Limiti iniziali di visualizzazione (D41-3, decisa dal proprietario
+    il 2026-10-15):** all'apertura di un'immagine, e per i tile FITS di un
+    HiPS senza `hips_pixel_cut`, vmin e vmax si propongono con
+    **`suggest_display_limits`** (§7): intervallo **`ZScaleInterval` di
+    `astropy.visualization`** con i parametri di default della libreria
+    (scritti nel risultato), calcolato sui soli pixel finiti in `float64`
+    (DC6); il campionamento della libreria è regolare, quindi stesso
+    ingresso → stessi limiti. **I limiti scelti, il metodo e i parametri
+    sono dichiarati nel risultato.** Immagini a colori: un solo intervallo
+    su tutti i piani insieme (come `set_display`, che usa lo stesso
+    intervallo per ogni piano), dichiarato. Immagini a due livelli (P6): il
+    calcolo si fa sull'anteprima, dichiarato. La scelta finale dei limiti
+    resta all'utente: `set_display` accetta qualsiasi vmin < vmax.
   - **Sovrapposizione con trasparenza (B5, `blend`):** piani RGBA della
     stessa griglia (ricampionati prima, P7), composti dal basso verso l'alto
     con l'operatore "over" di Porter e Duff (1984): colore = α·sopra +
@@ -375,6 +388,7 @@ pixel memorizzati.
 | in | immagine FITS | array + header | pixel (unità da header, es. MJy/sr o ADU) | + WCS |
 | in | taglio | float64 | gradi (centro) + lato in gradi o in pixel | output: nuovo FITS |
 | in | parametri di display | float64 | vmin, vmax, gamma, palette | solo presentazione |
+| out | limiti iniziali proposti | float64 | vmin, vmax nell'unità dell'immagine (`BUNIT` o "non dichiarata"), metodo `zscale`, parametri, pixel usati | `suggest_display_limits` (D41-3) |
 | in | immagini da combinarre | array | stesse unità o con fattore di scala dichiarato | operazioni H5 |
 | out | immagine in memoria | array nel **tipo nativo del file** (float32 o float64); display in float32 | pixel | con WCS; ogni calcolo in float64 (D11-1) |
 | out | cutout | FITS con WCS | pixel + header | |
@@ -409,6 +423,15 @@ pixel memorizzati.
   `histeq`) e palette dagli elenchi chiusi di §3; restituisce il piano di
   presentazione (`float32` in [0, 1] e colori RGBA a 8 bit) con i parametri
   usati, senza toccare l'array dell'immagine.
+- **`suggest_display_limits(image, *, method="zscale")`** (aggiunta il
+  2026-10-15, D41-3) — propone vmin e vmax per `set_display`. `image` è
+  un'immagine dell'11 o un array 2-D (anche i dati di un tile FITS del 12).
+  Unico metodo nella v1: `zscale` (`ZScaleInterval` di
+  `astropy.visualization` con i parametri di default della libreria:
+  numero di campioni, contrasto, rigetto, iterazioni). Restituisce
+  **`DisplayLimits`**: vmin, vmax (`float64`), unità, metodo e parametri,
+  numero di pixel finiti usati, note (colori: intervallo comune; due
+  livelli: calcolato sull'anteprima). Non modifica l'immagine.
 - **`resample_to_reference(image, reference, method)`** — ricampiona su una
   soluzione astrometrica di riferimento (B7); restituisce nuova immagine +
   qualità (mappa di copertura di `reproject` + percentuale di pixel coperti).
@@ -482,7 +505,7 @@ pixel memorizzati.
 | `scipy.ndimage` | convoluzione, ricampionamento semplice, baricentro del centroide (`center_of_mass`) | consolidato e testato |
 | `astropy.stats` | fondo cielo del centroide con `sigma_clipped_stats` (D11-7) | libreria di riferimento |
 | `reproject` (D11-2, decisa; licenza da verificare prima del codice) | ricampionamento tra proiezioni (B7), mappa di copertura, mosaico (`reproject_and_coadd`) | pensato per questo scopo; vedi §13 |
-| `astropy.visualization` | funzioni di trasferimento e intervalli (B3, B4) | libreria di riferimento |
+| `astropy.visualization` | funzioni di trasferimento e intervalli (B3, B4); `ZScaleInterval` per i limiti iniziali (D41-3) | libreria di riferimento |
 | `astropy.convolution` | kernel e convoluzione (H5) | libreria di riferimento, gestisce i NaN |
 | `contourpy` (licenza da verificare prima del codice di P5) | contorni / isofote (H7) | libreria usata da `matplotlib` |
 | `matplotlib` (solo le tabelle delle palette; licenza da verificare prima del codice di P4) | palette di §3 (B6) | fonte con licenza libera delle palette scientifiche |
@@ -532,6 +555,9 @@ pixel memorizzati.
 | Operazione H5 fuori dall'elenco chiuso o operando del tipo sbagliato | rifiuto con l'elenco delle operazioni | `OPERATION_UNSUPPORTED` |
 | Funzione di trasferimento o palette fuori dagli elenchi di §3 | rifiuto con l'elenco ammesso | `DISPLAY_OPTION_UNKNOWN` |
 | Calibrazione nel commento di JPEG/PNG o nel `.hhh` non leggibile | l'immagine si apre senza WCS, con avviso che cita la calibrazione scartata | `WCS_MISSING` |
+| `suggest_display_limits` senza pixel finiti | nessun limite proposto, messaggio | `DISPLAY_LIMITS_UNDEFINED` |
+| `suggest_display_limits` con vmin = vmax (immagine costante) | nessun limite proposto, messaggio con il valore costante; l'utente sceglie i limiti | `DISPLAY_LIMITS_UNDEFINED` |
+| Metodo diverso da `zscale` | rifiuto con l'elenco dei metodi | `DISPLAY_METHOD_UNKNOWN` |
 | Finestra o corona del centroide fuori dall'immagine | rifiuto con la finestra e i limiti dell'immagine | `CENTROID_OUT_OF_IMAGE` |
 | Centroide non definito (somma dei pesi ≤ 0 dopo la sottrazione del fondo, pixel non finiti nella finestra, nessun pixel finito nella corona) | nessuna posizione prodotta | `CENTROID_UNDEFINED` |
 | Memoria stimata di un'operazione oltre il limite delle operazioni (D11-11) | nessun dato caricato, errore con stima e tetto | `MEMORY_LIMIT_EXCEEDED` |
@@ -591,6 +617,9 @@ funzioni di §7.
 | T35 | Calibrazione esterna (D14-11) | FITS senza WCS caricato con una calibrazione esterna; stessa calibrazione su un FITS con WCS; oggetto senza `source`; nel 14 (T11) calibrazione della lista SIA su un'immagine scaricata | WCS uguale ad `astropy.wcs` costruito dall'intestazione del test, `EXTERNAL_CALIBRATION_USED`; con WCS proprio `EXTERNAL_CALIBRATION_IGNORED`; senza `source` errore; dimensioni diverse → `WCS_MISSING` | ricalcolo con Astropy |
 | T36 | Valore grezzo (D18-6) | FITS `int16` con `BZERO`, `BSCALE`, `BLANK`; stesso dato con un asse degenere; posizioni fuori, non intere; immagine derivata | `read_raw_pixel` uguale a `astropy.io.fits` con `do_not_scale_image_data=True` in ogni pixel (anche quello uguale a `BLANK`); `PIXEL_RAW_UNAVAILABLE` negli altri casi | confronto con Astropy |
 | T37 | Corona di default (D11-8) | `star_centroid` della stella di T16 con `box_size` 15 senza raggi, poi con raggi espliciti 15 e 22,5 | risultati identici; raggi usati (15 e 22,5 pixel) scritti nel risultato | confronto diretto |
+| T38 | Limiti iniziali (D41-3) | `suggest_display_limits` su un'immagine sintetica con rumore e sorgenti (semina fissa), con pixel NaN | vmin, vmax uguali a `ZScaleInterval().get_limits` calcolato nel test sui pixel finiti in `float64`; parametri e numero di pixel dichiarati; immagine invariata | ricalcolo con astropy |
+| T39 | Limiti ripetibili e casi limite | stessa immagine due volte; immagine costante; tutta NaN; metodo `minmax` | limiti identici; `DISPLAY_LIMITS_UNDEFINED` (due casi); `DISPLAY_METHOD_UNKNOWN` | test di unità |
+| T40 | Colori e due livelli | immagine RGB sintetica; immagine a due livelli (P6) | intervallo comune ricalcolato nel test su tutti i piani; per i due livelli calcolo sull'anteprima dichiarato | ricalcolo con astropy |
 | T30 | FITS RGB | HDU sintetica 3 × N × M con WCS, aperta con e senza `rgb=True` | con `rgb=True` immagine a colori con i tre piani uguali a `astropy.io.fits` e WCS celeste; senza → `CUBE_NOT_SUPPORTED`; `rgb=True` su 2 o 4 piani → `RGB_INPUT_INVALID` | confronto con Astropy |
 
 ## 13. Decisioni aperte
@@ -644,6 +673,14 @@ funzioni di §7.
   la finestra, abbastanza pixel per la mediana con sigma clipping.
   Applicata in §3, §7, §12 (T37). **Codice da aggiornare** (oggi i raggi
   sono obbligatori in `star_centroid`) quando il proprietario lo chiede.
+- **D41-3 — Limiti iniziali di visualizzazione: DECISA il 2026-10-15
+  (decisione del proprietario, dal `41`).** Nuova funzione
+  `suggest_display_limits` con `ZScaleInterval` di astropy; limiti scelti
+  dichiarati nel risultato. Applicata in §3, §6, §7, §8, §10, §12
+  (T38–T40). **Motivazione:** intervallo consolidato della comunità per
+  mostrare il fondo cielo e le sorgenti deboli senza saturare; calcolo di
+  libreria, nessun valore inventato. Codice da scrivere quando il
+  proprietario lo chiede.
 - **D11-9 — Decisioni del 2026-10-10 sulla divisione in parti (proprietario):**
   funzioni di trasferimento di `astropy.visualization`; contorni con
   `contourpy`; elenco chiuso delle operazioni H5 con specchiature che
@@ -700,3 +737,4 @@ funzioni di §7.
 | 2026-10-11 | Claude Code | **D14-11** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): parametro facoltativo `calibration` di `load_image` (calibrazione esterna con `header` e `source`, es. `SiaCalibration` del 14), usata solo se l'immagine non ha WCS proprio, con le regole del `.hhh` (dimensioni, WCS celeste valido); avvisi `EXTERNAL_CALIBRATION_USED` e `EXTERNAL_CALIBRATION_IGNORED`, `calibration_source = "external"`, voce nella storia (§3, §7, §10, §12 T35). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo di un pixel (D18-6) passa dal 18 all'11 come funzione pubblica `read_raw_pixel` (§3, §7, §10, T36); il 18 la richiama. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **D11-8 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): raggi della corona del centroide facoltativi con default 1 × e 1,5 × `box_size`, sempre dichiarati; `box_size` iniziale dello strumento del `41` 15 pixel (§3, §7, §13); test T37 (§12). Codice di `star_centroid` da aggiornare. Stato `approvato` invariato. |
+| 2026-10-15 | Claude Code | **D41-3 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`suggest_display_limits`** con `ZScaleInterval` di astropy, limiti e parametri dichiarati nel risultato, pixel finiti in `float64`, intervallo comune per i colori, anteprima per le immagini a due livelli (§3, §6, §7, §8); errori `DISPLAY_LIMITS_UNDEFINED`, `DISPLAY_METHOD_UNKNOWN` (§10); test T38–T40 (§12); §13. Stato `approvato` invariato. |

@@ -17,7 +17,25 @@ la formula è a parte: **"FASE: CODICE – interfaccia v1"** (regola del
 proprietario del 2026-10-15, in `CLAUDE.md`), valida solo per 40, 41, 42
 `approvato` e per il `05`; **non ancora dichiarata**.
 
-- **Stato al 2026-10-15: specifiche della prima versione dell'interfaccia
+- **Stato al 2026-10-15, dopo le decisioni del proprietario sulle specifiche
+  dell'interfaccia (nessun codice):** decise D05-1 (tre classi di comandi),
+  D05-2 (avviso senza fermarsi; impronta dei risultati di rete di ogni
+  comando nella sessione), D40-1 (v1: codice + testo del modulo), D41-1
+  (puntatore Simbad nel gruppo di thread dei tile), D41-2 (nuova
+  `format_coordinates` nel 10, cifre di DC3), D41-3 (nuova
+  `suggest_display_limits` nell'11 con `ZScaleInterval`), D41-4 (`perf` e
+  `gl` esclusi di default, `gl` blocca, `perf` si riporta; Mac di
+  riferimento da compilare); D05-3 e D40-2 rimandate; nuova D40-3 (Gruppo
+  3, messaggi dei moduli in inglese con traduzione); scelte minori di 05,
+  40, 41, 42 confermate. **Linee guida visive** nel `40` §3.11 (valide per
+  tutte le interfacce) e **mockup** in `mdfiles/mockup/` (tema scuro e
+  modalità notte rossa). PySide6/Qt (LGPL-3) registrata per A11 e per il
+  `60`. 10 e 11 modificati (restano `approvato`). **05, 40, 41, 42 senza
+  decisioni dei Gruppi 1 e 2 aperte**: l'approvazione spetta al
+  proprietario. Decisioni aperte: **14** (Gruppo 1 = 0, Gruppo 2 = 3,
+  Gruppo 3 = 11).
+
+- Stato precedente, sempre il 2026-10-15: **specifiche della prima versione dell'interfaccia
   (nessun codice).** Proposta della fase 1 approvata dal proprietario il
   2026-10-15 con precisazioni. **AM1 accettata:** nuovo file generale
   **`05-comandi-sessione.md`** (livello 1, codice previsto in
@@ -562,6 +580,11 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D11-8 | Corona del centroide: interno **1 × `box_size`**, esterno **1,5 × `box_size`**; `box_size` iniziale 15 pixel nel 41, modificabile e dichiarato | 2026-10-15 | decisione del proprietario, `11` §13, `41` §3.12 | |
 | Puntatore Simbad | Raggio **12 pixel logici** convertiti in angolo dal 10 (con il 17 per la distanza); richiesta dopo 500 ms fermo, una alla volta | 2026-10-15 | decisione del proprietario, `41` §3.12 | D14-9 punto 2 lo assegnava al 41 |
 | A9 | Testi in inglese con `tr()`, traduzione italiana nostra (Qt Linguist), traduzioni di Qt per i dialoghi standard, lingua dal sistema cambiabile nelle preferenze; **numeri scientifici sempre con il punto decimale** | 2026-10-15 | decisione del proprietario, `01` §4.2, `40` §3.9 | |
+| D05-1, D05-2 | Tre classi di comandi `session`/`passive`/`application`; alla riapertura, dati di rete cambiati → **avviso senza fermarsi**, con l'impronta dei risultati di rete di ogni comando salvata nella sessione (l'avviso dice quale comando e cosa è cambiato) | 2026-10-15 | decisione del proprietario, `05` §13 | |
+| D40-1 | v1: codice + testo del modulo invariati; traduzione in D40-3 | 2026-10-15 | decisione del proprietario, `40` §13 | |
+| D41-1…D41-4 | Puntatore Simbad `passive` nel gruppo di thread dei tile; `format_coordinates` nel 10; `suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati; `perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta | 2026-10-15 | decisione del proprietario, `41`, `10`, `11` §13 | Mac di riferimento da compilare |
+| Linee guida visive | macOS, tema che segue il sistema con lo scuro di riferimento, modalità notte rossa, cielo al centro con pannelli richiudibili e barre sottili, carattere di sistema, un solo accento, spaziature regolari, icone con licenza libera (proposta Lucide, da verificare), nulla da Aladin; valgono per tutte le interfacce | 2026-10-15 | decisione del proprietario, `40` §3.11 | mockup in `mdfiles/mockup/` |
+| Licenze dell'interfaccia | PySide6/Qt (LGPL-3) registrata per A11 e per il `60` | 2026-10-15 | decisione del proprietario, `decisioni-aperte.md` (A11), `40` §8 | |
 | Fase codice dell'interfaccia | Formula "FASE: CODICE – interfaccia v1", valida solo per i moduli di interfaccia `approvato` (40, 41, 42) e per il 05 | 2026-10-15 | regola del proprietario, `CLAUDE.md` | non ancora dichiarata |
 
 ## 6. Decisioni aperte
@@ -608,7 +631,9 @@ D16-8 (MOC da immagine con i blocchi): 14 aperte. Lo stesso giorno decisa
 D16-8 e aperta D14-13 (reindirizzamento http → https dell'ESO): 14 aperte.
 Il 2026-10-15, con le specifiche della prima versione dell'interfaccia,
 decise A9, D10-9 e D11-8 e aperte D05-1, D05-2, D05-3, D40-1, D40-2,
-D41-1…D41-4: **20 aperte** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11).
+D41-1…D41-4: 20 aperte. Lo stesso giorno decise D05-1, D05-2, D40-1,
+D41-1…D41-4, rimandate D05-3 e D40-2, aperta D40-3: **14 aperte** (Gruppo
+1 = 0, Gruppo 2 = 3, Gruppo 3 = 11).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -617,10 +642,8 @@ poi `decisioni-aperte.md`.
 | A2 | Strumento di packaging del `.dmg` | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): PyInstaller + dmgbuild; non blocca il livello 1, blocca l'approvazione di `60` |
 | A6 | Firma e notarizzazione Apple | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): sì, notarizzazione con account Apple Developer solo al momento della distribuzione; blocca l'approvazione di `60` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
-| D05-1, D05-2 | Classi dei comandi e letture passive; dati di rete diversi alla riapertura | `05-comandi-sessione.md` §13 | **da decidere** (Gruppo 2, aperte il 2026-10-15): bloccano l'approvazione del 05 |
-| D40-1 | Lingua dei messaggi dei moduli con l'interfaccia in inglese | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 2): blocca l'approvazione del 40 |
-| D41-1, D41-2, D41-3 | Thread delle letture passive di rete; scrittura dei numeri mostrati (funzione nel 10); limiti iniziali di visualizzazione (funzione nell'11) | `41-ui-visualizzatore-cielo.md` §13 | **da decidere** (Gruppo 2): bloccano l'approvazione del 41 |
-| D05-3, D40-2, D41-4 | Adattatore del 19; avvio tramite URL (H18); Mac di riferimento e test `perf`/`gl` | `05`, `40`, `41` §13 | **da decidere** (Gruppo 3) |
+| D05-3, D40-2 | Adattatore del 19; avvio tramite URL (H18) | `05`, `40` §13 | **rimandate** il 2026-10-15 (Gruppo 3) |
+| D40-3 | Messaggi dei moduli 10–19 in inglese con traduzione (coerente con A9) | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 3, aperta il 2026-10-15) |
 | AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md`. **Proposta del 2026-10-15, ACCETTATA lo stesso giorno:** nuovo file generale `05-comandi-sessione.md` (livello 1, registro dei comandi e sessione), scritto in `bozza` |
 | D14-13 | URL dei servizi dell'ESO in http: il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata | `14-core-protocolli-vo.md` §13 | **da decidere** (aperta il 2026-10-14); oggi la demo usa https, nessuna modifica al codice del 14 |
 | AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
@@ -640,12 +663,11 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (interfaccia v1, 2026-10-15):** il proprietario valida le
-   bozze 05, 40, 41, 42 e decide le aperte del Gruppo 2 che le bloccano
-   (D05-1, D05-2, D40-1, D41-1, D41-2, D41-3) e le scelte minori elencate
-   nei §13; autorizza le modifiche a 10 e 11 richieste da D41-2 e D41-3;
-   poi approvazione dei quattro file e dichiarazione "FASE: CODICE –
-   interfaccia v1". Prima del codice: verifiche (cache da più thread,
+0. **Subito (interfaccia v1, 2026-10-15):** decisioni del Gruppo 2 di
+   05, 40, 41, 42 tutte prese; il proprietario approva i quattro file
+   (spetta a lui), indica il Mac di riferimento (§3.15 del 41) e conferma
+   le due scelte minori di `format_coordinates` nel 10; poi dichiarazione
+   "FASE: CODICE – interfaccia v1". Prima del codice: verifiche (cache da più thread,
    OpenGL di PySide6, `reproject` per i HiPS, licenze di PySide6/Qt e
    pytest-qt) e codice del livello 1 da allineare (`make_view_wcs`,
    default di `choose_projection` e della corona, P6 del 12).
@@ -679,8 +701,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (20, al 2026-10-15): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 9, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (14, al 2026-10-15): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 3, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -733,3 +755,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-14 | Claude Code | **`display_positions` nel 13** (decisione del proprietario del 2026-10-14, autorizzazione esplicita; 13 resta `approvato`): §3, §7, §10, T34; codice in `catalogs.py`. Demo delle Pleiadi con `display_positions` per stelle e frecce (frecce dalle posizioni all'epoca di visualizzazione; Alcyone e Atlas a J2000 SIMBAD, dichiarato); report invariato nei valori. **MOC da immagine con i blocchi non applicato:** la regola decisa perde celle sul bordo (DSS 4,1104 contro 4,1399 deg²; 15 immagini casuali su 30) → **D16-8 aperta** nel 16 §13 e nel Gruppo 3, con raccomandazione e misure. Test 492 di default. Aperte 14. |
 | 2026-10-14 | Claude Code | **D16-8 decisa e applicata** (decisione del proprietario del 2026-10-14; 16 resta `approvato`): §3 (blocchi più angoli dei pixel lungo il contorno della regione dei blocchi validi, crescita ≤ b − 1 pixel, dimensione del blocco dichiarata), §12 T10, §13; codice in `moc.py`; test su 300 maschere casuali e test di rete sulla DSS (MOC identico, 4,1399 deg²). Tempi a cache calda: `moc_from_image` 10,3 → 0,21–0,27 s, demo 18,5–19,5 → 8,5–9,5 s; valori del report invariati. **D14-13 aperta** nel 14 (Gruppo 3; 14 resta `approvato`). Test 494 di default. Aperte 14. |
 | 2026-10-15 | Claude Code | **Specifiche della prima versione dell'interfaccia** (proposta della fase 1 approvata dal proprietario il 2026-10-15; nessun codice): **AM1 accettata, creato `05-comandi-sessione.md`** (bozza); **scritti `40`, `41`, `42`** (bozza, 14 sezioni); decise A9, D10-9, D11-8, raggio del puntatore Simbad; modificati i file approvati 01, 02, 03, 10, 11, 12, 13, 17, 18 (restano `approvato`) e `CLAUDE.md` (formula "FASE: CODICE – interfaccia v1"); nuove aperte D05-1, D05-2, D05-3, D40-1, D40-2, D41-1…D41-4. §2, §4, §5, §6, §7 aggiornati. Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11). Stati: approvato 14, bozza 9, non esiste 20, totale 43. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario sulle specifiche dell'interfaccia** (autorizzazione a modificare 10 e 11; nessun codice): decise D05-1, D05-2, D40-1, D41-1…D41-4; D05-3 e D40-2 rimandate; nuova D40-3; scelte minori di 05, 40, 41, 42 confermate; nuove `format_coordinates` (10) e `suggest_display_limits` (11); linee guida visive nel `40` §3.11; mockup `mdfiles/mockup/finestra-principale.html` e `finestra-principale-notte.html`; PySide6/Qt (LGPL-3) registrata per A11 e per il 60. §2, §5, §6, §7 aggiornati. Aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). Stati invariati: approvato 14, bozza 9, non esiste 20, totale 43. |

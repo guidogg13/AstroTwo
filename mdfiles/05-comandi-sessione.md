@@ -64,8 +64,9 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   testo del modulo); errore (codice e testo del modulo); provenienza
   (origine e data dei dati di rete o della cache, "dalla cache sì/no",
   librerie e versioni quando il modulo le dichiara); livelli prodotti;
-  istanti di inizio e fine (UTC, ISO 8601, DC1); impronta dei dati di rete
-  (D05-2). **Testi e numeri sono sempre quelli del modulo**: il 05 non
+  istanti di inizio e fine (UTC, ISO 8601, DC1); per i comandi di rete
+  l'**impronta dei risultati di rete** (SHA-256 dei byte ricevuti o della
+  copia in cache, origine, data, righe per le tabelle; D05-2). **Testi e numeri sono sempre quelli del modulo**: il 05 non
   riscrive messaggi e non arrotonda valori.
 
 ### 3.2 Registro, esecuzione, stato
@@ -160,7 +161,11 @@ Il disegno durante il gesto è del `41`.
     SHA atteso e trovato); file mancante → `SESSION_FILE_MISSING`, stop.
     Lo stato resta quello dei comandi già rieseguiti, dichiarato.
   - I dati di rete seguono le regole dei moduli (prima la cache, con
-    origine e data); un'impronta diversa da quella registrata → D05-2.
+    origine e data); l'impronta dei risultati di rete si ricalcola e, se
+    è diversa da quella registrata, **avviso**
+    `SESSION_NETWORK_DATA_DIFFERS` con il comando (numero e nome) e cosa è
+    cambiato (impronta, origine e data, righe prima e dopo); la
+    riesecuzione **continua** (D05-2, decisa il 2026-10-15).
   - Un comando che era `ok` e ora fallisce → stop, `SESSION_REPLAY_FAILED`
     con l'errore del modulo.
   - Versione di un comando non più supportata →
@@ -347,7 +352,7 @@ codice del modulo sui tipi chiusi di §3.1.
 | Schema della sessione più recente dell'app | nessuna riesecuzione | `SESSION_SCHEMA_UNSUPPORTED` |
 | File di sessione non leggibile o non valido | nessuna riesecuzione | `SESSION_INVALID` |
 | Stato finale diverso da quello registrato | avviso con le differenze | `SESSION_STATE_DIFFERS` |
-| Dati di rete diversi da quelli registrati | comportamento: D05-2 | `SESSION_NETWORK_DATA_DIFFERS` |
+| Dati di rete diversi da quelli registrati | avviso con comando e differenze (impronta, origine e data, righe), la riesecuzione continua (D05-2) | `SESSION_NETWORK_DATA_DIFFERS` |
 
 ## 11. Esposizione all'IA
 
@@ -375,45 +380,45 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T12 | Versioni | sessione con un comando in versione 2 non registrata; schema più recente | `COMMAND_VERSION_UNSUPPORTED`; `SESSION_SCHEMA_UNSUPPORTED` | test di unità |
 | T13 | Errori dei moduli invariati | comando che provoca `COORD_OUT_OF_RANGE` del 10 | risultato `error` con codice e testo identici a quelli del 10 | confronto diretto |
 | T14 | Stato finale diverso | alterare lo stato finale registrato nel file | `SESSION_STATE_DIFFERS` con la differenza | test di unità |
-| T15 | Dati di rete diversi | servizio simulato che alla riapertura risponde con una riga in più | comportamento di D05-2, con `SESSION_NETWORK_DATA_DIFFERS` | test di unità |
+| T15 | Dati di rete diversi (D05-2) | servizio simulato che alla riapertura risponde con una riga in più; poi cache svuotata e stessa risposta | avviso `SESSION_NETWORK_DATA_DIFFERS` con numero e nome del comando, impronte, origine e data, righe prima e dopo; riesecuzione completata; nessun avviso se la risposta è identica | test di unità |
 | T16 | Nessun segreto | sessione completa | nessuna chiave, nessun contenuto del Portachiavi, nessun dato della cache nel file | ispezione del JSON |
 | T17 | Cache da più thread (verifica di §3.2) | comandi nel thread di lavoro e letture passive in altri thread che leggono e scrivono la cache del 04 | nessun errore, limite rispettato, nessuna voce parziale | test di unità con cartella temporanea |
 
 ## 13. Decisioni aperte
 
-- **D05-1 — Classi dei comandi e letture passive:** la regola d'oro n. 6
-  chiede che ogni azione sia un comando, ma muovere il mouse produce
-  centinaia di letture al secondo (coordinate sotto il cursore, valore del
-  pixel, puntatore Simbad). Opzioni: (a) **tre classi**: `session`
+Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
+
+- **D05-1 — Classi dei comandi e letture passive: DECISA il 2026-10-15
+  (decisione del proprietario, opzione proposta).** Tre classi: `session`
   (registrati in cronologia e rieseguiti alla riapertura), `passive`
   (letture causate dal solo passaggio del mouse: eseguite tramite il
   registro, con risultato strutturato, ma **non** registrate in cronologia
-  né nella sessione; quelle senza rete si eseguono direttamente nel thread
-  principale, quelle con rete nel gruppo di thread del `41`, D41-1),
-  `application` (preferenze, pannelli, esportazioni, svuotamento della
-  cache: registrati in cronologia ma **non** rieseguiti alla riapertura,
-  perché non cambiano lo stato scientifico o scrivono file); (b) tutto in
-  cronologia, anche le letture passive; (c) letture passive fuori dal
-  registro. **Raccomandazione: (a)** — la cronologia resta leggibile, le
-  letture passano comunque dal registro (stessa strada dell'IA) e il
-  cursore resta entro 50 ms anche con la coda occupata. Gruppo 2 (blocca
-  l'approvazione del 05).
-- **D05-2 — Dati di rete diversi alla riapertura:** un catalogo remoto può
-  cambiare tra il salvataggio e la riapertura (nuove righe, servizio
-  aggiornato). Il proprietario ha deciso lo stop per i file locali con SHA
-  diverso; per la rete serve una regola. Proposta di impronta: SHA-256 dei
-  byte ricevuti (o del contenuto in cache) scritto nel risultato. Opzioni:
-  (a) **avviso** `SESSION_NETWORK_DATA_DIFFERS` e si continua, con origine,
-  data e impronte nel messaggio; (b) stop come per i file; (c) nessun
-  controllo. **Raccomandazione: (a)** — i dati remoti cambiano
-  legittimamente e la cache spesso li ha ancora; l'avviso dichiara la
-  differenza senza bloccare il lavoro. Gruppo 2.
-- **D05-3 — Adattatore del 19:** `PlanetaryCommand`/`run_command` del 19
+  né nella sessione; quelle senza rete nel thread principale, quelle con
+  rete — il puntatore Simbad — nel gruppo di thread dei tile del `41`,
+  D41-1), `application` (preferenze, pannelli, esportazioni, svuotamento
+  della cache: registrati in cronologia ma **non** rieseguiti alla
+  riapertura). **Motivazione:** la cronologia resta leggibile, le letture
+  passano comunque dal registro (stessa strada dell'IA) e il cursore resta
+  entro 50 ms anche con la coda occupata. Applicata in §3.1, §3.2, §7.
+- **D05-2 — Dati di rete diversi alla riapertura: DECISA il 2026-10-15
+  (decisione del proprietario).** **Avviso senza fermarsi.** Ogni comando
+  che usa la rete salva nel risultato, e quindi nella sessione,
+  un'**impronta dei suoi risultati di rete** (§3.4): SHA-256 dei byte
+  ricevuti dal servizio (o della copia in cache usata), con origine, data,
+  "dalla cache sì/no" e, per le tabelle, il numero di righe. Alla
+  riapertura il comando si riesegue e l'impronta si ricalcola; se è
+  diversa, avviso `SESSION_NETWORK_DATA_DIFFERS` che dice **quale comando**
+  (numero e nome) e **cosa è cambiato** (impronta prima e dopo, origine e
+  data prima e dopo, righe prima e dopo per le tabelle); la riesecuzione
+  continua. Applicata in §3.1, §3.4, §10, §12 (T15).
+- **D05-3 — Adattatore del 19: RIMANDATA il 2026-10-15** (decisione del
+  proprietario, come proposto: si fa quando l'interfaccia userà i dati
+  planetari). `PlanetaryCommand`/`run_command` del 19
   segue lo schema del 18. Per usarlo dal registro serve una modifica del 19
   (approvato), non compresa nell'autorizzazione del 2026-10-15.
   **Raccomandazione:** stesso adattatore del 18, da autorizzare quando
   l'interfaccia userà i dati planetari (non nella prima versione). Gruppo 3.
-- **Scelte minori da confermare:** (1) estensione `.astrotwo.json` del
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) estensione `.astrotwo.json` del
   file di sessione; (2) nomi dei comandi della tabella di §7; (3)
   identificativi dei livelli `L<n>`; (4) gesto che cambia centro e scala
   registrato come `view.set_zoom` seguito da `view.set_center`; (5) un
@@ -426,3 +431,4 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario del 2026-10-15 (AM1 accettata: modulo generale di livello 1, codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; registro senza Qt con annullamento cooperativo e avanzamento; spazio di lavoro immutabile; gesti registrati a fine gesto dopo 300 ms fermo; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore. Verifica della cache del 04 da più thread prima del codice. Nuove decisioni D05-1, D05-2, D05-3. |
+| 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D05-1 decisa (tre classi `session`/`passive`/`application`); D05-2 decisa (avviso senza fermarsi; impronta dei risultati di rete di ogni comando salvata nella sessione, l'avviso dice quale comando e cosa è cambiato; §3.1, §3.4, §10, T15); D05-3 rimandata; scelte minori confermate. Nessuna decisione dei Gruppi 1 e 2 resta aperta in questo file. |
