@@ -1277,3 +1277,60 @@ def test_external_calibration_parameter(tmp_path):
     assert np.allclose(image.wcs.wcs.pixel_to_world_values(3.5, 2.5), WCS(header).pixel_to_world_values(3.5, 2.5))
     with pytest.raises(TypeError):
         load_image(path, calibration=SimpleNamespace(header=header))
+
+
+# =============================================================================
+# T37–T40: corona di default (D11-8) e limiti iniziali (D41-3), 2026-10-15/16
+# =============================================================================
+
+from astropy.visualization import ZScaleInterval  # noqa: E402
+
+from astrotwo.core.images_fits import suggest_display_limits  # noqa: E402
+
+
+def test_t37_default_annulus():
+    image = synthetic_image()
+    default = star_centroid(image, (46.8, 39.2), box_size=15)
+    explicit = star_centroid(image, (46.8, 39.2), box_size=15, annulus_inner=15.0, annulus_outer=22.5)
+    assert (default.x, default.y, default.background) == (explicit.x, explicit.y, explicit.background)
+    assert (default.annulus_inner, default.annulus_outer) == (15.0, 22.5)
+
+
+def test_t38_display_limits_zscale():
+    image = synthetic_image(seed=38, extra_star=(20.0, 20.0)).astype(np.float64)
+    image[5, 5] = np.nan
+    before = image.copy()
+    limits = suggest_display_limits(image)
+    expected = ZScaleInterval().get_limits(image[np.isfinite(image)].astype(np.float64))
+    assert (limits.vmin, limits.vmax) == tuple(float(v) for v in expected)
+    assert limits.n_pixels == image.size - 1 and limits.parameters["n_samples"] == 1000
+    assert "zscale" in limits.method and limits.unit == "non dichiarata"
+    assert np.array_equal(image, before, equal_nan=True)
+
+
+def test_t39_display_limits_repeatable_and_errors():
+    image = synthetic_image()
+    assert suggest_display_limits(image) == suggest_display_limits(image)
+    expect_error("DISPLAY_LIMITS_UNDEFINED", suggest_display_limits, np.full((10, 10), 7.0))
+    expect_error("DISPLAY_LIMITS_UNDEFINED", suggest_display_limits, np.full((10, 10), np.nan))
+    expect_error("DISPLAY_METHOD_UNKNOWN", suggest_display_limits, image, method="minmax")
+
+
+def test_t40_display_limits_color_and_two_level(tmp_path):
+    planes = np.stack([synthetic_image(seed=s) for s in (1, 2, 3)]).astype(np.float64)
+
+    class Color:
+        data = planes
+        color = True
+        bunit = None
+
+    limits = suggest_display_limits(Color())
+    expected = ZScaleInterval().get_limits(planes.ravel())
+    assert (limits.vmin, limits.vmax) == tuple(float(v) for v in expected) and "colori" in limits.notes[0]
+    path = write_fits(tmp_path / "big.fits", star_field(100, 200))
+    preview = open_large_image(path, limits=SMALL)
+    assert preview.is_preview
+    two = suggest_display_limits(preview)
+    data = np.asarray(preview.data, dtype=np.float64)
+    assert (two.vmin, two.vmax) == tuple(float(v) for v in ZScaleInterval().get_limits(data[np.isfinite(data)]))
+    assert any("anteprima" in n for n in two.notes)

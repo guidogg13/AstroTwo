@@ -46,6 +46,7 @@ from astropy.visualization import (
     PowerStretch,
     SqrtStretch,
     SquaredStretch,
+    ZScaleInterval,
 )
 from astropy.wcs import WCS, FITSFixedWarning
 from astropy.wcs.utils import proj_plane_pixel_scales
@@ -69,6 +70,8 @@ from astrotwo.core.coordinates_wcs import (
 )
 
 __all__ = [
+    "DisplayLimits",
+    "suggest_display_limits",
     "PALETTES",
     "STRETCHES",
     "SUPPORTED_FORMATS",
@@ -947,6 +950,56 @@ def _apply_stretch(normalized: np.ndarray, name: str, gamma: float) -> np.ndarra
     return out
 
 
+#: Metodi di ``suggest_display_limits`` (v1: solo ``zscale``, D41-3).
+DISPLAY_LIMIT_METHODS: tuple[str, ...] = ("zscale",)
+
+
+@dataclass(frozen=True)
+class DisplayLimits:
+    """Limiti iniziali proposti per ``set_display`` (D41-3): dichiarati, mai imposti."""
+
+    vmin: float
+    vmax: float
+    unit: str
+    method: str
+    parameters: dict
+    n_pixels: int
+    notes: tuple[str, ...] = ()
+    provenance: str = _PROVENANCE
+
+
+def suggest_display_limits(image, *, method: str = "zscale") -> DisplayLimits:
+    """vmin e vmax con ``ZScaleInterval`` di astropy (parametri di default della libreria, dichiarati).
+
+    Calcolo sui soli pixel finiti in ``float64`` (DC6); immagini a colori: un solo intervallo su tutti i
+    piani; immagini a due livelli: sull'anteprima (dichiarato). L'immagine non cambia.
+    """
+    if method not in DISPLAY_LIMIT_METHODS:
+        raise ImagesFitsError("DISPLAY_METHOD_UNKNOWN", f"metodo {method!r} sconosciuto (ammessi: {', '.join(DISPLAY_LIMIT_METHODS)})")
+    data = np.asarray(getattr(image, "data", image))
+    color = bool(getattr(image, "color", False))
+    if data.ndim != (3 if color else 2):
+        raise ValueError("serve un'immagine 2-D (o 3 piani per un'immagine a colori)")
+    notes = []
+    if color:
+        notes.append("immagine a colori: un solo intervallo su tutti i piani, come set_display")
+    if getattr(image, "is_preview", False):
+        notes.append(f"immagine a due livelli: calcolo sull'anteprima (passo {image.preview_step})")
+    values = data[np.isfinite(data)].astype(np.float64, copy=False).ravel()
+    bunit = getattr(image, "bunit", None)
+    unit = bunit if bunit else "non dichiarata"
+    if values.size == 0:
+        raise ImagesFitsError("DISPLAY_LIMITS_UNDEFINED", "nessun pixel finito: nessun limite proposto")
+    interval = ZScaleInterval()
+    vmin, vmax = (float(v) for v in interval.get_limits(values))
+    if not vmin < vmax:
+        raise ImagesFitsError("DISPLAY_LIMITS_UNDEFINED",
+                              f"immagine costante (valore {values[0]!r}): nessun limite proposto, li sceglie l'utente",
+                              value=float(values[0]))
+    return DisplayLimits(vmin=vmin, vmax=vmax, unit=unit, method="zscale (astropy.visualization.ZScaleInterval)",
+                         parameters=dict(vars(interval)), n_pixels=int(values.size), notes=tuple(notes))
+
+
 def set_display(image, vmin: float, vmax: float, gamma: float = 1.0, palette: str = "gray", stretch: str = "linear") -> DisplayPlane:
     """Piano di presentazione con intervallo, funzione di trasferimento, gamma e palette.
 
@@ -1655,8 +1708,11 @@ def _star_centroid_by_region(image: FitsImage, position, box_size, annulus_inner
     return dataclasses.replace(local, x=local.x + bx0, y=local.y + by0, window=(x0 + bx0, x1 + bx0, y0 + by0, y1 + by0))
 
 
-def star_centroid(image, position, box_size: int, annulus_inner: float, annulus_outer: float) -> StarCentroid:
+def star_centroid(image, position, box_size: int, annulus_inner: float | None = None,
+                  annulus_outer: float | None = None) -> StarCentroid:
     """Baricentro pesato sull'intensità dopo la sottrazione del fondo (D11-7).
+
+    Raggi della corona omessi: 1 × e 1,5 × ``box_size`` (D11-8), sempre scritti nel risultato.
 
     - finestra quadrata di lato ``box_size`` (intero dispari ≥ 3) centrata sul
       pixel più vicino a ``position`` = (x, y) in convenzione numpy;
@@ -1666,6 +1722,12 @@ def star_centroid(image, position, box_size: int, annulus_inner: float, annulus_
     - baricentro con ``scipy.ndimage.center_of_mass`` su finestra − fondo,
       in ``float64``.
     """
+    if annulus_inner is None and not isinstance(box_size, bool) and isinstance(box_size, int):
+        annulus_inner = 1.0 * box_size
+    if annulus_outer is None and not isinstance(box_size, bool) and isinstance(box_size, int):
+        annulus_outer = 1.5 * box_size
+    if annulus_inner is None or annulus_outer is None:
+        raise ValueError("box_size deve essere un intero dispari ≥ 3")
     if getattr(image, "is_preview", False):
         return _star_centroid_by_region(image, position, box_size, annulus_inner, annulus_outer)
     data = _image_array(image)
