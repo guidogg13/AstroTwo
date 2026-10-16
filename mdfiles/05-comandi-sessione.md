@@ -4,8 +4,8 @@
 
 ## 2. Scopo
 
-Trasformare ogni azione dell'utente (menu, tastiera, mouse) e, più avanti,
-ogni richiesta dell'IA in un **comando** con nome, parametri tipizzati con
+Trasformare ogni azione dell'utente (menu, tastiera, mouse) e ogni
+richiesta dell'IA (dal 2026-10-16, `32`) in un **comando** con nome, parametri tipizzati con
 unità e risultato strutturato, eseguito chiamando solo funzioni pubbliche
 del livello 1, registrato e rieseguibile, e salvare il lavoro come
 **sessione** che si riapre rieseguendo i comandi.
@@ -57,7 +57,17 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   comando lungo (`long`: l'interfaccia mostra avanzamento e pulsante
   Annulla, regola del proprietario del 2026-10-15), modifica la vista
   (`changes_view`), solo lettura (`read_only`), **classe** (`session`,
-  `passive`, `application`; D05-1, §13).
+  `passive`, `application`; D05-1, §13), **conferma richiesta quando lo
+  chiede l'IA** (`confirm`, dal 2026-10-16: sì per i comandi `network` o
+  `long` che non sono `read_only` e per quelli che modificano un livello
+  esistente; elenco in §7; usato dal `32`).
+- **Chi l'ha chiesto (`requested_by`, dal 2026-10-16):** ogni comando
+  registrato porta l'origine: `menu`, `keyboard`, `mouse` (gesti e
+  strumenti), `history` (Riesegui del `40`), `session` (riapertura) oppure
+  `ai` con identificativo della conversazione, numero del turno,
+  identificativo della chiamata, profilo e modello (`30`, `35`).
+  `requested_by` è un dato descrittivo: **non cambia** validazione,
+  esecuzione né risultato.
 - **Risultato strutturato** (`CommandResult`): esito (`ok`, `error`,
   `cancelled`); valori restituiti dal modulo, **ogni numero con unità** e,
   dove pertinente, frame, epoca e convenzione dei pixel; avvisi (codice e
@@ -94,8 +104,9 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
 - **Identificativi dei livelli:** `L1`, `L2`, … in ordine di creazione, mai
   riusati nella stessa sessione; deterministici nella riesecuzione.
 - **Cronologia (`CommandHistory`):** elenco ordinato dei comandi di classe
-  `session` e `application` con numero progressivo e risultato, compresi
-  quelli in errore o annullati; i comandi `passive` non entrano (D05-1).
+  `session` e `application` con numero progressivo, `requested_by` e
+  risultato, compresi quelli in errore o annullati; i comandi `passive` non
+  entrano (D05-1).
 - **Annullamento cooperativo** (architettura approvata il 2026-10-15): ogni
   esecuzione riceve un `CancelToken`; il 05 lo controlla prima di iniziare
   e tra i passi dei comandi a più passi. Una funzione di un modulo già in
@@ -139,12 +150,19 @@ Il disegno durante il gesto è del `41`.
   `.astrotwo.json`), con: versione dello schema della sessione, versione
   dell'app (SemVer, DC4), data di creazione e di salvataggio (UTC, ISO
   8601), **elenco ordinato dei comandi** della cronologia con parametri
-  completi, esito, avvisi, istanti e impronta dei dati di rete, **elenco
+  completi, `requested_by`, esito, avvisi, istanti e impronta dei dati di
+  rete, **elenco
   dei file** usati (percorso assoluto, SHA-256, dimensione), **stato
   finale** (livelli con ordine, visibilità, opacità e regolazioni; vista
   con centro, scala, proiezione e base; griglia; selezioni).
 - **Niente pixel** né contenuti di tabelle, niente dati della cache,
-  **nessuna chiave o segreto** (regola d'oro n. 5). Tag e segnalibri
+  **nessuna chiave o segreto** (regola d'oro n. 5).
+- **Testo delle conversazioni con l'IA (dal 2026-10-16, `35` §3.9):** non
+  entra nella sessione, salvo richiesta esplicita dell'utente al
+  salvataggio; in quel caso un blocco facoltativo `conversations`
+  (messaggi, chiamate, risultati come inviati al modello, rapporti del
+  `34`, token) che **non si rilegge mai per rieseguire**. I nomi dei file
+  nel blocco sono senza cartelle, come inviati al modello. Tag e segnalibri
   (D17-3) entreranno nella sessione con le versioni successive
   dell'interfaccia (lo schema è versionato).
 - **Numeri nel JSON:** `float64` scritti con la rappresentazione più breve
@@ -172,6 +190,8 @@ Il disegno durante il gesto è del `41`.
     `COMMAND_VERSION_UNSUPPORTED`, stop; schema della sessione più recente
     dell'app → `SESSION_SCHEMA_UNSUPPORTED`; JSON non valido →
     `SESSION_INVALID`.
+  - I comandi con `requested_by = ai` si rieseguono **come gli altri,
+    senza chiamare l'IA** (nessun provider, nessuna chiave necessaria).
   - Alla fine lo stato ottenuto si confronta con lo stato finale
     registrato: se differisce, avviso `SESSION_STATE_DIFFERS` con l'elenco
     delle differenze.
@@ -184,10 +204,14 @@ Il disegno durante il gesto è del `41`.
   2020-12)**: nome, versione, descrizione in inglese, parametri (tipo,
   unità e grandezza fisica come annotazioni, intervallo, elenco chiuso,
   default), schema del risultato e indicatori.
-- Il `32-ia-registro-strumenti.md` **sceglierà** quali comandi esporre e
-  li userà **senza ridefinirli**. L'IA sceglie un comando e ne propone i
-  parametri; i parametri si validano come quelli dell'utente; **i numeri
-  del risultato vengono solo dai moduli** (regola d'oro n. 1).
+- Lo schema contiene anche gli indicatori `read_only`, `network`, `long`
+  e `confirm`.
+- Il `32-ia-registro-strumenti.md` **sceglie** quali comandi esporre
+  (elenco chiuso, scritto il 2026-10-16) e li usa **senza ridefinirli**.
+  L'IA sceglie un comando e ne propone i parametri; i parametri si
+  validano come quelli dell'utente; il comando passa dalla stessa coda del
+  `40` con `requested_by = ai`; **i numeri del risultato vengono solo dai
+  moduli** (regola d'oro n. 1).
 
 ### 3.6 Comandi già rieseguibili dei moduli 10–19
 
@@ -218,7 +242,8 @@ Il disegno durante il gesto è del `41`.
 - Non ha "annulla/ripeti": Aladin non ha "annulla" (A12) e la prima
   versione non lo prevede; si riesegue la cronologia.
 - Non salva pixel, contenuti di tabelle, dati della cache né segreti.
-- Non decide quali comandi vede l'IA (`32`).
+- Non decide quali comandi vede l'IA (`32`) e non chiama mai l'IA, nemmeno
+  alla riapertura di una sessione.
 - Non gestisce tag e segnalibri nella prima versione (D17-3, versioni
   successive).
 - Non gestisce la cache (`04`).
@@ -235,13 +260,15 @@ Il disegno durante il gesto è del `41`.
   `41-ui-visualizzatore-cielo.md`, `42-ui-pannello-cataloghi.md`;
   `18-core-calcolatrici.md` (formato dei comandi, solo come dato);
   in futuro `24-analisi-pipeline-riproducibili.md` (pipeline sopra il
-  registro), `32-ia-registro-strumenti.md` (schema JSON), `44`/`35`.
+  registro); `32-ia-registro-strumenti.md` (schema JSON, validazione,
+  `requested_by`, `confirm`), `35-ia-assistente-chat.md` (blocco
+  `conversations` della sessione), `44-ui-pannello-ia.md`.
 
 ## 6. Input e output
 
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
-| in | comando | nome + versione + parametri | tipi di §3.1, unità esplicite | dall'interfaccia (e in futuro dall'IA) |
+| in | comando | nome + versione + parametri + `requested_by` | tipi di §3.1, unità esplicite | dall'interfaccia o dall'IA (`32`) |
 | in | `CancelToken` | segnale | — | annullamento cooperativo |
 | in | file di sessione | JSON UTF-8 | schema versionato | riapertura |
 | out | `CommandResult` | struttura | valori con unità, frame, epoca, convenzione; avvisi ed errori del modulo; provenienza | mai un numero senza unità |
@@ -299,6 +326,24 @@ le scelte minori di §13; tutti versione 1):
 | `cursor.read` (posizione sullo schermo) | 10 `pixel_to_sky`, `convert_pixel_convention`; 17 `read_pixel` o 12 `pixel_values` | passive | |
 | `simbad.pointer` (posizione, raggio) | 10 `pixel_to_sky`, 17 `angular_distance`, 14 `simbad_pointer` | passive | rete |
 | `calc.*` (cinque calcolatrici) | 18 (adattatore `run_command`) | session | |
+| `coords.resolve_name` (testo del nome) — nuovo, 2026-10-16 | 10 `resolve_name` | session | sola lettura, rete |
+| `catalog.search` (livello, espressione, maiuscole sì/no) — nuovo | 13 `search` (grammatica chiusa, D13-1): numero delle righe che soddisfano l'espressione e i primi 50 indici; la selezione non cambia | session | sola lettura |
+| `catalog.describe` (livello) — nuovo | metadati della tabella del 13 (colonne con nome, tipo, unità, UCD, descrizione; righe; colonne di posizione; epoca; sorgente con origine e data) | session | sola lettura |
+| `catalog.rows` (livello, prima riga, numero di righe ≤ 50, colonne facoltative, ordine della tabella o mostrato) — nuovo | 13 `record_view` per ogni riga | session | sola lettura |
+| `layer.list` — nuovo | — (stato dello spazio di lavoro: livelli con identificativo, tipo, nome, visibilità, opacità, ordine, sorgente, righe) | session | sola lettura |
+
+**Indicatore `confirm`** (dal 2026-10-16, regola del `32` §3.5): **sì** per
+`image.open`, `catalog.open_file`, `catalog.load_region`, `hips.set_survey`,
+`view.go_to` (rete o lungo), `image.set_display`, `catalog.set_columns`,
+`catalog.set_style`, `layer.set_visible`, `layer.set_opacity`, `layer.move`,
+`layer.remove` (modificano un livello esistente); **no** per tutti gli altri,
+compresi i comandi di sola lettura (anche `coords.resolve_name`, che usa la
+rete). L'indicatore vale solo quando il comando lo chiede l'IA; quali
+comandi l'IA può chiedere è nel `32`.
+
+I comandi di sola lettura sono di classe `session`: entrano in cronologia
+(i numeri che l'IA cita vengono da lì, `#n`) e si rieseguono alla
+riapertura come gli altri (prima la cache, D05-2).
 
 ## 8. Librerie e standard di riferimento
 
@@ -383,6 +428,10 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T15 | Dati di rete diversi (D05-2) | servizio simulato che alla riapertura risponde con una riga in più; poi cache svuotata e stessa risposta | avviso `SESSION_NETWORK_DATA_DIFFERS` con numero e nome del comando, impronte, origine e data, righe prima e dopo; riesecuzione completata; nessun avviso se la risposta è identica | test di unità |
 | T16 | Nessun segreto | sessione completa | nessuna chiave, nessun contenuto del Portachiavi, nessun dato della cache nel file | ispezione del JSON |
 | T17 | Cache da più thread (verifica di §3.2) | comandi nel thread di lavoro e letture passive in altri thread che leggono e scrivono la cache del 04 | nessun errore, limite rispettato, nessuna voce parziale | test di unità con cartella temporanea |
+| T18 | `requested_by` | comandi da menu, mouse, Riesegui e IA (conversazione, turno, chiamata, profilo, modello); salvare e riaprire | `requested_by` in cronologia e nella sessione; stessi risultati qualunque sia l'origine | test di unità |
+| T19 | Comandi di sola lettura | `coords.resolve_name` (SIMBAD simulato), `catalog.search` con espressione valida e non valida, `catalog.describe`, `catalog.rows` con 60 righe chieste, `layer.list` | risultati uguali alle funzioni del 10 e del 13 chiamate nel test; `EXPRESSION_INVALID` del 13; `catalog.rows` oltre 50 → `COMMAND_PARAMETER_INVALID`; selezione e spazio di lavoro invariati | confronto diretto |
+| T20 | Indicatore `confirm` nello schema | `export_schema()` | `confirm` come nell'elenco di §7; `read_only` per i comandi nuovi | test di unità |
+| T21 | Conversazioni nella sessione | sessione con e senza il blocco `conversations`; riapertura con un provider simulato che fallisce se chiamato | blocco presente solo se chiesto, senza cartelle nei nomi dei file; riesecuzione identica nei due casi, nessuna chiamata al provider | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -423,6 +472,15 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   identificativi dei livelli `L<n>`; (4) gesto che cambia centro e scala
   registrato come `view.set_zoom` seguito da `view.set_center`; (5) un
   comando annullato resta in cronologia con l'esito `cancelled`.
+- **Proposta della fase 1 sull'IA, approvata dal proprietario il
+  2026-10-16:** campo `requested_by`, indicatore `confirm`, cinque comandi
+  di sola lettura per l'assistente (`coords.resolve_name`,
+  `catalog.search`, `catalog.describe`, `catalog.rows`, `layer.list`) e
+  blocco facoltativo `conversations` della sessione; applicata in §3.1,
+  §3.2, §3.4, §3.5, §7, §12 (T18–T21). **Scelte minori da confermare:** (1)
+  valori di `requested_by` (`menu`, `keyboard`, `mouse`, `history`,
+  `session`, `ai`); (2) comandi di sola lettura in classe `session`
+  (rieseguiti alla riapertura).
 - **Da verificare prima del codice:** accesso alla cache del 04 da più
   thread (§3.2, T17).
 
@@ -432,3 +490,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario del 2026-10-15 (AM1 accettata: modulo generale di livello 1, codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; registro senza Qt con annullamento cooperativo e avanzamento; spazio di lavoro immutabile; gesti registrati a fine gesto dopo 300 ms fermo; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore. Verifica della cache del 04 da più thread prima del codice. Nuove decisioni D05-1, D05-2, D05-3. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D05-1 decisa (tre classi `session`/`passive`/`application`); D05-2 decisa (avviso senza fermarsi; impronta dei risultati di rete di ogni comando salvata nella sessione, l'avviso dice quale comando e cosa è cambiato; §3.1, §3.4, §10, T15); D05-3 rimandata; scelte minori confermate. Nessuna decisione dei Gruppi 1 e 2 resta aperta in questo file. |
+| 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): campo `requested_by` nel comando, nella cronologia e nella sessione; indicatore `confirm` con il suo elenco; nuovi comandi di sola lettura `coords.resolve_name`, `catalog.search`, `catalog.describe`, `catalog.rows` (al più 50 righe), `layer.list`; blocco facoltativo `conversations` della sessione (solo su richiesta, mai riletto per rieseguire); riesecuzione dei comandi dell'IA senza chiamare l'IA; schema con gli indicatori per il `32`; test T18–T21. |

@@ -8,7 +8,12 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-15 — **decisioni del proprietario sulle specifiche dell'interfaccia**: decise D05-1,
+**Ultimo aggiornamento:** 2026-10-16 — **specifiche dell'IA nella v1** (proposta della fase 1 sull'IA approvata dal
+proprietario il 2026-10-16; nessun codice applicativo): creati in `bozza` `30`, `31`, `32`, `34`, `35`, `44`; modificati
+05, 40, 41, 42 e gli approvati 01, 02, 03, 10 (restano `approvato`) e `CLAUDE.md`; nuovo mockup
+`mockup/finestra-principale-ia.html`; regola dei commit con HTTP 429/502/503/504 come connessione (02 §8). Nessuna
+nuova decisione aperta; aperte 14. Riepilogo: approvato 14, bozza 15, non esiste 14, totale 43.
+Prima di questo aggiornamento: 2026-10-15 — **decisioni del proprietario sulle specifiche dell'interfaccia**: decise D05-1,
 D05-2, D40-1, D41-1…D41-4 (05, 40, 41, 42 senza decisioni dei Gruppi 1 e 2 aperte); nuova D40-3; `format_coordinates`
 nel 10 e `suggest_display_limits` nell'11 (restano `approvato`); linee guida visive nel 40; mockup in
 `mdfiles/mockup/` (due pagine HTML statiche, non contate tra i file di specifica). Aperte 14. Riepilogo invariato:
@@ -299,7 +304,7 @@ Dove si trovano le decisioni:
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14, 16, 18 e 19 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `05-comandi-sessione.md` | Registro dei comandi e sessione (livello 1, file generale come il 04; AM1 accettata il 2026-10-15; codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore; D05-1 e D05-2 decise (impronta dei risultati di rete nella sessione), D05-3 rimandata | bozza |
+| `05-comandi-sessione.md` | Registro dei comandi e sessione (livello 1, file generale come il 04; AM1 accettata il 2026-10-15; codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore; D05-1 e D05-2 decise (impronta dei risultati di rete nella sessione), D05-3 rimandata; dal 2026-10-16 `requested_by`, indicatore `confirm`, comandi di sola lettura per l'assistente e blocco facoltativo `conversations` | bozza |
 | `decisioni-aperte.md` | Decisioni aperte (14: Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11, aggiornate il 2026-10-15) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
@@ -331,23 +336,23 @@ Dove si trovano le decisioni:
 
 | File | Descrizione | Stato |
 |---|---|---|
-| `30-ia-adattatore-provider.md` | Adattatore unico per più provider IA scelti dall'utente | non esiste |
-| `31-ia-chiavi-portachiavi.md` | Lettura delle chiavi API dal Portachiavi di macOS | non esiste |
-| `32-ia-registro-strumenti.md` | Registro degli strumenti deterministici esposti all'IA | non esiste |
-| `33-ia-query-adql.md` | Costruzione, validazione ed esecuzione di query ADQL | non esiste |
-| `34-ia-verifica-risultati.md` | Verifica indipendente dei numeri prodotti su richiesta dell'IA | non esiste |
-| `35-ia-assistente-chat.md` | Assistente conversazionale dell'utente | non esiste |
+| `30-ia-adattatore-provider.md` | Adattatore per i provider IA (v1): profili senza chiave, SDK `anthropic` e `openai` con endpoint configurabile, capacità, `list_models`, `stream_turn` con eventi normalizzati, `AI_NO_TOOLS`, tempi 10/60/30 s, `RequestRecord` | bozza |
+| `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS (v1): `keyring` con il solo backend macOS forzato, nessun ripiego, `SecretKey` mascherato | bozza |
+| `32-ia-registro-strumenti.md` | Registro degli strumenti (v1): elenco esplicito di comandi del `05`, nomi tradotti, validazione del `05`, stessa coda con `requested_by = ai`, conferme, risultati ≤ 50 righe e 20 kB; testi esterni marcati come dati | bozza |
+| `33-ia-query-adql.md` | Costruzione, validazione ed esecuzione di query ADQL (**rimandato** il 2026-10-16; nella v1 `catalog.search`) | non esiste |
+| `34-ia-verifica-risultati.md` | Verifica dei numeri delle risposte (v1): estrazione di tutti i numeri, elenco chiuso delle eccezioni, confronto alla precisione scritta, evidenziazione, modalità rigorosa; nessuna istruzione letta dai risultati | bozza |
+| `35-ia-assistente-chat.md` | Assistente conversazionale (v1): ciclo degli strumenti, regole di sistema R1–R9, limiti (10 comandi, 5 minuti), token e prezzo facoltativo, privacy, sessione, sicurezza contro le istruzioni nei testi esterni | bozza |
 
 ## Interfaccia
 
 | File | Descrizione | Stato |
 |---|---|---|
-| `40-ui-finestra-principale.md` | Finestra principale (v1): menu, barra di stato, campo "Vai a", preferenze essenziali, pannelli Comandi e Messaggi, coda dei comandi in un thread di lavoro con avanzamento e Annulla, spazio per il 44; A9 decisa (inglese con `tr()`, italiano nostro, punto decimale sempre); D40-1 decisa, D40-2 rimandata, D40-3 aperta (Gruppo 3); **linee guida visive** (§3.11) per tutte le interfacce; mockup in `mdfiles/mockup/` | bozza |
-| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine FITS, sfondo HiPS, cataloghi, MOC, griglia, coordinate sotto il mouse, distanza, puntatore Simbad, livelli minimi, PNG; geometria da `make_view_wcs` (10) e tile dal 12 (P6); OpenGL dietro un'interfaccia di disegno nostra; obiettivi di prestazione P1–P7; D10-9, D11-8 e D41-1…D41-4 decise (Mac di riferimento da compilare); modalità notte rossa nel disegno | bozza |
-| `42-ui-pannello-cataloghi.md` | Pannello cataloghi (v1 minima): tabella in sola lettura con ordinamento, selezione sincronizzata con la vista, vista del record; colonne di posizione e moto proprio | bozza |
-| `mockup/finestra-principale.html`, `mockup/finestra-principale-notte.html` | Mockup statici della finestra principale (tema scuro e modalità notte rossa), valori fittizi; solo immagine di riferimento per il 40 §3.11, non codice dell'app né file di specifica (non contati nel riepilogo) | — |
+| `40-ui-finestra-principale.md` | Finestra principale (v1): menu, barra di stato, campo "Vai a", preferenze essenziali, pannelli Comandi e Messaggi, coda dei comandi in un thread di lavoro con avanzamento e Annulla, spazio per il 44; A9 decisa (inglese con `tr()`, italiano nostro, punto decimale sempre); D40-1 decisa, D40-2 rimandata, D40-3 aperta (Gruppo 3); **linee guida visive** (§3.11) per tutte le interfacce; mockup in `mdfiles/mockup/`; dal 2026-10-16 pannello dell'assistente (44) nella v1, colonna "chi" nella cronologia, preferenze dell'assistente | bozza |
+| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine FITS, sfondo HiPS, cataloghi, MOC, griglia, coordinate sotto il mouse, distanza, puntatore Simbad, livelli minimi, PNG; geometria da `make_view_wcs` (10) e tile dal 12 (P6); OpenGL dietro un'interfaccia di disegno nostra; obiettivi di prestazione P1–P7; D10-9, D11-8 e D41-1…D41-4 decise (Mac di riferimento da compilare); modalità notte rossa nel disegno; dal 2026-10-16 nord e barra di scala (A7) con `compass_and_scale_bar` del 10 | bozza |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi (v1 minima): tabella in sola lettura con ordinamento, selezione sincronizzata con la vista, vista del record; colonne di posizione e moto proprio; dal 2026-10-16 posizioni con `format_coordinates` del 10 e magnitudini a 3 decimali | bozza |
+| `mockup/finestra-principale.html`, `mockup/finestra-principale-notte.html`, `mockup/finestra-principale-ia.html` | Mockup statici della finestra principale (tema scuro, modalità notte rossa, pannello dell'assistente), valori fittizi; solo immagine di riferimento per il 40 §3.11 e il 44, non codice dell'app né file di specifica (non contati nel riepilogo) | — |
 | `43-ui-pannello-analisi.md` | Pannello analisi: grafici e risultati dei moduli di livello 2 | non esiste |
-| `44-ui-pannello-ia.md` | Pannello IA: chat, strumenti invocati, chiavi e provider | non esiste |
+| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): a destra, 380–420 pt; messaggi, schede dei comandi e di conferma, numeri verificati ed evidenziati, token, "Cosa è stato inviato", impostazioni con la chiave tramite il `31`, consenso al primo uso; mockup `mockup/finestra-principale-ia.html` | bozza |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature (interfaccia; origine H2 di `03-parita-aladin.md`; dipende da `41`, `40`) | non esiste |
 
 ## Funzioni avanzate (livello 4)
@@ -370,8 +375,8 @@ Dove si trovano le decisioni:
 
 | Stato | Quanti |
 |---|---|
-| bozza | 9 |
+| bozza | 15 |
 | in revisione | 0 |
 | approvato | 14 |
-| non esiste | 20 |
+| non esiste | 14 |
 | **Totale file in `mdfiles/`** | **43** |

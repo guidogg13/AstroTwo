@@ -23,8 +23,10 @@ Perimetro approvato dal proprietario il 2026-10-15.
   misura della distanza (17, H11) con aggancio facoltativo al centroide
   dell'11; MOC sovrapposti (16, E6); puntatore Simbad (H17, `simbad_pointer`
   del 14); pannello dei livelli minimo (A11: ordine, visibilità, opacità,
-  rimozione); esportazione della vista in PNG (A13, solo PNG).
-- **Fuori dalla v1:** barra di scala e indicatore del nord (A7), rotazione
+  rimozione); esportazione della vista in PNG (A13, solo PNG);
+  **indicatore del nord e barra di scala (A7, dal 2026-10-16**, con
+  `compass_and_scale_bar` del 10, §3.18).
+- **Fuori dalla v1:** rotazione
   (A8), minimappa (G4), campi strumentali (G5), file di regione (E7),
   albero delle collezioni (H1), cursore dell'epoca (H3), tag e segnalibri,
   mappa cliccabile (H20), frecce del moto proprio (D10), selezione a
@@ -296,6 +298,9 @@ scala, proiezione, livelli con sorgente, origine e data, data
 dell'esportazione). È un'immagine per l'occhio: i valori dei pixel del PNG
 non sono dati scientifici. Altri formati e stampa: fuori dalla v1.
 
+Nel PNG si disegnano anche l'indicatore del nord e la barra di scala
+(§3.18), come sullo schermo.
+
 ### 3.15 Obiettivi di prestazione (approvati il 2026-10-15)
 
 Misurati sul **Mac di riferimento** con test marcati `perf` (D41-4):
@@ -339,7 +344,36 @@ di base (navigazione da tastiera, contrasto, testo ingrandito di macOS).
 A1, A2/A3 (con il campo "Vai a" del `40`), A4, A6, A11 (minimo), A13 (solo
 PNG), B5 (opacità di immagine e HiPS), C1 (survey attivo), D11 (solo
 clic), E6 (MOC sovrapposti), F1 e H11 (distanza), H17 (solo puntatore
-Simbad). Le altre righe assegnate al 41 sono fuori dalla v1 (§3.1).
+Simbad), **A7** (nord e barra di scala, dal 2026-10-16). Le altre righe
+assegnate al 41 sono fuori dalla v1 (§3.1).
+
+### 3.18 Indicatore del nord e barra di scala (A7)
+
+Decisione del proprietario del 2026-10-16 (A7 nella v1, opzione b della
+proposta della fase 1 sull'IA): **tutto il calcolo è del 10**, con la nuova
+funzione `compass_and_scale_bar`; qui solo il disegno.
+
+- **Dove:** nell'**angolo in basso a sinistra** della vista (scelta minore
+  10), sopra i livelli e sotto le etichette degli strumenti; nessuna
+  interazione.
+- **Quando:** ricalcolato a **ogni comando di vista** (`view.set_center`,
+  `view.set_zoom`, `view.go_to`, cambio di base) chiamando
+  `compass_and_scale_bar` del 10 sulla `ViewGeometry` corrente, nel frame
+  della griglia se è visibile, altrimenti ICRS; durante un gesto resta
+  quello dell'ultimo comando di vista, in grigio, e si ricalcola alla fine
+  del gesto (nessun valore stimato durante il gesto).
+- **Nord ed est:** due frecce dal **centro della vista** (dove il 10 li
+  calcola) disegnate nell'angolo con le direzioni restituite dal 10
+  (vettori unitari in pixel della finestra) ed etichette "N" ed "E"; la
+  lunghezza delle frecce (40 pixel logici, scelta minore 11) è solo
+  disegno. Vicino al polo il 10 restituisce `NORTH_UNDEFINED`: al posto
+  delle frecce la scritta "polo nel campo".
+- **Barra di scala:** segmento orizzontale lungo quanti pixel della
+  finestra dice il 10, con l'etichetta scritta dal 10 (es. "10′"); la barra
+  vale al centro della vista: con proiezione `AIT` o campo oltre 30° il 10
+  lo dichiara e l'etichetta aggiunge "al centro".
+- **Disegno:** colori del tema (in modalità notte rossa solo rossi), cifre
+  tabulari; nessun numero calcolato qui.
 
 ## 4. Cosa NON fa
 
@@ -348,7 +382,8 @@ Simbad). Le altre righe assegnate al 41 sono fuori dalla v1 (§3.1).
   `01` §3, D17-2: geometria nel 17, disegno qui).
 - Non ricampiona l'immagine FITS sulla vista e non mescola più immagini
   (B5, B7 fuori dalla v1).
-- Non ruota la vista e non mostra barra di scala o nord (A7, A8).
+- Non ruota la vista (A8) e non calcola direzione del nord né lunghezza
+  della barra di scala (10, `compass_and_scale_bar`).
 - Non registra ogni movimento del mouse (gesti a fine gesto, `05` §3.3).
 - Non salva la sessione né gestisce la coda dei comandi (`05`, `40`).
 - Non mostra tabelle (`42`).
@@ -359,7 +394,8 @@ Simbad). Le altre righe assegnate al 41 sono fuori dalla v1 (§3.1).
 - **Livello:** interfaccia; nella v1 usa solo il livello 1.
 - **Dipende da:** `05-comandi-sessione.md`; `10-core-coordinate-wcs.md`
   (`make_view_wcs`, `choose_projection`, `pixel_to_sky`, `sky_to_pixel`,
-  `convert_pixel_convention`, `format_coordinates`, griglia),
+  `convert_pixel_convention`, `format_coordinates`, `compass_and_scale_bar`,
+  griglia),
   `11-core-immagini-fits.md` (`set_display`, `suggest_display_limits`,
   `star_centroid`), `12-core-hips.md` (survey, tile,
   campionamento della vista, valori dei pixel), `13-core-cataloghi.md`
@@ -495,6 +531,7 @@ mai abbassare in silenzio".
 | T18 | Numeri scritti dal 10 | coordinate sotto il cursore, etichette della griglia, coordinate nel puntatore Simbad | testi identici a quelli di `format_coordinates` del 10 sugli stessi valori; punto decimale anche in italiano | confronto diretto |
 | T19 | Limiti iniziali | apertura di un FITS sintetico; survey FITS simulato senza `hips_pixel_cut` | limiti uguali a `suggest_display_limits` dell'11 (sull'immagine; sul tile che contiene il centro della prima vista), dichiarati e registrati nel comando; stessi limiti alla riapertura della sessione | ricalcolo con l'11 |
 | T20 | Modalità notte (`gl`) | vista con immagine, HiPS a colori, due cataloghi, griglia, in modalità notte, disegnata fuori schermo | nessun pixel con componente verde o blu sopra la soglia bassa dichiarata nel test; posizioni invariate (T1) | lettura dell'immagine fuori schermo |
+| T21 | Nord e barra di scala (A7) | viste `TAN` in ICRS e galattico, su un'immagine ruotata con distorsioni SIP, vista `AIT`, vista con il polo nel campo | frecce disegnate con le direzioni di `compass_and_scale_bar` del 10 entro 1° e barra lunga quanto dice il 10 entro 1 pixel; etichetta identica al testo del 10; "al centro" per `AIT`; "polo nel campo" con `NORTH_UNDEFINED`; presenti anche nel PNG | ricalcolo con il 10 |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
 ## 13. Decisioni aperte
@@ -539,6 +576,11 @@ compilare il Mac di riferimento (§3.15).
   eccesso dichiarato; (7) unità della distanza scelta nelle opzioni,
   default ′; (8) 6 thread per i tile; (9) due file Python (`sky_viewer.py`,
   `sky_renderer_gl.py`) per tenere l'OpenGL separato.
+- **A7 nella v1: DECISA il 2026-10-16** (decisione del proprietario,
+  opzione b): indicatore del nord e barra di scala con la nuova
+  `compass_and_scale_bar` del 10 (§3.18, T21). **Scelte minori da
+  confermare:** (10) angolo in basso a sinistra; (11) frecce di 40 pixel
+  logici.
 - **Da verificare prima del codice:** cache del 04 da più thread (§3.13,
   `05` T17); funzioni OpenGL incluse in PySide6 sufficienti (§3.13);
   funzioni HiPS pubbliche di `reproject` rispetto al campionamento del 12
@@ -550,3 +592,4 @@ compilare il Mac di riferimento (§3.15).
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 approvata dal proprietario il 2026-10-15: perimetro v1; geometria con base e finestra da `make_view_wcs` del 10 e campionamento dei tile del 12; traslazione e scala dello schermo scritte esplicitamente come disegno; D10-9 (30° con scarto ±10 %), D11-8 (corona 1×/1,5× `box_size`, box 15 pixel) e raggio Simbad (12 pixel logici, 500 ms, una richiesta alla volta) decisi; rendering con `QOpenGLWidget` dietro un'interfaccia di disegno nostra, funzioni OpenGL di PySide6; obiettivi di prestazione P1–P7 con marcatori `perf` e `gl` e regola "misurare e riportare"; test con pytest-qt in `offscreen` e controllo entro 1 pixel; lista di controllo manuale; verifica della cache da più thread. Nuove decisioni D41-1…D41-4. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D41-1 (puntatore Simbad `passive` nel gruppo di thread dei tile), D41-2 (`format_coordinates` nel 10), D41-3 (`suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati e registrati; per i survey FITS senza `hips_pixel_cut`, sul tile del centro della prima vista), D41-4 (`perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta; Mac di riferimento da compilare) decise; scelte minori confermate; temi e modalità notte rossa nel renderer (linee guida visive del `40` §3.11), colori dei cataloghi di Okabe e Ito; test T18–T20. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |
+| 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): **A7 nella v1** (opzione b) — nuova §3.18 con indicatore del nord e barra di scala disegnati nell'angolo dai risultati di `compass_and_scale_bar` del 10 (nuova funzione), anche nel PNG; §3.1, §3.17, §4, §5 aggiornati; test T21; scelte minori 10 e 11 da confermare. |

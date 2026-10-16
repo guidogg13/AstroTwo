@@ -14,21 +14,27 @@ dei comandi (`05`) senza mai bloccare l'interfaccia.
 ### 3.1 Perimetro della prima versione (v1)
 
 Perimetro approvato dal proprietario il 2026-10-15. La v1 dell'interfaccia
-(40, 41, 42 minimo) usa **solo il livello 1**.
+(40, 41, 42 minimo) usa **solo il livello 1**; **dal 2026-10-16** (proposta
+della fase 1 sull'IA approvata) la v1 comprende anche il **pannello
+dell'assistente (44)**, che usa il livello 3 (30, 31, 32, 34, 35) sopra i
+comandi del livello 1. Senza assistente la finestra funziona identica
+(regola d'oro n. 7).
 
 - **In v1:** menu, barra di stato, campo "Vai a", preferenze essenziali,
   apertura di file (immagine FITS, catalogo, MOC) e di sessioni, pannello
   Comandi (cronologia visibile e rieseguibile), pannello Messaggi, schermo
   intero (A10), coda dei comandi in un thread di lavoro con avanzamento e
-  Annulla, spazio riservato al futuro pannello IA (44).
+  Annulla, **pannello dell'assistente (44)** nell'area a destra,
+  impostazioni dell'assistente nelle preferenze, colonna "chi" nella
+  cronologia.
 - **Fuori dalla v1** (versioni successive): segnalibri e storico delle
   posizioni (A12, H13, H16), console degli script e modalità demo o guida
   (H13), avvio tramite URL (H18, D40-2), finestre delle calcolatrici (18),
   preferenze non essenziali (cifre di visualizzazione DC3, timeout CA1,
   limiti di memoria e delle tabelle, dati planetari D19-5, server
-  predefiniti, tema), pannello analisi (43), pannello IA (44), viste
+  predefiniti, tema), pannello analisi (43), viste
   multiple (45). Finché non hanno un'interfaccia valgono i default dei
-  moduli.
+  moduli. (Il pannello IA, 44, è entrato nella v1 il 2026-10-16.)
 
 ### 3.2 Disposizione
 
@@ -36,10 +42,12 @@ Perimetro approvato dal proprietario il 2026-10-15. La v1 dell'interfaccia
 - Pannelli agganciabili (spostabili e richiudibili, comportamento standard
   di Qt): **Livelli** (del `41`), **Tabella** (`42`), **Comandi** e
   **Messaggi** (di questo modulo).
-- **Spazio per il pannello IA (44):** un'area agganciabile a destra,
-  nascosta, e una voce di menu disattivata "Assistant (available with level
-  3)"; nessuna implementazione nella v1. L'area esiste già perché il futuro
-  pannello non cambi la disposizione.
+- **Pannello dell'assistente (44, dal 2026-10-16):** nell'area agganciabile
+  a destra, larga 380–420 pt, richiudibile, con un pulsante nella barra
+  degli strumenti e la voce di menu **Assistant** attiva (contenuto e
+  comportamento nel `44`). Senza profilo, chiave o consenso il pannello
+  dice perché l'assistente non è disponibile; il resto della finestra non
+  cambia.
 - Geometria della finestra e dei pannelli salvata nelle impostazioni
   dell'app (non nella sessione).
 
@@ -68,7 +76,10 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   (puntatore del `41`). L'attivazione è `ui.set_tool`.
 - **Window:** mostra o nasconde i pannelli.
 - **Help:** About AstroTwo (versione SemVer, DC4, e testo di
-  `THIRD_PARTY_LICENSES`); Assistant (disattivata, §3.2).
+  `THIRD_PARTY_LICENSES`).
+- **Assistant** (voce nel menu Window e pulsante nella barra degli
+  strumenti, ⌃⌘A): mostra o nasconde il pannello del `44` (`ui.*`, classe
+  `application`).
 - Scorciatoie standard di macOS (⌘O apri, ⌘S salva sessione, ⌘Q esci,
   ⌃⌘F schermo intero).
 
@@ -96,9 +107,13 @@ trovato o rete assente: messaggio del 10 nel pannello Messaggi.
 ### 3.6 Pannello Comandi (cronologia visibile)
 
 - Una riga per comando della cronologia del `05`: numero, ora (UTC),
-  nome, parametri in breve, esito (ok, errore, annullato), numero di
-  avvisi. Filtro per classe (`session` di default, `application` a
-  richiesta; D05-1).
+  **chi** (dal `requested_by` del `05`: "Utente" per menu, tastiera, mouse
+  e Riesegui; "IA" per i comandi chiesti dall'assistente; "Sessione" per
+  la riapertura), nome, parametri in breve, esito (ok, errore, annullato),
+  numero di avvisi. Filtro per classe (`session` di default, `application`
+  a richiesta; D05-1) e per chi (tutti di default).
+- Per i comandi dell'IA il dettaglio mostra anche conversazione, turno,
+  profilo e modello, e se l'utente ha confermato il comando (`32` §3.5).
 - Selezionando una riga: parametri completi, risultato, avvisi, provenienza
   (origine e data dei dati di rete o della cache).
 - **Riesegui** (uno o più comandi selezionati): li rimette in coda come
@@ -137,10 +152,15 @@ Architettura approvata dal proprietario il 2026-10-15:
 - **Uscita con comandi in corso:** richiesta di conferma; se confermata,
   annullamento e attesa del ritorno della funzione in corso entro i
   timeout di rete del `04`.
+- **Comandi dell'assistente:** entrano nella **stessa coda** con
+  `requested_by = ai` (`32` §3.5); l'assistente (`35`) gira in un thread
+  proprio e aspetta il risultato con i segnali di Qt; Annulla nella barra di
+  stato e Stop del `44` impostano lo stesso `CancelToken` del comando.
 - **Sessione:** Open session riapre con la riesecuzione del `05` (comando
   lungo, con avanzamento e Annulla); gli stop del `05` si mostrano in una
   finestra modale. Prima di aprire una sessione o di uscire con comandi non
-  salvati, richiesta di conferma.
+  salvati, richiesta di conferma. **Save session** ha la casella "Includi il
+  testo delle conversazioni" (spenta di default, `35` §3.9).
 
 ### 3.9 Lingua (A9, decisa il 2026-10-15)
 
@@ -157,7 +177,10 @@ Architettura approvata dal proprietario il 2026-10-15:
 
 ### 3.10 Preferenze essenziali
 
-Finestra delle preferenze con cinque voci; ogni modifica è un comando
+Finestra delle preferenze con cinque voci e, dal 2026-10-16, la sezione
+**Assistant** (profili, modello, modalità rigorosa, limiti, prezzo
+facoltativo: tabella del `44` §3.6; la chiave va **solo** nel Portachiavi
+tramite il `31`, mai in `QSettings`); ogni modifica è un comando
 `prefs.set` (classe `application`). Salvate nelle impostazioni dell'app di
 macOS con `QSettings` (scelta minore 1), mai nella sessione.
 
@@ -235,7 +258,8 @@ aperta.
   (`42`).
 - Non riscrive né traduce i messaggi dei moduli (D40-1).
 - Non ha "annulla/ripeti" (A12): si riesegue la cronologia.
-- Non implementa il pannello IA (44) né chiama l'IA.
+- Non contiene il pannello dell'assistente (è del `44`, che il 40 ospita)
+  e non chiama l'IA.
 - Non conserva chiavi API (regola d'oro n. 5).
 - Non salva la sessione da sé: formato e riesecuzione sono del `05`.
 
@@ -249,9 +273,11 @@ aperta.
   `12-core-hips.md` (collezioni e survey, tramite comandi),
   `13-core-cataloghi.md` e `14-core-protocolli-vo.md` (catalogo nel campo,
   tramite comandi), `41-ui-visualizzatore-cielo.md`,
-  `42-ui-pannello-cataloghi.md`; libreria PySide6.
-- **Usato da:** nessuno nella v1 (in futuro `43`, `44`, `45` si agganciano a
-  questa finestra).
+  `42-ui-pannello-cataloghi.md`, `44-ui-pannello-ia.md` (pannello
+  dell'assistente, dal 2026-10-16), `35-ia-assistente-chat.md` (comandi
+  dell'IA nella coda); libreria PySide6.
+- **Usato da:** `44-ui-pannello-ia.md` (area a destra, preferenze, pannello
+  Comandi); in futuro `43`, `45` si agganciano a questa finestra.
 
 ## 6. Input e output
 
@@ -343,7 +369,9 @@ simulati, in `tests/ui/`.
 | T7 | Punto decimale | interfaccia in italiano con località `it_IT` | coordinate, valori e parametri mostrati con il punto decimale | lettura dei testi dei widget |
 | T8 | Preferenze | cambiare le cinque preferenze, riavviare la finestra (impostazioni in cartella temporanea) | valori ritrovati; comandi `prefs.set` in cronologia di classe `application` | test |
 | T9 | Sessione fermata | riaprire una sessione con un file cambiato | finestra modale con `SESSION_FILE_CHANGED` | test |
-| T10 | Spazio IA | avvio | area riservata presente e nascosta; voce di menu disattivata | ispezione dei widget |
+| T10 | Pannello IA | avvio con e senza profilo dell'assistente | area a destra con il pannello del `44`, richiudibile; voce Assistant attiva; senza profilo il pannello dice perché e tutti gli altri test di questa tabella passano | ispezione dei widget |
+| T14 | Colonna "chi" | un comando da menu, uno dal mouse, uno dall'IA (provider simulato), Riesegui | colonna "Utente", "Utente", "IA", "Utente"; filtro per chi; dettaglio del comando IA con conversazione, turno, profilo, modello, conferma | ispezione della cronologia |
+| T15 | Preferenze dell'assistente | modificare profilo, modalità rigorosa, limiti; scrivere una chiave | comandi `prefs.set` in cronologia; nessuna chiave in `QSettings` né in cronologia | ispezione |
 | T11 | Vai a | nome noto (SIMBAD simulato), coordinate sessagesimali, testo non valido | vista centrata con fonte dichiarata; errore del 10 per il testo non valido | ispezione |
 | T12 | Avvio (`perf`) | avvio senza rete sul Mac di riferimento | finestra pronta in ≤ 3 s | misura (marcatore `perf`, D41-4) |
 | T13 | Aspetto | sistema in modalità scura e chiara (simulata); poi modalità notte | tema che segue il sistema; in modalità notte nessun colore dei widget con componente verde o blu sopra una soglia bassa dichiarata nel test; comando `ui.set_appearance` di classe `application` | lettura della tavolozza dei widget |
@@ -375,6 +403,12 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   scorciatoie dei menu di §3.3; (4) filtro della cronologia con la sola
   classe `session` di default; (5) catalogo nel campo con centro e raggio
   della vista (`ViewGeometry` del 10).
+- **Proposta della fase 1 sull'IA, approvata dal proprietario il
+  2026-10-16:** pannello del `44` nella disposizione, voce Assistant attiva,
+  colonna "chi" nella cronologia, sezione Assistant nelle preferenze,
+  comandi dell'IA nella stessa coda, casella per il testo delle
+  conversazioni in Save session; applicata in §3.1, §3.2, §3.3, §3.6, §3.8,
+  §3.10, §12 (T10, T14, T15).
 - **Da verificare prima del codice:** testi delle licenze di PySide6/Qt
   (LGPL-3), di pytest-qt e della raccolta di icone (da aggiungere a
   `THIRD_PARTY_LICENSES`); cifre tabulari del carattere di sistema in Qt;
@@ -386,3 +420,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 approvata dal proprietario il 2026-10-15: perimetro v1 (menu, barra di stato, campo "Vai a", preferenze essenziali, apertura di file e sessioni, pannelli Comandi e Messaggi, schermo intero, spazio per il 44), coda dei comandi in un thread di lavoro con segnali di Qt, avanzamento e Annulla per ogni comando lungo, A9 decisa (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, punto decimale sempre). Nuove decisioni D40-1, D40-2. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D40-1 decisa (v1: codice + testo del modulo invariato); nuova **D40-3** (Gruppo 3: messaggi dei moduli in inglese con traduzione); D40-2 rimandata; scelte minori confermate; **nuova §3.11 "Linee guida visive"** (valide per tutte le interfacce: macOS, tema che segue il sistema con lo scuro di riferimento, modalità notte rossa, cielo al centro con pannelli richiudibili e barre sottili, carattere di sistema, un solo accento, spaziature di 4 punti, icone Lucide proposte con licenza da verificare, colori dei cataloghi di Okabe e Ito, nulla da Aladin); preferenza "Aspetto" e voce Night mode; PySide6/Qt LGPL-3 registrata per A11 e per il 60; mockup in `mdfiles/mockup/`; test T13. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |
+| 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): il pannello dell'assistente (`44`) entra nella v1 nell'area a destra, voce Assistant attiva (⌃⌘A); colonna "chi" (da `requested_by` del `05`) e dettagli dei comandi dell'IA nel pannello Comandi; sezione Assistant nelle preferenze (chiave solo nel Portachiavi, `31`); comandi dell'IA nella stessa coda con lo stesso `CancelToken`; casella "Includi il testo delle conversazioni" in Save session; test T10 aggiornato, T14 e T15 nuovi. |

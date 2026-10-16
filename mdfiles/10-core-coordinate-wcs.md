@@ -59,6 +59,12 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   DC3** (`02-convenzioni.md` §9: RA 0.01 s, Dec 0.1″), con
   `astropy.coordinates.Angle`: l'interfaccia non converte né arrotonda
   coordinate. Dettagli in §7.
+- **Indicatore del nord e barra di scala (`compass_and_scale_bar`,
+  aggiunta il 2026-10-16, A7 nella v1 per decisione del proprietario):**
+  per il `41`, direzione del nord e dell'est al centro della vista e
+  lunghezza in pixel della finestra di una barra di scala di lunghezza
+  angolare "tonda", con l'etichetta; il `41` disegna soltanto. Dettagli in
+  §7.
 - **WCS (World Coordinate System):** leggere, validare e applicare la soluzione
   astrometrica (`WCS`) di un'immagine FITS: da pixel a coordinate e viceversa;
   verificare che la soluzione sia internally consistente.
@@ -152,8 +158,10 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   `19-core-dati-planetari.md`, `05-comandi-sessione.md` (comandi di vista
   e di coordinate), tutti i moduli di analisi (20–24),
   `33-ia-query-adql.md`, `41-ui-visualizzatore-cielo.md` (`make_view_wcs`,
-  `choose_projection`, griglia, coordinate sotto il cursore),
-  `42-ui-pannello-cataloghi.md`.
+  `choose_projection`, griglia, coordinate sotto il cursore,
+  `compass_and_scale_bar`), `42-ui-pannello-cataloghi.md`
+  (`format_coordinates`), `34-ia-verifica-risultati.md`
+  (`format_coordinates`, `parse_sexagesimal`).
 
 ## 6. Input e output
 
@@ -180,6 +188,8 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
 | in | posizioni o valori di un asse da scrivere | `SkyFrame` / `Quantity` angolare + frame + asse | gradi | per `format_coordinates` |
 | in | stile, precisione, separatori | enumerativo; `Quantity` di tempo (RA) o angolare; enumerativo | — | default: sessagesimale con le cifre di DC3 |
 | out | `FormattedCoordinates` | testi | sessagesimale o decimale, con frame, epoca e precisione usata | per il `41` e il `40` |
+| in | geometria della vista, frame, lunghezza massima della barra | `ViewGeometry`; nome del frame; intero | pixel della finestra | per `compass_and_scale_bar` |
+| out | `CompassScaleBar` | struttura | vettori unitari nord/est in pixel della finestra (convenzione numpy); lunghezza angolare della barra (`Quantity`) e in pixel della finestra (`float64`); etichetta | per il `41` |
 | out | residui calibrazione | float64 | pixel e arcosecondi | RMS e massimo dichiarati, con le soglie usate |
 | out | soluzioni astrometriche | lista | — | le precedenti + la nuova in coda |
 | out | linee della griglia | lista | tratti in pixel (convenzione numpy) + valore della coordinata | geometria per il `41` |
@@ -335,6 +345,44 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
     se no, il caso si gestisce prima della scrittura con `Angle` e si
     dichiara nel codice.
 
+- **`compass_and_scale_bar(geometry, *, frame=None, max_bar_pixels=None)`**
+  (aggiunta il 2026-10-16, A7) — restituisce **`CompassScaleBar`**.
+  `geometry` è la `ViewGeometry` di `make_view_wcs`; `frame` (`icrs`,
+  `galactic` o un altro frame dell'elenco di questo modulo; default: il
+  frame della vista) è il sistema in cui si intende "nord";
+  `max_bar_pixels` (intero ≥ 1) è la lunghezza massima della barra in pixel
+  della finestra (default: un quinto della larghezza della finestra,
+  arrotondato per difetto; scelta minore 3 di questa funzione). Regole:
+  - **punto di riferimento:** il centro della finestra (`center` di
+    `ViewGeometry`);
+  - **nord ed est:** con `SkyCoord.directional_offset_by` si prendono i
+    punti a distanza δ dal centro con angolo di posizione 0° (nord) e 90°
+    (est) nel `frame`, con **δ = 10 pixel della finestra alla scala della
+    finestra** (dichiarato); `sky_to_window` dà i loro pixel; i **vettori
+    unitari** dal centro a quei pixel (convenzione numpy della finestra:
+    x = colonna, y = riga) sono le direzioni restituite, insieme a
+    `east_left` (vero se l'est sta a sinistra del nord guardando lo schermo,
+    dal segno del prodotto vettoriale). Se il polo del `frame` dista dal
+    centro meno di δ, o un punto cade fuori dalla proiezione, nessuna
+    direzione: avviso **`NORTH_UNDEFINED`** con il motivo;
+  - **barra di scala:** per ogni valore tondo dell'elenco **in arco** di
+    `choose_grid_spacing` (§9, da 0.01″ a 90°) si cerca la lunghezza L in
+    pixel della finestra di un **segmento orizzontale centrato nel centro
+    della finestra** i cui estremi (con `window_to_sky`) distano
+    esattamente quel valore (distanza angolare con
+    `SkyCoord.separation`; L trovata con `scipy.optimize.brentq` entro
+    1e-6 pixel); si sceglie il **valore più grande con L ≤
+    `max_bar_pixels`**. Se nemmeno il più piccolo ci sta, si usa il più
+    piccolo e lo si dichiara (`SCALE_BAR_TOO_LONG`); un valore i cui estremi
+    escono dalla proiezione non si usa;
+  - **etichetta:** il valore tondo con il suo simbolo (`″`, `′`, `°`) e la
+    rappresentazione più breve (es. "0.01″", "15′", "1°"), punto decimale;
+  - **validità:** la barra vale al centro; con proiezione `AIT` o raggio
+    del campo maggiore di 15° (campo oltre i 30° di D10-9) il risultato ha
+    `local_only` = vero, che il `41` scrive "al centro";
+  - il risultato porta frame, δ, metodo e i valori usati. Nessun disegno
+    (`41`).
+
 La calcolatrice delle coordinate (A5) non è più in questo modulo (D10-8): le
 sue funzioni sono `convert_coordinates` e `propagate_position` qui, gli
 offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
@@ -443,6 +491,9 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 | `make_view_wcs` con `NCP` o `ZPN` | rifiuto con il motivo (forma storica di `SIN`; coefficienti richiesti) | `PROJECTION_UNSUPPORTED` |
 | `format_coordinates` con precisione non positiva, senza unità o di unità non adatta (tempo per una latitudine) | rifiuto con il parametro | `FORMAT_PRECISION_INVALID` |
 | `format_coordinates` senza frame, con `values` senza `axis`, o con frame sconosciuto | rifiuto | `FRAME_UNSUPPORTED` / `COORD_UNIT_MISSING` |
+| `compass_and_scale_bar` con il polo del frame entro δ dal centro o direzione fuori dalla proiezione | nessuna direzione, barra calcolata se possibile, avviso con il motivo | `NORTH_UNDEFINED` (avviso) |
+| `compass_and_scale_bar` con il più piccolo valore tondo più lungo di `max_bar_pixels` | barra del valore più piccolo, dichiarata | `SCALE_BAR_TOO_LONG` (avviso) |
+| `compass_and_scale_bar` con `max_bar_pixels` < 1 o non intero, frame sconosciuto | rifiuto | `VIEW_PARAMETERS_INVALID` / `FRAME_UNSUPPORTED` |
 
 ## 11. Esposizione all'IA
 
@@ -494,6 +545,9 @@ propone i parametri e interpreta il risultato.
 | T31 | Scrittura con le cifre di DC3 (`format_coordinates`) | 1000 posizioni ICRS e galattiche casuali (semina fissa) | testi uguali a quelli prodotti nel test con `Angle.to_string` alle precisioni di DC3 (0.01 s, 0.1″); punto decimale; frame ed epoca nel risultato | ricalcolo con Astropy |
 | T32 | Riporto, 24h e segno | RA 23h59m59.996s, RA 10h59m59.996s, Dec −0.04″, Dec +89°59′59.96″, l = 359.99999999° | "00h00m00.00s", "11h00m00.00s", "−00°00′00.0″", "+90°00′00.0″", "0°00′00.0″" | valori attesi scritti dalla regola di §7 |
 | T33 | Precisione esplicita e stile decimale | etichette della griglia con passi 10′, 1 s, 0.01 s; stile `decimal`; separatori a due punti | forma più corta coerente con il passo; 6 decimali in gradi; due punti; precisione sbagliata → `FORMAT_PRECISION_INVALID` | test di unità |
+| T34 | Nord ed est (`compass_and_scale_bar`) | viste `TAN` in ICRS e in galattico; vista su un'immagine ruotata di 30° con SIP; base con `CDELT1` positivo (est a destra) | vettori uguali a quelli ricalcolati nel test con `directional_offset_by` e `sky_to_window` (1e-9); `east_left` vero, vero, vero, falso | ricalcolo con Astropy e il 10 |
+| T35 | Barra di scala | finestre `TAN` a scale diverse; `max_bar_pixels` 120 | gli estremi del segmento restituito distano il valore tondo entro 1e-9 gradi (ricalcolo con `SkyCoord.separation`); L ≤ 120 e il valore tondo successivo dell'elenco darebbe L > 120; etichetta attesa | ricalcolo con Astropy |
+| T36 | Polo, `AIT`, casi limite | centro sul polo nord ICRS; vista `AIT` di tutto il cielo; scala minuscola; `max_bar_pixels` 0 | `NORTH_UNDEFINED`; `local_only` vero; `SCALE_BAR_TOO_LONG`; `VIEW_PARAMETERS_INVALID` | test di unità |
 | T30 | Errori di `make_view_wcs` | scala 0, scala senza unità, dimensioni 0, `base` con `projection`, `NCP`, `ZPN` | `VIEW_PARAMETERS_INVALID`; `PROJECTION_UNSUPPORTED` | test di unità |
 
 ## 13. Decisioni aperte
@@ -578,6 +632,13 @@ propone i parametri e interpreta il risultato.
   per longitudini e latitudini dei frame non equatoriali (DC3 fissa solo RA
   e Dec); (2) 6 decimali in gradi nello stile decimale. Codice da scrivere
   quando il proprietario lo chiede.
+- **`compass_and_scale_bar` (A7 nella v1, decisione del proprietario del
+  2026-10-16, opzione b della proposta della fase 1 sull'IA):** §3, §5,
+  §6, §7, §10, §12 (T34–T36). **Scelte minori da confermare:** (3)
+  lunghezza massima di default = un quinto della larghezza della finestra;
+  (4) δ = 10 pixel della finestra; (5) "solo al centro" oltre 15° di raggio
+  del campo o con `AIT`. Codice da scrivere quando il proprietario dichiara
+  la fase codice dell'interfaccia v1.
 - **`make_view_wcs` (2026-10-15, decisione del proprietario sulla
   proposta della fase 1 dell'interfaccia):** aggiunta perché il `41` non
   calcoli proiezioni; §3, §6, §7, §10, §12 (T26–T30). **Codice da scrivere**
@@ -612,3 +673,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-10 | Claude Code | **D13-14 (a)** (decisione del proprietario: sessagesimali ASTRORES convertiti con il modulo 10; autorizzazione esplicita a modificare il file approvato): nuova `parse_sexagesimal` (§7) con `astropy.coordinates.Angle`, errore `COORD_FORMAT_INVALID` (§10), test T25 (§12). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): **D10-9 decisa** (soglia di default 30°, scarto ±10 % nel `41`); nuova **`make_view_wcs`** con `ViewGeometry` (base e finestra, funzioni finestra ↔ cielo esatte anche con distorsioni, WCS della regione visibile, raggio del campo) in §3, §6, §7; errori `VIEW_PARAMETERS_INVALID` e `PROJECTION_UNSUPPORTED` (§10); test T26–T30 (§12). Codice da scrivere (`make_view_wcs` e default di `choose_projection`). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **D41-2 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`format_coordinates`** (sessagesimale o decimale con le cifre di DC3, ore per i frame equatoriali, riporto e ritorno a 0h, segno dell'emisfero conservato, precisione esplicita per la griglia, `Angle.to_string` di astropy) in §3, §6, §7; errore `FORMAT_PRECISION_INVALID` (§10); test T31–T33 (§12); due scelte minori da confermare (§13). Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **A7 nella v1 decisa dal proprietario il 2026-10-16** (opzione b della proposta della fase 1 sull'IA, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`compass_and_scale_bar`** (nord ed est al centro della vista con `directional_offset_by`, `east_left`, barra di scala con il più grande valore tondo dell'elenco in arco che sta nella lunghezza massima, lunghezza del segmento orizzontale trovata con `brentq`, etichetta, `local_only`) in §3, §6, §7; avvisi `NORTH_UNDEFINED`, `SCALE_BAR_TOO_LONG` (§10); test T34–T36 (§12); tre scelte minori (§13); §5 con 34 e 42. Stato `approvato` invariato. |

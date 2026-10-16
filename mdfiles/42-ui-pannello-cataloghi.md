@@ -33,12 +33,26 @@ catalogo è poco usabile).
   fino al tetto di 1 milione di righe del 13.
 - **Intestazioni:** nome della colonna e unità; nel suggerimento al
   passaggio del mouse anche UCD e descrizione dai metadati del 13.
-- **Valori:** come sono nella tabella, senza conversioni né unità
-  cambiate (scelta minore 1): numeri con il formato dichiarato dalla
-  colonna se c'è (`precision`/`width` del VOTable, formato FITS),
-  altrimenti con la rappresentazione più breve che si rilegge identica,
-  sempre con il punto decimale (`40` §3.9); valori mancanti come cella
-  vuota con un segno grafico; il valore pieno si copia (`02` §6).
+- **Valori** (regola decisa dal proprietario il 2026-10-16, che sostituisce
+  la scelta minore 1 del 2026-10-15; motivo: il mockup con le cifre di DC3
+  la contraddiceva):
+  - **colonne di posizione** confermate (`confirm_position_columns` del
+    13): scritte con **`format_coordinates` del 10** nel **frame della
+    colonna** (nessuna conversione di frame), con lo stile scelto in
+    "Coordinates shown" del `40` (sessagesimale o decimale) e le cifre di
+    DC3 (RA 0.01 s, Dec 0.1″);
+  - **magnitudini** (colonne con UCD che comincia con `phot.mag`):
+    **3 decimali** (DC3), arrotondamento di presentazione (`02` §6) con la
+    formattazione standard di Python a virgola fissa, sull'unità della
+    colonna;
+  - **altre colonne:** come sono nella tabella, senza conversioni né unità
+    cambiate: formato dichiarato dalla colonna se c'è (`precision`/`width`
+    del VOTable, formato FITS), altrimenti la rappresentazione più breve che
+    si rilegge identica;
+  - sempre con il **punto decimale** (`40` §3.9); valori mancanti come
+    cella vuota con un segno grafico;
+  - **valore pieno** (`float64` della tabella con l'unità) nel
+    **suggerimento** al passaggio del mouse e nella **copia** (`02` §6).
 - **Ordinamento** (D8): clic sull'intestazione → `table.sort` (livello,
   colonna, verso) del `05`. L'ordine è quello delle righe **mostrate**: la
   tabella del 13 non cambia (D13-5). Ordine stabile (a pari valore resta
@@ -79,15 +93,16 @@ risultato di `catalog.select`.
 
 - Non modifica le tabelle (sola lettura, D13-5) e non calcola valori,
   colonne o statistiche (13).
-- Non converte unità né scrive coordinate in sessagesimale nella tabella
-  (v1).
+- Non converte unità né frame; le coordinate delle colonne di posizione le
+  scrive il 10 (`format_coordinates`), non questo modulo.
 - Non disegna le sorgenti (`41`) e non interroga servizi (13, 14).
 - Non salva sottoinsiemi né esporta tabelle (fuori dalla v1).
 
 ## 5. Livello e dipendenze
 
 - **Livello:** interfaccia; nella v1 usa solo il livello 1.
-- **Dipende da:** `05-comandi-sessione.md` (comandi `table.sort`,
+- **Dipende da:** `10-core-coordinate-wcs.md` (`format_coordinates` per le
+  colonne di posizione), `05-comandi-sessione.md` (comandi `table.sort`,
   `catalog.select`, `catalog.set_columns`), `13-core-cataloghi.md`
   (tabelle, `record_view`, colonne di posizione),
   `41-ui-visualizzatore-cielo.md` (selezione sincronizzata),
@@ -159,7 +174,7 @@ Con **pytest-qt** e piattaforma `offscreen`, in `tests/ui/`.
 | T2 | Selezione dalla tabella | selezionare tre righe | `catalog.select` con le tre righe; sorgenti evidenziate nel `41` | ispezione |
 | T3 | Selezione dalla vista | clic su una sorgente nel `41` | riga selezionata e visibile; record mostrato | ispezione |
 | T4 | Record | selezionare una riga con un valore mancante | contenuto uguale a `record_view` del 13 per quella riga | confronto diretto |
-| T5 | Valori mostrati | colonne con formato dichiarato, senza formato, mancanti | testo secondo §3.2, sempre con il punto decimale anche in italiano | lettura del modello |
+| T5 | Valori mostrati | colonne di posizione ICRS e galattiche, magnitudini (UCD `phot.mag;em.opt.V`), colonne con formato dichiarato, senza formato, mancanti | posizioni identiche ai testi di `format_coordinates` del 10 sugli stessi valori; magnitudini con 3 decimali; altre colonne secondo §3.2; suggerimento e copia con il valore pieno identico al `float64` della tabella; punto decimale anche in italiano | confronto diretto con il 10 e con la tabella |
 | T6 | Un milione di righe | tabella sintetica di 1 000 000 di righe | apertura senza copia dei dati; memoria aggiuntiva e tempo di ordinamento misurati e riportati (`perf`) | misura |
 | T7 | Colonne all'apertura | CSV senza UCD; scelta delle colonne di moto proprio | `confirm_position_columns` chiamata con le colonne confermate; `catalog.set_columns` registrato | ispezione |
 
@@ -167,9 +182,13 @@ Con **pytest-qt** e piattaforma `offscreen`, in `tests/ui/`.
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) valori mostrati come sono nella
-  tabella (formato della colonna o rappresentazione più breve), senza
-  sessagesimali nella v1; (2) ordine delle righe mostrate calcolato nel 42
+- **Valori mostrati: DECISI il 2026-10-16** (decisione del proprietario):
+  colonne di posizione con `format_coordinates` del 10, magnitudini (UCD
+  `phot.mag`) a 3 decimali, valore pieno nel suggerimento e nella copia,
+  altre colonne come sono; sostituisce la scelta minore 1 qui sotto
+  (§3.2, T5).
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) ~~valori mostrati come sono nella
+  tabella, senza sessagesimali nella v1~~ (sostituita il 2026-10-16); (2) ordine delle righe mostrate calcolato nel 42
   con `numpy.argsort(kind="stable")`: è un ordine di presentazione, non un
   valore mostrato, e la tabella non cambia; in alternativa una funzione di
   ordinamento nel 13 (modifica da autorizzare); (3) selezione e ordinamento
@@ -187,3 +206,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) come versione minima approvata dal proprietario il 2026-10-15: tabella in sola lettura con ordinamento (D8), selezione sincronizzata con la vista (D7), vista del record con `record_view` del 13, dialoghi delle colonne di posizione e di moto proprio; fuori dalla v1 ricerca, editor delle regole, colonne calcolate, grafici, SAMP. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** scelte minori confermate; rimando alle linee guida visive del `40` §3.11. Nessuna decisione dei Gruppi 1 e 2 aperta. |
+| 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (proposta della fase 1 sull'IA, autorizzazione a modificare la bozza come proposto): valori della tabella — colonne di posizione con `format_coordinates` del 10 nel frame della colonna, magnitudini (UCD `phot.mag`) a 3 decimali, valore pieno nel suggerimento e nella copia, altre colonne come sono; sostituisce la scelta minore 1 del 2026-10-15; dipendenza dal 10; test T5 aggiornato. |

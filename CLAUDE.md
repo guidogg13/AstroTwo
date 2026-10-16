@@ -15,12 +15,12 @@ Principio P11: **la parità con Aladin è il minimo, non il traguardo.** Tutte l
 **FASE: SPECIFICHE (nessun codice)** — per tutti i livelli finché il proprietario non dichiara la fase codice di un livello.
 
 - La fase codice si dichiara **per livello**: il proprietario scrive testualmente "FASE: CODICE – livello N". Da quel momento si può scrivere codice **solo per i moduli `approvato` di quel livello**; tutti gli altri livelli restano in fase specifiche.
-- **Per l'interfaccia** (regola del proprietario del 2026-10-15) c'è una formula a parte: "FASE: CODICE – interfaccia v1". Vale **solo** per i moduli di interfaccia `approvato` nella loro prima versione (40, 41, 42) e per il modulo generale `05-comandi-sessione.md`; non autorizza codice di altri moduli. "FASE: CODICE – livello 1" non basta per il `05`.
+- **Per l'interfaccia** (regola del proprietario del 2026-10-15) c'è una formula a parte: "FASE: CODICE – interfaccia v1". Vale **solo** per i moduli di interfaccia `approvato` nella loro prima versione (40, 41, 42 e, dal 2026-10-16, 44), per il modulo generale `05-comandi-sessione.md` e, **dal 2026-10-16** (decisione del proprietario), per i moduli IA della v1 `approvato` **30, 31, 32, 34, 35**; non autorizza codice di altri moduli (in particolare non del 33, rimandato). "FASE: CODICE – livello 1" non basta per il `05`.
 - Senza quella dichiarazione non si scrive codice applicativo, nemmeno per moduli `approvato`.
 - Nei livelli in fase specifiche si lavora solo sui file `.md` in `mdfiles/`.
 - Se ti viene chiesto codice per un livello ancora in fase specifiche, ricorda la regola e proponi di completare prima il `.md` del modulo.
 - Solo i file con stato `approvato` autorizzano a scrivere il codice di quel modulo; le verifiche segnate "da verificare prima del codice" nel `.md` si fanno prima di scriverlo.
-- Livelli in fase codice: **livello 1** (dichiarato dal proprietario il 2026-10-09). Interfaccia v1: **non dichiarata** (05, 40, 41, 42 in `bozza`).
+- Livelli in fase codice: **livello 1** (dichiarato dal proprietario il 2026-10-09). Interfaccia v1: **non dichiarata** (05, 30, 31, 32, 34, 35, 40, 41, 42, 44 in `bozza`).
 
 ## Regole d'oro (non negoziabili)
 
@@ -95,7 +95,7 @@ Corrispondenza specifica ↔ codice: `10-core-coordinate-wcs.md` → `src/astrot
 ## Scelte tecniche già decise (dettagli nei file indicati)
 
 - Python 3.12, `pyproject.toml`, `uv` (A4); UI **PySide6 (Qt)**, rendering mappe OpenGL specificato in `41` (A1).
-- IA: interfaccia "a capacità" (tool calling + streaming), provider cloud + endpoint compatibile OpenAI (A5).
+- IA: interfaccia "a capacità" (tool calling + streaming), provider cloud + endpoint compatibile OpenAI (A5); dal 2026-10-16 SDK ufficiali `anthropic` e `openai` (endpoint configurabile), nessun identificativo di modello nel codice, strumenti = comandi del `05` da un elenco esplicito nel `32`, testi esterni sempre dati e mai istruzioni (`30`–`35`).
 - Cache: SQLite per i cataloghi, file su disco per tile HiPS/FITS, 5 GB di default configurabili, origine e data sempre mostrate (A7, D11-3).
 - Coordinate: ICRS di default; **epoca mai assunta**, letta dai metadati e sempre scritta nel risultato (D10-2/D13-2, `02-convenzioni.md` DC2).
 - Tempo: JD interno via `astropy.time`, ISO 8601 solo in UI/file, scala sempre dichiarata (DC1).

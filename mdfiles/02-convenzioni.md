@@ -69,6 +69,12 @@ specifica.
 | `40-ui-finestra-principale.md` | `src/astrotwo/ui/main_window.py` (traduzioni in `src/astrotwo/ui/i18n/`) | `tests/ui/test_main_window.py` |
 | `41-ui-visualizzatore-cielo.md` | `src/astrotwo/ui/sky_viewer.py` e `src/astrotwo/ui/sky_renderer_gl.py` (implementazione OpenGL dell'interfaccia di disegno; due file, scelta minore 9 del 41 da confermare) | `tests/ui/test_sky_viewer.py` |
 | `42-ui-pannello-cataloghi.md` | `src/astrotwo/ui/catalog_panel.py` | `tests/ui/test_catalog_panel.py` |
+| `30-ia-adattatore-provider.md` | `src/astrotwo/ai/provider_adapter.py` | `tests/ai/test_provider_adapter.py` |
+| `31-ia-chiavi-portachiavi.md` | `src/astrotwo/ai/keychain_keys.py` | `tests/ai/test_keychain_keys.py` |
+| `32-ia-registro-strumenti.md` | `src/astrotwo/ai/tool_registry.py` | `tests/ai/test_tool_registry.py` |
+| `34-ia-verifica-risultati.md` | `src/astrotwo/ai/result_verification.py` | `tests/ai/test_result_verification.py` |
+| `35-ia-assistente-chat.md` | `src/astrotwo/ai/chat_assistant.py` | `tests/ai/test_chat_assistant.py` |
+| `44-ui-pannello-ia.md` | `src/astrotwo/ui/ai_panel.py` | `tests/ui/test_ai_panel.py` |
 
 ## 4. Unità di misura
 
@@ -189,7 +195,12 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
 3. Nessun test dipende dalla rete di default; i test di rete sono separati e
    marcati come tali.
 4. I test non usano mai una chiave API reale; il livello 3 si testa con doppi
-   (stub/mock) del provider.
+   (stub/mock) del provider: **servizi HTTP simulati locali** che imitano lo
+   streaming delle due API del `30` (dal 2026-10-16), un `ProviderAdapter`
+   finto per il `35` e il `44`, un Portachiavi simulato in memoria per il
+   `31`. Le prove con provider reali e con le chiavi dell'utente sono
+   nella lista di controllo manuale del `30` e del `35`, mai nei test
+   automatici.
 5. Riproducibilità: un test fallito deve poter essere rieseguito identico.
 6. Un modulo si considera verificato solo se i suoi test passano **e** il file
    `.md` è `approvato`.
@@ -304,3 +315,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-11 | Claude Code | §8: **ripetizione dei test di rete** (punto 8) e **regola dei commit** (punto 9, con lo script `scripts/commit_checked.py` e l'opzione `--no-network`) (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato); esempio del punto 2 aggiornato (`astropy-healpix` al posto di `healpy`, escluso per la licenza GPL). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per `05` (`core/commands.py`), `40`, `41`, `42`; corretto il file del 17 (`measures.py`, come scritto nel codice, non `measurements.py`); §8 punto 10 — test dell'interfaccia con pytest-qt in `offscreen`, controllo entro 1 pixel, marcatori `perf` e `gl`. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Regola dei commit (decisione del proprietario del 2026-10-16**, autorizzazione esplicita a modificare il file approvato): §8 punti 8 e 9 — le risposte HTTP 429, 502, 503 e 504 dei servizi esterni contano come "connessione" (servizio temporaneamente non disponibile), con le stesse ripetizioni e la dichiarazione nel messaggio di commit; gli altri 4xx restano risultati sbagliati e bloccano il commit. Aggiornati `tests/conftest.py` (`network_reason`), `scripts/commit_checked.py` e i loro test. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per 30, 31, 32, 34, 35 e 44; §8 punto 4 — test del livello 3 con servizi simulati delle due API, adattatore finto e Portachiavi simulato, provider reali solo nella lista di controllo manuale. Stato `approvato` invariato. |

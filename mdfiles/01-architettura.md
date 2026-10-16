@@ -81,7 +81,7 @@ Regole strutturali:
 | **A7** | 2026-10-04 | Cache con due media: **SQLite** per le interrogazioni ai cataloghi, **file su disco** per i riquadri HiPS e FITS; **limite di spazio configurabile** con eliminazione dei dati meno usati; ogni dato servito dalla cache espone **origine e data di scaricamento** | SQLite è interrogabile e portabile per le tabelle; i file singoli permettono lettura diretta dei riquadri senza deserializzazione; il limite configurabile impedisce che la cache cresca senza controllo; origine e data garantiscono tracciabilità e riproducibilità dei dati mostrati |
 | **A1** | 2026-10-04 | Interfaccia grafica scritta con **PySide6 (Qt)**; il rendering delle mappe con **OpenGL si specifica in `41-ui-visualizzatore-cielo.md`** | un solo ambiente Python coerente con A3/A4, widget maturi per la visualizzazione scientifica; orientamento già espresso qui, confermato dal proprietario prima dei moduli 40–45 |
 | **A9** | 2026-10-15 | Lingua dell'interfaccia: **testi in inglese nel codice con `tr()`**, **traduzione italiana nostra** con Qt Linguist, **traduzioni di Qt** per i dialoghi standard; lingua presa dal sistema e cambiabile nelle preferenze; **numeri scientifici sempre con il punto decimale in ogni lingua** | inglese come lingua comune della comunità, italiano per il proprietario; strumenti standard di Qt; il punto decimale evita ambiguità e rende i valori copiabili in modo riproducibile (dettagli in `40-ui-finestra-principale.md` §3.9) |
-| **A5** | 2026-10-04 | Interfaccia IA **a capacità** (chiamata di strumenti + streaming) con due implementazioni iniziali: **provider cloud** e **endpoint compatibile OpenAI** (che copre anche i modelli locali) | conforme a `CLAUDE.md` (l'utente sceglie il provider e inserisce la propria chiave), un solo contratto da testare, copertura di cloud e modelli locali; confermata dal proprietario prima dei moduli 30–35 |
+| **A5** | 2026-10-04 (implementazioni precisate il 2026-10-16) | Interfaccia IA **a capacità** (chiamata di strumenti + streaming) con due implementazioni iniziali: **provider cloud** e **endpoint compatibile OpenAI** (che copre anche i modelli locali). **Dal 2026-10-16:** le due implementazioni usano gli **SDK ufficiali `anthropic` (MIT) e `openai` (Apache-2.0)**, il secondo con **endpoint configurabile** (OpenAI in cloud, Ollama, LM Studio, vLLM…); licenze da verificare e da aggiungere a `THIRD_PARTY_LICENSES`; **nessun identificativo di modello nel codice** (lo sceglie l'utente); modelli senza chiamata di strumenti rifiutati (`AI_NO_TOOLS`); dettagli in `30-ia-adattatore-provider.md` | conforme a `CLAUDE.md` (l'utente sceglie il provider e inserisce la propria chiave), un solo contratto da testare, copertura di cloud e modelli locali; due SDK ufficiali con licenze permissive invece di una libreria che unifica i provider (meno dipendenze, passaggi intermedi sotto controllo); confermata dal proprietario prima dei moduli 30–35 |
 
 Note residue di A3/A4/A7:
 
@@ -160,10 +160,22 @@ astrotwo/
   dichiarano **nel `32-ia-registro-strumenti.md`**, non nel §11 dei moduli
   (decisione del proprietario del 2026-10-10, da D11-9): il §11 di un modulo
   rimanda al 32, che descrive per ogni strumento la funzione deterministica
-  del modulo chiamata; il registro non ricalcola nulla.
+  del modulo chiamata; il registro non ricalcola nulla. **Dal 2026-10-16:**
+  ogni strumento è un **comando del `05`** scelto da un **elenco esplicito**
+  nel 32, descritto con lo schema di `export_schema`, validato dal `05` ed
+  eseguito nella stessa coda dei comandi dell'utente con `requested_by =
+  ai`; i testi esterni nei risultati sono dati, mai istruzioni.
 - **Verifica risultati (livello 3):** ogni valore numerico prodotto su richiesta
-  dell'IA passa da un calcolo deterministico del livello 1/2 e viene
-  ri-verificato da `34-ia-verifica-risultati.md` prima di essere mostrato.
+  dell'IA passa da un calcolo deterministico del livello 1/2 (un comando
+  del `05`); `34-ia-verifica-risultati.md` controlla che **ogni numero
+  scritto nella risposta** corrisponda a un risultato di comando (o alla
+  domanda dell'utente) ed evidenzia quelli che non corrispondono.
+- **Livello 3 nella v1 (dal 2026-10-16):** il livello 3 (30, 31, 32, 34,
+  35, con il pannello 44) si costruisce **adesso sopra il livello 1**, prima
+  del livello 2: usa solo comandi del `05` che chiamano i moduli 10–19. Le
+  dipendenze restano solo verso il basso; quando il livello 2 esisterà, i
+  suoi comandi entreranno nel 32 con una modifica del 32. Il 33 (ADQL
+  scritto dall'IA) è rimandato.
 - **Riproducibilità (livello 1, dal 2026-10-15):** ogni azione
   dell'interfaccia è un comando del registro di `05-comandi-sessione.md`
   (livello 1, AM1 accettata il 2026-10-15), con nome, parametri tipizzati con
@@ -266,3 +278,4 @@ astrotwo/
 | 2026-10-12 | Claude Code | **A10 per gli HiPS** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato): riga A10 di §5, §8 e DA-07 aggiornate con l'esito — tile in memoria entro 512 MB configurabili, `build_hips` un tile alla volta entro il limite delle operazioni di 4 GB, cache comune di 5 GB su disco; A10 interamente decisa. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): creato `THIRD_PARTY_LICENSES` nella radice (nome, versione, licenza e avvisi di tutte le dipendenze, compreso l'avviso QD/LBNL di `spherical-geometry`), generato da `scripts/third_party_licenses.py` e controllato da un test; registrato in §6, annotato per A11 (§9 DA-08) e per il 60; regola: ogni nuova dipendenza va aggiunta al file. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): **A9 decisa** (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, lingua dal sistema, punto decimale sempre) e spostata da §5 a §4.2, DA-04 chiusa; §8 — valori quantitativi delle prestazioni decisi nel `41` §3.15; §7 — riproducibilità con il registro dei comandi di `05-comandi-sessione.md` (livello 1, AM1 accettata), il `24` sopra il `05`; §3 — livello 1 con i file generali 04 e 05; DA-08 — PySide6/Qt e pytest-qt da verificare per A11. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): A5 precisata (SDK `anthropic` e `openai` con endpoint configurabile, nessun modello nel codice, `AI_NO_TOOLS`); §7 — registro degli strumenti del 32 come elenco esplicito di comandi del `05`, verifica del 34 sui numeri della risposta, livello 3 costruito ora sopra il livello 1 (33 rimandato). Stato `approvato` invariato. |
