@@ -5,8 +5,9 @@ Uso: ``git add …`` poi ``uv run python scripts/commit_checked.py -m "messaggio
 1. Esegue i test di default: se uno fallisce, nessun commit (uscita 1).
 2. Esegue a parte i test di rete (marcatore ``network``, ripetuti come da punto 8):
    - tutti passano → commit con il messaggio dato;
-   - falliscono solo per connessione (proprietà ``network_final``) → commit, con il
-     messaggio che lo dichiara (test e motivo);
+   - falliscono solo per connessione o per un servizio temporaneamente non disponibile
+     (HTTP 429, 502, 503, 504; proprietà ``network_final``) → commit, con il messaggio che
+     lo dichiara (test e motivo);
    - un test di rete fallisce per un altro motivo → nessun commit (uscita 1).
    Con ``--no-network`` i test di rete non si eseguono (parti intermedie di un modulo,
    eseguiti alla fine del modulo) e il messaggio di commit lo dichiara.
@@ -30,7 +31,11 @@ def run_pytest(*args: str, junit: Path | None = None) -> int:
 
 
 def network_failures(junit: Path) -> tuple[list[str], list[str]]:
-    """(falliti solo per connessione, falliti per altri motivi) dal rapporto JUnit."""
+    """(falliti solo per la rete, falliti per altri motivi) dal rapporto JUnit.
+
+    "Per la rete" = connessione, timeout o servizio temporaneamente non disponibile (HTTP 429, 502,
+    503, 504): il motivo è nella proprietà ``network_final`` scritta da ``tests/conftest.py``.
+    """
     by_connection, other = [], []
     for case in ET.parse(junit).getroot().iter("testcase"):
         if case.find("failure") is None and case.find("error") is None:
@@ -74,13 +79,15 @@ def main() -> int:
         by_connection, other = network_failures(junit) if junit.exists() else ([], [])
 
     if other:
-        print("Test di rete falliti per un motivo diverso dalla connessione: nessun commit.\n  "
+        print("Test di rete falliti per un motivo diverso dalla connessione o da un servizio temporaneamente "
+              "non disponibile: nessun commit.\n  "
               + "\n  ".join(other), file=sys.stderr)
         return 1
 
     message = args.message
     if by_connection:
-        message = with_note(message, "Test di rete falliti solo per connessione dopo le ripetizioni "
+        message = with_note(message, "Test di rete falliti solo per connessione o per servizio temporaneamente "
+                            "non disponibile (HTTP 429, 502, 503, 504) dopo le ripetizioni "
                             "(02-convenzioni.md §8, punto 9):\n" + "\n".join(f"- {t}" for t in by_connection))
     return subprocess.run(["git", "commit", "-m", message], cwd=ROOT).returncode
 

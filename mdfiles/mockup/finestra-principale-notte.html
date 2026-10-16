@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AstroTwo mockup</title>
 <!-- Mockup statico della finestra principale (40, 41, 42). Solo immagine di riferimento,
-     non codice dell'app. Valori fittizi. Linee guida visive: 40-ui-finestra-principale.md §3.11. -->
+     non codice dell'app. Valori fittizi, tranne quelli della demo delle Pleiadi (M45, Alcyone, Atlas, 23.185′).
+     Linee guida visive: 40-ui-finestra-principale.md §3.11. -->
 <style>
 :root{
   --bg:#141518; --chrome:#1c1d21; --panel:#18191c; --line:#2a2c31; --line-soft:#232428;
@@ -101,6 +102,46 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
 .prog{width:90px;height:4px;background:var(--line);border-radius:2px;overflow:hidden}.prog span{display:block;width:39%;height:100%;background:var(--accent)}
 .btn{border:1px solid var(--line);border-radius:5px;padding:1px 8px;color:var(--text)}
 .caption{position:fixed;right:28px;bottom:2px;font-size:10.5px;color:var(--text-3)}
+
+.glabel{paint-order:stroke;stroke:var(--sky-top);stroke-width:3px;font-weight:500}
+.corner{position:absolute;left:14px;bottom:12px;display:flex;align-items:flex-end;gap:14px;
+  padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.45);border:1px solid var(--line)}
+.compass{width:46px;height:46px}.compass path{stroke:var(--glabel);stroke-width:1.6;fill:none}
+.compass text{fill:var(--glabel);font-size:10px;font-weight:600}
+.scalebar{display:flex;flex-direction:column;gap:4px;color:var(--glabel);font-size:11px;font-variant-numeric:tabular-nums}
+.scalebar span{display:block;width:90px;height:6px;border:1.5px solid var(--glabel);border-top:none}
+.cmd{grid-template-columns:30px 40px 132px minmax(80px,1fr) 10px}
+.bottom{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}
+.tip{left:auto;right:8%;top:66%}
+td,th{padding-left:7px;padding-right:7px}
+.pane,.aipanel,.cmd>*{min-width:0}
+.corner{background:rgba(0,0,0,.7)}
+.who{font-size:10px;color:var(--text-3);border:1px solid var(--line);border-radius:4px;text-align:center;padding:0 3px}
+.who.ia{color:var(--accent);border-color:var(--accent)}
+.main.with-ai{grid-template-columns:232px minmax(0,1fr) 420px}
+.main{grid-template-columns:232px minmax(0,1fr) 36px}
+.aipanel{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.prov{white-space:nowrap;display:flex;align-items:center;gap:4px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-2)}
+.ic.sm{width:13px;height:13px}
+.privacy{display:flex;gap:6px;align-items:flex-start;font-size:11px;color:var(--text-3);padding:8px 12px;border-bottom:1px solid var(--line-soft)}
+.chat{flex:1;overflow:hidden;padding:10px 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:8px}
+.acmd{margin:2px 0;padding:1px 0 3px 8px}
+.msg{border-radius:10px;padding:8px 10px;font-size:12.5px}
+.msg.user{align-self:flex-end;max-width:86%;background:var(--accent-soft);border:1px solid var(--accent)}
+.msg.bot{background:var(--chrome);border:1px solid var(--line)}
+.bt{color:var(--text-2);margin-bottom:6px}
+.acmd{border-left:2px solid var(--line);padding:3px 0 5px 8px;margin:4px 0}
+.ahead{display:flex;gap:6px;align-items:baseline;min-width:0}.ahead code{flex:none}.ahead .apar{flex:1;min-width:0}.ahead code{font:11.5px ui-monospace,"SF Mono",Menlo,monospace}
+.apar{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ares{font-size:12px;font-variant-numeric:tabular-nums}
+.asrc{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ares{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-size:10px;border-radius:4px;padding:0 5px}.chip.conf{border:1px solid var(--warn);color:var(--warn)}
+.answer{margin-top:8px;line-height:1.45}.ref{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 3px}
+.verify{display:flex;gap:6px;align-items:center;margin-top:8px;color:var(--ok);font-size:11.5px}
+.budget{font-size:10.5px;color:var(--text-3);margin-top:3px}
+.input{margin:10px 12px 12px;height:34px;border:1px solid var(--line);border-radius:8px;background:var(--bg);
+  display:flex;align-items:center;justify-content:space-between;padding:0 10px;color:var(--text-3)}
 </style>
 </head>
 <body>
@@ -116,6 +157,7 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
     <span class="tb"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg></span>
     <div class="goto"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><span>Vai a</span> <b>M45</b></div>
     <span class="survey">DSS2 colore · TAN · campo 1.82°</span>
+    <span class="tb"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg></span>
     <span class="tb on"><svg class="ic" viewBox="0 0 24 24"><path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z"/></svg></span>
   </div>
   <div class="main">
@@ -135,7 +177,7 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
 </div>
 <div class="layer">
   <span class="swatch sw-cat2"></span>
-  <div class="lmain"><div class="lname">2MASS PSC <span class="lid">L3</span></div><div class="linfo">48 righe · epoca 2000.0</div>
+  <div class="lmain"><div class="lname">2MASS PSC <span class="lid">L3</span></div><div class="linfo">48 righe · epoca non dichiarata</div>
   <div class="opacity"><span style="width:100%"></span></div></div>
   <svg class="ic eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
 </div>
@@ -577,38 +619,40 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
 <circle cx="6.6" cy="521.3" r="0.8" fill="var(--star)" opacity="0.77"/>
 <circle cx="497.6" cy="184.0" r="0.8" fill="var(--star)" opacity="0.57"/>
 <circle cx="418.8" cy="595.6" r="0.5" fill="var(--star)" opacity="0.46"/>
-<circle cx="520" cy="300" r="24.0" fill="url(#glow)"/>
-<circle cx="520" cy="300" r="4.1" fill="var(--star-core)"/>
-<circle cx="655" cy="335" r="17.6" fill="url(#glow)"/>
-<circle cx="655" cy="335" r="3.0" fill="var(--star-core)"/>
-<circle cx="662" cy="305" r="13.4" fill="url(#glow)"/>
-<circle cx="662" cy="305" r="2.3" fill="var(--star-core)"/>
-<circle cx="365" cy="255" r="18.6" fill="url(#glow)"/>
-<circle cx="365" cy="255" r="3.2" fill="var(--star-core)"/>
-<circle cx="420" cy="195" r="16.6" fill="url(#glow)"/>
-<circle cx="420" cy="195" r="2.9" fill="var(--star-core)"/>
-<circle cx="425" cy="335" r="16.0" fill="url(#glow)"/>
-<circle cx="425" cy="335" r="2.8" fill="var(--star-core)"/>
-<circle cx="355" cy="165" r="14.7" fill="url(#glow)"/>
-<circle cx="355" cy="165" r="2.5" fill="var(--star-core)"/>
-<circle cx="330" cy="215" r="10.9" fill="url(#glow)"/>
-<circle cx="330" cy="215" r="1.9" fill="var(--star-core)"/>
-<circle cx="352" cy="120" r="9.6" fill="url(#glow)"/>
-<circle cx="352" cy="120" r="1.7" fill="var(--star-core)"/>
-        <path d="M132,0 Q150,310.0 168,620" class="grid"/>
-<text x="156" y="610" class="glabel">03h50m</text>
-<path d="M352,0 Q370,310.0 388,620" class="grid"/>
-<text x="376" y="610" class="glabel">03h48m</text>
-<path d="M572,0 Q590,310.0 608,620" class="grid"/>
-<text x="596" y="610" class="glabel">03h46m</text>
-<path d="M792,0 Q810,310.0 828,620" class="grid"/>
-<text x="816" y="610" class="glabel">03h44m</text>
-<path d="M0,138 Q500.0,120 1000,138" class="grid"/>
-<text x="8" y="124" class="glabel">+24°20′</text>
-<path d="M0,318 Q500.0,300 1000,318" class="grid"/>
-<text x="8" y="304" class="glabel">+24°00′</text>
-<path d="M0,498 Q500.0,480 1000,498" class="grid"/>
-<text x="8" y="484" class="glabel">+23°40′</text>
+<circle cx="500.2" cy="307.2" r="24.0" fill="url(#glow)"/>
+<circle cx="500.2" cy="307.2" r="4.1" fill="var(--star-core)"/>
+<circle cx="293.3" cy="335.2" r="17.9" fill="url(#glow)"/>
+<circle cx="293.3" cy="335.2" r="3.1" fill="var(--star-core)"/>
+<circle cx="290.3" cy="290.2" r="12.8" fill="url(#glow)"/>
+<circle cx="290.3" cy="290.2" r="2.2" fill="var(--star-core)"/>
+<circle cx="822.1" cy="302.8" r="18.6" fill="url(#glow)"/>
+<circle cx="822.1" cy="302.8" r="3.2" fill="var(--star-core)"/>
+<circle cx="704.7" cy="165.4" r="17.0" fill="url(#glow)"/>
+<circle cx="704.7" cy="165.4" r="2.9" fill="var(--star-core)"/>
+<circle cx="643.0" cy="391.9" r="16.3" fill="url(#glow)"/>
+<circle cx="643.0" cy="391.9" r="2.8" fill="var(--star-core)"/>
+<circle cx="781.0" cy="111.7" r="15.0" fill="url(#glow)"/>
+<circle cx="781.0" cy="111.7" r="2.6" fill="var(--star-core)"/>
+<circle cx="830.9" cy="207.7" r="10.9" fill="url(#glow)"/>
+<circle cx="830.9" cy="207.7" r="1.9" fill="var(--star-core)"/>
+<circle cx="694.6" cy="64.6" r="9.6" fill="url(#glow)"/>
+<circle cx="694.6" cy="64.6" r="1.7" fill="var(--star-core)"/>
+        <path d="M52.7,0 Q66.7,310.0 80.7,620" class="grid"/>
+<path d="M299.4,0 Q313.4,310.0 327.4,620" class="grid"/>
+<path d="M546.0,0 Q560.0,310.0 574.0,620" class="grid"/>
+<path d="M792.6,0 Q806.6,310.0 820.6,620" class="grid"/>
+<path d="M1039.3,0 Q1053.3,310.0 1067.3,620" class="grid"/>
+<path d="M0,192.0 Q500.0,174.0 1000,192.0" class="grid"/>
+<path d="M0,372.0 Q500.0,354.0 1000,372.0" class="grid"/>
+<path d="M0,552.0 Q500.0,534.0 1000,552.0" class="grid"/>
+<text x="71.7" y="382.0" class="glabel">3h51m</text>
+<text x="318.4" y="382.0" class="glabel">3h49m</text>
+<text x="565.0" y="382.0" class="glabel">3h47m</text>
+<text x="811.6" y="382.0" class="glabel">3h45m</text>
+<text x="1058.3" y="382.0" class="glabel">3h43m</text>
+<text x="566" y="178.0" class="glabel">+24°20′</text>
+<text x="566" y="358.0" class="glabel">+24°00′</text>
+<text x="566" y="538.0" class="glabel">+23°40′</text>
         <circle cx="323.8" cy="93.5" r="6" class="cat1"/>
 <circle cx="821.3" cy="58.4" r="6" class="cat1"/>
 <circle cx="123.8" cy="138.4" r="6" class="cat1"/>
@@ -679,15 +723,15 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
 <circle cx="191.7" cy="161.7" r="6" class="cat1"/>
 <circle cx="797.1" cy="458.3" r="6" class="cat1"/>
 <circle cx="495.7" cy="124.3" r="6" class="cat1"/>
-<circle cx="520.0" cy="300.0" r="6" class="cat1"/>
-<circle cx="655.0" cy="335.0" r="6" class="cat1"/>
-<circle cx="662.0" cy="305.0" r="6" class="cat1"/>
-<circle cx="365.0" cy="255.0" r="6" class="cat1"/>
-<circle cx="420.0" cy="195.0" r="6" class="cat1"/>
-<circle cx="425.0" cy="335.0" r="6" class="cat1"/>
-<circle cx="355.0" cy="165.0" r="6" class="cat1"/>
-<circle cx="330.0" cy="215.0" r="6" class="cat1"/>
-<circle cx="352.0" cy="120.0" r="6" class="cat1"/>
+<circle cx="500.2" cy="307.2" r="6" class="cat1"/>
+<circle cx="293.3" cy="335.2" r="6" class="cat1"/>
+<circle cx="290.3" cy="290.2" r="6" class="cat1"/>
+<circle cx="822.1" cy="302.8" r="6" class="cat1"/>
+<circle cx="704.7" cy="165.4" r="6" class="cat1"/>
+<circle cx="643.0" cy="391.9" r="6" class="cat1"/>
+<circle cx="781.0" cy="111.7" r="6" class="cat1"/>
+<circle cx="830.9" cy="207.7" r="6" class="cat1"/>
+<circle cx="694.6" cy="64.6" r="6" class="cat1"/>
 <rect x="502.9" y="18.7" width="9" height="9" class="cat2"/>
 <rect x="42.1" y="527.8" width="9" height="9" class="cat2"/>
 <rect x="201.5" y="417.3" width="9" height="9" class="cat2"/>
@@ -728,41 +772,45 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
 <rect x="724.3" y="82.1" width="9" height="9" class="cat2"/>
 <rect x="376.4" y="309.2" width="9" height="9" class="cat2"/>
 <rect x="441.3" y="158.7" width="9" height="9" class="cat2"/>
-<circle cx="425" cy="335" r="11" class="selected"/>
+<circle cx="643.0" cy="391.9" r="11" class="selected"/>
         
-<line x1="520" y1="300" x2="655" y2="335" class="measure"/>
-<circle cx="520" cy="300" r="3" class="measure-end"/><circle cx="655" cy="335" r="3" class="measure-end"/>
-<g transform="translate(560,300)"><rect x="-4" y="-17" width="62" height="20" rx="5" class="mlabel-bg"/>
-<text x="27" y="-3" class="mlabel">23.18′</text></g>
-
+<line x1="500.2" y1="307.2" x2="293.3" y2="335.2" class="measure"/>
+<circle cx="500.2" cy="307.2" r="3" class="measure-end"/><circle cx="293.3" cy="335.2" r="3" class="measure-end"/>
+<g transform="translate(396.8,305.2)"><rect x="-34" y="-15" width="68" height="20" rx="5" class="mlabel-bg"/>
+<text x="0" y="0" class="mlabel">23.185′</text></g>
       </svg>
       <div class="tip"><div class="t1">Merope — * 23 Tau</div>
         <div class="t2">B6IVe · α 03h46m19.57s δ +23°56′54.1″</div>
         <div class="t2">V 4.18 (Johnson, Vega) · citazioni 912</div>
         <div><a>Apri in SIMBAD ↗</a></div></div>
+      <div class="corner" title="Angolo riservato a indicatore del nord e barra di scala (A7)">
+        <svg class="compass" viewBox="0 0 46 46"><path d="M30 34V10M26 15l4-5 4 5M30 34H8M13 30l-5 4 5 4"/>
+        <text x="27" y="8">N</text><text x="0" y="31">E</text></svg>
+        <div class="scalebar"><span></span>10′</div>
+      </div>
     </section>
     <aside class="ai"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg><span class="vt">Assistente · livello 3</span></aside>
   </div>
   <div class="bottom">
     <div class="pane">
       <div class="tabs"><span class="tab on">Gaia DR3 · L2</span><span class="tab">2MASS PSC · L3</span></div>
-      <div class="scroll"><table><thead><tr><th>source_id</th><th>ra <i>deg</i></th><th>dec <i>deg</i></th><th>pmra <i>mas/yr</i></th><th>pmdec <i>mas/yr</i></th><th>phot_g_mean_mag <i>mag</i></th></tr></thead><tbody><tr class="sel"><td>65 205 423 410 958 912</td><td>56.21893</td><td>24.11336</td><td>19.997</td><td>-45.548</td><td>4.1803</td></tr><tr class=""><td>66 507 969 879 925 568</td><td>56.29881</td><td>24.10370</td><td>20.118</td><td>-44.212</td><td>7.6625</td></tr><tr class=""><td>66 526 127 137 440 128</td><td>56.30107</td><td>23.94841</td><td>18.866</td><td>-46.041</td><td>6.8213</td></tr><tr class=""><td>65 271 000 000 000 001</td><td>56.21011</td><td>24.04102</td><td>21.004</td><td>-44.930</td><td>8.0411</td></tr><tr class=""><td>66 714 384 141 781 760</td><td>56.45690</td><td>24.36781</td><td>19.312</td><td>-43.874</td><td>3.6290</td></tr><tr class=""><td>65 283 000 000 000 002</td><td>56.22104</td><td>23.98811</td><td>18.402</td><td>-46.770</td><td>9.1102</td></tr><tr class=""><td>64 979 000 000 000 003</td><td>56.08215</td><td>24.17002</td><td>20.551</td><td>-45.019</td><td>10.2273</td></tr></tbody></table></div>
-      <div class="record">Record della riga 57 · 152 colonne · epoca di riferimento 2016.0 (TCB)</div>
+      <div class="scroll"><table><thead><tr><th>source_id</th><th>ra <i>h m s</i></th><th>dec <i>° ′ ″</i></th><th>phot_g_mean_mag <i>mag</i></th><th>pmra <i>mas/yr</i></th><th>pmdec <i>mas/yr</i></th></tr></thead><tbody><tr class=""><td>66526127137440128</td><td>03h47m29.07s</td><td>+24°06′18.4″</td><td>2.759</td><td>19.354</td><td>-43.110</td></tr><tr class=""><td>65205423410958912</td><td>03h49m09.73s</td><td>+24°03′12.2″</td><td>3.613</td><td>17.771</td><td>-44.702</td></tr><tr class=""><td>66507969879925568</td><td>03h44m52.53s</td><td>+24°06′48.0″</td><td>3.656</td><td>21.553</td><td>-44.920</td></tr><tr class=""><td>65638127137440896</td><td>03h45m49.60s</td><td>+24°22′03.9″</td><td>3.835</td><td>21.091</td><td>-45.030</td></tr><tr class="sel"><td>65271000000000001</td><td>03h46m19.57s</td><td>+23°56′54.1″</td><td>4.135</td><td>21.170</td><td>-42.670</td></tr><tr class=""><td>66714384141781760</td><td>03h45m12.49s</td><td>+24°28′02.2″</td><td>4.239</td><td>19.350</td><td>-41.630</td></tr><tr class=""><td>65283000000000002</td><td>03h49m11.21s</td><td>+24°08′12.1″</td><td>5.011</td><td>18.710</td><td>-47.680</td></tr></tbody></table></div>
+      <div class="record">RA e Dec scritte con le cifre di DC3 (0.01 s, 0.1″), magnitudini a 3 decimali · ICRS, epoca J2016.0</div>
     </div>
     <div class="pane">
       <div class="tabs"><span class="tab on">Comandi</span><span class="tab">Messaggi · 1</span></div>
-      <div class="scroll"><div class="cmd"><span class="cn">#11</span><span class="cname">view.go_to</span><span class="cpar">M45 · SIMBAD (cache 2026-10-14)</span><span class="state ok"></span></div>
-<div class="cmd"><span class="cn">#12</span><span class="cname">view.set_zoom</span><span class="cpar">scale = 1.80″/px</span><span class="state ok"></span></div>
-<div class="cmd"><span class="cn">#13</span><span class="cname">catalog.load_region</span><span class="cpar">I/355/gaiadr3 · r = 0.90° · 193 righe</span><span class="state ok"></span></div>
-<div class="cmd"><span class="cn">#14</span><span class="cname">catalog.load_region</span><span class="cpar">II/246 · r = 0.90° · 48 righe</span><span class="state warn"></span></div>
-<div class="cmd"><span class="cn">#15</span><span class="cname">measure.distance</span><span class="cpar">L2 #57 → L2 #12 · unità ′</span><span class="state ok"></span></div>
-<div class="cmd"><span class="cn">#16</span><span class="cname">catalog.select</span><span class="cpar">L2 · riga 57</span><span class="state ok"></span></div>
-<div class="cmd"><span class="cn">#17</span><span class="cname">moc.open</span><span class="cpar">pleiadi_dss.fits · SHA-256 3f9a…</span><span class="state ok"></span></div>
-<div class="cmd running"><span class="cn">#18</span><span class="cname">hips.set_survey</span><span class="cpar">CDS/P/2MASS/color · tile 14 di 36</span><span class="state run"></span></div></div>
+      <div class="scroll"><div class="cmd"><span class="cn">#11</span><span class="who ">menu</span><span class="cname">view.go_to</span><span class="cpar">M45 · SIMBAD (cache 2026-10-14)</span><span class="state ok"></span></div>
+<div class="cmd"><span class="cn">#12</span><span class="who ">mouse</span><span class="cname">view.set_zoom</span><span class="cpar">scale = 1.80″/px</span><span class="state ok"></span></div>
+<div class="cmd"><span class="cn">#13</span><span class="who ">menu</span><span class="cname">catalog.load_region</span><span class="cpar">I/355/gaiadr3 · r = 0.90° · 193 righe</span><span class="state ok"></span></div>
+<div class="cmd"><span class="cn">#14</span><span class="who ">menu</span><span class="cname">catalog.load_region</span><span class="cpar">II/246 · r = 0.90° · 48 righe</span><span class="state warn"></span></div>
+<div class="cmd"><span class="cn">#15</span><span class="who ">mouse</span><span class="cname">measure.distance</span><span class="cpar">Alcyone → Atlas · 23.185′</span><span class="state ok"></span></div>
+<div class="cmd"><span class="cn">#16</span><span class="who ">mouse</span><span class="cname">catalog.select</span><span class="cpar">L2 · riga 5</span><span class="state ok"></span></div>
+<div class="cmd"><span class="cn">#17</span><span class="who ">menu</span><span class="cname">moc.open</span><span class="cpar">pleiadi_dss.fits · SHA-256 3f9a…</span><span class="state ok"></span></div>
+<div class="cmd running"><span class="cn">#18</span><span class="who">menu</span><span class="cname">hips.set_survey</span><span class="cpar">CDS/P/2MASS/color · tile 14 di 36</span><span class="state run"></span></div></div>
     </div>
   </div>
   <div class="status">
-    <span>α <b>03h47m24.02s</b> δ <b>+24°07′00.4″</b> ICRS · J2000</span>
+    <span>α <b>03h47m29.08s</b> δ <b>+24°06′18.5″</b> ICRS · J2000</span>
     <span>pixel FITS <b>(1234.0, 876.0)</b></span>
     <span>valore — (HiPS a colori)</span>
     <span class="grow"></span>
@@ -770,7 +818,6 @@ tr.sel td{background:var(--accent-soft)}tr.sel td:first-child{box-shadow:inset 3
     <span>hips.set_survey</span><span class="prog"><span></span></span><span class="btn">Annulla</span>
   </div>
 </div>
-<div class="caption">Mockup — Finestra principale — modalità notte rossa · valori fittizi, solo riferimento visivo ·
-<a href="finestra-principale.html" style="color:inherit">tema scuro</a></div>
+<div class="caption">Mockup — modalità notte rossa · valori fittizi, solo riferimento visivo · <a href="finestra-principale.html" style="color:inherit">tema scuro</a> · <a href="finestra-principale-ia.html" style="color:inherit">con l'assistente</a></div>
 </body>
 </html>

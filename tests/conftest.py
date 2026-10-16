@@ -6,6 +6,7 @@ Ogni test gira con una cartella home temporanea: così nessun test può
 scrivere nella vera cache ``~/Library/Caches/AstroTwo/`` (04-cache.md §12).
 """
 
+import re
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -100,14 +101,32 @@ def cache(tmp_path):
 # Decisione del proprietario del 2026-10-11: al massimo 2 ripetizioni, solo per i test con il
 # marcatore ``network`` e solo se l'errore è di connessione o di timeout, mai per un risultato
 # sbagliato (un AssertionError non si ripete); ogni ripetizione è scritta nel risultato del test.
+# Dal 2026-10-16 (decisione del proprietario) contano come la connessione anche le risposte HTTP
+# 429, 502, 503 e 504 dei servizi esterni (servizio temporaneamente non disponibile).
 
 NETWORK_RETRIES = 2
 # Testi fissi con cui pyvo segnala connessione fallita o timeout (DALServiceError senza causa concatenata).
 _PYVO_NETWORK_TEXTS = ("Connection failed", "Request timed out")
+# Decisione del proprietario del 2026-10-16: servizio esterno temporaneamente non disponibile, trattato
+# come la connessione (stesse ripetizioni, commit dichiarato). Gli altri 4xx restano risultati sbagliati.
+TRANSIENT_HTTP_STATUSES = (429, 502, 503, 504)
+_TRANSIENT_HTTP_TEXT = re.compile(r"\bHTTP (429|502|503|504)\b|\b(429|502|503|504) (?:Client|Server) Error\b")
 
 
-def network_failure(exc: BaseException) -> bool:
-    """Vero solo per un errore di connessione o di timeout, cercato lungo la catena delle cause."""
+def _transient_http_status(exc: BaseException) -> int | None:
+    """Stato HTTP 429/502/503/504 dichiarato dall'eccezione (attributi o testo fisso), altrimenti ``None``."""
+    response = getattr(exc, "response", None)
+    details = getattr(exc, "details", None)
+    for status in (getattr(exc, "status", None), getattr(response, "status_code", None),
+                   details.get("status") if isinstance(details, dict) else None):
+        if isinstance(status, int) and status in TRANSIENT_HTTP_STATUSES:
+            return status
+    match = _TRANSIENT_HTTP_TEXT.search(str(exc))
+    return int(match.group(1) or match.group(2)) if match else None
+
+
+def network_reason(exc: BaseException) -> str | None:
+    """Motivo "di rete" (connessione, timeout, HTTP 429/502/503/504) lungo la catena delle cause, altrimenti ``None``."""
     import socket
 
     import requests
@@ -116,16 +135,24 @@ def network_failure(exc: BaseException) -> bool:
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
         if isinstance(exc, AssertionError):
-            return False
+            return None
         if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout, ConnectionError,
                             TimeoutError, socket.timeout)):
-            return True
+            return f"connessione: {type(exc).__name__}"
         if getattr(exc, "code", None) == "NET_TIMEOUT":  # errori dei moduli di AstroTwo per la rete
-            return True
+            return f"connessione: {type(exc).__name__}"
         if type(exc).__name__ == "DALServiceError" and any(t in str(exc) for t in _PYVO_NETWORK_TEXTS):
-            return True
+            return f"connessione: {type(exc).__name__}"
+        status = _transient_http_status(exc)
+        if status is not None:
+            return f"servizio temporaneamente non disponibile: HTTP {status} ({type(exc).__name__})"
         exc = exc.__cause__ or exc.__context__
-    return False
+    return None
+
+
+def network_failure(exc: BaseException) -> bool:
+    """Vero solo per connessione, timeout o servizio temporaneamente non disponibile (02-convenzioni.md §8)."""
+    return network_reason(exc) is not None
 
 
 def _with_network_retries(item):
@@ -136,10 +163,11 @@ def _with_network_retries(item):
             try:
                 return original()
             except BaseException as exc:
-                if attempt == NETWORK_RETRIES or not network_failure(exc):
-                    if network_failure(exc):
-                        # Fallito ancora per connessione dopo le ripetizioni (02-convenzioni.md §8, punto 8).
-                        item.user_properties.append(("network_final", f"connessione: {type(exc).__name__}"))
+                reason = network_reason(exc)
+                if attempt == NETWORK_RETRIES or reason is None:
+                    if reason is not None:
+                        # Fallito ancora per la rete dopo le ripetizioni (02-convenzioni.md §8, punto 8).
+                        item.user_properties.append(("network_final", reason))
                     raise
                 item.user_properties.append(
                     ("network_retry", f"tentativo {attempt + 1} fallito per la rete "

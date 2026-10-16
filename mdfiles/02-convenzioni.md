@@ -203,16 +203,24 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
    di connessione/timeout di `requests` e della libreria standard, errori
    `NET_TIMEOUT` dei moduli, i messaggi fissi di `pyvo` "Connection failed" e
    "Request timed out"), **mai** per un risultato sbagliato; ogni ripetizione
-   è scritta nel risultato del test. Un test di rete che fallisce ancora per
-   connessione dopo le ripetizioni è marcato come tale nel risultato
-   (proprietà `network_final`). Implementazione in `tests/conftest.py`.
+   è scritta nel risultato del test. **Dal 2026-10-16 (decisione del
+   proprietario) contano come "connessione" anche le risposte HTTP 429, 502,
+   503 e 504 dei servizi esterni** (servizio temporaneamente non
+   disponibile), riconosciute dallo stato dichiarato nell'errore o dal testo
+   fisso "HTTP 503" / "503 Server Error", lungo la catena delle cause; **gli
+   altri errori 4xx (e i 5xx diversi da 502, 503, 504) restano risultati
+   sbagliati**. Un test di rete che fallisce ancora per la rete dopo le
+   ripetizioni è marcato come tale nel risultato (proprietà `network_final`,
+   con il motivo: "connessione" oppure "servizio temporaneamente non
+   disponibile: HTTP n"). Implementazione in `tests/conftest.py`.
 9. **Regola dei commit (decisione del proprietario del 2026-10-11):** si fa
    commit **solo se tutti i test di default passano**. I test di rete si
    eseguono e si riportano **a parte**: se falliscono **solo per
-   connessione** (dopo le ripetizioni del punto 8) il commit si può fare, ma
-   il **messaggio di commit lo dichiara** (test e motivo); se un test di rete
-   fallisce per un altro motivo (es. un risultato sbagliato) il commit non
-   si fa. Il commit si fa **solo** con `scripts/commit_checked.py -m "…"`,
+   connessione** (dopo le ripetizioni del punto 8; compresi i servizi
+   temporaneamente non disponibili, HTTP 429, 502, 503, 504) il commit si
+   può fare, ma il **messaggio di commit lo dichiara** (test e motivo); se
+   un test di rete fallisce per un altro motivo (es. un risultato sbagliato,
+   un altro errore 4xx) il commit non si fa. Il commit si fa **solo** con `scripts/commit_checked.py -m "…"`,
    che esegue i test e chiama `git commit` solo se l'esito lo consente
    (aggiunge da sé al messaggio i test di rete falliti per connessione).
    Nelle parti intermedie di un modulo, se il proprietario chiede i test di
@@ -295,3 +303,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-09 | Claude Code | §3: **nomi dei file Python confermati in inglese** (decisione del proprietario, autorizzazione esplicita a modificare il file approvato): regola = traduzione inglese del nome della specifica in `snake_case`; tabella con il file Python e il file di test di `04` e dei moduli 10–19. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | §8: **ripetizione dei test di rete** (punto 8) e **regola dei commit** (punto 9, con lo script `scripts/commit_checked.py` e l'opzione `--no-network`) (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato); esempio del punto 2 aggiornato (`astropy-healpix` al posto di `healpy`, escluso per la licenza GPL). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per `05` (`core/commands.py`), `40`, `41`, `42`; corretto il file del 17 (`measures.py`, come scritto nel codice, non `measurements.py`); §8 punto 10 — test dell'interfaccia con pytest-qt in `offscreen`, controllo entro 1 pixel, marcatori `perf` e `gl`. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **Regola dei commit (decisione del proprietario del 2026-10-16**, autorizzazione esplicita a modificare il file approvato): §8 punti 8 e 9 — le risposte HTTP 429, 502, 503 e 504 dei servizi esterni contano come "connessione" (servizio temporaneamente non disponibile), con le stesse ripetizioni e la dichiarazione nel messaggio di commit; gli altri 4xx restano risultati sbagliati e bloccano il commit. Aggiornati `tests/conftest.py` (`network_reason`), `scripts/commit_checked.py` e i loro test. Stato `approvato` invariato. |
