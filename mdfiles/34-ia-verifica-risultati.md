@@ -1,6 +1,6 @@
 # 34-ia-verifica-risultati.md — verifica dei numeri nelle risposte dell'IA
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -271,7 +271,7 @@ risposte scritte nei test e risultati sintetici dei comandi.
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) numeri trovati solo in un testo
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) numeri trovati solo in un testo
   esterno mostrati come `external_text`, contati a parte e non come errore
   (la modalità rigorosa non li fa rigenerare); (2) contenuto dell'elenco
   chiuso di §3.3 (cataloghi X4, prefissi X5, standard X7); (3) tolleranza
@@ -283,3 +283,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: estrazione di tutti i numeri (decimali, scientifici, sessagesimali con il 10, date, forme ambigue), **elenco chiuso delle eccezioni** (numeri di comando, livelli, epoche, cataloghi, designazioni, numerazioni, standard), confronto per testo e alla precisione scritta con unità convertibili solo per confrontare, dati in ingresso e parametri, stati ed evidenziazione, modalità rigorosa con una sola rigenerazione; **sicurezza**: nessuna istruzione letta dai risultati, numeri dei testi esterni mai verificati, controllo delle conferme dopo un testo esterno; test con istruzioni malevole. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

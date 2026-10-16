@@ -1,6 +1,6 @@
 # 40-ui-finestra-principale.md — finestra principale, menu, barra di stato, preferenze
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -421,3 +421,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 approvata dal proprietario il 2026-10-15: perimetro v1 (menu, barra di stato, campo "Vai a", preferenze essenziali, apertura di file e sessioni, pannelli Comandi e Messaggi, schermo intero, spazio per il 44), coda dei comandi in un thread di lavoro con segnali di Qt, avanzamento e Annulla per ogni comando lungo, A9 decisa (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, punto decimale sempre). Nuove decisioni D40-1, D40-2. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D40-1 decisa (v1: codice + testo del modulo invariato); nuova **D40-3** (Gruppo 3: messaggi dei moduli in inglese con traduzione); D40-2 rimandata; scelte minori confermate; **nuova §3.11 "Linee guida visive"** (valide per tutte le interfacce: macOS, tema che segue il sistema con lo scuro di riferimento, modalità notte rossa, cielo al centro con pannelli richiudibili e barre sottili, carattere di sistema, un solo accento, spaziature di 4 punti, icone Lucide proposte con licenza da verificare, colori dei cataloghi di Okabe e Ito, nulla da Aladin); preferenza "Aspetto" e voce Night mode; PySide6/Qt LGPL-3 registrata per A11 e per il 60; mockup in `mdfiles/mockup/`; test T13. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): il pannello dell'assistente (`44`) entra nella v1 nell'area a destra, voce Assistant attiva (⌃⌘A); colonna "chi" (da `requested_by` del `05`) e dettagli dei comandi dell'IA nel pannello Comandi; sezione Assistant nelle preferenze (chiave solo nel Portachiavi, `31`); comandi dell'IA nella stessa coda con lo stesso `CancelToken`; casella "Includi il testo delle conversazioni" in Save session; test T10 aggiornato, T14 e T15 nuovi. |
+| 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

@@ -1,6 +1,6 @@
 # 30-ia-adattatore-provider.md — adattatore dei provider IA
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -296,7 +296,7 @@ Studio in locale. Esito annotato nel registro modifiche.
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) `max_output_tokens` di default 4096,
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) `max_output_tokens` di default 4096,
   modificabile nel profilo; (2) nessun parametro di campionamento inviato
   (vale il default del provider); (3) ripetizioni dell'adattatore al più 2,
   solo prima del primo evento, per connessione e HTTP 429, 500, 502, 503,
@@ -314,3 +314,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: profili senza chiave, due implementazioni (SDK `anthropic`, SDK `openai` con endpoint configurabile e Chat Completions), capacità dichiarate, `list_models`, `stream_turn` con eventi normalizzati, `AI_NO_TOOLS`, tempi massimi 10/60/30 s, ripetizioni solo prima del primo evento, `RequestRecord` per "Cosa è stato inviato", `https` per gli endpoint remoti, nessun modello nel codice. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

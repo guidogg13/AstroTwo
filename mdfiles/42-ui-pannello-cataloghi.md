@@ -1,6 +1,6 @@
 # 42-ui-pannello-cataloghi.md — pannello cataloghi e tabelle
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -207,3 +207,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) come versione minima approvata dal proprietario il 2026-10-15: tabella in sola lettura con ordinamento (D8), selezione sincronizzata con la vista (D7), vista del record con `record_view` del 13, dialoghi delle colonne di posizione e di moto proprio; fuori dalla v1 ricerca, editor delle regole, colonne calcolate, grafici, SAMP. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** scelte minori confermate; rimando alle linee guida visive del `40` §3.11. Nessuna decisione dei Gruppi 1 e 2 aperta. |
 | 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (proposta della fase 1 sull'IA, autorizzazione a modificare la bozza come proposto): valori della tabella — colonne di posizione con `format_coordinates` del 10 nel frame della colonna, magnitudini (UCD `phot.mag`) a 3 decimali, valore pieno nel suggerimento e nella copia, altre colonne come sono; sostituisce la scelta minore 1 del 2026-10-15; dipendenza dal 10; test T5 aggiornato. |
+| 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

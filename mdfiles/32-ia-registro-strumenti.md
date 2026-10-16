@@ -1,6 +1,6 @@
 # 32-ia-registro-strumenti.md — registro degli strumenti esposti all'IA
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -315,7 +315,7 @@ provider (richieste di strumenti scritte nei test).
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) modalità rigida (`strict`) dei
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) modalità rigida (`strict`) dei
   provider non usata; (2) `coords.resolve_name` senza conferma pur usando
   la rete, perché di sola lettura (interpretazione della regola "i comandi
   di sola lettura non chiedono conferma"; dopo un testo esterno la chiede,
@@ -332,3 +332,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: elenco esplicito dei comandi esposti e non esposti, schema da `export_schema` del `05`, nomi tradotti (`view.go_to` → `view__go_to`), validazione del `05`, stessa coda del `40` con `requested_by = ai`, conferme (rete, lungo, modifica di un livello; sola lettura senza conferma), risultati entro 50 righe e 20 kB senza numeri accorciati, nomi di file senza cartelle, `catalog.search` al posto del 33; **sicurezza**: testi esterni marcati come dati, conferma obbligatoria per i comandi chiesti dopo un testo esterno. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

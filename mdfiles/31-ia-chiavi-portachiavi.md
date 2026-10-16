@@ -1,6 +1,6 @@
 # 31-ia-chiavi-portachiavi.md — chiavi API nel Portachiavi di macOS
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -21,7 +21,11 @@ disponibile, errore esplicito).
 - **Un elemento del Portachiavi per profilo di provider** (`30` §3.1): una
   sola chiave per profilo (più chiavi per lo stesso profilo: fuori dalla
   v1).
-- **Nome del servizio:** `AstroTwo AI` (fisso). **Nome dell'account:**
+- **Nome del servizio:** `dev.pages.astrotwo.ai` (fisso; identificativo
+  inverso del progetto `dev.pages.astrotwo`, dal sito `astrotwo.pages.dev`,
+  con il suffisso `.ai` per le chiavi dell'IA; decisione del proprietario
+  del 2026-10-16, stesso identificativo del bundle dell'app, `01` §6).
+  **Nome dell'account:**
   l'identificativo del profilo del `30` (es. `anthropic`,
   `openai-compatible:api.openai.com`). Nessun altro dato nell'elemento.
 - L'elemento sta nel **Portachiavi di login** dell'utente, quello che
@@ -142,7 +146,7 @@ Nomi proposti, descrizione in parole. File Python
   valore; ogni altra forma di testo è `"••••"`; non si serializza in JSON
   (errore se si prova).
 - **`KeychainError`** — errore con codice di §10 e testo senza segreti.
-- **`SERVICE_NAME`** — costante `"AstroTwo AI"`.
+- **`SERVICE_NAME`** — costante `"dev.pages.astrotwo.ai"`.
 
 ## 8. Librerie e standard di riferimento
 
@@ -204,8 +208,9 @@ con il marcatore **`keychain`** (scelta minore 2), esclusi di default.
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) nome del servizio `AstroTwo AI` e
-  nome dell'account = identificativo del profilo del `30`; (2) nuovo
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-16:** (1) **modificata dal proprietario:** nome del servizio
+  `dev.pages.astrotwo.ai` (identificativo inverso del progetto con suffisso
+  `.ai`) e nome dell'account = identificativo del profilo del `30`; (2) nuovo
   marcatore di test `keychain` per il Portachiavi reale, escluso di default
   come `network` (si aggiunge a `pyproject.toml` con il codice); (3) spazi
   e a capo ai bordi tolti in silenzio al salvataggio (sono sempre errori di
@@ -221,3 +226,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: `keyring` con il solo backend macOS forzato, nessun ripiego (`KEYCHAIN_UNAVAILABLE`), una chiave per profilo del `30`, lettura al momento della chiamata con `SecretKey` mascherato, nessuna traccia in log, cronologia o sessione. |
+| 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16:** scelta minore 1 modificata (servizio del Portachiavi `dev.pages.astrotwo.ai`, identificativo inverso del progetto con suffisso `.ai`; account = profilo del `30`), 2 e 3 confermate. **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

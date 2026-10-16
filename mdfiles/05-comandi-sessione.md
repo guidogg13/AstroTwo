@@ -1,6 +1,6 @@
 # 05-comandi-sessione.md — registro dei comandi e sessione
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -477,7 +477,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   di sola lettura per l'assistente (`coords.resolve_name`,
   `catalog.search`, `catalog.describe`, `catalog.rows`, `layer.list`) e
   blocco facoltativo `conversations` della sessione; applicata in §3.1,
-  §3.2, §3.4, §3.5, §7, §12 (T18–T21). **Scelte minori da confermare:** (1)
+  §3.2, §3.4, §3.5, §7, §12 (T18–T21). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1)
   valori di `requested_by` (`menu`, `keyboard`, `mouse`, `history`,
   `session`, `ai`); (2) comandi di sola lettura in classe `session`
   (rieseguiti alla riapertura).
@@ -491,3 +491,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario del 2026-10-15 (AM1 accettata: modulo generale di livello 1, codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; registro senza Qt con annullamento cooperativo e avanzamento; spazio di lavoro immutabile; gesti registrati a fine gesto dopo 300 ms fermo; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore. Verifica della cache del 04 da più thread prima del codice. Nuove decisioni D05-1, D05-2, D05-3. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D05-1 decisa (tre classi `session`/`passive`/`application`); D05-2 decisa (avviso senza fermarsi; impronta dei risultati di rete di ogni comando salvata nella sessione, l'avviso dice quale comando e cosa è cambiato; §3.1, §3.4, §10, T15); D05-3 rimandata; scelte minori confermate. Nessuna decisione dei Gruppi 1 e 2 resta aperta in questo file. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): campo `requested_by` nel comando, nella cronologia e nella sessione; indicatore `confirm` con il suo elenco; nuovi comandi di sola lettura `coords.resolve_name`, `catalog.search`, `catalog.describe`, `catalog.rows` (al più 50 righe), `layer.list`; blocco facoltativo `conversations` della sessione (solo su richiesta, mai riletto per rieseguire); riesecuzione dei comandi dell'IA senza chiamare l'IA; schema con gli indicatori per il `32`; test T18–T21. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

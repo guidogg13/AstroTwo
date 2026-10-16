@@ -628,13 +628,13 @@ propone i parametri e interpreta il risultato.
   Applicata in §3, §6, §7, §12 (T29).
 - **`format_coordinates` (D41-2, decisa dal proprietario il 2026-10-15):**
   nuova funzione per scrivere le coordinate con le cifre di DC3; §3, §6,
-  §7, §10, §12 (T31–T33). **Scelte minori da confermare:** (1) 0.1″ anche
+  §7, §10, §12 (T31–T33). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) 0.1″ anche
   per longitudini e latitudini dei frame non equatoriali (DC3 fissa solo RA
   e Dec); (2) 6 decimali in gradi nello stile decimale. Codice da scrivere
   quando il proprietario lo chiede.
 - **`compass_and_scale_bar` (A7 nella v1, decisione del proprietario del
   2026-10-16, opzione b della proposta della fase 1 sull'IA):** §3, §5,
-  §6, §7, §10, §12 (T34–T36). **Scelte minori da confermare:** (3)
+  §6, §7, §10, §12 (T34–T36). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (3)
   lunghezza massima di default = un quinto della larghezza della finestra;
   (4) δ = 10 pixel della finestra; (5) "solo al centro" oltre 15° di raggio
   del campo o con `AIT`. Codice da scrivere quando il proprietario dichiara
@@ -674,3 +674,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): **D10-9 decisa** (soglia di default 30°, scarto ±10 % nel `41`); nuova **`make_view_wcs`** con `ViewGeometry` (base e finestra, funzioni finestra ↔ cielo esatte anche con distorsioni, WCS della regione visibile, raggio del campo) in §3, §6, §7; errori `VIEW_PARAMETERS_INVALID` e `PROJECTION_UNSUPPORTED` (§10); test T26–T30 (§12). Codice da scrivere (`make_view_wcs` e default di `choose_projection`). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **D41-2 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`format_coordinates`** (sessagesimale o decimale con le cifre di DC3, ore per i frame equatoriali, riporto e ritorno a 0h, segno dell'emisfero conservato, precisione esplicita per la griglia, `Angle.to_string` di astropy) in §3, §6, §7; errore `FORMAT_PRECISION_INVALID` (§10); test T31–T33 (§12); due scelte minori da confermare (§13). Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **A7 nella v1 decisa dal proprietario il 2026-10-16** (opzione b della proposta della fase 1 sull'IA, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`compass_and_scale_bar`** (nord ed est al centro della vista con `directional_offset_by`, `east_left`, barra di scala con il più grande valore tondo dell'elenco in arco che sta nella lunghezza massima, lunghezza del segmento orizzontale trovata con `brentq`, etichetta, `local_only`) in §3, §6, §7; avvisi `NORTH_UNDEFINED`, `SCALE_BAR_TOO_LONG` (§10); test T34–T36 (§12); tre scelte minori (§13); §5 con 34 e 42. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | Scelte minori di `format_coordinates` (1, 2) e di `compass_and_scale_bar` (3, 4, 5) **confermate dal proprietario il 2026-10-16**, che approva anche le modifiche del 2026-10-16. Stato `approvato` invariato. |

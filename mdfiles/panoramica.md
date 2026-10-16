@@ -16,7 +16,16 @@ tutti gli altri livelli restano in **FASE: SPECIFICHE**. Per l'interfaccia
 la formula è a parte: **"FASE: CODICE – interfaccia v1"** (regola del
 proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
-31, 32, 34, 35 `approvato`; **non ancora dichiarata**.
+31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
+
+- **Stato al 2026-10-16, dopo l'approvazione:** il proprietario ha
+  confermato le 32 scelte minori come raccomandate tranne una (servizio
+  del Portachiavi `dev.pages.astrotwo.ai`; identificativo del progetto e
+  bundle identifier `dev.pages.astrotwo` in `01` §6), ha **approvato 05,
+  30, 31, 32, 34, 35, 40, 41, 42, 44** e le modifiche al 10, e ha dichiarato
+  **"FASE: CODICE – interfaccia v1"**. Prima del codice: verifiche e
+  allineamento del codice del livello 1 (10, 11, 12, 18), poi proposta di
+  divisione del codice della v1.
 
 - **Stato al 2026-10-16: specifiche dell'IA nella v1 (nessun codice
   applicativo).** Proposta della fase 1 sull'IA approvata dal proprietario
@@ -456,7 +465,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, test | — | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo coprente | — | approvato |
 | `04-cache.md` | Cache A7 comune (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s, origine e data; nessuna cache propria nei moduli), usata da 10–14, 16, 18 e 19 | 1 (generale) | approvato |
-| `05-comandi-sessione.md` | Registro dei comandi e sessione (AM1 accettata il 2026-10-15): comandi tipizzati con unità e risultato strutturato, sessione JSON rieseguibile senza pixel, schema JSON per il 32; usato da 40, 41, 42 | 1 (generale) | bozza |
+| `05-comandi-sessione.md` | Registro dei comandi e sessione (AM1 accettata il 2026-10-15): comandi tipizzati con unità e risultato strutturato, sessione JSON rieseguibile senza pixel, schema JSON per il 32; usato da 40, 41, 42 | 1 (generale) | approvato |
 | `decisioni-aperte.md` | Decisioni aperte, smistate in tre gruppi; §3 = esiti delle decisioni prese il 2026-10-04 | — | bozza |
 | **Nucleo (livello 1)** | | | |
 | `10-core-coordinate-wcs.md` | Coordinate, WCS, sistemi di riferimento | 1 | approvato |
@@ -476,18 +485,18 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `23-analisi-cubi-di-dati.md` | Cubi di dati (λ o velocità) | 2 | non esiste |
 | `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili, scripting e API Python, costruiti sopra il registro dei comandi e la sessione del `05` (dal 2026-10-15) | 2 | non esiste |
 | **IA (livello 3)** | | | |
-| `30-ia-adattatore-provider.md` | Adattatore per provider IA (v1): profili, SDK `anthropic` e `openai` con endpoint configurabile, capacità, `list_models`, `stream_turn` con eventi normalizzati | 3 | bozza |
-| `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS (v1): `keyring` col solo backend macOS, nessun ripiego | 3 | bozza |
-| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA (v1, dal 2026-10-16: elenco esplicito di comandi del `05`; dei candidati qui sotto entrano solo `describe_table` → `catalog.describe` e `search` → `catalog.search`, gli altri quando diventano comandi del `05`). **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10); **dal 14 (2026-10-10, D14-9 punto 16):** `cone_search` (centro, raggio con unità, catalogo; tabella con provenienza), `tap_query` (URL TAP, ADQL, `max_rows`; tabella o errore del servizio), `validate_adql` (controlli minimi), `describe_services` (elenco dei server, `ServerRegistry`), `ssa_search` / `ssa_load` (spettri con provenienza; analisi nel 21) | 3 | bozza |
+| `30-ia-adattatore-provider.md` | Adattatore per provider IA (v1): profili, SDK `anthropic` e `openai` con endpoint configurabile, capacità, `list_models`, `stream_turn` con eventi normalizzati | 3 | approvato |
+| `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS (v1): `keyring` col solo backend macOS, nessun ripiego | 3 | approvato |
+| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA (v1, dal 2026-10-16: elenco esplicito di comandi del `05`; dei candidati qui sotto entrano solo `describe_table` → `catalog.describe` e `search` → `catalog.search`, gli altri quando diventano comandi del `05`). **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10); **dal 14 (2026-10-10, D14-9 punto 16):** `cone_search` (centro, raggio con unità, catalogo; tabella con provenienza), `tap_query` (URL TAP, ADQL, `max_rows`; tabella o errore del servizio), `validate_adql` (controlli minimi), `describe_services` (elenco dei server, `ServerRegistry`), `ssa_search` / `ssa_load` (spettri con provenienza; analisi nel 21) | 3 | approvato |
 | `33-ia-query-adql.md` | Costruzione ed esecuzione di query ADQL (**rimandato** il 2026-10-16: nella v1 `catalog.search`) | 3 | non esiste |
-| `34-ia-verifica-risultati.md` | Verifica dei numeri delle risposte dell'IA (v1): ogni numero contro i risultati dei comandi, eccezioni chiuse, evidenziazione, modalità rigorosa | 3 | bozza |
-| `35-ia-assistente-chat.md` | Assistente conversazionale (v1): ciclo degli strumenti, regole di sistema, limiti, privacy, sicurezza contro le istruzioni nei testi esterni | 3 | bozza |
+| `34-ia-verifica-risultati.md` | Verifica dei numeri delle risposte dell'IA (v1): ogni numero contro i risultati dei comandi, eccezioni chiuse, evidenziazione, modalità rigorosa | 3 | approvato |
+| `35-ia-assistente-chat.md` | Assistente conversazionale (v1): ciclo degli strumenti, regole di sistema, limiti, privacy, sicurezza contro le istruzioni nei testi esterni | 3 | approvato |
 | **Interfaccia** | | | |
-| `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1) | — | bozza |
-| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | bozza |
-| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record) | — | bozza |
+| `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1) | — | approvato |
+| `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | approvato |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record) | — | approvato |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
-| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso | — | bozza |
+| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso | — | approvato |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
 | **Funzioni avanzate (livello 4)** | | | |
 | `50-avanzate-transienti.md` | Caccia ai transienti | 4 | non esiste |
@@ -621,6 +630,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Cifre della tabella (42) | Colonne di posizione con `format_coordinates`, magnitudini (UCD `phot.mag`) a 3 decimali, valore pieno nel suggerimento e nella copia, altre colonne come sono | 2026-10-16 | decisione del proprietario, `42` §3.2 | sostituisce la scelta minore 1 del 42 |
 | Fase codice IA | "FASE: CODICE – interfaccia v1" vale anche per 30, 31, 32, 34, 35 e 44 `approvato` | 2026-10-16 | decisione del proprietario, `CLAUDE.md` | |
 | Regola dei commit (HTTP) | HTTP 429, 502, 503, 504 dei servizi esterni = "connessione" (stesse ripetizioni, dichiarazione nel commit); altri 4xx = risultato sbagliato | 2026-10-16 | decisione del proprietario, `02` §8, `tests/conftest.py`, `scripts/commit_checked.py` | |
+| Scelte minori della v1 (32) | Confermate come raccomandate, tranne la #6: servizio del Portachiavi `dev.pages.astrotwo.ai` | 2026-10-16 | decisione del proprietario, §13 di 05, 10, 30, 31, 32, 34, 35, 41, 44 | |
+| Identificativo del progetto | `dev.pages.astrotwo` (sito `astrotwo.pages.dev`), bundle identifier dell'app (60) | 2026-10-16 | decisione del proprietario, `01` §6 | |
+| Approvazione e fase codice della v1 | 05, 30, 31, 32, 34, 35, 40, 41, 42, 44 `approvato`; "FASE: CODICE – interfaccia v1" dichiarata | 2026-10-16 | decisione del proprietario, `CLAUDE.md` | |
 
 ## 6. Decisioni aperte
 
@@ -797,3 +809,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-15 | Claude Code | **Specifiche della prima versione dell'interfaccia** (proposta della fase 1 approvata dal proprietario il 2026-10-15; nessun codice): **AM1 accettata, creato `05-comandi-sessione.md`** (bozza); **scritti `40`, `41`, `42`** (bozza, 14 sezioni); decise A9, D10-9, D11-8, raggio del puntatore Simbad; modificati i file approvati 01, 02, 03, 10, 11, 12, 13, 17, 18 (restano `approvato`) e `CLAUDE.md` (formula "FASE: CODICE – interfaccia v1"); nuove aperte D05-1, D05-2, D05-3, D40-1, D40-2, D41-1…D41-4. §2, §4, §5, §6, §7 aggiornati. Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 9, Gruppo 3 = 11). Stati: approvato 14, bozza 9, non esiste 20, totale 43. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario sulle specifiche dell'interfaccia** (autorizzazione a modificare 10 e 11; nessun codice): decise D05-1, D05-2, D40-1, D41-1…D41-4; D05-3 e D40-2 rimandate; nuova D40-3; scelte minori di 05, 40, 41, 42 confermate; nuove `format_coordinates` (10) e `suggest_display_limits` (11); linee guida visive nel `40` §3.11; mockup `mdfiles/mockup/finestra-principale.html` e `finestra-principale-notte.html`; PySide6/Qt (LGPL-3) registrata per A11 e per il 60. §2, §5, §6, §7 aggiornati. Aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). Stati invariati: approvato 14, bozza 9, non esiste 20, totale 43. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA nella v1 approvata dal proprietario il 2026-10-16** (nessun codice applicativo): scritti in `bozza` 30, 31, 32, 34, 35, 44; modificati 05 (`requested_by`, `confirm`, cinque comandi di sola lettura, blocco `conversations`), 40 (pannello 44, colonna "chi", preferenze dell'assistente), 41 (A7 nella v1, §3.18), 42 (cifre della tabella) e, con autorizzazione esplicita, gli approvati 01 (A5, §7), 02 (tabella specifica ↔ codice, test del livello 3), 03 (E2, A7), 10 (`compass_and_scale_bar`) e `CLAUDE.md` (formula di fase estesa a 30, 31, 32, 34, 35, 44); **sicurezza** contro le istruzioni nei testi esterni nel 32, 34, 35. **Regola dei commit:** HTTP 429/502/503/504 = connessione (`02` §8; `tests/conftest.py` e `scripts/commit_checked.py` con i test; commit `83f15df` insieme ai mockup, bloccati prima dal 503 di TAP VizieR). §2, §4, §5, §7 aggiornati. Nessuna nuova decisione aperta (solo scelte minori nei §13); aperte 14. |
+| 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16:** 32 scelte minori confermate (la #6 modificata: servizio del Portachiavi `dev.pages.astrotwo.ai`; identificativo del progetto e bundle identifier `dev.pages.astrotwo` in `01` §6); **approvati 05, 30, 31, 32, 34, 35, 40, 41, 42, 44** e le modifiche al 10; **dichiarata "FASE: CODICE – interfaccia v1"** (`CLAUDE.md`). §2, §4, §5 aggiornati. |

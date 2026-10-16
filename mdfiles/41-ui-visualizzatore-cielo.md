@@ -1,6 +1,6 @@
 # 41-ui-visualizzatore-cielo.md — visualizzatore del cielo
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -578,8 +578,7 @@ compilare il Mac di riferimento (§3.15).
   `sky_renderer_gl.py`) per tenere l'OpenGL separato.
 - **A7 nella v1: DECISA il 2026-10-16** (decisione del proprietario,
   opzione b): indicatore del nord e barra di scala con la nuova
-  `compass_and_scale_bar` del 10 (§3.18, T21). **Scelte minori da
-  confermare:** (10) angolo in basso a sinistra; (11) frecce di 40 pixel
+  `compass_and_scale_bar` del 10 (§3.18, T21). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (10) angolo in basso a sinistra; (11) frecce di 40 pixel
   logici.
 - **Da verificare prima del codice:** cache del 04 da più thread (§3.13,
   `05` T17); funzioni OpenGL incluse in PySide6 sufficienti (§3.13);
@@ -593,3 +592,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 approvata dal proprietario il 2026-10-15: perimetro v1; geometria con base e finestra da `make_view_wcs` del 10 e campionamento dei tile del 12; traslazione e scala dello schermo scritte esplicitamente come disegno; D10-9 (30° con scarto ±10 %), D11-8 (corona 1×/1,5× `box_size`, box 15 pixel) e raggio Simbad (12 pixel logici, 500 ms, una richiesta alla volta) decisi; rendering con `QOpenGLWidget` dietro un'interfaccia di disegno nostra, funzioni OpenGL di PySide6; obiettivi di prestazione P1–P7 con marcatori `perf` e `gl` e regola "misurare e riportare"; test con pytest-qt in `offscreen` e controllo entro 1 pixel; lista di controllo manuale; verifica della cache da più thread. Nuove decisioni D41-1…D41-4. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D41-1 (puntatore Simbad `passive` nel gruppo di thread dei tile), D41-2 (`format_coordinates` nel 10), D41-3 (`suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati e registrati; per i survey FITS senza `hips_pixel_cut`, sul tile del centro della prima vista), D41-4 (`perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta; Mac di riferimento da compilare) decise; scelte minori confermate; temi e modalità notte rossa nel renderer (linee guida visive del `40` §3.11), colori dei cataloghi di Okabe e Ito; test T18–T20. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): **A7 nella v1** (opzione b) — nuova §3.18 con indicatore del nord e barra di scala disegnati nell'angolo dai risultati di `compass_and_scale_bar` del 10 (nuova funzione), anche nel PNG; §3.1, §3.17, §4, §5 aggiornati; test T21; scelte minori 10 e 11 da confermare. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

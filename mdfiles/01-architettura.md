@@ -138,6 +138,12 @@ astrotwo/
   `src/astrotwo/core/coordinates_wcs.py`): la corrispondenza specifica ↔ codice
   va tenuta esplicita. Convenzione completa in `02-convenzioni.md`.
 - I test di un modulo vivono nella stessa posizione relativa dentro `tests/`.
+- **Identificativo del progetto** (decisione del proprietario del
+  2026-10-16): **`dev.pages.astrotwo`**, identificativo inverso ricavato dal
+  sito del progetto `astrotwo.pages.dev`. È il **bundle identifier dell'app**
+  per il `60-distribuzione-dmg.md` e la radice degli altri identificativi:
+  il servizio del Portachiavi per le chiavi dell'IA è
+  `dev.pages.astrotwo.ai` (`31` §3.1).
 - Dove vivano gli strumenti di packaging del modulo 60: da definire in
   `60-distribuzione-dmg.md`.
 - **`THIRD_PARTY_LICENSES`** (decisione del proprietario del 2026-10-13):
@@ -279,3 +285,4 @@ astrotwo/
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): creato `THIRD_PARTY_LICENSES` nella radice (nome, versione, licenza e avvisi di tutte le dipendenze, compreso l'avviso QD/LBNL di `spherical-geometry`), generato da `scripts/third_party_licenses.py` e controllato da un test; registrato in §6, annotato per A11 (§9 DA-08) e per il 60; regola: ogni nuova dipendenza va aggiunta al file. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): **A9 decisa** (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, lingua dal sistema, punto decimale sempre) e spostata da §5 a §4.2, DA-04 chiusa; §8 — valori quantitativi delle prestazioni decisi nel `41` §3.15; §7 — riproducibilità con il registro dei comandi di `05-comandi-sessione.md` (livello 1, AM1 accettata), il `24` sopra il `05`; §3 — livello 1 con i file generali 04 e 05; DA-08 — PySide6/Qt e pytest-qt da verificare per A11. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): A5 precisata (SDK `anthropic` e `openai` con endpoint configurabile, nessun modello nel codice, `AI_NO_TOOLS`); §7 — registro degli strumenti del 32 come elenco esplicito di comandi del `05`, verifica del 34 sui numeri della risposta, livello 3 costruito ora sopra il livello 1 (33 rimandato). Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (autorizzazione esplicita a modificare il file approvato): §6 — identificativo del progetto `dev.pages.astrotwo` (sito `astrotwo.pages.dev`), bundle identifier dell'app per il 60, servizio del Portachiavi `dev.pages.astrotwo.ai` per il 31. Stato `approvato` invariato. |

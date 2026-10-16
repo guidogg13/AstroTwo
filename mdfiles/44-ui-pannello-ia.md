@@ -1,6 +1,6 @@
 # 44-ui-pannello-ia.md — pannello dell'assistente IA
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -238,7 +238,7 @@ Portachiavi simulato del `31`, in `tests/ui/`.
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) larghezza di default 400 pt
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) larghezza di default 400 pt
   (intervallo 380–420); (2) scorciatoia ⌃⌘A per il pannello; (3) Invio
   invia, ⇧Invio va a capo; (4) Markdown semplice senza HTML né immagini,
   collegamenti come testo.
@@ -253,3 +253,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: pannello a destra di 380–420 pt con intestazione (profilo, modello, lucchetto, "locale"), riga sulla privacy, messaggi, schede dei comandi e di conferma (senza "per questa conversazione" dopo un testo esterno), evidenziazione dei numeri del `34`, token e costo facoltativo, "Cosa è stato inviato", impostazioni con la chiave tramite il `31`, consenso al primo uso, stato "non disponibile" con il resto dell'app invariato, modalità notte rossa. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |

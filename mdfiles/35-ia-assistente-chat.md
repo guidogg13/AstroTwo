@@ -1,6 +1,6 @@
 # 35-ia-assistente-chat.md — assistente conversazionale
 
-**Stato:** bozza
+**Stato:** approvato
 
 ## 2. Scopo
 
@@ -334,7 +334,7 @@ che contiene istruzioni.
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
 
-- **Scelte minori da confermare:** (1) testo delle regole di sistema di
+- **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) testo delle regole di sistema di
   §3.4, in inglese, uguale per tutti i provider; (2) le chiamate rifiutate
   o non confermate contano nel limite di 10; (3) le attese di conferma non
   contano nei 5 minuti; (4) casella "Includi il testo delle conversazioni"
@@ -345,3 +345,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: conversazione in memoria, ciclo degli strumenti uno alla volta con conferme, limiti di 10 chiamate e 5 minuti, regole di sistema R1–R9, Stop con `CancelToken`, token e costo solo con il prezzo dell'utente, disponibilità, privacy (cosa esce e cosa no, consenso per profilo, "Cosa è stato inviato", "locale"), comandi nella sessione e testo solo su richiesta; **sicurezza**: testi esterni come dati (R4), marcatura, conferma obbligatoria dopo un testo esterno, test di prompt injection. |
+| 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
