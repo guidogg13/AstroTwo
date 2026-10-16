@@ -931,3 +931,79 @@ def test_network_catalog_and_cube(cache):
     assert planes.depth == 1024 and planes.first_frame == 512
     tile = fetch_tile(cube, 0, 0, format="fits", plane=512, cache=cache)
     assert tile.url.endswith("Npix0_512.fits") and tile.data.shape[-2:] == (cube.tile_width, cube.tile_width)
+
+
+# =============================================================================
+# P6 — Riproiezione dei tile sulla vista (T17, T18), 2026-10-16
+
+from astrotwo.core.coordinates_wcs import SkyFrame, make_view_wcs  # noqa: E402
+from astrotwo.core.hips import fill_view, view_sampling  # noqa: E402
+
+
+def route_all_tiles(service, path, order, maker, ext="fits", ctype="application/fits"):
+    for index in range(12 * 4 ** order):
+        route_tile(service, path, order, index, maker(index), ext=ext, ctype=ctype)
+
+
+def assemble(sampling, tiles, dtype, extra=()):
+    out = np.zeros(sampling.shape + tuple(extra), dtype=dtype)
+    filled = np.zeros(sampling.shape, dtype=bool)
+    for tile in tiles:
+        part = fill_view(sampling, tile)
+        y0, y1, x0, x1 = part.box
+        out[y0:y1, x0:x1][part.mask] = part.values[part.mask]
+        assert not np.any(filled[y0:y1, x0:x1] & part.mask)  # ogni pixel in un solo tile
+        filled[y0:y1, x0:x1] |= part.mask
+    return out, filled
+
+
+@pytest.mark.parametrize("projection, scale, order, center", [
+    ("TAN", 20 * u.arcsec, None, (45.0, 20.0)),
+    ("TAN", 3 * u.arcmin, None, (0.0, 41.8)),  # vicino a confini tra tile
+    ("AIT", 5 * u.deg, 1, (0.0, 0.0)),  # tutto il cielo, bordo dell'AIT
+])
+def test_t17_view_sampling(service, cache, projection, scale, order, center):
+    hips = tile_service(service, cache, formats="fits", order=3)
+    route_all_tiles(service, "/hips", 3 if order is None else order, fits_tile)
+    if order is None:
+        route_all_tiles(service, "/hips", 3, fits_tile)
+    view = make_view_wcs(SkyFrame.from_lonlat(center[0] * u.deg, center[1] * u.deg, "icrs"), scale, (40, 80),
+                         projection=projection)
+    sampling = view_sampling(hips, view, order=order)
+    assert sampling.method == "nearest" and "nearest" in sampling.description
+    tiles = [fetch_tile(hips, sampling.order, i, format="fits", cache=cache) for i in sampling.tiles]
+    got, filled = assemble(sampling, tiles, np.float32)
+    yy, xx = np.mgrid[0:40, 0:80]
+    sky = view.window_to_sky(xx.ravel().astype(float), yy.ravel().astype(float))
+    finite = np.isfinite(sky.spherical.lon.value)
+    assert np.array_equal(filled.ravel(), finite)  # nessuna fascia vuota, "nessun dato" solo fuori dal cielo
+    expected = pixel_values(hips, sky[finite], order=sampling.order, cache=cache)
+    assert np.array_equal(got.ravel()[finite], expected.values)
+    assert set(sampling.tiles) == set(int(i) for i in expected.tile_index)
+    if projection == "AIT":
+        assert not finite.all()
+
+
+def test_t18_progressive_fill_and_colors(service, cache):
+    hips = tile_service(service, cache, formats="fits", order=3)
+    route_all_tiles(service, "/hips", 3, fits_tile)
+    view = make_view_wcs(SkyFrame.from_lonlat(0.0 * u.deg, 41.8 * u.deg, "icrs"), 3 * u.arcmin, (40, 80),
+                         projection="TAN")
+    sampling = view_sampling(hips, view)
+    tiles = [fetch_tile(hips, sampling.order, i, format="fits", cache=cache) for i in sampling.tiles]
+    assert len(tiles) > 1
+    a, _ = assemble(sampling, tiles, np.float32)
+    b, _ = assemble(sampling, tiles[::-1], np.float32)
+    assert np.array_equal(a, b)
+    payload, array = image_tile("png")
+    jpg = tile_service(service, cache, formats="png", order=3, path="/png")
+    route_all_tiles(service, "/png", 3, lambda i: payload, ext="png", ctype="image/png")
+    s2 = view_sampling(jpg, view)
+    t2 = [fetch_tile(jpg, s2.order, i, format="png", cache=cache) for i in s2.tiles]
+    colors, filled = assemble(s2, t2, np.uint8, extra=(3,))
+    flipped = array[::-1]  # come fetch_tile: riga 0 = ultima riga del file
+    assert np.array_equal(colors[filled], flipped[s2.tile_y[filled], s2.tile_x[filled]])
+    with pytest.raises(HiPSError) as err:
+        fill_view(sampling, fetch_tile(hips, 3, 0, format="fits", cache=cache) if 0 not in sampling.tiles else tiles[0])
+    if 0 not in sampling.tiles:
+        assert err.value.code == "HIPS_OUT_OF_TILE"

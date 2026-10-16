@@ -460,13 +460,16 @@ qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
   bit nell'orientamento già capovolto da `fetch_tile`; provenienza del tile
   (URL, data, dalla cache sì/no). Il `41` chiama `fill_view` per ogni tile
   appena arriva (riempimento progressivo).
-- **Da verificare prima del codice:** se le funzioni HiPS pubbliche di
-  `reproject` (es. `hips_as_dask_array` con `reproject_interp`) possono
-  servire lo stesso scopo **scaricando i tile con la rete del 14 e la
-  cache del 04**; se no, si usa il metodo descritto qui (raccomandato).
-  Misurare il tempo di `view_sampling` per una finestra di 2560 × 1600
-  pixel fisici (obiettivo P6 del `41`: primi tile visibili in ≤ 2 s con la
-  cache calda).
+- **Verificato il 2026-10-16:** le funzioni HiPS pubbliche di `reproject`
+  0.21 (`hips_as_dask_array`, `reproject_from_hips`) scaricano i tile da sé
+  con `astropy.utils.data.download_file`, quindi **non** con la rete del 14
+  e la cache del 04: si usa il metodo descritto qui. **Tempo misurato** di
+  `view_sampling` per una finestra di 2560 × 1600 pixel fisici (Mac M1 di
+  sviluppo, non ancora il Mac di riferimento): 1.27 s (`TAN`, 1″ per
+  pixel, ordine 9, 38 tile), 0.82 s (`TAN`, 30″, ordine 4), 0.57 s
+  (`AIT`, 0.15°, ordine 0); obiettivo P6 del `41` (primi tile in ≤ 2 s con
+  la cache calda) da misurare con il `41`, margine ridotto: misurare e
+  riportare.
 
 ## 4. Cosa NON fa
 
@@ -721,3 +724,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-12 | Claude Code | **Decisioni del proprietario del 2026-10-12** (autorizzazione esplicita a modificare il file approvato): H10 SkyView rinviato finché NASA non documenta l'URL SIA, con il motivo (§3); **D12-6 decisa** (normalizzazione dei nomi dei corpi con una tabella del 19, scritta con il 19), **D12-7 decisa** (`hips_frame = ecliptic` non supportato finché non è verificato su un HiPS reale), **D12-8 decisa** (nessun Allsky da `build_hips` per ora) (§3, §13); uso di `reproject` in `build_hips` approvato com'è, metodo `flux` non disponibile in `build_hips` (§3); disposizione dei pixel nel tile approvata, verificata su dati reali (2MASS K, confronto con `reproject`), da ricontrollare in AP1 (§3); scelte minori del 12 tutte confermate. Nessun codice cambia. Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D12-6 applicata** (decisione del proprietario del 2026-10-13, autorizzazione esplicita a modificare il file approvato): `hips_body` normalizzato con la tabella dei nomi del 19 (`BODY_NORMALIZED`; fuori tabella `body = None` con `BODY_UNSUPPORTED`) (§3); test aggiornati. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova parte **P6, riproiezione dei tile sulla vista del `41`** — `view_sampling` e `fill_view` con campionamento al più vicino sulla griglia HEALPix (disposizione dei pixel verificata, nessuna fascia tra tile), geometria da `make_view_wcs` del 10; verifica delle funzioni HiPS pubbliche di `reproject` prima del codice (§3, §7, §12 T17–T18, §13). Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **P6 scritta** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `view_sampling` (campionamento al più vicino sulla griglia HEALPix, stessa regola di `pixel_values`, ordine di default da `order_for_resolution`, copertura facoltativa) e `fill_view` (valori nel tipo nativo o colori a 8 bit, riquadro e maschera, provenienza); verifica di `reproject` (scarica da sé: non usabile con la rete del 14 e la cache del 04) e tempi misurati in §3; test T17 (`TAN` e `AIT`, confini tra tile, bordo dell'`AIT`) e T18 (ordine di arrivo, colori PNG) in `tests/core/test_hips.py`. Stato `approvato` invariato. |

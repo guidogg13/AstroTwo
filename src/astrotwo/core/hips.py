@@ -20,6 +20,10 @@ from datetime import UTC, datetime
 import astropy.units as u
 
 __all__ = [
+    "ViewSampling",
+    "ViewTile",
+    "view_sampling",
+    "fill_view",
     "ActiveSurvey",
     "BUILD_METHODS",
     "BuildResult",
@@ -894,6 +898,135 @@ def pixel_values(service: HiPSService, coords, *, order: int | None = None, plan
                    f"{', '.join(sources)}{note}")
     return PixelValues(values=values, tile_index=tiles, x=x, y=y, order=order, unit=unit, description=description,
                        warnings=tuple(notes))
+
+
+# --------------------------------------------------------------------------
+# P6 — Riproiezione dei tile sulla vista del modulo 41 (2026-10-15)
+# --------------------------------------------------------------------------
+# Verifica del 2026-10-16: le funzioni HiPS pubbliche di reproject 0.21 (hips_as_dask_array,
+# reproject_from_hips) scaricano i tile da sé con astropy.utils.data.download_file, non con la rete del 14
+# e la cache del 04: si usa il campionamento al più vicino sulla griglia HEALPix descritto nel 12 (P6).
+
+
+@dataclass(frozen=True, eq=False)
+class ViewSampling:
+    """Per ogni pixel della finestra (righe × colonne, centro, convenzione numpy): tile e pixel del tile.
+
+    ``tile_of_pixel`` vale -1 per "nessun dato" (fuori dalla proiezione o fuori copertura); ``tile_x``,
+    ``tile_y`` sono colonna e riga nel tile (indice da 0, orientamento FITS)."""
+
+    hips_id: str
+    order: int
+    frame: str
+    plane: int | None
+    shape: tuple[int, int]
+    tiles: tuple[int, ...]
+    tile_of_pixel: object
+    tile_x: object
+    tile_y: object
+    method: str
+    description: str
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True, eq=False)
+class ViewTile:
+    """Valori di un tile per i pixel della finestra che vi cadono (riquadro ``[y0:y1, x0:x1]`` e maschera)."""
+
+    index: int
+    order: int
+    box: tuple[int, int, int, int]  # y0, y1, x0, x1 (estremi superiori esclusi), pixel della finestra
+    values: object  # FITS: tipo nativo (DC6); JPEG/PNG: uint8 (…, 3 o 4), orientamento già capovolto
+    mask: object  # True dove il pixel della finestra prende il valore da questo tile
+    format: str
+    provenance: str
+    from_cache: bool
+
+
+def view_sampling(service: HiPSService, view, *, order: int | None = None, plane: int | None = None,
+                  coverage=None) -> ViewSampling:
+    """Tile necessari per la finestra della vista e, per ogni suo pixel, tile e pixel del tile (P6).
+
+    Metodo ``nearest``: cielo del centro di ogni pixel con ``window_to_sky`` di ``ViewGeometry`` (10), frame del
+    HiPS con il modulo 10, cella all'ordine K + S con ``astropy-healpix`` e disposizione dei pixel verificata
+    (stessa regola di ``pixel_values``). Ordine di default: ``order_for_resolution`` alla scala della finestra."""
+    import numpy as np
+
+    from astrotwo.core.coordinates_wcs import SkyFrame, ViewGeometry
+
+    if not isinstance(view, ViewGeometry):
+        raise TypeError("view: serve la ViewGeometry di make_view_wcs (modulo 10)")
+    if service.tile_width is None:
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: i cataloghi non hanno pixel")
+    target = _astropy_frame(service.frame)
+    notes: list[tuple[str, str]] = []
+    if order is None:
+        order, more = order_for_resolution(service, view.scale)
+        notes += list(more)
+    _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    plane = _check_plane(service, plane)
+    rows, cols = view.shape
+    yy, xx = np.mgrid[0:rows, 0:cols]
+    sky = view.window_to_sky(xx.ravel().astype(np.float64), yy.ravel().astype(np.float64))
+    finite = np.isfinite(sky.spherical.lon.value) & np.isfinite(sky.spherical.lat.value)
+    tile_of_pixel = np.full(rows * cols, -1, dtype=np.int64)
+    tile_x = np.zeros(rows * cols, dtype=np.int32)
+    tile_y = np.zeros(rows * cols, dtype=np.int32)
+    note = ""
+    if np.any(finite):
+        lon, lat, note = _to_frame(SkyFrame(coord=sky[finite], frame_defaults_note="frame della base della vista"),
+                                   service.frame, "pixel della finestra")
+        tiles, x, y = _tile_pixels(lon, lat, order, service.tile_width)
+        keep = np.ones(tiles.size, dtype=bool)
+        if coverage is not None:
+            if service.frame != "equatorial":
+                notes.append(("HIPS_COVERAGE_NOT_CHECKED", f"hips_frame {service.frame!r}: il MOC del servizio è in "
+                              "ICRS, filtro di copertura non applicato"))
+            else:
+                if getattr(coverage, "kind", None) != "space":
+                    raise TypeError("coverage: serve il MOC spaziale del servizio (modulo 16)")
+                keep = _in_coverage(coverage, order, tiles)
+        where = np.flatnonzero(finite)[keep]
+        tile_of_pixel[where] = tiles[keep]
+        tile_x[where] = x[keep]
+        tile_y[where] = y[keep]
+    needed = tuple(int(i) for i in np.unique(tile_of_pixel[tile_of_pixel >= 0]))
+    empty = int(np.count_nonzero(tile_of_pixel < 0))
+    description = (f"{len(needed)} tile di {service.hips_id} all'ordine {order} per una finestra di {cols} × {rows} "
+                   f"pixel; {empty} pixel senza dati (fuori dalla proiezione o dalla copertura); frame {target}{note}; "
+                   "metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, "
+                   "disposizione dei pixel verificata)")
+    return ViewSampling(hips_id=service.hips_id, order=order, frame=service.frame, plane=plane, shape=(rows, cols),
+                        tiles=needed, tile_of_pixel=tile_of_pixel.reshape(rows, cols),
+                        tile_x=tile_x.reshape(rows, cols), tile_y=tile_y.reshape(rows, cols), method="nearest",
+                        description=description, warnings=tuple(notes))
+
+
+def fill_view(sampling: ViewSampling, tile: HiPSTile) -> ViewTile:
+    """Valori del tile (``fetch_tile``) per i soli pixel della finestra che vi cadono (riempimento progressivo)."""
+    import numpy as np
+
+    if tile.order != sampling.order:
+        raise HiPSError("HIPS_OUT_OF_TILE", f"tile all'ordine {tile.order}, campionamento all'ordine {sampling.order}")
+    mask = sampling.tile_of_pixel == tile.index
+    if not np.any(mask):
+        raise HiPSError("HIPS_OUT_OF_TILE", f"il tile {tile.index} non contiene pixel della finestra")
+    rows = np.flatnonzero(mask.any(axis=1))
+    cols = np.flatnonzero(mask.any(axis=0))
+    y0, y1, x0, x1 = int(rows[0]), int(rows[-1]) + 1, int(cols[0]), int(cols[-1]) + 1
+    box_mask = mask[y0:y1, x0:x1]
+    tx = sampling.tile_x[y0:y1, x0:x1][box_mask]
+    ty = sampling.tile_y[y0:y1, x0:x1][box_mask]
+    data = tile.data
+    if tile.format == "fits":
+        plane_data = data if data.ndim == 2 else data[0]
+        values = np.zeros(box_mask.shape, dtype=plane_data.dtype)
+    else:
+        plane_data = data
+        values = np.zeros(box_mask.shape + data.shape[2:], dtype=data.dtype)
+    values[box_mask] = plane_data[ty, tx]
+    return ViewTile(index=tile.index, order=tile.order, box=(y0, y1, x0, x1), values=values, mask=box_mask,
+                    format=tile.format, provenance=tile.provenance(), from_cache=tile.from_cache)
 
 
 # --------------------------------------------------------------------------
