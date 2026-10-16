@@ -56,6 +56,18 @@ NOTES: dict[str, str] = {
         "licenze né costi; inclusione dei moduli del toolkit in un programma che li usa ammessa; clausola di "
         "esclusione di garanzia da riportare)."),
     "pds4-tools": "Small Bodies Node della NASA PDS (University of Maryland).",
+    "pyside6-essentials": (
+        "PySide6 (Qt for Python) e le librerie Qt incluse nella ruota: AstroTwo le usa con la LGPL-3.0 (licenza "
+        "scelta tra LGPL-3.0-only, GPL-2.0-only e GPL-3.0-only; registrata il 2026-10-15 per A11 e per il modulo "
+        "60). La ruota non contiene i testi: LGPL-3.0 e GPL-3.0 (a cui la LGPL rimanda) sono presi dal sorgente "
+        "ufficiale, sotto. Obblighi LGPL nel .dmg (librerie sostituibili dall'utente, avvisi) e avvisi delle "
+        "componenti di terze parti incluse nelle librerie Qt (elenco \"Licenses Used in Qt\" della "
+        "documentazione di Qt): da completare con il modulo 60."),
+    "shiboken6": "Generatore e runtime dei binding di PySide6: stessa licenza e stessi testi di pyside6-essentials.",
+    "anthropic": "SDK ufficiale di Anthropic (modulo 30). Include httpx_aiohttp (licenza e avviso sotto).",
+    "openai": "SDK ufficiale di OpenAI (modulo 30). Include httpx_aiohttp (licenza sotto).",
+    "httpx2": "Trasporto HTTP degli SDK anthropic e openai (successore di httpx; il modulo 30 lo usa solo tramite gli SDK).",
+    "keyring": "Accesso al Portachiavi di macOS (modulo 31), usato solo con il backend macOS.",
 }
 
 #: Regole d'uso della NAIF (https://naif.jpl.nasa.gov/naif/rules.html, lette il 2026-10-13): estratti pertinenti.
@@ -102,9 +114,25 @@ Acknowledgement: AstroTwo uses NASA's SPICE system (NAIF, JPL) for planetary bod
 """
 
 
+_PYSIDE_SOURCE = (
+    "cartella LICENSES/ del sorgente ufficiale https://download.qt.io/official_releases/QtForPython/pyside6/"
+    "PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.zip (SHA-256 "
+    "15b25c9e06f3acb8930c318192f3c20aee162f4b8d01bf4b4c60193c924cd847), copiata in scripts/licenses/; letto il "
+    "2026-10-16")
+_LICENSES_DIR = Path(__file__).resolve().parent / "licenses"
+
+
+def _pyside_texts() -> str:
+    return "\n\n".join(
+        f"--- {name} ---\n\n" + (_LICENSES_DIR / name).read_text(encoding="utf-8").rstrip()
+        for name in ("LGPL-3.0-only.txt", "GPL-3.0-only.txt"))
+
+
 #: Testi di licenza presi fuori dal pacchetto installato, quando la ruota non li contiene: nome del pacchetto →
 #: (fonte, testo integrale).
 EXTERNAL_LICENSE_TEXTS: dict[str, tuple[str, str]] = {
+    "pyside6-essentials": (_PYSIDE_SOURCE, _pyside_texts()),
+    "shiboken6": (_PYSIDE_SOURCE, _pyside_texts()),
     "pims": (
         "license.txt del sorgente ufficiale https://files.pythonhosted.org/packages/b8/02/"
         "5bf3639f5b77e9b183011c08541c5039ba3d04f5316c70312b48a8e003a9/pims-0.7.tar.gz (SHA-256 "
@@ -173,10 +201,25 @@ def _roots() -> list[Requirement]:
     return [Requirement(text) for text in project["dependencies"]]
 
 
+def _dev_roots() -> list[Requirement]:
+    groups = tomllib.loads((ROOT / "pyproject.toml").read_text()).get("dependency-groups", {})
+    return [Requirement(text) for text in groups.get("dev", [])]
+
+
 def runtime_closure() -> list[md.Distribution]:
     """Pacchetti di esecuzione (marcatori valutati su questa piattaforma, nessun extra), in ordine di nome."""
+    return _closure(_roots())
+
+
+def dev_closure() -> list[md.Distribution]:
+    """Strumenti di sviluppo (gruppo ``dev``) che non sono già dipendenze di esecuzione: non vanno nel .dmg."""
+    runtime = {canonicalize_name(d.metadata["Name"]) for d in runtime_closure()}
+    return [d for d in _closure(_dev_roots()) if canonicalize_name(d.metadata["Name"]) not in runtime]
+
+
+def _closure(roots: list[Requirement]) -> list[md.Distribution]:
     environment = default_environment()
-    pending, seen = list(_roots()), {}
+    pending, seen = list(roots), {}
     while pending:
         requirement = pending.pop()
         name = canonicalize_name(requirement.name)
@@ -231,7 +274,9 @@ def render() -> str:
         "dichiarata e il testo integrale dei file di licenza e degli avvisi distribuiti con ogni pacchetto,",
         "più i componenti non Python inclusi nel progetto. Licenza di AstroTwo: da decidere (A11).",
         "Pacchetti esclusi perché richiesti solo su Linux o Windows (marcatori di piattaforma): non",
-        "elencati. Python stesso (PSF) e le librerie dell'interfaccia si aggiungeranno con il modulo 60.",
+        "elencati. Python stesso (PSF) e gli avvisi delle componenti incluse nelle librerie Qt si",
+        "aggiungeranno con il modulo 60. In fondo, a parte, gli strumenti di sviluppo (test), che non si",
+        "distribuiscono nel .dmg.",
         "",
         "Riepilogo",
         "=========",
@@ -265,6 +310,16 @@ def render() -> str:
     for component in EXTRA_COMPONENTS:
         lines += ["", "=" * 78, f"{component.name} {component.version}", "=" * 78,
                   f"Licenza: {component.license}", f"Fonte: {component.source}", "", component.license_text.rstrip()]
+    dev = dev_closure()
+    lines += ["", "", "Strumenti di sviluppo (solo test, non distribuiti nel .dmg)",
+              "==========================================================", ""]
+    for distribution in dev:
+        lines.append(f"{distribution.metadata['Name']:<{width}}  {distribution.version:<22}  {_license(distribution)}")
+    for distribution in dev:
+        lines += ["", "-" * 78, f"{distribution.metadata['Name']} {distribution.version}", "-" * 78,
+                  f"Licenza: {_license(distribution)}"]
+        for filename, text in _license_files(distribution):
+            lines += ["", f"--- {filename} ---", "", text.rstrip()]
     return "\n".join(lines) + "\n"
 
 

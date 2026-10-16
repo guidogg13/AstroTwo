@@ -215,11 +215,17 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   come `network` (si aggiunge a `pyproject.toml` con il codice); (3) spazi
   e a capo ai bordi tolti in silenzio al salvataggio (sono sempre errori di
   copia).
-- **Da verificare prima del codice:** licenza di `keyring` (MIT) e delle
-  sue dipendenze, da aggiungere a `THIRD_PARTY_LICENSES`; elementi non
-  sincronizzabili nel Portachiavi di login; funzionamento del backend
-  dentro l'app del `.dmg`; richiesta di permesso di macOS con la firma
-  dell'app (A6).
+- **Verifiche prima del codice (2026-10-16):** licenza di `keyring` 25.7.0
+  (MIT) e delle dipendenze (`jaraco.classes`, `jaraco.context`,
+  `jaraco.functools`, `more-itertools`, MIT) **verificate** e in
+  `THIRD_PARTY_LICENSES`; backend `keyring.backends.macOS` usato
+  direttamente: scrive nel **Portachiavi di login**
+  (`login.keychain-db`), elemento **non sincronizzabile**, lettura e
+  cancellazione riuscite con un servizio di prova; **la forzatura serve**:
+  con `PYTHON_KEYRING_BACKEND` la scelta automatica di `keyring` cade su un
+  altro backend (provato con quello nullo); **dentro un'app costruita con
+  PyInstaller** 6.22.3 (cartella, senza firma) il backend funziona. Resta
+  per il `60`: richiesta di permesso di macOS con l'app firmata (A6).
 
 ## 14. Registro modifiche
 
@@ -227,3 +233,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: `keyring` con il solo backend macOS forzato, nessun ripiego (`KEYCHAIN_UNAVAILABLE`), una chiave per profilo del `30`, lettura al momento della chiamata con `SecretKey` mascherato, nessuna traccia in log, cronologia o sessione. |
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16:** scelta minore 1 modificata (servizio del Portachiavi `dev.pages.astrotwo.ai`, identificativo inverso del progetto con suffisso `.ai`; account = profilo del `30`), 2 e 3 confermate. **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-16 | Claude Code | Verifiche prima del codice (§13) superate: licenze, Portachiavi di login non sincronizzabile, forzatura necessaria (variabile d'ambiente), backend funzionante in un'app PyInstaller. Resta per il 60 il permesso con l'app firmata. Stato `approvato` invariato. |

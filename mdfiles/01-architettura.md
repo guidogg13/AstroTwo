@@ -155,6 +155,11 @@ astrotwo/
   astropy) e i componenti non Python inclusi nel progetto (es. kernel della
   NAIF del 19). Si genera con `scripts/third_party_licenses.py`; il test
   `tests/test_third_party_licenses.py` fallisce se il file non è aggiornato.
+  **Dal 2026-10-16** il file contiene anche le dipendenze della v1
+  dell'interfaccia e dell'IA (`pyside6-essentials`, `shiboken6`,
+  `anthropic`, `openai`, `httpx2`, `keyring` e le loro dipendenze; testi
+  LGPL-3.0 e GPL-3.0 dal sorgente ufficiale di PySide6) e, a parte, gli
+  strumenti di sviluppo non distribuiti (pytest, pytest-qt).
   **Da ora ogni nuova dipendenza va aggiunta a quel file** (rigenerandolo)
   nello stesso commit che la introduce. Serve ad A11 (licenza di AstroTwo,
   compatibilità con le licenze elencate) e al `60` (avvisi da includere nel
@@ -286,3 +291,4 @@ astrotwo/
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): **A9 decisa** (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, lingua dal sistema, punto decimale sempre) e spostata da §5 a §4.2, DA-04 chiusa; §8 — valori quantitativi delle prestazioni decisi nel `41` §3.15; §7 — riproducibilità con il registro dei comandi di `05-comandi-sessione.md` (livello 1, AM1 accettata), il `24` sopra il `05`; §3 — livello 1 con i file generali 04 e 05; DA-08 — PySide6/Qt e pytest-qt da verificare per A11. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): A5 precisata (SDK `anthropic` e `openai` con endpoint configurabile, nessun modello nel codice, `AI_NO_TOOLS`); §7 — registro degli strumenti del 32 come elenco esplicito di comandi del `05`, verifica del 34 sui numeri della risposta, livello 3 costruito ora sopra il livello 1 (33 rimandato). Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (autorizzazione esplicita a modificare il file approvato): §6 — identificativo del progetto `dev.pages.astrotwo` (sito `astrotwo.pages.dev`), bundle identifier dell'app per il 60, servizio del Portachiavi `dev.pages.astrotwo.ai` per il 31. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | §6: `THIRD_PARTY_LICENSES` con le dipendenze della v1 dell'interfaccia e dell'IA e la sezione degli strumenti di sviluppo (verifiche del 2026-10-16, nell'ambito di "FASE: CODICE – interfaccia v1"). Stato `approvato` invariato. |

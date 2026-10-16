@@ -214,7 +214,7 @@ Nomi proposti, descrizione in parole. File Python
 |---|---|---|
 | **`anthropic`** (SDK ufficiale) | API Messages, streaming, chiamata di strumenti, elenco dei modelli | decisione del proprietario del 2026-10-16; **licenza MIT da verificare** e da aggiungere a `THIRD_PARTY_LICENSES` con le dipendenze |
 | **`openai`** (SDK ufficiale) | API Chat Completions su endpoint configurabile, streaming, chiamata di strumenti, elenco dei modelli | decisione del proprietario del 2026-10-16; copre OpenAI in cloud e i server locali compatibili; **licenza Apache-2.0 da verificare** e da aggiungere a `THIRD_PARTY_LICENSES` con le dipendenze |
-| `httpx` (dipendenza dei due SDK) | trasporto HTTP, tempi massimi | licenza BSD-3 da verificare; nessun uso diretto oltre a tempi massimi e log |
+| `httpx2` (dipendenza dei due SDK, successore di `httpx`) | trasporto HTTP, tempi massimi | licenza BSD-3 verificata il 2026-10-16; nessun uso diretto oltre a tempi massimi e log |
 | JSON Schema | descrizione degli strumenti verso i provider | formato accettato da entrambe le API (sottoinsieme preparato dal `32`) |
 
 **Dipendenze dei due SDK** (da verificare con le licenze, es. `pydantic`,
@@ -303,11 +303,27 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   504, 529 (attese: `retry-after` fino a 30 s, altrimenti 1 s e 4 s); (4)
   identificativo del profilo `openai-compatible:<host>[:<porta>]` (un
   profilo per endpoint).
-- **Da verificare prima del codice:** licenze di `anthropic`, `openai`,
-  `httpx` e delle loro dipendenze (da aggiungere a `THIRD_PARTY_LICENSES`);
-  chiamata di strumenti in streaming con Ollama e LM Studio; chiamata di
-  strumenti per i modelli elencati dall'API di Anthropic; come i server
-  compatibili segnalano un modello senza strumenti (per `AI_NO_TOOLS`).
+- **Verifiche prima del codice (2026-10-16):**
+  - **licenze: verificate** — `anthropic` 1.15.0 MIT, `openai` 3.31.0
+    Apache-2.0; il trasporto dei due SDK è **`httpx2`** 2.13.1 (BSD-3, il
+    successore di `httpx`) con `httpcore2`, `h11`, `truststore` (MIT, usa i
+    certificati di sistema di macOS), `anyio`, `pydantic`, `jiter`,
+    `docstring-parser`, `opentelemetry-api` (Apache-2.0, richiesto da
+    `anthropic`) e gli altri in `THIRD_PARTY_LICENSES`;
+  - **Ollama: verificato** (Ollama 0.34.4, SDK `openai`, Chat Completions
+    in streaming su `http://127.0.0.1:11434/v1`): con `llama3.2:1b` la
+    chiamata di strumenti arriva come `tool_calls` nei frammenti, nome e
+    argomenti JSON ricomposti correttamente; `qwen2.5-coder:1.5b` scrive
+    invece la chiamata come testo (comportamento del modello: nessuna
+    `ToolCallRequest`, la risposta è testo). Ollama dichiara le capacità di
+    ogni modello in `/api/tags` (`"tools"`): da usare per `AI_NO_TOOLS`
+    con Ollama; il rifiuto di un modello senza strumenti **non è provato**
+    (nessun modello di quel tipo installato);
+  - **LM Studio: rimandato** (non installato sul Mac di sviluppo); prova
+    da fare prima di dichiarare compatibile LM Studio;
+  - **da fare con le chiavi dell'utente** (lista di controllo manuale di
+    §12): chiamata di strumenti con i modelli elencati dall'API di
+    Anthropic e sottoinsieme di JSON Schema accettato (`32` §3.4).
 
 ## 14. Registro modifiche
 
@@ -315,3 +331,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: profili senza chiave, due implementazioni (SDK `anthropic`, SDK `openai` con endpoint configurabile e Chat Completions), capacità dichiarate, `list_models`, `stream_turn` con eventi normalizzati, `AI_NO_TOOLS`, tempi massimi 10/60/30 s, ripetizioni solo prima del primo evento, `RequestRecord` per "Cosa è stato inviato", `https` per gli endpoint remoti, nessun modello nel codice. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-16 | Claude Code | Verifiche prima del codice (§13): licenze verificate e in `THIRD_PARTY_LICENSES` (trasporto `httpx2`, successore di `httpx`); Ollama verificato (chiamata di strumenti in streaming con `llama3.2:1b`; capacità dichiarate in `/api/tags`); LM Studio rimandato (non installato). Stato `approvato` invariato. |

@@ -5,15 +5,19 @@ description = "AstroTwo: successore di Aladin per gli astrofisici"
 readme = "CLAUDE.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "anthropic>=1.15.0",
     "astropy>=8.0.1",
     "astropy-healpix>=2.0.1",
     "astroquery>=0.4.11",
     "defusedxml>=0.7.1",
+    "keyring>=25.7.0",
     "matplotlib>=3.11.2",
     "mocpy>=0.20.0",
     "numpy>=2.5.3",
+    "openai>=3.31.0",
     "pds4-tools>=1.4",
     "pillow>=12.3.0",
+    "pyside6-essentials>=6.12.0",
     "pyvo>=1.9.1",
     "reproject>=0.21.0",
     "requests>=2.34.2",
@@ -25,6 +29,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-qt>=4.5.0",
 ]
 
 [build-system]

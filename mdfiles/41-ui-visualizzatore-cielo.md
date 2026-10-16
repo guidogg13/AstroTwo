@@ -580,8 +580,14 @@ compilare il Mac di riferimento (§3.15).
   opzione b): indicatore del nord e barra di scala con la nuova
   `compass_and_scale_bar` del 10 (§3.18, T21). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (10) angolo in basso a sinistra; (11) frecce di 40 pixel
   logici.
-- **Da verificare prima del codice:** cache del 04 da più thread (§3.13,
-  `05` T17); funzioni OpenGL incluse in PySide6 sufficienti (§3.13);
+- **Verificato il 2026-10-16:** cache del 04 da più thread (§3.13, `05`
+  T17; corretta con D04 nel 04); **funzioni OpenGL incluse in PySide6
+  sufficienti** (PySide6 6.12.0, Mac M1: contesto 4.1 core fuori schermo,
+  programma con `gl_PointSize`, VAO e buffer `float32` con
+  `setAttributeBuffer`, texture `R32F` campionata, rilettura del
+  framebuffer: punti al pixel esatto, valori della texture esatti, nessun
+  errore GL; PyOpenGL non serve).
+- **Da verificare prima del codice:**
   funzioni HiPS pubbliche di `reproject` rispetto al campionamento del 12
   (12, P6); licenze di PySide6/Qt e di pytest-qt.
 
@@ -593,3 +599,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D41-1 (puntatore Simbad `passive` nel gruppo di thread dei tile), D41-2 (`format_coordinates` nel 10), D41-3 (`suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati e registrati; per i survey FITS senza `hips_pixel_cut`, sul tile del centro della prima vista), D41-4 (`perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta; Mac di riferimento da compilare) decise; scelte minori confermate; temi e modalità notte rossa nel renderer (linee guida visive del `40` §3.11), colori dei cataloghi di Okabe e Ito; test T18–T20. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): **A7 nella v1** (opzione b) — nuova §3.18 con indicatore del nord e barra di scala disegnati nell'angolo dai risultati di `compass_and_scale_bar` del 10 (nuova funzione), anche nel PNG; §3.1, §3.17, §4, §5 aggiornati; test T21; scelte minori 10 e 11 da confermare. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-16 | Claude Code | Verifiche del 2026-10-16: funzioni OpenGL di PySide6 sufficienti (§13), cache da più thread corretta con D04 del 04. Stato `approvato` invariato. |
