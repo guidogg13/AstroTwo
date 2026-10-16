@@ -340,10 +340,12 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
   - il risultato porta i testi per asse, frame ed epoca dei dati (mai
     assunta), stile e precisione usati. **Calcolo:**
     `astropy.coordinates.Angle.wrap_at` e `Angle.to_string`; nessuna
-    formula scritta a mano. **Da verificare prima del codice:** che
-    `Angle.to_string` faccia il riporto e il ritorno a 0h come scritto qui;
-    se no, il caso si gestisce prima della scrittura con `Angle` e si
-    dichiara nel codice.
+    formula scritta a mano. **Verificato il 2026-10-16 (astropy 8.0.1):**
+    `Angle.to_string` fa il riporto tra i campi ma **non** il ritorno a 0
+    (scrive "24h00m00.00s" e "360°00′00.0″"): il ritorno si fa nel codice
+    riscrivendo con `Angle` il valore 0, dichiarato nel codice. Il segno si
+    scrive con il trattino ASCII (`-`, `+`), copiabile come chiede A9 (il
+    "−" degli esempi è tipografico).
 
 - **`compass_and_scale_bar(geometry, *, frame=None, max_bar_pixels=None)`**
   (aggiunta il 2026-10-16, A7) — restituisce **`CompassScaleBar`**.
@@ -675,3 +677,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-15 | Claude Code | **D41-2 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`format_coordinates`** (sessagesimale o decimale con le cifre di DC3, ore per i frame equatoriali, riporto e ritorno a 0h, segno dell'emisfero conservato, precisione esplicita per la griglia, `Angle.to_string` di astropy) in §3, §6, §7; errore `FORMAT_PRECISION_INVALID` (§10); test T31–T33 (§12); due scelte minori da confermare (§13). Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **A7 nella v1 decisa dal proprietario il 2026-10-16** (opzione b della proposta della fase 1 sull'IA, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`compass_and_scale_bar`** (nord ed est al centro della vista con `directional_offset_by`, `east_left`, barra di scala con il più grande valore tondo dell'elenco in arco che sta nella lunghezza massima, lunghezza del segmento orizzontale trovata con `brentq`, etichetta, `local_only`) in §3, §6, §7; avvisi `NORTH_UNDEFINED`, `SCALE_BAR_TOO_LONG` (§10); test T34–T36 (§12); tre scelte minori (§13); §5 con 34 e 42. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | Scelte minori di `format_coordinates` (1, 2) e di `compass_and_scale_bar` (3, 4, 5) **confermate dal proprietario il 2026-10-16**, che approva anche le modifiche del 2026-10-16. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `make_view_wcs` con `ViewGeometry` (regione visibile = base con il pixel di riferimento spostato all'origine intera che contiene la finestra, anche per SIP; `WCS.slice` per le distorsioni a tabella), `format_coordinates` (verifica di `Angle.to_string`: riporto sì, ritorno a 0 no, gestito nel codice; segno ASCII), `compass_and_scale_bar`, `choose_projection` con default 30° che restituisce `ProjectionChoice` (proiezione, campo, soglia e sua fonte); test T20 aggiornato e T26–T36 in `tests/core/test_coordinates_wcs.py` (100 superati). Stato `approvato` invariato. |

@@ -79,6 +79,15 @@ __all__ = [
     "compute_grid_lines",
     "choose_grid_spacing",
     "choose_projection",
+    "ProjectionChoice",
+    "DEFAULT_PROJECTION_THRESHOLD",
+    "VIEW_PROJECTIONS",
+    "ViewGeometry",
+    "make_view_wcs",
+    "FormattedCoordinates",
+    "format_coordinates",
+    "CompassScaleBar",
+    "compass_and_scale_bar",
 ]
 
 #: Proiezioni dell'elenco D10-4 (manuale di Aladin, ed. giugno 2022, sez. 5.14).
@@ -1408,13 +1417,499 @@ def compute_grid_lines(
     )
 
 
-def choose_projection(field_of_view, *, threshold) -> str:
+#: Soglia di default di ``choose_projection`` (D10-9, decisa dal proprietario il 2026-10-15).
+DEFAULT_PROJECTION_THRESHOLD = 30.0 * u.deg
+
+
+@dataclass(frozen=True)
+class ProjectionChoice:
+    """Proiezione scelta con il campo e la soglia usati (soglia sempre scritta nel risultato)."""
+
+    projection: Literal["TAN", "AIT"]
+    field_of_view: u.Quantity
+    threshold: u.Quantity
+    threshold_source: str
+
+
+def choose_projection(field_of_view, *, threshold=None) -> ProjectionChoice:
     """``TAN`` se il campo di vista è minore della soglia, ``AIT`` altrimenti.
 
-    La soglia è obbligatoria finché la decisione D10-9 non ne fissa il valore.
+    Soglia di default 30° (D10-9); il modulo 41 passa una soglia esplicita (33° o 27°) per lo scarto
+    di ±10 %. Campo di vista = diametro del cerchio che contiene la vista.
     """
     fov = _require_angle(field_of_view, "campo di vista")
-    limit = _require_angle(threshold, "soglia")
+    explicit = threshold is not None
+    limit = _require_angle(threshold, "soglia") if explicit else DEFAULT_PROJECTION_THRESHOLD
     if not (np.isfinite(fov.value) and fov.value > 0 and np.isfinite(limit.value) and limit.value > 0):
         raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "campo di vista e soglia devono essere positivi")
-    return "TAN" if fov < limit else "AIT"
+    return ProjectionChoice(
+        projection="TAN" if fov < limit else "AIT",
+        field_of_view=fov.to(u.deg),
+        threshold=limit.to(u.deg),
+        threshold_source="soglia esplicita" if explicit else "soglia di default 30° (D10-9)",
+    )
+
+
+# --------------------------------------------------------------------------
+# Geometria della vista per il modulo 41 (make_view_wcs, 2026-10-15)
+# --------------------------------------------------------------------------
+
+#: Proiezioni ammesse per una base creata (elenco D10-4 senza NCP e ZPN).
+VIEW_PROJECTIONS: tuple[str, ...] = ("TAN", "SIN", "AIT", "ZEA", "STG", "CAR")
+_VIEW_FRAMES = {"icrs": ("RA---", "DEC--"), "galactic": ("GLON-", "GLAT-")}
+_BORDER_SAMPLES = 64
+
+
+def _view_error(message: str, **details) -> CoordinatesWcsError:
+    return CoordinatesWcsError("VIEW_PARAMETERS_INVALID", message, **details)
+
+
+@dataclass(frozen=True, eq=False)
+class ViewGeometry:
+    """Base su cui si disegna e finestra visibile a una scala data (10 §7, ``make_view_wcs``).
+
+    Pixel della base e della finestra in convenzione numpy (x = colonna, y = riga, indice da 0; DC7).
+    Pixel della base = ``origin + (x, y) / factor`` per il pixel ``(x, y)`` della finestra.
+    """
+
+    base: WCS
+    base_created: bool
+    projection: str
+    frame_name: str
+    tangent_point: SkyFrame | None
+    base_scale: u.Quantity
+    base_scale_method: str
+    center: SkyFrame
+    scale: u.Quantity
+    shape: tuple[int, int]
+    factor: float
+    origin: tuple[float, float]
+    visible_wcs: WCS
+    visible_origin: tuple[int, int]
+    visible_shape: tuple[int, int]
+    field_radius: u.Quantity
+    field_radius_method: str
+    notes: tuple[str, ...] = ()
+    provenance: str = _PROVENANCE
+
+    def window_to_base(self, x, y) -> tuple[np.ndarray, np.ndarray]:
+        x = np.asarray(x, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64)
+        return self.origin[0] + x / self.factor, self.origin[1] + y / self.factor
+
+    def base_to_window(self, bx, by) -> tuple[np.ndarray, np.ndarray]:
+        bx = np.asarray(bx, dtype=np.float64)
+        by = np.asarray(by, dtype=np.float64)
+        return (bx - self.origin[0]) * self.factor, (by - self.origin[1]) * self.factor
+
+    def window_to_sky(self, x, y) -> SkyCoord:
+        """Cielo nel frame della base; ``NaN`` fuori dalla proiezione (esatto anche con distorsioni)."""
+        bx, by = self.window_to_base(x, y)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return self.base.pixel_to_world(bx, by)
+
+    def sky_to_window(self, coords) -> tuple[np.ndarray, np.ndarray]:
+        coord = coords.coord if isinstance(coords, SkyFrame) else coords
+        if not isinstance(coord, SkyCoord):
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "servono coordinate SkyFrame o SkyCoord")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            bx, by = self.base.world_to_pixel(coord)
+        return self.base_to_window(bx, by)
+
+
+def _check_view_shape(shape) -> tuple[int, int]:
+    if (not isinstance(shape, Sequence) or len(shape) != 2
+            or any(isinstance(n, bool) or not isinstance(n, (int, np.integer)) or n < 1 for n in shape)):
+        raise _view_error("shape deve essere (righe, colonne), interi >= 1", shape=shape)
+    return int(shape[0]), int(shape[1])
+
+
+def _check_view_scale(scale) -> u.Quantity:
+    if not isinstance(scale, u.Quantity) or not scale.unit.is_equivalent(u.deg) or not np.isscalar(scale.value):
+        raise _view_error("scale deve essere un angolo per pixel con unità (es. 1 * u.arcsec)")
+    if not (np.isfinite(scale.value) and scale.value > 0):
+        raise _view_error("scale deve essere positiva e finita")
+    return scale.to(u.deg)
+
+
+def _created_base(projection, frame: str, tangent: SkyCoord, scale_deg: float) -> WCS:
+    w = WCS(naxis=2)
+    lon_prefix, lat_prefix = _VIEW_FRAMES[frame]
+    w.wcs.ctype = [f"{lon_prefix}{projection}", f"{lat_prefix}{projection}"]
+    w.wcs.crval = [float(tangent.spherical.lon.deg), float(tangent.spherical.lat.deg)]
+    w.wcs.cdelt = [-scale_deg, scale_deg]  # nord in alto, est a sinistra
+    w.wcs.crpix = [1.0, 1.0]  # pixel (0, 0) in convenzione numpy (DC7)
+    w.wcs.cunit = ["deg", "deg"]
+    if frame == "icrs":
+        w.wcs.radesys = "ICRS"
+    w.wcs.set()  # LONPOLE/LATPOLE: regole di default dello standard FITS WCS (Paper II) applicate da WCSLIB
+    return w
+
+
+def _projection_of(w: WCS) -> str:
+    return w.wcs.ctype[0][-3:] if len(w.wcs.ctype[0]) >= 8 else ""
+
+
+def make_view_wcs(center, scale, shape, *, projection=None, frame=None, tangent_point=None,
+                  base=None) -> ViewGeometry:
+    """Geometria della vista per il modulo 41 (10 §7): base e finestra a una scala data.
+
+    Senza ``base`` crea una base nuova (``projection`` obbligatoria tra ``VIEW_PROJECTIONS``, ``frame``
+    ``icrs`` di default o ``galactic``, punto di tangenza = centro di default); con ``base`` (WCS di
+    un'immagine o base creata prima) la base non cambia e ``projection``/``frame``/``tangent_point`` non
+    si danno. Nessun disegno.
+    """
+    if not isinstance(center, SkyFrame):
+        raise _view_error("center deve essere uno SkyFrame (coordinate con frame e unità)")
+    scale_deg = _check_view_scale(scale)
+    rows, cols = _check_view_shape(shape)
+    notes: list[str] = []
+    if base is not None:
+        if projection is not None or frame is not None or tangent_point is not None:
+            raise _view_error("con base non si danno projection, frame né tangent_point")
+        w = _as_wcs(base)
+        created = False
+        scales = proj_plane_pixel_scales(w)
+        base_scale = float(np.sqrt(scales[0] * scales[1])) * u.deg
+        method = "proj_plane_pixel_scales di astropy.wcs.utils, media geometrica dei due assi"
+        frame_name = wcs_to_celestial_frame(w).name
+        proj = _projection_of(w)
+        tangent = None
+    else:
+        if projection is None:
+            raise _view_error("senza base serve projection")
+        if projection in ("NCP", "ZPN"):
+            reason = "forma storica di SIN" if projection == "NCP" else "richiede i coefficienti PV2_m"
+            raise CoordinatesWcsError("PROJECTION_UNSUPPORTED", f"{projection} non ammessa per una vista: {reason}")
+        if projection not in VIEW_PROJECTIONS:
+            raise CoordinatesWcsError("PROJECTION_UNSUPPORTED", f"proiezione {projection!r} non ammessa per una vista")
+        frame_name = "icrs" if frame is None else frame
+        if frame_name not in _VIEW_FRAMES:
+            raise CoordinatesWcsError("FRAME_UNSUPPORTED", f"frame {frame_name!r} non ammesso per una vista (icrs, galactic)")
+        if tangent_point is not None and not isinstance(tangent_point, SkyFrame):
+            raise _view_error("tangent_point deve essere uno SkyFrame")
+        tangent_coord = (center if tangent_point is None else tangent_point).coord.transform_to(frame_name)
+        w = _created_base(projection, frame_name, tangent_coord, float(scale_deg.value))
+        created = True
+        base_scale = scale_deg
+        method = "scala della base = scale (base creata)"
+        proj = projection
+        tangent = SkyFrame(coord=SkyCoord(tangent_coord.spherical.lon, tangent_coord.spherical.lat, frame=frame_name))
+        notes.append("LONPOLE/LATPOLE dalle regole di default dello standard FITS WCS (Paper II), applicate da WCSLIB")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        cx, cy = (float(v) for v in w.world_to_pixel(center.coord))
+    if not (math.isfinite(cx) and math.isfinite(cy)):
+        raise _view_error("il centro cade fuori dalla proiezione della base")
+    factor = float((base_scale / scale_deg).decompose().value)
+    origin = (cx - (cols - 1) / 2 / factor, cy - (rows - 1) / 2 / factor)
+    # Regione visibile: la base tagliata dall'origine intera che contiene la finestra (stesso cielo per
+    # pixel corrispondenti; astropy sposta il pixel di riferimento, anche delle distorsioni SIP).
+    vx0, vy0 = math.floor(origin[0] - 0.5), math.floor(origin[1] - 0.5)
+    vnx = math.ceil(origin[0] + (cols - 0.5) / factor + 0.5) - vx0 + 1
+    vny = math.ceil(origin[1] + (rows - 0.5) / factor + 0.5) - vy0 + 1
+    visible = w.deepcopy()
+    visible.wcs.crpix = [w.wcs.crpix[0] - vx0, w.wcs.crpix[1] - vy0]
+    if visible.sip is not None:
+        from astropy.wcs import Sip
+        visible.sip = Sip(w.sip.a, w.sip.b, w.sip.ap, w.sip.bp, (w.sip.crpix[0] - vx0, w.sip.crpix[1] - vy0))
+    if any(getattr(w, name, None) is not None for name in ("cpdis1", "cpdis2", "det2im1", "det2im2")):
+        visible = w.slice((slice(vy0, None), slice(vx0, None))) if vx0 >= 0 and vy0 >= 0 else visible
+        notes.append("distorsioni a tabella: regione visibile ricavata con WCS.slice")
+    visible.pixel_shape = (vnx, vny)
+    geometry = ViewGeometry(
+        base=w, base_created=created, projection=proj, frame_name=frame_name, tangent_point=tangent,
+        base_scale=base_scale.to(u.deg), base_scale_method=method, center=center, scale=scale_deg,
+        shape=(rows, cols), factor=factor, origin=origin, visible_wcs=visible, visible_origin=(vx0, vy0),
+        visible_shape=(vny, vnx), field_radius=0.0 * u.deg, field_radius_method="", notes=tuple(notes),
+    )
+    radius, radius_method = _field_radius(geometry)
+    return dataclasses_replace(geometry, field_radius=radius, field_radius_method=radius_method)
+
+
+def _border_points(rows: int, cols: int) -> tuple[np.ndarray, np.ndarray]:
+    xs = np.linspace(-0.5, cols - 0.5, _BORDER_SAMPLES)
+    ys = np.linspace(-0.5, rows - 0.5, _BORDER_SAMPLES)
+    bx = np.concatenate([xs, xs, np.full(_BORDER_SAMPLES, -0.5), np.full(_BORDER_SAMPLES, cols - 0.5)])
+    by = np.concatenate([np.full(_BORDER_SAMPLES, -0.5), np.full(_BORDER_SAMPLES, rows - 0.5), ys, ys])
+    return bx, by
+
+
+def _field_radius(g: ViewGeometry) -> tuple[u.Quantity, str]:
+    rows, cols = g.shape
+    bx, by = _border_points(rows, cols)
+    border = g.window_to_sky(bx, by)
+    lon, lat = border.spherical.lon.value, border.spherical.lat.value
+    if not np.all(np.isfinite(lon) & np.isfinite(lat)):
+        return 180.0 * u.deg, (f"180°: punti del bordo della finestra fuori dalla proiezione "
+                                f"({_BORDER_SAMPLES} punti per lato)")
+    radius = float(np.max(g.center.coord.separation(border).deg))
+    return radius * u.deg, (f"massima distanza angolare (astropy.coordinates) tra il centro e "
+                            f"{_BORDER_SAMPLES} punti per lato del bordo della finestra")
+
+
+def dataclasses_replace(obj, **changes):
+    import dataclasses
+
+    return dataclasses.replace(obj, **changes)
+
+
+# --------------------------------------------------------------------------
+# Scrittura delle coordinate per l'interfaccia (format_coordinates, D41-2)
+# --------------------------------------------------------------------------
+
+_EQUATORIAL_FRAMES = frozenset({"icrs", "fk5", "fk4", "fk4noeterms"})
+_HMS_SYMBOLS = ("h", "m", "s")
+_DMS_SYMBOLS = ("°", "′", "″")
+_DEFAULT_RA_PRECISION = 0.01 * u.s  # DC3
+_DEFAULT_ARC_PRECISION = 0.1 * u.arcsec  # DC3 (Dec); anche lon/lat degli altri frame (scelta minore 1)
+_DECIMAL_DIGITS = 6  # stile decimale (scelta minore 2)
+
+
+@dataclass(frozen=True)
+class FormattedCoordinates:
+    """Testi per l'interfaccia (10 §7, ``format_coordinates``)."""
+
+    lon: tuple[str, ...]
+    lat: tuple[str, ...]
+    frame_name: str
+    epoch: Time | None
+    epoch_note: str
+    style: str
+    lon_precision: u.Quantity | None
+    lat_precision: u.Quantity | None
+    separators: str
+    provenance: str = _PROVENANCE
+
+
+def _fields_and_decimals(precision_value: float, field_units: tuple[float, float, float]) -> tuple[int, int]:
+    """Campi da scrivere e decimali dell'ultimo: forma più corta con l'ultimo campo non più grossolano."""
+    for fields, size in enumerate(field_units[:2], start=1):
+        if size <= precision_value * (1 + 1e-12):
+            return fields, 0
+    decimals = 0
+    while 10.0 ** (-decimals) * field_units[2] > precision_value * (1 + 1e-9):
+        decimals += 1
+    return 3, decimals
+
+
+def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators: str) -> tuple[tuple[str, ...], u.Quantity]:
+    """``kind``: ``ra`` (ore), ``lon`` (gradi senza segno, [0°, 360°)), ``lat`` (gradi con segno)."""
+    if style == "decimal":
+        if precision is None:
+            decimals, used = _DECIMAL_DIGITS, 10.0 ** -_DECIMAL_DIGITS * u.deg
+        else:
+            if not precision.unit.is_equivalent(u.deg):
+                raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "nello stile decimal la precisione è un angolo")
+            p = float(precision.to_value(u.deg))
+            decimals = max(0, math.ceil(-math.log10(p) - 1e-12))
+            used = precision
+        values = angles.wrap_at(360 * u.deg) if kind != "lat" else angles
+        texts = []
+        for a in np.atleast_1d(values):
+            text = Angle(a).to_string(unit=u.deg, decimal=True, precision=decimals, alwayssign=(kind == "lat"))
+            if kind != "lat" and float(text) >= 360.0:  # astropy non riporta a 0: ritorno fatto qui con Angle
+                text = Angle(0 * u.deg).to_string(unit=u.deg, decimal=True, precision=decimals)
+            texts.append(text)
+        return tuple(texts), used
+    if kind == "ra":
+        unit, sizes, symbols = u.hourangle, (3600.0, 60.0, 1.0), _HMS_SYMBOLS
+        default = _DEFAULT_RA_PRECISION
+        if precision is None:
+            p_seconds = float(default.to_value(u.s))
+        elif precision.unit.is_equivalent(u.s):
+            p_seconds = float(precision.to_value(u.s))
+        elif precision.unit.is_equivalent(u.deg):
+            p_seconds = float(precision.to_value(u.arcsec)) / 15.0  # 1 s di tempo = 15″
+        else:
+            raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "precisione dell'ascensione retta senza unità di tempo o angolare")
+        p_value = p_seconds
+    else:
+        unit, sizes, symbols = u.deg, (3600.0, 60.0, 1.0), _DMS_SYMBOLS
+        if precision is None:
+            p_value = float(_DEFAULT_ARC_PRECISION.to_value(u.arcsec))
+        elif precision.unit.is_equivalent(u.deg):
+            p_value = float(precision.to_value(u.arcsec))
+        else:
+            raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"precisione di unità non adatta a una {('latitudine' if kind == 'lat' else 'longitudine')}")
+    if not (math.isfinite(p_value) and p_value > 0):
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve essere positiva")
+    fields, decimals = _fields_and_decimals(p_value, sizes)
+    sep = ":" if separators == "colons" else symbols
+    values = angles.wrap_at(360 * u.deg) if kind != "lat" else angles
+    texts = []
+    for a in np.atleast_1d(values):
+        options = dict(unit=unit, sep=sep, fields=fields, pad=(kind != "lon"), alwayssign=(kind == "lat"))
+        if fields == 3:
+            options["precision"] = decimals
+        text = Angle(a).to_string(**options)
+        # astropy fa il riporto tra i campi ma scrive 24h / 360°: il ritorno a 0 si fa qui, con Angle.
+        if kind == "ra" and text.startswith("24"):
+            text = Angle(0 * u.hourangle).to_string(**options)
+        elif kind == "lon" and text.startswith("360"):
+            text = Angle(0 * u.deg).to_string(**options)
+        texts.append(text)
+    used = (p_seconds * u.s) if kind == "ra" else (p_value * u.arcsec)
+    return tuple(texts), used
+
+
+def format_coordinates(coords=None, *, values=None, frame=None, axis=None, style="sexagesimal",
+                       precision=None, separators="symbols") -> FormattedCoordinates:
+    """Coordinate come testo per l'interfaccia, con le cifre di DC3 (10 §7, D41-2).
+
+    Frame equatoriali (icrs, fk5, fk4): longitudine in ore, latitudine in gradi con segno; altri frame:
+    longitudine in gradi in [0°, 360°) senza segno. Calcolo con ``Angle.wrap_at`` e ``Angle.to_string``
+    di astropy; il ritorno a 0h/0° dopo il riporto (che astropy non fa) è gestito qui con ``Angle``.
+    Il segno è il trattino ASCII (``-``/``+``), copiabile.
+    """
+    if style not in ("sexagesimal", "decimal"):
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"stile sconosciuto: {style!r}")
+    if separators not in ("symbols", "colons"):
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"separatori sconosciuti: {separators!r}")
+    if precision is not None and (not isinstance(precision, u.Quantity) or not np.isscalar(precision.value)):
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve avere un'unità (es. 10 * u.arcmin)")
+    if (coords is None) == (values is None):
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", "dare coords oppure values (con frame e axis)")
+    if coords is not None:
+        if not isinstance(coords, SkyFrame):
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame")
+        frame_name = coords.frame_name
+        if frame is not None and frame != frame_name:
+            raise CoordinatesWcsError("FRAME_UNSUPPORTED", f"frame {frame!r} diverso da quello delle coordinate ({frame_name}): nessuna conversione")
+        equatorial = frame_name in _EQUATORIAL_FRAMES
+        lon_kind = "ra" if equatorial else "lon"
+        lon_texts, lon_p = _format_axis(Angle(coords.lon), kind=lon_kind, style=style, precision=precision, separators=separators)
+        lat_texts, lat_p = _format_axis(Angle(coords.lat), kind="lat", style=style, precision=precision, separators=separators)
+        epoch, note = coords.epoch, ("epoca dei dati" if coords.epoch is not None else "epoca non nota: non assunta")
+    else:
+        if frame is None:
+            raise CoordinatesWcsError("FRAME_UNSUPPORTED", "con values serve frame")
+        _frame_class(frame)
+        if axis not in ("lon", "lat"):
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "con values serve axis = 'lon' o 'lat'")
+        angles = Angle(_require_angle(values, "values"))
+        equatorial = frame in _EQUATORIAL_FRAMES
+        kind = "lat" if axis == "lat" else ("ra" if equatorial else "lon")
+        texts, used = _format_axis(angles, kind=kind, style=style, precision=precision, separators=separators)
+        lon_texts, lat_texts = (texts, ()) if axis == "lon" else ((), texts)
+        lon_p, lat_p = (used, None) if axis == "lon" else (None, used)
+        frame_name, epoch, note = frame, None, "valori di un asse: epoca non pertinente"
+    return FormattedCoordinates(lon=lon_texts, lat=lat_texts, frame_name=frame_name, epoch=epoch, epoch_note=note,
+                                style=style, lon_precision=lon_p, lat_precision=lat_p, separators=separators)
+
+
+# --------------------------------------------------------------------------
+# Indicatore del nord e barra di scala (compass_and_scale_bar, A7, 2026-10-16)
+# --------------------------------------------------------------------------
+
+_COMPASS_DELTA_PIXELS = 10.0  # scelta minore 4
+_LOCAL_ONLY_RADIUS = 15.0 * u.deg  # scelta minore 5 (campo oltre i 30° di D10-9)
+
+
+@dataclass(frozen=True)
+class CompassScaleBar:
+    """Direzioni del nord e dell'est al centro della vista e barra di scala (10 §7)."""
+
+    frame_name: str
+    north: tuple[float, float] | None
+    east: tuple[float, float] | None
+    east_left: bool | None
+    delta: u.Quantity
+    bar_angle: u.Quantity
+    bar_pixels: float
+    label: str
+    local_only: bool
+    max_bar_pixels: int
+    warnings: tuple[tuple[str, str], ...]
+    method: str
+    provenance: str = _PROVENANCE
+
+
+def _bar_label(step: u.Quantity) -> tuple[str, u.Quantity]:
+    deg = float(step.to_value(u.deg))
+    for unit, symbol in ((u.deg, "°"), (u.arcmin, "′"), (u.arcsec, "″")):
+        value = round(float(step.to_value(unit)), 10)
+        if value >= 1 or unit is u.arcsec:
+            return f"{value:g}{symbol}", value * unit
+    raise AssertionError(deg)  # pragma: no cover
+
+
+def compass_and_scale_bar(geometry: ViewGeometry, *, frame=None, max_bar_pixels=None) -> CompassScaleBar:
+    """Nord ed est al centro della vista e barra di scala "tonda" (10 §7, A7 nella v1).
+
+    Direzioni: punti a δ = 10 pixel della finestra con ``SkyCoord.directional_offset_by`` (angolo di
+    posizione 0° e 90° nel frame), portati nella finestra; vettori unitari in convenzione numpy della
+    finestra (y verso il nord della base). Barra: il più grande valore tondo in arco di
+    ``choose_grid_spacing`` la cui lunghezza (segmento orizzontale centrato, estremi a quella distanza
+    angolare, ``scipy.optimize.brentq`` entro 1e-6 pixel) non supera ``max_bar_pixels``.
+    """
+    from scipy.optimize import brentq
+
+    if not isinstance(geometry, ViewGeometry):
+        raise _view_error("serve una ViewGeometry di make_view_wcs")
+    rows, cols = geometry.shape
+    if max_bar_pixels is None:
+        max_bar_pixels = max(1, cols // 5)
+    if isinstance(max_bar_pixels, bool) or not isinstance(max_bar_pixels, (int, np.integer)) or max_bar_pixels < 1:
+        raise _view_error("max_bar_pixels deve essere un intero >= 1")
+    frame_name = geometry.frame_name if frame is None else frame
+    target = _frame_instance(frame_name)
+    xc, yc = (cols - 1) / 2, (rows - 1) / 2
+    warn: list[tuple[str, str]] = []
+    center = geometry.window_to_sky(xc, yc).transform_to(target)
+    delta = (_COMPASS_DELTA_PIXELS * geometry.scale).to(u.deg)
+    pole = SkyCoord(0 * u.deg, 90 * u.deg, frame=target)
+    north = east = east_left = None
+    if not np.isfinite(center.spherical.lat.deg):
+        warn.append(("NORTH_UNDEFINED", "centro della finestra fuori dalla proiezione"))
+    elif center.separation(pole) < delta or center.separation(SkyCoord(0 * u.deg, -90 * u.deg, frame=target)) < delta:
+        warn.append(("NORTH_UNDEFINED", f"polo del frame {frame_name} a meno di δ = {delta.to(u.arcsec):.3g} dal centro"))
+    else:
+        vectors = []
+        for angle in (0 * u.deg, 90 * u.deg):
+            x, y = geometry.sky_to_window(center.directional_offset_by(angle, delta))
+            v = np.array([float(x) - xc, float(y) - yc])
+            vectors.append(v / np.hypot(*v) if np.all(np.isfinite(v)) and np.hypot(*v) > 0 else None)
+        if any(v is None for v in vectors):
+            warn.append(("NORTH_UNDEFINED", "direzione fuori dalla proiezione"))
+        else:
+            north, east = (tuple(float(c) for c in vectors[0]), tuple(float(c) for c in vectors[1]))
+            east_left = bool(north[0] * east[1] - north[1] * east[0] > 0)
+
+    def separation(length: float) -> float:
+        ends = geometry.window_to_sky([xc - length / 2, xc + length / 2], [yc, yc])
+        lat = ends.spherical.lat.deg
+        if not np.all(np.isfinite(lat)):
+            return float("nan")
+        return float(ends[0].separation(ends[1]).deg)
+
+    limit = float(max_bar_pixels)
+    if not math.isfinite(separation(limit)):  # estremi fuori dalla proiezione: lunghezza utile più grande
+        low, high = 0.0, limit
+        for _ in range(60):
+            mid = (low + high) / 2
+            low, high = (mid, high) if math.isfinite(separation(mid)) else (low, mid)
+        limit = low
+    reach = separation(limit) if limit > 0 else 0.0
+    candidates = [s for s in GRID_STEPS_ARC if float(s.to_value(u.deg)) <= reach]
+    if candidates:
+        step = candidates[-1]
+        bar = brentq(lambda L: separation(L) - float(step.to_value(u.deg)), 0.0, limit, xtol=1e-6)
+    else:
+        step = GRID_STEPS_ARC[0]
+        warn.append(("SCALE_BAR_TOO_LONG", f"anche {step.to(u.arcsec):g} supera {max_bar_pixels} pixel della finestra"))
+        high = max(limit, 1.0)
+        while separation(high) < float(step.to_value(u.deg)):
+            high *= 2
+        bar = brentq(lambda L: separation(L) - float(step.to_value(u.deg)), 0.0, high, xtol=1e-6)
+    label, angle = _bar_label(step)
+    local_only = geometry.projection == "AIT" or geometry.field_radius > _LOCAL_ONLY_RADIUS
+    return CompassScaleBar(
+        frame_name=frame_name, north=north, east=east, east_left=east_left, delta=delta, bar_angle=angle,
+        bar_pixels=float(bar), label=label, local_only=bool(local_only), max_bar_pixels=int(max_bar_pixels),
+        warnings=tuple(warn),
+        method=("directional_offset_by con δ = 10 pixel della finestra; barra: segmento orizzontale centrato, "
+                "SkyCoord.separation, brentq entro 1e-6 pixel; valori tondi in arco di choose_grid_spacing"),
+    )

@@ -727,12 +727,10 @@ def test_t23_errors():
 
 
 def test_t20_choose_projection():
-    threshold = 30 * u.deg  # soglia data dal test: il valore di progetto è D10-9
-    assert choose_projection(1 * u.deg, threshold=threshold) == "TAN"
-    assert choose_projection(180 * u.deg, threshold=threshold) == "AIT"
-    assert choose_projection(threshold, threshold=threshold) == "AIT"
-    with pytest.raises(TypeError):
-        choose_projection(1 * u.deg)  # soglia obbligatoria finché D10-9 è aperta
+    threshold = 30 * u.deg
+    assert choose_projection(1 * u.deg, threshold=threshold).projection == "TAN"
+    assert choose_projection(180 * u.deg, threshold=threshold).projection == "AIT"
+    assert choose_projection(threshold, threshold=threshold).projection == "AIT"
     expect_error("COORD_UNIT_MISSING", choose_projection, 1.0, threshold=threshold)
 
 
@@ -831,3 +829,220 @@ def test_t25_parse_sexagesimal():
     with pytest.raises(CoordinatesWcsError) as info:
         parse_sexagesimal(["non è un angolo"], hours=False)
     assert info.value.code == "COORD_FORMAT_INVALID"
+
+
+# --- T26-T36: vista, scrittura delle coordinate, nord e barra di scala (2026-10-15/16) ---------------
+
+from astropy.coordinates import Angle  # noqa: E402
+
+from astrotwo.core.coordinates_wcs import (  # noqa: E402
+    GRID_STEPS_ARC,
+    ViewGeometry,
+    compass_and_scale_bar,
+    format_coordinates,
+    make_view_wcs,
+)
+
+
+def icrs(ra, dec, epoch=None):
+    return SkyFrame.from_lonlat(ra * u.deg, dec * u.deg, "icrs", epoch=epoch)
+
+
+def test_t29_default_threshold():
+    assert choose_projection(29.999 * u.deg).projection == "TAN"
+    choice = choose_projection(30 * u.deg)
+    assert choice.projection == "AIT" and choice.threshold == 30 * u.deg and "default" in choice.threshold_source
+    explicit = choose_projection(31 * u.deg, threshold=33 * u.deg)
+    assert explicit.projection == "TAN" and explicit.threshold == 33 * u.deg
+
+
+@pytest.mark.parametrize("projection", ["TAN", "SIN", "AIT", "ZEA", "STG", "CAR"])
+@pytest.mark.parametrize("frame", ["icrs", "galactic"])
+def test_t26_view_without_base(projection, frame):
+    center = icrs(56.75, 24.12) if frame == "icrs" else SkyFrame.from_lonlat(166.57 * u.deg, -23.52 * u.deg, "galactic")
+    g = make_view_wcs(center, 2 * u.arcsec, (300, 400), projection=projection, frame=frame)
+    lon_p, lat_p = ("RA---", "DEC--") if frame == "icrs" else ("GLON-", "GLAT-")
+    ref = WCS(naxis=2)
+    ref.wcs.ctype = [lon_p + projection, lat_p + projection]
+    ref.wcs.crval = [center.lon.value, center.lat.value]
+    ref.wcs.cdelt = [-2 / 3600, 2 / 3600]
+    ref.wcs.crpix = [1, 1]
+    ref.wcs.cunit = ["deg", "deg"]
+    if frame == "icrs":
+        ref.wcs.radesys = "ICRS"
+    ref.wcs.set()
+    xs, ys = np.meshgrid(np.linspace(-50, 50, 7), np.linspace(-40, 40, 7))
+    a = g.base.pixel_to_world(xs.ravel(), ys.ravel())
+    b = ref.pixel_to_world(xs.ravel(), ys.ravel())
+    assert np.max(a.separation(b).deg) < 1e-9
+    c = g.window_to_sky(399 / 2, 299 / 2)
+    assert c.separation(center.coord).deg < 1e-9
+    wx, wy = np.array([0.0, 123.4, 399.0]), np.array([0.0, 77.7, 299.0])
+    bx, by = g.sky_to_window(g.window_to_sky(wx, wy))
+    assert np.max(np.abs(bx - wx)) < 1e-6 and np.max(np.abs(by - wy)) < 1e-6
+    assert g.factor == pytest.approx(1.0) and g.base_created
+
+
+def sip_wcs():
+    header = fits.Header()
+    header.update({"NAXIS": 2, "NAXIS1": 1000, "NAXIS2": 800, "CTYPE1": "RA---TAN-SIP", "CTYPE2": "DEC--TAN-SIP",
+                   "CRVAL1": 56.75, "CRVAL2": 24.12, "CRPIX1": 500.5, "CRPIX2": 400.5,
+                   "CD1_1": -2.4e-4, "CD1_2": 1.4e-4, "CD2_1": 1.4e-4, "CD2_2": 2.4e-4,
+                   "A_ORDER": 2, "B_ORDER": 2, "A_2_0": 2e-6, "A_1_1": -1e-6, "B_0_2": 3e-6, "B_1_1": 1e-6})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FITSFixedWarning)
+        return WCS(header)
+
+
+def dss_solution():
+    path = get_pkg_data_filename("data/dss.14.29.56-62.41.05.fits.gz", package="astropy.wcs.tests")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return wcs_from_header(fits.getheader(path))
+
+
+@pytest.mark.parametrize("which", ["sip", "dss"])
+def test_t27_view_on_distorted_image(which):
+    base = sip_wcs() if which == "sip" else dss_solution()
+    w = base if which == "sip" else base.wcs
+    c = w.pixel_to_world(300.0, 200.0)
+    center = SkyFrame(coord=SkyCoord(c.ra, c.dec, frame="icrs")) if which == "sip" else SkyFrame(coord=c)
+    for scale in (0.5 * u.arcsec, 3 * u.arcsec, 20 * u.arcsec):
+        g = make_view_wcs(center, scale, (240, 320), base=base)
+        assert not g.base_created
+        x, y = np.array([0.0, 17.3, 319.0]), np.array([0.0, 101.9, 239.0])
+        direct = w.pixel_to_world(g.origin[0] + x / g.factor, g.origin[1] + y / g.factor)
+        assert np.max(g.window_to_sky(x, y).separation(direct).arcsec) < 1e-12 * 3600
+        bx, by = g.window_to_base(x, y)
+        vis = g.visible_wcs.pixel_to_world(bx - g.visible_origin[0], by - g.visible_origin[1])
+        assert np.max(vis.separation(direct).deg) < 1e-9
+
+
+def test_t28_field_radius():
+    center = icrs(10.0, 20.0)
+    g = make_view_wcs(center, 6 * u.arcsec, (200, 300), projection="TAN")
+    xs = np.linspace(-0.5, 299.5, 64)
+    ys = np.linspace(-0.5, 199.5, 64)
+    bx = np.concatenate([xs, xs, np.full(64, -0.5), np.full(64, 299.5)])
+    by = np.concatenate([np.full(64, -0.5), np.full(64, 199.5), ys, ys])
+    expected = np.max(center.coord.separation(g.window_to_sky(bx, by)).deg)
+    assert g.field_radius.to_value(u.deg) == pytest.approx(expected, abs=1e-12)
+    allsky = make_view_wcs(icrs(0.0, 0.0), 1.5 * u.deg, (200, 400), projection="AIT")
+    assert allsky.field_radius == 180 * u.deg and "fuori dalla proiezione" in allsky.field_radius_method
+
+
+def test_t30_view_errors():
+    c = icrs(10.0, 20.0)
+    expect_error("VIEW_PARAMETERS_INVALID", make_view_wcs, c, 0 * u.arcsec, (10, 10), projection="TAN")
+    expect_error("VIEW_PARAMETERS_INVALID", make_view_wcs, c, 1.0, (10, 10), projection="TAN")
+    expect_error("VIEW_PARAMETERS_INVALID", make_view_wcs, c, 1 * u.arcsec, (0, 10), projection="TAN")
+    expect_error("VIEW_PARAMETERS_INVALID", make_view_wcs, c, 1 * u.arcsec, (10, 10), projection="TAN", base=sip_wcs())
+    expect_error("VIEW_PARAMETERS_INVALID", make_view_wcs, c, 1 * u.arcsec, (10, 10))
+    expect_error("PROJECTION_UNSUPPORTED", make_view_wcs, c, 1 * u.arcsec, (10, 10), projection="NCP")
+    expect_error("PROJECTION_UNSUPPORTED", make_view_wcs, c, 1 * u.arcsec, (10, 10), projection="ZPN")
+
+
+def test_t31_dc3_digits():
+    rng = np.random.default_rng(31)
+    ra, dec = rng.uniform(0, 360, 1000), rng.uniform(-90, 90, 1000)
+    out = format_coordinates(SkyFrame.from_lonlat(ra * u.deg, dec * u.deg, "icrs", epoch="J2016.0"))
+    exp_ra = [Angle(v * u.deg).to_string(unit=u.hourangle, sep=("h", "m", "s"), precision=2, pad=True) for v in ra]
+    exp_dec = [Angle(v * u.deg).to_string(unit=u.deg, sep=("°", "′", "″"), precision=1, pad=True, alwayssign=True)
+               for v in dec]
+    exp_ra = ["00h00m00.00s" if t.startswith("24") else t for t in exp_ra]
+    assert list(out.lon) == exp_ra and list(out.lat) == exp_dec
+    assert out.frame_name == "icrs" and out.epoch == Time("J2016.0") and "," not in "".join(out.lon + out.lat)
+    gal = format_coordinates(SkyFrame.from_lonlat(ra * u.deg, dec * u.deg, "galactic"))
+    assert list(gal.lon)[:5] == [Angle(v * u.deg).to_string(unit=u.deg, sep=("°", "′", "″"), precision=1) for v in ra[:5]]
+    assert gal.epoch is None and "non assunta" in gal.epoch_note
+
+
+def test_t32_carry_wrap_sign():
+    ra = Angle(["23h59m59.996s", "10h59m59.996s"]).deg
+    out = format_coordinates(SkyFrame.from_lonlat(ra * u.deg, [-0.04 / 3600, 89 + 59 / 60 + 59.96 / 3600] * u.deg, "icrs"))
+    assert out.lon == ("00h00m00.00s", "11h00m00.00s")
+    assert out.lat == ("-00°00′00.0″", "+90°00′00.0″")
+    gal = format_coordinates(SkyFrame.from_lonlat([359.99999999] * u.deg, [0.0] * u.deg, "galactic"))
+    assert gal.lon == ("0°00′00.0″",)
+
+
+def test_t33_precision_and_styles():
+    lab = format_coordinates(values=[10.5, 11.0] * u.deg, frame="galactic", axis="lat", precision=10 * u.arcmin)
+    assert lab.lat == ("+10°30′", "+11°00′")
+    ra = format_coordinates(values=[150.0] * u.deg, frame="icrs", axis="lon", precision=1 * u.s)
+    assert ra.lon == ("10h00m00s",)
+    ra2 = format_coordinates(values=[150.0] * u.deg, frame="icrs", axis="lon", precision=0.01 * u.s)
+    assert ra2.lon == ("10h00m00.00s",)
+    dec = format_coordinates(icrs(150.123456789, -5.5), style="decimal")
+    assert dec.lon == ("150.123457",) and dec.lat == ("-5.500000",)
+    col = format_coordinates(icrs(187.5, 12.25), separators="colons")
+    assert col.lon == ("12:30:00.00",) and col.lat == ("+12:15:00.0",)
+    expect_error("FORMAT_PRECISION_INVALID", format_coordinates, icrs(1, 1), precision=0 * u.arcsec)
+    expect_error("FORMAT_PRECISION_INVALID", format_coordinates, icrs(1, 1), precision=1.0)
+    expect_error("FORMAT_PRECISION_INVALID", format_coordinates, values=[1] * u.deg, frame="icrs", axis="lat",
+                 precision=1 * u.s)
+    expect_error("FRAME_UNSUPPORTED", format_coordinates, values=[1] * u.deg, axis="lat")
+    expect_error("COORD_UNIT_MISSING", format_coordinates, values=[1] * u.deg, frame="icrs")
+
+
+def expected_vectors(g: ViewGeometry, frame):
+    rows, cols = g.shape
+    xc, yc = (cols - 1) / 2, (rows - 1) / 2
+    c = g.window_to_sky(xc, yc).transform_to(frame)
+    delta = 10 * g.scale
+    out = []
+    for pa in (0, 90):
+        x, y = g.sky_to_window(c.directional_offset_by(pa * u.deg, delta))
+        v = np.array([float(x) - xc, float(y) - yc])
+        out.append(v / np.hypot(*v))
+    return out
+
+
+def test_t34_north_and_east():
+    cases = [
+        (make_view_wcs(icrs(56.75, 24.12), 2 * u.arcsec, (300, 400), projection="TAN"), "icrs", True),
+        (make_view_wcs(icrs(56.75, 24.12), 2 * u.arcsec, (300, 400), projection="TAN", frame="galactic"), "galactic", True),
+        (make_view_wcs(icrs(56.75, 24.12), 2 * u.arcsec, (300, 400), base=sip_wcs()), "icrs", True),
+    ]
+    flipped = WCS(naxis=2)
+    flipped.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    flipped.wcs.crval = [56.75, 24.12]
+    flipped.wcs.cdelt = [2 / 3600, 2 / 3600]
+    flipped.wcs.crpix = [1, 1]
+    flipped.wcs.set()
+    cases.append((make_view_wcs(icrs(56.75, 24.12), 2 * u.arcsec, (300, 400), base=flipped), "icrs", False))
+    for g, frame, east_left in cases:
+        result = compass_and_scale_bar(g, frame=frame)
+        n, e = expected_vectors(g, frame)
+        assert np.max(np.abs(np.array(result.north) - n)) < 1e-9 and np.max(np.abs(np.array(result.east) - e)) < 1e-9
+        assert result.east_left is east_left and result.warnings == ()
+
+
+@pytest.mark.parametrize("scale", [0.2 * u.arcsec, 2 * u.arcsec, 30 * u.arcsec, 5 * u.arcmin])
+def test_t35_scale_bar(scale):
+    g = make_view_wcs(icrs(56.75, 24.12), scale, (300, 600), projection="TAN")
+    bar = compass_and_scale_bar(g, max_bar_pixels=120)
+    xc, yc = 599 / 2, 299 / 2
+    ends = g.window_to_sky([xc - bar.bar_pixels / 2, xc + bar.bar_pixels / 2], [yc, yc])
+    assert abs(ends[0].separation(ends[1]).deg - bar.bar_angle.to_value(u.deg)) < 1e-9
+    assert bar.bar_pixels <= 120
+    steps = [float(s.to_value(u.deg)) for s in GRID_STEPS_ARC]
+    i = steps.index(pytest.approx(bar.bar_angle.to_value(u.deg)))
+    if i + 1 < len(steps):
+        far = g.window_to_sky([xc - 60, xc + 60], [yc, yc])
+        assert far[0].separation(far[1]).deg < steps[i + 1]  # il valore tondo successivo non ci sta
+    assert bar.label[-1] in "″′°" and "," not in bar.label
+    assert bar.local_only is bool(g.field_radius > 15 * u.deg)
+
+
+def test_t36_pole_aitoff_limits():
+    pole = compass_and_scale_bar(make_view_wcs(icrs(10.0, 90.0), 2 * u.arcsec, (100, 100), projection="TAN"))
+    assert pole.north is None and pole.warnings[0][0] == "NORTH_UNDEFINED"
+    allsky = compass_and_scale_bar(make_view_wcs(icrs(0.0, 0.0), 1.5 * u.deg, (200, 400), projection="AIT"))
+    assert allsky.local_only
+    tiny = compass_and_scale_bar(make_view_wcs(icrs(1.0, 1.0), 0.001 * u.arcsec, (100, 100), projection="TAN"),
+                                 max_bar_pixels=5)
+    assert ("SCALE_BAR_TOO_LONG" in [w[0] for w in tiny.warnings]) and tiny.label == "0.01″"
+    g = make_view_wcs(icrs(1.0, 1.0), 1 * u.arcsec, (100, 100), projection="TAN")
+    expect_error("VIEW_PARAMETERS_INVALID", compass_and_scale_bar, g, max_bar_pixels=0)
+    expect_error("FRAME_UNSUPPORTED", compass_and_scale_bar, g, frame="nonexistent")
