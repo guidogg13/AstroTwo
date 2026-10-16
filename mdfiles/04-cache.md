@@ -66,6 +66,29 @@ viene e quando è stato preso.
   classi di cache proprie; tutti usano `SharedCache` direttamente.
 - **Pulizia su richiesta:** svuotare tutta la cache o la parte di un modulo
   (comando registrato, regola d'oro n. 6).
+- **Accesso da più thread e da più processi (D04, decisa dal proprietario
+  il 2026-10-16, opzioni a + b):** ogni istanza di `SharedCache` ha la
+  propria connessione SQLite (una per thread, o una per operazione come
+  fanno i moduli che non ricevono una cache); le scritture usano
+  transazioni `BEGIN IMMEDIATE` e la libreria aspetta il lucchetto del
+  database fino al suo timeout (5 s, quello di `sqlite3`). I **file orfani**
+  (file temporanei `.tmp-*` e file senza voce nel registro, che non hanno
+  provenienza e non si possono servire) si eliminano con due regole:
+  - **(a) solo se più vecchi di una soglia:** di default **10 minuti**
+    (600 s), configurabile con il parametro `orphan_min_age` di
+    `SharedCache` (secondi, > 0); la soglia usata si scrive nel log a ogni
+    eliminazione. Un file più giovane può essere la scrittura in corso di
+    un altro thread o processo (file temporaneo, o file già rinominato con
+    la voce del registro non ancora confermata) e non si tocca;
+  - **(b) una sola volta per processo**, alla **prima apertura** di
+    `SharedCache` per quella cartella (nell'app la cartella è una sola, quindi
+    una volta per processo; i test, che usano cartelle diverse, la
+    ripetono per ciascuna). Le aperture successive nello stesso processo
+    non puliscono.
+  Motivo: con la pulizia a ogni apertura e senza soglia, una nuova istanza
+  cancellava il file temporaneo di una scrittura in corso in un altro thread
+  (`FileNotFoundError` in `put`: 5 errori su 1200 operazioni con un'istanza
+  per thread, 250 con un'istanza per operazione, prova del 2026-10-16).
 
 ## 4. Cosa NON fa
 
@@ -116,7 +139,8 @@ viene e quando è stato preso.
 Nomi proposti, descrizione in parole, nessun codice:
 
 - **`SharedCache`** (classe) — apre (o crea) la cache nella cartella
-  indicata, `~/Library/Caches/AstroTwo/` di default; metodi principali:
+  indicata, `~/Library/Caches/AstroTwo/` di default; parametro
+  `orphan_min_age` (secondi, default 600, §3); metodi principali:
   - **`put(module, key, data, origin, retrieved_at)`** — salva una voce e la
     sua provenienza; applica il limite (LRU) prima di scrivere;
   - **`get(module, key)`** — restituisce dato + `origin` + `retrieved_at`
@@ -157,6 +181,8 @@ Nomi proposti, descrizione in parole, nessun codice:
 - **Scritture sicure:** una voce si scrive per intero o non si scrive (file
   temporaneo poi rinominato; transazione SQLite), così che un arresto
   improvviso non lasci voci a metà.
+- **Più thread e più processi:** nessuna voce parziale, limite rispettato
+  e nessun errore con letture e scritture concorrenti (§3, D04).
 - **Prestazioni:** la lettura di una voce presente non deve richiedere rete;
   valori misurabili in `61-strategia-test.md`.
 
@@ -169,6 +195,8 @@ Nomi proposti, descrizione in parole, nessun codice:
 | Scrittura senza `origin` o `retrieved_at` | rifiuto | `CACHE_PROVENANCE_MISSING` |
 | Rete assente nel modulo chiamante | il modulo può servire la copia in cache dichiarandola tale; se manca, errore del modulo | `NET_TIMEOUT` (del modulo) |
 | Voce richiesta da un modulo diverso dal proprietario | rifiuto | `CACHE_FORBIDDEN` |
+| File orfano più giovane della soglia (scrittura in corso altrove) | non eliminato | — |
+| `orphan_min_age` non positivo | rifiuto | `ValueError` |
 
 ## 11. Esposizione all'IA
 
@@ -187,6 +215,9 @@ data dei dati restituiti dagli strumenti dei moduli che la usano.
 | T6 | Database corrotto | sovrascrivere `cache.sqlite` con byte casuali e riaprire | `CACHE_UNAVAILABLE` con avviso, cache ricreata | test di unità |
 | T7 | Scrittura interrotta | simulare un errore a metà scrittura | nessuna voce parziale leggibile | test di unità |
 | T8 | Posizione | aprire senza cartella esplicita | percorso = `~/Library/Caches/AstroTwo/` (i test usano sempre una cartella temporanea) | test di unità con cartella home simulata |
+| T9 | Più thread (D04; è anche il T17 del `05`) | 8 thread con letture e scritture concorrenti di file e righe, sia un'istanza per thread sia un'istanza per operazione, almeno 1200 operazioni per modo | 0 errori; nessuna voce parziale (contenuto letto sempre intero); totale ≤ limite; nessuna voce del registro senza file | test di unità con cartella temporanea |
+| T10 | Due processi (D04) | due processi che usano insieme la stessa cartella con lo stesso carico | 0 errori in entrambi; nessuna voce parziale; totale ≤ limite | test con `multiprocessing` |
+| T11 | Soglia degli orfani (D04) | un `.tmp-*` e un file senza registro più vecchi della soglia, gli stessi più giovani; prima apertura nel processo; poi un nuovo orfano vecchio e una seconda apertura | alla prima apertura eliminati solo i vecchi, soglia nel log; alla seconda apertura nessuna pulizia | test di unità (date dei file impostate con `os.utime`) |
 
 ## 13. Decisioni aperte
 
@@ -201,6 +232,11 @@ Nessuna decisione aperta. Decise dal proprietario il 2026-10-09:
   `ImageCache` (`11`), `HiPSCache` (`12`), `CatalogCache` (`13`),
   `QueryCache` (`14`) e la cache dei MOC (`16`) sono tolte dalle specifiche;
   tutti usano la cache comune `SharedCache`.
+- **D04 — Cache da più thread e da più processi: DECISA il 2026-10-16**
+  (decisione del proprietario, opzioni a + b): orfani eliminati solo se più
+  vecchi di 10 minuti (configurabile, dichiarata) e una sola volta per
+  processo alla prima apertura. Applicata in §3, §7, §9, §10, §12
+  (T9–T11).
 
 ## 14. Registro modifiche
 
@@ -211,3 +247,5 @@ Nessuna decisione aperta. Decise dal proprietario il 2026-10-09:
 | 2026-10-09 | Claude Code | **Precisazioni del proprietario prima del codice:** il totale del limite è la somma dei dati delle voci (overhead di SQLite escluso); 5 GB = 5 × 10⁹ byte; descritti chiavi uniche con modulo proprietario, righe con colonne dichiarate dal modulo, ricreazione della cache corrotta e cache disattivata se la cartella non è scrivibile (§3, §9, §12-T3). Stato `approvato` invariato. |
 | 2026-10-09 | Claude Code | **Codice scritto:** `src/astrotwo/core/cache.py` (`SharedCache`, `CacheTable`, `CachedValue`, `CacheUsage`, `NETWORK_TIMEOUTS`) con i test T1–T8 di §12 e casi aggiuntivi in `tests/core/test_cache.py` (18 superati; sempre in cartella temporanea o home simulata). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): §5 "Usato da" con `18-core-calcolatrici.md` (tabella IERS di `update_iers_table`) e `19-core-dati-planetari.md` (PDS4 da URL, D19-9, attraverso la rete e la cache del 14). Nessun altro cambiamento. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **D04 decisa dal proprietario il 2026-10-16** (autorizzazione esplicita a modificare il file approvato): accesso da più thread e da più processi — orfani eliminati solo se più vecchi di `orphan_min_age` (600 s di default, configurabile, nel log) e una sola volta per processo alla prima apertura; motivo: la verifica del 2026-10-16 (5 errori su 1200 operazioni con un'istanza per thread, 250 con un'istanza per operazione); test T9 (è il T17 del 05), T10, T11. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | **Codice di D04:** `SharedCache(orphan_min_age=600)` in `src/astrotwo/core/cache.py` (orfani eliminati solo se più vecchi della soglia, nel log; pulizia una volta per processo e per cartella); test T9 (8 thread, istanza per thread e per operazione, 1200 operazioni, 0 errori), T10 (due processi, 400 operazioni ciascuno, 0 errori), T11 (soglia e una sola pulizia per processo) in `tests/core/test_cache.py`, falliti prima della correzione e superati dopo. Stato `approvato` invariato. |

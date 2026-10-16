@@ -481,8 +481,11 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   valori di `requested_by` (`menu`, `keyboard`, `mouse`, `history`,
   `session`, `ai`); (2) comandi di sola lettura in classe `session`
   (rieseguiti alla riapertura).
-- **Da verificare prima del codice:** accesso alla cache del 04 da più
-  thread (§3.2, T17).
+- **Accesso alla cache del 04 da più thread (§3.2, T17): verificato il
+  2026-10-16.** La prima prova è fallita (orfani cancellati durante le
+  scritture di altri thread); corretto nel 04 con D04 (orfani solo oltre 10
+  minuti, pulizia una volta per processo); T17 è nei test della cache
+  (`tests/core/test_cache.py`, T9 del 04).
 
 ## 14. Registro modifiche
 
@@ -492,3 +495,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D05-1 decisa (tre classi `session`/`passive`/`application`); D05-2 decisa (avviso senza fermarsi; impronta dei risultati di rete di ogni comando salvata nella sessione, l'avviso dice quale comando e cosa è cambiato; §3.1, §3.4, §10, T15); D05-3 rimandata; scelte minori confermate. Nessuna decisione dei Gruppi 1 e 2 resta aperta in questo file. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): campo `requested_by` nel comando, nella cronologia e nella sessione; indicatore `confirm` con il suo elenco; nuovi comandi di sola lettura `coords.resolve_name`, `catalog.search`, `catalog.describe`, `catalog.rows` (al più 50 righe), `layer.list`; blocco facoltativo `conversations` della sessione (solo su richiesta, mai riletto per rieseguire); riesecuzione dei comandi dell'IA senza chiamare l'IA; schema con gli indicatori per il `32`; test T18–T21. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-16 | Claude Code | Verifica "cache del 04 da più thread" (§3.2, T17) chiusa: fallita alla prima prova, corretta nel 04 con D04 (decisione del proprietario del 2026-10-16); T17 nella suite come T9 del 04. Stato `approvato` invariato. |

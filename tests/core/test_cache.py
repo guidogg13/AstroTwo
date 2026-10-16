@@ -250,3 +250,131 @@ def test_invalid_arguments(tmp_path):
             cache.table("10", "nomi; DROP", {"v": "TEXT"})
     with pytest.raises(ValueError):
         SharedCache(tmp_path, limit_bytes=0)
+
+
+# --- D04 (decisione del proprietario del 2026-10-16): più thread, più processi, orfani -------------
+
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import threading  # noqa: E402
+
+LOAD_LIMIT = 2_000_000
+
+
+def _load(root, per_instance: bool, seed: int, operations: int, errors: list) -> int:
+    """Letture e scritture concorrenti di file e righe; restituisce le operazioni fatte."""
+    shared = None if per_instance else SharedCache(root, LOAD_LIMIT)
+    done = 0
+    for i in range(operations):
+        try:
+            c = SharedCache(root, LOAD_LIMIT) if per_instance else shared
+            key = f"k{(seed * 7 + i) % 40}"
+            if i % 3:
+                c.put("12", key, bytes([seed % 256]) * (10_000 + 97 * i), origin=ORIGIN, retrieved_at=WHEN)
+            value = c.get("12", key)
+            if value is not None and len(set(value.data)) != 1:
+                raise AssertionError(f"voce parziale o mista: {key}")
+            rows = c.table("13", "rows", {"v": "TEXT"})
+            if i % 2:
+                rows.put(f"r{key}", {"v": str(seed) * 500}, origin=ORIGIN, retrieved_at=WHEN)
+            row = rows.get(f"r{key}")
+            if row is not None and len(set(row.data["v"])) != 1:
+                raise AssertionError(f"riga parziale o mista: r{key}")
+            if c.usage().total_bytes > LOAD_LIMIT:
+                raise AssertionError("limite superato")
+            if per_instance:
+                c.close()
+            done += 1
+        except Exception as exc:  # raccolti: il test vuole 0 errori
+            errors.append(f"{type(exc).__name__}: {exc}")
+    if shared is not None:
+        shared.close()
+    return done
+
+
+def _check_consistent(root):
+    with SharedCache(root, LOAD_LIMIT) as c:
+        rows = c._db.execute("SELECT kind, location FROM registry").fetchall()
+        missing = [loc for kind, loc in rows if kind == "file" and not (root / "files" / loc).exists()]
+        assert missing == []
+        assert c.usage().total_bytes <= LOAD_LIMIT
+
+
+@pytest.mark.parametrize("per_instance", [False, True], ids=["istanza_per_thread", "istanza_per_operazione"])
+def test_t9_many_threads(tmp_path, per_instance):
+    """T9 del 04 = T17 del 05: 8 thread, ≥ 1200 operazioni, 0 errori, nessuna voce parziale, limite."""
+    root = tmp_path / "cache"
+    errors, counts = [], []
+    threads = [threading.Thread(target=lambda n=n: counts.append(_load(root, per_instance, n, 150, errors)))
+               for n in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert sum(counts) >= 1200
+    _check_consistent(root)
+
+
+_PROCESS_LOAD = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[3])
+import test_cache as t
+errors = []
+done = t._load(Path(sys.argv[1]), True, int(sys.argv[2]), 400, errors)
+print(done, len(errors))
+for e in errors[:5]:
+    print(e)
+"""
+
+
+def test_t10_two_processes(tmp_path):
+    root = tmp_path / "cache"
+    SharedCache(root, LOAD_LIMIT).close()
+    here = str(Path(__file__).resolve().parent)
+    procs = [subprocess.Popen([sys.executable, "-c", _PROCESS_LOAD, str(root), str(seed), here],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for seed in (1, 2)]
+    outputs = [p.communicate(timeout=300) for p in procs]
+    for proc, (out, err) in zip(procs, outputs):
+        assert proc.returncode == 0, err
+        done, failed = map(int, out.split("\n")[0].split())
+        assert (done, failed) == (400, 0), out
+    _check_consistent(root)
+
+
+def _orphans(root, age_seconds):
+    folder = root / "files" / "12"
+    folder.mkdir(parents=True, exist_ok=True)
+    made = []
+    for name in (f".tmp-{age_seconds}", f"{age_seconds:064d}.bin"):
+        path = folder / name
+        path.write_bytes(b"x")
+        old = datetime.now().timestamp() - age_seconds
+        os.utime(path, (old, old))
+        made.append(path)
+    return made
+
+
+def test_t11_orphan_age_threshold_and_once_per_process(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(cache_module, "_CLEANED_ROOTS", set())
+    root = tmp_path / "cache"
+    old, young = _orphans(root, 601), _orphans(root, 30)
+    with caplog.at_level(logging.INFO, logger="astrotwo.cache"):
+        SharedCache(root).close()
+    assert not any(p.exists() for p in old)
+    assert all(p.exists() for p in young)
+    assert "600" in caplog.text  # soglia dichiarata nel log
+    later = _orphans(root, 3600)
+    SharedCache(root).close()  # seconda apertura nello stesso processo: nessuna pulizia
+    assert all(p.exists() for p in later)
+
+
+def test_t11_orphan_threshold_configurable(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache_module, "_CLEANED_ROOTS", set())
+    root = tmp_path / "cache"
+    old = _orphans(root, 120)
+    SharedCache(root, orphan_min_age=60).close()
+    assert not any(p.exists() for p in old)
+    with pytest.raises(ValueError):
+        SharedCache(tmp_path / "other", orphan_min_age=0)

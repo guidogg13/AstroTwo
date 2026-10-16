@@ -21,6 +21,8 @@ import re
 import shutil
 import sqlite3
 import tempfile
+import threading
+import time
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -29,6 +31,7 @@ from pathlib import Path
 
 __all__ = [
     "DEFAULT_LIMIT_BYTES",
+    "DEFAULT_ORPHAN_MIN_AGE",
     "NETWORK_TIMEOUTS",
     "CacheError",
     "CacheWarning",
@@ -42,6 +45,14 @@ __all__ = [
 
 #: Limite unico di default: 5 GB = 5 × 10⁹ byte (CA2).
 DEFAULT_LIMIT_BYTES = 5_000_000_000
+
+#: Età minima (s) di un file orfano per eliminarlo: 10 minuti (D04, 2026-10-16). Un file più giovane può
+#: essere la scrittura in corso di un altro thread o processo.
+DEFAULT_ORPHAN_MIN_AGE = 600.0
+
+# Cartelle già pulite dagli orfani in questo processo (D04: una sola volta per processo, alla prima apertura).
+_CLEANED_ROOTS: set[Path] = set()
+_CLEANED_LOCK = threading.Lock()
 
 _DB_NAME = "cache.sqlite"
 _FILES_DIR = "files"
@@ -163,11 +174,15 @@ class SharedCache:
     ``~/Library/Caches/AstroTwo/``.
     """
 
-    def __init__(self, root: str | os.PathLike | None = None, limit_bytes: int = DEFAULT_LIMIT_BYTES) -> None:
+    def __init__(self, root: str | os.PathLike | None = None, limit_bytes: int = DEFAULT_LIMIT_BYTES,
+                 orphan_min_age: float = DEFAULT_ORPHAN_MIN_AGE) -> None:
         if isinstance(limit_bytes, bool) or not isinstance(limit_bytes, int) or limit_bytes <= 0:
             raise ValueError("limit_bytes deve essere un intero positivo")
+        if isinstance(orphan_min_age, bool) or not isinstance(orphan_min_age, (int, float)) or not orphan_min_age > 0:
+            raise ValueError("orphan_min_age deve essere un numero di secondi positivo")
         self.root = Path(root) if root is not None else default_cache_root()
         self.limit_bytes = limit_bytes
+        self.orphan_min_age = float(orphan_min_age)
         self.available = False
         self._db: sqlite3.Connection | None = None
         self._open()
@@ -188,7 +203,11 @@ class SharedCache:
             self._disable(f"cartella {self.root} non scrivibile ({exc}): cache ignorata")
             return
         self.available = True
-        self._remove_orphans()
+        with _CLEANED_LOCK:  # D04 (b): una sola volta per processo e per cartella
+            first = self.root.resolve() not in _CLEANED_ROOTS
+            _CLEANED_ROOTS.add(self.root.resolve())
+        if first:
+            self._remove_orphans()
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.root / _DB_NAME, isolation_level=None)
@@ -236,12 +255,23 @@ class SharedCache:
         self._db = None
 
     def _remove_orphans(self) -> None:
-        """File temporanei o senza registro: non hanno provenienza, si eliminano."""
+        """File temporanei o senza registro più vecchi di ``orphan_min_age``: senza provenienza, si eliminano.
+
+        D04 (a): un orfano più giovane può essere la scrittura in corso di un altro thread o processo.
+        """
         known = {row[0] for row in self._db.execute("SELECT location FROM registry WHERE kind = 'file'")}
         files_dir = self.root / _FILES_DIR
+        now = time.time()
         for path in files_dir.rglob("*"):
-            if path.is_file() and path.relative_to(files_dir).as_posix() not in known:
+            try:
+                if not path.is_file() or path.relative_to(files_dir).as_posix() in known:
+                    continue
+                age = now - path.stat().st_mtime
+            except OSError:  # sparito nel frattempo (scrittura di un altro processo conclusa)
+                continue
+            if age >= self.orphan_min_age:
                 path.unlink(missing_ok=True)
+                log.info("file orfano eliminato: %s (età %.0f s, soglia %.0f s)", path, age, self.orphan_min_age)
 
     def close(self) -> None:
         if self._db is not None:
