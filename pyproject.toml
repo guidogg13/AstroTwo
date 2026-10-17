@@ -41,7 +41,8 @@ packages = ["src/astrotwo"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not network'"
+addopts = "-m 'not network and not keychain'"
 markers = [
     "network: test che richiedono la rete (esclusi di default, 02-convenzioni.md §8 punto 3)",
+    "keychain: test sul Portachiavi reale di macOS (esclusi di default, eseguiti a mano, 31 §12)",
 ]

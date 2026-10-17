@@ -722,8 +722,11 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    2026-10-17). **Divisione del codice della v1 approvata dal proprietario
    il 2026-10-17:** 05 registro e sessione → 31/30 chiavi e provider (con i
    profili predefiniti) → finestra 40 → visualizzatore 41 → 42 → 32/34/35
-   → pannello 44. **Parte 1 (05) scritta il 2026-10-17** (scelte minori
-   della parte 1 nel 05 §13, da confermare). Da verificare all'inizio delle parti che li usano:
+   → pannello 44. **Parti 1 (05) e 2 (31, 30 con i profili predefiniti)
+   scritte il 2026-10-17** (scelte minori nel §13 di 05 e 30, da
+   confermare; T8 del 31 sul Portachiavi reale e lista di controllo manuale
+   del 30 con le chiavi dell'utente da fare a mano). Prossima: parte 3
+   (finestra 40). Da verificare all'inizio delle parti che li usano:
    licenza delle icone e `QStyleHints.colorScheme`/cifre tabulari (40),
    Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -811,3 +814,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-16 | Claude Code | **Allineamento del livello 1 alla v1:** codice e test di 10 (`make_view_wcs`, `format_coordinates`, `compass_and_scale_bar`, `choose_projection` con default 30°), 11 (`suggest_display_limits`, corona di default), 12 (P6, con la verifica di `reproject` e i tempi misurati); adattatore del 18 fermo sulla nuova **D05-4** (Gruppo 1). Aperte 15. §7 con la proposta di divisione del codice della v1 in attesa del proprietario. |
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17:** (A) `httpx2` accettato dopo la verifica dell'origine (01, 30); (B) profili predefiniti dei provider IA (30 §3.1.1, 31, 44 §3.6) con indirizzi dalla documentazione ufficiale; **D05-4 decisa** (tipo `record`, forme JSON nel 05 §3.1, parametri dei `calc.*` nel 18); adattatore `run_command` del 18 scritto e testato (T18 nel formato del 05); note superate "codice da scrivere" tolte da 10, 11, 12. Aperte **14**. §5, §6, §7 aggiornati. |
 | 2026-10-17 | Claude Code | **Parte 1 del codice della v1: modulo 05** (`src/astrotwo/core/commands.py`, `tests/core/test_commands.py`, 26 test): registro con i 39 comandi di §7 del 05, validazione con le forme JSON di D05-4 (più il tipo `time`), spazio di lavoro immutabile, cronologia, sessione (salva, apri, riesecuzione con stop e avvisi), schema JSON per il 32; scelte minori della parte 1 nel 05 §13 (da confermare). |
+| 2026-10-17 | Claude Code | **Parte 2 del codice della v1: moduli 31 e 30** (`ai/keychain_keys.py`, `ai/provider_adapter.py` con i dieci profili predefiniti; test con Portachiavi e provider simulati, 34 test; marcatore `keychain`). Precisazioni del 30 dalle fonti e dal codice degli SDK (indirizzo di Anthropic, `max_completion_tokens` per OpenAI, variabili d'ambiente neutralizzate); scelte minori della parte 2 nel 30 §13, da confermare. |

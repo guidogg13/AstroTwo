@@ -8,7 +8,7 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-17 — **codice del 05 scritto** (parte 1 della v1, 39 comandi; scelte minori da confermare nel 05 §13). Prima: **D05-4 decisa** (tipo `record` nel 05, parametri dei `calc.*` nel 18,
+**Ultimo aggiornamento:** 2026-10-17 — **codice di 31 e 30 scritto** (parte 2 della v1, profili predefiniti); prima: **codice del 05 scritto** (parte 1 della v1, 39 comandi; scelte minori da confermare nel 05 §13). Prima: **D05-4 decisa** (tipo `record` nel 05, parametri dei `calc.*` nel 18,
 adattatore scritto); `httpx2` accettato (01, 30); profili predefiniti dei provider IA (30, 31, 44). Aperte 14 (Gruppo 1 = 0).
 Riepilogo invariato: approvato 24, bozza 5, non esiste 14, totale 43.
 Prima di questo aggiornamento: 2026-10-16 — **D04 (cache da più thread) decisa e scritta; verifiche prima del codice della

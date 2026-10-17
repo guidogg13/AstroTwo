@@ -70,14 +70,18 @@ Regole:
   già deciso (`openai-compatible:<host>[:<porta>]`, ricavato da `base_url`;
   scelta minore 4 del §13): due profili predefiniti diversi hanno host
   diversi, quindi chiavi diverse.
+- **Campo del limite di uscita:** `max_tokens` (campo di Chat Completions)
+  per tutti i profili compatibili OpenAI tranne `openai`, che usa
+  `max_completion_tokens` come dice la sua documentazione (fonte nella
+  tabella). Il campo è scritto nel profilo (`max_tokens_field`).
 - **Nessuna intestazione facoltativa** propria di un provider (es. quelle di
   OpenRouter per le classifiche dei siti): si manda solo ciò che serve alla
   richiesta (privacy, `35` §3.8).
 
 | `preset` | Provider | `base_url` (dalla fonte) | Chiamata di strumenti | Fonte ufficiale e note |
 |---|---|---|---|---|
-| `anthropic` | Anthropic (`kind = anthropic`) | quello predefinito dell'SDK `anthropic` | `documented` | API Messages con `tool_use` (§3.2); prova con le chiavi dell'utente nella lista di controllo manuale di §12 |
-| `openai` | OpenAI | `https://api.openai.com/v1` | `documented` | developers.openai.com/api/reference/overview (indirizzo negli esempi `https://api.openai.com/v1/chat/completions`); developers.openai.com/api/docs/guides/function-calling: integrazione con Chat Completions dichiarata, ma **alcuni modelli richiedono la Responses API per la chiamata di strumenti** (con quei modelli: `AI_NO_TOOLS`); lo streaming delle chiamate è descritto solo per la Responses API |
+| `anthropic` | Anthropic (`kind = anthropic`) | `https://api.anthropic.com` (uguale al default dell'SDK `anthropic`) | `documented` | platform.claude.com/docs/en/api/overview ("The Claude API is a RESTful API at `https://api.anthropic.com`"); API Messages con `tool_use` (§3.2); prova con le chiavi dell'utente nella lista di controllo manuale di §12 |
+| `openai` | OpenAI | `https://api.openai.com/v1` | `documented` | developers.openai.com/api/reference/overview (indirizzo negli esempi `https://api.openai.com/v1/chat/completions`); developers.openai.com/api/reference/python/resources/chat/subresources/completions/methods/create: `max_tokens` deprecato a favore di `max_completion_tokens` e non compatibile con i modelli della serie o, quindi per questo profilo il limite di uscita si manda come `max_completion_tokens`; developers.openai.com/api/docs/guides/function-calling: integrazione con Chat Completions dichiarata, ma **alcuni modelli richiedono la Responses API per la chiamata di strumenti** (con quei modelli: `AI_NO_TOOLS`); lo streaming delle chiamate è descritto solo per la Responses API |
 | `gemini` | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `documented` | ai.google.dev/gemini-api/docs/openai: chiamata di funzioni, streaming e `models.list` dichiarati; compatibilità con le librerie OpenAI dichiarata **in beta** |
 | `mistral` | Mistral AI | `https://api.mistral.ai/v1` | `documented` | docs.mistral.ai/api (`POST /v1/chat/completions` con `tools`, `stream`), docs.mistral.ai/api/endpoint/models (`GET /v1/models`); docs.mistral.ai/capabilities/function_calling: solo alcuni modelli (elenco non esaustivo) |
 | `deepseek` | DeepSeek | `https://api.deepseek.com` (senza `/v1`, come nella fonte) | `documented` | api-docs.deepseek.com e api-docs.deepseek.com/guides/tool_calls; limite dichiarato: Chat Completions non accetta chiamate di strumenti inserite a metà conversazione |
@@ -169,6 +173,15 @@ provider e restituisce, man mano che arrivano, **eventi normalizzati**:
 - **Variabili d'ambiente ignorate:** `ANTHROPIC_API_KEY`,
   `ANTHROPIC_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` e simili non
   si usano mai (chiave e indirizzo si passano sempre in modo esplicito).
+  **Verifica del 2026-10-17 sul codice degli SDK installati:** anche con
+  chiave e indirizzo espliciti, `anthropic` 1.15.0 legge
+  `ANTHROPIC_CUSTOM_HEADERS` (intestazioni aggiunte a ogni richiesta) e
+  `openai` 3.31.0 legge `OPENAI_ORG_ID`, `OPENAI_PROJECT_ID` e
+  `OPENAI_CUSTOM_HEADERS`. Per questo l'adattatore passa agli SDK un client
+  `httpx2` proprio che **manda solo un elenco chiuso di intestazioni**
+  (autenticazione, versione dell'API, tipo del contenuto, accettazione,
+  agente e intestazioni `x-stainless-*` dell'SDK, lunghezza, host,
+  codifica, connessione) e toglie tutte le altre.
 - **Log degli SDK e di `httpx`:** livello `WARNING` al massimo e un filtro
   che toglie intestazioni e corpi; nessun log contiene chiave, intestazioni
   di autenticazione o testi della conversazione.
@@ -386,6 +399,31 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
     §12): chiamata di strumenti con i modelli elencati dall'API di
     Anthropic e sottoinsieme di JSON Schema accettato (`32` §3.4).
 
+- **Scelte minori della parte 2 (codice del 30, 2026-10-17): DA CONFERMARE
+  dal proprietario.**
+  1. **Timeout non ripetuti:** si ripetono gli errori di connessione e gli
+     HTTP 429/500/502/503/504/529; un tempo massimo superato (connessione o
+     lettura) dà subito `AI_TIMEOUT`, così il turno non supera mai di molto i
+     tempi dichiarati.
+  2. **Altri rifiuti 4xx** (né contesto né strumenti): `AI_SERVICE` con il
+     testo del servizio ("richiesta rifiutata dal servizio, HTTP n").
+  3. **Riconoscimento di contesto superato e di modello senza strumenti**
+     dal testo d'errore del servizio (espressioni fisse nel codice, es.
+     "prompt is too long", "does not support tools"): i servizi non hanno
+     codici comuni.
+  4. **Trasporto:** client `httpx2` con `trust_env=False` (niente `.netrc`
+     né variabili del trasporto) ed elenco chiuso di intestazioni (§3.6).
+  5. **Log delle librerie:** livello WARNING e testo di ogni loro messaggio
+     sostituito già alla creazione del record (anche dei moduli figli e
+     qualunque gestore lo riceva).
+  6. **Profilo locale senza chiave:** segnaposto fisso non segreto
+     `astrotwo-local-no-key`; un profilo remoto senza chiave dà `KEY_NOT_FOUND`
+     del 31 come primo evento (`ProviderError`).
+  7. **"Prova il modello":** strumento di prova `astrotwo_probe` senza
+     argomenti e un messaggio che chiede di chiamarlo.
+  8. **Chat Completions** non ha un campo d'errore per i risultati: l'esito
+     resta nel contenuto JSON del 32 (`is_error` si manda solo ad Anthropic).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -394,3 +432,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifiche prima del codice (§13): licenze verificate e in `THIRD_PARTY_LICENSES` (trasporto `httpx2`, successore di `httpx`); Ollama verificato (chiamata di strumenti in streaming con `llama3.2:1b`; capacità dichiarate in `/api/tags`); LM Studio rimandato (non installato). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17** (autorizzazione esplicita a modificare il file approvato): (A) verifica dell'origine di `httpx2` registrata e accettata (§8, §13; regola delle versioni bloccate nel `uv.lock`); (B) **profili predefiniti** (§3.1.1, campo `preset` in §3.1, `PROVIDER_PRESETS` e `profile_from_preset` in §7, T15): OpenAI, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, Ollama e LM Studio in locale, più Anthropic; indirizzi e note dalla documentazione ufficiale con la fonte (consultata il 2026-10-17); stato della chiamata di strumenti `verified`/`documented`/`unverified`, marcato nel `44` se non `verified`; nessun modello fisso; una chiave per profilo con l'identificativo già deciso. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | Prima del codice della parte 2 (precisazioni dalle fonti e dal codice degli SDK, autorizzazione del 2026-10-17): indirizzo del profilo `anthropic` dalla documentazione ufficiale; `max_completion_tokens` per il profilo `openai` (`max_tokens_field`); variabili d'ambiente lette dagli SDK anche con chiave esplicita (`ANTHROPIC_CUSTOM_HEADERS`, `OPENAI_ORG_ID`, `OPENAI_PROJECT_ID`, `OPENAI_CUSTOM_HEADERS`) neutralizzate con un elenco chiuso di intestazioni (§3.6). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Codice della parte 2 della v1:** `src/astrotwo/ai/provider_adapter.py` (profili e `PROVIDER_PRESETS`, messaggi ed eventi normalizzati, `AnthropicAdapter` e `OpenAICompatibleAdapter` con gli SDK ufficiali, ripetizioni solo prima del primo evento, tempi massimi con il silenzio dello streaming, annullamento, `RequestRecord`, `list_models`, `probe_tools`, `make_adapter`) e `tests/ai/test_provider_adapter.py` con servizi simulati locali (T1–T15 per entrambi gli adattatori dove previsto, 26 test). Scelte minori della parte 2 in §13, da confermare. Lista di controllo manuale con le chiavi dell'utente ancora da fare. Stato `approvato` invariato. |
