@@ -199,7 +199,7 @@ esecuzione è incompatibile con la GPL-3.0:
 
 - PySide6 e shiboken6: "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only" → si usa l'opzione LGPL-3.0 (o GPL-3.0-only), compatibile; i testi
   completi LGPL-3.0 e GPL-3.0 sono nel file. WCSLIB (LGPL-3, in astropy): testo completo nel file, compatibile.
-- Apache-2.0 (anthropic non, ma `openai`, `requests`, `google-crc32c`, `opentelemetry-api`, `packaging`): compatibile con la GPL-3.0
+- Apache-2.0 (`openai`, `requests`, `google-crc32c`, `opentelemetry-api`, `packaging`): compatibile con la GPL-3.0
   (non con la GPL-2.0): per questo l'insieme distribuito è effettivamente sotto la GPL **versione 3**.
 - MPL-2.0 (`certifi`): compatibile con la GPL-3.0 (clausola "Secondary License" della MPL-2.0).
 - Tutte le altre (MIT, BSD, ISC, PSF, MIT-CMU, Zlib, 0BSD, CC0): permissive e compatibili. QD/LBNL in `spherical-geometry`
