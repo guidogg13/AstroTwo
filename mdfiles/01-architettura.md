@@ -82,6 +82,7 @@ Regole strutturali:
 | **A1** | 2026-10-04 | Interfaccia grafica scritta con **PySide6 (Qt)**; il rendering delle mappe con **OpenGL si specifica in `41-ui-visualizzatore-cielo.md`** | un solo ambiente Python coerente con A3/A4, widget maturi per la visualizzazione scientifica; orientamento già espresso qui, confermato dal proprietario prima dei moduli 40–45 |
 | **A9** | 2026-10-15 | Lingua dell'interfaccia: **testi in inglese nel codice con `tr()`**, **traduzione italiana nostra** con Qt Linguist, **traduzioni di Qt** per i dialoghi standard; lingua presa dal sistema e cambiabile nelle preferenze; **numeri scientifici sempre con il punto decimale in ogni lingua** | inglese come lingua comune della comunità, italiano per il proprietario; strumenti standard di Qt; il punto decimale evita ambiguità e rende i valori copiabili in modo riproducibile (dettagli in `40-ui-finestra-principale.md` §3.9) |
 | **A5** | 2026-10-04 (implementazioni precisate il 2026-10-16) | Interfaccia IA **a capacità** (chiamata di strumenti + streaming) con due implementazioni iniziali: **provider cloud** e **endpoint compatibile OpenAI** (che copre anche i modelli locali). **Dal 2026-10-16:** le due implementazioni usano gli **SDK ufficiali `anthropic` (MIT) e `openai` (Apache-2.0)**, il secondo con **endpoint configurabile** (OpenAI in cloud, Ollama, LM Studio, vLLM…); licenze da verificare e da aggiungere a `THIRD_PARTY_LICENSES`; **nessun identificativo di modello nel codice** (lo sceglie l'utente); modelli senza chiamata di strumenti rifiutati (`AI_NO_TOOLS`); dettagli in `30-ia-adattatore-provider.md` | conforme a `CLAUDE.md` (l'utente sceglie il provider e inserisce la propria chiave), un solo contratto da testare, copertura di cloud e modelli locali; due SDK ufficiali con licenze permissive invece di una libreria che unifica i provider (meno dipendenze, passaggi intermedi sotto controllo); confermata dal proprietario prima dei moduli 30–35 |
+| **A11** | 2026-10-17 | Licenza di AstroTwo: **GPL-3.0-or-later**. Titolare del copyright: **Guido Ratti**, anno 2026, unico titolare (per poter offrire in futuro licenze diverse o una versione Pro). Testo in `LICENSE`, avviso in `NOTICE`, intestazione SPDX in ogni file `.py`, contributi esterni solo con accordo di cessione dei diritti (`CONTRIBUTING.md`) | scelta del proprietario; compatibile con tutte le dipendenze (verifica del 2026-10-17 in §6.1); chiude la parte di A11 che bloccava il `60` |
 
 Note residue di A3/A4/A7:
 
@@ -108,7 +109,6 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 | A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): sì**, firma e notarizzazione con account Apple Developer **solo al momento della distribuzione**; blocca l'approvazione di `60-distribuzione-dmg.md` |
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
 | A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS (12): decisa il 2026-10-12** — tile in memoria entro **512 MB, configurabili**; `build_hips` lavora **un tile alla volta** entro il **limite delle operazioni** (4 GB, D11-11); su disco la **cache comune di 5 GB** (`04-cache.md`). **A10 interamente decisa** |
-| A11 | **Licenza di AstroTwo** | da decidere (es. licenza permissiva BSD/MIT/Apache, oppure copyleft GPL/LGPL); deve essere compatibile con le licenze delle dipendenze (tra cui WCSLIB, LGPL-3, incluso in astropy); elenco completo in `THIRD_PARTY_LICENSES` (§6, dal 2026-10-13) | `60-distribuzione-dmg.md` | **da decidere** (Gruppo 2): blocca l'approvazione di `60-distribuzione-dmg.md` (decisione aperta dal proprietario il 2026-10-10) |
 
 Fuori da questo file: **AP1** validazione finale della parità con Aladin
 (`03-parita-aladin.md`, rimandata) e **AM1** aggiunta/separazione di moduli
@@ -178,6 +178,62 @@ astrotwo/
   Serve ad A11 (licenza di AstroTwo,
   compatibilità con le licenze elencate) e al `60` (avvisi da includere nel
   `.dmg`).
+
+### 6.1 Licenza di AstroTwo, crediti dei dati e requisiti per il modulo 60 (A11, decisa il 2026-10-17)
+
+**Decisione del proprietario (2026-10-17, chiude A11).** AstroTwo è distribuito con licenza **GPL-3.0-or-later**; titolare del
+copyright **Guido Ratti**, anno **2026**, che resta l'**unico titolare** (per poter offrire in futuro licenze diverse o una versione
+Pro). Nessun cambiamento al comportamento dell'app.
+
+File nella radice: `LICENSE` (testo integrale e non modificato della GPL-3.0, scaricato da
+`https://www.gnu.org/licenses/gpl-3.0.txt`; SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`),
+`NOTICE` (avviso standard GNU), `CONTRIBUTING.md` (nessun contributo esterno senza un accordo scritto di cessione dei diritti, CLA,
+con il proprietario; il testo del CLA non è scritto), `THIRD_PARTY_LICENSES` (intestazione "Licenza di AstroTwo:
+GPL-3.0-or-later"). `pyproject.toml`: `license = "GPL-3.0-or-later"` e `license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_LICENSES"]`
+(PEP 639). Ogni file `.py` di `src/`, `tests/`, `scripts/`, `examples/` inizia (dopo un eventuale shebang) con
+`# SPDX-License-Identifier: GPL-3.0-or-later` e `# Copyright (C) 2026 Guido Ratti`; `tests/test_license_headers.py` fallisce se
+manca. Le icone Lucide in `src/astrotwo/ui/icons/` restano sotto la loro licenza (ISC/MIT, file `LICENSE` nella cartella).
+
+**Verifica di compatibilità con le dipendenze (2026-10-17, sull'elenco di `THIRD_PARTY_LICENSES`).** Nessuna dipendenza di
+esecuzione è incompatibile con la GPL-3.0:
+
+- PySide6 e shiboken6: "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only" → si usa l'opzione LGPL-3.0 (o GPL-3.0-only), compatibile; i testi
+  completi LGPL-3.0 e GPL-3.0 sono nel file. WCSLIB (LGPL-3, in astropy): testo completo nel file, compatibile.
+- Apache-2.0 (anthropic non, ma `openai`, `requests`, `google-crc32c`, `opentelemetry-api`, `packaging`): compatibile con la GPL-3.0
+  (non con la GPL-2.0): per questo l'insieme distribuito è effettivamente sotto la GPL **versione 3**.
+- MPL-2.0 (`certifi`): compatibile con la GPL-3.0 (clausola "Secondary License" della MPL-2.0).
+- Tutte le altre (MIT, BSD, ISC, PSF, MIT-CMU, Zlib, 0BSD, CC0): permissive e compatibili. QD/LBNL in `spherical-geometry`
+  (BSD modificata): compatibile; resta **da verificare** la frase sull'uso commerciale (fuori dalle clausole) e il segnaposto
+  `<COPYRIGHT HOLDER>` non compilato nel testo di `pims`.
+- Escluse e da non aggiungere: `healpy` (GPL-2.0-only, già escluso: incompatibile con la GPL-3.0 insieme alle librerie Apache-2.0)
+  e ogni licenza non libera o con divieto di uso commerciale.
+- Il kernel `pck00011.tpc` (NAIF) è un **dato** distribuito senza modifiche con le regole d'uso della NAIF, non è coperto dalla
+  GPL-3.0 di AstroTwo.
+
+**Crediti dei dati e dei servizi (da mostrare nell'app e nelle immagini esportate; testi letti il 2026-10-17).**
+
+| Servizio / dato | Testo di riconoscimento richiesto o richiesto/gradito | Fonte |
+|---|---|---|
+| Simbad (CDS) | "This research has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France" + 2000, A&AS, 143, 9, "The SIMBAD astronomical database", Wenger et al. | `https://cds.unistra.fr/help/acknowledgement/` |
+| VizieR (CDS), servizio | "This research has made use of the VizieR catalogue access tool, CDS, Strasbourg Astronomical Observatory, France (DOI : 10.26093/cds/vizier)." + 2000, A&AS, 143, 23, "The VizieR database of astronomical catalogues", Ochsenbein et al. | `https://cds.unistra.fr/help/acknowledgement/`, `https://cds.unistra.fr/vizier-org/licences_vizier.html` |
+| VizieR, dati dei singoli cataloghi | citare autori, produttore ed editore del catalogo (file ReadMe); alcuni cataloghi hanno una sezione "Acknowledging"; **l'uso commerciale dei dati dipende dall'origine di ciascun catalogo** | `https://cds.unistra.fr/vizier-org/licences_vizier.html` |
+| Sesame (risolutore di nomi del CDS) | testo ufficiale proprio **non trovato**: **da verificare** (nel frattempo vale il riconoscimento di Simbad, di cui Sesame interroga la base) | `https://cds.unistra.fr/help/acknowledgement/` |
+| HiPS (CDS) | testo ufficiale **non trovato** nella pagina dei riconoscimenti del CDS: **da verificare** (articolo di riferimento: Fernique et al. 2015, A&A 578, A114, **da verificare**) | — |
+| MocServer (CDS) | testo ufficiale **non trovato**: **da verificare** | — |
+| Servizio X-Match del CDS (se usato) | "This research has made use of the CDS cross-match service, Strasbourg Astronomical Observatory, France." + 2012, ASPC, 461, 291 (Boch et al.) e 2020, ASPC, 522, 125 (Pineau et al.) | `https://cds.unistra.fr/help/acknowledgement/` |
+| Survey DSS2 (STScI/MAST) | "The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. Government grant NAG W-2166. The images of these surveys are based on photographic data obtained using the Oschin Schmidt Telescope on Palomar Mountain and the UK Schmidt Telescope. The plates were processed into the present compressed digital form with the permission of these institutions." seguito dai paragrafi su POSS-I, POSS-II, Oschin Schmidt, UK Schmidt e ESO (testo integrale alla fonte) | `https://archive.stsci.edu/dss/acknowledging.html` |
+| DSS: copyright | le immagini sono protette da copyright (Caltech 1993-1995 per la parte nord, AAO Board 1993-5, UK SERC/PPARC e AAT Board 1992-5, AURA 1995 per il resto), "distribuite per accordo"; la pagina **non dice nulla sull'uso commerciale** → **uso commerciale delle immagini DSS: da verificare** (da chiarire con STScI prima di una versione Pro o di una distribuzione commerciale) | `https://archive.stsci.edu/dss/copyright.html` |
+| NAIF / SPICE (kernel e toolkit) | riconoscimento incoraggiato, non obbligatorio; uso anche commerciale ammesso senza licenze né costi; testo preciso nella pagina "credit" della NAIF: **da verificare** | `https://naif.jpl.nasa.gov/naif/rules.html` |
+
+**Requisiti del modulo 60 (registrati il 2026-10-17, non implementati ora).** Il `60-distribuzione-dmg.md` dovrà prevedere:
+
+1. finestra **"Licenze"** nel menu Informazioni (licenza di AstroTwo, `THIRD_PARTY_LICENSES`, crediti dei dati);
+2. librerie **Qt/PySide6 separate e sostituibili** dall'utente, **non modificate**;
+3. **link o offerta scritta** per il sorgente esatto di PySide6/Qt corrispondente alle librerie incluse nel `.dmg`;
+4. **nessun divieto di reverse engineering** nelle condizioni d'uso (richiesto dalla LGPL-3 per le librerie Qt);
+5. note di **Python (PSF)** e di **Qt** (avvisi delle componenti incluse, elenco "Licenses Used in Qt") in `THIRD_PARTY_LICENSES`;
+6. **crediti anche nelle immagini esportate** (testo di riconoscimento del survey e dei servizi usati);
+7. **verifica del marchio "AstroTwo"** (disponibilità, prima della distribuzione pubblica).
 
 ## 7. Come si collegano i livelli
 
@@ -265,19 +321,9 @@ astrotwo/
   2026-10-10** (D13-4 nel 13); **per gli HiPS il 2026-10-12** (512 MB di tile
   in memoria, configurabili; `build_hips` un tile alla volta entro il limite
   delle operazioni di 4 GB; cache comune di 5 GB su disco; valori nel 12).
-- **DA-08 — A11, Licenza di AstroTwo:** da decidere (Gruppo 2); blocca
-  l'approvazione di `60-distribuzione-dmg.md`. Vincolo noto: WCSLIB (LGPL-3,
-  dentro astropy). **Dal 2026-10-13 l'elenco completo delle licenze delle
-  dipendenze è in `THIRD_PARTY_LICENSES`** (§6): da leggere per decidere A11;
-  punti da valutare già annotati lì: LGPL-3 di WCSLIB (con la GPL-3 per
-  riferimento), clausola di LBNL sugli usi commerciali della libreria QD
-  (fuori dalle clausole numerate), MPL-2.0 di `certifi`, testo di licenza
-  mancante nel pacchetto `pims` (da verificare). **Dal 2026-10-15:** con
-  l'interfaccia entreranno **PySide6 e Qt** (licenza LGPL-3 per l'uso
-  previsto, **da verificare** prima del codice dell'interfaccia) e, per i
-  test, **pytest-qt** (da verificare): vanno aggiunti a
-  `THIRD_PARTY_LICENSES` e valutati per A11 e per il `60`. Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun
-  codice né dato preso da Aladin, che è GPL).
+- **DA-08 — A11, Licenza di AstroTwo: DECISA il 2026-10-17** (decisione del proprietario) — **GPL-3.0-or-later**, titolare
+  Guido Ratti (anno 2026, unico titolare). Dettagli, verifica di compatibilità con le dipendenze, crediti dei dati e requisiti
+  per il `60` in §6.1. Collegata alla regola d'oro n. 8 di `CLAUDE.md` (nessun codice né dato preso da Aladin, che è GPL).
 - **DA-06 — A8, Compatibilità con lo scripting di Aladin:** rimandata a dopo il
   completamento del livello 1; la strada "scripting principale in Python" resta
   valida nel frattempo.
@@ -307,3 +353,4 @@ astrotwo/
 | 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (autorizzazione esplicita a modificare il file approvato): §6 — identificativo del progetto `dev.pages.astrotwo` (sito `astrotwo.pages.dev`), bundle identifier dell'app per il 60, servizio del Portachiavi `dev.pages.astrotwo.ai` per il 31. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | §6: `THIRD_PARTY_LICENSES` con le dipendenze della v1 dell'interfaccia e dell'IA e la sezione degli strumenti di sviluppo (verifiche del 2026-10-16, nell'ambito di "FASE: CODICE – interfaccia v1"). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (autorizzazione esplicita a modificare il file approvato): §6 — verifica di `httpx2` registrata (dipendenza ufficiale di `anthropic` e `openai`, impronte del `uv.lock` uguali a PyPI, autore Tom Christie, manutentore Pydantic Services Inc., repository `github.com/pydantic/httpx2`, prosecuzione dichiarata da Pydantic e non da `encode/httpx`, nessuna attestazione di pubblicazione su PyPI) e accettata; regola: versioni bloccate nel `uv.lock`, aggiornamento solo esplicito e con nuovo controllo delle impronte. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026 (autorizzazione esplicita a modificare il file approvato): riga A11 spostata da §5 a §4.2; nuova §6.1 (licenza, verifica di compatibilità con le dipendenze, crediti dei dati, requisiti del modulo 60); DA-08 chiusa. Stato `approvato` invariato. |

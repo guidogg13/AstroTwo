@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Adattatore dei provider IA: un solo contratto "a capacità" (chiamata di strumenti e streaming) (livello 3).
 
 Specifica: ``mdfiles/30-ia-adattatore-provider.md`` (stato ``approvato``).

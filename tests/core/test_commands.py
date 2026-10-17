@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 05 (``mdfiles/05-comandi-sessione.md`` §12).
 
 Senza Qt e senza rete: servizi simulati (SIMBAD, TAP VizieR) come nei test dei moduli 10 e 13. I valori attesi

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 11 (``mdfiles/11-core-immagini-fits.md`` §12, T1–T34).
 
 Gli attesi sono ricalcolati nel test con le librerie di riferimento

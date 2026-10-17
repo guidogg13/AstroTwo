@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 13 (``mdfiles/13-core-cataloghi.md`` §12).
 
 File di prova generati nel test; gli attesi sono ricalcolati con

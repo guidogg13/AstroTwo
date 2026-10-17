@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Misure angolari e strumenti di misura.
 
 Specifica: ``mdfiles/17-core-misure.md`` (stato ``approvato``).

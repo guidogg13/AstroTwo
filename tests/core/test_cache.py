@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test di accettazione della cache comune (``mdfiles/04-cache.md`` §12).
 
 Tutti i test usano una cartella temporanea (``tmp_path``) o, per T8, una

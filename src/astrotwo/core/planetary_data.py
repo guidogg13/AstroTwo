@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Dati planetari: corpi, sistemi di riferimento planetari, collezioni, EPN-TAP e immagini PDS.
 
 Specifica: ``mdfiles/19-core-dati-planetari.md`` (stato ``approvato``).

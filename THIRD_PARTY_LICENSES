@@ -4,7 +4,7 @@ File generato da scripts/third_party_licenses.py (decisione del proprietario del
 non modificarlo a mano; per ogni nuova dipendenza si rigenera. Contiene tutte le dipendenze di
 esecuzione su macOS (chiusura delle dipendenze di pyproject.toml), con nome, versione, licenza
 dichiarata e il testo integrale dei file di licenza e degli avvisi distribuiti con ogni pacchetto,
-più i componenti non Python inclusi nel progetto. Licenza di AstroTwo: da decidere (A11).
+più i componenti non Python inclusi nel progetto. Licenza di AstroTwo: GPL-3.0-or-later (A11 decisa il 2026-10-17).
 Pacchetti esclusi perché richiesti solo su Linux o Windows (marcatori di piattaforma): non
 elencati. Python stesso (PSF) e gli avvisi delle componenti incluse nelle librerie Qt si
 aggiungeranno con il modulo 60. In fondo, a parte, gli strumenti di sviluppo (test), che non si

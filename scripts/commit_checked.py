@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Commit condizionato all'esito dei test (02-convenzioni.md §8, punto 9).
 
 Uso: ``git add …`` poi ``uv run python scripts/commit_checked.py -m "messaggio"``.

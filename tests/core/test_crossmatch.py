@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 15 (``mdfiles/15-core-crossmatch.md`` §12).
 
 Tabelle di prova scritte nel test come VOTable e lette con il modulo 13; gli

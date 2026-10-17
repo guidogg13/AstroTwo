@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Immagini FITS: lettura, gestione e visualizzazione.
 
 Specifica: ``mdfiles/11-core-immagini-fits.md`` (stato ``approvato``).

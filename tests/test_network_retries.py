@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test della regola di ripetizione dei test di rete (decisione del proprietario del 2026-10-11)."""
 
 import pytest

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 17 (``mdfiles/17-core-misure.md`` §12).
 
 I valori attesi si ricalcolano nel test con ``astropy`` (e ``numpy``/``scipy`` per i pixel), mai copiati

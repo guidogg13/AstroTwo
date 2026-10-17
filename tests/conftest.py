@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Configurazione comune dei test.
 
 Servizio HTTP simulato locale (``service``) e cache temporanea (``cache``) per i moduli di rete.

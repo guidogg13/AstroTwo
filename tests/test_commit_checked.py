@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Regola dei commit (02-convenzioni.md §8, punto 9): lettura dei test di rete falliti."""
 
 import importlib.util

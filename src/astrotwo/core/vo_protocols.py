@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Protocolli Virtual Observatory: VOTable, esportazione, rete, servizi VO, SAMP.
 
 Specifica: ``mdfiles/14-core-protocolli-vo.md`` (stato ``approvato``).

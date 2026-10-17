@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 16 (``mdfiles/16-core-moc.md`` §12).
 
 I file MOC di prova si scrivono nel test secondo il testo dello standard IVOA MOC (1.0/1.1 e 2.0), mai

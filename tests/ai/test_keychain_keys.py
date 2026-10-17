@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 31 (``mdfiles/31-ia-chiavi-portachiavi.md`` §12).
 
 Di default con un'**API Security simulata in memoria** al posto delle funzioni che il backend macOS di

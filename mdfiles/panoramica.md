@@ -18,6 +18,11 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-17, licenza del progetto (A11 decisa):** AstroTwo è distribuito con **GPL-3.0-or-later**, titolare Guido Ratti
+  (2026, unico titolare). Creati `LICENSE` (testo ufficiale GPL-3.0), `NOTICE`, `CONTRIBUTING.md` (nessun contributo esterno senza CLA);
+  `pyproject.toml` con `license` e `license-files`; intestazione SPDX in tutti i `.py` (test `tests/test_license_headers.py`);
+  `THIRD_PARTY_LICENSES` rigenerato; verifica di compatibilità, crediti dei dati e requisiti del `60` in `01` §6.1. Nessun cambiamento
+  al comportamento dell'app. Aperte **13** (Gruppo 2 = 2: A2, A6).
 - **Stato al 2026-10-17, parte 4 sprint 4a della v1 (visualizzatore 41,
   prima fetta):** scritti `src/astrotwo/ui/sky_viewer.py` (`SkyViewer`,
   `SkyRenderer`, `TilePool` con 6 thread e annullamento per generazione) e
@@ -658,6 +663,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D40-1 | v1: codice + testo del modulo invariati; traduzione in D40-3 | 2026-10-15 | decisione del proprietario, `40` §13 | |
 | D41-1…D41-4 | Puntatore Simbad `passive` nel gruppo di thread dei tile; `format_coordinates` nel 10; `suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati; `perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta | 2026-10-15 | decisione del proprietario, `41`, `10`, `11` §13 | Mac di riferimento da compilare |
 | Linee guida visive | macOS, tema che segue il sistema con lo scuro di riferimento, modalità notte rossa, cielo al centro con pannelli richiudibili e barre sottili, carattere di sistema, un solo accento, spaziature regolari, icone con licenza libera (proposta Lucide, da verificare), nulla da Aladin; valgono per tutte le interfacce | 2026-10-15 | decisione del proprietario, `40` §3.11 | mockup in `mdfiles/mockup/` |
+| Licenza di AstroTwo (A11) | **GPL-3.0-or-later**, titolare Guido Ratti 2026 (unico titolare); `LICENSE`, `NOTICE`, `CONTRIBUTING.md`, intestazione SPDX nei `.py`; crediti dei dati e requisiti del `60` in `01` §6.1 | 2026-10-17 | decisione del proprietario, `01` §4.2 e §6.1 | |
 | Licenze dell'interfaccia | PySide6/Qt (LGPL-3) registrata per A11 e per il `60` | 2026-10-15 | decisione del proprietario, `decisioni-aperte.md` (A11), `40` §8 | |
 | Fase codice dell'interfaccia | Formula "FASE: CODICE – interfaccia v1", valida solo per i moduli di interfaccia `approvato` (40, 41, 42) e per il 05 | 2026-10-15 | regola del proprietario, `CLAUDE.md` | non ancora dichiarata; estesa il 2026-10-16 |
 | IA nella v1 (perimetro) | 30, 31, 32, 34, 35, 44; **33 rimandato**, al suo posto `catalog.search` del 13 | 2026-10-16 | decisione del proprietario, `32`, `03` (E2) | |
@@ -700,7 +706,7 @@ su D11-6, D13-7, D14-7, D14-8, D15-5 → 16 aperte; con le verifiche del
 modulo 10 in fase codice (D10-7, D10-8) → 18 aperte; con D10-7 e D10-8
 decise, le nuove D10-9 e D11-7 e le CA1–CA4 di `04-cache.md` → 22 aperte;
 con CA1–CA4 e D11-7 decise → 17; con la nuova D11-8 → 18; con la nuova
-**A11 — licenza di AstroTwo** → **19 aperte** (Gruppo 1 = 0, Gruppo 2 = 4: A2,
+**A11 — licenza di AstroTwo** (decisa poi il 2026-10-17: GPL-3.0-or-later) → **19 aperte** (Gruppo 1 = 0, Gruppo 2 = 4: A2,
 A6, A9, A11 per `60`/`40`; Gruppo 3 = 15, con D10-9 da decidere con il 41,
 D11-8 con 20 e 41, A10 ormai solo per cataloghi e HiPS). Il 2026-10-10, dopo
 il modulo 13 fino a P5: 17; **dopo il modulo 14 e P6 del 13: 21 aperte**
@@ -875,3 +881,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |
 | 2026-10-17 | Claude Code | **Parte 4a-fix2:** la rotella di un mouse vero non zooma sul Mac del proprietario; aggiunto il log diagnostico `ASTROTWO_DEBUG_INPUT=1` (spento di default) in `sky_viewer.py`, descritto nel `41` §3.4. Causa **da verificare** con i dati reali; nessun file cambia stato. |
 | 2026-10-17 | Claude Code | **Parte 4a-fix2 (correzione):** causa trovata con il log del proprietario: la rotella del mouse su macOS ha `pixelDelta` non nullo e il codice la trattava come trackpad (solo spostamento). Ora `NoScrollPhase` = rotella → zoom (1/6 di scatto per evento, 6 eventi per scatto misurati), fasi = trackpad → spostamento. Specifica `41` §3.4 aggiornata prima; test con i valori reali. Nessun file cambia stato. |
+| 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026. Creati `LICENSE`, `NOTICE`, `CONTRIBUTING.md`; `pyproject.toml` (PEP 639); intestazioni SPDX in tutti i `.py` con test; `THIRD_PARTY_LICENSES` rigenerato; `01` §4.2/§6.1 (compatibilità, crediti dei dati con "da verificare" per Sesame, HiPS, MocServer, uso commerciale DSS, requisiti del `60`). Nessun cambiamento di comportamento. Aperte **13** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 11). Stati invariati. |

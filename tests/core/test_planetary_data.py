@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 19 (``mdfiles/19-core-dati-planetari.md`` §12).
 
 I valori attesi si ricalcolano nel test con ``spiceypy`` e ``pds4_tools`` (le librerie di D19-1 e D19-2b) o

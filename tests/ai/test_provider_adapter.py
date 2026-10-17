@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 30 (``mdfiles/30-ia-adattatore-provider.md`` §12).
 
 Senza rete e senza chiavi reali: due servizi simulati locali (API Messages di Anthropic e Chat Completions)

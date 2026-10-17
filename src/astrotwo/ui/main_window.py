@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Finestra principale (interfaccia v1): menu, barra di stato, campo "Vai a", pannelli, preferenze.
 
 Specifica: ``mdfiles/40-ui-finestra-principale.md`` (stato ``approvato``).

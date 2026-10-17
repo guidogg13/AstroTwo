@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Coordinate celesti, WCS, sistemi ed epoche di riferimento.
 
 Specifica: ``mdfiles/10-core-coordinate-wcs.md`` (stato ``approvato``).

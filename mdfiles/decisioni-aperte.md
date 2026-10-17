@@ -37,7 +37,10 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-17, con la decisione di D40-4 (⌃⌘N): 14 aperte** — Gruppo 1: **0** · Gruppo 2: **3** · Gruppo 3:
+**Dal 2026-10-17, con la decisione di A11 (GPL-3.0-or-later): 13 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3:
+**11**. A11 decisa dal proprietario il 2026-10-17 (prima nel file di origine `01` §6.1); il `60` resta bloccato solo da `A2` e `A6`.
+
+Prima, **dal 2026-10-17, con la decisione di D40-4 (⌃⌘N): 14 aperte** — Gruppo 1: **0** · Gruppo 2: **3** · Gruppo 3:
 **11**.
 
 Prima, **dal 2026-10-17, con la parte 3b del codice della v1: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **3** · Gruppo 3:
@@ -266,13 +269,12 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (3)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (2)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
-| `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10. **Dal 2026-10-13 elenco completo delle licenze in `THIRD_PARTY_LICENSES`** (punti da valutare: LGPL-3 di WCSLIB, clausola LBNL della libreria QD, MPL-2.0 di `certifi`; testo di `pims` trovato il 2026-10-13 nel sorgente ufficiale su PyPI e aggiunto, ma con il segnaposto `<COPYRIGHT HOLDER>` non compilato). **Dal 2026-10-15 registrate per A11 e per il `60`: PySide6 e Qt, licenza LGPL-3** (interfaccia, obblighi LGPL nel `.dmg` come per WCSLIB; testo da verificare prima del codice), pytest-qt (test) e la raccolta di icone proposta (Lucide, ISC) da verificare; **licenza di Lucide verificata il 2026-10-17** (ISC, più MIT di Feather per le icone derivate) e scritta in `THIRD_PARTY_LICENSES` | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 
 ## 5. GRUPPO 3 — rimandabili al momento del codice (11)
 
@@ -364,3 +366,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-17 | Claude Code | **`D05-4` decisa dal proprietario il 2026-10-17** (opzione a, prima nel file di origine 05 §13 e nel 18): tolta dalle aperte del Gruppo 1. Decisioni del 2026-10-17 su `httpx2` (01, 30) e sui profili predefiniti dei provider (30, 31, 44): decise e registrate nei file di origine, non entrano in questo elenco. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |
 | 2026-10-17 | Claude Code | **Nuova nel Gruppo 3: `D40-4`** (prima nel file di origine 40 §13): scorciatoia della modalità notte chiesta dal proprietario con la parte 3b, raccomandazione ⌃⌘N. `A11` annotata: licenza di Lucide verificata. Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 12). |
 | 2026-10-17 | Claude Code | **`D40-4` decisa dal proprietario: ⌃⌘N** (prima nel file di origine 40 §13), tolta dal Gruppo 3. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |
+| 2026-10-17 | Claude Code | **`A11` decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti (prima nel file di origine `01` §4.2 e §6.1), tolta dal Gruppo 2. Conteggi: aperte **13** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 11). |

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """THIRD_PARTY_LICENSES aggiornato con tutte le dipendenze (decisione del proprietario del 2026-10-13)."""
 
 import importlib.util

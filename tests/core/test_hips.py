@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 12 (``mdfiles/12-core-hips.md`` §12).
 
 I file ``properties`` e i tile di prova si scrivono nel test secondo il testo dello standard IVOA HiPS 1.0, mai

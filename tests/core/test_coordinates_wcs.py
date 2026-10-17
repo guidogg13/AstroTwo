@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test di accettazione del modulo 10 (``mdfiles/10-core-coordinate-wcs.md`` §12).
 
 I valori attesi sono sempre ricalcolati nel test con Astropy (o con

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del visualizzatore del cielo (41 §12), sprint 4a: sfondo HiPS, gesti → comandi, vista iniziale.
 
 Piattaforma ``offscreen`` con il renderer in memoria (``tests/ui/fake_renderer.py``); il test ``gl`` usa la GPU.

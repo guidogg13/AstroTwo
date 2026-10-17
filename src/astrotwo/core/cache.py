@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Cache comune dei dati scaricati (A7).
 
 Specifica: ``mdfiles/04-cache.md`` (stato ``approvato``).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Calcolatrici: algebrica, unità, pixel, coordinate e tempo.
 
 Specifica: ``mdfiles/18-core-calcolatrici.md`` (stato ``approvato``).

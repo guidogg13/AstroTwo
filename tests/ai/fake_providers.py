@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Servizi simulati locali dei provider IA (30 §12): nessuna rete, nessuna chiave reale.
 
 ``StreamingService`` risponde a ogni richiesta con il prossimo elemento di ``script`` (o di ``routes[path]``):

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Servizi HiPS all-sky: metadati, tile, collezioni, cubi, cataloghi progressivi, generazione.
 
 Specifica: ``mdfiles/12-core-hips.md`` (stato ``approvato``).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """AstroTwo: successore di Aladin per gli astrofisici.
 
 Specifiche in ``mdfiles/``; versione SemVer (DC4 di ``02-convenzioni.md``).

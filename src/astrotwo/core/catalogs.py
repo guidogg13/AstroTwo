@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Cataloghi e tabelle: lettura, colonne di posizione, ricerca, regole di disegno.
 
 Specifica: ``mdfiles/13-core-cataloghi.md`` (stato ``approvato``).

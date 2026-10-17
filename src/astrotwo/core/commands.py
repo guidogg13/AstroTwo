@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Registro dei comandi e sessione (livello 1, file generale come il 04).
 
 Specifica: ``mdfiles/05-comandi-sessione.md`` (stato ``approvato``).

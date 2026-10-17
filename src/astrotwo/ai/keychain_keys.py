@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Chiavi API dei provider IA solo nel Portachiavi di macOS (livello 3).
 
 Specifica: ``mdfiles/31-ia-chiavi-portachiavi.md`` (stato ``approvato``).

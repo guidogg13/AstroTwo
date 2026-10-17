@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Implementazione OpenGL dell'interfaccia di disegno del 41 (``SkyRenderer``) su ``QOpenGLWidget``.
 
 OpenGL 4.1 core profile (il massimo su macOS), solo con le funzioni incluse in PySide6 (41 §3.13). Sprint 4a: il

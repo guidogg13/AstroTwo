@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test di rete della demo delle Pleiadi (``examples/demo_pleiadi.py``): figura e report creati.
 
 La demo usa solo funzioni pubbliche di AstroTwo; qui si controlla che arrivi in fondo con i servizi reali e che il

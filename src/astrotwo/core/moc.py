@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Mappe di copertura MOC: spaziali, temporali e spazio-temporali.
 
 Specifica: ``mdfiles/16-core-moc.md`` (stato ``approvato``).

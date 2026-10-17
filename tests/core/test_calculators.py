@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 18 (``mdfiles/18-core-calcolatrici.md`` §12).
 
 I valori attesi si ricalcolano nel test con la libreria indicata (``numpy``, ``astropy``), mai copiati da

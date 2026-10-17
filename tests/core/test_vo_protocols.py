@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test del modulo 14 (``mdfiles/14-core-protocolli-vo.md`` §12).
 
 File e servizi di prova generati nel test (servizi simulati con un server

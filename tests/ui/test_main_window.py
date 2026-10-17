@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
 """Test della finestra principale (40 §12) con pytest-qt, piattaforma ``offscreen`` e servizi simulati."""
 
 import json
