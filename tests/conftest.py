@@ -6,6 +6,7 @@ Ogni test gira con una cartella home temporanea: così nessun test può
 scrivere nella vera cache ``~/Library/Caches/AstroTwo/`` (04-cache.md §12).
 """
 
+import os
 import re
 import threading
 import urllib.parse
@@ -14,6 +15,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from astrotwo.core.cache import SharedCache
+
+# Test dell'interfaccia con pytest-qt sulla piattaforma Qt ``offscreen`` (senza schermo, 40 §12). Qui e non in
+# ``tests/ui/conftest.py``: un secondo modulo ``conftest`` nasconderebbe questo a ``tests/test_network_retries.py``.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest_plugins = ["pytester"]  # per il test della regola di ripetizione dei test di rete
 

@@ -26,6 +26,9 @@ dependencies = [
     "spiceypy>=8.3.0",
 ]
 
+[project.scripts]
+astrotwo = "astrotwo.ui.main_window:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
@@ -41,8 +44,10 @@ packages = ["src/astrotwo"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not network and not keychain'"
+addopts = "-m 'not network and not keychain and not perf and not gl'"
 markers = [
     "network: test che richiedono la rete (esclusi di default, 02-convenzioni.md §8 punto 3)",
     "keychain: test sul Portachiavi reale di macOS (esclusi di default, eseguiti a mano, 31 §12)",
+    "perf: misure di prestazioni sul Mac di riferimento (escluse di default, riportate, D41-4)",
+    "gl: test del disegno OpenGL (esclusi di default, bloccanti quando si eseguono, D41-4)",
 ]

@@ -419,9 +419,20 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `THIRD_PARTY_LICENSES`; avvisi delle componenti incluse nelle librerie Qt
   da completare con il `60`. **pytest-qt** 4.5.0 MIT, nella sezione degli
   strumenti di sviluppo di `THIRD_PARTY_LICENSES`.
-- **Da verificare prima del codice:** licenza della raccolta di icone (da
-  aggiungere a `THIRD_PARTY_LICENSES`); cifre tabulari del carattere di sistema in Qt;
-  `QStyleHints.colorScheme` nella versione di PySide6.
+- **Verifiche prima del codice, fatte il 2026-10-17 (parte 3 della v1):**
+  `QStyleHints.colorScheme` c'è in PySide6 6.12.0 (usato per seguire il
+  sistema, T13); cifre tabulari con la funzione OpenType `tnum` di
+  `QFont.setFeature` (impostazione verificata dai test; la resa a schermo
+  con il carattere di sistema si controlla a occhio sul Mac). **Ancora da
+  verificare:** licenza della raccolta di icone, quando si aggiungono le
+  icone (la parte 3 non ne usa: barre con testo e controlli nativi).
+- **Codice della parte 3 (2026-10-17):** T1–T14 in `tests/ui/`; **T15**
+  (preferenze dell'assistente) si scrive con il `44`, che porta la sezione
+  Assistant delle preferenze. Le conferme dei comandi chiesti dall'IA
+  (indicatore `confirm` del `05`, schede del `44`) arrivano con 32/35/44;
+  i comandi chiesti dall'utente non chiedono conferma (l'azione dell'utente
+  è la conferma), salvo uscita con comandi in corso o non salvati e
+  apertura di una sessione sopra lavoro non salvato (§3.8).
 
 ## 14. Registro modifiche
 
@@ -432,3 +443,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): il pannello dell'assistente (`44`) entra nella v1 nell'area a destra, voce Assistant attiva (⌃⌘A); colonna "chi" (da `requested_by` del `05`) e dettagli dei comandi dell'IA nel pannello Comandi; sezione Assistant nelle preferenze (chiave solo nel Portachiavi, `31`); comandi dell'IA nella stessa coda con lo stesso `CancelToken`; casella "Includi il testo delle conversazioni" in Save session; test T10 aggiornato, T14 e T15 nuovi. |
 | 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifiche del 2026-10-16: licenze di PySide6 (`pyside6-essentials`, LGPL-3.0 con i testi dal sorgente ufficiale) e di pytest-qt (MIT) verificate e in `THIRD_PARTY_LICENSES`. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Codice della parte 3 della v1** ("FASE: CODICE – interfaccia v1"): `src/astrotwo/ui/main_window.py` (finestra, menu, barra di stato, "Vai a", pannelli Comandi e Messaggi, coda dei comandi in un `QThread` con avanzamento e Annulla, preferenze, aspetto scuro/chiaro/sistema/notte rossa, lingua inglese/italiano con punto decimale sempre), traduzione `src/astrotwo/ui/i18n/astrotwo_it.ts`/`.qm`, avvio `uv run astrotwo`, test `tests/ui/test_main_window.py` (T1–T14, T12 con marcatore `perf`). Verifiche di §13 fatte (colorScheme, cifre tabulari); icone ancora da verificare quando si aggiungono. Visualizzatore (41), tabella (42) e assistente (44) restano spazi riservati fino alle loro parti. Stato `approvato` invariato. |

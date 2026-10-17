@@ -18,6 +18,21 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-17, parte 3 della v1 (finestra 40):** scritti
+  `src/astrotwo/ui/main_window.py` (finestra, menu, barra di stato, "Vai
+  a", pannelli Comandi e Messaggi, coda dei comandi in un `QThread` con
+  avanzamento e Annulla, preferenze, aspetto sistema/scuro/chiaro/notte
+  rossa, inglese e italiano con il punto decimale sempre), la traduzione
+  italiana (`ui/i18n/`) e i test `tests/ui/` (T1–T14 del 40; T15 con il
+  44); avvio con `uv run astrotwo`. Decisioni del proprietario dello stesso
+  giorno: **D05-2 precisata** (impronta = SHA-256 del contenuto restituito
+  dal modulo), confermate le scelte minori del 05 sul tipo `time` e sul
+  parametro `window` dei comandi di vista; VizieR TAP (HTTP 503 da giorni)
+  **endpoint invariato** (`https://tapvizier.cds.unistra.fr/TAPVizieR/tap`,
+  guasto temporaneo del bilanciatore del CDS: rispondono 503 anche la
+  pagina `adql/about.html` e gli altri nomi del servizio), nessuna modifica.
+  Spazi riservati per 41, 42 e 44 fino alle loro parti.
+
 - **Stato al 2026-10-16, dopo l'approvazione:** il proprietario ha
   confermato le 32 scelte minori come raccomandate tranne una (servizio
   del Portachiavi `dev.pages.astrotwo.ai`; identificativo del progetto e
@@ -492,7 +507,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `34-ia-verifica-risultati.md` | Verifica dei numeri delle risposte dell'IA (v1): ogni numero contro i risultati dei comandi, eccezioni chiuse, evidenziazione, modalità rigorosa | 3 | approvato |
 | `35-ia-assistente-chat.md` | Assistente conversazionale (v1): ciclo degli strumenti, regole di sistema, limiti, privacy, sicurezza contro le istruzioni nei testi esterni | 3 | approvato |
 | **Interfaccia** | | | |
-| `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1) | — | approvato |
+| `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1); **codice scritto il 2026-10-17** (`ui/main_window.py`, parte 3 della v1) | — | approvato |
 | `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | approvato |
 | `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record) | — | approvato |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
@@ -613,7 +628,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D11-8 | Corona del centroide: interno **1 × `box_size`**, esterno **1,5 × `box_size`**; `box_size` iniziale 15 pixel nel 41, modificabile e dichiarato | 2026-10-15 | decisione del proprietario, `11` §13, `41` §3.12 | |
 | Puntatore Simbad | Raggio **12 pixel logici** convertiti in angolo dal 10 (con il 17 per la distanza); richiesta dopo 500 ms fermo, una alla volta | 2026-10-15 | decisione del proprietario, `41` §3.12 | D14-9 punto 2 lo assegnava al 41 |
 | A9 | Testi in inglese con `tr()`, traduzione italiana nostra (Qt Linguist), traduzioni di Qt per i dialoghi standard, lingua dal sistema cambiabile nelle preferenze; **numeri scientifici sempre con il punto decimale** | 2026-10-15 | decisione del proprietario, `01` §4.2, `40` §3.9 | |
-| D05-1, D05-2 | Tre classi di comandi `session`/`passive`/`application`; alla riapertura, dati di rete cambiati → **avviso senza fermarsi**, con l'impronta dei risultati di rete di ogni comando salvata nella sessione (l'avviso dice quale comando e cosa è cambiato) | 2026-10-15 | decisione del proprietario, `05` §13 | |
+| D05-1, D05-2 | Tre classi di comandi `session`/`passive`/`application`; alla riapertura, dati di rete cambiati → **avviso senza fermarsi**, con l'impronta dei risultati di rete di ogni comando salvata nella sessione (l'avviso dice quale comando e cosa è cambiato); **precisazione del 2026-10-17:** l'impronta è lo SHA-256 del contenuto restituito dal modulo (i moduli 10–14 non restituiscono i byte ricevuti) | 2026-10-15 | decisione del proprietario, `05` §13 | |
 | D40-1 | v1: codice + testo del modulo invariati; traduzione in D40-3 | 2026-10-15 | decisione del proprietario, `40` §13 | |
 | D41-1…D41-4 | Puntatore Simbad `passive` nel gruppo di thread dei tile; `format_coordinates` nel 10; `suggest_display_limits` con `ZScaleInterval` nell'11, limiti dichiarati; `perf` e `gl` esclusi di default, `gl` blocca, `perf` si riporta | 2026-10-15 | decisione del proprietario, `41`, `10`, `11` §13 | Mac di riferimento da compilare |
 | Linee guida visive | macOS, tema che segue il sistema con lo scuro di riferimento, modalità notte rossa, cielo al centro con pannelli richiudibili e barre sottili, carattere di sistema, un solo accento, spaziature regolari, icone con licenza libera (proposta Lucide, da verificare), nulla da Aladin; valgono per tutte le interfacce | 2026-10-15 | decisione del proprietario, `40` §3.11 | mockup in `mdfiles/mockup/` |
@@ -726,9 +741,11 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    scritte il 2026-10-17** (scelte minori nel §13 di 05 e 30, da
    confermare; T8 del 31 sul Portachiavi reale, corretto il 2026-10-17 per
    la cartella home temporanea dei test, e lista di controllo manuale del 30
-   con le chiavi dell'utente da fare a mano). Prossima: parte 3
-   (finestra 40). Da verificare all'inizio delle parti che li usano:
-   licenza delle icone e `QStyleHints.colorScheme`/cifre tabulari (40),
+   con le chiavi dell'utente da fare a mano). **Parte 3 (finestra 40)
+   scritta il 2026-10-17** (verificati `QStyleHints.colorScheme` e cifre
+   tabulari; prova a mano della finestra da fare dal proprietario).
+   Prossima: parte 4 (visualizzatore 41). Da verificare all'inizio delle
+   parti che li usano: licenza delle icone (quando si aggiungono),
    Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -817,3 +834,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **Parte 1 del codice della v1: modulo 05** (`src/astrotwo/core/commands.py`, `tests/core/test_commands.py`, 26 test): registro con i 39 comandi di §7 del 05, validazione con le forme JSON di D05-4 (più il tipo `time`), spazio di lavoro immutabile, cronologia, sessione (salva, apri, riesecuzione con stop e avvisi), schema JSON per il 32; scelte minori della parte 1 nel 05 §13 (da confermare). |
 | 2026-10-17 | Claude Code | **Parte 2 del codice della v1: moduli 31 e 30** (`ai/keychain_keys.py`, `ai/provider_adapter.py` con i dieci profili predefiniti; test con Portachiavi e provider simulati, 34 test; marcatore `keychain`). Precisazioni del 30 dalle fonti e dal codice degli SDK (indirizzo di Anthropic, `max_completion_tokens` per OpenAI, variabili d'ambiente neutralizzate); scelte minori della parte 2 nel 30 §13, da confermare. |
 | 2026-10-17 | Claude Code | **Correzione del test T8 del 31** (solo test, nessuna funzione nuova): la finestra di macOS "Impossibile trovare un portachiavi" veniva dalla cartella home temporanea che `tests/conftest.py` dà a ogni test (`HOME` cambiata: macOS cerca il Portachiavi di login in `$HOME/Library/Keychains` e non lo trova). T8 ora usa la vera home dell'utente letta dal sistema (`pwd`). Codice del 31 invariato (servizio `dev.pages.astrotwo.ai`, nessun portachiavi impostato esplicitamente). T8 da rieseguire a mano dal proprietario. |
+| 2026-10-17 | Claude Code | **Parte 3 del codice della v1: modulo 40** (`src/astrotwo/ui/main_window.py`, traduzione `ui/i18n/astrotwo_it.ts`/`.qm`, `tests/ui/test_main_window.py` con T1–T14, T12 `perf`; voce `astrotwo` in `[project.scripts]`, marcatori `perf` e `gl` esclusi di default in `pyproject.toml`). Decisioni del proprietario: D05-2 precisata (impronta sul contenuto restituito dal modulo; 05 §3.1 e §13), scelte minori del 05 confermate (tipo `time`, parametro `window`); VizieR TAP: endpoint invariato, 503 = guasto temporaneo del CDS, nessuna modifica. Verifiche del 40 §13 fatte (colorScheme, cifre tabulari); icone ancora da verificare. §2, §4, §5, §7 aggiornati. Aperte 14 invariate. Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |

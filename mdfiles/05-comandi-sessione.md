@@ -108,8 +108,9 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   (origine e data dei dati di rete o della cache, "dalla cache sì/no",
   librerie e versioni quando il modulo le dichiara); livelli prodotti;
   istanti di inizio e fine (UTC, ISO 8601, DC1); per i comandi di rete
-  l'**impronta dei risultati di rete** (SHA-256 dei byte ricevuti o della
-  copia in cache, origine, data, righe per le tabelle; D05-2). **Testi e numeri sono sempre quelli del modulo**: il 05 non
+  l'**impronta dei risultati di rete** (SHA-256 del contenuto restituito
+  dal modulo, origine, data, righe per le tabelle; D05-2, precisata dal
+  proprietario il 2026-10-17). **Testi e numeri sono sempre quelli del modulo**: il 05 non
   riscrive messaggi e non arrotonda valori.
 
 ### 3.2 Registro, esecuzione, stato
@@ -496,9 +497,13 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 - **D05-2 — Dati di rete diversi alla riapertura: DECISA il 2026-10-15
   (decisione del proprietario).** **Avviso senza fermarsi.** Ogni comando
   che usa la rete salva nel risultato, e quindi nella sessione,
-  un'**impronta dei suoi risultati di rete** (§3.4): SHA-256 dei byte
-  ricevuti dal servizio (o della copia in cache usata), con origine, data,
-  "dalla cache sì/no" e, per le tabelle, il numero di righe. Alla
+  un'**impronta dei suoi risultati di rete** (§3.4): SHA-256 del
+  **contenuto restituito dal modulo** (precisazione del proprietario del
+  2026-10-17: i moduli 10–14 non restituiscono i byte ricevuti; per una
+  tabella colonne, tipi, unità, valori e maschere; per un nome risolto la
+  posizione; per un HiPS le proprietà), con origine, data, "dalla cache
+  sì/no" e, per le tabelle, il numero di righe. Rileva gli stessi
+  cambiamenti dei dati. Alla
   riapertura il comando si riesegue e l'impronta si ricalcola; se è
   diversa, avviso `SESSION_NETWORK_DATA_DIFFERS` che dice **quale comando**
   (numero e nome) e **cosa è cambiato** (impronta prima e dopo, origine e
@@ -554,9 +559,14 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   valori di `requested_by` (`menu`, `keyboard`, `mouse`, `history`,
   `session`, `ai`); (2) comandi di sola lettura in classe `session`
   (rieseguiti alla riapertura).
-- **Scelte minori della parte 1 (codice del 05, 2026-10-17): DA
-  CONFERMARE dal proprietario.** Dettagli che la specifica lasciava aperti,
-  scelti scrivendo `src/astrotwo/core/commands.py`:
+- **Scelte minori della parte 1 (codice del 05, 2026-10-17).** Dettagli
+  che la specifica lasciava aperti, scelti scrivendo
+  `src/astrotwo/core/commands.py`. **Confermate dal proprietario il
+  2026-10-17** (richiesta della parte 3): la **1** (tipo `time`), il
+  **parametro `window`** della 2 (dimensione della finestra come parametro
+  dei comandi di vista) e la **4** (impronta sul contenuto restituito dal
+  modulo, testo di D05-2 aggiornato). Le altre (resto della 2, 3, 5–8)
+  restano **da confermare**:
   1. **Tipo `time`** nell'elenco chiuso (precisazione di D05-4): la forma
      JSON "tempo" del §3.1 è il tipo dei campi di epoca (`epoch`,
      `equinox`, `obstime`), anche dei `calc.*`.
@@ -614,3 +624,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | Nuova decisione aperta **D05-4** (Gruppo 1): forma JSON dei valori dei parametri e tipo per i parametri strutturati, trovata scrivendo l'adattatore del 18; raccomandazione (a) tipo `record` e forme JSON in §3.1. Ferma solo l'adattatore del 18 e i comandi `calc.*`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (opzione a; autorizzazione esplicita a modificare il file approvato): nuovo tipo `record` con campi tipizzati validati ed esportati nello schema; forma JSON di ogni tipo in §3.1 (tempo con scala sempre scritta, file con SHA-256 e dimensione, `null` per i facoltativi senza default); valori di pixel come `number` nell'unità dell'immagine; §3.6 con i `layer_ref` risolti dal 05 prima dell'adattatore del 18; T22. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 1 della v1** (divisione approvata dal proprietario il 2026-10-17): `src/astrotwo/core/commands.py` (39 comandi della tabella di §7, registro, spazio di lavoro immutabile, cronologia, sessione con riapertura, schema JSON) e `tests/core/test_commands.py` (T1–T22 più vista, misura, comandi collegati e costo del registro, 26 test). Tipo `time` nell'elenco chiuso (precisazione di D05-4); nuovi casi in §10 (`VIEW_UNDEFINED`, `OUT_OF_SKY`, `POSITION_COLUMNS_REQUIRED`, comandi non collegati); scelte minori della parte 1 in §13, da confermare. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17 (parte 3 della v1):** D05-2 precisata (impronta = SHA-256 del contenuto restituito dal modulo; §3.1 e §13 aggiornati); confermate le scelte minori 1 (tipo `time`), il parametro `window` della 2 e la 4; le altre restano da confermare. Stato `approvato` invariato. |
