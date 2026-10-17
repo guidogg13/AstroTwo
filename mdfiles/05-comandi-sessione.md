@@ -40,6 +40,7 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   |---|---|---|
   | `quantity` | valore `float64` + unità (stringa di `astropy.units`, formato FITS o VOUnit come D18-2) | la definizione dichiara la grandezza fisica (es. angolo) e l'intervallo valido; un'unità non convertibile è un errore |
   | `sky_position` | longitudine e latitudine (`quantity` angolari), frame (nome di `astropy.coordinates`), epoca | epoca scritta sempre: valore oppure `null` con il motivo (es. "frame senza epoca"); **mai assunta** (D10-2) |
+  | `time` | un istante o un'epoca nella forma "tempo" qui sotto (dal 2026-10-17, precisazione di D05-4: dà un nome al tipo dei campi di epoca) | scala sempre scritta (DC1); epoca mai assunta |
   | `pixel_position` | x, y `float64` + convenzione | nel comando registrato sempre in convenzione `numpy` dichiarata (DC7); la conversione FITS ↔ numpy è del 10 |
   | `file` | percorso assoluto + SHA-256 + dimensione in byte | lo SHA-256 si calcola alla registrazione (§3.4) |
   | `url` | indirizzo | origine e data del dato scaricato stanno nel risultato (cache, `04`) |
@@ -434,6 +435,12 @@ codice del modulo sui tipi chiusi di §3.1.
 | File di sessione non leggibile o non valido | nessuna riesecuzione | `SESSION_INVALID` |
 | Stato finale diverso da quello registrato | avviso con le differenze | `SESSION_STATE_DIFFERS` |
 | Dati di rete diversi da quelli registrati | avviso con comando e differenze (impronta, origine e data, righe), la riesecuzione continua (D05-2) | `SESSION_NETWORK_DATA_DIFFERS` |
+| Comando dell'interfaccia (`view.export_png`, `prefs.set`, `ui.*`) senza esecuzione collegata dal 40/41 (2026-10-17) | nessuna esecuzione | `COMMAND_UNKNOWN` |
+| Lettura sotto il cursore senza vista definita (centro, scala o finestra mancanti) (2026-10-17) | nessuna lettura | `VIEW_UNDEFINED` |
+| Punto del cursore fuori dalla proiezione (2026-10-17) | avviso "fuori dal cielo", nessuna coordinata | `OUT_OF_SKY` |
+| Catalogo da file senza colonne di posizione dai metadati (2026-10-17) | livello aperto con i suggerimenti del 13; avviso: confermare con `catalog.set_columns` | `POSITION_COLUMNS_REQUIRED` |
+| Ordinamento di una colonna non ordinabile (dal 42) | nessun ordinamento | `TABLE_SORT_UNSUPPORTED` |
+| Parametro rifiutato dalla funzione del modulo con `TypeError`/`ValueError` (senza codice) (2026-10-17) | risultato `error` con il testo del modulo | `COMMAND_PARAMETER_INVALID` |
 
 ## 11. Esposizione all'IA
 
@@ -547,6 +554,48 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   valori di `requested_by` (`menu`, `keyboard`, `mouse`, `history`,
   `session`, `ai`); (2) comandi di sola lettura in classe `session`
   (rieseguiti alla riapertura).
+- **Scelte minori della parte 1 (codice del 05, 2026-10-17): DA
+  CONFERMARE dal proprietario.** Dettagli che la specifica lasciava aperti,
+  scelti scrivendo `src/astrotwo/core/commands.py`:
+  1. **Tipo `time`** nell'elenco chiuso (precisazione di D05-4): la forma
+     JSON "tempo" del §3.1 è il tipo dei campi di epoca (`epoch`,
+     `equinox`, `obstime`), anche dei `calc.*`.
+  2. **Vista:** `view.set_center`, `view.set_zoom` e `view.go_to` hanno il
+     parametro facoltativo `window` (`record` larghezza × altezza in pixel
+     fisici; senza: quella dello stato), così la geometria del 10 è
+     ricostruibile dalla cronologia. Scala = angolo per pixel della
+     finestra. Con un'immagine con WCS la base è il suo WCS; senza, base
+     creata in ICRS che parte da `TAN` e segue `choose_projection` con le
+     soglie fisse 33° (da `TAN`) e 27° (da `AIT`) del 41 §3.3, ricreata con
+     il punto di tangenza al centro quando la proiezione cambia o il punto
+     esce dalla finestra. La griglia visibile si ricalcola a ogni comando di
+     vista.
+  3. **"Vai a":** coppia decimale = gradi; coppia sessagesimale `h:m:s
+     ±d:m:s` o `h m s ±d m s` = longitudine in ore nei frame equatoriali;
+     frame delle coordinate mostrate; epoca non nota (non assunta); il
+     resto è un nome per `resolve_name`.
+  4. **Impronta dei risultati di rete (D05-2):** i moduli 10–14 non
+     restituiscono i byte ricevuti, quindi l'impronta è lo SHA-256 del
+     **contenuto restituito dal modulo** (colonne, tipi, unità, valori e
+     maschere della tabella; posizione del nome risolto; proprietà del
+     HiPS), con origine, data, "dalla cache" e righe. Rileva gli stessi
+     cambiamenti dei dati.
+  5. **Riapertura:** i comandi rieseguiti conservano il loro
+     `requested_by` (chi li aveva chiesti); `Session.load(path, registry)`
+     legge il file, `replay` riesegue.
+  6. **Comandi dell'interfaccia:** `view.export_png`, `prefs.set`,
+     `ui.set_tool`, `ui.set_panel`, `ui.set_fullscreen`,
+     `ui.set_appearance` sono definiti qui (classe `application`) e
+     l'esecuzione la collega il 40/41 con `CommandRegistry.bind`; senza →
+     `COMMAND_UNKNOWN`.
+  7. **Livelli:** `image.open` sostituisce l'immagine aperta (al più una,
+     41 §3.5) e scrive nel comando registrato i limiti scelti da
+     `suggest_display_limits` (D41-3); `hips.set_survey` sostituisce lo
+     sfondo e lo mette in fondo all'ordine; `measure.distance` misura tra due
+     pixel di un'immagine con WCS e crea un livello `measure`.
+  8. **Firma:** `execute` restituisce il `CommandResult` (§7); `run`
+     restituisce anche il comando registrato (con i valori scelti dal
+     modulo) per la cronologia; `Session.run` esegue e registra.
 - **Accesso alla cache del 04 da più thread (§3.2, T17): verificato il
   2026-10-16.** La prima prova è fallita (orfani cancellati durante le
   scritture di altri thread); corretto nel 04 con D04 (orfani solo oltre 10
@@ -564,3 +613,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | Verifica "cache del 04 da più thread" (§3.2, T17) chiusa: fallita alla prima prova, corretta nel 04 con D04 (decisione del proprietario del 2026-10-16); T17 nella suite come T9 del 04. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | Nuova decisione aperta **D05-4** (Gruppo 1): forma JSON dei valori dei parametri e tipo per i parametri strutturati, trovata scrivendo l'adattatore del 18; raccomandazione (a) tipo `record` e forme JSON in §3.1. Ferma solo l'adattatore del 18 e i comandi `calc.*`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (opzione a; autorizzazione esplicita a modificare il file approvato): nuovo tipo `record` con campi tipizzati validati ed esportati nello schema; forma JSON di ogni tipo in §3.1 (tempo con scala sempre scritta, file con SHA-256 e dimensione, `null` per i facoltativi senza default); valori di pixel come `number` nell'unità dell'immagine; §3.6 con i `layer_ref` risolti dal 05 prima dell'adattatore del 18; T22. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Codice della parte 1 della v1** (divisione approvata dal proprietario il 2026-10-17): `src/astrotwo/core/commands.py` (39 comandi della tabella di §7, registro, spazio di lavoro immutabile, cronologia, sessione con riapertura, schema JSON) e `tests/core/test_commands.py` (T1–T22 più vista, misura, comandi collegati e costo del registro, 26 test). Tipo `time` nell'elenco chiuso (precisazione di D05-4); nuovi casi in §10 (`VIEW_UNDEFINED`, `OUT_OF_SKY`, `POSITION_COLUMNS_REQUIRED`, comandi non collegati); scelte minori della parte 1 in §13, da confermare. Stato `approvato` invariato. |

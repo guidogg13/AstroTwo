@@ -8,7 +8,7 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-10-17 — **D05-4 decisa** (tipo `record` nel 05, parametri dei `calc.*` nel 18,
+**Ultimo aggiornamento:** 2026-10-17 — **codice del 05 scritto** (parte 1 della v1, 39 comandi; scelte minori da confermare nel 05 §13). Prima: **D05-4 decisa** (tipo `record` nel 05, parametri dei `calc.*` nel 18,
 adattatore scritto); `httpx2` accettato (01, 30); profili predefiniti dei provider IA (30, 31, 44). Aperte 14 (Gruppo 1 = 0).
 Riepilogo invariato: approvato 24, bozza 5, non esiste 14, totale 43.
 Prima di questo aggiornamento: 2026-10-16 — **D04 (cache da più thread) decisa e scritta; verifiche prima del codice della
@@ -313,7 +313,7 @@ Dove si trovano le decisioni:
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, coordinate, versioni, test | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14, 16, 18 e 19 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
-| `05-comandi-sessione.md` | Registro dei comandi e sessione (livello 1, file generale come il 04; AM1 accettata il 2026-10-15; codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore; D05-1 e D05-2 decise (impronta dei risultati di rete nella sessione), D05-3 rimandata; dal 2026-10-16 `requested_by`, indicatore `confirm`, comandi di sola lettura per l'assistente e blocco facoltativo `conversations` | approvato |
+| `05-comandi-sessione.md` | Registro dei comandi e sessione (livello 1, file generale come il 04; AM1 accettata il 2026-10-15; codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore; D05-1 e D05-2 decise (impronta dei risultati di rete nella sessione), D05-3 rimandata; dal 2026-10-16 `requested_by`, indicatore `confirm`, comandi di sola lettura per l'assistente e blocco facoltativo `conversations`; dal 2026-10-17 tipo `record` (D05-4) e **codice scritto** | approvato |
 | `decisioni-aperte.md` | Decisioni aperte (14: Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11, aggiornate il 2026-10-17) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)

@@ -465,7 +465,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `02-convenzioni.md` | Convenzioni di documentazione, nomi, unità, test | — | approvato |
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo coprente | — | approvato |
 | `04-cache.md` | Cache A7 comune (`~/Library/Caches/AstroTwo/`, un solo limite di 5 GB, timeout 10 s / 60 s, origine e data; nessuna cache propria nei moduli), usata da 10–14, 16, 18 e 19 | 1 (generale) | approvato |
-| `05-comandi-sessione.md` | Registro dei comandi e sessione (AM1 accettata il 2026-10-15): comandi tipizzati con unità e risultato strutturato, sessione JSON rieseguibile senza pixel, schema JSON per il 32; usato da 40, 41, 42 | 1 (generale) | approvato |
+| `05-comandi-sessione.md` | Registro dei comandi e sessione (AM1 accettata il 2026-10-15): comandi tipizzati con unità e risultato strutturato, sessione JSON rieseguibile senza pixel, schema JSON per il 32; usato da 40, 41, 42; **codice scritto il 2026-10-17** (`core/commands.py`, 39 comandi, parte 1 della v1) | 1 (generale) | approvato |
 | `decisioni-aperte.md` | Decisioni aperte, smistate in tre gruppi; §3 = esiti delle decisioni prese il 2026-10-04 | — | bozza |
 | **Nucleo (livello 1)** | | | |
 | `10-core-coordinate-wcs.md` | Coordinate, WCS, sistemi di riferimento | 1 | approvato |
@@ -722,7 +722,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    2026-10-17). **Divisione del codice della v1 approvata dal proprietario
    il 2026-10-17:** 05 registro e sessione → 31/30 chiavi e provider (con i
    profili predefiniti) → finestra 40 → visualizzatore 41 → 42 → 32/34/35
-   → pannello 44. Da verificare all'inizio delle parti che li usano:
+   → pannello 44. **Parte 1 (05) scritta il 2026-10-17** (scelte minori
+   della parte 1 nel 05 §13, da confermare). Da verificare all'inizio delle parti che li usano:
    licenza delle icone e `QStyleHints.colorScheme`/cifre tabulari (40),
    Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -809,3 +810,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-16 | Claude Code | **Verifiche prima del codice della v1:** licenze di `anthropic` (MIT), `openai` (Apache-2.0), `httpx2` (BSD-3), `keyring` (MIT), PySide6 (`pyside6-essentials`, LGPL-3.0, testi dal sorgente ufficiale), pytest-qt (MIT) in `THIRD_PARTY_LICENSES`; `keyring` forzato sul Portachiavi di login e funzionante in un'app PyInstaller; OpenGL di PySide6 sufficiente; Ollama con chiamata di strumenti in streaming verificato; LM Studio rimandato (non installato). |
 | 2026-10-16 | Claude Code | **Allineamento del livello 1 alla v1:** codice e test di 10 (`make_view_wcs`, `format_coordinates`, `compass_and_scale_bar`, `choose_projection` con default 30°), 11 (`suggest_display_limits`, corona di default), 12 (P6, con la verifica di `reproject` e i tempi misurati); adattatore del 18 fermo sulla nuova **D05-4** (Gruppo 1). Aperte 15. §7 con la proposta di divisione del codice della v1 in attesa del proprietario. |
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17:** (A) `httpx2` accettato dopo la verifica dell'origine (01, 30); (B) profili predefiniti dei provider IA (30 §3.1.1, 31, 44 §3.6) con indirizzi dalla documentazione ufficiale; **D05-4 decisa** (tipo `record`, forme JSON nel 05 §3.1, parametri dei `calc.*` nel 18); adattatore `run_command` del 18 scritto e testato (T18 nel formato del 05); note superate "codice da scrivere" tolte da 10, 11, 12. Aperte **14**. §5, §6, §7 aggiornati. |
+| 2026-10-17 | Claude Code | **Parte 1 del codice della v1: modulo 05** (`src/astrotwo/core/commands.py`, `tests/core/test_commands.py`, 26 test): registro con i 39 comandi di §7 del 05, validazione con le forme JSON di D05-4 (più il tipo `time`), spazio di lavoro immutabile, cronologia, sessione (salva, apri, riesecuzione con stop e avvisi), schema JSON per il 32; scelte minori della parte 1 nel 05 §13 (da confermare). |
