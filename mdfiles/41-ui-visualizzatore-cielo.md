@@ -145,8 +145,21 @@ ogni rotella, `angleDelta`, `pixelDelta`, fase, `inverted`, modificatori,
 sorgente, quale widget la riceve e se è accettata; per ogni passo di zoom,
 scala prima/dopo e che cosa fa il ritardo di 300 ms (gesto azzerato o
 ripristinato). Spenta di default; nessuna chiave né dato personale nei log.
-Temporanea nell'uso, resta nel codice. La causa della rotella che non zooma
-su mouse vero è **da verificare** con i dati reali.
+Temporanea nell'uso, resta nel codice.
+
+**Rotella del mouse su macOS, dati reali (2026-10-17, parte 4a-fix2):**
+misurati sul Mac del proprietario: ogni evento ha `phase` = `NoScrollPhase`,
+`angleDelta` = ±120 e un `pixelDelta` non nullo e irregolare (da 2 a 1147,
+accelerazione di macOS); uno scatto fisico arriva spezzato in 4–7 eventi (34
+eventi per 6 scatti). Regola: `NoScrollPhase` = rotella di mouse → zoom, con
+`pixelDelta` ignorato; ogni evento vale 1/6 di scatto
+(`WHEEL_EVENTS_PER_NOTCH` = 6, scelta nostra tarata sul log; un giro di 3
+scatti dà circa 3 scatti, 4 scatti = ×2, con ±20% di scarto da scatto a
+scatto; lo zoom resta proporzionale alla velocità). Fasi
+Begin/Update/End/Momentum = trackpad a due dita → spostamento; il pizzico
+resta lo zoom del trackpad. Sostituisce la regola "ogni evento vale almeno
+uno scatto" di (a). Il numero di eventi per scatto può dipendere dalla
+velocità della rotella impostata nel sistema: da verificare su altri Mac.
 
 ### 3.5 Livelli
 

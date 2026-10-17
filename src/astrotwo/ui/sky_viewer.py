@@ -29,6 +29,9 @@ GESTURE_IDLE_MS = 300
 #: Fattore di zoom per scatto della rotella del mouse (120 unità di ``angleDelta``): 2^(1/4), 4 scatti = raddoppio
 #: (41 §3.4, scelta del proprietario del 2026-10-17); sul trackpad lo zoom è il pizzico, due dita spostano.
 ZOOM_STEP = 2.0 ** 0.25
+#: Eventi di rotella che macOS manda per uno scatto fisico (misurati sul Mac del proprietario il 2026-10-17: 34
+#: eventi per 6 scatti, da 4 a 7 per scatto, tutti con ``angleDelta`` = ±120); ogni evento vale 1/6 di scatto.
+WHEEL_EVENTS_PER_NOTCH = 6
 #: Fattore dei pulsanti e delle scorciatoie di zoom (41 §3.4, decisione del proprietario del 2026-10-17).
 BUTTON_ZOOM = 2.0
 #: Campo della vista a cui porta un "Vai a" riuscito se la vista era più larga (stessa decisione).
@@ -465,18 +468,17 @@ class SkyViewer(QWidget):
         debug_input(f"wheelEvent angleDelta=({event.angleDelta().x()},{event.angleDelta().y()}) "
                     f"pixelDelta=({pixels.x()},{pixels.y()}) phase={event.phase().name} inverted={event.inverted()} "
                     f"modifiers={event.modifiers()} source={event.source().name}")
-        if not pixels.isNull():  # trackpad a due dita: spostamento (41 §3.16); lo zoom è il pizzico
-            self.pan_by(pixels.x(), pixels.y())
-        else:
-            # Rotella del mouse su macOS: Qt dà all'evento un valore proporzionale alla velocità (da pochi
-            # centesimi di scatto a 120), non 120 per scatto: ogni evento vale almeno uno scatto intero.
+        if event.phase() == Qt.ScrollPhase.NoScrollPhase:
+            # Rotella di un mouse: su macOS ogni scatto arriva spezzato in più eventi (tutti con angleDelta = ±120) e
+            # con un pixelDelta non nullo (accelerazione del sistema), da ignorare. Ogni evento vale 1/6 di scatto.
             delta = event.angleDelta().y()
             if delta:
-                steps = delta / 120.0
-                steps = max(1.0, abs(steps)) * (1.0 if steps > 0 else -1.0)
+                steps = delta / 120.0 / WHEEL_EVENTS_PER_NOTCH
                 self.zoom_by(ZOOM_STEP ** steps, event.position())
             else:
-                debug_input("wheelEvent: angleDelta.y = 0 e pixelDelta nullo, nessuna azione")
+                debug_input("wheelEvent: angleDelta.y = 0, nessuna azione")
+        elif not pixels.isNull():  # trackpad a due dita (fasi Begin/Update/End/Momentum): spostamento (41 §3.16)
+            self.pan_by(pixels.x(), pixels.y())  # lo zoom del trackpad è il pizzico
         event.accept()
         debug_input(f"wheelEvent accettato={event.isAccepted()}")
 

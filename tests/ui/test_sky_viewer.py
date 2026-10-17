@@ -89,8 +89,8 @@ def test_format_field():
     assert sv.format_field(None) == ""
 
 
-def wheel(widget, steps, pos):
-    event = QWheelEvent(QPointF(pos), QPointF(widget.mapToGlobal(pos)), QPoint(0, 0), QPoint(0, int(120 * steps)),
+def wheel(widget, steps, pos, pixel=0):
+    event = QWheelEvent(QPointF(pos), QPointF(widget.mapToGlobal(pos)), QPoint(0, pixel), QPoint(0, int(120 * steps)),
                         Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
     QApplication.sendEvent(widget, event)
 
@@ -111,8 +111,8 @@ def test_t5_wheel_zoom_to_commands(qtbot, viewer_window):
     geometry = before.geometry
     drawn = sky.sampling
     center = QPoint(sky.width() // 2, sky.height() // 2)
-    for _ in range(4):
-        wheel(sky, 1, center)  # 4 scatti = raddoppio (2^(1/4) per scatto)
+    for _ in range(4 * sv.WHEEL_EVENTS_PER_NOTCH):
+        wheel(sky, 1, center)  # 4 scatti (6 eventi ciascuno) = raddoppio (2^(1/4) per scatto)
     assert len(win.session.history) == 3 and not win.busy()  # gesto in corso: solo disegno
     assert sky.renderer.transform[0] == pytest.approx(2.0)
     qtbot.waitUntil(lambda: len(win.session.history) == 5, timeout=5000)
@@ -155,7 +155,8 @@ def test_t5_drag_to_center_and_limits(qtbot, viewer_window):
     assert entry.command.parameters["position"]["lon"]["value"] == pytest.approx(expected.spherical.lon.deg,
                                                                                 abs=1e-9)
     # limite della scala: dal cielo intero non si va oltre 360° sulla larghezza
-    wheel(sky, -3, QPoint(100, 150))
+    for _ in range(3 * sv.WHEEL_EVENTS_PER_NOTCH):
+        wheel(sky, -1, QPoint(100, 150))
     assert sky.renderer.transform[0] == pytest.approx(1.0)
 
 
@@ -278,13 +279,15 @@ def test_real_events_reach_sky(qtbot, viewer_window):
     start(qtbot, win)
     sky = win.sky
     here = QPoint(sky.width() // 2, sky.height() // 2)
+    per_event = sv.ZOOM_STEP ** (1 / sv.WHEEL_EVENTS_PER_NOTCH)
     via_window(win, "wheel", here, angle=120)
-    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP)
-    # rotella di macOS: un evento lento vale poche unità di 120, deve comunque valere uno scatto intero
-    via_window(win, "wheel", here, angle=4)
-    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP ** 2)
-    via_window(win, "wheel", here, angle=-4)
-    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP)
+    assert sky.renderer.transform[0] == pytest.approx(per_event)
+    via_window(win, "wheel", here, angle=120)
+    via_window(win, "wheel", here, angle=-120)
+    assert sky.renderer.transform[0] == pytest.approx(per_event)
+    for _ in range(sv.WHEEL_EVENTS_PER_NOTCH - 1):
+        via_window(win, "wheel", here, angle=120)
+    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP)  # uno scatto fisico
     k = sky.k
     pinch = via_window(win, "pinch", here, value=0.25)
     assert pinch.isAccepted() and sky.k == pytest.approx(k * 1.25)
@@ -380,3 +383,47 @@ def test_debug_input_log_off_by_default(qtbot, viewer_window, capfd, monkeypatch
     wheel(sky, 1, center)
     err = capfd.readouterr().err
     assert "wheelEvent angleDelta=(0,120)" in err and "zoom_by" in err and "accettato=True" in err
+
+
+# Valori reali del Mac del proprietario (~/rotella.log del 2026-10-17): mouse a rotellina, NoScrollPhase,
+# angleDelta = ±120 e pixelDelta non nullo e irregolare (accelerazione di macOS), 34 eventi per 6 scatti.
+REAL_PIXEL_DELTAS = [2, 245, 287, 680, 385, 403, 425, 2, 248, 612, 739, 2, 41, 210, 288, 325, 1147, 424]  # 3 scatti
+
+
+def test_real_mouse_wheel_values_zoom_not_pan(qtbot, viewer_window):
+    """Con pixelDelta non nullo e NoScrollPhase è rotella di mouse: zoom, mai spostamento; 18 eventi = 3 scatti."""
+    win = viewer_window
+    start(qtbot, win)
+    sky = win.sky
+    here = QPoint(sky.width() // 2, sky.height() // 2)
+    for pixel in REAL_PIXEL_DELTAS:
+        via_window(win, "wheel", here, angle=120, pixel=QPoint(0, pixel))
+    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP ** 3, rel=1e-9)
+    assert sky._moved is False
+    for pixel in REAL_PIXEL_DELTAS:  # e indietro con gli stessi valori di segno opposto
+        via_window(win, "wheel", here, angle=-120, pixel=QPoint(0, -pixel))
+    assert sky.renderer.transform[0] == pytest.approx(1.0, rel=1e-9)
+    assert sky._moved is False
+
+
+def phased_wheel(win, here, phase, pixel):
+    sky = win.sky
+    p = sky.mapTo(win, here)
+    event = QWheelEvent(QPointF(p), QPointF(win.mapToGlobal(p)), QPoint(0, pixel), QPoint(0, pixel * 3 // 2),
+                        Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, phase, False)
+    QApplication.sendEvent(win.windowHandle(), event)
+
+
+def test_trackpad_phased_scroll_pans_without_zoom(qtbot, viewer_window):
+    """Sequenza di trackpad (Begin, Update, End, Momentum) con pixelDelta: solo spostamento, nessuno zoom."""
+    win = viewer_window
+    start(qtbot, win)
+    sky = win.sky
+    here = QPoint(sky.width() // 2, sky.height() // 2)
+    ty = sky.ty
+    for phase, pixel in ((Qt.ScrollPhase.ScrollBegin, 4), (Qt.ScrollPhase.ScrollUpdate, 10),
+                         (Qt.ScrollPhase.ScrollUpdate, 6), (Qt.ScrollPhase.ScrollEnd, 0),
+                         (Qt.ScrollPhase.ScrollMomentum, 2)):
+        phased_wheel(win, here, phase, pixel)
+    assert sky.ty == pytest.approx(ty + 22 * sky.ratio())
+    assert sky.k == pytest.approx(1.0) and sky._zoomed is False
