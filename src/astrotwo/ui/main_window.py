@@ -427,6 +427,9 @@ QLineEdit#goToField {{ background: {t['alternate']}; color: {t['text']}; border:
     border-radius: 6px; padding: 2px 8px; selection-background-color: {t['accent_soft']};
     selection-color: {t['text']}; }}
 QLineEdit#goToField:focus {{ border: 1px solid {t['focus']}; }}
+QToolButton#zoomIn, QToolButton#zoomOut {{ background: {t['chrome']}; border: 1px solid {t['line']};
+    border-radius: 6px; }}
+QToolButton#zoomIn:hover, QToolButton#zoomOut:hover {{ background: {t['line_soft']}; }}
 QMainWindow::separator {{ background: {t['line']}; width: 1px; height: 1px; }}
 QMainWindow > QTabBar {{ background: {t['panel']}; }}
 QMainWindow > QTabBar::tab {{ background: transparent; color: {t['text3']}; border: none; border-radius: 6px;
@@ -1402,6 +1405,10 @@ class MainWindow(QMainWindow):
         self.act_quit = a(self.tr("Quit"), self.close, shortcut=QKeySequence.StandardKey.Quit, name="quit")
         self.act_quit.setMenuRole(QAction.MenuRole.QuitRole)
         self.act_go_to = a(self.tr("Go to…"), lambda: self.go_to_field.setFocus(), shortcut="Ctrl+L", name="goTo")
+        self.act_zoom_in = a(self.tr("Zoom in"), lambda: self.sky.zoom_step(+1), name="zoomIn")
+        self.act_zoom_in.setShortcuts([QKeySequence.StandardKey.ZoomIn, QKeySequence("Ctrl+=")])
+        self.act_zoom_out = a(self.tr("Zoom out"), lambda: self.sky.zoom_step(-1),
+                              shortcut=QKeySequence.StandardKey.ZoomOut, name="zoomOut")
         self.act_grid = a(self.tr("Show coordinate grid"), self._grid_toggled, checkable=True, name="grid")
         self.grid_frames = QActionGroup(self)
         self.act_grid_icrs = a(self.tr("Grid in ICRS"), lambda: self._grid_frame("icrs"), checkable=True,
@@ -1459,6 +1466,8 @@ class MainWindow(QMainWindow):
         m.addAction(self.act_quit)
         m = bar.addMenu(self.tr("View"))
         m.addAction(self.act_go_to)
+        m.addAction(self.act_zoom_in)
+        m.addAction(self.act_zoom_out)
         grid = m.addMenu(self.tr("Coordinate grid"))
         grid.addAction(self.act_grid)
         grid.addSeparator()
@@ -1616,6 +1625,8 @@ class MainWindow(QMainWindow):
             self._apply_effect(done.registered, result)
         self.sky.command_finished(done.registered.name, result.status, result.values,
                                   self.session.workspace.state)
+        if done.registered.name == "view.go_to" and result.status == "ok":
+            self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
 
     def _apply_effect(self, command: Command, result: CommandResult) -> None:
         """Effetto dei comandi dell'interfaccia (classe ``application``) e stato dei menu, nel thread principale."""
@@ -1862,6 +1873,11 @@ class MainWindow(QMainWindow):
         """Icone e stati vuoti nei colori del tema (in modalità notte solo toni di rosso, §3.11)."""
         for act, name in self.toolbar_icons.items():
             act.setIcon(themed_icon(name, tokens))
+        for button, name, act in ((self.sky.zoom_in_button, "plus", self.act_zoom_in),
+                                  (self.sky.zoom_out_button, "minus", self.act_zoom_out)):
+            button.setIcon(themed_icon(name, tokens))
+            shortcut = act.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+            button.setToolTip(f"{act.text()} ({shortcut})")
         self.go_to_field.search_icon.setIcon(themed_icon("search", {**tokens, "text2": tokens["text3"]}))
         for dock in self.docks.values():
             dock.header.set_theme(tokens)

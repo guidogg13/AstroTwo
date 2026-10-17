@@ -322,3 +322,46 @@ def test_go_to_error_is_visible(qtbot, viewer_window, fake_simbad):  # noqa: F81
     wait_idle(qtbot, win)
     assert win.session.history.entries[-1].result.status == "error"
     assert win.status.currentMessage().startswith(win.session.history.entries[-1].result.error.code)
+
+
+def test_zoom_buttons_and_shortcuts(qtbot, viewer_window):
+    """Pulsanti + e − e voci ⌘+ / ⌘−: zoom ×2 e ÷2 come un gesto, poi i comandi registrati."""
+    win = viewer_window
+    start(qtbot, win)
+    sky = win.sky
+    assert sky.zoom_in_button.isVisible() and sky.zoom_out_button.isVisible()
+    assert sky.zoom_in_button.geometry().right() < sky.width() and sky.zoom_in_button.y() >= 0
+    assert win.childAt(sky.mapTo(win, sky.zoom_in_button.geometry().center())) is sky.zoom_in_button
+    scale = win.session.workspace.state.view.scale
+    qtbot.mouseClick(sky.zoom_in_button, Qt.MouseButton.LeftButton)
+    assert sky.renderer.transform[0] == pytest.approx(2.0)
+    qtbot.mouseClick(sky.zoom_out_button, Qt.MouseButton.LeftButton)
+    assert sky.renderer.transform[0] == pytest.approx(1.0)
+    win.act_zoom_in.trigger()
+    win.act_zoom_in.trigger()
+    assert sky.renderer.transform[0] == pytest.approx(4.0)
+    assert win.act_zoom_in.shortcut().toString() and win.act_zoom_out.shortcut().toString()
+    qtbot.waitUntil(lambda: len(win.session.history) == 5, timeout=8000)
+    zoom = win.session.history.entries[3]
+    assert zoom.command.name == "view.set_zoom"
+    assert zoom.command.parameters["scale"]["value"] == pytest.approx(scale.to_value("deg") / 4.0, rel=1e-12)
+
+
+def test_go_to_zooms_to_about_one_degree(qtbot, viewer_window, fake_simbad):  # noqa: F811
+    win = viewer_window
+    start(qtbot, win)
+    win.go_to("M31")
+    wait_idle(qtbot, win)
+    qtbot.waitUntil(lambda: names(win)[-1] == "view.set_zoom", timeout=8000)
+    wait_idle(qtbot, win)
+    last = win.session.history.entries[-1]
+    assert last.command.requested_by.source == "keyboard"
+    field = last.result.values["field_of_view"]
+    assert field["unit"] == "deg" and 0.5 < field["value"] < 2.0
+    center = win.session.workspace.state.view.center.coord
+    assert center.ra.deg == pytest.approx(10.6847, abs=1e-3)
+    before = len(win.session.history)
+    win.go_to("10.68 41.27")  # già a circa 1°: resta com'è
+    wait_idle(qtbot, win)
+    qtbot.wait(300)
+    assert names(win)[before:] == ["view.go_to"], names(win)

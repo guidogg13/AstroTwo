@@ -249,6 +249,14 @@
         <translation>Schermo intero</translation>
     </message>
     <message>
+        <source>Zoom in</source>
+        <translation>Ingrandisci</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Rimpicciolisci</translation>
+    </message>
+    <message>
         <source>Night mode</source>
         <translation>Modalità notte</translation>
     </message>

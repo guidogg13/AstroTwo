@@ -125,6 +125,20 @@ nasce da queste trasformazioni:
   campo: la scala che ne risulta è un parametro del comando, non un
   risultato.
 
+**Zoom scopribile e rotella di macOS (decisione del proprietario del
+2026-10-17, dopo la prova sul suo Mac):** (a) la rotella del mouse su macOS
+non dà 120 per scatto ma valori proporzionali alla velocità: ogni evento
+vale almeno uno scatto (2^(1/4)); (b) due pulsanti **+** e **−** in
+sovrimpressione nell'angolo in alto a destra del cielo e le voci **Zoom in**
+(⌘+) e **Zoom out** (⌘−) del menu View: zoom di ×2 / ÷2 attorno al centro
+della finestra, come un gesto (stesso ritardo di 300 ms, poi
+`view.set_zoom` e `view.set_center`), entro gli stessi limiti di scala; (c)
+dopo un `view.go_to` riuscito, se il campo della vista è maggiore di 1,25°, la
+vista si porta a un campo di circa 1° con un `view.set_zoom` registrato
+(`requested_by` = `keyboard`), così lo spostamento si vede; se è già
+minore, resta com'è (il campo ottenuto è solo vicino a 1°: la proiezione può cambiare). Il `05` e il suo `view.go_to` non cambiano (il
+comando centra soltanto).
+
 ### 3.5 Livelli
 
 - **Tipi nella v1:** un'immagine FITS (al più una alla volta: aprirne una
@@ -621,3 +635,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-16 | Claude Code | Verifiche del 2026-10-16: funzioni OpenGL di PySide6 sufficienti (§13), cache da più thread corretta con D04 del 04. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Sprint 4a del codice** (§3.1): `ui/sky_viewer.py` e `ui/sky_renderer_gl.py`, sfondo HiPS a colori, zoom e spostamento come comandi del `05`, vista iniziale e limiti dello zoom (scelte del proprietario del 2026-10-17), scritta del survey; test T4, T5, T12 parziali e test `gl` del disegno in `tests/ui/test_sky_viewer.py`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Parte 4a-fix del codice della v1 (41, FASE: CODICE – interfaccia v1):** dopo la prova del proprietario (zoom e "Vai a" non funzionavano). Cause trovate con eventi Qt reali passati dalla finestra: (1) la rotella del mouse su macOS dà eventi con valori piccoli (non 120 per scatto): ora ogni evento vale almeno uno scatto; il pizzico è ora accettato; (2) uno spostamento o un ridimensionamento dei pannelli ancora da registrare, a fine gesto, rimetteva il centro in un altro punto dopo "Vai a" (e al primo avvio): ora una vista cambiata da altro azzera il gesto in sospeso e la finestra diversa è compensata; (3) l'errore di "Vai a" compare anche nella barra di stato. Nessun comando né spec cambiati; 3 test nuovi in `tests/ui/test_sky_viewer.py`. Aperta la domanda al proprietario su pulsanti + / − e ⌘+ / ⌘− (non nel 41). |
+| 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |

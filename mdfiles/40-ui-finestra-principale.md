@@ -60,7 +60,7 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   Open MOC… (`moc.open`); Open session… / Save session… (sessione del
   `05`, §3.8); Export view as PNG… (`view.export_png`, disegno del `41`);
   Quit.
-- **View:** Go to… (porta il fuoco sul campo "Vai a"); Coordinate grid
+- **View:** Go to… (porta il fuoco sul campo "Vai a"); Zoom in (⌘+) e Zoom out (⌘−) (zoom del `41` §3.4); Coordinate grid
   (`view.set_grid`, con frame ICRS o galattico); Coordinates shown (ICRS
   sessagesimale, ICRS decimale, galattico: `view.set_coordinate_display`);
   Full screen (A10, `ui.set_fullscreen`); Night mode (modalità notte rossa,
@@ -90,7 +90,7 @@ Accetta un nome di oggetto o una coppia di coordinate; produce
 (`resolve_name` per un nome, `parse_sexagesimal`/`convert_coordinates` per
 le coordinate) e centra la vista. Il risultato mostra la fonte (SIMBAD,
 "dalla cache" con origine e data, epoca J2000 dichiarata). Nome non
-trovato o rete assente: messaggio del 10 nel pannello Messaggi.
+trovato o rete assente: messaggio del 10 nel pannello Messaggi e, per 10 s, nella barra di stato (2026-10-17). Dopo un "Vai a" riuscito la vista si porta a un campo di circa 1° se era maggiore di 1,25° (`41` §3.4).
 
 ### 3.5 Barra di stato
 
@@ -474,3 +474,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-17 | Claude Code | **Parte 3b del codice della v1** (correzioni dell'aspetto dopo la prova del proprietario; nessuna funzione nuova, comandi invariati): foglio di stile dai mockup, icone Lucide (licenza verificata: ISC più MIT di Feather, in `THIRD_PARTY_LICENSES`; §3.11, §8), intestazioni dei pannelli, stati vuoti dei segnaposto, pulsanti della barra per azioni già nei menu (anche Night mode); test T13 esteso al foglio di stile e alle icone in modalità notte, nuovo test delle linee guida visive. **Aperta D40-4** (scorciatoia della modalità notte, Gruppo 3, raccomandazione ⌃⌘N). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **D40-4 decisa dal proprietario: ⌃⌘N** per View → Night mode (§3.3, §13); codice e test T13 aggiornati. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | Sprint 4a del 41: visualizzatore al posto del segnaposto, scritta del survey nella barra, barra di stato ad altezza fissa (26 px, §13). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |

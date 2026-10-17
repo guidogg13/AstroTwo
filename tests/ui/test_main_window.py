@@ -537,7 +537,7 @@ def test_visual_guidelines(qtbot, window):
     """Linee guida visive (§3.11) e mockup: icone Lucide con licenza, barra, intestazioni, righe, stati vuoti."""
     win = window
     names_used = set(win.toolbar_icons.values()) | {"search", "x", "picture-in-picture-2", "telescope", "table-2",
-                                                    "history", "message-square-warning", "sparkles", "layers"}
+                                                    "history", "message-square-warning", "sparkles", "layers", "plus", "minus"}
     for name in names_used:
         assert (mw.ICONS_DIR / f"{name}.svg").is_file(), name
     assert {p.stem for p in mw.ICONS_DIR.glob("*.svg")} == names_used  # nessuna icona inutilizzata

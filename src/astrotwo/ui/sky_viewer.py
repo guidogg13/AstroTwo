@@ -17,7 +17,7 @@ from collections.abc import Callable, Mapping
 import astropy.units as u
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWidgets import QToolButton, QVBoxLayout, QWidget
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
@@ -27,6 +27,12 @@ GESTURE_IDLE_MS = 300
 #: Fattore di zoom per scatto della rotella del mouse (120 unità di ``angleDelta``): 2^(1/4), 4 scatti = raddoppio
 #: (41 §3.4, scelta del proprietario del 2026-10-17); sul trackpad lo zoom è il pizzico, due dita spostano.
 ZOOM_STEP = 2.0 ** 0.25
+#: Fattore dei pulsanti e delle scorciatoie di zoom (41 §3.4, decisione del proprietario del 2026-10-17).
+BUTTON_ZOOM = 2.0
+#: Campo della vista a cui porta un "Vai a" riuscito se la vista era più larga (stessa decisione).
+GO_TO_FIELD = 1.0 * u.deg
+#: Oltre questo campo il "Vai a" zooma; il campo ottenuto è solo vicino a 1° (la proiezione può cambiare).
+GO_TO_FIELD_MAX = 1.25 * u.deg
 #: Scala minima della vista (angolo per pixel della finestra), scelta del proprietario del 2026-10-17.
 MIN_SCALE = 0.01 * u.arcsec
 #: Larghezza angolare massima della finestra: scala massima = 360° / larghezza in pixel fisici (stessa scelta).
@@ -195,6 +201,8 @@ class SkyViewer(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(child)
+        self.zoom_in_button = self._zoom_button("zoomIn", +1)
+        self.zoom_out_button = self._zoom_button("zoomOut", -1)
         self.tiles = TilePool(cache)
         self.tiles.bridge.sampled.connect(self._sampled)
         self.tiles.bridge.tile.connect(self._tile)
@@ -221,6 +229,42 @@ class SkyViewer(QWidget):
         self.idle.setSingleShot(True)
         self.idle.setInterval(GESTURE_IDLE_MS)
         self.idle.timeout.connect(self._gesture_end)
+
+    def _zoom_button(self, name: str, direction: int) -> QToolButton:
+        """Pulsante + o − in sovrimpressione (icona, nome e testo li dà la finestra principale, 40)."""
+        button = QToolButton(self)
+        button.setObjectName(name)
+        button.setAutoRaise(True)
+        button.setFixedSize(32, 32)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.clicked.connect(lambda: self.zoom_step(direction))
+        return button
+
+    def _place_buttons(self) -> None:
+        x = self.width() - self.zoom_in_button.width() - 12
+        self.zoom_in_button.move(x, 12)
+        self.zoom_out_button.move(x, 12 + self.zoom_in_button.height() + 4)
+        self.zoom_in_button.raise_()
+        self.zoom_out_button.raise_()
+
+    def zoom_step(self, direction: int) -> None:
+        """Zoom ×2 (``direction`` = +1) o ÷2 (−1) attorno al centro della finestra, come un gesto (41 §3.4)."""
+        self.zoom_by(BUTTON_ZOOM ** direction, QPointF(self.width() / 2, self.height() / 2))
+
+    def go_to_zoom(self) -> bool:
+        """Dopo un "Vai a" riuscito: se il campo è maggiore di 1°, ``view.set_zoom`` per portarlo a circa 1° (41
+        §3.4). Il campo è quello del risultato del comando (10)."""
+        if self.view is None or self.view.scale is None or self.field is None:
+            return False
+        field = self.field["value"] * u.Unit(self.field["unit"], format="fits")
+        if field <= GO_TO_FIELD_MAX:
+            return False
+        # Parametro scelto da noi (non un risultato): a campi piccoli il campo è la diagonale della finestra per la
+        # scala, quindi scala = 1° / diagonale in pixel; il campo vero lo darà il 10 nel risultato.
+        window = self.window_size()
+        scale = max((GO_TO_FIELD / float(np.hypot(window["width"], window["height"]))).to(u.deg), MIN_SCALE)
+        self.submit("view.set_zoom", {"scale": quantity_json(scale), "window": window}, source="keyboard")
+        return True
 
     # --- stato dai comandi --------------------------------------------------------------
 
@@ -445,12 +489,14 @@ class SkyViewer(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
+        self._place_buttons()
         if not self._shown:
             self._shown = True
             QTimer.singleShot(0, self.first_shown.emit)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
+        self._place_buttons()
         old, new = event.oldSize(), event.size()
         if not old.isValid() or self.view is None or self.view.window is None:
             return
