@@ -7,6 +7,8 @@ marcatore ``keychain`` (escluso di default, eseguito a mano).
 
 import json
 import logging
+import os
+import pwd
 import subprocess
 
 import pytest
@@ -191,8 +193,12 @@ def test_secret_key_is_opaque():
 
 
 @pytest.mark.keychain
-def test_t8_real_keychain():
+def test_t8_real_keychain(monkeypatch):
     """Portachiavi reale (a mano): servizio di test, chiave finta, elemento rimosso alla fine."""
+    # Il conftest dà a ogni test una HOME temporanea; macOS cerca il Portachiavi di login in
+    # $HOME/Library/Keychains e, non trovandolo, mostra "Impossibile trovare un portachiavi".
+    # Qui serve la vera cartella home dell'utente (letta dal sistema, non dall'ambiente).
+    monkeypatch.setenv("HOME", pwd.getpwuid(os.getuid()).pw_dir)
     service = SERVICE_NAME + ".test"
     store = KeychainStore(service=service)
     try:

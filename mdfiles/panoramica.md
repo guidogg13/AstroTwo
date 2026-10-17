@@ -724,8 +724,9 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    profili predefiniti) → finestra 40 → visualizzatore 41 → 42 → 32/34/35
    → pannello 44. **Parti 1 (05) e 2 (31, 30 con i profili predefiniti)
    scritte il 2026-10-17** (scelte minori nel §13 di 05 e 30, da
-   confermare; T8 del 31 sul Portachiavi reale e lista di controllo manuale
-   del 30 con le chiavi dell'utente da fare a mano). Prossima: parte 3
+   confermare; T8 del 31 sul Portachiavi reale, corretto il 2026-10-17 per
+   la cartella home temporanea dei test, e lista di controllo manuale del 30
+   con le chiavi dell'utente da fare a mano). Prossima: parte 3
    (finestra 40). Da verificare all'inizio delle parti che li usano:
    licenza delle icone e `QStyleHints.colorScheme`/cifre tabulari (40),
    Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
@@ -815,3 +816,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17:** (A) `httpx2` accettato dopo la verifica dell'origine (01, 30); (B) profili predefiniti dei provider IA (30 §3.1.1, 31, 44 §3.6) con indirizzi dalla documentazione ufficiale; **D05-4 decisa** (tipo `record`, forme JSON nel 05 §3.1, parametri dei `calc.*` nel 18); adattatore `run_command` del 18 scritto e testato (T18 nel formato del 05); note superate "codice da scrivere" tolte da 10, 11, 12. Aperte **14**. §5, §6, §7 aggiornati. |
 | 2026-10-17 | Claude Code | **Parte 1 del codice della v1: modulo 05** (`src/astrotwo/core/commands.py`, `tests/core/test_commands.py`, 26 test): registro con i 39 comandi di §7 del 05, validazione con le forme JSON di D05-4 (più il tipo `time`), spazio di lavoro immutabile, cronologia, sessione (salva, apri, riesecuzione con stop e avvisi), schema JSON per il 32; scelte minori della parte 1 nel 05 §13 (da confermare). |
 | 2026-10-17 | Claude Code | **Parte 2 del codice della v1: moduli 31 e 30** (`ai/keychain_keys.py`, `ai/provider_adapter.py` con i dieci profili predefiniti; test con Portachiavi e provider simulati, 34 test; marcatore `keychain`). Precisazioni del 30 dalle fonti e dal codice degli SDK (indirizzo di Anthropic, `max_completion_tokens` per OpenAI, variabili d'ambiente neutralizzate); scelte minori della parte 2 nel 30 §13, da confermare. |
+| 2026-10-17 | Claude Code | **Correzione del test T8 del 31** (solo test, nessuna funzione nuova): la finestra di macOS "Impossibile trovare un portachiavi" veniva dalla cartella home temporanea che `tests/conftest.py` dà a ogni test (`HOME` cambiata: macOS cerca il Portachiavi di login in `$HOME/Library/Keychains` e non lo trova). T8 ora usa la vera home dell'utente letta dal sistema (`pwd`). Codice del 31 invariato (servizio `dev.pages.astrotwo.ai`, nessun portachiavi impostato esplicitamente). T8 da rieseguire a mano dal proprietario. |
