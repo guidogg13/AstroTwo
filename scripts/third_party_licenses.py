@@ -193,6 +193,16 @@ EXTRA_COMPONENTS: tuple[Component, ...] = (
                 "2015 (Archinal et al. 2018)"),
         license_text=NAIF_RULES,
     ),
+    Component(
+        name="Lucide (icone SVG dell'interfaccia)",
+        version="lucide-static 1.59.0",
+        license="ISC; MIT (progetto Feather) per le icone derivate elencate nel testo",
+        source=("pacchetto npm lucide-static 1.59.0 (https://registry.npmjs.org/lucide-static/-/"
+                "lucide-static-1.59.0.tgz, SHA-1 3a4b633a0516bd1cf96524ef54f907cec0fd1007, verificata il 2026-10-17); "
+                "icone copiate senza modifiche in src/astrotwo/ui/icons/ insieme al file LICENSE del pacchetto "
+                "(40 §3.11)"),
+        license_text=(ROOT / "src" / "astrotwo" / "ui" / "icons" / "LICENSE").read_text(encoding="utf-8"),
+    ),
 )
 
 

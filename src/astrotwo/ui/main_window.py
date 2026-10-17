@@ -8,11 +8,15 @@ arrivo; i risultati tornano al thread principale con i segnali di Qt. La finestr
 mostra valori, codici e testi dei moduli invariati (§4, D40-1).
 
 Il visualizzatore del cielo (41), la tabella (42) e il pannello dell'assistente (44) sono parti successive
-della v1: qui la finestra riserva il loro spazio.
+della v1: qui la finestra riserva il loro spazio con uno stato vuoto che dice cosa arriverà.
+
+Aspetto (§3.11, mockup in ``mdfiles/mockup/``): tavolozza e foglio di stile dai colori del tema, icone Lucide
+(``ui/icons/``, licenza ISC in ``ui/icons/LICENSE``) disegnate con QtSvg nel colore del tema.
 """
 
 from __future__ import annotations
 
+import functools
 import itertools
 import json
 import sys
@@ -24,11 +28,13 @@ from pathlib import Path
 from PySide6.QtCore import (
     QByteArray,
     QCoreApplication,
+    QEvent,
     QLibraryInfo,
     QLocale,
     QObject,
     QRunnable,
     QSettings,
+    QSize,
     Qt,
     QThread,
     QThreadPool,
@@ -37,7 +43,19 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QFontDatabase, QKeySequence, QPalette
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
+    QFont,
+    QFontDatabase,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPalette,
+    QPixmap,
+)
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -65,7 +83,9 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -97,7 +117,9 @@ __all__ = [
     "MessagesPanel",
     "GoToField",
     "PreferencesDialog",
+    "EmptyState",
     "load_translations",
+    "themed_icon",
     "apply_appearance",
     "PREFERENCES",
     "main",
@@ -330,22 +352,34 @@ class CommandRunner(QObject):
 # Aspetto (§3.11): sistema, scuro (di riferimento), chiaro, notte rossa
 # --------------------------------------------------------------------------
 
+# Ruoli della tavolozza di Qt e, per il foglio di stile, i colori dei mockup (``mdfiles/mockup/``): ``chrome``
+# barre, ``panel`` pannelli, ``line_soft`` righe e intestazioni, ``accent_soft`` selezione ed elementi attivi,
+# ``focus`` accento pieno (bordi, avanzamento, icone attive), ``sky_*`` fondo e testi dell'area del cielo.
 _DARK = {"window": "#1c1d21", "base": "#18191c", "alternate": "#141518", "text": "#e6e6e8", "text2": "#a0a2a8",
          "text3": "#6c6f76", "button": "#232428", "line": "#2a2c31", "accent": "#0a84ff", "on_accent": "#ffffff",
-         "error": "#ff453a", "shadow": "#000000"}
+         "error": "#ff453a", "shadow": "#000000",
+         "chrome": "#1c1d21", "panel": "#18191c", "line_soft": "#232428", "accent_soft": "rgba(10, 132, 255, 46)",
+         "focus": "#0a84ff", "sky_top": "#05070c", "sky_bottom": "#0a0d16", "sky_text": "#a0a2a8",
+         "sky_text3": "#6c6f76"}
 _LIGHT = {"window": "#ececec", "base": "#ffffff", "alternate": "#f5f5f7", "text": "#1d1d1f", "text2": "#515154",
           "text3": "#8e8e93", "button": "#f5f5f7", "line": "#d1d1d6", "accent": "#007aff", "on_accent": "#ffffff",
-          "error": "#ff3b30", "shadow": "#8e8e93"}
+          "error": "#ff3b30", "shadow": "#8e8e93",
+          "chrome": "#ececec", "panel": "#ffffff", "line_soft": "#e5e5ea", "accent_soft": "rgba(0, 122, 255, 36)",
+          "focus": "#007aff", "sky_top": "#05070c", "sky_bottom": "#0a0d16", "sky_text": "#a0a2a8",
+          "sky_text3": "#6c6f76"}  # il cielo resta scuro anche nel tema chiaro
 #: Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).
 _NIGHT = {"window": "#0e0101", "base": "#0c0101", "alternate": "#0a0000", "text": "#d23a2a", "text2": "#9a2a1e",
           "text3": "#6a1d15", "button": "#1d0404", "line": "#2a0606", "accent": "#5a0f0a", "on_accent": "#ff3b2f",
-          "error": "#ff3b2f", "shadow": "#000000"}
+          "error": "#ff3b2f", "shadow": "#000000",
+          "chrome": "#0e0101", "panel": "#0c0101", "line_soft": "#1d0404", "accent_soft": "rgba(255, 59, 47, 41)",
+          "focus": "#ff3b2f", "sky_top": "#000000", "sky_bottom": "#050000", "sky_text": "#9a2a1e",
+          "sky_text3": "#6a1d15"}
 _TOKENS = {"dark": _DARK, "light": _LIGHT, "night": _NIGHT}
 
 
 def _palette(tokens: Mapping[str, str]) -> QPalette:
     """Tavolozza con **tutti** i ruoli in tutti i gruppi (nessun colore lasciato al default dello stile)."""
-    c = {k: QColor(v) for k, v in tokens.items()}
+    c = {k: QColor(v) for k, v in tokens.items() if v.startswith("#")}
     pal = QPalette()
     roles = {
         QPalette.ColorRole.Window: c["window"], QPalette.ColorRole.WindowText: c["text"],
@@ -374,6 +408,104 @@ def _system_color_scheme() -> Qt.ColorScheme:
     return QApplication.styleHints().colorScheme()
 
 
+def _stylesheet(t: Mapping[str, str], *, native_toolbar: bool) -> str:
+    """Foglio di stile dei pannelli, delle barre e degli stati vuoti dai colori del tema (mockup, §3.11).
+
+    Margini e distanze sulla griglia di 4 punti; i controlli (pulsanti, menu a tendina, caselle) restano quelli
+    dello stile. Con lo stile nativo di macOS la barra degli strumenti non ha fondo proprio: resta unita alla
+    barra del titolo (§3.11). Nessuna dimensione del carattere qui: la danno i font di sistema (accessibilità).
+    """
+    toolbar = "" if native_toolbar else f"""
+QToolBar#mainToolbar {{ background: {t['chrome']}; border: none; border-bottom: 1px solid {t['line']}; }}"""
+    return f"""{toolbar}
+QToolBar#mainToolbar {{ padding: 4px 8px; spacing: 4px; }}
+QToolBar#mainToolbar::separator {{ background: {t['line']}; width: 1px; margin: 4px 4px; }}
+QToolBar#mainToolbar QToolButton {{ border: none; border-radius: 6px; padding: 4px 6px; }}
+QToolBar#mainToolbar QToolButton:hover {{ background: {t['line_soft']}; }}
+QToolBar#mainToolbar QToolButton:checked {{ background: {t['accent_soft']}; }}
+QLineEdit#goToField {{ background: {t['alternate']}; color: {t['text']}; border: 1px solid {t['line']};
+    border-radius: 6px; padding: 2px 8px; selection-background-color: {t['accent_soft']};
+    selection-color: {t['text']}; }}
+QLineEdit#goToField:focus {{ border: 1px solid {t['focus']}; }}
+QMainWindow::separator {{ background: {t['line']}; width: 1px; height: 1px; }}
+QMainWindow > QTabBar {{ background: {t['panel']}; }}
+QMainWindow > QTabBar::tab {{ background: transparent; color: {t['text3']}; border: none; border-radius: 6px;
+    padding: 4px 12px; margin: 4px 2px; }}
+QMainWindow > QTabBar::tab:selected {{ background: {t['line_soft']}; color: {t['text']}; }}
+QMainWindow > QTabBar::tab:hover:!selected {{ color: {t['text2']}; }}
+QWidget#dockHeader {{ background: {t['panel']}; border-bottom: 1px solid {t['line_soft']}; }}
+QLabel#dockTitle {{ color: {t['text3']}; }}
+QWidget#dockHeader QToolButton {{ border: none; border-radius: 4px; padding: 2px; }}
+QWidget#dockHeader QToolButton:hover {{ background: {t['line_soft']}; }}
+QWidget[panel="true"] {{ background: {t['panel']}; }}
+QTableView {{ background: {t['panel']}; color: {t['text']}; border: none; gridline-color: {t['line_soft']};
+    selection-background-color: {t['accent_soft']}; selection-color: {t['text']}; }}
+QTableView::item {{ padding: 0px 8px; border-bottom: 1px solid {t['line_soft']}; }}
+QHeaderView::section {{ background: {t['panel']}; color: {t['text2']}; border: none;
+    border-bottom: 1px solid {t['line_soft']}; padding: 4px 8px; }}
+QTableCornerButton::section {{ background: {t['panel']}; border: none; }}
+QSplitter::handle {{ background: {t['line_soft']}; }}
+QSplitter::handle:horizontal {{ width: 1px; }}
+QPlainTextEdit#historyDetail {{ background: {t['alternate']}; color: {t['text2']}; border: none;
+    border-left: 1px solid {t['line_soft']}; padding: 8px; }}
+QFrame#skyArea {{ background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 {t['sky_top']},
+    stop: 1 {t['sky_bottom']}); }}
+QWidget#emptyState {{ background: {t['panel']}; }}
+QFrame#skyArea QWidget#emptyState {{ background: transparent; }}
+QLabel#emptyTitle {{ color: {t['text2']}; }}
+QLabel#emptyText {{ color: {t['text3']}; }}
+QFrame#skyArea QLabel#emptyTitle {{ color: {t['sky_text']}; }}
+QFrame#skyArea QLabel#emptyText {{ color: {t['sky_text3']}; }}
+QStatusBar {{ background: {t['chrome']}; border-top: 1px solid {t['line']}; color: {t['text2']}; }}
+QStatusBar::item {{ border: none; }}
+QStatusBar QLabel {{ color: {t['text2']}; padding: 0px 4px; }}
+QPushButton#cancelCommand {{ background: transparent; color: {t['text']}; border: 1px solid {t['line']};
+    border-radius: 5px; padding: 1px 8px; }}
+QPushButton#cancelCommand:hover {{ background: {t['line_soft']}; }}
+QStatusBar QProgressBar {{ background: {t['line']}; border: none; border-radius: 2px; }}
+QStatusBar QProgressBar::chunk {{ background: {t['focus']}; border-radius: 2px; }}
+"""
+
+
+# --------------------------------------------------------------------------
+# Icone (§3.11): raccolta Lucide (ISC, ``ui/icons/LICENSE``), disegnate con QtSvg nel colore del tema
+# --------------------------------------------------------------------------
+
+ICONS_DIR = Path(__file__).resolve().parent / "icons"
+ICON_SIZE = 16  # punti; le immagini si disegnano anche al doppio per gli schermi Retina
+
+
+@functools.lru_cache(maxsize=None)
+def _icon_svg(name: str) -> str:
+    return (ICONS_DIR / f"{name}.svg").read_text(encoding="utf-8")
+
+
+def _icon_pixmap(name: str, color: str, size: int) -> QPixmap:
+    """L'icona ``name`` di Lucide a ``size`` pixel, con i tratti (``currentColor``) nel colore dato."""
+    renderer = QSvgRenderer(QByteArray(_icon_svg(name).replace("currentColor", color).encode("utf-8")))
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return pixmap
+
+
+def themed_icon(name: str, tokens: Mapping[str, str], size: int = ICON_SIZE) -> QIcon:
+    """Icona nel colore del tema: normale ``text2``, attiva (spuntata) ``focus``, disattivata ``text3``.
+
+    In modalità notte i tre colori sono toni di rosso (§3.11).
+    """
+    icon = QIcon()
+    for scale in (1, 2):
+        px = size * scale
+        icon.addPixmap(_icon_pixmap(name, tokens["text2"], px), QIcon.Mode.Normal, QIcon.State.Off)
+        icon.addPixmap(_icon_pixmap(name, tokens["focus"], px), QIcon.Mode.Normal, QIcon.State.On)
+        icon.addPixmap(_icon_pixmap(name, tokens["text3"], px), QIcon.Mode.Disabled, QIcon.State.Off)
+        icon.addPixmap(_icon_pixmap(name, tokens["text3"], px), QIcon.Mode.Disabled, QIcon.State.On)
+    return icon
+
+
 _BASE_STYLE: list[str] = []  # stile nativo dell'app all'avvio ("macOS" sul Mac)
 
 
@@ -398,6 +530,7 @@ def apply_appearance(mode: str, app: QApplication | None = None) -> str:
         if app.style().name().lower() != "fusion":
             app.setStyle("Fusion")
         app.setPalette(_palette(_NIGHT))
+        app.setStyleSheet(_stylesheet(_NIGHT, native_toolbar=False))
         return effective
     if app.style().name() != base:
         app.setStyle(base)
@@ -410,10 +543,12 @@ def apply_appearance(mode: str, app: QApplication | None = None) -> str:
     else:
         effective = mode
         hints.setColorScheme(Qt.ColorScheme.Dark if mode == "dark" else Qt.ColorScheme.Light)
-    if base.lower() == "macos":
+    native = base.lower() == "macos"
+    if native:
         app.setPalette(app.style().standardPalette())
     else:
         app.setPalette(_palette(_TOKENS[effective]))
+    app.setStyleSheet(_stylesheet(_TOKENS[effective], native_toolbar=native))
     return effective
 
 
@@ -421,6 +556,23 @@ def _tabular(font: QFont) -> QFont:
     """Cifre a larghezza fissa (funzione OpenType ``tnum``) per coordinate e valori (§3.11)."""
     font = QFont(font)
     font.setFeature(QFont.Tag("tnum"), 1)
+    return font
+
+
+def _scaled(font: QFont, factor: float) -> QFont:
+    """Carattere in proporzione a quello di sistema (segue le impostazioni di accessibilità, §3.11)."""
+    font = QFont(font)
+    if font.pointSizeF() > 0:
+        font.setPointSizeF(font.pointSizeF() * factor)
+    return font
+
+
+def _header_font(font: QFont) -> QFont:
+    """Intestazione dei pannelli del mockup: piccola, semigrassetto, maiuscole spaziate."""
+    font = _scaled(font, 0.85)
+    font.setWeight(QFont.Weight.DemiBold)
+    font.setCapitalization(QFont.Capitalization.AllUppercase)
+    font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 104)
     return font
 
 
@@ -487,6 +639,87 @@ def _who(requested_by: RequestedBy) -> str:
 # --------------------------------------------------------------------------
 
 
+class EmptyState(QWidget):
+    """Stato vuoto di un pannello o di uno spazio riservato: icona, titolo e un testo che dice cosa arriverà."""
+
+    def __init__(self, icon: str, title: str, text: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("emptyState")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.icon_name = icon
+        self.icon_label = QLabel()
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("emptyTitle")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_font = QFont(self.title_label.font())
+        title_font.setWeight(QFont.Weight.DemiBold)
+        self.title_label.setFont(title_font)
+        self.text_label = QLabel(text)
+        self.text_label.setObjectName("emptyText")
+        self.text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.text_label.setWordWrap(True)
+        self.text_label.setFont(_scaled(self.text_label.font(), 0.92))
+        body = QWidget()
+        body.setMaximumWidth(420)
+        column = QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(8)
+        for w in (self.icon_label, self.title_label, self.text_label):
+            column.addWidget(w)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(body, 100)
+        row.addStretch(1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.addStretch(1)
+        layout.addLayout(row)
+        layout.addStretch(2)
+
+    def text(self) -> str:
+        return f"{self.title_label.text()}\n{self.text_label.text()}"
+
+    def cover(self, host: QWidget) -> None:
+        """Sovrapposto a ``host`` (una tabella vuota) con la sua stessa forma, fuori dalla disposizione: mostrarlo o
+        nasconderlo non cambia le misure dei pannelli né della vista."""
+        self.setParent(host)
+        host.installEventFilter(self)
+        self.setGeometry(host.rect())
+        self.raise_()
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - nome di Qt
+        if watched is self.parentWidget() and event.type() == QEvent.Type.Resize:
+            self.setGeometry(watched.rect())
+        return False
+
+    def set_theme(self, tokens: Mapping[str, str], *, on_sky: bool = False) -> None:
+        color = tokens["sky_text3"] if on_sky else tokens["text3"]
+        self.icon_label.setPixmap(themed_icon(self.icon_name, {**tokens, "text2": color}, 32).pixmap(32, 32))
+
+
+def _as_panel(widget: QWidget) -> QWidget:
+    """Fondo dei pannelli dal foglio di stile (le sottoclassi di ``QWidget`` lo disegnano solo con questo
+    attributo)."""
+    widget.setProperty("panel", True)
+    widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    return widget
+
+
+ROW_HEIGHT = 24  # stessa altezza di riga in tutti i pannelli (§3.11, griglia di 4 punti)
+
+
+def _style_table(table: QTableWidget) -> None:
+    """Tabelle dei pannelli come nel mockup: righe di 24 punti, nessuna griglia, cifre tabulari."""
+    table.setFont(_tabular(_scaled(table.font(), 0.92)))
+    table.setShowGrid(False)
+    table.setFrameShape(QFrame.Shape.NoFrame)
+    table.verticalHeader().setVisible(False)
+    table.verticalHeader().setDefaultSectionSize(ROW_HEIGHT)
+    table.horizontalHeader().setHighlightSections(False)
+    table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+
 class GoToField(QLineEdit):
     """Campo "Vai a" (§3.4): un nome di oggetto o una coppia di coordinate; Invio → ``view.go_to``."""
 
@@ -498,7 +731,9 @@ class GoToField(QLineEdit):
         self.setPlaceholderText(self.tr("Go to: object name or coordinates"))
         self.setClearButtonEnabled(True)
         self.setMinimumWidth(280)
+        self.setMaximumWidth(420)
         self.setFont(_tabular(self.font()))
+        self.search_icon = self.addAction(QIcon(), QLineEdit.ActionPosition.LeadingPosition)
         self.returnPressed.connect(self._go)
 
     def _go(self) -> None:
@@ -515,16 +750,20 @@ class StatusBar(QStatusBar):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setSizeGripEnabled(False)
+        self.setContentsMargins(8, 0, 8, 0)
+        font = _tabular(_scaled(self.font(), 0.92))
         self.cursor_label = QLabel(self.tr("No data"))
-        self.cursor_label.setFont(_tabular(self.cursor_label.font()))
         self.network_label = QLabel()
         self.command_label = QLabel()
+        for label in (self.cursor_label, self.network_label, self.command_label):
+            label.setFont(font)
         self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(160)
-        self.progress_bar.setMaximumHeight(12)
+        self.progress_bar.setFixedSize(90, 4)
         self.progress_bar.setTextVisible(False)
         self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.setObjectName("cancelCommand")
+        self.cancel_button.setFont(font)
+        self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_button.clicked.connect(self.cancelRequested)
         self.addWidget(self.cursor_label, 1)
         for w in (self.network_label, self.command_label, self.progress_bar, self.cancel_button):
@@ -605,15 +844,18 @@ class HistoryPanel(QWidget):
             self.tr("Result"), self.tr("Warnings")])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.verticalHeader().setVisible(False)
+        _style_table(self.table)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        self.table.setFont(_tabular(self.table.font()))
+        self.mono = _tabular(_scaled(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont), 0.92))
         self.detail = QPlainTextEdit()
         self.detail.setObjectName("historyDetail")
         self.detail.setReadOnly(True)
-        self.detail.setFont(_tabular(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)))
+        self.detail.setFont(self.mono)
+        self.empty = EmptyState("history", self.tr("No commands yet"), self.tr(
+            "Every action from the menus, the keyboard or the mouse appears here with its number: select it to "
+            "see parameters, result and provenance, rerun it or copy it as JSON."))
         bar = QHBoxLayout()
-        bar.setContentsMargins(0, 0, 0, 0)
+        bar.setContentsMargins(8, 8, 8, 0)
         bar.setSpacing(8)
         for w in (self.class_filter, self.who_filter):
             bar.addWidget(w)
@@ -625,11 +867,17 @@ class HistoryPanel(QWidget):
         split.addWidget(self.detail)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.addWidget(split)
+        self.empty.cover(body)  # non il QSplitter: lo prenderebbe come terza colonna
+        _as_panel(self)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         layout.addLayout(bar)
-        layout.addWidget(split)
+        layout.addWidget(body)
         self.class_filter.currentIndexChanged.connect(self.refresh)
         self.who_filter.currentIndexChanged.connect(self.refresh)
         self.table.itemSelectionChanged.connect(self._show_detail)
@@ -645,6 +893,10 @@ class HistoryPanel(QWidget):
         if self._passes(entry):
             self.shown.append(entry)
             self._add_row(entry)
+        self._show_empty()
+
+    def _show_empty(self) -> None:
+        self.empty.setVisible(not self.shown)
 
     def _passes(self, entry: HistoryEntry) -> bool:
         cls, who = self.class_filter.currentData(), self.who_filter.currentData()
@@ -659,6 +911,7 @@ class HistoryPanel(QWidget):
         self.shown = [e for e in self.entries if self._passes(e)]
         for entry in self.shown:
             self._add_row(entry)
+        self._show_empty()
 
     def _add_row(self, entry: HistoryEntry) -> None:
         r = entry.result
@@ -669,6 +922,8 @@ class HistoryPanel(QWidget):
         self.table.insertRow(row)
         for col, text in enumerate(cells):
             item = QTableWidgetItem(text)
+            if col == 3:
+                item.setFont(self.mono)  # nome del comando a larghezza fissa (mockup)
             if r.status == "error":
                 item.setForeground(QColor(_TOKENS[_current_tokens()]["error"]))
             self.table.setItem(row, col, item)
@@ -702,13 +957,18 @@ class MessagesPanel(QWidget):
         self.table = QTableWidget(0, 3)
         self.table.setObjectName("messagesTable")
         self.table.setHorizontalHeaderLabels([self.tr("Command"), self.tr("Code"), self.tr("Message")])
-        self.table.verticalHeader().setVisible(False)
+        _style_table(self.table)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table.setWordWrap(True)
+        self.empty = EmptyState("message-square-warning", self.tr("No messages"), self.tr(
+            "Errors and warnings of the modules appear here with their code, their unchanged text and the "
+            "number of the command that produced them; errors in red."))
+        self.empty.cover(self.table)
+        _as_panel(self)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.table)
         self.messages: list[tuple[str, str, str, bool]] = []  # (comando, codice, testo, errore)
 
@@ -722,6 +982,7 @@ class MessagesPanel(QWidget):
             if error:
                 item.setForeground(QColor(_TOKENS[_current_tokens()]["error"]))
             self.table.setItem(row, col, item)
+        self.empty.hide()
         self.table.scrollToBottom()
 
 
@@ -1045,48 +1306,68 @@ class MainWindow(QMainWindow):
         sky.setObjectName("skyArea")
         sky.setFrameShape(QFrame.Shape.NoFrame)
         sky.setMinimumSize(320, 240)
-        label = QLabel(self.tr("The sky viewer (module 41) arrives in the next part of the first version."))
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setWordWrap(True)
-        QVBoxLayout(sky).addWidget(label)
+        self.sky_empty = EmptyState("telescope", self.tr("Sky viewer"), self.tr(
+            "Arrives with module 41, in the next part of the first version: HiPS surveys, FITS images, catalogs "
+            "and MOCs drawn here, with coordinate grid, north indicator and scale bar. Go to, menus and panels "
+            "already work."))
+        QVBoxLayout(sky).addWidget(self.sky_empty)
         self.sky_area = sky
         self.setCentralWidget(sky)
 
-    def _placeholder(self, text: str) -> QWidget:
-        w = QLabel(text)
-        w.setWordWrap(True)
-        w.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        w.setMargin(12)
-        return w
+    def _panel(self, widget: QWidget) -> QWidget:
+        return _as_panel(widget)
 
     def _build_docks(self) -> None:
         self.history = HistoryPanel()
         self.history.rerunRequested.connect(self.rerun)
         self.messages = MessagesPanel()
-        specs = (
-            ("layers", self.tr("Layers"), self._placeholder(self.tr("Layers arrive with the sky viewer (41).")),
-             Qt.DockWidgetArea.LeftDockWidgetArea),
-            ("assistant", self.tr("Assistant"), self._placeholder(self.tr(
+        self.empty_states = {
+            "layers": EmptyState("layers", self.tr("No layers yet"), self.tr(
+                "Arrive with the sky viewer (module 41): one row for each HiPS survey, image, catalog, MOC and "
+                "measurement, with order, visibility and opacity.")),
+            "assistant": EmptyState("sparkles", self.tr("Assistant"), self.tr(
                 "The assistant is not available: its panel (module 44) is not written yet. "
-                "The rest of AstroTwo works normally.")), Qt.DockWidgetArea.RightDockWidgetArea),
-            ("table", self.tr("Table"), self._placeholder(self.tr("The table arrives with module 42.")),
-             Qt.DockWidgetArea.BottomDockWidgetArea),
+                "The rest of AstroTwo works normally.")),
+            "table": EmptyState("table-2", self.tr("No catalog yet"), self.tr(
+                "Arrives with module 42: one tab for each catalog layer, column headers with units, sorting, "
+                "and selection synchronised with the sky.")),
+        }
+        specs = (
+            ("layers", self.tr("Layers"), self._panel(self.empty_states["layers"]),
+             Qt.DockWidgetArea.LeftDockWidgetArea),
+            ("assistant", self.tr("Assistant"), self._panel(self.empty_states["assistant"]),
+             Qt.DockWidgetArea.RightDockWidgetArea),
+            ("table", self.tr("Table"), self._panel(self.empty_states["table"]), Qt.DockWidgetArea.BottomDockWidgetArea),
             ("commands", self.tr("Commands"), self.history, Qt.DockWidgetArea.BottomDockWidgetArea),
             ("messages", self.tr("Messages"), self.messages, Qt.DockWidgetArea.BottomDockWidgetArea),
         )
+        self.setTabPosition(Qt.DockWidgetArea.BottomDockWidgetArea, QTabWidget.TabPosition.North)
         self.docks: dict[str, _Dock] = {}
         for key, title, widget, area in specs:
             dock = _Dock(key, title, self)
             dock.setWidget(widget)
             dock.closeRequested.connect(lambda k: self.submit("ui.set_panel", {"panel": k, "visible": False},
                                                               source="mouse"))
+            for signal in (dock.visibilityChanged, dock.topLevelChanged, dock.dockLocationChanged):
+                signal.connect(self._schedule_headers)
             self.addDockWidget(area, dock)
             self.docks[key] = dock
+        self.docks["layers"].setMinimumWidth(232)
         self.docks["assistant"].setMinimumWidth(380)
         self.docks["assistant"].setMaximumWidth(420)
         self.tabifyDockWidget(self.docks["table"], self.docks["commands"])
         self.tabifyDockWidget(self.docks["commands"], self.docks["messages"])
         self.docks["commands"].raise_()
+        self._refresh_headers()
+
+    def _schedule_headers(self, *_) -> None:
+        QTimer.singleShot(0, self._refresh_headers)
+
+    def _refresh_headers(self) -> None:
+        """Intestazione propria per i pannelli soli; per i pannelli a schede fanno da intestazione le schede."""
+        for dock in self.docks.values():
+            tabbed = not dock.isFloating() and any(not d.isHidden() for d in self.tabifiedDockWidgets(dock))
+            dock.show_header(not tabbed)
 
     def _action(self, text: str, slot: Callable | None = None, *, shortcut=None, checkable=False,
                 name: str | None = None) -> QAction:
@@ -1201,15 +1482,37 @@ class MainWindow(QMainWindow):
         tb.setObjectName("mainToolbar")
         tb.setMovable(False)
         tb.setFloatable(False)
+        tb.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+
+        def spacer() -> QWidget:
+            w = QWidget()
+            w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            return w
+
+        # Pulsanti del mockup: ognuno è un'azione dei menu di §3.3 (stesso comando del 05), nessuna funzione nuova.
+        for act in (self.act_open_image, self.panel_actions["layers"], self.act_grid):
+            tb.addAction(act)
+        tb.addSeparator()
+        for act in (self.act_distance, self.act_simbad):
+            tb.addAction(act)
+        tb.addWidget(spacer())
         self.go_to_field = GoToField()
         self.go_to_field.goTo.connect(self.go_to)
         tb.addWidget(self.go_to_field)
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        tb.addWidget(spacer)
+        tb.addWidget(spacer())
+        tb.addAction(self.act_night)
         tb.addAction(self.panel_actions["assistant"])
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, tb)
         self.toolbar = tb
+        self.toolbar_icons = {
+            self.act_open_image: "folder-open", self.panel_actions["layers"]: "layers", self.act_grid: "grid-3x3",
+            self.act_distance: "ruler", self.act_simbad: "crosshair", self.act_night: "moon",
+            self.panel_actions["assistant"]: "sparkles"}
+        for act in self.toolbar_icons:
+            act.setIconVisibleInMenu(False)  # menu di macOS senza icone
+            shortcut = act.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+            act.setToolTip(f"{act.text()} ({shortcut})" if shortcut else act.text())
 
     def _start_runner(self) -> None:
         self._thread = QThread(self)
@@ -1519,6 +1822,18 @@ class MainWindow(QMainWindow):
         self.appearance = apply_appearance(mode)
         _CURRENT_APPEARANCE[0] = self.appearance
         self.act_night.setChecked(self.appearance == "night")
+        self._apply_theme_details(_TOKENS[self.appearance])
+
+    def _apply_theme_details(self, tokens: Mapping[str, str]) -> None:
+        """Icone e stati vuoti nei colori del tema (in modalità notte solo toni di rosso, §3.11)."""
+        for act, name in self.toolbar_icons.items():
+            act.setIcon(themed_icon(name, tokens))
+        self.go_to_field.search_icon.setIcon(themed_icon("search", {**tokens, "text2": tokens["text3"]}))
+        for dock in self.docks.values():
+            dock.header.set_theme(tokens)
+        for empty in (*self.empty_states.values(), self.history.empty, self.messages.empty):
+            empty.set_theme(tokens)
+        self.sky_empty.set_theme(tokens, on_sky=True)
 
     def _system_scheme_changed(self, scheme) -> None:
         if getattr(self, "appearance_mode", None) == "system" and not getattr(self, "_reapplying", False):
@@ -1575,10 +1890,59 @@ class _Dock(QDockWidget):
         super().__init__(title, parent)
         self.key = key
         self.setObjectName(f"dock_{key}")
+        self.header = _DockHeader(self)
+        self.no_header = QWidget()  # pannello a schede: niente intestazione, la fanno le schede
+        self.setTitleBarWidget(self.header)
+
+    def show_header(self, visible: bool) -> None:
+        wanted = self.header if visible else self.no_header
+        if self.titleBarWidget() is not wanted:
+            self.setTitleBarWidget(wanted)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - nome di Qt
         event.ignore()  # lo nasconde l'effetto del comando (MainWindow._apply_effect)
         self.closeRequested.emit(self.key)
+
+
+class _DockHeader(QWidget):
+    """Intestazione dei pannelli del mockup: titolo piccolo in maiuscolo, pulsanti per staccare e chiudere.
+
+    Trascinare l'intestazione sposta il pannello e il doppio clic lo stacca, come la barra standard di Qt (i clic
+    non usati dalla barra passano al ``QDockWidget``). Chiudere passa da ``_Dock.closeEvent`` (comando
+    ``ui.set_panel``).
+    """
+
+    def __init__(self, dock: _Dock) -> None:
+        super().__init__(dock)
+        self.setObjectName("dockHeader")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFixedHeight(30)
+        self.title = QLabel(dock.windowTitle())
+        self.title.setObjectName("dockTitle")
+        self.title.setFont(_header_font(self.title.font()))
+        dock.windowTitleChanged.connect(self.title.setText)
+        self.float_button = QToolButton()
+        self.float_button.setObjectName("dockFloat")
+        self.float_button.setToolTip(QCoreApplication.translate("MainWindow", "Detach panel"))
+        self.float_button.clicked.connect(lambda: dock.setFloating(not dock.isFloating()))
+        self.close_button = QToolButton()
+        self.close_button.setObjectName("dockClose")
+        self.close_button.setToolTip(QCoreApplication.translate("MainWindow", "Close panel"))
+        self.close_button.clicked.connect(dock.close)
+        for button in (self.float_button, self.close_button):
+            button.setIconSize(QSize(14, 14))
+            button.setAutoRaise(True)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 0, 8, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self.title, 1)
+        layout.addWidget(self.float_button)
+        layout.addWidget(self.close_button)
+
+    def set_theme(self, tokens: Mapping[str, str]) -> None:
+        quiet = {**tokens, "text2": tokens["text3"]}
+        self.float_button.setIcon(themed_icon("picture-in-picture-2", quiet, 14))
+        self.close_button.setIcon(themed_icon("x", quiet, 14))
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -239,10 +239,12 @@ aperta.
 - **Icone:** da una sola raccolta con licenza libera. **Proposta: Lucide**
   (icone a linea in SVG, licenza ISC, permissiva; raccolta ampia e
   coerente, adatta alle barre sottili); alternative Phosphor (MIT) e Tabler
-  Icons (MIT). **Licenza da verificare prima del codice e da aggiungere a
-  `THIRD_PARTY_LICENSES`** con il testo della licenza. Le icone si
-  disegnano con `QtSvg` di PySide6 e prendono il colore del tema (anche il
-  rosso della modalità notte).
+  Icons (MIT). **Licenza verificata il 2026-10-17** (pacchetto
+  `lucide-static` 1.59.0: ISC, più MIT del progetto Feather per le icone
+  derivate elencate nel file) e scritta in `THIRD_PARTY_LICENSES` con il
+  testo integrale; icone copiate senza modifiche in `src/astrotwo/ui/icons/`
+  con il file `LICENSE`. Le icone si disegnano con `QtSvg` di PySide6 e
+  prendono il colore del tema (anche il rosso della modalità notte).
 - **Numeri:** sempre con il punto decimale (§3.9) e con le cifre di DC3;
   coordinate scritte con la funzione del 10 (D41-2).
 - **Mockup di riferimento:** `mdfiles/mockup/finestra-principale.html` (tema
@@ -319,7 +321,7 @@ Nomi proposti, descrizione in parole. File Python
 | Qt Linguist (`pyside6-lupdate`, `pyside6-lrelease`) | file di traduzione `.ts`/`.qm` | strumento standard di Qt (A9) |
 | Traduzioni di Qt (`qtbase_it`) | dialoghi standard in italiano | distribuite con Qt |
 | **pytest-qt** | test dell'interfaccia | decisione del proprietario del 2026-10-15; **licenza da verificare** e da aggiungere a `THIRD_PARTY_LICENSES` |
-| PySide6 `QtSvg`; raccolta di icone **Lucide** (proposta, ISC) | icone dell'interfaccia (§3.11) | linee guida visive del 2026-10-15; licenza da verificare e da aggiungere a `THIRD_PARTY_LICENSES` |
+| PySide6 `QtSvg`; raccolta di icone **Lucide** (`lucide-static` 1.59.0, ISC; MIT di Feather per le icone derivate) | icone dell'interfaccia (§3.11) | linee guida visive del 2026-10-15; licenza verificata il 2026-10-17 e scritta in `THIRD_PARTY_LICENSES` |
 | `QStyleHints.colorScheme` di Qt | modalità chiaro/scuro del sistema | segue il sistema senza codice proprio; disponibilità nella versione di PySide6 da verificare |
 
 ## 9. Regole e vincoli
@@ -423,9 +425,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `QStyleHints.colorScheme` c'è in PySide6 6.12.0 (usato per seguire il
   sistema, T13); cifre tabulari con la funzione OpenType `tnum` di
   `QFont.setFeature` (impostazione verificata dai test; la resa a schermo
-  con il carattere di sistema si controlla a occhio sul Mac). **Ancora da
-  verificare:** licenza della raccolta di icone, quando si aggiungono le
-  icone (la parte 3 non ne usa: barre con testo e controlli nativi).
+  con il carattere di sistema si controlla a occhio sul Mac). Licenza della
+  raccolta di icone **verificata il 2026-10-17** con la parte 3b (§3.11, §8).
 - **Codice della parte 3 (2026-10-17):** T1–T14 in `tests/ui/`; **T15**
   (preferenze dell'assistente) si scrive con il `44`, che porta la sezione
   Assistant delle preferenze. Le conferme dei comandi chiesti dall'IA
@@ -433,6 +434,29 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   i comandi chiesti dall'utente non chiedono conferma (l'azione dell'utente
   è la conferma), salvo uscita con comandi in corso o non salvati e
   apertura di una sessione sopra lavoro non salvato (§3.8).
+- **Parte 3b (2026-10-17), correzioni dell'aspetto chieste dal proprietario
+  dopo la prova della finestra (nessuna funzione nuova, comandi invariati):**
+  foglio di stile dai colori dei mockup (barre, pannelli, tabelle con righe di
+  24 punti senza griglia, schede dei pannelli in basso in alto, barra di
+  stato), margini sulla griglia di 4 punti, icone Lucide nel colore del tema,
+  intestazioni dei pannelli come nel mockup (titolo piccolo in maiuscolo,
+  pulsanti per staccare e chiudere; i pannelli a schede usano le schede),
+  stati vuoti con icona e testo che dice cosa arriverà (cielo 41, Livelli
+  41, Tabella 42, Assistente 44, Comandi e Messaggi senza righe). Nella
+  barra degli strumenti, come nel mockup, pulsanti per azioni già nei menu
+  di §3.3 (Open image, pannello Layers, griglia, Distance, Simbad pointer,
+  **Night mode**, Assistant). **Differenze dal mockup lasciate:** la scritta
+  del survey nella barra ("DSS2 colore · TAN · campo") arriva con il 41 che
+  dà quei valori; nella colonna "chi" restano "Utente/IA/Sessione" di §3.6
+  (il mockup mostra "menu/mouse").
+- **D40-4 — Scorciatoia della modalità notte: da decidere (aperta il
+  2026-10-17 dal proprietario, Gruppo 3).** Il proprietario chiede una
+  scorciatoia per View → Night mode; §3.3 (scelta minore 3, confermata il
+  2026-10-15) non ne prevede. **Raccomandazione: ⌃⌘N** (stessa famiglia di
+  ⌃⌘F schermo intero e ⌃⌘A assistente; non usata da altre voci né dalle
+  scorciatoie standard di macOS per le app). Finché non è decisa, la voce è
+  raggiungibile dal menu View e dal pulsante con la luna nella barra degli
+  strumenti.
 
 ## 14. Registro modifiche
 
@@ -444,3 +468,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifiche del 2026-10-16: licenze di PySide6 (`pyside6-essentials`, LGPL-3.0 con i testi dal sorgente ufficiale) e di pytest-qt (MIT) verificate e in `THIRD_PARTY_LICENSES`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 3 della v1** ("FASE: CODICE – interfaccia v1"): `src/astrotwo/ui/main_window.py` (finestra, menu, barra di stato, "Vai a", pannelli Comandi e Messaggi, coda dei comandi in un `QThread` con avanzamento e Annulla, preferenze, aspetto scuro/chiaro/sistema/notte rossa, lingua inglese/italiano con punto decimale sempre), traduzione `src/astrotwo/ui/i18n/astrotwo_it.ts`/`.qm`, avvio `uv run astrotwo`, test `tests/ui/test_main_window.py` (T1–T14, T12 con marcatore `perf`). Verifiche di §13 fatte (colorScheme, cifre tabulari); icone ancora da verificare quando si aggiungono. Visualizzatore (41), tabella (42) e assistente (44) restano spazi riservati fino alle loro parti. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Parte 3b del codice della v1** (correzioni dell'aspetto dopo la prova del proprietario; nessuna funzione nuova, comandi invariati): foglio di stile dai mockup, icone Lucide (licenza verificata: ISC più MIT di Feather, in `THIRD_PARTY_LICENSES`; §3.11, §8), intestazioni dei pannelli, stati vuoti dei segnaposto, pulsanti della barra per azioni già nei menu (anche Night mode); test T13 esteso al foglio di stile e alle icone in modalità notte, nuovo test delle linee guida visive. **Aperta D40-4** (scorciatoia della modalità notte, Gruppo 3, raccomandazione ⌃⌘N). Stato `approvato` invariato. |

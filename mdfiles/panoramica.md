@@ -18,6 +18,16 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-17, parte 3b della v1 (correzioni dell'aspetto del
+  40 dopo la prova del proprietario; nessuna funzione nuova, comandi
+  invariati):** foglio di stile dai colori dei mockup, icone Lucide nel
+  colore del tema (licenza verificata: ISC, più MIT di Feather per le icone
+  derivate, in `THIRD_PARTY_LICENSES`), intestazioni dei pannelli come nel
+  mockup, stati vuoti dei segnaposto con il testo di cosa arriverà, pulsanti
+  della barra per azioni già nei menu (anche **Night mode**, che era solo nel
+  menu View). **Aperta D40-4** (scorciatoia della modalità notte, Gruppo 3,
+  raccomandazione ⌃⌘N). Decisioni aperte: **15** (Gruppo 1 = 0, Gruppo 2 =
+  3, Gruppo 3 = 12).
 - **Stato al 2026-10-17, parte 3 della v1 (finestra 40):** scritti
   `src/astrotwo/ui/main_window.py` (finestra, menu, barra di stato, "Vai
   a", pannelli Comandi e Messaggi, coda dei comandi in un `QThread` con
@@ -701,6 +711,9 @@ D41-1…D41-4: 20 aperte. Lo stesso giorno decise D05-1, D05-2, D40-1,
 D41-1…D41-4, rimandate D05-3 e D40-2, aperta D40-3: **14 aperte** (Gruppo
 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). Il 2026-10-16 aperta D05-4 (15 aperte),
 decisa il 2026-10-17: **14 aperte** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11).
+Lo stesso giorno, con la parte 3b del codice della v1, aperta D40-4
+(scorciatoia della modalità notte): **15 aperte** (Gruppo 1 = 0, Gruppo 2 =
+3, Gruppo 3 = 12).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -711,6 +724,7 @@ poi `decisioni-aperte.md`.
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
 | D05-3, D40-2 | Adattatore del 19; avvio tramite URL (H18) | `05`, `40` §13 | **rimandate** il 2026-10-15 (Gruppo 3) |
 | D40-3 | Messaggi dei moduli 10–19 in inglese con traduzione (coerente con A9) | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 3, aperta il 2026-10-15) |
+| D40-4 | Scorciatoia da tastiera della modalità notte (View → Night mode) | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 3, aperta il 2026-10-17 dal proprietario; raccomandazione ⌃⌘N) |
 | AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md`. **Proposta del 2026-10-15, ACCETTATA lo stesso giorno:** nuovo file generale `05-comandi-sessione.md` (livello 1, registro dei comandi e sessione), scritto in `bozza` |
 | D14-13 | URL dei servizi dell'ESO in http: il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata | `14-core-protocolli-vo.md` §13 | **da decidere** (aperta il 2026-10-14); oggi la demo usa https, nessuna modifica al codice del 14 |
 | AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
@@ -743,10 +757,11 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    la cartella home temporanea dei test, e lista di controllo manuale del 30
    con le chiavi dell'utente da fare a mano). **Parte 3 (finestra 40)
    scritta il 2026-10-17** (verificati `QStyleHints.colorScheme` e cifre
-   tabulari; prova a mano della finestra da fare dal proprietario).
-   Prossima: parte 4 (visualizzatore 41). Da verificare all'inizio delle
-   parti che li usano: licenza delle icone (quando si aggiungono),
-   Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
+   tabulari; prova a mano fatta dal proprietario). **Parte 3b
+   (correzioni dell'aspetto del 40) scritta il 2026-10-17** (icone Lucide
+   con licenza verificata); da decidere D40-4 (scorciatoia della modalità
+   notte) e da riprovare a mano sul Mac. Prossima: parte 4 (visualizzatore
+   41). Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -770,8 +785,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (14, al 2026-10-17): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 3, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (15, al 2026-10-17): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 3, Gruppo 3 = 12); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -835,3 +850,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **Parte 2 del codice della v1: moduli 31 e 30** (`ai/keychain_keys.py`, `ai/provider_adapter.py` con i dieci profili predefiniti; test con Portachiavi e provider simulati, 34 test; marcatore `keychain`). Precisazioni del 30 dalle fonti e dal codice degli SDK (indirizzo di Anthropic, `max_completion_tokens` per OpenAI, variabili d'ambiente neutralizzate); scelte minori della parte 2 nel 30 §13, da confermare. |
 | 2026-10-17 | Claude Code | **Correzione del test T8 del 31** (solo test, nessuna funzione nuova): la finestra di macOS "Impossibile trovare un portachiavi" veniva dalla cartella home temporanea che `tests/conftest.py` dà a ogni test (`HOME` cambiata: macOS cerca il Portachiavi di login in `$HOME/Library/Keychains` e non lo trova). T8 ora usa la vera home dell'utente letta dal sistema (`pwd`). Codice del 31 invariato (servizio `dev.pages.astrotwo.ai`, nessun portachiavi impostato esplicitamente). T8 da rieseguire a mano dal proprietario. |
 | 2026-10-17 | Claude Code | **Parte 3 del codice della v1: modulo 40** (`src/astrotwo/ui/main_window.py`, traduzione `ui/i18n/astrotwo_it.ts`/`.qm`, `tests/ui/test_main_window.py` con T1–T14, T12 `perf`; voce `astrotwo` in `[project.scripts]`, marcatori `perf` e `gl` esclusi di default in `pyproject.toml`). Decisioni del proprietario: D05-2 precisata (impronta sul contenuto restituito dal modulo; 05 §3.1 e §13), scelte minori del 05 confermate (tipo `time`, parametro `window`); VizieR TAP: endpoint invariato, 503 = guasto temporaneo del CDS, nessuna modifica. Verifiche del 40 §13 fatte (colorScheme, cifre tabulari); icone ancora da verificare. §2, §4, §5, §7 aggiornati. Aperte 14 invariate. Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |
+| 2026-10-17 | Claude Code | **Parte 3b del codice della v1: correzioni dell'aspetto del 40** dopo la prova del proprietario (nessuna funzione nuova, comandi invariati): foglio di stile dai mockup, icone Lucide (`src/astrotwo/ui/icons/`, licenza ISC + MIT di Feather verificata e in `THIRD_PARTY_LICENSES`, script delle licenze aggiornato), intestazioni dei pannelli, stati vuoti dei segnaposto, pulsanti della barra per azioni dei menu (anche Night mode); traduzioni italiane aggiornate; test T13 esteso e nuovo test delle linee guida visive. **Aperta D40-4** (scorciatoia della modalità notte, Gruppo 3). §2, §6, §7 aggiornati. Aperte 15 (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 12). Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |

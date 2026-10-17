@@ -118,6 +118,14 @@
         <translation>Avvisi</translation>
     </message>
     <message>
+        <source>No commands yet</source>
+        <translation>Ancora nessun comando</translation>
+    </message>
+    <message>
+        <source>Every action from the menus, the keyboard or the mouse appears here with its number: select it to see parameters, result and provenance, rerun it or copy it as JSON.</source>
+        <translation>Ogni azione dai menu, dalla tastiera o dal mouse compare qui con il suo numero: selezionala per vedere parametri, risultato e provenienza, rieseguirla o copiarla come JSON.</translation>
+    </message>
+    <message>
         <source>ok</source>
         <translation>ok</translation>
     </message>
@@ -137,16 +145,8 @@
         <translation>THIRD_PARTY_LICENSES non trovato.</translation>
     </message>
     <message>
-        <source>The sky viewer (module 41) arrives in the next part of the first version.</source>
-        <translation>Il visualizzatore del cielo (modulo 41) arriva nella prossima parte della prima versione.</translation>
-    </message>
-    <message>
         <source>Layers</source>
         <translation>Livelli</translation>
-    </message>
-    <message>
-        <source>Layers arrive with the sky viewer (41).</source>
-        <translation>I livelli arrivano con il visualizzatore del cielo (41).</translation>
     </message>
     <message>
         <source>Assistant</source>
@@ -161,8 +161,28 @@
         <translation>Tabella</translation>
     </message>
     <message>
-        <source>The table arrives with module 42.</source>
-        <translation>La tabella arriva con il modulo 42.</translation>
+        <source>Sky viewer</source>
+        <translation>Visualizzatore del cielo</translation>
+    </message>
+    <message>
+        <source>Arrives with module 41, in the next part of the first version: HiPS surveys, FITS images, catalogs and MOCs drawn here, with coordinate grid, north indicator and scale bar. Go to, menus and panels already work.</source>
+        <translation>Arriva con il modulo 41, nella prossima parte della prima versione: survey HiPS, immagini FITS, cataloghi e MOC disegnati qui, con griglia delle coordinate, indicatore del nord e barra di scala. &quot;Vai a&quot;, menu e pannelli funzionano già.</translation>
+    </message>
+    <message>
+        <source>No layers yet</source>
+        <translation>Ancora nessun livello</translation>
+    </message>
+    <message>
+        <source>Arrive with the sky viewer (module 41): one row for each HiPS survey, image, catalog, MOC and measurement, with order, visibility and opacity.</source>
+        <translation>Arrivano con il visualizzatore del cielo (modulo 41): una riga per ogni survey HiPS, immagine, catalogo, MOC e misura, con ordine, visibilità e opacità.</translation>
+    </message>
+    <message>
+        <source>No catalog yet</source>
+        <translation>Ancora nessun catalogo</translation>
+    </message>
+    <message>
+        <source>Arrives with module 42: one tab for each catalog layer, column headers with units, sorting, and selection synchronised with the sky.</source>
+        <translation>Arriva con il modulo 42: una scheda per ogni livello di catalogo, intestazioni delle colonne con le unità, ordinamento e selezione sincronizzata con il cielo.</translation>
     </message>
     <message>
         <source>Commands</source>
@@ -384,6 +404,14 @@
         <source>Quit anyway?</source>
         <translation>Uscire comunque?</translation>
     </message>
+    <message>
+        <source>Detach panel</source>
+        <translation>Stacca il pannello</translation>
+    </message>
+    <message>
+        <source>Close panel</source>
+        <translation>Chiudi il pannello</translation>
+    </message>
 </context>
 <context>
     <name>MessagesPanel</name>
@@ -398,6 +426,14 @@
     <message>
         <source>Message</source>
         <translation>Messaggio</translation>
+    </message>
+    <message>
+        <source>No messages</source>
+        <translation>Nessun messaggio</translation>
+    </message>
+    <message>
+        <source>Errors and warnings of the modules appear here with their code, their unchanged text and the number of the command that produced them; errors in red.</source>
+        <translation>Errori e avvisi dei moduli compaiono qui con il loro codice, il loro testo invariato e il numero del comando che li ha prodotti; gli errori in rosso.</translation>
     </message>
 </context>
 <context>

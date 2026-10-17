@@ -1,6 +1,7 @@
 """Test della finestra principale (40 §12) con pytest-qt, piattaforma ``offscreen`` e servizi simulati."""
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -504,6 +505,66 @@ def test_t13_appearance(qtbot, window, monkeypatch):
     win.act_night.trigger()
     wait_idle(qtbot, win)
     assert win.appearance == "dark" and win.session.history.entries[-1].command.parameters == {"mode": "system"}
+
+
+def stylesheet_colors(text):
+    """Colori scritti nel foglio di stile: ``#rrggbb`` e ``rgba(r, g, b, a)``, come (rosso, verde, blu)."""
+    for hexa in re.findall(r"#([0-9a-fA-F]{6})\b", text):
+        yield tuple(int(hexa[i:i + 2], 16) for i in (0, 2, 4))
+    for r, g, b in re.findall(r"rgba\((\d+),\s*(\d+),\s*(\d+)", text):
+        yield int(r), int(g), int(b)
+
+
+def test_t13_night_stylesheet_and_icons(qtbot, window):
+    """Modalità notte (§3.11): anche foglio di stile, icone e stati vuoti solo in toni di rosso."""
+    win = window
+    win.act_night.trigger()
+    wait_idle(qtbot, win)
+    colors = list(stylesheet_colors(QApplication.instance().styleSheet()))
+    assert len(colors) > 10
+    assert all(g <= NIGHT_THRESHOLD and b <= NIGHT_THRESHOLD for _, g, b in colors), colors
+    for act in win.toolbar_icons:
+        image = act.icon().pixmap(32, 32).toImage()
+        drawn = [image.pixelColor(x, y) for x in range(32) for y in range(32) if image.pixelColor(x, y).alpha()]
+        assert drawn and all(c.green() <= NIGHT_THRESHOLD and c.blue() <= NIGHT_THRESHOLD for c in drawn), act
+    win.act_night.trigger()
+    wait_idle(qtbot, win)
+    assert any(b > 200 for _, _, b in stylesheet_colors(QApplication.instance().styleSheet()))  # accento blu
+
+
+def test_visual_guidelines(qtbot, window):
+    """Linee guida visive (§3.11) e mockup: icone Lucide con licenza, barra, intestazioni, righe, stati vuoti."""
+    win = window
+    names_used = set(win.toolbar_icons.values()) | {"search", "x", "picture-in-picture-2", "telescope", "table-2",
+                                                    "history", "message-square-warning", "sparkles", "layers"}
+    for name in names_used:
+        assert (mw.ICONS_DIR / f"{name}.svg").is_file(), name
+    assert {p.stem for p in mw.ICONS_DIR.glob("*.svg")} == names_used  # nessuna icona inutilizzata
+    licenses = (Path(mw.__file__).resolve().parents[3] / "THIRD_PARTY_LICENSES").read_text(encoding="utf-8")
+    assert (mw.ICONS_DIR / "LICENSE").read_text(encoding="utf-8").strip() in licenses
+    # ogni pulsante della barra è un'azione dei menu (nessuna funzione nuova), con icona e nome nel suggerimento
+    menu_actions = {a for m in win.menuBar().actions() for a in m.menu().actions()}
+    menu_actions |= {a for m in win.menuBar().actions() for s in m.menu().actions() if s.menu()
+                     for a in s.menu().actions()}
+    for act in win.toolbar_icons:
+        assert act in win.toolbar.actions() and act in menu_actions
+        assert not act.icon().isNull() and act.text() in act.toolTip()
+    assert win.act_night in win.toolbar.actions()
+    # intestazioni: pannelli soli con l'intestazione propria; quelli a schede usano le schede
+    assert win.docks["layers"].titleBarWidget() is win.docks["layers"].header
+    assert win.docks["commands"].titleBarWidget() is win.docks["commands"].no_header
+    assert win.docks["layers"].header.title.font().capitalization() == QFont.Capitalization.AllUppercase
+    assert win.history.table.verticalHeader().defaultSectionSize() == mw.ROW_HEIGHT
+    assert win.messages.table.verticalHeader().defaultSectionSize() == mw.ROW_HEIGHT
+    assert "41" in win.sky_empty.text() and "42" in win.docks["table"].widget().text()
+    # stati vuoti: spariscono alla prima riga senza cambiare le misure della vista
+    size = win.view_window()
+    assert win.history.empty.isVisibleTo(win.history) and win.messages.empty.isVisibleTo(win.messages)
+    win.go_to("%%%")
+    wait_idle(qtbot, win)
+    assert not win.history.empty.isVisibleTo(win.history) and not win.messages.empty.isVisibleTo(win.messages)
+    qtbot.wait(50)
+    assert win.view_window() == size
 
 
 def test_tabular_digits(window):
