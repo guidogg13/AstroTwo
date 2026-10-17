@@ -161,14 +161,6 @@
         <translation>Tabella</translation>
     </message>
     <message>
-        <source>Sky viewer</source>
-        <translation>Visualizzatore del cielo</translation>
-    </message>
-    <message>
-        <source>Arrives with module 41, in the next part of the first version: HiPS surveys, FITS images, catalogs and MOCs drawn here, with coordinate grid, north indicator and scale bar. Go to, menus and panels already work.</source>
-        <translation>Arriva con il modulo 41, nella prossima parte della prima versione: survey HiPS, immagini FITS, cataloghi e MOC disegnati qui, con griglia delle coordinate, indicatore del nord e barra di scala. &quot;Vai a&quot;, menu e pannelli funzionano già.</translation>
-    </message>
-    <message>
         <source>No layers yet</source>
         <translation>Ancora nessun livello</translation>
     </message>
@@ -319,6 +311,10 @@
     <message>
         <source>The file cannot be opened</source>
         <translation>Il file non si può aprire</translation>
+    </message>
+    <message>
+        <source>field %1</source>
+        <translation>campo %1</translation>
     </message>
     <message>
         <source>Open image</source>

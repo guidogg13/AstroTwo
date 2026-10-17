@@ -64,7 +64,7 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   (`view.set_grid`, con frame ICRS o galattico); Coordinates shown (ICRS
   sessagesimale, ICRS decimale, galattico: `view.set_coordinate_display`);
   Full screen (A10, `ui.set_fullscreen`); Night mode (modalità notte rossa,
-  `ui.set_appearance`, §3.11).
+  `ui.set_appearance`, §3.11; ⌃⌘N, D40-4).
 - **Data:** HiPS survey… (finestra con un campo di ricerca sulla copia
   locale delle collezioni, `CollectionIndex.filter` del 12, e un campo per
   identificativo o URL: `hips.set_survey`); Catalog in view… (finestra con
@@ -81,7 +81,7 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   strumenti, ⌃⌘A): mostra o nasconde il pannello del `44` (`ui.*`, classe
   `application`).
 - Scorciatoie standard di macOS (⌘O apri, ⌘S salva sessione, ⌘Q esci,
-  ⌃⌘F schermo intero).
+  ⌃⌘F schermo intero; ⌃⌘N modalità notte, D40-4).
 
 ### 3.4 Campo "Vai a" (A2, A3)
 
@@ -449,14 +449,17 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   del survey nella barra ("DSS2 colore · TAN · campo") arriva con il 41 che
   dà quei valori; nella colonna "chi" restano "Utente/IA/Sessione" di §3.6
   (il mockup mostra "menu/mouse").
-- **D40-4 — Scorciatoia della modalità notte: da decidere (aperta il
-  2026-10-17 dal proprietario, Gruppo 3).** Il proprietario chiede una
-  scorciatoia per View → Night mode; §3.3 (scelta minore 3, confermata il
-  2026-10-15) non ne prevede. **Raccomandazione: ⌃⌘N** (stessa famiglia di
-  ⌃⌘F schermo intero e ⌃⌘A assistente; non usata da altre voci né dalle
-  scorciatoie standard di macOS per le app). Finché non è decisa, la voce è
-  raggiungibile dal menu View e dal pulsante con la luna nella barra degli
-  strumenti.
+- **Sprint 4a del 41 (2026-10-17):** il segnaposto del cielo è sostituito
+  dal visualizzatore del 41; la scritta del survey nella barra
+  ("titolo · proiezione · campo") ora c'è; la **barra di stato ha altezza
+  fissa di 26 px** (come il mockup), così mostrare Annulla e l'avanzamento
+  non cambia la dimensione del cielo (che a ogni nuova dimensione registra
+  la nuova finestra).
+- **D40-4 — Scorciatoia della modalità notte: DECISA il 2026-10-17
+  (decisione del proprietario): ⌃⌘N** per View → Night mode (stessa
+  famiglia di ⌃⌘F schermo intero e ⌃⌘A assistente; non usata da altre voci
+  né dalle scorciatoie standard di macOS per le app). La voce resta anche
+  nel menu View e nel pulsante con la luna nella barra degli strumenti.
 
 ## 14. Registro modifiche
 
@@ -469,3 +472,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | Verifiche del 2026-10-16: licenze di PySide6 (`pyside6-essentials`, LGPL-3.0 con i testi dal sorgente ufficiale) e di pytest-qt (MIT) verificate e in `THIRD_PARTY_LICENSES`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 3 della v1** ("FASE: CODICE – interfaccia v1"): `src/astrotwo/ui/main_window.py` (finestra, menu, barra di stato, "Vai a", pannelli Comandi e Messaggi, coda dei comandi in un `QThread` con avanzamento e Annulla, preferenze, aspetto scuro/chiaro/sistema/notte rossa, lingua inglese/italiano con punto decimale sempre), traduzione `src/astrotwo/ui/i18n/astrotwo_it.ts`/`.qm`, avvio `uv run astrotwo`, test `tests/ui/test_main_window.py` (T1–T14, T12 con marcatore `perf`). Verifiche di §13 fatte (colorScheme, cifre tabulari); icone ancora da verificare quando si aggiungono. Visualizzatore (41), tabella (42) e assistente (44) restano spazi riservati fino alle loro parti. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Parte 3b del codice della v1** (correzioni dell'aspetto dopo la prova del proprietario; nessuna funzione nuova, comandi invariati): foglio di stile dai mockup, icone Lucide (licenza verificata: ISC più MIT di Feather, in `THIRD_PARTY_LICENSES`; §3.11, §8), intestazioni dei pannelli, stati vuoti dei segnaposto, pulsanti della barra per azioni già nei menu (anche Night mode); test T13 esteso al foglio di stile e alle icone in modalità notte, nuovo test delle linee guida visive. **Aperta D40-4** (scorciatoia della modalità notte, Gruppo 3, raccomandazione ⌃⌘N). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **D40-4 decisa dal proprietario: ⌃⌘N** per View → Night mode (§3.3, §13); codice e test T13 aggiornati. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | Sprint 4a del 41: visualizzatore al posto del segnaposto, scritta del survey nella barra, barra di stato ad altezza fissa (26 px, §13). Stato `approvato` invariato. |

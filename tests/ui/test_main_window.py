@@ -516,8 +516,9 @@ def stylesheet_colors(text):
 
 
 def test_t13_night_stylesheet_and_icons(qtbot, window):
-    """Modalità notte (§3.11): anche foglio di stile, icone e stati vuoti solo in toni di rosso."""
+    """Modalità notte (§3.11): anche foglio di stile, icone e stati vuoti solo in toni di rosso; ⌃⌘N (D40-4)."""
     win = window
+    assert win.act_night.shortcut().toString() == "Meta+Ctrl+N"
     win.act_night.trigger()
     wait_idle(qtbot, win)
     colors = list(stylesheet_colors(QApplication.instance().styleSheet()))
@@ -556,7 +557,7 @@ def test_visual_guidelines(qtbot, window):
     assert win.docks["layers"].header.title.font().capitalization() == QFont.Capitalization.AllUppercase
     assert win.history.table.verticalHeader().defaultSectionSize() == mw.ROW_HEIGHT
     assert win.messages.table.verticalHeader().defaultSectionSize() == mw.ROW_HEIGHT
-    assert "41" in win.sky_empty.text() and "42" in win.docks["table"].widget().text()
+    assert "42" in win.docks["table"].widget().text()
     # stati vuoti: spariscono alla prima riga senza cambiare le misure della vista
     size = win.view_window()
     assert win.history.empty.isVisibleTo(win.history) and win.messages.empty.isVisibleTo(win.messages)

@@ -1379,6 +1379,9 @@ def _view_values(view: ViewState, info: dict) -> dict:
            "window": None if view.window is None else {"width": view.window[0], "height": view.window[1]}}
     if g is not None:
         out.update(field_radius=quantity_json(g.field_radius), field_radius_method=g.field_radius_method,
+                   field_of_view=quantity_json(2 * g.field_radius),
+                   field_of_view_method="2 × field_radius della ViewGeometry del 10 (diametro del cerchio che "
+                                        "contiene la finestra disegnata)",
                    base_scale=quantity_json(g.base_scale), base_scale_method=g.base_scale_method,
                    notes=list(g.notes), **info)
     if view.grid is not None:

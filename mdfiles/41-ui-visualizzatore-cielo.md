@@ -35,6 +35,25 @@ Perimetro approvato dal proprietario il 2026-10-15.
   volta, scelta minore 1), altri formati di esportazione e stampa (A13),
   rinomina dei livelli (A11).
 
+**Divisione del codice in sprint (2026-10-17).** **4a (scritto il
+2026-10-17):** sfondo HiPS di un survey a colori (JPEG/PNG; un survey FITS
+dà l'avviso `HIPS_FITS_NOT_YET` finché non arriva il 4b), zoom (rotella del
+mouse 2^(1/4) per scatto, pizzico del trackpad) e spostamento
+(trascinamento, due dita sul trackpad) come `view.set_zoom`/`view.set_center`
+a fine gesto, scritta "survey · proiezione · campo" nella barra del `40`,
+modalità notte nel disegno. **Scelte del proprietario del 2026-10-17:**
+vista iniziale a cielo intero (centro ICRS 0°, 0°; scala = 360° / larghezza
+della finestra in pixel fisici, prima lo zoom), limiti della scala da
+0.01″/pixel a 360° / larghezza, campo nella barra = `field_of_view` dei
+comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
+1°, in ′ sotto 1°, in ″ sotto 1′. Una nuova dimensione del cielo registra
+`view.set_center` con la nuova finestra a fine gesto. **Sprint successivi:**
+4b tile FITS con `set_display` e coordinate sotto il mouse (`cursor.read`);
+4c griglia e nord/barra di scala; 4d immagine FITS (base del suo WCS); 4e
+cataloghi e clic su una sorgente; 4f MOC, corpi diversi e pannello dei
+livelli; 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
+(T17) e prestazioni (`perf`).
+
 ### 3.2 Geometria della vista: base e finestra
 
 Nessuna proiezione è calcolata qui: tutta la geometria viene dal 10
@@ -600,3 +619,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): **A7 nella v1** (opzione b) — nuova §3.18 con indicatore del nord e barra di scala disegnati nell'angolo dai risultati di `compass_and_scale_bar` del 10 (nuova funzione), anche nel PNG; §3.1, §3.17, §4, §5 aggiornati; test T21; scelte minori 10 e 11 da confermare. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifiche del 2026-10-16: funzioni OpenGL di PySide6 sufficienti (§13), cache da più thread corretta con D04 del 04. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Sprint 4a del codice** (§3.1): `ui/sky_viewer.py` e `ui/sky_renderer_gl.py`, sfondo HiPS a colori, zoom e spostamento come comandi del `05`, vista iniziale e limiti dello zoom (scelte del proprietario del 2026-10-17), scritta del survey; test T4, T5, T12 parziali e test `gl` del disegno in `tests/ui/test_sky_viewer.py`. Stato `approvato` invariato. |

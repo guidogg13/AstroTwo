@@ -37,7 +37,10 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-17, con la parte 3b del codice della v1: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **3** · Gruppo 3:
+**Dal 2026-10-17, con la decisione di D40-4 (⌃⌘N): 14 aperte** — Gruppo 1: **0** · Gruppo 2: **3** · Gruppo 3:
+**11**.
+
+Prima, **dal 2026-10-17, con la parte 3b del codice della v1: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **3** · Gruppo 3:
 **12** (nuova `D40-4`, scorciatoia della modalità notte).
 
 Prima, **dal 2026-10-15, dopo le decisioni del proprietario sulle specifiche dell'interfaccia: 14 aperte** — Gruppo 1:
@@ -271,7 +274,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A11` | **Licenza di AstroTwo** (compatibile con le dipendenze, tra cui WCSLIB LGPL-3)? Aperta dal proprietario il 2026-10-10. **Dal 2026-10-13 elenco completo delle licenze in `THIRD_PARTY_LICENSES`** (punti da valutare: LGPL-3 di WCSLIB, clausola LBNL della libreria QD, MPL-2.0 di `certifi`; testo di `pims` trovato il 2026-10-13 nel sorgente ufficiale su PyPI e aggiunto, ma con il segnaposto `<COPYRIGHT HOLDER>` non compilato). **Dal 2026-10-15 registrate per A11 e per il `60`: PySide6 e Qt, licenza LGPL-3** (interfaccia, obblighi LGPL nel `.dmg` come per WCSLIB; testo da verificare prima del codice), pytest-qt (test) e la raccolta di icone proposta (Lucide, ISC) da verificare; **licenza di Lucide verificata il 2026-10-17** (ISC, più MIT di Feather per le icone derivate) e scritta in `THIRD_PARTY_LICENSES` | `01-architettura.md` §5 (blocca solo l'approvazione del `60`) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (12)
+## 5. GRUPPO 3 — rimandabili al momento del codice (11)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -283,7 +286,6 @@ gruppi successivi, A8 dopo il livello 1).
 | `D05-3` | Adattatore del 19 (`PlanetaryCommand`) al formato del 05: **rimandata** (2026-10-15) a quando l'interfaccia userà i dati planetari; modifica del 19 da autorizzare | `05-comandi-sessione.md` §13 |
 | `D40-2` | Avvio tramite URL (H18): equivalente in AstroTwo, **rimandata** (2026-10-15) alla versione successiva del 40 | `40-ui-finestra-principale.md` §13 |
 | `D40-3` | Messaggi dei moduli 10–19 in inglese con traduzione italiana, coerente con A9 (tabelle codice → testo nei moduli o testi con `tr()`)? Aperta dal proprietario il 2026-10-15; nella v1 codice + testo del modulo invariato | `40-ui-finestra-principale.md` §13 (riguarda i moduli 10–19) |
-| `D40-4` | Scorciatoia da tastiera per View → Night mode (chiesta dal proprietario il 2026-10-17; §3.3 non ne prevede)? **Raccomandazione: ⌃⌘N**; intanto la voce è nel menu View e nella barra degli strumenti | `40-ui-finestra-principale.md` §13 |
 | `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
 | `D14-13` | URL dei servizi dell'ESO in http (dal registro VO e nelle risposte SIA): il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata; oggi la demo usa https direttamente, nessuna modifica al codice del 14 | `14-core-protocolli-vo.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
@@ -361,3 +363,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-16 | Claude Code | **Nuova nel Gruppo 1: `D05-4`** (prima nel file di origine 05 §13): forma JSON dei valori dei parametri e parametri strutturati, trovata allineando il 18; ferma solo l'adattatore del 18 e i comandi `calc.*`. Conteggi: aperte **15** (Gruppo 1 = 1, Gruppo 2 = 3, Gruppo 3 = 11). |
 | 2026-10-17 | Claude Code | **`D05-4` decisa dal proprietario il 2026-10-17** (opzione a, prima nel file di origine 05 §13 e nel 18): tolta dalle aperte del Gruppo 1. Decisioni del 2026-10-17 su `httpx2` (01, 30) e sui profili predefiniti dei provider (30, 31, 44): decise e registrate nei file di origine, non entrano in questo elenco. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |
 | 2026-10-17 | Claude Code | **Nuova nel Gruppo 3: `D40-4`** (prima nel file di origine 40 §13): scorciatoia della modalità notte chiesta dal proprietario con la parte 3b, raccomandazione ⌃⌘N. `A11` annotata: licenza di Lucide verificata. Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 12). |
+| 2026-10-17 | Claude Code | **`D40-4` decisa dal proprietario: ⌃⌘N** (prima nel file di origine 40 §13), tolta dal Gruppo 3. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |

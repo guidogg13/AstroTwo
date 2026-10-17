@@ -24,6 +24,17 @@ pytest_plugins = ["pytester"]  # per il test della regola di ripetizione dei tes
 
 
 @pytest.fixture(autouse=True)
+def _memory_sky_renderer(request, monkeypatch):
+    """Sulla piattaforma ``offscreen`` non c'è GPU: il visualizzatore del 41 disegna in memoria (tranne ``gl``)."""
+    import sys
+
+    if "astrotwo.ui.sky_viewer" in sys.modules and request.node.get_closest_marker("gl") is None:
+        from tests.ui.fake_renderer import MemoryRenderer
+
+        monkeypatch.setattr(sys.modules["astrotwo.ui.sky_viewer"], "DEFAULT_RENDERER", MemoryRenderer)
+
+
+@pytest.fixture(autouse=True)
 def _temporary_home(tmp_path_factory, monkeypatch):
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))

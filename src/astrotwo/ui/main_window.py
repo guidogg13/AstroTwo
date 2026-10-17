@@ -448,14 +448,12 @@ QSplitter::handle {{ background: {t['line_soft']}; }}
 QSplitter::handle:horizontal {{ width: 1px; }}
 QPlainTextEdit#historyDetail {{ background: {t['alternate']}; color: {t['text2']}; border: none;
     border-left: 1px solid {t['line_soft']}; padding: 8px; }}
-QFrame#skyArea {{ background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 {t['sky_top']},
+#skyArea {{ background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 {t['sky_top']},
     stop: 1 {t['sky_bottom']}); }}
 QWidget#emptyState {{ background: {t['panel']}; }}
-QFrame#skyArea QWidget#emptyState {{ background: transparent; }}
 QLabel#emptyTitle {{ color: {t['text2']}; }}
 QLabel#emptyText {{ color: {t['text3']}; }}
-QFrame#skyArea QLabel#emptyTitle {{ color: {t['sky_text']}; }}
-QFrame#skyArea QLabel#emptyText {{ color: {t['sky_text3']}; }}
+QLabel#surveyLabel {{ color: {t['text2']}; }}
 QStatusBar {{ background: {t['chrome']}; border-top: 1px solid {t['line']}; color: {t['text2']}; }}
 QStatusBar::item {{ border: none; }}
 QStatusBar QLabel {{ color: {t['text2']}; padding: 0px 4px; }}
@@ -768,6 +766,9 @@ class StatusBar(QStatusBar):
         self.addWidget(self.cursor_label, 1)
         for w in (self.network_label, self.command_label, self.progress_bar, self.cancel_button):
             self.addPermanentWidget(w)
+        # Altezza fissa del mockup (26 px): mostrare Annulla e l'avanzamento non ridimensiona il cielo (41), che
+        # a ogni nuova dimensione registra la nuova finestra.
+        self.setFixedHeight(26)
         self.show_network(0, 0)
         self.show_idle()
 
@@ -1294,6 +1295,7 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
         for message in translation_warnings:
             self.messages.add(None, message, error=False)
+        self._startup_view = startup_commands
         if startup_commands:
             frame, fmt = COORDINATE_DISPLAYS[self.preference("view/coordinates")]
             self.submit("view.set_coordinate_display", {"frame": frame, "format": fmt})
@@ -1302,17 +1304,19 @@ class MainWindow(QMainWindow):
     # --- costruzione -------------------------------------------------------------------
 
     def _build_central(self) -> None:
-        sky = QFrame()
-        sky.setObjectName("skyArea")
-        sky.setFrameShape(QFrame.Shape.NoFrame)
-        sky.setMinimumSize(320, 240)
-        self.sky_empty = EmptyState("telescope", self.tr("Sky viewer"), self.tr(
-            "Arrives with module 41, in the next part of the first version: HiPS surveys, FITS images, catalogs "
-            "and MOCs drawn here, with coordinate grid, north indicator and scale bar. Go to, menus and panels "
-            "already work."))
-        QVBoxLayout(sky).addWidget(self.sky_empty)
-        self.sky_area = sky
-        self.setCentralWidget(sky)
+        """Visualizzatore del cielo del 41 al centro (sprint 4a: sfondo HiPS, zoom e spostamento)."""
+        from astrotwo.ui.sky_viewer import SkyViewer
+
+        self.sky = SkyViewer(self.submit, cache=self.cache)
+        self.sky.message.connect(lambda m: self.messages.add(None, m, error=m.code == "GL_UNAVAILABLE"))
+        if hasattr(self.sky.renderer, "failed"):
+            self.sky.renderer.failed.connect(
+                lambda code, text: self.messages.add(None, ResultMessage(code, text), error=True))
+        self.sky.tiles_changed.connect(lambda _n: self._update_network())
+        self.sky.view_changed.connect(self._show_survey)
+        self.sky.first_shown.connect(self._first_view)
+        self.sky_area = self.sky
+        self.setCentralWidget(self.sky)
 
     def _panel(self, widget: QWidget) -> QWidget:
         return _as_panel(widget)
@@ -1418,7 +1422,8 @@ class MainWindow(QMainWindow):
         self.coordinate_actions[self.preference("view/coordinates")].setChecked(True)
         self.act_fullscreen = a(self.tr("Full screen"), lambda c: self.submit("ui.set_fullscreen", {"enabled": c}),
                                 shortcut="Meta+Ctrl+F", checkable=True, name="fullscreen")
-        self.act_night = a(self.tr("Night mode"), self._night_toggled, checkable=True, name="night")
+        self.act_night = a(self.tr("Night mode"), self._night_toggled, shortcut="Meta+Ctrl+N", checkable=True,
+                           name="night")  # ⌃⌘N (D40-4)
         self.act_hips = a(self.tr("HiPS survey…"), self.hips_dialog, name="hipsSurvey")
         self.act_catalog_view = a(self.tr("Catalog in view…"), self.catalog_dialog, name="catalogInView")
         self.tool_group = QActionGroup(self)
@@ -1501,6 +1506,11 @@ class MainWindow(QMainWindow):
         self.go_to_field.goTo.connect(self.go_to)
         tb.addWidget(self.go_to_field)
         tb.addWidget(spacer())
+        self.survey_label = QLabel()
+        self.survey_label.setObjectName("surveyLabel")
+        self.survey_label.setFont(_tabular(_scaled(self.survey_label.font(), 0.92)))
+        self.survey_label.setMinimumHeight(self.survey_label.fontMetrics().height())  # barra di altezza fissa
+        tb.addWidget(self.survey_label)
         tb.addAction(self.act_night)
         tb.addAction(self.panel_actions["assistant"])
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, tb)
@@ -1567,7 +1577,7 @@ class MainWindow(QMainWindow):
 
     def _update_network(self) -> None:
         """Comandi di rete in coda o in corso; i tile HiPS in arrivo li conta il 41."""
-        self.status.show_network(sum(1 for j in self._jobs.values() if j.network), 0)
+        self.status.show_network(sum(1 for j in self._jobs.values() if j.network), self.sky._in_flight)
 
     @Slot(int, str)
     def _job_started(self, job_id: int, name: str) -> None:
@@ -1602,6 +1612,8 @@ class MainWindow(QMainWindow):
                 self.show_modal(self.tr("The file cannot be opened"), f"{result.error.code}: {result.error.text}")
         elif result.status == "ok":
             self._apply_effect(done.registered, result)
+        self.sky.command_finished(done.registered.name, result.status, result.values,
+                                  self.session.workspace.state)
 
     def _apply_effect(self, command: Command, result: CommandResult) -> None:
         """Effetto dei comandi dell'interfaccia (classe ``application``) e stato dei menu, nel thread principale."""
@@ -1638,9 +1650,27 @@ class MainWindow(QMainWindow):
 
     def view_window(self) -> dict[str, int]:
         """Dimensioni della vista in pixel fisici (pixel logici × rapporto dei pixel dello schermo)."""
-        ratio = self.sky_area.devicePixelRatioF()
-        return {"width": max(1, round(self.sky_area.width() * ratio)),
-                "height": max(1, round(self.sky_area.height() * ratio))}
+        return self.sky.window_size()
+
+    def _first_view(self) -> None:
+        """Vista iniziale (cielo intero) quando il cielo ha la sua dimensione vera, dopo il survey dell'avvio."""
+        if self._startup_view:
+            self.sky.start_view()
+
+    def _show_survey(self) -> None:
+        """Scritta del survey nella barra (40 §3.11): titolo · proiezione · campo, valori dati da 12 e 10."""
+        from astrotwo.ui.sky_viewer import format_field
+
+        sky = self.sky
+        if sky.service is None:
+            self.survey_label.setText("")
+            return
+        parts = [sky.service.title or sky.service.hips_id]
+        if sky.view is not None and sky.view.projection:
+            parts.append(sky.view.projection)
+        if sky.field is not None:
+            parts.append(self.tr("field %1").replace("%1", format_field(sky.field)))
+        self.survey_label.setText(" · ".join(parts))
 
     def go_to(self, text: str) -> int:
         return self.submit("view.go_to", {"text": text, "window": self.view_window()}, source="keyboard")
@@ -1806,6 +1836,7 @@ class MainWindow(QMainWindow):
             self.saved_count = len(self.session.history)
             self.saved_path = done.path
             self.history.set_entries(self.session.history.entries)
+            self.sky.show_state(self.session.workspace.state)
         for w in report.warnings:
             self.messages.add(None, w, error=False)
         if report.status == "stopped" and report.stop is not None:
@@ -1823,6 +1854,7 @@ class MainWindow(QMainWindow):
         _CURRENT_APPEARANCE[0] = self.appearance
         self.act_night.setChecked(self.appearance == "night")
         self._apply_theme_details(_TOKENS[self.appearance])
+        self.sky.set_night(self.appearance == "night")
 
     def _apply_theme_details(self, tokens: Mapping[str, str]) -> None:
         """Icone e stati vuoti nei colori del tema (in modalità notte solo toni di rosso, §3.11)."""
@@ -1833,7 +1865,6 @@ class MainWindow(QMainWindow):
             dock.header.set_theme(tokens)
         for empty in (*self.empty_states.values(), self.history.empty, self.messages.empty):
             empty.set_theme(tokens)
-        self.sky_empty.set_theme(tokens, on_sky=True)
 
     def _system_scheme_changed(self, scheme) -> None:
         if getattr(self, "appearance_mode", None) == "system" and not getattr(self, "_reapplying", False):
@@ -1875,6 +1906,10 @@ class MainWindow(QMainWindow):
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/state", self.saveState())
         self.settings.sync()
+        self.sky.tiles.generation += 1  # richieste di tile superate: si scartano
+        if hasattr(self.sky.renderer, "_cleanup"):
+            self.sky.renderer._cleanup()  # texture della GPU liberate con il contesto ancora attivo
+        self.sky.tiles.wait(int((NETWORK_TIMEOUTS.connect + NETWORK_TIMEOUTS.read) * 1000))
         self._thread.quit()
         # attesa del ritorno della funzione in corso entro i timeout di rete del 04 (§3.8)
         self._thread.wait(int((NETWORK_TIMEOUTS.connect + NETWORK_TIMEOUTS.read) * 1000))
@@ -1947,6 +1982,11 @@ class _DockHeader(QWidget):
 
 def main(argv: list[str] | None = None) -> int:
     """Avvio con ``uv run astrotwo``."""
+    from PySide6.QtGui import QSurfaceFormat
+
+    from astrotwo.ui.sky_renderer_gl import surface_format
+
+    QSurfaceFormat.setDefaultFormat(surface_format())  # OpenGL 4.1 core profile prima della QApplication (41)
     app = QApplication(sys.argv if argv is None else argv)
     app.setOrganizationDomain("pages.dev")  # impostazioni in dev.pages.astrotwo (01 §6)
     app.setApplicationName("astrotwo")

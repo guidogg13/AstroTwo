@@ -654,6 +654,11 @@ def test_view_projection_and_go_to(registry, fake_simbad):
     assert wide.values["projection_choice"]["threshold"] == {"value": 33.0, "unit": "deg"}
     back = run(s, "view.set_zoom", scale={"value": 0.04, "unit": "deg"}, window=WINDOW)  # campo ≈ 40°: resta AIT
     assert back.values["projection"] == "AIT" and back.values["projection_choice"]["threshold"]["value"] == 27.0
+    # campo della geometria disegnata (dal 10), anche dopo la ricreazione della base
+    whole = run(s, "view.set_zoom", scale={"value": 360.0 / WINDOW["width"], "unit": "deg"}, window=WINDOW)
+    radius = s.workspace.state.view.geometry.field_radius
+    assert whole.values["field_of_view"] == {"value": float(2 * radius.to_value(u.deg)), "unit": "deg"}
+    assert whole.values["field_of_view_method"].startswith("2 × field_radius")
     by_name = run(s, "view.go_to", text="M31", window=WINDOW)
     assert by_name.status == "ok" and by_name.values["resolved"]["main_id"] == "M  31" and fake_simbad == ["M31"]
     typed = run(s, "view.go_to", text="00:42:44.3 +41:16:09", window=WINDOW)

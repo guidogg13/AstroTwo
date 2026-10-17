@@ -579,7 +579,13 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
      soglie fisse 33° (da `TAN`) e 27° (da `AIT`) del 41 §3.3, ricreata con
      il punto di tangenza al centro quando la proiezione cambia o il punto
      esce dalla finestra. La griglia visibile si ricalcola a ogni comando di
-     vista.
+     vista. **Campo della vista nel risultato (dal 2026-10-17, decisione del
+     proprietario con lo sprint 4a del 41):** i comandi di vista
+     restituiscono anche `field_of_view` = 2 × `field_radius` della
+     `ViewGeometry` disegnata (diametro del cerchio che contiene la finestra,
+     dal 10) con `field_of_view_method`; è il campo mostrato nella barra del
+     `40`. Il `field_of_view` dentro `projection_choice` resta quello su cui
+     si è scelta la proiezione (può precedere la ricreazione della base).
   3. **"Vai a":** coppia decimale = gradi; coppia sessagesimale `h:m:s
      ±d:m:s` o `h m s ±d m s` = longitudine in ore nei frame equatoriali;
      frame delle coordinate mostrate; epoca non nota (non assunta); il
@@ -625,3 +631,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (opzione a; autorizzazione esplicita a modificare il file approvato): nuovo tipo `record` con campi tipizzati validati ed esportati nello schema; forma JSON di ogni tipo in §3.1 (tempo con scala sempre scritta, file con SHA-256 e dimensione, `null` per i facoltativi senza default); valori di pixel come `number` nell'unità dell'immagine; §3.6 con i `layer_ref` risolti dal 05 prima dell'adattatore del 18; T22. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 1 della v1** (divisione approvata dal proprietario il 2026-10-17): `src/astrotwo/core/commands.py` (39 comandi della tabella di §7, registro, spazio di lavoro immutabile, cronologia, sessione con riapertura, schema JSON) e `tests/core/test_commands.py` (T1–T22 più vista, misura, comandi collegati e costo del registro, 26 test). Tipo `time` nell'elenco chiuso (precisazione di D05-4); nuovi casi in §10 (`VIEW_UNDEFINED`, `OUT_OF_SKY`, `POSITION_COLUMNS_REQUIRED`, comandi non collegati); scelte minori della parte 1 in §13, da confermare. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17 (parte 3 della v1):** D05-2 precisata (impronta = SHA-256 del contenuto restituito dal modulo; §3.1 e §13 aggiornati); confermate le scelte minori 1 (tipo `time`), il parametro `window` della 2 e la 4; le altre restano da confermare. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Decisione del proprietario (sprint 4a del 41):** i comandi di vista restituiscono `field_of_view` della geometria disegnata (2 × `field_radius` del 10, con il metodo), perché il `field_of_view` di `projection_choice` può riferirsi alla geometria prima della ricreazione della base (§13, scelta 2); codice e test aggiornati. Stato `approvato` invariato. |
