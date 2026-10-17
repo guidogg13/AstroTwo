@@ -711,27 +711,21 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (interfaccia e IA v1, 2026-10-16):** nessuna decisione dei
-   Gruppi 1 e 2 aperta in 05, 30, 31, 32, 34, 35, 40, 41, 42, 44; il
-   proprietario conferma le scelte minori dei §13 (anche le tre di
-   `compass_and_scale_bar` e le due di `format_coordinates` nel 10), indica
-   il Mac di riferimento (§3.15 del 41) e approva i dieci file (spetta a
-   lui); poi dichiarazione "FASE: CODICE – interfaccia v1". Prima del codice
-   anche le verifiche dell'IA: licenze di `anthropic`, `openai`, `httpx`,
-   `keyring` e dipendenze; backend macOS di `keyring` nell'app del `.dmg`;
-   strumenti in streaming con Ollama e LM Studio; sottoinsieme di JSON
-   Schema accettato dai due provider; Markdown di Qt limitabile. Prima del codice: verifiche (cache da più thread,
-   OpenGL di PySide6, `reproject` per i HiPS, licenze di PySide6/Qt e
-   pytest-qt) e codice del livello 1 da allineare (`make_view_wcs`,
-   default di `choose_projection` e della corona, P6 del 12).
-   **Fase codice del livello 1:** livello 1 chiuso il 2026-10-13
-   (04, 10–19; rinviati solo H10 SkyView e PDS3, D19-8). Primo test con
-   dati veri fatto: demo delle Pleiadi in `examples/` (2026-10-13).
-   D16-8 decisa e scritta il 2026-10-14; da decidere D14-13
-   (reindirizzamento http → https dell'ESO, Gruppo 3).
-   Aperte anche: D10-9 (con il 41), D11-8 (con 20 e 41), A11 licenza (blocca
-   il 60; elenco delle licenze in `THIRD_PARTY_LICENSES`). Poi: decidere A8 e
-   chiedere la fase codice dei livelli successivi dopo le loro specifiche.
+0. **Subito (FASE: CODICE – interfaccia v1, 2026-10-16):** verifiche
+   prima del codice fatte (licenze in `THIRD_PARTY_LICENSES`, `keyring` sul
+   Portachiavi e in un'app PyInstaller, OpenGL di PySide6, Ollama; cache da
+   più thread corretta con D04); LM Studio rimandato. Livello 1 allineato:
+   10 (`make_view_wcs`, `format_coordinates`, `compass_and_scale_bar`,
+   `choose_projection` a 30°), 11 (`suggest_display_limits`, corona di
+   default), 12 (P6 `view_sampling`/`fill_view`). **Fermo:** adattatore del
+   18 sulla nuova **D05-4** (Gruppo 1, forma JSON dei valori dei parametri
+   del 05; raccomandazione: tipo `record`). **In attesa del proprietario:**
+   decisione D05-4 e ok sulla divisione del codice della v1 in parti
+   (proposta del 2026-10-16: 05 → 31/30 → 40 → 41 in due parti → 42 →
+   32/34/35 → 44). Da verificare all'inizio delle parti che li usano:
+   licenza delle icone e `QStyleHints.colorScheme`/cifre tabulari (40),
+   Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
+   con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
    dettagli integrati in `03-parita-aladin.md` (righe H20–H27 e correzioni
@@ -754,8 +748,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (14, al 2026-10-16): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   0, Gruppo 2 = 3, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (15, al 2026-10-16): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   1, Gruppo 2 = 3, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -813,3 +807,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16:** 32 scelte minori confermate (la #6 modificata: servizio del Portachiavi `dev.pages.astrotwo.ai`; identificativo del progetto e bundle identifier `dev.pages.astrotwo` in `01` §6); **approvati 05, 30, 31, 32, 34, 35, 40, 41, 42, 44** e le modifiche al 10; **dichiarata "FASE: CODICE – interfaccia v1"** (`CLAUDE.md`). §2, §4, §5 aggiornati. |
 | 2026-10-16 | Claude Code | **D04 decisa dal proprietario** (cache da più thread e processi: orfani solo oltre 10 minuti, pulizia una volta per processo); 04 modificato (resta `approvato`) con codice e test T9–T11; verifica del 05 §3.2 (T17) chiusa. |
 | 2026-10-16 | Claude Code | **Verifiche prima del codice della v1:** licenze di `anthropic` (MIT), `openai` (Apache-2.0), `httpx2` (BSD-3), `keyring` (MIT), PySide6 (`pyside6-essentials`, LGPL-3.0, testi dal sorgente ufficiale), pytest-qt (MIT) in `THIRD_PARTY_LICENSES`; `keyring` forzato sul Portachiavi di login e funzionante in un'app PyInstaller; OpenGL di PySide6 sufficiente; Ollama con chiamata di strumenti in streaming verificato; LM Studio rimandato (non installato). |
+| 2026-10-16 | Claude Code | **Allineamento del livello 1 alla v1:** codice e test di 10 (`make_view_wcs`, `format_coordinates`, `compass_and_scale_bar`, `choose_projection` con default 30°), 11 (`suggest_display_limits`, corona di default), 12 (P6, con la verifica di `reproject` e i tempi misurati); adattatore del 18 fermo sulla nuova **D05-4** (Gruppo 1). Aperte 15. §7 con la proposta di divisione del codice della v1 in attesa del proprietario. |

@@ -196,7 +196,15 @@ Gruppo 1 sono state **confermate dal proprietario il 2026-10-04** (esiti in
 decidere (regola: le decisioni aperte si decidono, non si scelgono in
 silenzio).
 
-## 3. GRUPPO 1 — bloccanti per altri moduli (0 aperte: 22 decise il 2026-10-04; AM1 per H21, D19-2 e D19-3 decise il 2026-10-08)
+## 3. GRUPPO 1 — bloccanti per altri moduli (1 aperta: D05-4, dal 2026-10-16; 22 decise il 2026-10-04; AM1 per H21, D19-2 e D19-3 decise il 2026-10-08)
+
+**Aperta:**
+
+| Etichetta | Domanda | Moduli | Raccomandazione |
+|---|---|---|---|
+| `D05-4` | Forma JSON dei valori dei parametri dei comandi del 05 e tipo per i parametri strutturati (`CoordinateTarget`, `ProperMotion`, `DisplaySettings` del 18; immagine come livello)? | `05-comandi-sessione.md` §13 (ferma l'adattatore del `18` e i comandi `calc.*`) | (a) nuovo tipo `record` e forme JSON di ogni tipo in §3.1 del 05; alternativa (b) parametri appiattiti |
+
+**Decise:**
 
 Tutte le decisioni di questo gruppo sono state **prese dal proprietario il
 2026-10-04**. Sotto l'elenco sintetico con l'esito; la formulazione completa e
@@ -347,3 +355,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA nella v1 approvata dal proprietario il 2026-10-16** (file 30, 31, 32, 34, 35, 44 in bozza; modifiche a 01, 02, 03, 05, 10, 40, 41, 42): **nessuna decisione nuova né chiusa in questo elenco** — le scelte della proposta sono decise dal proprietario e registrate nei file di origine e in `panoramica.md` §5 (A5 precisata, A7 nella v1, perimetro dell'IA con il 33 rimandato, regola dei commit con HTTP 429/502/503/504); nei §13 dei nuovi file restano solo scelte minori da confermare e verifiche prima del codice. Conteggi invariati: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |
 | 2026-10-16 | Claude Code | Scelte minori della v1 confermate, 05, 30, 31, 32, 34, 35, 40, 41, 42, 44 approvati e "FASE: CODICE – interfaccia v1" dichiarata dal proprietario il 2026-10-16: nessuna voce di questo elenco cambia. Conteggi invariati: aperte **14**. |
 | 2026-10-16 | Claude Code | **D04** (cache da più thread, aperta e decisa lo stesso giorno dal proprietario nella conversazione, opzioni a + b; registrata nel file di origine 04): non entra nei conteggi. Aperte **14**. |
+| 2026-10-16 | Claude Code | **Nuova nel Gruppo 1: `D05-4`** (prima nel file di origine 05 §13): forma JSON dei valori dei parametri e parametri strutturati, trovata allineando il 18; ferma solo l'adattatore del 18 e i comandi `calc.*`. Conteggi: aperte **15** (Gruppo 1 = 1, Gruppo 2 = 3, Gruppo 3 = 11). |

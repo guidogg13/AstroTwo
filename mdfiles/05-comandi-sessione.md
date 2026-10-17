@@ -467,6 +467,30 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   (approvato), non compresa nell'autorizzazione del 2026-10-15.
   **Raccomandazione:** stesso adattatore del 18, da autorizzare quando
   l'interfaccia userà i dati planetari (non nella prima versione). Gruppo 3.
+- **D05-4 — Forma JSON dei valori dei parametri e parametri strutturati
+  (aperta il 2026-10-16 da Claude Code durante l'allineamento del 18, Gruppo
+  1: tocca il 05 e il 18).** §3.1 elenca i tipi dei parametri ma non dice
+  **come si scrive in JSON il valore** di ciascuno (`quantity`,
+  `sky_position`, `pixel_position`, `file`, `layer_ref`, …), e l'elenco
+  chiuso **non ha un tipo per una struttura con campi**. Le calcolatrici del
+  18 hanno parametri strutturati (`CoordinateInput`, `CoordinateTarget`,
+  `ProperMotion`, `DisplaySettings`) e uno che è un livello (l'immagine di
+  `convert_pixel_value`): senza questa definizione l'adattatore
+  `run_command` del 18 dovrebbe inventare il formato del 05. **Opzioni:**
+  (a) aggiungere il tipo **`record`** (struttura con campi tipizzati
+  dichiarati nella definizione, ricorsiva sugli stessi tipi) e scrivere in
+  §3.1 la forma JSON di ogni tipo: `quantity` = `{"value": …, "unit":
+  "…"}`; `sky_position` = `{"lon": quantity, "lat": quantity, "frame":
+  "…", "equinox": …|null, "obstime": …|null, "epoch": …|null,
+  "epoch_reason": "…"}`; `pixel_position` = `{"x": …, "y": …,
+  "convention": "numpy"}`; `layer_ref` = `"L3"`; `record` = oggetto con i
+  campi; (b) **appiattire** i parametri strutturati delle calcolatrici in
+  parametri semplici (es. `position_lon`, `position_lat`,
+  `position_frame`, …), senza nuovo tipo. **Raccomandazione: (a)**, che
+  conserva la forma delle funzioni del 18 e serve anche ai comandi futuri
+  (es. regole di disegno, `catalog.set_style`); l'adattatore del 18 riceve i
+  livelli già risolti dal 05 (il 18 non conosce lo spazio di lavoro). Ferma
+  solo l'adattatore del 18 e i comandi `calc.*` del 05.
 - **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) estensione `.astrotwo.json` del
   file di sessione; (2) nomi dei comandi della tabella di §7; (3)
   identificativi dei livelli `L<n>`; (4) gesto che cambia centro e scala
@@ -496,3 +520,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): campo `requested_by` nel comando, nella cronologia e nella sessione; indicatore `confirm` con il suo elenco; nuovi comandi di sola lettura `coords.resolve_name`, `catalog.search`, `catalog.describe`, `catalog.rows` (al più 50 righe), `layer.list`; blocco facoltativo `conversations` della sessione (solo su richiesta, mai riletto per rieseguire); riesecuzione dei comandi dell'IA senza chiamare l'IA; schema con gli indicatori per il `32`; test T18–T21. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifica "cache del 04 da più thread" (§3.2, T17) chiusa: fallita alla prima prova, corretta nel 04 con D04 (decisione del proprietario del 2026-10-16); T17 nella suite come T9 del 04. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | Nuova decisione aperta **D05-4** (Gruppo 1): forma JSON dei valori dei parametri e tipo per i parametri strutturati, trovata scrivendo l'adattatore del 18; raccomandazione (a) tipo `record` e forme JSON in §3.1. Ferma solo l'adattatore del 18 e i comandi `calc.*`. Stato `approvato` invariato. |

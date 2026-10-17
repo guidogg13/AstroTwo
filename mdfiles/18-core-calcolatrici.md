@@ -145,7 +145,12 @@ stesso identificatore).
    (T18). Il `CalculatorResult` dà il comando anche nel formato del `05`.
    Il formato del `05` è un dato semplice (JSON): il 18 non importa il
    registro, quindi non c'è dipendenza circolare (il `05` chiama il 18).
-   **Codice da scrivere** dopo l'approvazione del `05`.
+   **Codice da scrivere** dopo l'approvazione del `05`. **Fermo dal
+   2026-10-16** sulla decisione aperta **D05-4** del `05` (forma JSON dei
+   valori dei parametri e parametri strutturati come `CoordinateTarget`,
+   `ProperMotion`, `DisplaySettings`): si scrive insieme al registro del
+   `05`, dopo la decisione. `CalculatorCommand` e `run_command` attuali
+   restano invariati.
 2. **Grammatica:** la stessa tabella `FUNCTIONS`/`CONSTANTS` del 13 (D13-8),
    numeri solo in notazione decimale o esponenziale (`0x10`, `1_000`, `1j`
    → `CALC_SYNTAX_ERROR`), `^` potenza (`**` rifiutato), un `=` facoltativo
@@ -581,3 +586,4 @@ elementare.
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): la lettura del valore grezzo passa all'11 (`read_raw_pixel`); il 18 la richiama; tolta l'eccezione dal §4 (§3 P4 scelte 2 e 4, §5). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1–P5 confermate; **UT1** con le tabelle IERS incluse in astropy (IERS-A, poi IERS-B), senza rete, `IERS_RANGE` fuori copertura, tabella dichiarata nel risultato, aggiornamento solo su richiesta con `update_iers_table` tramite la rete del 14 (§3 P2 scelta 5, §8, §10, T17). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): formato dei comandi = quello di `05-comandi-sessione.md` (prima "del 24"); `run_command` diventa un adattatore del formato del `05` e accetta ancora `CalculatorCommand`; nessuna dipendenza circolare (§3, §5, §7, §12 T18). Codice da scrivere dopo l'approvazione del `05`. Stato `approvato` invariato. |
+| 2026-10-16 | Claude Code | Adattatore `run_command` del formato del 05 **fermo** sulla decisione aperta D05-4 (forma JSON dei valori e parametri strutturati non definiti nel 05); nessun codice cambiato. Stato `approvato` invariato. |
