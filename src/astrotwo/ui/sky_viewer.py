@@ -11,13 +11,15 @@ cataloghi, i livelli e gli strumenti arrivano negli sprint successivi.
 
 from __future__ import annotations
 
+import os
+import sys
 import threading
 from collections.abc import Callable, Mapping
 
 import astropy.units as u
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtWidgets import QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QToolButton, QVBoxLayout, QWidget
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
@@ -41,6 +43,31 @@ MAX_WIDTH_ANGLE = 360.0 * u.deg
 START_CENTER = {"lon": {"value": 0.0, "unit": "deg"}, "lat": {"value": 0.0, "unit": "deg"}, "frame": "icrs",
                 "equinox": None, "obstime": None, "epoch": None,
                 "epoch_reason": "epoca delle posizioni non nota (non assunta)"}
+#: Variabile d'ambiente che accende il log diagnostico degli ingressi (rotella, zoom, gesto) sul terminale.
+DEBUG_INPUT_ENV = "ASTROTWO_DEBUG_INPUT"
+
+
+def debug_input_enabled() -> bool:
+    return os.environ.get(DEBUG_INPUT_ENV) == "1"
+
+
+def debug_input(text: str) -> None:
+    """Riga di diagnostica su stderr (solo con ``ASTROTWO_DEBUG_INPUT=1``): valori di Qt e stato dello zoom, mai
+    chiavi o dati personali."""
+    if debug_input_enabled():
+        print(f"[astrotwo-input] {text}", file=sys.stderr, flush=True)
+
+
+class _WheelSpy(QObject):
+    """Filtro di eventi dell'applicazione, solo per la diagnostica: dice quale widget riceve ogni rotella."""
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        if event.type() == QEvent.Type.Wheel and debug_input_enabled():
+            debug_input(f"wheel visto da {type(obj).__name__}({obj.objectName()!r}) "
+                        f"accettato_prima={event.isAccepted()}")
+        return False
+
+
 #: Thread del gruppo dei tile (41 §3.13, scelta minore 8).
 TILE_THREADS = 6
 
@@ -229,6 +256,9 @@ class SkyViewer(QWidget):
         self.idle.setSingleShot(True)
         self.idle.setInterval(GESTURE_IDLE_MS)
         self.idle.timeout.connect(self._gesture_end)
+        if debug_input_enabled():
+            self._spy = _WheelSpy(self)
+            QApplication.instance().installEventFilter(self._spy)
 
     def _zoom_button(self, name: str, direction: int) -> QToolButton:
         """Pulsante + o − in sovrimpressione (icona, nome e testo li dà la finestra principale, 40)."""
@@ -314,6 +344,8 @@ class SkyViewer(QWidget):
             # Vista cambiata da altro che dal gesto in corso (Vai a, comando dell'assistente, cronologia): lo
             # spostamento o lo zoom ancora da registrare erano relativi alla geometria vecchia e non valgono più
             # per la nuova; se restassero, a fine gesto sposterebbero il centro appena scelto.
+            debug_input(f"gesto AZZERATO da show_state (geometria cambiata da altro): k {self.k:.4f}->1 "
+                        f"zoomed={self._zoomed} moved={self._moved}")
             self.idle.stop()
             self._zoomed = self._moved = False
             self.k, self.tx, self.ty = 1.0, 0.0, 0.0
@@ -347,6 +379,7 @@ class SkyViewer(QWidget):
                 self.idle.start()
         else:  # trasformazione residua del gesto continuato dopo l'invio dei comandi (solo disegno)
             ks, txs, tys = sent
+            debug_input(f"geometria ridisegnata: gesto RIPRISTINATO come residuo, k inviato={ks:.4f} k attuale={self.k:.4f}")
             kr = self.k / ks
             self.k, self.tx, self.ty = kr, self.tx - kr * txs, self.ty - kr * tys
         self._upload()
@@ -400,7 +433,9 @@ class SkyViewer(QWidget):
     def zoom_by(self, factor: float, at: QPointF) -> None:
         """Zoom di ``factor`` (dato in ingresso dal gesto) attorno al punto ``at`` (pixel logici), entro i limiti."""
         if self.view is None or self.view.scale is None:
+            debug_input(f"zoom_by ignorato: vista non pronta (view={self.view is not None})")
             return
+        k_before, requested = self.k, factor
         scale = (self.view.scale / (self.k * factor)).to(u.deg)
         if scale < MIN_SCALE:
             factor = float((self.view.scale / MIN_SCALE).decompose()) / self.k
@@ -413,9 +448,12 @@ class SkyViewer(QWidget):
         self.ty = cy - factor * (cy - self.ty)
         self._zoomed = True
         self._gesture_step()
+        debug_input(f"zoom_by fattore_chiesto={requested:.4f} fattore_usato={factor:.4f} k {k_before:.4f}->{self.k:.4f} "
+                    f"scala_vista={self.view.scale.to_value(u.arcsec):.6g}arcsec; debounce {GESTURE_IDLE_MS} ms riavviato")
 
     def pan_by(self, dx: float, dy: float) -> None:
         """Spostamento di ``(dx, dy)`` pixel logici."""
+        debug_input(f"pan_by dx={dx} dy={dy}")
         r = self.ratio()
         self.tx += dx * r
         self.ty += dy * r
@@ -424,6 +462,9 @@ class SkyViewer(QWidget):
 
     def wheelEvent(self, event) -> None:  # noqa: N802 - nome di Qt
         pixels = event.pixelDelta()
+        debug_input(f"wheelEvent angleDelta=({event.angleDelta().x()},{event.angleDelta().y()}) "
+                    f"pixelDelta=({pixels.x()},{pixels.y()}) phase={event.phase().name} inverted={event.inverted()} "
+                    f"modifiers={event.modifiers()} source={event.source().name}")
         if not pixels.isNull():  # trackpad a due dita: spostamento (41 §3.16); lo zoom è il pizzico
             self.pan_by(pixels.x(), pixels.y())
         else:
@@ -434,7 +475,10 @@ class SkyViewer(QWidget):
                 steps = delta / 120.0
                 steps = max(1.0, abs(steps)) * (1.0 if steps > 0 else -1.0)
                 self.zoom_by(ZOOM_STEP ** steps, event.position())
+            else:
+                debug_input("wheelEvent: angleDelta.y = 0 e pixelDelta nullo, nessuna azione")
         event.accept()
+        debug_input(f"wheelEvent accettato={event.isAccepted()}")
 
     def event(self, event) -> bool:
         if event.type() == QEvent.Type.NativeGesture and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
@@ -462,8 +506,11 @@ class SkyViewer(QWidget):
     def _gesture_end(self) -> None:
         """Fine del gesto: ``view.set_zoom`` poi ``view.set_center`` con lo stato finale (05 §3.3)."""
         geometry = self.geometry
+        debug_input(f"debounce scaduto: zoomed={self._zoomed} moved={self._moved} k={self.k:.4f} "
+                    f"tx={self.tx:.1f} ty={self.ty:.1f}")
         if geometry is None or self.view is None or self.view.scale is None:
             self._zoomed = self._moved = False
+            debug_input("gesto AZZERATO: geometria o vista non pronta")
             return
         window = self.window_size()
         w, h = window["width"], window["height"]
@@ -481,6 +528,7 @@ class SkyViewer(QWidget):
             self.submit("view.set_center", {"position": sky_json(center), "window": window}, source="mouse")
             sent += 1
         self._zoomed = self._moved = False
+        debug_input(f"gesto inviato: {sent} comandi (view.set_zoom/view.set_center)")
         if sent:
             self._awaiting += sent
             self._submitted = (self.k, self.tx, self.ty)

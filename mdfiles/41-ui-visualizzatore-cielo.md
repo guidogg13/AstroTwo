@@ -139,6 +139,15 @@ vista si porta a un campo di circa 1° con un `view.set_zoom` registrato
 minore, resta com'è (il campo ottenuto è solo vicino a 1°: la proiezione può cambiare). Il `05` e il suo `view.go_to` non cambiano (il
 comando centra soltanto).
 
+**Diagnostica degli ingressi (2026-10-17, parte 4a-fix2):** con la variabile
+d'ambiente `ASTROTWO_DEBUG_INPUT=1` il visualizzatore scrive su stderr, per
+ogni rotella, `angleDelta`, `pixelDelta`, fase, `inverted`, modificatori,
+sorgente, quale widget la riceve e se è accettata; per ogni passo di zoom,
+scala prima/dopo e che cosa fa il ritardo di 300 ms (gesto azzerato o
+ripristinato). Spenta di default; nessuna chiave né dato personale nei log.
+Temporanea nell'uso, resta nel codice. La causa della rotella che non zooma
+su mouse vero è **da verificare** con i dati reali.
+
 ### 3.5 Livelli
 
 - **Tipi nella v1:** un'immagine FITS (al più una alla volta: aprirne una

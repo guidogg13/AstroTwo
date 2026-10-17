@@ -365,3 +365,18 @@ def test_go_to_zooms_to_about_one_degree(qtbot, viewer_window, fake_simbad):  # 
     wait_idle(qtbot, win)
     qtbot.wait(300)
     assert names(win)[before:] == ["view.go_to"], names(win)
+
+
+def test_debug_input_log_off_by_default(qtbot, viewer_window, capfd, monkeypatch):
+    """Il log diagnostico degli ingressi (ASTROTWO_DEBUG_INPUT) è spento di default e acceso con "1"."""
+    win = viewer_window
+    start(qtbot, win)
+    sky = win.sky
+    center = QPoint(sky.width() // 2, sky.height() // 2)
+    monkeypatch.delenv("ASTROTWO_DEBUG_INPUT", raising=False)
+    wheel(sky, 1, center)
+    assert "astrotwo-input" not in capfd.readouterr().err
+    monkeypatch.setenv("ASTROTWO_DEBUG_INPUT", "1")
+    wheel(sky, 1, center)
+    err = capfd.readouterr().err
+    assert "wheelEvent angleDelta=(0,120)" in err and "zoom_by" in err and "accettato=True" in err
