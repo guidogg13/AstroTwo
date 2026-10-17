@@ -145,12 +145,56 @@ stesso identificatore).
    (T18). Il `CalculatorResult` dà il comando anche nel formato del `05`.
    Il formato del `05` è un dato semplice (JSON): il 18 non importa il
    registro, quindi non c'è dipendenza circolare (il `05` chiama il 18).
-   **Codice da scrivere** dopo l'approvazione del `05`. **Fermo dal
-   2026-10-16** sulla decisione aperta **D05-4** del `05` (forma JSON dei
-   valori dei parametri e parametri strutturati come `CoordinateTarget`,
-   `ProperMotion`, `DisplaySettings`): si scrive insieme al registro del
-   `05`, dopo la decisione. `CalculatorCommand` e `run_command` attuali
-   restano invariati.
+   **D05-4 decisa dal proprietario il 2026-10-17** (tipo `record` e forme
+   JSON del `05` §3.1): l'adattatore si scrive con il registro del `05`.
+   **Parametri dei cinque comandi nel formato del `05`** (tutti versione 1;
+   i facoltativi senza default valgono `null`; i parametri "uno solo tra"
+   sono controllati dal 18 con gli stessi errori di oggi):
+   - `calc.evaluate_expression`: `expression` (`string`), `max_length`
+     (`integer`, 1000), `max_depth` (`integer`, 50), `colon_units` (`enum`
+     `hours`/`degrees`, facoltativo: la stessa unità per tutti i valori con
+     i due punti) **oppure** `colon_units_each` (`list` di `enum`, una voce
+     per valore nell'ordine del testo).
+   - `calc.convert_units`: `value` (`number`) **oppure** `value_text`
+     (`string`: espressione, angolo sessagesimale o data ISO 8601);
+     `from_unit`, `to_unit` (`string`, unità FITS/VOUnit o rappresentazione
+     del tempo); `equivalency` (`enum` di D18-3, facoltativo); `reference`
+     (`quantity` lunghezza d'onda o frequenza, facoltativo); `sexagesimal`
+     (`enum` `degrees`/`hours`, facoltativo); `scale`, `target_scale`
+     (`enum` delle scale, facoltativi).
+   - `calc.convert_pixel_value`: a mano `raw` **oppure** `physical`,
+     `bzero`, `bscale` (`number`, nell'unità dell'immagine dove pertinente,
+     `05` §3.1), `blank` (`integer`), `bunit` (`string`); con un clic `image`
+     (`layer_ref`, immagine risolta dal `05`) e `position` (`pixel_position`)
+     **oppure** `position_sky` (`sky_position`); `display` (`record`
+     `DisplaySettings`: `vmin`, `vmax` `number` nell'unità dell'immagine,
+     `gamma` `number` 1.0, `stretch` `enum` dell'11, `palette` `string`
+     della palette, default `gray`), facoltativo.
+   - `calc.calculate_coordinates`: `position` (`record` `CoordinateInput`:
+     `lon`, `lat` `quantity` angolari **oppure** `lon_text`, `lat_text`
+     `string` sessagesimali, `lon_sexagesimal` `enum`, `frame` `string`,
+     `equinox`, `obstime`, `epoch` tempo del `05` §3.1) **oppure**
+     `catalog_row` (`record`: `layer` `layer_ref` risolto dal `05`, `row`
+     `integer`, colonne `pm_ra`, `pm_dec`, `parallax`, `radial_velocity`
+     `string`, `pm_ra_includes_cosdec` `boolean`, `source_epoch` tempo; i
+     campi di `CatalogSource` del 17); `targets` (`list` di `record`
+     `CoordinateTarget`: `frame`, `equinox`, `obstime`); `epoch` (tempo,
+     facoltativo); `motion` (`record` `ProperMotion`: `pm_ra_cosdec`,
+     `pm_dec` `quantity` velocità angolari, `parallax` `quantity` angolo,
+     `radial_velocity` `quantity` velocità, `proper_motion_only`
+     `boolean`); `offsets` (`record`: `d_lon`, `d_lat` `quantity` angoli);
+     `direction` (`record`: `distance`, `position_angle` `quantity` angoli);
+     `to_point` (`sky_position`).
+   - `calc.convert_time`: `time_value` (`number`, per `jd`, `mjd`, `jyear`,
+     `byear`) **oppure** `time_text` (`string`, per `iso`); `time_format`
+     (`enum`), `scale` (`enum`, obbligatoria), `target_scale` (`enum`,
+     facoltativo), `iers_table` (`enum` `bundled`/`updated`, `bundled`).
+   `CalculatorResult.command_05` dà il comando nel formato del `05`;
+   `run_command(command, layers=None)` accetta un `CalculatorCommand` o un
+   comando del `05` (oggetto JSON con `name`, `version`, `parameters`) e,
+   per i `layer_ref`, gli oggetti già risolti in `layers`. Errori di forma
+   del comando del `05` (nome, versione, parametro sconosciuto o di forma
+   sbagliata) → `CALC_COMMAND_INVALID`.
 2. **Grammatica:** la stessa tabella `FUNCTIONS`/`CONSTANTS` del 13 (D13-8),
    numeri solo in notazione decimale o esponenziale (`0x10`, `1_000`, `1j`
    → `CALC_SYNTAX_ERROR`), `^` potenza (`**` rifiutato), un `=` facoltativo
@@ -465,6 +509,7 @@ VOUnit per le stringhe di unità (D18-2).
 | Unità non convertibili tra loro senza equivalenza | rifiuto con le due dimensioni fisiche | `UNIT_INCOMPATIBLE` |
 | Magnitudine verso flusso senza punto zero | rifiuto | `UNIT_ZERO_POINT_REQUIRED` |
 | Data non valida | rifiuto con il formato atteso | `TIME_INVALID` |
+| Comando nel formato del `05` con nome, versione o parametri non validi (adattatore) | nessun calcolo | `CALC_COMMAND_INVALID` |
 | UT1 per una data fuori dalla copertura delle tabelle IERS | rifiuto con l'intervallo coperto, nessuna estrapolazione | `IERS_RANGE` |
 | `iers_table="updated"` senza un aggiornamento nella cache | rifiuto con l'indicazione di `update_iers_table` | `IERS_TABLE_MISSING` |
 | Tabella IERS scaricata non leggibile | nessun aggiornamento | `IERS_TABLE_INVALID` |
@@ -587,3 +632,4 @@ elementare.
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori di P1–P5 confermate; **UT1** con le tabelle IERS incluse in astropy (IERS-A, poi IERS-B), senza rete, `IERS_RANGE` fuori copertura, tabella dichiarata nel risultato, aggiornamento solo su richiesta con `update_iers_table` tramite la rete del 14 (§3 P2 scelta 5, §8, §10, T17). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): formato dei comandi = quello di `05-comandi-sessione.md` (prima "del 24"); `run_command` diventa un adattatore del formato del `05` e accetta ancora `CalculatorCommand`; nessuna dipendenza circolare (§3, §5, §7, §12 T18). Codice da scrivere dopo l'approvazione del `05`. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | Adattatore `run_command` del formato del 05 **fermo** sulla decisione aperta D05-4 (forma JSON dei valori e parametri strutturati non definiti nel 05); nessun codice cambiato. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (autorizzazione esplicita a modificare il file approvato): §3 P1 scelta 1 con l'elenco dei parametri dei cinque `calc.*` nel formato del `05` (tipo `record` per `DisplaySettings`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, offset, direzione, riga di catalogo; `layer_ref` risolti dal `05`), `command_05` e `run_command(command, layers)`; nuovo `CALC_COMMAND_INVALID` (§10). Stato `approvato` invariato. |

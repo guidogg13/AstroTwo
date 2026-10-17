@@ -48,6 +48,38 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   | `number` | numero puro `float64` | solo per grandezze adimensionali dichiarate (es. opacità in [0, 1], gamma) |
   | `integer`, `boolean`, `string` | valori semplici | `string` solo per testi (nomi di oggetti, identificativi, espressioni), mai per numeri |
   | `list` | lista di uno dei tipi sopra | |
+  | `record` | struttura con **campi tipizzati** dichiarati nella definizione (D05-4, decisa il 2026-10-17) | ogni campo è un parametro con nome, tipo (uno qualsiasi di questa tabella, anche `record` o `list`), unità e grandezza fisica dove servono, intervallo, default e descrizioni EN/IT; validato come gli altri parametri; un campo non dichiarato è un errore |
+
+- **Forma JSON dei valori** (D05-4, decisa dal proprietario il
+  2026-10-17, opzione a): ogni valore di un comando registrato, nella
+  cronologia e nella sessione, si scrive così:
+
+  | Tipo | Forma JSON | Esempio |
+  |---|---|---|
+  | `quantity` | `{"value": numero, "unit": "testo"}`; unità nel formato FITS o, se non valida lì, VOUnit (D18-2) | `{"value": 5.0, "unit": "arcmin"}` |
+  | `sky_position` | `{"lon": quantity, "lat": quantity, "frame": "nome", "equinox": tempo o null, "obstime": tempo o null, "epoch": tempo o null, "epoch_reason": "testo" o null}`; `epoch_reason` obbligatorio quando `epoch` è `null`; `equinox`/`obstime` obbligatori quando il frame li prevede (regole del 10) | `{"lon": {"value": 56.75, "unit": "deg"}, "lat": {"value": 24.1167, "unit": "deg"}, "frame": "icrs", "equinox": null, "obstime": null, "epoch": null, "epoch_reason": "posizione scritta dall'utente senza epoca"}` |
+  | tempo (dentro `sky_position` e nei campi di epoca) | epoca giuliana o besseliana come testo (`"J2000.0"`, `"B1950.0"`, scala TT per definizione) oppure `{"value": numero o testo, "format": "isot", "jd", "mjd", "jyear" o "byear", "scale": "utc", "tai", "tt", "tdb", "tcb", "tcg" o "ut1"}` (scala sempre scritta, DC1); con `"format": "jd"` il valore può essere la coppia `[jd1, jd2]` di `astropy.time`, per la precisione piena | `"J2016.0"` |
+  | `pixel_position` | `{"x": numero, "y": numero, "convention": "numpy"}` (nel comando registrato sempre `numpy`, DC7) | `{"x": 10.0, "y": 20.5, "convention": "numpy"}` |
+  | `file` | in ingresso `{"path": "assoluto"}`; registrato `{"path": …, "sha256": "…", "size": intero}` (calcolati alla registrazione, §3.4) | |
+  | `url` | testo | `"https://…"` |
+  | `layer_ref` | testo `L<n>` | `"L3"` |
+  | `enum`, `string` | testo | |
+  | `number` | numero JSON (§3.4: rappresentazione più breve che si rilegge identica) | |
+  | `integer`, `boolean` | numero intero, `true`/`false` | |
+  | `list` | array JSON di valori del tipo dichiarato | |
+  | `record` | oggetto JSON con i campi dichiarati, ciascuno nella sua forma | `{"vmin": 0.0, "vmax": 100.0, "gamma": 1.0, "stretch": "linear", "palette": "gray"}` |
+
+  Un parametro o un campo **facoltativo senza default** vale `null` quando
+  manca (scritto esplicitamente nel comando registrato). Lo schema per il
+  `32` (§3.5) esporta un `record` come `object` con `properties`,
+  `required` e `additionalProperties: false`, e ogni campo con le stesse
+  annotazioni dei parametri (unità, grandezza fisica, intervallo, elenco
+  chiuso, default).
+- **Valori di pixel nell'unità dell'immagine** (D05-4): i valori grezzi e
+  fisici di un pixel, `BZERO` e i limiti di visualizzazione `vmin`/`vmax`
+  sono `number` nella definizione con la nota "nell'unità dell'immagine
+  (`BUNIT`)": l'unità non è fissa ma dell'immagine, e il risultato la
+  dichiara (o dichiara "non dichiarata", regola del 17).
 
 - **Default:** dichiarati nella definizione e **risolti al momento della
   registrazione**: il comando registrato contiene sempre tutti i valori
@@ -224,7 +256,11 @@ Il disegno durante il gesto è del `41`.
   chiama la funzione della calcolatrice (dettagli nel 18 §3).
   **Nessuna dipendenza circolare nel codice:** il formato del 05 è un dato
   semplice (nome, versione, parametri in JSON); il 18 lo legge senza
-  importare il registro.
+  importare il registro. I parametri strutturati delle calcolatrici sono
+  `record` (D05-4) e l'elenco dei parametri di ogni `calc.*` è nel 18 §3
+  (P1, scelta 1); i parametri `layer_ref` (immagine o catalogo) il 05 li
+  **risolve prima** e passa all'adattatore gli oggetti dello spazio di
+  lavoro (il 18 non conosce lo spazio di lavoro).
 - **19:** `PlanetaryCommand`/`run_command` del 19 ha lo stesso schema; il
   suo adattamento al formato del 05 richiede una modifica del 19
   (approvato) non ancora autorizzata (D05-3). Nella prima versione
@@ -431,6 +467,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T18 | `requested_by` | comandi da menu, mouse, Riesegui e IA (conversazione, turno, chiamata, profilo, modello); salvare e riaprire | `requested_by` in cronologia e nella sessione; stessi risultati qualunque sia l'origine | test di unità |
 | T19 | Comandi di sola lettura | `coords.resolve_name` (SIMBAD simulato), `catalog.search` con espressione valida e non valida, `catalog.describe`, `catalog.rows` con 60 righe chieste, `layer.list` | risultati uguali alle funzioni del 10 e del 13 chiamate nel test; `EXPRESSION_INVALID` del 13; `catalog.rows` oltre 50 → `COMMAND_PARAMETER_INVALID`; selezione e spazio di lavoro invariati | confronto diretto |
 | T20 | Indicatore `confirm` nello schema | `export_schema()` | `confirm` come nell'elenco di §7; `read_only` per i comandi nuovi | test di unità |
+| T22 | Tipo `record` e forme JSON (D05-4) | comando con un `record` valido, con un campo in più, con un campo mancante senza default, con un campo `quantity` in unità non convertibile; forma JSON di ogni tipo scritta e riletta; `export_schema()` | il primo valido (default dei campi risolti); gli altri `COMMAND_PARAMETER_INVALID` con il nome del campo (`parametro.campo`); forme di §3.1 identiche dopo la rilettura; nello schema `object` con `properties`, `required`, `additionalProperties: false` | test di unità |
 | T21 | Conversazioni nella sessione | sessione con e senza il blocco `conversations`; riapertura con un provider simulato che fallisce se chiamato | blocco presente solo se chiesto, senza cartelle nei nomi dei file; riesecuzione identica nei due casi, nessuna chiamata al provider | test di unità |
 
 ## 13. Decisioni aperte
@@ -467,9 +504,14 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   (approvato), non compresa nell'autorizzazione del 2026-10-15.
   **Raccomandazione:** stesso adattatore del 18, da autorizzare quando
   l'interfaccia userà i dati planetari (non nella prima versione). Gruppo 3.
-- **D05-4 — Forma JSON dei valori dei parametri e parametri strutturati
-  (aperta il 2026-10-16 da Claude Code durante l'allineamento del 18, Gruppo
-  1: tocca il 05 e il 18).** §3.1 elenca i tipi dei parametri ma non dice
+- **D05-4 — Forma JSON dei valori dei parametri e parametri strutturati:
+  DECISA il 2026-10-17 (decisione del proprietario, opzione a).** Nuovo tipo
+  `record` (campi tipizzati, con unità dove serve, validati dal 05 come gli
+  altri parametri ed esportati nello schema JSON per il 32) e forma JSON di
+  ogni tipo in §3.1; elenco dei parametri dei `calc.*` nel 18. Applicata in
+  §3.1, §3.6, §12 (T22). Testo della domanda com'era (aperta il 2026-10-16
+  da Claude Code durante l'allineamento del 18, Gruppo 1: tocca il 05 e il
+  18): §3.1 elenca i tipi dei parametri ma non dice
   **come si scrive in JSON il valore** di ciascuno (`quantity`,
   `sky_position`, `pixel_position`, `file`, `layer_ref`, …), e l'elenco
   chiuso **non ha un tipo per una struttura con campi**. Le calcolatrici del
@@ -521,3 +563,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifica "cache del 04 da più thread" (§3.2, T17) chiusa: fallita alla prima prova, corretta nel 04 con D04 (decisione del proprietario del 2026-10-16); T17 nella suite come T9 del 04. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | Nuova decisione aperta **D05-4** (Gruppo 1): forma JSON dei valori dei parametri e tipo per i parametri strutturati, trovata scrivendo l'adattatore del 18; raccomandazione (a) tipo `record` e forme JSON in §3.1. Ferma solo l'adattatore del 18 e i comandi `calc.*`. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (opzione a; autorizzazione esplicita a modificare il file approvato): nuovo tipo `record` con campi tipizzati validati ed esportati nello schema; forma JSON di ogni tipo in §3.1 (tempo con scala sempre scritta, file con SHA-256 e dimensione, `null` per i facoltativi senza default); valori di pixel come `number` nell'unità dell'immagine; §3.6 con i `layer_ref` risolti dal 05 prima dell'adattatore del 18; T22. Stato `approvato` invariato. |

@@ -33,12 +33,59 @@ chiave** (che sta nel Portachiavi, `31`) e mai nella sessione.
 | `max_output_tokens` | intero > 0 | default 4096 (scelta minore 1), modificabile |
 | `local` | sì/no | **ricavato**, non scritto dall'utente: sì solo se l'host di `base_url` è `localhost`, `127.0.0.1` o `::1` |
 
+| `preset` | identificativo del profilo predefinito (§3.1.1) oppure `custom` | solo descrittivo: dice da quale profilo predefinito viene l'indirizzo e quale stato della chiamata di strumenti mostrare; non cambia l'`id` |
+
 - **Chiave:** obbligatoria per i profili remoti; facoltativa per quelli
   locali (molti server locali non la chiedono). Senza chiave un profilo
   remoto non è utilizzabile (`KEY_NOT_FOUND` del `31`, mostrato dal `44`).
 - **Sicurezza del trasporto:** un endpoint remoto deve essere `https`;
   `http` è ammesso solo per gli host locali. Altrimenti
   `AI_INSECURE_ENDPOINT`, nessuna richiesta.
+
+### 3.1.1 Profili predefiniti (decisione del proprietario del 2026-10-17)
+
+Oltre all'adattatore Anthropic e all'endpoint compatibile OpenAI con
+indirizzo libero (`preset = custom`), il `44` offre un **elenco chiuso di
+profili predefiniti** per i provider più usati che hanno un endpoint
+compatibile OpenAI (Chat Completions). Un profilo predefinito riempie solo
+`kind` e `base_url`; il resto è come per gli altri profili.
+
+Regole:
+
+- **Indirizzi e note solo dalla documentazione ufficiale** del provider,
+  con la fonte citata qui sotto (consultata il 2026-10-17); nessun indirizzo
+  scritto a memoria. Un indirizzo che cambia si aggiorna qui, con la nuova
+  fonte e la data, prima del codice.
+- **Stato della chiamata di strumenti** per ogni provider: `verified`
+  (provata da noi con AstroTwo, data e modello nel §13), `documented`
+  (dichiarata dalla documentazione ufficiale, non provata da noi) oppure
+  `unverified` (la documentazione consultata non la dichiara per Chat
+  Completions). Nel `44` **ogni profilo che non è `verified` è marcato**
+  con il suo stato. Lo stato non cambia il comportamento: un modello che non
+  chiama strumenti dà comunque `AI_NO_TOOLS` (§3.3).
+- **Nessun identificativo di modello fisso:** il modello si sceglie
+  dall'elenco del provider (`list_models`, §3.4) quando è disponibile,
+  altrimenti si scrive a mano (`AI_MODELS_UNAVAILABLE`).
+- **Una chiave per profilo nel Portachiavi** (`31`), con l'identificativo
+  già deciso (`openai-compatible:<host>[:<porta>]`, ricavato da `base_url`;
+  scelta minore 4 del §13): due profili predefiniti diversi hanno host
+  diversi, quindi chiavi diverse.
+- **Nessuna intestazione facoltativa** propria di un provider (es. quelle di
+  OpenRouter per le classifiche dei siti): si manda solo ciò che serve alla
+  richiesta (privacy, `35` §3.8).
+
+| `preset` | Provider | `base_url` (dalla fonte) | Chiamata di strumenti | Fonte ufficiale e note |
+|---|---|---|---|---|
+| `anthropic` | Anthropic (`kind = anthropic`) | quello predefinito dell'SDK `anthropic` | `documented` | API Messages con `tool_use` (§3.2); prova con le chiavi dell'utente nella lista di controllo manuale di §12 |
+| `openai` | OpenAI | `https://api.openai.com/v1` | `documented` | developers.openai.com/api/reference/overview (indirizzo negli esempi `https://api.openai.com/v1/chat/completions`); developers.openai.com/api/docs/guides/function-calling: integrazione con Chat Completions dichiarata, ma **alcuni modelli richiedono la Responses API per la chiamata di strumenti** (con quei modelli: `AI_NO_TOOLS`); lo streaming delle chiamate è descritto solo per la Responses API |
+| `gemini` | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `documented` | ai.google.dev/gemini-api/docs/openai: chiamata di funzioni, streaming e `models.list` dichiarati; compatibilità con le librerie OpenAI dichiarata **in beta** |
+| `mistral` | Mistral AI | `https://api.mistral.ai/v1` | `documented` | docs.mistral.ai/api (`POST /v1/chat/completions` con `tools`, `stream`), docs.mistral.ai/api/endpoint/models (`GET /v1/models`); docs.mistral.ai/capabilities/function_calling: solo alcuni modelli (elenco non esaustivo) |
+| `deepseek` | DeepSeek | `https://api.deepseek.com` (senza `/v1`, come nella fonte) | `documented` | api-docs.deepseek.com e api-docs.deepseek.com/guides/tool_calls; limite dichiarato: Chat Completions non accetta chiamate di strumenti inserite a metà conversazione |
+| `xai` | xAI | `https://api.x.ai/v1` | `unverified` | docs.x.ai/docs/api-reference (indirizzo); docs.x.ai/developers/model-capabilities/legacy/chat-completions: Chat Completions è un **endpoint "legacy"** (le novità vanno alla Responses API); la pagina non dichiara la chiamata di strumenti su questo endpoint |
+| `groq` | Groq | `https://api.groq.com/openai/v1` | `documented` | console.groq.com/docs/openai (indirizzo, campi non supportati: `logprobs`, `logit_bias`, `top_logprobs`, `messages[].name`, che AstroTwo non manda); console.groq.com/docs/tool-use: "All models hosted on Groq support tool use" |
+| `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `documented` | openrouter.ai/docs/quickstart (indirizzo); openrouter.ai/docs/guides/features/tool-calling: solo i modelli con il parametro `tools` (filtro dell'elenco dei modelli), streaming con `delta.tool_calls` documentato |
+| `ollama` | Ollama (locale) | `http://localhost:11434/v1` | `verified` | docs.ollama.com/api/openai-compatibility ("Streaming" e "Tools" supportati; la chiave è richiesta dal client ma ignorata); verificato il 2026-10-16 con `llama3.2:1b` (§13) |
+| `lmstudio` | LM Studio (locale) | `http://localhost:1234/v1` | `documented` | lmstudio.ai/docs/app/api/endpoints/openai (porta 1234, `/v1/models`, `/v1/chat/completions`); lmstudio.ai/docs/developer/openai-compat/tools (`tools` su `/v1/chat/completions`, chiamate in frammenti nello streaming); **prova nostra rimandata** (LM Studio non installato, §13) |
 
 ### 3.2 Le due implementazioni
 
@@ -204,6 +251,10 @@ Nomi proposti, descrizione in parole. File Python
   implementazioni.
 - **`make_adapter(profile, keychain)`** — crea l'adattatore del profilo;
   controlla `https` (§3.1).
+- **`PROVIDER_PRESETS`** — l'elenco chiuso dei profili predefiniti di
+  §3.1.1 (`preset`, nome del provider, `kind`, `base_url`, stato della
+  chiamata di strumenti, fonte, note); **`profile_from_preset(preset,
+  model, ...)`** crea il `ProviderProfile` (modello scelto dall'utente).
 - **Eventi:** `TextDelta`, `ToolCallRequest`, `Usage`, `ProviderNotice`,
   `TurnEnd`, `ProviderError`.
 - **`ProviderErrorCode`** — i codici di §10.
@@ -214,7 +265,7 @@ Nomi proposti, descrizione in parole. File Python
 |---|---|---|
 | **`anthropic`** (SDK ufficiale) | API Messages, streaming, chiamata di strumenti, elenco dei modelli | decisione del proprietario del 2026-10-16; **licenza MIT da verificare** e da aggiungere a `THIRD_PARTY_LICENSES` con le dipendenze |
 | **`openai`** (SDK ufficiale) | API Chat Completions su endpoint configurabile, streaming, chiamata di strumenti, elenco dei modelli | decisione del proprietario del 2026-10-16; copre OpenAI in cloud e i server locali compatibili; **licenza Apache-2.0 da verificare** e da aggiungere a `THIRD_PARTY_LICENSES` con le dipendenze |
-| `httpx2` (dipendenza dei due SDK, successore di `httpx`) | trasporto HTTP, tempi massimi | licenza BSD-3 verificata il 2026-10-16; nessun uso diretto oltre a tempi massimi e log |
+| `httpx2` (dipendenza dei due SDK, prosecuzione di `httpx` mantenuta da Pydantic) | trasporto HTTP, tempi massimi | licenza BSD-3 verificata il 2026-10-16; origine verificata il 2026-10-17 e accettata dal proprietario (§13); nessun uso diretto oltre a tempi massimi e log |
 | JSON Schema | descrizione degli strumenti verso i provider | formato accettato da entrambe le API (sottoinsieme preparato dal `32`) |
 
 **Dipendenze dei due SDK** (da verificare con le licenze, es. `pydantic`,
@@ -286,6 +337,7 @@ Ogni test vale per **entrambi** gli adattatori, salvo dove indicato.
 | T12 | Elenco dei modelli | servizio con e senza endpoint dei modelli | elenco del servizio; `AI_MODELS_UNAVAILABLE` | servizio simulato |
 | T13 | Modello senza strumenti (`openai_compatible`) | il servizio rifiuta `tools` come fanno i server senza chiamata di strumenti (risposta registrata nel test) | `AI_NO_TOOLS` | servizio simulato |
 | T14 | Contratto uguale | stessa conversazione normalizzata sui due servizi simulati con risposte equivalenti | stessa sequenza di eventi normalizzati | confronto diretto |
+| T15 | Profili predefiniti (§3.1.1) | `PROVIDER_PRESETS`; `profile_from_preset` per ciascuno; un turno con il servizio simulato al posto dell'indirizzo di ogni profilo | ogni profilo ha `base_url`, fonte e uno dei tre stati; `https` per i remoti, `local` = sì solo per Ollama e LM Studio; `id` = `openai-compatible:<host>[:<porta>]` (diverso per ogni profilo); nessun identificativo di modello nell'elenco; nessuna intestazione facoltativa inviata | test di unità e servizio simulato |
 
 **Lista di controllo manuale** (prima di approvare il codice, con le
 chiavi dell'utente e a sue spese): un turno con strumenti con un modello
@@ -321,6 +373,15 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
     (nessun modello di quel tipo installato);
   - **LM Studio: rimandato** (non installato sul Mac di sviluppo); prova
     da fare prima di dichiarare compatibile LM Studio;
+  - **`httpx2`: origine verificata il 2026-10-17 e accettata dal
+    proprietario** (decisione del 2026-10-17, strada 1): dipendenza ufficiale
+    di `anthropic` 1.15.0 e `openai` 3.31.0 (metadati installati e PyPI);
+    impronte SHA-256 di `httpx2` 2.13.1 nel `uv.lock` uguali a PyPI; autore
+    Tom Christie, manutentore Pydantic Services Inc.; repository
+    `github.com/pydantic/httpx2`; **prosecuzione dichiarata da Pydantic, non
+    dal progetto `encode/httpx`**; nessuna attestazione di pubblicazione su
+    PyPI. Regola: versioni bloccate nel `uv.lock`, aggiornamento solo
+    esplicito e con nuovo controllo delle impronte (`01` §6);
   - **da fare con le chiavi dell'utente** (lista di controllo manuale di
     §12): chiamata di strumenti con i modelli elencati dall'API di
     Anthropic e sottoinsieme di JSON Schema accettato (`32` §3.4).
@@ -332,3 +393,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: profili senza chiave, due implementazioni (SDK `anthropic`, SDK `openai` con endpoint configurabile e Chat Completions), capacità dichiarate, `list_models`, `stream_turn` con eventi normalizzati, `AI_NO_TOOLS`, tempi massimi 10/60/30 s, ripetizioni solo prima del primo evento, `RequestRecord` per "Cosa è stato inviato", `https` per gli endpoint remoti, nessun modello nel codice. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifiche prima del codice (§13): licenze verificate e in `THIRD_PARTY_LICENSES` (trasporto `httpx2`, successore di `httpx`); Ollama verificato (chiamata di strumenti in streaming con `llama3.2:1b`; capacità dichiarate in `/api/tags`); LM Studio rimandato (non installato). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17** (autorizzazione esplicita a modificare il file approvato): (A) verifica dell'origine di `httpx2` registrata e accettata (§8, §13; regola delle versioni bloccate nel `uv.lock`); (B) **profili predefiniti** (§3.1.1, campo `preset` in §3.1, `PROVIDER_PRESETS` e `profile_from_preset` in §7, T15): OpenAI, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, Ollama e LM Studio in locale, più Anthropic; indirizzi e note dalla documentazione ufficiale con la fonte (consultata il 2026-10-17); stato della chiamata di strumenti `verified`/`documented`/`unverified`, marcato nel `44` se non `verified`; nessun modello fisso; una chiave per profilo con l'identificativo già deciso. Stato `approvato` invariato. |

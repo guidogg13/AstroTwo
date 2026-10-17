@@ -196,13 +196,12 @@ Gruppo 1 sono state **confermate dal proprietario il 2026-10-04** (esiti in
 decidere (regola: le decisioni aperte si decidono, non si scelgono in
 silenzio).
 
-## 3. GRUPPO 1 — bloccanti per altri moduli (1 aperta: D05-4, dal 2026-10-16; 22 decise il 2026-10-04; AM1 per H21, D19-2 e D19-3 decise il 2026-10-08)
+## 3. GRUPPO 1 — bloccanti per altri moduli (0 aperte: 22 decise il 2026-10-04; AM1 per H21, D19-2 e D19-3 decise il 2026-10-08; D05-4 aperta il 2026-10-16 e decisa il 2026-10-17)
 
-**Aperta:**
-
-| Etichetta | Domanda | Moduli | Raccomandazione |
-|---|---|---|---|
-| `D05-4` | Forma JSON dei valori dei parametri dei comandi del 05 e tipo per i parametri strutturati (`CoordinateTarget`, `ProperMotion`, `DisplaySettings` del 18; immagine come livello)? | `05-comandi-sessione.md` §13 (ferma l'adattatore del `18` e i comandi `calc.*`) | (a) nuovo tipo `record` e forme JSON di ogni tipo in §3.1 del 05; alternativa (b) parametri appiattiti |
+**Decise di recente:** `D05-4` (forma JSON dei valori dei parametri del 05 e
+parametri strutturati) — **decisa dal proprietario il 2026-10-17, opzione
+(a)**: nuovo tipo `record` con campi tipizzati e forme JSON di ogni tipo in
+`05-comandi-sessione.md` §3.1; parametri dei `calc.*` nel 18 §3.
 
 **Decise:**
 
@@ -356,3 +355,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-16 | Claude Code | Scelte minori della v1 confermate, 05, 30, 31, 32, 34, 35, 40, 41, 42, 44 approvati e "FASE: CODICE – interfaccia v1" dichiarata dal proprietario il 2026-10-16: nessuna voce di questo elenco cambia. Conteggi invariati: aperte **14**. |
 | 2026-10-16 | Claude Code | **D04** (cache da più thread, aperta e decisa lo stesso giorno dal proprietario nella conversazione, opzioni a + b; registrata nel file di origine 04): non entra nei conteggi. Aperte **14**. |
 | 2026-10-16 | Claude Code | **Nuova nel Gruppo 1: `D05-4`** (prima nel file di origine 05 §13): forma JSON dei valori dei parametri e parametri strutturati, trovata allineando il 18; ferma solo l'adattatore del 18 e i comandi `calc.*`. Conteggi: aperte **15** (Gruppo 1 = 1, Gruppo 2 = 3, Gruppo 3 = 11). |
+| 2026-10-17 | Claude Code | **`D05-4` decisa dal proprietario il 2026-10-17** (opzione a, prima nel file di origine 05 §13 e nel 18): tolta dalle aperte del Gruppo 1. Decisioni del 2026-10-17 su `httpx2` (01, 30) e sui profili predefiniti dei provider (30, 31, 44): decise e registrate nei file di origine, non entrano in questo elenco. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |

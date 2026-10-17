@@ -14,6 +14,7 @@ from astropy.time import Time
 
 from astrotwo.core.calculators import (
     CalculatorError,
+    CoordinatesOutput,
     CalculatorResult,
     CoordinateInput,
     CoordinateTarget,
@@ -607,3 +608,98 @@ def test_t18_rerun_registered_commands(tmp_path):
         assert (again.input, again.unit, again.scale, again.calculator) == \
             (result.input, result.unit, result.scale, result.calculator), result.command.text
         assert again.value == result.value or np.array_equal(again.value, result.value), result.command.text
+
+
+# =============================================================================
+# Adattatore del formato del 05 (D05-4, decisa il 2026-10-17; T18 nel formato del 05, T9 del 05)
+
+import json  # noqa: E402
+
+
+def through_05(result: CalculatorResult, layers=None) -> CalculatorResult:
+    """Comando del risultato nel formato del 05, passato per il testo JSON e rieseguito con l'adattatore."""
+    command = json.loads(json.dumps(result.command_05(layers)))
+    assert command["name"].startswith("calc.") and command["version"] == 1
+    return run_command(command, layers)
+
+
+def assert_same(again: CalculatorResult, result: CalculatorResult) -> None:
+    assert (again.input, again.unit, again.scale, again.calculator) == \
+        (result.input, result.unit, result.scale, result.calculator), result.command.text
+    if isinstance(result.value, CoordinatesOutput):  # i rapporti del 17 hanno l'istante della misura
+        a, b = again.value, result.value
+        assert a.base == b.base and a.representations == b.representations, result.command.text
+        assert (a.offsets_to is None) == (b.offsets_to is None)
+        if a.offsets_to is not None:
+            assert (a.offsets_to.d_lon, a.offsets_to.d_lat) == (b.offsets_to.d_lon, b.offsets_to.d_lat)
+        return
+    assert again.value == result.value or np.array_equal(again.value, result.value), result.command.text
+
+
+def test_t18_rerun_in_05_format(tmp_path):
+    raw = np.array([[-32768, 0, 7], [100, -5, 3]], dtype=np.int16)
+    image = load_image(str(scaled_fits(tmp_path, raw, BZERO=10.0, BSCALE=0.5, BLANK=-5)))
+    start = SkyFrame.from_lonlat(83.6331 * u.deg, 22.0145 * u.deg, "icrs")
+    dated = SkyFrame.from_lonlat(150.0 * u.deg, 2.0 * u.deg, "icrs", epoch=Time(2000.0, format="jyear", scale="tt"))
+    motion = ProperMotion(pm_ra_cosdec=500 * u.mas / u.yr, pm_dec=-300 * u.mas / u.yr, parallax=20 * u.mas)
+    table = catalog_row(tmp_path)
+    layers = {"L1": image, "L2": table}
+    results = [
+        evaluate_expression("3*8"), evaluate_expression("sind(30)"), evaluate_expression("skydist(10, 20, 10.5, 20.5)"),
+        evaluate_expression("skydist(10:00:00, 20, 10:30:00, 20.5)", colon_units=["hours", "hours"]),
+        convert_units(0.1, "m", "nm"), convert_units(2, "a", "d"),
+        convert_units("10:10:08", None, "deg", sexagesimal="degrees"),
+        convert_units(500, "nm", "Hz", "spectral"),
+        convert_units(1.0, "km/s", "MHz", "doppler_radio", reference=1420.405751768 * u.MHz),
+        convert_units("2024-02-29T18:00:00", None, "mjd", scale="utc"),
+        convert_pixel_value(raw=-32768, bzero=32768, bscale=1),
+        convert_pixel_value(physical=12.5, bzero=10.0, bscale=0.5, blank=-5, bunit="adu"),
+        convert_pixel_value(image=image, position=PixelPosition(x=np.float64(1), y=np.float64(1), convention="fits"),
+                            display=DisplaySettings(0.0, 100.0)),
+        calculate_coordinates(start, [CoordinateTarget("galactic")]),
+        calculate_coordinates(start, [CoordinateTarget("fk5", equinox="J2000"),
+                                      CoordinateTarget("fk4", equinox="B1875", obstime="B1875")]),
+        calculate_coordinates(CoordinateInput("05:34:31.94", "+22:00:52.2", "icrs", lon_sexagesimal="hours"),
+                              [CoordinateTarget("icrs")]),
+        calculate_coordinates(dated, [CoordinateTarget("icrs")], epoch=2016.0, motion=motion),
+        calculate_coordinates(start, [CoordinateTarget("icrs")], direction=(30 * u.arcmin, 135 * u.deg)),
+        calculate_coordinates(start, [CoordinateTarget("icrs")], offsets=(1 * u.arcmin, -2 * u.arcmin), to_point=start),
+        calculate_coordinates(CatalogSource(table, 0, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True,
+                                            parallax="plx"), [CoordinateTarget("icrs")], epoch=2016.0),
+        convert_time("2000-01-01T12:00:00", "iso", "TT"), convert_time("2024-02-29T18:00:00", "iso", "utc"),
+        convert_time(2451545.0, "jd", "tt", "tdb"),
+    ]
+    for result in results:
+        assert_same(through_05(result, layers), result)
+    # Il formato del 05 della posizione in pixel è sempre numpy (DC7).
+    click = results[12].command_05(layers)["parameters"]
+    assert click["position"] == {"x": 0.0, "y": 0.0, "convention": "numpy"} and click["image"] == "L1"
+    assert results[0].command_05()["parameters"] == {"expression": "3*8", "max_length": 1000, "max_depth": 50,
+                                                     "colon_units": None, "colon_units_each": None}
+
+
+def test_adapter_rejects_malformed_05_commands():
+    good = evaluate_expression("1+1").command_05()
+    for broken in (
+        {**good, "name": "calc.unknown"},
+        {**good, "version": 2},
+        {**good, "parameters": {**good["parameters"], "extra": 1}},
+        {**good, "parameters": {**good["parameters"], "max_length": "1000"}},
+        {"name": "calc.convert_units", "version": 1, "parameters": {"value": 1.0, "value_text": "2", "from_unit": "m",
+                                                                     "to_unit": "km"}},
+        {"name": "calc.convert_units", "version": 1, "parameters": {"value": 1.0, "from_unit": "m", "to_unit": "nm",
+                                                                     "reference": {"value": 1.0}}},
+        {"name": "calc.convert_pixel_value", "version": 1, "parameters": {"image": "L9", "position": {
+            "x": 0.0, "y": 0.0, "convention": "numpy"}}},
+        {"name": "calc.calculate_coordinates", "version": 1, "parameters": {
+            "position": {"lon": {"value": 1.0, "unit": "deg"}, "lat": {"value": 1.0, "unit": "deg"}, "frame": "icrs"},
+            "targets": "icrs"}},
+    ):
+        with pytest.raises(CalculatorError) as exc:
+            run_command(broken, {})
+        assert exc.value.code == "CALC_COMMAND_INVALID", broken
+    # Gli errori delle calcolatrici passano invariati anche dall'adattatore.
+    with pytest.raises(CalculatorError) as exc:
+        run_command({"name": "calc.convert_units", "version": 1,
+                     "parameters": {"value": 1.0, "from_unit": "m", "to_unit": "s"}})
+    assert exc.value.code == "UNIT_INCOMPATIBLE"

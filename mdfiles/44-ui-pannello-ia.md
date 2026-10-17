@@ -95,8 +95,8 @@ preferenze del `40`); ogni modifica è un comando `prefs.set` di classe
 | Voce | Valori | Note |
 |---|---|---|
 | Profili | elenco; aggiungi, modifica, rimuovi | campi del `30` §3.1 |
-| Tipo | Anthropic, compatibile OpenAI | |
-| Indirizzo dell'endpoint | URL | obbligatorio per "compatibile OpenAI"; `https` per gli endpoint remoti |
+| Provider | menu a comparsa: i profili predefiniti del `30` §3.1.1 (Anthropic, OpenAI, Google Gemini, Mistral AI, DeepSeek, xAI, Groq, OpenRouter, Ollama, LM Studio) e, in fondo, "Altro endpoint compatibile OpenAI…" | dal 2026-10-17 (decisione del proprietario); accanto a ogni provider che non è `verified` un **contrassegno** con il suo stato ("chiamata di strumenti dichiarata dal provider, non provata da AstroTwo" per `documented`; "chiamata di strumenti non dichiarata: potrebbe non funzionare" per `unverified`) e la fonte del `30` nel suggerimento |
+| Indirizzo dell'endpoint | URL | riempito dal profilo predefinito e modificabile; obbligatorio per "Altro endpoint compatibile OpenAI"; `https` per gli endpoint remoti |
 | Modello | elenco da `list_models` (pulsante Aggiorna) o testo | nessun modello predefinito |
 | Chiave API | campo **mascherato**; Salva, Cancella | tramite il `31`; il testo non si copia e si svuota dopo il salvataggio; nessun comando registrato |
 | Prova il modello | pulsante | `probe_tools` del `30`; mostra esito e token |
@@ -233,6 +233,7 @@ Portachiavi simulato del `31`, in `tests/ui/`.
 | T12 | Collegamenti e HTML | risposta con un link e un tag HTML | link non aperto da solo; HTML mostrato come testo | ispezione |
 | T13 | Modalità notte | modalità notte rossa | colori del pannello senza componente verde o blu sopra la soglia di T13 del `40` | lettura della tavolozza |
 | T14 | Reattività | risposta lenta e comando lungo | sonda del thread principale < 100 ms | sonda di latenza |
+| T15 | Scelta del provider (2026-10-17) | aprire il menu Provider; scegliere ogni voce | voci nell'ordine di §3.6 più "Altro endpoint…"; indirizzo riempito come nel `30` §3.1.1; contrassegno su ogni provider non `verified` con il suo stato; nessun modello preselezionato; il lucchetto segue la chiave del profilo scelto | ispezione dei widget |
 
 ## 13. Decisioni aperte
 
@@ -254,3 +255,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: pannello a destra di 380–420 pt con intestazione (profilo, modello, lucchetto, "locale"), riga sulla privacy, messaggi, schede dei comandi e di conferma (senza "per questa conversazione" dopo un testo esterno), evidenziazione dei numeri del `34`, token e costo facoltativo, "Cosa è stato inviato", impostazioni con la chiave tramite il `31`, consenso al primo uso, stato "non disponibile" con il resto dell'app invariato, modalità notte rossa. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (profili predefiniti del `30` §3.1.1; aggiornamento del 44 chiesto dal proprietario): §3.6 voce "Tipo" sostituita da "Provider" (menu con i profili predefiniti e "Altro endpoint compatibile OpenAI…", contrassegno per i provider non `verified`, indirizzo riempito e modificabile); T15. Stato `approvato` invariato. |

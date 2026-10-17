@@ -633,6 +633,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Scelte minori della v1 (32) | Confermate come raccomandate, tranne la #6: servizio del Portachiavi `dev.pages.astrotwo.ai` | 2026-10-16 | decisione del proprietario, §13 di 05, 10, 30, 31, 32, 34, 35, 41, 44 | |
 | Identificativo del progetto | `dev.pages.astrotwo` (sito `astrotwo.pages.dev`), bundle identifier dell'app (60) | 2026-10-16 | decisione del proprietario, `01` §6 | |
 | Approvazione e fase codice della v1 | 05, 30, 31, 32, 34, 35, 40, 41, 42, 44 `approvato`; "FASE: CODICE – interfaccia v1" dichiarata | 2026-10-16 | decisione del proprietario, `CLAUDE.md` | |
+| D05-4 | Forma JSON dei valori dei parametri del 05: nuovo tipo `record` (campi tipizzati con unità, validati e nello schema per il 32), forme JSON di ogni tipo; parametri dei `calc.*` nel 18 | 2026-10-17 | decisione del proprietario (opzione a), `05` §3.1, `18` §3 | |
+| `httpx2` | Accettato come trasporto degli SDK `anthropic` e `openai` dopo la verifica dell'origine (Pydantic, non `encode/httpx`); versioni bloccate nel `uv.lock`, aggiornamento solo esplicito con nuovo controllo delle impronte | 2026-10-17 | decisione del proprietario, `01` §6, `30` §13 | |
+| Profili predefiniti dei provider IA | Anthropic, OpenAI, Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, Ollama, LM Studio; indirizzi dalla documentazione ufficiale con la fonte; stato della chiamata di strumenti `verified`/`documented`/`unverified`, marcato nel 44; nessun modello fisso; una chiave per profilo | 2026-10-17 | decisione del proprietario, `30` §3.1.1, `31` §3.1, `44` §3.6 | |
 | D04 | Cache da più thread e processi: orfani eliminati solo se più vecchi di 10 minuti (configurabile, nel log), pulizia una volta per processo alla prima apertura | 2026-10-16 | decisione del proprietario, `04` §3 | dalla verifica fallita del 05 §3.2 |
 
 ## 6. Decisioni aperte
@@ -681,7 +684,8 @@ Il 2026-10-15, con le specifiche della prima versione dell'interfaccia,
 decise A9, D10-9 e D11-8 e aperte D05-1, D05-2, D05-3, D40-1, D40-2,
 D41-1…D41-4: 20 aperte. Lo stesso giorno decise D05-1, D05-2, D40-1,
 D41-1…D41-4, rimandate D05-3 e D40-2, aperta D40-3: **14 aperte** (Gruppo
-1 = 0, Gruppo 2 = 3, Gruppo 3 = 11).
+1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). Il 2026-10-16 aperta D05-4 (15 aperte),
+decisa il 2026-10-17: **14 aperte** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -711,18 +715,14 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-0. **Subito (FASE: CODICE – interfaccia v1, 2026-10-16):** verifiche
-   prima del codice fatte (licenze in `THIRD_PARTY_LICENSES`, `keyring` sul
-   Portachiavi e in un'app PyInstaller, OpenGL di PySide6, Ollama; cache da
-   più thread corretta con D04); LM Studio rimandato. Livello 1 allineato:
-   10 (`make_view_wcs`, `format_coordinates`, `compass_and_scale_bar`,
-   `choose_projection` a 30°), 11 (`suggest_display_limits`, corona di
-   default), 12 (P6 `view_sampling`/`fill_view`). **Fermo:** adattatore del
-   18 sulla nuova **D05-4** (Gruppo 1, forma JSON dei valori dei parametri
-   del 05; raccomandazione: tipo `record`). **In attesa del proprietario:**
-   decisione D05-4 e ok sulla divisione del codice della v1 in parti
-   (proposta del 2026-10-16: 05 → 31/30 → 40 → 41 in due parti → 42 →
-   32/34/35 → 44). Da verificare all'inizio delle parti che li usano:
+0. **Subito (FASE: CODICE – interfaccia v1, 2026-10-17):** verifiche
+   prima del codice fatte (licenze, `keyring`, OpenGL, Ollama, cache con
+   D04; origine di `httpx2` verificata e accettata il 2026-10-17); livello 1
+   allineato (10, 11, 12; adattatore del 18 con D05-4 decisa il
+   2026-10-17). **Divisione del codice della v1 approvata dal proprietario
+   il 2026-10-17:** 05 registro e sessione → 31/30 chiavi e provider (con i
+   profili predefiniti) → finestra 40 → visualizzatore 41 → 42 → 32/34/35
+   → pannello 44. Da verificare all'inizio delle parti che li usano:
    licenza delle icone e `QStyleHints.colorScheme`/cifre tabulari (40),
    Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -748,8 +748,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    di Aladin).
 7. Alla fine del progetto: validazione della parità con Aladin (AP1),
    confrontando i risultati sugli stessi dati.
-8. Decisioni ancora aperte (15, al 2026-10-16): elenco in `decisioni-aperte.md` (Gruppo 1 =
-   1, Gruppo 2 = 3, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
+8. Decisioni ancora aperte (14, al 2026-10-17): elenco in `decisioni-aperte.md` (Gruppo 1 =
+   0, Gruppo 2 = 3, Gruppo 3 = 11); vanno chiuse prima dell'approvazione del modulo
    interessato o, per il Gruppo 3, al momento del codice.
 
 ## 8. Registro modifiche
@@ -808,3 +808,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-16 | Claude Code | **D04 decisa dal proprietario** (cache da più thread e processi: orfani solo oltre 10 minuti, pulizia una volta per processo); 04 modificato (resta `approvato`) con codice e test T9–T11; verifica del 05 §3.2 (T17) chiusa. |
 | 2026-10-16 | Claude Code | **Verifiche prima del codice della v1:** licenze di `anthropic` (MIT), `openai` (Apache-2.0), `httpx2` (BSD-3), `keyring` (MIT), PySide6 (`pyside6-essentials`, LGPL-3.0, testi dal sorgente ufficiale), pytest-qt (MIT) in `THIRD_PARTY_LICENSES`; `keyring` forzato sul Portachiavi di login e funzionante in un'app PyInstaller; OpenGL di PySide6 sufficiente; Ollama con chiamata di strumenti in streaming verificato; LM Studio rimandato (non installato). |
 | 2026-10-16 | Claude Code | **Allineamento del livello 1 alla v1:** codice e test di 10 (`make_view_wcs`, `format_coordinates`, `compass_and_scale_bar`, `choose_projection` con default 30°), 11 (`suggest_display_limits`, corona di default), 12 (P6, con la verifica di `reproject` e i tempi misurati); adattatore del 18 fermo sulla nuova **D05-4** (Gruppo 1). Aperte 15. §7 con la proposta di divisione del codice della v1 in attesa del proprietario. |
+| 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17:** (A) `httpx2` accettato dopo la verifica dell'origine (01, 30); (B) profili predefiniti dei provider IA (30 §3.1.1, 31, 44 §3.6) con indirizzi dalla documentazione ufficiale; **D05-4 decisa** (tipo `record`, forme JSON nel 05 §3.1, parametri dei `calc.*` nel 18); adattatore `run_command` del 18 scritto e testato (T18 nel formato del 05); note superate "codice da scrivere" tolte da 10, 11, 12. Aperte **14**. §5, §6, §7 aggiornati. |

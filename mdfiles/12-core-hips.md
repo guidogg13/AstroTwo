@@ -428,7 +428,7 @@ riquadro mostrato.
   `read_service`, `fetch_tile`, `pixel_values` (T14).
 
 **P6 — riproiezione dei tile sulla vista (specifica del 2026-10-15, codice
-da scrivere).** Decisione del proprietario del 2026-10-15: il visualizzatore
+scritto il 2026-10-16, commit `c8cf5ec`).** Decisione del proprietario del 2026-10-15: il visualizzatore
 (`41`) non riproietta da sé; i tile si portano sulla finestra della vista
 qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
 
@@ -651,7 +651,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 
 - **P6 — Riproiezione dei tile sulla vista (decisione del proprietario
   del 2026-10-15):** aggiunta al 12 per il `41`; metodo e verifica in §3
-  (P6). Codice da scrivere quando il proprietario lo chiede.
+  (P6). **Codice scritto il 2026-10-16** (commit `c8cf5ec`).
 - **D12-1 — Generazione HiPS (H9): DECISA il 2026-10-09, CORRETTA il
   2026-10-10 (decisione del proprietario, regola d'oro n. 8).** La generazione
   segue lo **standard pubblico IVOA HiPS 1.0**, con **`reproject`** dove
@@ -725,3 +725,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-13 | Claude Code | **D12-6 applicata** (decisione del proprietario del 2026-10-13, autorizzazione esplicita a modificare il file approvato): `hips_body` normalizzato con la tabella dei nomi del 19 (`BODY_NORMALIZED`; fuori tabella `body = None` con `BODY_UNSUPPORTED`) (§3); test aggiornati. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova parte **P6, riproiezione dei tile sulla vista del `41`** — `view_sampling` e `fill_view` con campionamento al più vicino sulla griglia HEALPix (disposizione dei pixel verificata, nessuna fascia tra tile), geometria da `make_view_wcs` del 10; verifica delle funzioni HiPS pubbliche di `reproject` prima del codice (§3, §7, §12 T17–T18, §13). Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **P6 scritta** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `view_sampling` (campionamento al più vicino sulla griglia HEALPix, stessa regola di `pixel_values`, ordine di default da `order_for_resolution`, copertura facoltativa) e `fill_view` (valori nel tipo nativo o colori a 8 bit, riquadro e maschera, provenienza); verifica di `reproject` (scarica da sé: non usabile con la rete del 14 e la cache del 04) e tempi misurati in §3; test T17 (`TAN` e `AIT`, confini tra tile, bordo dell'`AIT`) e T18 (ordine di arrivo, colori PNG) in `tests/core/test_hips.py`. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |

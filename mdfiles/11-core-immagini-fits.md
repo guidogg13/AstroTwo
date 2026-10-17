@@ -671,16 +671,16 @@ funzioni di §7.
   finestra (≈ 0,71 × `box_size`), quindi la luce della stella cercata nella
   finestra non entra nella corona; la corona ha un'area di circa 3,9 volte
   la finestra, abbastanza pixel per la mediana con sigma clipping.
-  Applicata in §3, §7, §12 (T37). **Codice da aggiornare** (oggi i raggi
-  sono obbligatori in `star_centroid`) quando il proprietario lo chiede.
+  Applicata in §3, §7, §12 (T37). **Codice aggiornato il 2026-10-16**
+  (raggi facoltativi con il default, commit `f4c42b2`).
 - **D41-3 — Limiti iniziali di visualizzazione: DECISA il 2026-10-15
   (decisione del proprietario, dal `41`).** Nuova funzione
   `suggest_display_limits` con `ZScaleInterval` di astropy; limiti scelti
   dichiarati nel risultato. Applicata in §3, §6, §7, §8, §10, §12
   (T38–T40). **Motivazione:** intervallo consolidato della comunità per
   mostrare il fondo cielo e le sorgenti deboli senza saturare; calcolo di
-  libreria, nessun valore inventato. Codice da scrivere quando il
-  proprietario lo chiede.
+  libreria, nessun valore inventato. **Codice scritto il 2026-10-16**
+  (commit `f4c42b2`).
 - **D11-9 — Decisioni del 2026-10-10 sulla divisione in parti (proprietario):**
   funzioni di trasferimento di `astropy.visualization`; contorni con
   `contourpy`; elenco chiuso delle operazioni H5 con specchiature che
@@ -739,3 +739,4 @@ funzioni di §7.
 | 2026-10-15 | Claude Code | **D11-8 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): raggi della corona del centroide facoltativi con default 1 × e 1,5 × `box_size`, sempre dichiarati; `box_size` iniziale dello strumento del `41` 15 pixel (§3, §7, §13); test T37 (§12). Codice di `star_centroid` da aggiornare. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **D41-3 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`suggest_display_limits`** con `ZScaleInterval` di astropy, limiti e parametri dichiarati nel risultato, pixel finiti in `float64`, intervallo comune per i colori, anteprima per le immagini a due livelli (§3, §6, §7, §8); errori `DISPLAY_LIMITS_UNDEFINED`, `DISPLAY_METHOD_UNKNOWN` (§10); test T38–T40 (§12); §13. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `suggest_display_limits` con `ZScaleInterval` (parametri di default dichiarati, pixel finiti in `float64`, intervallo comune per i colori, anteprima per i due livelli) e raggi della corona di default 1 × / 1,5 × `box_size` in `star_centroid` (D11-8); test T37–T40 in `tests/core/test_images_fits.py` (118 superati). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |

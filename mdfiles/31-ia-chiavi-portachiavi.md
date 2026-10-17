@@ -28,6 +28,10 @@ disponibile, errore esplicito).
   **Nome dell'account:**
   l'identificativo del profilo del `30` (es. `anthropic`,
   `openai-compatible:api.openai.com`). Nessun altro dato nell'elemento.
+  Dal 2026-10-17 vale anche per i **profili predefiniti** del `30` §3.1.1
+  (es. `openai-compatible:generativelanguage.googleapis.com` per Gemini,
+  `openai-compatible:localhost:11434` per Ollama): ogni profilo ha la sua
+  chiave, nessuna regola nuova.
 - L'elemento sta nel **Portachiavi di login** dell'utente, quello che
   `keyring` usa su macOS; **non è sincronizzato con iCloud** (la
   sincronizzazione è fuori dalla v1). **Da verificare prima del codice:**
@@ -234,3 +238,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: `keyring` con il solo backend macOS forzato, nessun ripiego (`KEYCHAIN_UNAVAILABLE`), una chiave per profilo del `30`, lettura al momento della chiamata con `SecretKey` mascherato, nessuna traccia in log, cronologia o sessione. |
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16:** scelta minore 1 modificata (servizio del Portachiavi `dev.pages.astrotwo.ai`, identificativo inverso del progetto con suffisso `.ai`; account = profilo del `30`), 2 e 3 confermate. **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-16 | Claude Code | Verifiche prima del codice (§13) superate: licenze, Portachiavi di login non sincronizzabile, forzatura necessaria (variabile d'ambiente), backend funzionante in un'app PyInstaller. Resta per il 60 il permesso con l'app firmata. Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | §3.1: i profili predefiniti del `30` §3.1.1 (decisione del proprietario del 2026-10-17) usano lo stesso identificativo e quindi una chiave ciascuno; nessuna regola nuova. Stato `approvato` invariato. |

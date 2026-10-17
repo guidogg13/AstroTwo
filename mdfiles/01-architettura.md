@@ -161,7 +161,21 @@ astrotwo/
   LGPL-3.0 e GPL-3.0 dal sorgente ufficiale di PySide6) e, a parte, gli
   strumenti di sviluppo non distribuiti (pytest, pytest-qt).
   **Da ora ogni nuova dipendenza va aggiunta a quel file** (rigenerandolo)
-  nello stesso commit che la introduce. Serve ad A11 (licenza di AstroTwo,
+  nello stesso commit che la introduce.
+  **Verifica di `httpx2` (2026-10-17, decisione del proprietario del
+  2026-10-17: accettato come trasporto degli SDK):** è la dipendenza
+  dichiarata sia da `anthropic` 1.15.0 (`httpx2>=2.0.0,<3`) sia da `openai`
+  3.31.0 (`httpx2>=2.12.0,<3`), nei metadati installati e su PyPI; le
+  impronte SHA-256 di `httpx2` 2.13.1 nel `uv.lock` coincidono con quelle
+  pubblicate su PyPI; autore Tom Christie (autore di `httpx`), manutentore
+  Pydantic Services Inc., licenza BSD-3-Clause, repository
+  `github.com/pydantic/httpx2`. È una **prosecuzione dichiarata da
+  Pydantic**, non dal progetto `encode/httpx` (che resta attivo e non rimanda
+  a `httpx2`); PyPI non mostra **nessuna attestazione di pubblicazione** per
+  la 2.13.1. **Regola:** versioni di tutte le dipendenze bloccate nel
+  `uv.lock`; un aggiornamento si fa solo su richiesta esplicita e con un
+  nuovo controllo delle impronte rispetto a PyPI.
+  Serve ad A11 (licenza di AstroTwo,
   compatibilità con le licenze elencate) e al `60` (avvisi da includere nel
   `.dmg`).
 
@@ -292,3 +306,4 @@ astrotwo/
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): A5 precisata (SDK `anthropic` e `openai` con endpoint configurabile, nessun modello nel codice, `AI_NO_TOOLS`); §7 — registro degli strumenti del 32 come elenco esplicito di comandi del `05`, verifica del 34 sui numeri della risposta, livello 3 costruito ora sopra il livello 1 (33 rimandato). Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (autorizzazione esplicita a modificare il file approvato): §6 — identificativo del progetto `dev.pages.astrotwo` (sito `astrotwo.pages.dev`), bundle identifier dell'app per il 60, servizio del Portachiavi `dev.pages.astrotwo.ai` per il 31. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | §6: `THIRD_PARTY_LICENSES` con le dipendenze della v1 dell'interfaccia e dell'IA e la sezione degli strumenti di sviluppo (verifiche del 2026-10-16, nell'ambito di "FASE: CODICE – interfaccia v1"). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (autorizzazione esplicita a modificare il file approvato): §6 — verifica di `httpx2` registrata (dipendenza ufficiale di `anthropic` e `openai`, impronte del `uv.lock` uguali a PyPI, autore Tom Christie, manutentore Pydantic Services Inc., repository `github.com/pydantic/httpx2`, prosecuzione dichiarata da Pydantic e non da `encode/httpx`, nessuna attestazione di pubblicazione su PyPI) e accettata; regola: versioni bloccate nel `uv.lock`, aggiornamento solo esplicito e con nuovo controllo delle impronte. Stato `approvato` invariato. |

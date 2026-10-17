@@ -27,6 +27,7 @@ import math
 import re
 import tempfile
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +36,7 @@ import astropy
 import astropy.units as u
 import matplotlib
 import numpy as np
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from astropy.utils import iers
 
@@ -43,7 +45,9 @@ from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts, SharedCache
 from astrotwo.core.catalogs import CONSTANTS, FUNCTIONS
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
+    PixelPosition,
     SkyFrame,
+    convert_pixel_convention,
     _to_epoch,
     convert_coordinates,
     parse_sexagesimal,
@@ -68,6 +72,7 @@ __all__ = [
     "CalculatorError",
     "CalculatorCommand",
     "CalculatorResult",
+    "COMMAND_NAMES_05",
     "run_command",
     "evaluate_expression",
     "TIME_FORMATS",
@@ -129,6 +134,11 @@ class CalculatorCommand:
     def text(self) -> str:
         return f"{self.function}({', '.join(f'{name}={value!r}' for name, value in self.arguments)})"
 
+    def to_05(self, layers: Mapping[str, object] | None = None) -> dict:
+        """Lo stesso comando nel formato del 05 (JSON, D05-4); ``layers``: identificativo → oggetto, per le
+        immagini e le tabelle passate come oggetti (il 18 non conosce lo spazio di lavoro)."""
+        return _to_05(self, layers or {})
+
 
 @dataclass(frozen=True, eq=False)
 class CalculatorResult:
@@ -149,12 +159,23 @@ class CalculatorResult:
         if self.unit is None and self.scale is None:
             raise TypeError("CalculatorResult senza unità né scala: errore di programmazione (§9)")
 
+    def command_05(self, layers: Mapping[str, object] | None = None) -> dict:
+        """Il comando registrato nel formato del 05 (§3, P1 scelta 1)."""
+        return self.command.to_05(layers)
+
 
 _COMMANDS: dict[str, object] = {}
 
 
-def run_command(command: CalculatorCommand) -> CalculatorResult:
-    """Riesegue un comando registrato (T18): solo le funzioni delle calcolatrici, nessun altro codice."""
+def run_command(command, layers: Mapping[str, object] | None = None) -> CalculatorResult:
+    """Riesegue un comando: ``CalculatorCommand`` oppure comando nel formato del 05 (adattatore, D05-4).
+
+    Per il formato del 05, ``layers`` dà gli oggetti già risolti dal 05 per i parametri ``layer_ref``.
+    Solo le funzioni delle calcolatrici, nessun altro codice.
+    """
+    if isinstance(command, Mapping):
+        function, arguments = _from_05(command, layers or {})
+        return _COMMANDS[function](**arguments)
     if not isinstance(command, CalculatorCommand) or command.function not in _COMMANDS:
         raise ValueError(f"comando non riconosciuto: {command!r}")
     return _COMMANDS[command.function](**dict(command.arguments))
@@ -1205,3 +1226,384 @@ def calculate_coordinates(position, targets, *, epoch=None, motion=None, offsets
         command=CalculatorCommand("calculate_coordinates", (
             ("position", position), ("targets", targets), ("epoch", epoch), ("motion", motion),
             ("offsets", offsets), ("direction", direction), ("to_point", to_point))))
+
+
+# --------------------------------------------------------------------------
+# Adattatore del formato del 05 (D05-4, decisa il 2026-10-17): forme JSON del 05 §3.1
+# --------------------------------------------------------------------------
+
+#: Nome del comando del 05 per ogni calcolatrice (tutti versione 1).
+COMMAND_NAMES_05 = {
+    "evaluate_expression": "calc.evaluate_expression",
+    "convert_units": "calc.convert_units",
+    "convert_pixel_value": "calc.convert_pixel_value",
+    "calculate_coordinates": "calc.calculate_coordinates",
+    "convert_time": "calc.convert_time",
+}
+_FUNCTIONS_05 = {name: function for function, name in COMMAND_NAMES_05.items()}
+_TIME_JSON_FORMATS = ("isot", "jd", "mjd", "jyear", "byear")
+
+
+def _invalid(message: str) -> CalculatorError:
+    return CalculatorError("CALC_COMMAND_INVALID", message)
+
+
+def _number_json(value: object) -> float | None:
+    return None if value is None else float(value)
+
+
+def _unit_json(unit: u.UnitBase) -> str:
+    for fmt in ("fits", "vounit"):
+        try:
+            return unit.to_string(fmt)
+        except (ValueError, u.UnitsError):
+            continue
+    raise ValueError(f"unità {unit} non scrivibile in FITS né in VOUnit (D18-2)")
+
+
+def _quantity_json(q: u.Quantity | None) -> dict | None:
+    if q is None:
+        return None
+    if not isinstance(q, u.Quantity) or not q.isscalar:
+        raise TypeError(f"serve una Quantity scalare, non {q!r}")
+    return {"value": float(q.value), "unit": _unit_json(q.unit)}
+
+
+def _time_json(value: object) -> object:
+    """Tempo del 05 §3.1: epoca ``J…``/``B…`` come testo, altrimenti JD in due parti con la scala."""
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, Time):
+        if value.format in ("jyear_str", "byear_str"):
+            return str(value.value)
+        return {"value": [float(value.jd1), float(value.jd2)], "format": "jd", "scale": value.scale}
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(value, bool):
+        return {"value": float(value), "format": "jyear", "scale": "tt"}  # regola del 10: anno giuliano in TT
+    raise TypeError(f"tempo {value!r}: Time, anno giuliano o epoca 'J…'/'B…'")
+
+
+def _layer_json(obj: object, layers: Mapping[str, object]) -> str:
+    for ref, candidate in layers.items():
+        if candidate is obj:
+            return ref
+    raise ValueError("oggetto senza identificativo di livello: passarlo in layers (il 18 non conosce lo spazio di "
+                     "lavoro)")
+
+
+def _sky_json(point) -> dict | None:
+    if point is None:
+        return None
+    if isinstance(point, SkyCoord):
+        point = SkyFrame(coord=point)
+    frame = point.coord.frame
+    sph = point.coord.spherical
+    return {"lon": _quantity_json(u.Quantity(sph.lon)), "lat": _quantity_json(u.Quantity(sph.lat)),
+            "frame": frame.name,
+            "equinox": _time_json(getattr(frame, "equinox", None) if "equinox" in frame.frame_attributes else None),
+            "obstime": _time_json(getattr(frame, "obstime", None) if "obstime" in frame.frame_attributes else None),
+            "epoch": _time_json(point.epoch),
+            "epoch_reason": None if point.epoch is not None else "epoca delle posizioni non nota (non assunta)"}
+
+
+def _angle_or_text(value: object) -> tuple[dict | None, str | None]:
+    if isinstance(value, str):
+        return None, value
+    if isinstance(value, u.Quantity):
+        return _quantity_json(value), None
+    return _quantity_json(np.float64(value) * u.deg), None
+
+
+def _to_05(command: CalculatorCommand, layers: Mapping[str, object]) -> dict:
+    a = dict(command.arguments)
+    f = command.function
+    if f == "evaluate_expression":
+        colon = a.get("colon_units")
+        p = {"expression": a["expression"], "max_length": a["max_length"], "max_depth": a["max_depth"],
+             "colon_units": colon if isinstance(colon, str) else None,
+             "colon_units_each": list(colon) if isinstance(colon, (tuple, list)) else None}
+    elif f == "convert_units":
+        value = a["value"]
+        p = {"value": None if isinstance(value, str) else _number_json(value),
+             "value_text": value if isinstance(value, str) else None,
+             "from_unit": a["from_unit"], "to_unit": a["to_unit"], "equivalency": a["equivalency"],
+             "reference": _quantity_json(a["reference"]), "sexagesimal": a["sexagesimal"], "scale": a["scale"],
+             "target_scale": a["target_scale"]}
+    elif f == "convert_pixel_value":
+        display = a.get("display")
+        p = dict.fromkeys(("raw", "physical", "bzero", "bscale", "blank", "bunit", "image", "position",
+                           "position_sky"))
+        if "image" in a:
+            p["image"] = _layer_json(a["image"], layers)
+            position = a["position"]
+            if isinstance(position, PixelPosition):
+                numpy_pos = convert_pixel_convention(position.x, position.y, position.convention, "numpy")
+                p["position"] = {"x": float(np.ravel(numpy_pos.x)[0]), "y": float(np.ravel(numpy_pos.y)[0]),
+                                 "convention": "numpy"}
+            else:
+                p["position_sky"] = _sky_json(position)
+        else:
+            p.update(raw=_number_json(a["raw"]), physical=_number_json(a["physical"]), bzero=_number_json(a["bzero"]),
+                     bscale=_number_json(a["bscale"]), blank=None if a["blank"] is None else int(a["blank"]),
+                     bunit=None if a["bunit"] is None else str(a["bunit"]))
+        p["display"] = None if display is None else {
+            "vmin": float(display.vmin), "vmax": float(display.vmax), "gamma": float(display.gamma),
+            "stretch": display.stretch, "palette": display.palette}
+    elif f == "calculate_coordinates":
+        position = a["position"]
+        p = {"position": None, "catalog_row": None}
+        if isinstance(position, CatalogSource):
+            p["catalog_row"] = {"layer": _layer_json(position.table, layers), "row": int(position.row),
+                                "pm_ra": position.pm_ra, "pm_dec": position.pm_dec,
+                                "pm_ra_includes_cosdec": position.pm_ra_includes_cosdec,
+                                "parallax": position.parallax, "radial_velocity": position.radial_velocity,
+                                "source_epoch": _time_json(position.source_epoch)}
+        elif isinstance(position, CoordinateInput):
+            lon, lon_text = _angle_or_text(position.lon)
+            lat, lat_text = _angle_or_text(position.lat)
+            p["position"] = {"lon": lon, "lat": lat, "lon_text": lon_text, "lat_text": lat_text,
+                             "lon_sexagesimal": position.lon_sexagesimal, "frame": position.frame,
+                             "equinox": _time_json(position.equinox), "obstime": _time_json(position.obstime),
+                             "epoch": _time_json(position.epoch)}
+        else:
+            sky = _sky_json(position)
+            p["position"] = {"lon": sky["lon"], "lat": sky["lat"], "lon_text": None, "lat_text": None,
+                             "lon_sexagesimal": None, "frame": sky["frame"], "equinox": sky["equinox"],
+                             "obstime": sky["obstime"], "epoch": sky["epoch"]}
+        motion, offsets, direction = a["motion"], a["offsets"], a["direction"]
+        p.update(
+            targets=[{"frame": t.frame, "equinox": _time_json(t.equinox), "obstime": _time_json(t.obstime)}
+                     for t in a["targets"]],
+            epoch=_time_json(a["epoch"]),
+            motion=None if motion is None else {
+                "pm_ra_cosdec": _quantity_json(motion.pm_ra_cosdec), "pm_dec": _quantity_json(motion.pm_dec),
+                "parallax": _quantity_json(motion.parallax), "radial_velocity": _quantity_json(motion.radial_velocity),
+                "proper_motion_only": bool(motion.proper_motion_only)},
+            offsets=None if offsets is None else {"d_lon": _quantity_json(offsets[0]),
+                                                  "d_lat": _quantity_json(offsets[1])},
+            direction=None if direction is None else {"distance": _quantity_json(direction[0]),
+                                                      "position_angle": _quantity_json(direction[1])},
+            to_point=_sky_json(a["to_point"]))
+    elif f == "convert_time":
+        value = a["time_value"]
+        p = {"time_value": None if isinstance(value, str) else _number_json(value),
+             "time_text": value if isinstance(value, str) else None,
+             "time_format": a["time_format"], "scale": a["scale"], "target_scale": a["target_scale"],
+             "iers_table": a["iers_table"]}
+    else:  # pragma: no cover - _COMMANDS è chiuso
+        raise ValueError(f"funzione {f!r} senza comando del 05")
+    return {"name": COMMAND_NAMES_05[f], "version": 1, "parameters": p}
+
+
+# --- dal formato del 05 agli argomenti delle funzioni ---------------------------------------
+
+
+class _Reader:
+    """Lettura dei parametri di un comando del 05: ogni errore di forma → ``CALC_COMMAND_INVALID``."""
+
+    def __init__(self, parameters: Mapping, allowed: tuple[str, ...], what: str, layers: Mapping[str, object]):
+        if not isinstance(parameters, Mapping):
+            raise _invalid(f"{what}: i parametri sono un oggetto JSON")
+        unknown = sorted(set(parameters) - set(allowed))
+        if unknown:
+            raise _invalid(f"{what}: parametri non previsti {', '.join(unknown)}")
+        self.p, self.what, self.layers = parameters, what, layers
+
+    def raw(self, name: str):
+        return self.p.get(name)
+
+    def _fail(self, name: str, expected: str) -> CalculatorError:
+        return _invalid(f"{self.what}.{name}: serve {expected}, non {self.p.get(name)!r}")
+
+    def number(self, name: str) -> float | None:
+        v = self.p.get(name)
+        if v is None:
+            return None
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise self._fail(name, "un numero")
+        return float(v)
+
+    def integer(self, name: str) -> int | None:
+        v = self.p.get(name)
+        if v is None:
+            return None
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise self._fail(name, "un intero")
+        return v
+
+    def text(self, name: str) -> str | None:
+        v = self.p.get(name)
+        if v is not None and not isinstance(v, str):
+            raise self._fail(name, "un testo")
+        return v
+
+    def boolean(self, name: str) -> bool | None:
+        v = self.p.get(name)
+        if v is not None and not isinstance(v, bool):
+            raise self._fail(name, "true o false")
+        return v
+
+    def record(self, name: str, fields: tuple[str, ...]) -> _Reader | None:
+        v = self.p.get(name)
+        if v is None:
+            return None
+        if not isinstance(v, Mapping):
+            raise self._fail(name, "un oggetto JSON (record)")
+        return _Reader(v, fields, f"{self.what}.{name}", self.layers)
+
+    def quantity(self, name: str) -> u.Quantity | None:
+        v = self.p.get(name)
+        if v is None:
+            return None
+        if not isinstance(v, Mapping) or set(v) != {"value", "unit"} or isinstance(v["value"], bool) \
+                or not isinstance(v["value"], (int, float)) or not isinstance(v["unit"], str):
+            raise self._fail(name, '{"value": numero, "unit": "unità"}')
+        for fmt in ("fits", "vounit"):
+            try:
+                return np.float64(v["value"]) * u.Unit(v["unit"], format=fmt)
+            except ValueError:
+                continue
+        raise self._fail(name, "un'unità valida in FITS o VOUnit (D18-2)")
+
+    def time(self, name: str):
+        v = self.p.get(name)
+        if v is None or isinstance(v, str):
+            return v
+        if not isinstance(v, Mapping) or set(v) != {"value", "format", "scale"} \
+                or v["format"] not in _TIME_JSON_FORMATS or v["scale"] not in TIME_SCALES:
+            raise self._fail(name, "un tempo del 05 (§3.1): 'J…'/'B…' o {value, format, scale}")
+        value = v["value"]
+        try:
+            if v["format"] == "jd" and isinstance(value, list) and len(value) == 2:
+                return Time(float(value[0]), float(value[1]), format="jd", scale=v["scale"])
+            return Time(value, format=v["format"], scale=v["scale"])
+        except (ValueError, TypeError) as exc:
+            raise self._fail(name, f"un tempo leggibile ({exc})") from exc
+
+    def layer(self, name: str):
+        v = self.p.get(name)
+        if v is None:
+            return None
+        if not isinstance(v, str) or v not in self.layers:
+            raise _invalid(f"{self.what}.{name}: livello {v!r} non risolto (il 05 passa gli oggetti in layers)")
+        return self.layers[v]
+
+    def sky(self, name: str) -> SkyFrame | None:
+        r = self.record(name, ("lon", "lat", "frame", "equinox", "obstime", "epoch", "epoch_reason"))
+        if r is None:
+            return None
+        lon, lat, frame = r.quantity("lon"), r.quantity("lat"), r.text("frame")
+        if lon is None or lat is None or frame is None:
+            raise _invalid(f"{self.what}.{name}: lon, lat e frame obbligatori")
+        epoch = r.time("epoch")
+        if epoch is None and not r.text("epoch_reason"):
+            raise _invalid(f"{self.what}.{name}: epoch null senza epoch_reason (epoca mai assunta, D10-2)")
+        try:
+            return SkyFrame.from_lonlat(lon, lat, frame, equinox=r.time("equinox"), obstime=r.time("obstime"),
+                                        epoch=epoch)
+        except CoordinatesWcsError as exc:
+            raise _forwarded(exc, f"{self.what}.{name}") from exc
+
+
+def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]:
+    if not isinstance(command, Mapping) or set(command) - {"name", "version", "parameters", "requested_by"}:
+        raise _invalid("comando del 05: oggetto con name, version e parameters")
+    name = command.get("name")
+    if name not in _FUNCTIONS_05:
+        raise _invalid(f"comando {name!r} non è una calcolatrice ({', '.join(_FUNCTIONS_05)})")
+    if command.get("version") != 1:
+        raise _invalid(f"{name}: versione {command.get('version')!r} non supportata (1)")
+    function = _FUNCTIONS_05[name]
+    p = command.get("parameters")
+    if function == "evaluate_expression":
+        r = _Reader(p, ("expression", "max_length", "max_depth", "colon_units", "colon_units_each"), name, layers)
+        each = r.raw("colon_units_each")
+        if each is not None and (not isinstance(each, list) or not all(isinstance(x, str) for x in each)):
+            raise _invalid(f"{name}.colon_units_each: lista di 'hours'/'degrees'")
+        if each is not None and r.raw("colon_units") is not None:
+            raise _invalid(f"{name}: colon_units oppure colon_units_each, non entrambi")
+        args = {"expression": r.text("expression"),
+                "max_length": MAX_EXPRESSION_LENGTH if r.raw("max_length") is None else r.integer("max_length"),
+                "max_depth": MAX_NESTING_DEPTH if r.raw("max_depth") is None else r.integer("max_depth"),
+                "colon_units": tuple(each) if each is not None else r.text("colon_units")}
+    elif function == "convert_units":
+        r = _Reader(p, ("value", "value_text", "from_unit", "to_unit", "equivalency", "reference", "sexagesimal",
+                        "scale", "target_scale"), name, layers)
+        if (r.raw("value") is None) == (r.raw("value_text") is None):
+            raise _invalid(f"{name}: value oppure value_text (uno solo)")
+        args = {"value": r.text("value_text") if r.raw("value") is None else r.number("value"),
+                "from_unit": r.text("from_unit"), "to_unit": r.text("to_unit"), "equivalency": r.text("equivalency"),
+                "reference": r.quantity("reference"), "sexagesimal": r.text("sexagesimal"),
+                "scale": r.text("scale"), "target_scale": r.text("target_scale")}
+    elif function == "convert_pixel_value":
+        r = _Reader(p, ("raw", "physical", "bzero", "bscale", "blank", "bunit", "image", "position", "position_sky",
+                        "display"), name, layers)
+        d = r.record("display", ("vmin", "vmax", "gamma", "stretch", "palette"))
+        display = None if d is None else DisplaySettings(
+            vmin=d.number("vmin"), vmax=d.number("vmax"), gamma=1.0 if d.raw("gamma") is None else d.number("gamma"),
+            stretch=d.text("stretch") or "linear", palette=d.text("palette") or "gray")
+        if r.raw("image") is not None:
+            if (r.raw("position") is None) == (r.raw("position_sky") is None):
+                raise _invalid(f"{name}: con image serve position oppure position_sky (uno solo)")
+            if r.raw("position") is not None:
+                q = r.record("position", ("x", "y", "convention"))
+                if q.text("convention") != "numpy":
+                    raise _invalid(f"{name}.position: nel comando registrato la convenzione è numpy (DC7)")
+                position = PixelPosition(x=np.float64(q.number("x")), y=np.float64(q.number("y")), convention="numpy")
+            else:
+                position = r.sky("position_sky")
+            args = {"image": r.layer("image"), "position": position, "display": display}
+        else:
+            args = {"raw": r.number("raw"), "physical": r.number("physical"), "bzero": r.number("bzero"),
+                    "bscale": r.number("bscale"), "blank": r.integer("blank"), "bunit": r.text("bunit"),
+                    "display": display}
+    elif function == "calculate_coordinates":
+        r = _Reader(p, ("position", "catalog_row", "targets", "epoch", "motion", "offsets", "direction",
+                        "to_point"), name, layers)
+        if (r.raw("position") is None) == (r.raw("catalog_row") is None):
+            raise _invalid(f"{name}: position oppure catalog_row (uno solo)")
+        if r.raw("position") is not None:
+            c = r.record("position", ("lon", "lat", "lon_text", "lat_text", "lon_sexagesimal", "frame", "equinox",
+                                      "obstime", "epoch"))
+            lon = c.text("lon_text") if c.raw("lon") is None else c.quantity("lon")
+            lat = c.text("lat_text") if c.raw("lat") is None else c.quantity("lat")
+            if lon is None or lat is None or c.text("frame") is None:
+                raise _invalid(f"{name}.position: lon (o lon_text), lat (o lat_text) e frame obbligatori")
+            position = CoordinateInput(lon=lon, lat=lat, frame=c.text("frame"),
+                                       lon_sexagesimal=c.text("lon_sexagesimal"), equinox=c.time("equinox"),
+                                       obstime=c.time("obstime"), epoch=c.time("epoch"))
+        else:
+            c = r.record("catalog_row", ("layer", "row", "pm_ra", "pm_dec", "pm_ra_includes_cosdec", "parallax",
+                                         "radial_velocity", "source_epoch"))
+            position = CatalogSource(table=c.layer("layer"), row=c.integer("row"), pm_ra=c.text("pm_ra"),
+                                     pm_dec=c.text("pm_dec"), pm_ra_includes_cosdec=c.boolean("pm_ra_includes_cosdec"),
+                                     parallax=c.text("parallax"), radial_velocity=c.text("radial_velocity"),
+                                     source_epoch=c.time("source_epoch"))
+        targets_json = r.raw("targets")
+        if not isinstance(targets_json, list):
+            raise _invalid(f"{name}.targets: lista di record (frame, equinox, obstime)")
+        targets = []
+        for i, item in enumerate(targets_json):
+            t = _Reader(item, ("frame", "equinox", "obstime"), f"{name}.targets[{i}]", layers) \
+                if isinstance(item, Mapping) else None
+            if t is None or t.text("frame") is None:
+                raise _invalid(f"{name}.targets[{i}]: record con frame obbligatorio")
+            targets.append(CoordinateTarget(frame=t.text("frame"), equinox=t.time("equinox"),
+                                            obstime=t.time("obstime")))
+        m = r.record("motion", ("pm_ra_cosdec", "pm_dec", "parallax", "radial_velocity", "proper_motion_only"))
+        motion = None if m is None else ProperMotion(
+            pm_ra_cosdec=m.quantity("pm_ra_cosdec"), pm_dec=m.quantity("pm_dec"), parallax=m.quantity("parallax"),
+            radial_velocity=m.quantity("radial_velocity"), proper_motion_only=bool(m.boolean("proper_motion_only")))
+        o = r.record("offsets", ("d_lon", "d_lat"))
+        g = r.record("direction", ("distance", "position_angle"))
+        args = {"position": position, "targets": targets, "epoch": r.time("epoch"), "motion": motion,
+                "offsets": None if o is None else (o.quantity("d_lon"), o.quantity("d_lat")),
+                "direction": None if g is None else (g.quantity("distance"), g.quantity("position_angle")),
+                "to_point": r.sky("to_point")}
+    else:  # convert_time
+        r = _Reader(p, ("time_value", "time_text", "time_format", "scale", "target_scale", "iers_table"), name, layers)
+        if (r.raw("time_value") is None) == (r.raw("time_text") is None):
+            raise _invalid(f"{name}: time_value oppure time_text (uno solo)")
+        args = {"time_value": r.text("time_text") if r.raw("time_value") is None else r.number("time_value"),
+                "time_format": r.text("time_format"), "scale": r.text("scale"),
+                "target_scale": r.text("target_scale"), "iers_table": r.text("iers_table") or "bundled"}
+    return function, args

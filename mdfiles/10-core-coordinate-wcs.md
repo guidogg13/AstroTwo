@@ -632,19 +632,19 @@ propone i parametri e interpreta il risultato.
   nuova funzione per scrivere le coordinate con le cifre di DC3; §3, §6,
   §7, §10, §12 (T31–T33). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (1) 0.1″ anche
   per longitudini e latitudini dei frame non equatoriali (DC3 fissa solo RA
-  e Dec); (2) 6 decimali in gradi nello stile decimale. Codice da scrivere
-  quando il proprietario lo chiede.
+  e Dec); (2) 6 decimali in gradi nello stile decimale. **Codice scritto il
+  2026-10-16** (commit `d1e4c0e`).
 - **`compass_and_scale_bar` (A7 nella v1, decisione del proprietario del
   2026-10-16, opzione b della proposta della fase 1 sull'IA):** §3, §5,
   §6, §7, §10, §12 (T34–T36). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (3)
   lunghezza massima di default = un quinto della larghezza della finestra;
   (4) δ = 10 pixel della finestra; (5) "solo al centro" oltre 15° di raggio
-  del campo o con `AIT`. Codice da scrivere quando il proprietario dichiara
-  la fase codice dell'interfaccia v1.
+  del campo o con `AIT`. **Codice scritto il 2026-10-16** (commit
+  `d1e4c0e`).
 - **`make_view_wcs` (2026-10-15, decisione del proprietario sulla
   proposta della fase 1 dell'interfaccia):** aggiunta perché il `41` non
-  calcoli proiezioni; §3, §6, §7, §10, §12 (T26–T30). **Codice da scrivere**
-  (con il default di D10-9) quando il proprietario lo chiede.
+  calcoli proiezioni; §3, §6, §7, §10, §12 (T26–T30). **Codice scritto il
+  2026-10-16** con il default di D10-9 (commit `d1e4c0e`).
 
 ## 14. Registro modifiche
 
@@ -678,3 +678,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-16 | Claude Code | **A7 nella v1 decisa dal proprietario il 2026-10-16** (opzione b della proposta della fase 1 sull'IA, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`compass_and_scale_bar`** (nord ed est al centro della vista con `directional_offset_by`, `east_left`, barra di scala con il più grande valore tondo dell'elenco in arco che sta nella lunghezza massima, lunghezza del segmento orizzontale trovata con `brentq`, etichetta, `local_only`) in §3, §6, §7; avvisi `NORTH_UNDEFINED`, `SCALE_BAR_TOO_LONG` (§10); test T34–T36 (§12); tre scelte minori (§13); §5 con 34 e 42. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | Scelte minori di `format_coordinates` (1, 2) e di `compass_and_scale_bar` (3, 4, 5) **confermate dal proprietario il 2026-10-16**, che approva anche le modifiche del 2026-10-16. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `make_view_wcs` con `ViewGeometry` (regione visibile = base con il pixel di riferimento spostato all'origine intera che contiene la finestra, anche per SIP; `WCS.slice` per le distorsioni a tabella), `format_coordinates` (verifica di `Angle.to_string`: riporto sì, ritorno a 0 no, gestito nel codice; segno ASCII), `compass_and_scale_bar`, `choose_projection` con default 30° che restituisce `ProjectionChoice` (proiezione, campo, soglia e sua fonte); test T20 aggiornato e T26–T36 in `tests/core/test_coordinates_wcs.py` (100 superati). Stato `approvato` invariato. |
+| 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
