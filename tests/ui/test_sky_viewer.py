@@ -6,14 +6,14 @@ Piattaforma ``offscreen`` con il renderer in memoria (``tests/ui/fake_renderer.p
 import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QMouseEvent, QWheelEvent
+from PySide6.QtGui import QMouseEvent, QNativeGestureEvent, QPointingDevice, QWheelEvent
 from PySide6.QtWidgets import QApplication
 
 from astrotwo.core import hips
 from astrotwo.core.commands import ResultMessage
 from astrotwo.ui import sky_viewer as sv
 from tests.core.test_hips import WIDTH, image_tile, properties_text, serve_properties
-from tests.ui.test_main_window import make_window, names, settings_path, wait_idle  # noqa: F401 - fixture
+from tests.ui.test_main_window import fake_simbad, make_window, names, settings_path, wait_idle  # noqa: F401 - fixture
 
 
 def serve_png_survey(service, *, order=3):
@@ -247,3 +247,78 @@ def test_gl_texture_orientation_transform_and_night(qtbot):
     pixels = [shot.pixelColor(x, y) for x in range(0, w, 7) for y in range(0, h, 7)]
     assert all(c.green() <= 8 and c.blue() <= 8 for c in pixels)
     assert shot.pixelColor(w // 2, 3 * h // 4).red() > 0  # il blu diventa rosso scuro (luminanza)
+
+
+# --- 4a-fix: eventi arrivati come dal sistema (finestra → widget sotto il cursore), non dati al widget ----------
+
+
+def via_window(win, kind, local, **kw):
+    """Invia l'evento alla finestra (come fa macOS): Qt lo recapita al widget sotto il cursore."""
+    sky = win.sky
+    p = sky.mapTo(win, local)
+    g = QPointF(win.mapToGlobal(p))
+    if kind == "wheel":
+        event = QWheelEvent(QPointF(p), g, kw.get("pixel", QPoint(0, 0)), QPoint(0, kw["angle"]),
+                            Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase,
+                            False)
+    elif kind == "pinch":
+        event = QNativeGestureEvent(Qt.NativeGestureType.ZoomNativeGesture, QPointingDevice.primaryPointingDevice(),
+                                    2, QPointF(p), QPointF(p), g, kw["value"], QPointF())
+    else:
+        buttons = Qt.MouseButton.NoButton if kind == QEvent.Type.MouseButtonRelease else Qt.MouseButton.LeftButton
+        event = QMouseEvent(kind, QPointF(p), g, Qt.MouseButton.LeftButton, buttons, Qt.KeyboardModifier.NoModifier)
+    assert win.childAt(p) is sky  # il cielo riceve l'evento: nessun widget sopra
+    QApplication.sendEvent(win.windowHandle(), event)
+    return event
+
+
+def test_real_events_reach_sky(qtbot, viewer_window):
+    """Rotella, pizzico e trascinamento arrivano al cielo passando dalla finestra; il pizzico è accettato."""
+    win = viewer_window
+    start(qtbot, win)
+    sky = win.sky
+    here = QPoint(sky.width() // 2, sky.height() // 2)
+    via_window(win, "wheel", here, angle=120)
+    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP)
+    # rotella di macOS: un evento lento vale poche unità di 120, deve comunque valere uno scatto intero
+    via_window(win, "wheel", here, angle=4)
+    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP ** 2)
+    via_window(win, "wheel", here, angle=-4)
+    assert sky.renderer.transform[0] == pytest.approx(sv.ZOOM_STEP)
+    k = sky.k
+    pinch = via_window(win, "pinch", here, value=0.25)
+    assert pinch.isAccepted() and sky.k == pytest.approx(k * 1.25)
+    tx = sky.tx
+    for kind, offset in ((QEvent.Type.MouseButtonPress, 0), (QEvent.Type.MouseMove, 30),
+                         (QEvent.Type.MouseButtonRelease, 30)):
+        via_window(win, kind, here + QPoint(offset, 0))
+    assert sky.tx == pytest.approx(tx + 30 * sky.ratio())
+    assert sky.renderer.transform[1] == pytest.approx(sky.tx)
+    qtbot.waitUntil(lambda: len(win.session.history) >= 5 and not win.busy(), timeout=8000)
+    assert [e.command.name for e in win.session.history.entries[3:5]] == ["view.set_zoom", "view.set_center"]
+
+
+def test_go_to_moves_view_and_survives_stale_gesture(qtbot, viewer_window, fake_simbad):  # noqa: F811
+    """"Vai a" sposta il cielo; un gesto o un ridimensionamento ancora da registrare non lo sposta altrove."""
+    win = viewer_window
+    start(qtbot, win)
+    sky = win.sky
+    sky.pan_by(40, 25)  # spostamento in sospeso (come un ridimensionamento dei pannelli) prima di "Vai a"
+    win.go_to_field.setText("M31")
+    qtbot.keyClick(win.go_to_field, Qt.Key.Key_Return)
+    wait_idle(qtbot, win)
+    qtbot.wait(sv.GESTURE_IDLE_MS + 600)
+    wait_idle(qtbot, win)
+    assert "view.set_center" not in names(win)[4:]  # nessun comando del gesto scartato dopo il go_to
+    center = win.session.workspace.state.view.center.coord
+    assert center.ra.deg == pytest.approx(10.6847, abs=1e-3) and center.dec.deg == pytest.approx(41.2688, abs=1e-3)
+    assert sky.renderer.transform == pytest.approx((1.0, 0.0, 0.0))
+
+
+def test_go_to_error_is_visible(qtbot, viewer_window, fake_simbad):  # noqa: F811
+    win = viewer_window
+    start(qtbot, win)
+    win.go_to("oggetto-che-non-esiste")
+    wait_idle(qtbot, win)
+    assert win.session.history.entries[-1].result.status == "error"
+    assert win.status.currentMessage().startswith(win.session.history.entries[-1].result.error.code)

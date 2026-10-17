@@ -1608,6 +1608,8 @@ class MainWindow(QMainWindow):
             self.messages.add(number, w, error=False)
         if result.error is not None and result.status == "error":
             self.messages.add(number, result.error, error=True)
+            if done.registered.name == "view.go_to":  # il pannello Messaggi è in una scheda: errore anche qui
+                self.status.showMessage(f"{result.error.code}: {result.error.text}", 10000)
             if done.registered.name in ("image.open", "catalog.open_file", "moc.open"):
                 self.show_modal(self.tr("The file cannot be opened"), f"{result.error.code}: {result.error.text}")
         elif result.status == "ok":

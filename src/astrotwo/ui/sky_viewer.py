@@ -266,6 +266,14 @@ class SkyViewer(QWidget):
         self.geometry = view.geometry
         self.service = layer.data if layer else None
         self.survey_layer = layer.id if layer else None
+        if changed_geometry and self._submitted is None:
+            # Vista cambiata da altro che dal gesto in corso (Vai a, comando dell'assistente, cronologia): lo
+            # spostamento o lo zoom ancora da registrare erano relativi alla geometria vecchia e non valgono più
+            # per la nuova; se restassero, a fine gesto sposterebbero il centro appena scelto.
+            self.idle.stop()
+            self._zoomed = self._moved = False
+            self.k, self.tx, self.ty = 1.0, 0.0, 0.0
+            self.renderer.set_transform(1.0, 0.0, 0.0)
         sent = self._submitted if changed_geometry else (1.0, 0.0, 0.0)
         self._submitted = None
         self.tiles.generation += 1
@@ -287,6 +295,12 @@ class SkyViewer(QWidget):
         sent = self._pending.pop(gen, None)
         if sent is None:
             self.k, self.tx, self.ty = 1.0, 0.0, 0.0
+            # La geometria è stata chiesta con una finestra che può non essere più quella di adesso (pannelli
+            # ridimensionati nel frattempo): stesso centro, immagine ricentrata e, a fine gesto, nuova finestra.
+            dx, dy = (self.window_size()["width"] - cols) / 2, (self.window_size()["height"] - rows) / 2
+            if dx or dy:
+                self.tx, self.ty, self._moved = dx, dy, True
+                self.idle.start()
         else:  # trasformazione residua del gesto continuato dopo l'invio dei comandi (solo disegno)
             ks, txs, tys = sent
             kr = self.k / ks
@@ -369,14 +383,19 @@ class SkyViewer(QWidget):
         if not pixels.isNull():  # trackpad a due dita: spostamento (41 §3.16); lo zoom è il pizzico
             self.pan_by(pixels.x(), pixels.y())
         else:
-            steps = event.angleDelta().y() / 120.0
-            if steps:
+            # Rotella del mouse su macOS: Qt dà all'evento un valore proporzionale alla velocità (da pochi
+            # centesimi di scatto a 120), non 120 per scatto: ogni evento vale almeno uno scatto intero.
+            delta = event.angleDelta().y()
+            if delta:
+                steps = delta / 120.0
+                steps = max(1.0, abs(steps)) * (1.0 if steps > 0 else -1.0)
                 self.zoom_by(ZOOM_STEP ** steps, event.position())
         event.accept()
 
     def event(self, event) -> bool:
         if event.type() == QEvent.Type.NativeGesture and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
             self.zoom_by(1.0 + event.value(), event.position())  # pizzico sul trackpad
+            event.accept()
             return True
         return super().event(event)
 
