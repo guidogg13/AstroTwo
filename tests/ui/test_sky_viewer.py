@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Test del visualizzatore del cielo (41 §12), sprint 4a: sfondo HiPS, gesti → comandi, vista iniziale.
+"""Test del visualizzatore del cielo (41 §12), sprint 4a-4b: sfondo HiPS (a colori e FITS), gesti → comandi, vista
+iniziale, coordinate e valore sotto il mouse.
 
 Piattaforma ``offscreen`` con il renderer in memoria (``tests/ui/fake_renderer.py``); il test ``gl`` usa la GPU.
 """
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import QApplication
 from astrotwo.core import hips
 from astrotwo.core.commands import ResultMessage
 from astrotwo.ui import sky_viewer as sv
+from tests.core.test_commands_hips_display import serve_fits_survey, tile_data
 from tests.core.test_hips import WIDTH, image_tile, properties_text, serve_properties
 from tests.ui.test_main_window import fake_simbad, make_window, names, settings_path, wait_idle  # noqa: F401 - fixture
 
@@ -429,3 +431,156 @@ def test_trackpad_phased_scroll_pans_without_zoom(qtbot, viewer_window):
         phased_wheel(win, here, phase, pixel)
     assert sky.ty == pytest.approx(ty + 22 * sky.ratio())
     assert sky.k == pytest.approx(1.0) and sky._zoomed is False
+
+
+# =============================================================================
+# Sprint 4b — tile FITS a colori (T4, T19) e lettura sotto il mouse (T8)
+
+
+def test_t4_fits_survey_drawn_with_set_display(qtbot, viewer_window, service):
+    """Ogni pixel con dati = colore della palette ``gray`` sul valore del tile, tra i limiti scelti da ``hips.set_survey``."""
+    import matplotlib
+
+    win = viewer_window
+    win.survey_url = serve_fits_survey(service)
+    start(qtbot, win)
+    display = win.sky.display
+    assert display is not None and display["palette"] == "gray" and display["vmin"] < display["vmax"]
+    codes = [win.messages.table.item(r, 1).text() for r in range(win.messages.table.rowCount())]
+    assert "HIPS_FITS_NOT_YET" not in codes and "HIPS_DISPLAY_UNKNOWN" not in codes
+    sampling = win.sky.sampling
+    gray = matplotlib.colormaps["gray"]
+    expected = np.zeros(sampling.shape + (4,), dtype=np.uint8)
+    for index in sampling.tiles:
+        mask = sampling.tile_of_pixel == index
+        values = tile_data(index)[sampling.tile_y[mask], sampling.tile_x[mask]].astype(np.float64)
+        norm = np.clip((values - display["vmin"]) / (display["vmax"] - display["vmin"]), 0.0, 1.0)
+        expected[mask] = gray(norm, bytes=True)
+    drawn = win.sky.canvas
+    assert np.array_equal(drawn[..., 3] > 0, sampling.tile_of_pixel >= 0)
+    assert np.abs(drawn.astype(int) - expected.astype(int)).max() <= 1  # float32 di set_display contro float64 qui
+    assert drawn[..., :3].std() > 5  # non è un'immagine piatta
+    assert np.array_equal(win.sky.renderer.texture, drawn[::-1])
+
+
+def test_fits_tile_not_finite_is_transparent(qtbot):
+    """``colorize``: pixel non finiti trasparenti (``set_display``), JPEG/PNG invariati, limiti mancanti → errore."""
+    from astrotwo.core.hips import HiPSError, ViewTile
+
+    values = np.array([[1.0, np.nan], [3.0, 2.0]], dtype=np.float32)
+    mask = np.ones((2, 2), dtype=bool)
+    tile = ViewTile(index=1, order=0, box=(0, 2, 0, 2), values=values, mask=mask, format="fits", provenance="x",
+                    from_cache=False)
+    shown = sv.colorize(tile, {"vmin": 1.0, "vmax": 3.0, "gamma": 1.0, "palette": "gray", "stretch": "linear"})
+    assert shown.format == "rgba" and shown.values.dtype == np.uint8 and shown.values.shape == (2, 2, 4)
+    assert shown.values[0, 1, 3] == 0 and shown.values[0, 0, 3] == 255
+    assert shown.values[0, 0, 0] == 0 and shown.values[1, 0, 0] == 255 and 120 <= shown.values[1, 1, 0] <= 135
+    png = ViewTile(index=1, order=0, box=(0, 2, 0, 2), values=np.zeros((2, 2, 3), np.uint8), mask=mask, format="png",
+                   provenance="x", from_cache=False)
+    assert sv.colorize(png, None) is png
+    with pytest.raises(HiPSError) as err:
+        sv.colorize(tile, None)
+    assert err.value.code == "HIPS_DISPLAY_UNKNOWN"
+
+
+def hover(qtbot, win, x, y):
+    """Mouse sul cielo in (x, y) pixel logici (senza pulsanti): il risultato di ``cursor.read`` che ne segue."""
+    sky = win.sky
+    pos = QPoint(x, y)
+    event = QMouseEvent(QEvent.Type.MouseMove, QPointF(pos), QPointF(sky.mapToGlobal(pos)), Qt.MouseButton.NoButton,
+                        Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+    with qtbot.waitSignal(sky.cursor_read, timeout=10000) as blocker:
+        QApplication.sendEvent(sky, event)
+    return blocker.args[0]
+
+
+def expected_text(win, x, y):
+    """Testo atteso: cielo dalla finestra (10), scritto da ``format_coordinates``, valore da ``pixel_values`` (12)."""
+    from astrotwo.core import coordinates_wcs as cw
+
+    sky, geometry = win.sky, win.sky.geometry
+    r = sky.ratio()
+    point = geometry.window_to_sky(x * r - 0.5, geometry.shape[0] - y * r - 0.5)
+    frame = cw.SkyFrame(coord=point)
+    lon = cw.format_coordinates(frame, style="sexagesimal").lon[0]
+    lat = cw.format_coordinates(frame, style="sexagesimal").lat[0]
+    value = hips.pixel_values(sky.service, frame, order=sky.sampling.order, cache=win.cache).values[0]
+    return f"ICRS {lon} {lat} (epoch unknown)  ·  {float(value):.6g} mJy"
+
+
+def test_t8_cursor_coordinates_and_value_in_status_bar(qtbot, viewer_window, service):
+    win = viewer_window
+    win.survey_url = serve_fits_survey(service)
+    start(qtbot, win)
+    history = len(win.session.history)
+    w, h = win.sky.width(), win.sky.height()
+    for x, y in ((w // 2, h // 2), (w // 3, h // 2 + 30)):
+        result = hover(qtbot, win, x, y)
+        assert result.status == "ok" and result.values["pixel"]["order"] == win.sky.sampling.order
+        assert win.status.cursor_label.text() == expected_text(win, x, y)
+    assert len(win.session.history) == history  # lettura passiva: mai in cronologia (D05-1)
+    # il sistema scelto per le coordinate vale anche qui
+    win.submit("view.set_coordinate_display", {"frame": "galactic", "format": "decimal"})
+    wait_idle(qtbot, win)
+    hover(qtbot, win, w // 2, h // 2)
+    r, geometry = win.sky.ratio(), win.sky.geometry
+    gal = geometry.window_to_sky(w // 2 * r - 0.5, geometry.shape[0] - h // 2 * r - 0.5).transform_to("galactic")
+    assert win.status.cursor_label.text().startswith(f"Galactic {gal.l.deg:.6f} {gal.b.deg:+.6f} (epoch unknown)")
+    # uscita dal cielo
+    with qtbot.waitSignal(win.sky.cursor_read):
+        QApplication.sendEvent(win.sky, QEvent(QEvent.Type.Leave))
+    assert win.status.cursor_label.text() == "No data"
+
+
+def test_t8_outside_sky_and_color_survey(qtbot, viewer_window):
+    win = viewer_window
+    start(qtbot, win)  # survey a colori: nessun valore del pixel
+    w, h = win.sky.width(), win.sky.height()
+    result = hover(qtbot, win, w // 2, h // 2)
+    assert "pixel" not in result.values and win.status.cursor_label.text().endswith("no data")
+    result = hover(qtbot, win, 1, 1)  # angolo: fuori dall'ellisse dell'AIT
+    assert result.values["sky"] is None and result.warnings[0].code == "OUT_OF_SKY"
+    assert win.status.cursor_label.text() == "Outside the sky"
+
+
+def test_t8_one_read_at_a_time_last_position_wins(qtbot, viewer_window, service):
+    win = viewer_window
+    win.survey_url = serve_fits_survey(service)
+    start(qtbot, win)
+    calls = []
+    real = win.sky.passive
+
+    def counting(name, params, source):
+        calls.append(params["position"]["x"])
+        return real(name, params, source)
+
+    win.sky.passive = counting
+    w, h = win.sky.width(), win.sky.height()
+    sky = win.sky
+    results = []
+    sky.cursor_read.connect(results.append)
+    for k in range(30):  # 30 movimenti senza far girare il ciclo degli eventi: la prima lettura è in corso
+        pos = QPoint(w // 4 + 3 * k, h // 2)
+        QApplication.sendEvent(sky, QMouseEvent(QEvent.Type.MouseMove, QPointF(pos), QPointF(sky.mapToGlobal(pos)),
+                                                Qt.MouseButton.NoButton, Qt.MouseButton.NoButton,
+                                                Qt.KeyboardModifier.NoModifier))
+    qtbot.waitUntil(lambda: len(results) >= 2, timeout=10000)
+    assert len(calls) == 2  # una in corso, poi solo l'ultima posizione
+    assert calls[1] == pytest.approx(w // 4 + 3 * 29 - 0.5)
+    assert win.status.cursor_label.text() == expected_text(win, w // 4 + 3 * 29, h // 2)
+
+
+def test_t8_reading_during_gesture_uses_drawn_transform(qtbot, viewer_window, service):
+    """Durante uno zoom ×2 attorno al centro il punto a distanza 2d dal centro è quello che prima stava a d."""
+    win = viewer_window
+    win.survey_url = serve_fits_survey(service)
+    start(qtbot, win)
+    sky = win.sky
+    cx, cy = sky.width() // 2, sky.height() // 2
+    before = hover(qtbot, win, cx + 50, cy + 20).values["sky"]
+    for _ in range(4 * sv.WHEEL_EVENTS_PER_NOTCH):
+        wheel(sky, 1, QPoint(cx, cy))
+    assert sky.renderer.transform[0] == pytest.approx(2.0)  # gesto ancora in corso (solo disegno)
+    during = hover(qtbot, win, cx + 100, cy + 40).values["sky"]
+    assert during["lon"]["value"] == pytest.approx(before["lon"]["value"], abs=1e-9)
+    assert during["lat"]["value"] == pytest.approx(before["lat"]["value"], abs=1e-9)

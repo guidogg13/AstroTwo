@@ -1155,16 +1155,76 @@ def _exec_image_set_display(ctx: ExecutionContext, p: Mapping) -> Outcome:
                    state=ctx.state.replace_layer(new))
 
 
+#: Ordine massimo del tile su cui si propongono i limiti di colore di un survey FITS (41 §3.7, decisione del
+#: proprietario del 2026-10-18): un tile fisso e piccolo, così il risultato non dipende dalla finestra.
+DISPLAY_TILE_ORDER = 3
+
+
+def _survey_display_limits(ctx: ExecutionContext, service, coverage, vmin, vmax) -> tuple[dict, list[ResultMessage]]:
+    """Limiti di colore di un survey con tile FITS (41 §3.7): ``vmin``/``vmax`` dati, altrimenti ``hips_pixel_cut``
+    del servizio, altrimenti ``suggest_display_limits`` (11) sul tile FITS che contiene ICRS (0°, 0°) — centro della
+    vista iniziale — all'ordine ``min(3, ordine massimo)``; se quel tile manca, sul primo tile coperto. Dichiara
+    sempre da dove vengono."""
+    from astrotwo.core.coordinates_wcs import SkyFrame
+    from astrotwo.core.hips import HiPSError, _tile_cells_at, fetch_tile, pixel_values
+    from astrotwo.core.images_fits import suggest_display_limits
+
+    base = {"gamma": 1.0, "stretch": "linear", "palette": "gray"}
+    warnings: list[ResultMessage] = []
+    if vmin is not None and vmax is not None:
+        return {**base, "vmin": float(vmin), "vmax": float(vmax), "limits_source": "parametri del comando"}, warnings
+    cut = [t for text in service.properties.get("hips_pixel_cut", ()) for t in text.split()]
+    try:
+        cut_min, cut_max = (float(cut[0]), float(cut[1])) if len(cut) == 2 else (None, None)
+    except ValueError:
+        cut_min = cut_max = None
+    if cut_min is not None and cut_min < cut_max and math.isfinite(cut_min) and math.isfinite(cut_max):
+        return ({**base, "vmin": cut_min, "vmax": cut_max,
+                 "limits_source": f"hips_pixel_cut del servizio ({service.origin})"}, warnings)
+    order = min(DISPLAY_TILE_ORDER, service.order)
+    center = SkyFrame.from_lonlat(0.0 * u.deg, 0.0 * u.deg, "icrs")
+    tile, where = None, "tile che contiene ICRS (0°, 0°)"
+    try:
+        index = int(np.ravel(pixel_values(service, center, order=order, cache=ctx.cache).tile_index)[0])
+        tile = fetch_tile(service, order, index, format="fits", cache=ctx.cache)
+    except HiPSError as exc:
+        if exc.code in ("NET_TIMEOUT", "MOCSERVER_UNAVAILABLE"):
+            raise
+        warnings.append(ResultMessage(
+            "HIPS_DISPLAY_FALLBACK", f"{service.hips_id}: il tile di ICRS (0°, 0°) all'ordine {order} non c'è "
+            f"({exc.code}); limiti dal primo tile coperto"))
+    if tile is None:
+        if coverage is None:
+            raise CommandError("HIPS_DISPLAY_LIMITS_UNDEFINED", f"{service.hips_id}: nessun tile da cui proporre i "
+                               "limiti di colore (copertura non nota); indicare vmin e vmax")
+        cells, _ = _tile_cells_at(coverage.moc, order)
+        if len(cells) == 0:
+            raise CommandError("HIPS_DISPLAY_LIMITS_UNDEFINED", f"{service.hips_id}: copertura vuota; indicare vmin e vmax")
+        index = int(np.min(cells))
+        tile = fetch_tile(service, order, index, format="fits", cache=ctx.cache)
+        where = "primo tile coperto"
+    data = tile.data if tile.data.ndim == 2 else tile.data[0]
+    limits = suggest_display_limits(data)
+    return ({**base, "vmin": float(limits.vmin), "vmax": float(limits.vmax),
+             "limits_source": f"{limits.method} sul {where}, ordine {order}, tile {tile.index} ({tile.provenance()})",
+             "unit": tile.header.get("BUNIT") if tile.header is not None else None}, warnings)
+
+
 def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.hips import set_survey
 
     active = set_survey(p["survey"], cache=ctx.cache)
     service = active.service
     state = ctx.state
+    display, resolved, display_warnings = None, {}, []
+    if service.tile_formats[:1] == ("fits",) and service.tile_width is not None:
+        ctx.step("suggest_display_limits")
+        display, display_warnings = _survey_display_limits(ctx, service, active.coverage, p["vmin"], p["vmax"])
+        resolved = {"vmin": display["vmin"], "vmax": display["vmax"]}  # limiti scelti registrati nel comando (D41-3)
     old = [layer.id for layer in state.of_kind("hips")]  # uno sfondo HiPS (il survey attivo, 41 §3.5)
     state = dataclasses.replace(state, layers=tuple(x for x in state.layers if x.id not in old))
     layer_id, state = _add_layer(state, "hips", service.title or service.hips_id, service, source=service.base_url,
-                                 derived={"coverage": active.coverage})
+                                 display=display, derived={"coverage": active.coverage})
     # Lo sfondo va sotto gli altri livelli.
     layers = (state.layers[-1],) + state.layers[:-1]
     state = dataclasses.replace(state, layers=layers)
@@ -1172,9 +1232,9 @@ def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
     values = {"layer": layer_id, "replaced": old, "hips_id": service.hips_id, "title": service.title,
               "base_url": service.base_url, "frame": service.frame, "order": service.order,
               "tile_formats": list(service.tile_formats), "body": service.body,
-              "coverage": active.coverage is not None}
-    return Outcome(values=values, state=state, layers_created=[layer_id],
-                   warnings=_module_warnings(active.warnings) + _module_warnings(service.warnings),
+              "coverage": active.coverage is not None, "display": display}
+    return Outcome(values=values, state=state, layers_created=[layer_id], resolved=resolved,
+                   warnings=_module_warnings(active.warnings) + _module_warnings(service.warnings) + display_warnings,
                    provenance=[_source(service.origin, service.retrieved_at, service.from_cache)],
                    network_fingerprint=[_fingerprint(_json_digest(props), service.origin, service.retrieved_at,
                                                      service.from_cache)])
@@ -1565,11 +1625,15 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.coordinates_wcs import PixelPosition, convert_pixel_convention
     from astrotwo.core.measures import read_pixel
 
+    from astrotwo.core.coordinates_wcs import convert_coordinates
+
     bx, by, sky = _cursor_point(ctx, p)
     values: dict = {"base_pixel": {"x": bx, "y": by, "convention": "numpy"}}
     warnings: list[ResultMessage] = []
     finite = bool(np.all(np.isfinite([sky.coords.lon.to_value(u.deg), sky.coords.lat.to_value(u.deg)])))
-    values["sky"] = sky_json(sky.coords) if finite else None
+    # Cielo nel sistema scelto per le coordinate mostrate (``view.set_coordinate_display``, 41 §3.11), con l'epoca
+    # dichiarata dal 10; il valore del pixel si legge sempre dalla posizione nel frame della base.
+    values["sky"] = sky_json(convert_coordinates(sky.coords, ctx.state.view.coordinate_frame)) if finite else None
     if not finite:
         warnings.append(ResultMessage("OUT_OF_SKY", "fuori dal cielo: il punto non ha coordinate nella proiezione"))
     base = ctx.state.find(ctx.state.view.base_layer) if ctx.state.view.base_layer else None
@@ -1591,7 +1655,7 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
         if hips and "fits" in hips[0].data.tile_formats:
             from astrotwo.core.hips import pixel_values
             try:
-                read = pixel_values(hips[0].data, sky.coords, cache=ctx.cache)
+                read = pixel_values(hips[0].data, sky.coords, order=p["order"], cache=ctx.cache)
                 values["pixel"] = {"layer": hips[0].id, "value": float(np.ravel(read.values)[0]),
                                    "unit": None if read.unit is None else str(read.unit), "order": read.order}
                 warnings += _module_warnings(read.warnings)
@@ -2013,7 +2077,13 @@ def default_registry(*, cache=None) -> CommandRegistry:
         CommandSpec("hips.set_survey", 1, "Set the HiPS background survey.", "Imposta il survey HiPS di sfondo.",
                     ("12 set_survey", "12 add_hips"), (
                         P("survey", "string", "Survey identifier or base URL (null: default survey of the 12).",
-                          "Identificativo o URL di base del survey (null: survey di default del 12).", default=None),),
+                          "Identificativo o URL di base del survey (null: survey di default del 12).", default=None),
+                        P("vmin", "number", "Display minimum for FITS tiles (null: hips_pixel_cut or zscale, written "
+                          "in the command).", "Minimo di visualizzazione dei tile FITS (null: hips_pixel_cut o zscale, "
+                          "scritto nel comando).", default=None, note="nell'unità del survey (BUNIT)"),
+                        P("vmax", "number", "Display maximum for FITS tiles (null: hips_pixel_cut or zscale, written "
+                          "in the command).", "Massimo di visualizzazione dei tile FITS (null: hips_pixel_cut o "
+                          "zscale, scritto nel comando).", default=None, note="nell'unità del survey (BUNIT)")),
                     "session", _exec_hips_set_survey, network=True, confirm=True),
         CommandSpec("catalog.open_file", 1, "Open a catalog from a file.", "Apre un catalogo da file.",
                     ("13 load_table", "13 suggest_position_columns", "19 check_overlay"), (
@@ -2160,7 +2230,10 @@ def default_registry(*, cache=None) -> CommandRegistry:
         CommandSpec("cursor.read", 1, "Sky position and pixel value under the cursor.",
                     "Posizione celeste e valore del pixel sotto il cursore.",
                     ("10 pixel_to_sky", "10 convert_pixel_convention", "17 read_pixel", "12 pixel_values"), (
-                        P("position", "pixel_position", "Window pixel (numpy).", "Pixel della finestra (numpy)."),),
+                        P("position", "pixel_position", "Window pixel (numpy).", "Pixel della finestra (numpy)."),
+                        P("order", "integer", "HiPS order of the pixel value (null: the survey's deepest).",
+                          "Ordine HiPS del valore del pixel (null: il più profondo del survey).", default=None,
+                          minimum=0)),
                     "passive", _exec_cursor_read, read_only=True),
         CommandSpec("simbad.pointer", 1, "Most cited SIMBAD object near the cursor.",
                     "Oggetto SIMBAD più citato vicino al cursore.",

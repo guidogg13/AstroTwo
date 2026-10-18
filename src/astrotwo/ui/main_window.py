@@ -21,6 +21,7 @@ from __future__ import annotations
 import functools
 import itertools
 import json
+import math
 import sys
 import threading
 from collections.abc import Callable, Mapping
@@ -92,6 +93,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import astropy.units as u
+
 import astrotwo
 from astrotwo.core.cache import DEFAULT_LIMIT_BYTES, NETWORK_TIMEOUTS, SharedCache
 from astrotwo.core.commands import (
@@ -110,6 +113,7 @@ from astrotwo.core.commands import (
     CancelToken,
     default_registry,
 )
+from astrotwo.core.coordinates_wcs import format_coordinates
 
 __all__ = [
     "MainWindow",
@@ -624,6 +628,15 @@ def load_translations(language: str, app: QCoreApplication | None = None) -> tup
     return language, warnings
 
 
+def _quantity(value: Mapping) -> u.Quantity:
+    """``Quantity`` da ``{"value", "unit"}`` dei risultati dei comandi (unità in FITS o VOUnit)."""
+    try:
+        unit = u.Unit(value["unit"], format="fits")
+    except ValueError:
+        unit = u.Unit(value["unit"], format="vounit")
+    return u.Quantity(value["value"], unit)
+
+
 def _json_text(value: object) -> str:
     """Valori dei moduli come testo JSON: punto decimale in ogni lingua (§3.9), numeri invariati."""
     return json.dumps(value, ensure_ascii=False, allow_nan=True)
@@ -755,6 +768,7 @@ class StatusBar(QStatusBar):
         self.setSizeGripEnabled(False)
         self.setContentsMargins(8, 0, 8, 0)
         font = _tabular(_scaled(self.font(), 0.92))
+        self.coordinate_style = "sexagesimal"  # formato delle coordinate (``view.set_coordinate_display``)
         self.cursor_label = QLabel(self.tr("No data"))
         self.network_label = QLabel()
         self.command_label = QLabel()
@@ -778,7 +792,8 @@ class StatusBar(QStatusBar):
         self.show_idle()
 
     def show_cursor(self, result: CommandResult | None) -> None:
-        """Valori di ``cursor.read`` (41) come li dà il modulo; "fuori dal cielo"/"nessun dato" senza valore."""
+        """Valori di ``cursor.read`` (41 §3.11): coordinate scritte da ``format_coordinates`` del 10 (DC3) con frame ed
+        epoca dichiarati, valore del pixel con l'unità se nota; "fuori dal cielo"/"nessun dato" senza valore."""
         if result is None or result.status != "ok":
             self.cursor_label.setText(self.tr("No data"))
             return
@@ -787,16 +802,31 @@ class StatusBar(QStatusBar):
             self.cursor_label.setText(self.tr("Outside the sky"))
             return
         sky = values["sky"]
-        parts = [f"{sky['frame']} {_json_text(sky['lon'])} {_json_text(sky['lat'])}"]
+        parts = [self._sky_text(sky)]
         pixel = values.get("pixel")
         if pixel is None:
             parts.append(self.tr("no data"))
         else:
             unit = pixel.get("unit") or pixel.get("unit_label") or ""
-            parts.append(f"{_json_text(pixel['value'])} {unit}".strip())
+            value = pixel["value"]
+            parts.append(f"{value:.6g} {unit}".strip() if math.isfinite(value) else self.tr("no data"))
             if pixel.get("fits") is not None:
                 parts.append(f"FITS ({pixel['fits']['x']}, {pixel['fits']['y']})")
         self.cursor_label.setText("  ·  ".join(parts))
+
+    def _sky_text(self, sky: Mapping) -> str:
+        """Frame, longitudine e latitudine (10 ``format_coordinates``) ed epoca come la dichiara il risultato."""
+        frame = sky["frame"]
+        lon = format_coordinates(values=_quantity(sky["lon"]), frame=frame, axis="lon", style=self.coordinate_style)
+        lat = format_coordinates(values=_quantity(sky["lat"]), frame=frame, axis="lat", style=self.coordinate_style)
+        epoch = sky.get("epoch")
+        if epoch is None:
+            epoch_text = self.tr("epoch unknown")
+        elif isinstance(epoch, str):
+            epoch_text = self.tr("epoch %1").replace("%1", epoch)
+        else:
+            epoch_text = self.tr("epoch %1").replace("%1", f"JD {sum(epoch['value']):.5f} {epoch['scale'].upper()}")
+        return f"{frame.upper() if frame == 'icrs' else frame.capitalize()} {lon.lon[0]} {lat.lat[0]} ({epoch_text})"
 
     def show_network(self, commands: int, tiles: int) -> None:
         self.network_label.setText(self.tr("Network: %1 commands, %2 tiles").replace("%1", str(commands))
@@ -1288,6 +1318,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self.status = StatusBar(self)
         self.status.cancelRequested.connect(self.cancel_running)
+        self.sky.cursor_read.connect(self.status.show_cursor)
         self.setStatusBar(self.status)
         self._start_runner()
         self.apply_appearance(self.preference("appearance"))
@@ -1312,7 +1343,7 @@ class MainWindow(QMainWindow):
         """Visualizzatore del cielo del 41 al centro (sprint 4a: sfondo HiPS, zoom e spostamento)."""
         from astrotwo.ui.sky_viewer import SkyViewer
 
-        self.sky = SkyViewer(self.submit, cache=self.cache)
+        self.sky = SkyViewer(self.submit, cache=self.cache, passive=self.read_passive)
         self.sky.message.connect(lambda m: self.messages.add(None, m, error=m.code == "GL_UNAVAILABLE"))
         if hasattr(self.sky.renderer, "failed"):
             self.sky.renderer.failed.connect(
@@ -1579,6 +1610,13 @@ class MainWindow(QMainWindow):
         self._submit_job.emit(job)
         return job.id
 
+    def read_passive(self, name: str, params: Mapping[str, object], source: str = "mouse") -> CommandResult:
+        """Esegue subito un comando ``passive`` (D05-1) fuori dalla coda e dalla cronologia; si chiama da un thread
+        dei tile (41 §3.11). Legge lo stato corrente della sessione, senza modificarlo."""
+        session = self.session
+        version = session.registry.spec(name).version
+        return session.registry.run(Command(name, version, dict(params), RequestedBy(source)), session.workspace)[1]
+
     def busy(self) -> bool:
         return bool(self._jobs)
 
@@ -1660,6 +1698,7 @@ class MainWindow(QMainWindow):
             for key, (frame, fmt) in COORDINATE_DISPLAYS.items():
                 if (frame, fmt) == (p["frame"], p["format"]):
                     self.coordinate_actions[key].setChecked(True)
+            self.status.coordinate_style = p["format"]
 
     # --- azioni dei menu ----------------------------------------------------------------
 

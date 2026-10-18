@@ -1,18 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Visualizzatore del cielo (41), sprint 4a: sfondo HiPS di un survey, zoom e spostamento.
+"""Visualizzatore del cielo (41), sprint 4a-4b: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il mouse.
 
 Nessun numero mostrato nasce qui: la geometria è la ``ViewGeometry`` del 10 (dai comandi di vista del 05), i tile
 e il loro campionamento sulla finestra vengono dal 12 (``view_sampling``, ``fetch_tile``, ``fill_view``).
 Traslazione e scala dello schermo durante un gesto sono solo disegno (41 §3.4); a fine gesto (300 ms fermo, 05
 §3.3) si registrano ``view.set_zoom`` e/o ``view.set_center`` con lo stato finale.
 
-In questo sprint: un solo sfondo HiPS a colori (JPEG/PNG); i tile FITS (colori con ``set_display`` dell'11), i
+Sfondo HiPS: un solo survey; i tile JPEG/PNG si disegnano com'è, i tile FITS sono portati a colori da
+``set_display`` dell'11 con i limiti scelti da ``hips.set_survey`` (campo ``display`` del livello, 41 §3.7). Sotto il
+mouse una lettura passiva ``cursor.read`` (05) nel gruppo di thread dei tile, al più una in corso (41 §3.11). I
 cataloghi, i livelli e gli strumenti arrivano negli sprint successivi.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 import threading
@@ -132,6 +135,7 @@ class _Bridge(QObject):
     tile = Signal(int, object)  # generazione, ViewTile
     failed = Signal(int, str, str)  # generazione, codice, testo
     done = Signal(int)  # generazione (una richiesta di tile finita, riuscita o no)
+    cursor = Signal(object)  # CommandResult di una lettura sotto il mouse
 
 
 class _Task(QRunnable):
@@ -173,7 +177,7 @@ class TilePool:
 
         self.pool.start(_Task(run))
 
-    def fetch(self, generation: int, service, sampling, index: int) -> None:
+    def fetch(self, generation: int, service, sampling, index: int, display: Mapping | None = None) -> None:
         from astrotwo.core.hips import fetch_tile, fill_view
 
         def run() -> None:
@@ -184,7 +188,7 @@ class TilePool:
                     tile = fetch_tile(service, sampling.order, index, plane=sampling.plane, cache=self.cache,
                                       memory=self.memory)
                     if self.current(generation):
-                        self.bridge.tile.emit(generation, fill_view(sampling, tile))
+                        self.bridge.tile.emit(generation, colorize(fill_view(sampling, tile), display))
                 except Exception as exc:  # noqa: BLE001 - errori del 12/04: zona vuota e un messaggio
                     code = getattr(exc, "code", type(exc).__name__)
                     self.bridge.failed.emit(generation, str(code), str(exc))
@@ -193,8 +197,36 @@ class TilePool:
 
         self.pool.start(_Task(run))
 
+    def read(self, passive: Callable[..., object], name: str, params: Mapping) -> None:
+        """Lettura passiva (``cursor.read``, 41 §3.11) nel gruppo di thread dei tile; il risultato torna al thread
+        principale con ``bridge.cursor`` (un errore imprevisto diventa un risultato in errore, mai un'eccezione)."""
+        from astrotwo.core.commands import CommandResult
+
+        def run() -> None:
+            try:
+                result = passive(name, params, "mouse")
+            except Exception as exc:  # noqa: BLE001 - il gruppo di thread non si ferma mai
+                result = CommandResult("error", error=ResultMessage("UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}"))
+            self.bridge.cursor.emit(result)
+
+        self.pool.start(_Task(run))
+
     def wait(self, msecs: int = 30000) -> bool:
         return self.pool.waitForDone(msecs)
+
+
+def colorize(view_tile, display: Mapping | None):
+    """Tile FITS → colori RGBA con ``set_display`` dell'11 (41 §3.7): nessun calcolo qui, solo la chiamata al modulo.
+    I tile JPEG/PNG hanno già i colori. Pixel non finiti = trasparenti (``set_display``)."""
+    if view_tile.format != "fits":
+        return view_tile
+    from astrotwo.core.images_fits import set_display
+
+    if display is None or display.get("vmin") is None or display.get("vmax") is None:
+        raise HiPSError("HIPS_DISPLAY_UNKNOWN", "limiti di colore del survey non noti: i tile FITS non si disegnano")
+    plane = set_display(view_tile.values, display["vmin"], display["vmax"], display.get("gamma", 1.0),
+                        display.get("palette", "gray"), display.get("stretch", "linear"))
+    return dataclasses.replace(view_tile, values=plane.rgba, format="rgba")
 
 
 def format_field(field: Mapping | None) -> str:
@@ -212,21 +244,24 @@ def format_field(field: Mapping | None) -> str:
 class SkyViewer(QWidget):
     """Widget del cielo (41 §7): tiene la ``ViewGeometry`` corrente, traduce i gesti in comandi, disegna i tile.
 
-    ``submit(name, params, source)`` mette in coda un comando del 05 (la coda del 40).
+    ``submit(name, params, source)`` mette in coda un comando del 05 (la coda del 40); ``passive(name, params,
+    source)`` esegue subito un comando passivo (D05-1) e ne restituisce il risultato (chiamata da un thread dei tile).
     """
 
     message = Signal(object)  # ResultMessage per il pannello Messaggi (un solo messaggio per survey e codice)
     tiles_changed = Signal(int)  # richieste di tile in corso, per la barra di stato
     view_changed = Signal()  # nuova geometria o nuovo survey disegnati (scritta della barra)
     first_shown = Signal()  # la finestra ha la sua dimensione vera: si può chiedere la vista iniziale
+    cursor_read = Signal(object)  # CommandResult di cursor.read, o None se il mouse esce dal cielo
 
     def __init__(self, submit: Callable[..., int], cache=None, renderer: SkyRenderer | None = None,
-                 parent=None) -> None:
+                 parent=None, passive: Callable[..., object] | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("skyArea")
         self.setMinimumSize(320, 240)
-        self.setMouseTracking(False)
+        self.setMouseTracking(True)  # coordinate sotto il mouse anche senza premere (41 §3.11)
         self.submit = submit
+        self.passive = passive
         self.renderer = renderer if renderer is not None else DEFAULT_RENDERER()
         child = self.renderer.widget()
         child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -240,10 +275,15 @@ class SkyViewer(QWidget):
         self.tiles.bridge.tile.connect(self._tile)
         self.tiles.bridge.failed.connect(self._failed)
         self.tiles.bridge.done.connect(self._tile_done)
+        self.tiles.bridge.cursor.connect(self._cursor_done)
+        self._cursor_busy = False
+        self._cursor_next: QPointF | None = None  # ultima posizione arrivata mentre una lettura era in corso
+        self._cursor_inside = False
         self.geometry = None  # ViewGeometry del 10 disegnata (o in preparazione)
         self.view = None  # ViewState corrente
         self.service = None
         self.survey_layer: str | None = None
+        self.display: Mapping | None = None  # limiti, palette e funzione di trasferimento del survey FITS (livello)
         self.field: Mapping | None = None  # field_of_view dell'ultimo comando di vista
         self.sampling = None
         self.canvas: np.ndarray | None = None  # RGBA, righe nell'ordine della finestra (riga 0 = sud, y del 10)
@@ -344,6 +384,7 @@ class SkyViewer(QWidget):
             return
         self.geometry = view.geometry
         self.service = layer.data if layer else None
+        self.display = layer.display if layer else None
         self.survey_layer = layer.id if layer else None
         if changed_geometry and self._submitted is None:
             # Vista cambiata da altro che dal gesto in corso (Vai a, comando dell'assistente, cronologia): lo
@@ -389,13 +430,13 @@ class SkyViewer(QWidget):
             self.k, self.tx, self.ty = kr, self.tx - kr * txs, self.ty - kr * tys
         self._upload()
         self.renderer.set_transform(self.k, self.tx, self.ty)
-        if "fits" in self.service.tile_formats[:1]:
-            self._report("HIPS_FITS_NOT_YET", f"{self.service.hips_id}: i tile FITS si disegnano con set_display "
-                         "dell'11 nello sprint successivo del 41; scegliere un survey a colori (JPEG o PNG)")
+        if "fits" in self.service.tile_formats[:1] and (self.display is None or self.display.get("vmin") is None):
+            self._report("HIPS_DISPLAY_UNKNOWN", f"{self.service.hips_id}: limiti di colore del survey non noti, "
+                         "i tile FITS non si disegnano; riaprire il survey indicando vmin e vmax")
             return
         for index in sampling.tiles:
             self._in_flight += 1
-            self.tiles.fetch(gen, self.service, sampling, index)
+            self.tiles.fetch(gen, self.service, sampling, index, self.display)
         self.tiles_changed.emit(self._in_flight)
 
     def _tile(self, gen: int, view_tile) -> None:
@@ -501,7 +542,47 @@ class SkyViewer(QWidget):
             pos = event.position()
             self.pan_by(pos.x() - self._drag.x(), pos.y() - self._drag.y())
             self._drag = pos
+        self._cursor_inside = True
+        self.read_cursor(event.position())
         event.accept()
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._cursor_inside = False
+        self._cursor_next = None
+        self.cursor_read.emit(None)
+        super().leaveEvent(event)
+
+    # --- coordinate e valore sotto il mouse (41 §3.11) -----------------------------------
+
+    def window_position(self, at: QPointF) -> dict:
+        """Punto dello schermo (pixel logici) → pixel della finestra disegnata (convenzione numpy, riga 0 = sud):
+        stessa traslazione e scala del disegno (§3.4), anche durante un gesto. È geometria di disegno: le coordinate
+        celesti le dà ``cursor.read`` con il 10."""
+        r = self.ratio()
+        qx, qy = (at.x() * r - self.tx) / self.k, (at.y() * r - self.ty) / self.k
+        rows = self.geometry.shape[0]
+        return {"x": qx - 0.5, "y": rows - qy - 0.5, "convention": "numpy"}
+
+    def read_cursor(self, at: QPointF) -> None:
+        """Lettura passiva ``cursor.read`` alla posizione ``at``: al più una in corso, vale l'ultima posizione."""
+        if self.passive is None or self.geometry is None or self.view is None:
+            return
+        if self._cursor_busy:
+            self._cursor_next = at
+            return
+        self._cursor_busy = True
+        order = None
+        if self.service is not None and self.sampling is not None and "fits" in self.service.tile_formats:
+            order = int(self.sampling.order)  # il valore è quello del pixel disegnato (decisione del 2026-10-18)
+        self.tiles.read(self.passive, "cursor.read", {"position": self.window_position(at), "order": order})
+
+    def _cursor_done(self, result) -> None:
+        self._cursor_busy = False
+        if self._cursor_inside:
+            self.cursor_read.emit(result)
+        pending, self._cursor_next = self._cursor_next, None
+        if pending is not None and self._cursor_inside:
+            self.read_cursor(pending)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         self._drag = None

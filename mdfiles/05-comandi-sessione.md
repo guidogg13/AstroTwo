@@ -342,7 +342,7 @@ le scelte minori di §13; tutti versione 1):
 |---|---|---|---|
 | `image.open` (file, HDU) | 11 `list_image_hdus`, `load_image`; 19 `check_overlay` | session | lungo |
 | `image.set_display` (livello, vmin, vmax, funzione di trasferimento, palette, gamma) | 11 `set_display` | session | |
-| `hips.set_survey` (identificativo o URL) | 12 `set_survey` (`add_hips` per un URL) | session | rete |
+| `hips.set_survey` (identificativo o URL, `vmin`, `vmax`) | 12 `set_survey` (`add_hips` per un URL), `fetch_tile`; 11 `suggest_display_limits` (survey con tile FITS) | session | rete |
 | `catalog.open_file` (file, tabella, formato) | 13 `load_table`, `suggest_position_columns`, `confirm_position_columns` | session | lungo |
 | `catalog.load_region` (catalogo, centro, raggio, `max_rows`) | 13 `load_catalog` con regione (rete del 14) | session | rete, lungo |
 | `catalog.set_columns` (livello, colonne di posizione, moto proprio, parallasse) | 13 `confirm_position_columns` | session | |
@@ -361,7 +361,7 @@ le scelte minori di §13; tutti versione 1):
 | `cache.clear` (modulo) | 04 `clear` | application | |
 | `prefs.set` (chiave, valore) | — | application | |
 | `ui.*` (strumento attivo, pannelli, schermo intero) | — | application | |
-| `cursor.read` (posizione sullo schermo) | 10 `pixel_to_sky`, `convert_pixel_convention`; 17 `read_pixel` o 12 `pixel_values` | passive | |
+| `cursor.read` (posizione sullo schermo, `order`) | 10 `pixel_to_sky`, `convert_coordinates`, `convert_pixel_convention`; 17 `read_pixel` o 12 `pixel_values` | passive | |
 | `simbad.pointer` (posizione, raggio) | 10 `pixel_to_sky`, 17 `angular_distance`, 14 `simbad_pointer` | passive | rete |
 | `calc.*` (cinque calcolatrici) | 18 (adattatore `run_command`) | session | |
 | `coords.resolve_name` (testo del nome) — nuovo, 2026-10-16 | 10 `resolve_name` | session | sola lettura, rete |
@@ -607,7 +607,17 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   7. **Livelli:** `image.open` sostituisce l'immagine aperta (al più una,
      41 §3.5) e scrive nel comando registrato i limiti scelti da
      `suggest_display_limits` (D41-3); `hips.set_survey` sostituisce lo
-     sfondo e lo mette in fondo all'ordine; `measure.distance` misura tra due
+     sfondo e lo mette in fondo all'ordine; **per un survey con tile FITS
+     (primo formato `fits`) sceglie i limiti di colore** (parametri `vmin` e
+     `vmax`: se dati si usano, altrimenti `hips_pixel_cut` del servizio, altrimenti
+     `suggest_display_limits` sul tile FITS che contiene ICRS (0°, 0°) — centro
+     della vista iniziale — all'ordine min(3, ordine massimo del survey); se quel
+     tile manca o è fuori copertura, sul primo tile coperto di quell'ordine; il
+     metodo è dichiarato nel risultato) e li scrive nel comando registrato e nel
+     campo `display` del livello (palette `gray`, funzione `linear`, gamma 1);
+     `cursor.read` converte il cielo nel sistema scelto con
+     `view.set_coordinate_display` e, con il parametro facoltativo `order`, legge
+     il valore del survey FITS a quell'ordine (default: il più profondo); `measure.distance` misura tra due
      pixel di un'immagine con WCS e crea un livello `measure`.
   8. **Firma:** `execute` restituisce il `CommandResult` (§7); `run`
      restituisce anche il comando registrato (con i valori scelti dal
@@ -632,3 +642,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-17 | Claude Code | **Codice della parte 1 della v1** (divisione approvata dal proprietario il 2026-10-17): `src/astrotwo/core/commands.py` (39 comandi della tabella di §7, registro, spazio di lavoro immutabile, cronologia, sessione con riapertura, schema JSON) e `tests/core/test_commands.py` (T1–T22 più vista, misura, comandi collegati e costo del registro, 26 test). Tipo `time` nell'elenco chiuso (precisazione di D05-4); nuovi casi in §10 (`VIEW_UNDEFINED`, `OUT_OF_SKY`, `POSITION_COLUMNS_REQUIRED`, comandi non collegati); scelte minori della parte 1 in §13, da confermare. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17 (parte 3 della v1):** D05-2 precisata (impronta = SHA-256 del contenuto restituito dal modulo; §3.1 e §13 aggiornati); confermate le scelte minori 1 (tipo `time`), il parametro `window` della 2 e la 4; le altre restano da confermare. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Decisione del proprietario (sprint 4a del 41):** i comandi di vista restituiscono `field_of_view` della geometria disegnata (2 × `field_radius` del 10, con il metodo), perché il `field_of_view` di `projection_choice` può riferirsi alla geometria prima della ricreazione della base (§13, scelta 2); codice e test aggiornati. Stato `approvato` invariato. |
+| 2026-10-18 | Claude Code | **Sprint 4b del 41 (decisioni del proprietario del 2026-10-18):** `hips.set_survey` guadagna `vmin` e `vmax` facoltativi e, per i survey con tile FITS, sceglie i limiti di colore (`hips_pixel_cut`, altrimenti `suggest_display_limits` sul tile di ICRS (0°, 0°) all'ordine min(3, massimo), con ripiego sul primo tile coperto) e li registra nel comando (§3.6 punto 7, T19 del 41); `cursor.read` guadagna `order` facoltativo (valore del pixel all'ordine disegnato) e dà il cielo nel sistema scelto. Il ripiego sul primo tile coperto è una scelta minore da confermare. Stato `approvato` invariato. |

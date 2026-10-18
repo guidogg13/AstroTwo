@@ -18,6 +18,24 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-18, parte 4 sprint 4b della v1 (41: tile FITS e
+  lettura sotto il mouse):** i tile dei survey FITS si disegnano con i
+  colori di `set_display` dell'11 (palette `gray`, funzione `linear`,
+  gamma 1; pixel non finiti trasparenti) al posto dell'avviso
+  `HIPS_FITS_NOT_YET`; nella barra di stato compaiono frame, coordinate
+  scritte da `format_coordinates` del 10, epoca dichiarata e, per i survey
+  FITS, il valore del pixel con l'unità. **Decisioni del proprietario del
+  2026-10-18:** (1) i limiti di colore li sceglie `hips.set_survey`
+  (`hips_pixel_cut`, altrimenti `suggest_display_limits` sul tile di ICRS
+  (0°, 0°) all'ordine min(3, massimo)) e li scrive nel comando registrato
+  (`vmin`, `vmax`: riapertura della sessione = stessi colori); (2) il
+  valore del pixel si legge all'ordine disegnato (`cursor.read` guadagna
+  `order`). Aggiornati `05` e `41` (stato `approvato` invariato). Scelta
+  minore da confermare: se il tile di (0°, 0°) manca, i limiti vengono dal
+  primo tile coperto (altrimenti `HIPS_DISPLAY_LIMITS_UNDEFINED`).
+  Il test `test_visual_guidelines` faceva una richiesta reale a SIMBAD:
+  ora usa il finto servizio (`fake_simbad`), nessun cambiamento all'app.
+  Decisioni aperte invariate: **13**.
 - **Stato al 2026-10-17, licenza del progetto (A11 decisa):** AstroTwo è distribuito con **GPL-3.0-or-later**, titolare Guido Ratti
   (2026, unico titolare). Creati `LICENSE` (testo ufficiale GPL-3.0), `NOTICE`, `CONTRIBUTING.md` (nessun contributo esterno senza CLA);
   `pyproject.toml` con `license` e `license-files`; intestazione SPDX in tutti i `.py` (test `tests/test_license_headers.py`);
@@ -782,9 +800,9 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    tabulari; prova a mano fatta dal proprietario). **Parte 3b
    (correzioni dell'aspetto del 40) scritta il 2026-10-17** (icone Lucide
    con licenza verificata); D40-4 decisa il 2026-10-17 (⌃⌘N). **Parte 4,
-   sprint 4a (41: sfondo HiPS, zoom, spostamento) scritta il 2026-10-17**;
-   prossimi sprint del 41: 4b tile FITS con `set_display` e coordinate
-   sotto il mouse, 4c griglia e nord/barra di scala, 4d immagine FITS,
+   sprint 4a (41: sfondo HiPS, zoom, spostamento) scritta il 2026-10-17,
+   sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
+   2026-10-18**; prossimi sprint del 41: 4c griglia e nord/barra di scala, 4d immagine FITS,
    4e cataloghi e clic, 4f MOC e livelli, 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -882,3 +900,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **Parte 4a-fix2:** la rotella di un mouse vero non zooma sul Mac del proprietario; aggiunto il log diagnostico `ASTROTWO_DEBUG_INPUT=1` (spento di default) in `sky_viewer.py`, descritto nel `41` §3.4. Causa **da verificare** con i dati reali; nessun file cambia stato. |
 | 2026-10-17 | Claude Code | **Parte 4a-fix2 (correzione):** causa trovata con il log del proprietario: la rotella del mouse su macOS ha `pixelDelta` non nullo e il codice la trattava come trackpad (solo spostamento). Ora `NoScrollPhase` = rotella → zoom (1/6 di scatto per evento, 6 eventi per scatto misurati), fasi = trackpad → spostamento. Specifica `41` §3.4 aggiornata prima; test con i valori reali. Nessun file cambia stato. |
 | 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026. Creati `LICENSE`, `NOTICE`, `CONTRIBUTING.md`; `pyproject.toml` (PEP 639); intestazioni SPDX in tutti i `.py` con test; `THIRD_PARTY_LICENSES` rigenerato; `01` §4.2/§6.1 (compatibilità, crediti dei dati con "da verificare" per Sesame, HiPS, MocServer, uso commerciale DSS, requisiti del `60`). Nessun cambiamento di comportamento. Aperte **13** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 11). Stati invariati. |
+| 2026-10-18 | Claude Code | **Parte 4, sprint 4b del codice della v1 (41):** tile FITS a colori con `set_display` (`ui/sky_viewer.py`, `colorize`), limiti di colore scelti da `hips.set_survey` e registrati nel comando (`core/commands.py`: parametri `vmin`/`vmax`), coordinate e valore del pixel sotto il mouse nella barra di stato (`cursor.read` con `order` e sistema scelto, `format_coordinates` del 10; `ui/main_window.py`), traduzioni; test nuovi in `tests/ui/test_sky_viewer.py` e `tests/core/test_commands_hips_display.py` (T4 FITS, T8, T19). Decisioni del proprietario del 2026-10-18 in `05` e `41`. Corretto `test_visual_guidelines` (rete reale verso SIMBAD → `fake_simbad`). |

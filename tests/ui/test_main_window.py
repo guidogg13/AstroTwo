@@ -141,7 +141,8 @@ def test_t1_menu_items_produce_commands(qtbot, window, files, offline, tmp_path,
     # export_png: disegno del 41 non ancora collegato → COMMAND_UNKNOWN del 05
     assert by_name["view.export_png"][0].result.error.code == "COMMAND_UNKNOWN"
     assert by_name["ui.set_appearance"][0].command.parameters == {"mode": "night"} and win.appearance == "night"
-    assert by_name["hips.set_survey"][0].command.parameters == {"survey": "CDS/P/2MASS/color"}
+    assert by_name["hips.set_survey"][0].command.parameters == {
+        "survey": "CDS/P/2MASS/color", "vmin": None, "vmax": None}
     assert by_name["hips.set_survey"][0].result.error.code == "NET_TIMEOUT"
     region = by_name["catalog.load_region"][0].command.parameters
     view = win.session.workspace.state.view
@@ -332,6 +333,7 @@ def test_t7_decimal_point_in_italian(qtbot, settings_path, cache):
         detail = win.history.detail.toPlainText()
         assert "56.75" in detail and "24.125" in detail and "56,75" not in detail and "24,125" not in detail
         assert json.loads(detail)["result"]["values"] == win.session.history.entries[1].result.values
+        win.status.coordinate_style = "decimal"
         win.status.show_cursor(win.session.history.entries[1].result.__class__(
             "ok", values={"sky": sky(56.75, 24.125), "pixel": {"value": 0.25, "unit": "Jy"}}))
         assert "56.75" in win.status.cursor_label.text() and "0.25 Jy" in win.status.cursor_label.text()
@@ -386,7 +388,7 @@ def test_startup_commands_from_preferences(qtbot, settings_path, cache, offline)
     entries = win.session.history.entries
     assert [e.command.name for e in entries] == ["view.set_coordinate_display", "hips.set_survey"]
     assert entries[0].command.parameters == {"frame": "icrs", "format": "decimal"}
-    assert entries[1].command.parameters == {"survey": "CDS/P/DSS2/color"}
+    assert entries[1].command.parameters == {"survey": "CDS/P/DSS2/color", "vmin": None, "vmax": None}
     win.close()
 
 
@@ -535,8 +537,10 @@ def test_t13_night_stylesheet_and_icons(qtbot, window):
     assert any(b > 200 for _, _, b in stylesheet_colors(QApplication.instance().styleSheet()))  # accento blu
 
 
-def test_visual_guidelines(qtbot, window):
-    """Linee guida visive (§3.11) e mockup: icone Lucide con licenza, barra, intestazioni, righe, stati vuoti."""
+def test_visual_guidelines(qtbot, window, fake_simbad):
+    """Linee guida visive (§3.11) e mockup: icone Lucide con licenza, barra, intestazioni, righe, stati vuoti.
+
+    ``go_to("%%%")`` risolve un nome: con ``fake_simbad`` nessuna richiesta di rete reale."""
     win = window
     names_used = set(win.toolbar_icons.values()) | {"search", "x", "picture-in-picture-2", "telescope", "table-2",
                                                     "history", "message-square-warning", "sparkles", "layers", "plus", "minus"}
@@ -684,10 +688,16 @@ def test_status_bar_cursor_values(window):
     assert bar.cursor_label.text() == "No data"
     bar.show_cursor(CommandResult("ok", values={"sky": None}))
     assert bar.cursor_label.text() == "Outside the sky"
-    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": {
-        "value": 105.5, "unit": "adu", "fits": {"x": 11, "y": 11}}}))
-    text = bar.cursor_label.text()
-    assert "56.75" in text and "105.5 adu" in text and "FITS (11, 11)" in text
+    pixel = {"value": 105.5, "unit": "adu", "fits": {"x": 11, "y": 11}}
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": pixel}))
+    text = bar.cursor_label.text()  # sessagesimale (default), frame ed epoca dichiarati, scritti da format_coordinates
+    assert text.startswith("ICRS 03h47m00.00s +24°07′12.0″ (epoch unknown)")
+    assert "105.5 adu" in text and "FITS (11, 11)" in text
+    bar.coordinate_style = "decimal"
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12, "galactic", epoch="J2016.0"), "pixel": pixel}))
+    assert bar.cursor_label.text().startswith("Galactic 56.750000 +24.120000 (epoch J2016.0)")
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": {"value": float("nan"), "unit": None}}))
+    assert bar.cursor_label.text().endswith("no data")
 
 
 def test_main_entry_point():

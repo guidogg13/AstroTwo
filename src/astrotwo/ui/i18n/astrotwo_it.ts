@@ -557,6 +557,14 @@
         <translation>nessun dato</translation>
     </message>
     <message>
+        <source>epoch unknown</source>
+        <translation>epoca non nota</translation>
+    </message>
+    <message>
+        <source>epoch %1</source>
+        <translation>epoca %1</translation>
+    </message>
+    <message>
         <source>Network: %1 commands, %2 tiles</source>
         <translation>Rete: %1 comandi, %2 tile</translation>
     </message>

@@ -37,7 +37,7 @@ Perimetro approvato dal proprietario il 2026-10-15.
 
 **Divisione del codice in sprint (2026-10-17).** **4a (scritto il
 2026-10-17):** sfondo HiPS di un survey a colori (JPEG/PNG; un survey FITS
-dà l'avviso `HIPS_FITS_NOT_YET` finché non arriva il 4b), zoom (rotella del
+dà l'avviso `HIPS_FITS_NOT_YET` fino al 4b), zoom (rotella del
 mouse 2^(1/4) per scatto, pizzico del trackpad) e spostamento
 (trascinamento, due dita sul trackpad) come `view.set_zoom`/`view.set_center`
 a fine gesto, scritta "survey · proiezione · campo" nella barra del `40`,
@@ -47,9 +47,11 @@ della finestra in pixel fisici, prima lo zoom), limiti della scala da
 0.01″/pixel a 360° / larghezza, campo nella barra = `field_of_view` dei
 comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 1°, in ′ sotto 1°, in ″ sotto 1′. Una nuova dimensione del cielo registra
-`view.set_center` con la nuova finestra a fine gesto. **Sprint successivi:**
-4b tile FITS con `set_display` e coordinate sotto il mouse (`cursor.read`);
-4c griglia e nord/barra di scala; 4d immagine FITS (base del suo WCS); 4e
+`view.set_center` con la nuova finestra a fine gesto. **4b (scritto il
+2026-10-18):** tile FITS portati a colori da `set_display` dell'11 con i limiti scelti da
+`hips.set_survey` (§3.7), coordinate e valore del pixel sotto il mouse nella barra di stato
+(`cursor.read`, §3.11; il valore si legge all'ordine disegnato, decisione del proprietario del
+2026-10-18). **Sprint successivi:** 4c griglia e nord/barra di scala; 4d immagine FITS (base del suo WCS); 4e
 cataloghi e clic su una sorgente; 4f MOC, corpi diversi e pannello dei
 livelli; 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
 (T17) e prestazioni (`perf`).
@@ -212,7 +214,15 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   `suggest_display_limits` dell'11 (D41-3) sui valori del **tile che
   contiene il centro della prima vista** del survey (scelta fissa, così il
   risultato non dipende dall'ordine di arrivo dei tile), dichiarati nel
-  risultato di `hips.set_survey`. **Tile JPEG o PNG:** colori del tile.
+  risultato di `hips.set_survey`. **Dove (decisione del proprietario del
+  2026-10-18):** i limiti li sceglie `hips.set_survey` (05, §3.6 punto 7), non il
+  visualizzatore, e li scrive nel comando registrato (`vmin`, `vmax`), così la
+  riapertura della sessione dà gli stessi colori; il "centro della prima vista" è
+  ICRS (0°, 0°), il centro fisso della vista iniziale, e il tile è quello
+  all'ordine min(3, massimo del survey) che lo contiene. Il visualizzatore
+  riceve i limiti nel campo `display` del livello e chiama `set_display` dell'11
+  (palette `gray`, funzione `linear`, gamma 1) su ogni tile nel gruppo di thread
+  dei tile: nessun calcolo nell'interfaccia. **Tile JPEG o PNG:** colori del tile.
 - Un cambio di finestra **annulla le richieste di tile non più
   necessarie** (annullamento cooperativo: i risultati si scartano).
 - Tile mancanti o scartati (`HIPS_TILE_MISSING`, `HIPS_BAD_TILE` del 12):
@@ -277,6 +287,9 @@ primi, senza secondi).
   `convert_pixel_convention` del 10 (DC7); valore con `read_pixel` del 17
   sull'immagine, altrimenti con `pixel_values` del 12 sui tile FITS del
   survey; nessun valore per i survey a colori (`HIPS_PIXEL_UNAVAILABLE`).
+  **Ordine (decisione del proprietario del 2026-10-18):** il valore si legge
+  all'ordine del campionamento disegnato (parametro `order` di `cursor.read`),
+  così è quello del pixel che si vede e il tile è già in memoria o in cache.
 - Fuori dalla proiezione (bordo dell'`AIT`): "fuori dal cielo".
 - Il risultato va nella barra di stato del `40`; il formato dei numeri
   è quello di `format_coordinates` del 10 con le cifre di DC3 (D41-2).
@@ -658,3 +671,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-17 | Claude Code | **Sprint 4a del codice** (§3.1): `ui/sky_viewer.py` e `ui/sky_renderer_gl.py`, sfondo HiPS a colori, zoom e spostamento come comandi del `05`, vista iniziale e limiti dello zoom (scelte del proprietario del 2026-10-17), scritta del survey; test T4, T5, T12 parziali e test `gl` del disegno in `tests/ui/test_sky_viewer.py`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Parte 4a-fix del codice della v1 (41, FASE: CODICE – interfaccia v1):** dopo la prova del proprietario (zoom e "Vai a" non funzionavano). Cause trovate con eventi Qt reali passati dalla finestra: (1) la rotella del mouse su macOS dà eventi con valori piccoli (non 120 per scatto): ora ogni evento vale almeno uno scatto; il pizzico è ora accettato; (2) uno spostamento o un ridimensionamento dei pannelli ancora da registrare, a fine gesto, rimetteva il centro in un altro punto dopo "Vai a" (e al primo avvio): ora una vista cambiata da altro azzera il gesto in sospeso e la finestra diversa è compensata; (3) l'errore di "Vai a" compare anche nella barra di stato. Nessun comando né spec cambiati; 3 test nuovi in `tests/ui/test_sky_viewer.py`. Aperta la domanda al proprietario su pulsanti + / − e ⌘+ / ⌘− (non nel 41). |
 | 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |
+| 2026-10-18 | Claude Code | **Sprint 4b del codice** (§3.1): tile FITS con `set_display`, limiti scelti da `hips.set_survey` (05) e registrati nel comando, coordinate e valore sotto il mouse nella barra di stato con `format_coordinates`; decisioni del proprietario del 2026-10-18 su dove si scelgono i limiti e su quale ordine si legge il valore (§3.7, §3.11); test T4 (tile FITS), T8, T19. Stato `approvato` invariato. |
