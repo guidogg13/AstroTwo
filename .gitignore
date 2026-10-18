@@ -13,3 +13,21 @@ examples/output/
 .cache/
 .uv-cache/
 *.egg-info/
+
+# distribuzione (modulo 60)
+build/
+dist/
+*.dmg
+*.app/
+
+# log e file locali
+*.log
+.env
+.env.*
+.coverage
+htmlcov/
+
+# impostazioni locali degli editor e di Claude Code
+.vscode/
+.idea/
+.claude/settings.local.json
