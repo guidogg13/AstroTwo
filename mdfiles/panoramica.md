@@ -18,6 +18,20 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-19, parte 4b-fix della v1:** dopo la prova del
+  proprietario. (1) **"Vai a" M31 non funzionava dopo Sirius:** causa trovata
+  con il servizio reale — il nome si risolveva bene (M31, m31, M 31,
+  Andromeda, NGC 224 danno tutti lo stesso oggetto, come Sirius), ma la base
+  `TAN` creata su Sirius non può rappresentare un centro a più di 90°
+  (`VIEW_PARAMETERS_INVALID: il centro cade fuori dalla proiezione della
+  base`); ora il 05 ricrea la base con il punto di tangenza al centro (test
+  con le risposte reali di SIMBAD registrate, senza rete). (2) Il valore del
+  pixel dichiara ordine HiPS e risoluzione (`cursor.read`: `resolution`,
+  `survey_order`; barra di stato `… · ordine 6 (≈ 3.2″/px)`); il testo della
+  barra non ridimensiona più il cielo. (3) Ripiego sul primo tile coperto e
+  6 cifre significative confermati. (4) `pytest-timeout` (120 s a test, 600 s
+  quelli di rete, metodo `thread`): un blocco diventa un fallimento con il
+  nome del test. Decisioni aperte invariate: **13**.
 - **Stato al 2026-10-18, parte 4 sprint 4b della v1 (41: tile FITS e
   lettura sotto il mouse):** i tile dei survey FITS si disegnano con i
   colori di `set_display` dell'11 (palette `gray`, funzione `linear`,
@@ -31,8 +45,8 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
   (`vmin`, `vmax`: riapertura della sessione = stessi colori); (2) il
   valore del pixel si legge all'ordine disegnato (`cursor.read` guadagna
   `order`). Aggiornati `05` e `41` (stato `approvato` invariato). Scelta
-  minore da confermare: se il tile di (0°, 0°) manca, i limiti vengono dal
-  primo tile coperto (altrimenti `HIPS_DISPLAY_LIMITS_UNDEFINED`).
+  minore (confermata il 2026-10-19): se il tile di (0°, 0°) manca, i limiti
+  vengono dal primo tile coperto (altrimenti `HIPS_DISPLAY_LIMITS_UNDEFINED`).
   Il test `test_visual_guidelines` faceva una richiesta reale a SIMBAD:
   ora usa il finto servizio (`fake_simbad`), nessun cambiamento all'app.
   Decisioni aperte invariate: **13**.
@@ -802,7 +816,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    con licenza verificata); D40-4 decisa il 2026-10-17 (⌃⌘N). **Parte 4,
    sprint 4a (41: sfondo HiPS, zoom, spostamento) scritta il 2026-10-17,
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
-   2026-10-18**; prossimi sprint del 41: 4c griglia e nord/barra di scala, 4d immagine FITS,
+   2026-10-18, con correzioni il 2026-10-19**; prossimi sprint del 41: 4c griglia e nord/barra di scala, 4d immagine FITS,
    4e cataloghi e clic, 4f MOC e livelli, 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -901,3 +915,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **Parte 4a-fix2 (correzione):** causa trovata con il log del proprietario: la rotella del mouse su macOS ha `pixelDelta` non nullo e il codice la trattava come trackpad (solo spostamento). Ora `NoScrollPhase` = rotella → zoom (1/6 di scatto per evento, 6 eventi per scatto misurati), fasi = trackpad → spostamento. Specifica `41` §3.4 aggiornata prima; test con i valori reali. Nessun file cambia stato. |
 | 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026. Creati `LICENSE`, `NOTICE`, `CONTRIBUTING.md`; `pyproject.toml` (PEP 639); intestazioni SPDX in tutti i `.py` con test; `THIRD_PARTY_LICENSES` rigenerato; `01` §4.2/§6.1 (compatibilità, crediti dei dati con "da verificare" per Sesame, HiPS, MocServer, uso commerciale DSS, requisiti del `60`). Nessun cambiamento di comportamento. Aperte **13** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 11). Stati invariati. |
 | 2026-10-18 | Claude Code | **Parte 4, sprint 4b del codice della v1 (41):** tile FITS a colori con `set_display` (`ui/sky_viewer.py`, `colorize`), limiti di colore scelti da `hips.set_survey` e registrati nel comando (`core/commands.py`: parametri `vmin`/`vmax`), coordinate e valore del pixel sotto il mouse nella barra di stato (`cursor.read` con `order` e sistema scelto, `format_coordinates` del 10; `ui/main_window.py`), traduzioni; test nuovi in `tests/ui/test_sky_viewer.py` e `tests/core/test_commands_hips_display.py` (T4 FITS, T8, T19). Decisioni del proprietario del 2026-10-18 in `05` e `41`. Corretto `test_visual_guidelines` (rete reale verso SIMBAD → `fake_simbad`). |
+| 2026-10-19 | Claude Code | **Parte 4b-fix della v1 (41):** correzione di "Vai a" da una vista `TAN` verso un centro lontano (`_recompute_view` del 05 ricrea la base), ordine e risoluzione del valore del pixel in `cursor.read` e nella barra di stato, barra di stato che non ridimensiona il cielo, `pytest-timeout` come dipendenza di sviluppo (`pyproject.toml`, `uv.lock`, `THIRD_PARTY_LICENSES`, `tests/conftest.py`, `tests/test_timeout_config.py`); test nuovi. Scelte minori dell'sprint 4b confermate dal proprietario. |

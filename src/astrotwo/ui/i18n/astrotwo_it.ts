@@ -557,6 +557,10 @@
         <translation>nessun dato</translation>
     </message>
     <message>
+        <source>order %1</source>
+        <translation>ordine %1</translation>
+    </message>
+    <message>
         <source>epoch unknown</source>
         <translation>epoca non nota</translation>
     </message>

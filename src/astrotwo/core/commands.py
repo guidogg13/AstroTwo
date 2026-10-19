@@ -1387,7 +1387,7 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
     Base creata: proiezione con ``choose_projection`` (soglia 33° in ``TAN``, 27° in ``AIT``), ricreata con il
     punto di tangenza al centro quando la proiezione cambia o il punto di tangenza esce dalla finestra.
     """
-    from astrotwo.core.coordinates_wcs import choose_projection, make_view_wcs
+    from astrotwo.core.coordinates_wcs import CoordinatesWcsError, choose_projection, make_view_wcs
 
     info = {} if info is None else info
     base = state.find(view.base_layer) if view.base_layer else None
@@ -1403,13 +1403,23 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
         view = dataclasses.replace(view, projection=geometry.projection, tangent_point=None, geometry=geometry)
     else:
         projection = view.projection or "TAN"
-        geometry = make_view_wcs(view.center, view.scale, shape, projection=projection, frame=view.frame,
-                                 tangent_point=view.tangent_point)
+        outside = False
+        try:
+            geometry = make_view_wcs(view.center, view.scale, shape, projection=projection, frame=view.frame,
+                                     tangent_point=view.tangent_point)
+        except CoordinatesWcsError as exc:
+            if exc.code != "VIEW_PARAMETERS_INVALID" or view.tangent_point is None:
+                raise
+            # Il nuovo centro non ha posto nella proiezione della base attuale (es. una ``TAN`` centrata su Sirius
+            # non rappresenta M31, a più di 90°): si ricrea la base con il punto di tangenza al centro (41 §3.2). Se
+            # il motivo era un altro (scala, finestra) lo stesso errore si ripresenta qui sotto.
+            outside = True
+            geometry = make_view_wcs(view.center, view.scale, shape, projection=projection, frame=view.frame)
         choice = choose_projection(2 * geometry.field_radius,
                                    threshold=_TO_AIT_THRESHOLD if projection == "TAN" else _TO_TAN_THRESHOLD)
         tx, ty = geometry.sky_to_window(geometry.tangent_point)
         inside = bool(-0.5 <= float(tx) < cols - 0.5 and -0.5 <= float(ty) < rows - 0.5)
-        recreated = choice.projection != projection or not inside or view.tangent_point is None
+        recreated = outside or choice.projection != projection or not inside or view.tangent_point is None
         if recreated:
             geometry = make_view_wcs(view.center, view.scale, shape, projection=choice.projection, frame=view.frame)
         info["base"] = "base creata" + (" (ricreata con il punto di tangenza al centro)" if recreated else "")
@@ -1656,8 +1666,15 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
             from astrotwo.core.hips import pixel_values
             try:
                 read = pixel_values(hips[0].data, sky.coords, order=p["order"], cache=ctx.cache)
+                from astropy_healpix import nside_to_pixel_resolution
+
+                # Risoluzione del pixel HiPS letto: lato medio della cella HEALPix all'ordine + log2(larghezza del
+                # tile) (``astropy-healpix``); a ordini bassi non è il pixel originale del survey.
+                nside = 2 ** (read.order + hips[0].data.tile_width.bit_length() - 1)
                 values["pixel"] = {"layer": hips[0].id, "value": float(np.ravel(read.values)[0]),
-                                   "unit": None if read.unit is None else str(read.unit), "order": read.order}
+                                   "unit": None if read.unit is None else str(read.unit), "order": read.order,
+                                   "resolution": quantity_json(nside_to_pixel_resolution(nside).to(u.arcsec)),
+                                   "survey_order": hips[0].data.order}
                 warnings += _module_warnings(read.warnings)
             except Exception as exc:  # noqa: BLE001
                 message = _module_error(exc)

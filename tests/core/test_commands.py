@@ -712,3 +712,25 @@ def test_registry_overhead(registry, files):
         registry.validate(command, ws)
     per_command = (time.perf_counter() - start) / 200
     assert per_command < 0.005, f"validazione: {per_command * 1e3:.3f} ms per comando"
+
+
+def test_go_to_center_outside_current_projection_recreates_base(registry, monkeypatch):
+    """Regressione del 2026-10-19: da una vista ``TAN`` centrata su Sirius, "Vai a" M31 (a circa 100°) dava
+    ``VIEW_PARAMETERS_INVALID``. Risposte di SIMBAD registrate dal servizio reale il 2026-10-19."""
+    recorded = {"Sirius": ("* alf CMa", 101.28715533333335, -16.71611586111111),
+                "M31": ("M  31", 10.684708333333333, 41.268750000000004)}
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (
+        simbad_table(*recorded[name]), "https://simbad.cds.unistra.fr/simbad/sim-tap"))
+    s = Session(registry)
+    assert run(s, "view.set_zoom", scale={"value": 7.5, "unit": "arcsec"}, window=WINDOW).status == "ok"
+    for name in ("Sirius", "M31", "Sirius", "M31"):
+        result = run(s, "view.go_to", text=name, window=WINDOW)
+        assert result.status == "ok", result.error
+        view = s.workspace.state.view
+        assert view.projection == "TAN" and "ricreata" in result.values["base"]
+        _, ra, dec = recorded[name]
+        assert view.center.lon.to_value(u.deg) == pytest.approx(ra, abs=1e-9)
+        assert view.center.lat.to_value(u.deg) == pytest.approx(dec, abs=1e-9)
+        # il centro del cielo disegnato è quello chiesto (10, window_to_sky)
+        mid = view.geometry.window_to_sky((WINDOW["width"] - 1) / 2, (WINDOW["height"] - 1) / 2)
+        assert mid.spherical.lon.deg == pytest.approx(ra, abs=1e-6)

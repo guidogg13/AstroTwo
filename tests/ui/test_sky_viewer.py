@@ -6,6 +6,7 @@ iniziale, coordinate e valore sotto il mouse.
 Piattaforma ``offscreen`` con il renderer in memoria (``tests/ui/fake_renderer.py``); il test ``gl`` usa la GPU.
 """
 
+import astropy.units as u
 import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
@@ -505,7 +506,12 @@ def expected_text(win, x, y):
     lon = cw.format_coordinates(frame, style="sexagesimal").lon[0]
     lat = cw.format_coordinates(frame, style="sexagesimal").lat[0]
     value = hips.pixel_values(sky.service, frame, order=sky.sampling.order, cache=win.cache).values[0]
-    return f"ICRS {lon} {lat} (epoch unknown)  ·  {float(value):.6g} mJy"
+    from astropy_healpix import nside_to_pixel_resolution
+
+    order = sky.sampling.order
+    res = nside_to_pixel_resolution(2 ** (order + 6)).to_value(u.arcsec)  # tile da 64 pixel = 6 livelli sotto l'ordine
+    unit_res = f"{res / 3600:.2g}°" if res >= 3600 else (f"{res / 60:.2g}′" if res >= 60 else f"{res:.2g}″")
+    return f"ICRS {lon} {lat} (epoch unknown)  ·  {float(value):.6g} mJy · order {order} (≈ {unit_res}/px)"
 
 
 def test_t8_cursor_coordinates_and_value_in_status_bar(qtbot, viewer_window, service):
@@ -519,6 +525,7 @@ def test_t8_cursor_coordinates_and_value_in_status_bar(qtbot, viewer_window, ser
         assert result.status == "ok" and result.values["pixel"]["order"] == win.sky.sampling.order
         assert win.status.cursor_label.text() == expected_text(win, x, y)
     assert len(win.session.history) == history  # lettura passiva: mai in cronologia (D05-1)
+    assert (win.sky.width(), win.sky.height()) == (w, h)  # il testo della barra non ridimensiona il cielo
     # il sistema scelto per le coordinate vale anche qui
     win.submit("view.set_coordinate_display", {"frame": "galactic", "format": "decimal"})
     wait_idle(qtbot, win)
@@ -584,3 +591,32 @@ def test_t8_reading_during_gesture_uses_drawn_transform(qtbot, viewer_window, se
     during = hover(qtbot, win, cx + 100, cy + 40).values["sky"]
     assert during["lon"]["value"] == pytest.approx(before["lon"]["value"], abs=1e-9)
     assert during["lat"]["value"] == pytest.approx(before["lat"]["value"], abs=1e-9)
+
+
+def test_go_to_far_target_from_tan_view(qtbot, viewer_window, monkeypatch):
+    """Sirius poi M31 (a circa 100°): la base ``TAN`` di Sirius non rappresenta M31, la base si ricrea e la vista va.
+
+    Risposte di SIMBAD registrate dal servizio reale il 2026-10-19 (``main_id``, ``ra`` e ``dec`` come restituiti)."""
+    from astrotwo.core import coordinates_wcs as cw
+    from tests.core.test_coordinates_wcs import simbad_table
+
+    recorded = {"Sirius": ("* alf CMa", 101.28715533333335, -16.71611586111111),
+                "M31": ("M  31", 10.684708333333333, 41.268750000000004)}
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (
+        simbad_table(*recorded[name]), "https://simbad.cds.unistra.fr/simbad/sim-tap"))
+    win = viewer_window
+    start(qtbot, win)
+    for name in ("Sirius", "M31", "Sirius", "M31"):
+        before = win.sky.sampling
+        win.go_to(name)
+        wait_idle(qtbot, win)
+        wait_drawn(qtbot, win, before)
+        entry = [e for e in win.session.history.entries if e.command.name == "view.go_to"][-1]
+        assert entry.result.status == "ok", entry.result.error
+        view = win.session.workspace.state.view
+        _, ra, dec = recorded[name]
+        assert view.center.lon.to_value("deg") == pytest.approx(ra, abs=1e-6)
+        assert view.center.lat.to_value("deg") == pytest.approx(dec, abs=1e-6)
+        assert view.projection == "TAN" and win.sky.geometry is view.geometry
+    codes = [win.messages.table.item(r, 1).text() for r in range(win.messages.table.rowCount())]
+    assert "VIEW_PARAMETERS_INVALID" not in codes

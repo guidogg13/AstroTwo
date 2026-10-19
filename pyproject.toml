@@ -35,6 +35,7 @@ astrotwo = "astrotwo.ui.main_window:main"
 dev = [
     "pytest>=9.1.1",
     "pytest-qt>=4.5.0",
+    "pytest-timeout>=2.4.0",
 ]
 
 [build-system]
@@ -47,6 +48,11 @@ packages = ["src/astrotwo"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not network and not keychain and not perf and not gl'"
+# Un test fermo diventa un fallimento con il suo nome (pytest-timeout): 120 s a test, 300 s per quelli di rete
+# (``tests/conftest.py``). Metodo ``thread``: scrive le pile di tutti i thread e termina il processo, perché un
+# blocco dentro Qt o in un thread di lavoro non risponderebbe a un segnale.
+timeout = 120
+timeout_method = "thread"
 markers = [
     "network: test che richiedono la rete (esclusi di default, 02-convenzioni.md §8 punto 3)",
     "keychain: test sul Portachiavi reale di macOS (esclusi di default, eseguiti a mano, 31 §12)",

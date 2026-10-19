@@ -14,7 +14,7 @@ import pytest
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.visualization import ZScaleInterval
-from astropy_healpix import HEALPix
+from astropy_healpix import HEALPix, nside_to_pixel_resolution
 
 from astrotwo.core import coordinates_wcs as cw
 from astrotwo.core import hips
@@ -150,6 +150,10 @@ def test_t8_cursor_read_frame_and_order(session, service):
         expected = hips.pixel_values(service_obj, sky, order=used, cache=session.registry.cache)
         assert result.values["pixel"]["value"] == float(expected.values[0])
         assert result.values["pixel"]["order"] == used and result.values["pixel"]["unit"] == "mJy"
+        # risoluzione del pixel letto (ordine + log2(64) = 6 livelli sotto il tile), ricalcolo con astropy-healpix
+        res = nside_to_pixel_resolution(2 ** (used + 6)).to_value(u.arcsec)
+        assert result.values["pixel"]["resolution"] == {"value": pytest.approx(res), "unit": "arcsec"}
+        assert result.values["pixel"]["survey_order"] == ORDER
     assert len(session.history) == history  # lettura passiva: mai in cronologia (D05-1)
     # cielo nel frame di base (ICRS, epoca non nota dichiarata)
     shown = result.values["sky"]

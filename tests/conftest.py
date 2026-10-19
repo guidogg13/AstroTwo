@@ -22,6 +22,10 @@ from astrotwo.core.cache import SharedCache
 # ``tests/ui/conftest.py``: un secondo modulo ``conftest`` nasconderebbe questo a ``tests/test_network_retries.py``.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+#: Limite per test di rete (secondi): comprende le ripetizioni (``_with_network_retries``); gli altri test hanno
+#: ``timeout`` di ``pyproject.toml`` (pytest-timeout, metodo ``thread``).
+NETWORK_TEST_TIMEOUT = 600
+
 pytest_plugins = ["pytester"]  # per il test della regola di ripetizione dei test di rete
 
 
@@ -197,6 +201,9 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.get_closest_marker("network") is not None:
             item.runtest = _with_network_retries(item)
+            if item.get_closest_marker("timeout") is None:
+                # limite più alto (3 tentativi con i timeout di rete del 04), 600 s invece dei 120 s di default
+                item.add_marker(pytest.mark.timeout(NETWORK_TEST_TIMEOUT))
 
 
 @pytest.hookimpl(hookwrapper=True)

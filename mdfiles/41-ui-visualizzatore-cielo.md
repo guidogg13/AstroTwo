@@ -83,8 +83,10 @@ dei tile sulla vista, aggiunto al 12 il 2026-10-15).
   finestra è esatta e deterministica, ricostruibile dalla cronologia.
 - **Ricentramento della base senza immagine (scelta minore 2):** la base
   si ricrea con un nuovo punto di tangenza (il centro della finestra)
-  quando il punto di tangenza esce dalla finestra, o quando cambia la
-  proiezione (§3.3).
+  quando il punto di tangenza esce dalla finestra, quando cambia la
+  proiezione (§3.3) o quando il nuovo centro non ha posto nella proiezione
+  della base attuale (una `TAN` non rappresenta punti a più di 90° dal
+  tangente: da Sirius a M31; correzione del 2026-10-19).
 - **Cambio di base in un passo:** la vista continua a mostrare la base
   vecchia finché per la nuova non sono pronte posizioni dei cataloghi,
   griglia, MOC e campionamento dei tile; poi passa alla nuova tutta
@@ -290,6 +292,12 @@ primi, senza secondi).
   **Ordine (decisione del proprietario del 2026-10-18):** il valore si legge
   all'ordine del campionamento disegnato (parametro `order` di `cursor.read`),
   così è quello del pixel che si vede e il tile è già in memoria o in cache.
+  **Dichiarazione (decisione del proprietario del 2026-10-19):** la barra di
+  stato scrive anche l'ordine HiPS letto e la risoluzione di quel pixel (es.
+  `1234.5 ADU · ordine 6 (≈ 3.2″/px)`), perché a ordini bassi il valore non è
+  il pixel originale del survey; i numeri vengono dal risultato di `cursor.read`
+  (6 cifre significative per il valore, 2 per la risoluzione). Il testo non
+  cambia la larghezza minima della finestra (se non ci sta, si taglia).
 - Fuori dalla proiezione (bordo dell'`AIT`): "fuori dal cielo".
 - Il risultato va nella barra di stato del `40`; il formato dei numeri
   è quello di `format_coordinates` del 10 con le cifre di DC3 (D41-2).
@@ -672,3 +680,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-17 | Claude Code | **Parte 4a-fix del codice della v1 (41, FASE: CODICE – interfaccia v1):** dopo la prova del proprietario (zoom e "Vai a" non funzionavano). Cause trovate con eventi Qt reali passati dalla finestra: (1) la rotella del mouse su macOS dà eventi con valori piccoli (non 120 per scatto): ora ogni evento vale almeno uno scatto; il pizzico è ora accettato; (2) uno spostamento o un ridimensionamento dei pannelli ancora da registrare, a fine gesto, rimetteva il centro in un altro punto dopo "Vai a" (e al primo avvio): ora una vista cambiata da altro azzera il gesto in sospeso e la finestra diversa è compensata; (3) l'errore di "Vai a" compare anche nella barra di stato. Nessun comando né spec cambiati; 3 test nuovi in `tests/ui/test_sky_viewer.py`. Aperta la domanda al proprietario su pulsanti + / − e ⌘+ / ⌘− (non nel 41). |
 | 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |
 | 2026-10-18 | Claude Code | **Sprint 4b del codice** (§3.1): tile FITS con `set_display`, limiti scelti da `hips.set_survey` (05) e registrati nel comando, coordinate e valore sotto il mouse nella barra di stato con `format_coordinates`; decisioni del proprietario del 2026-10-18 su dove si scelgono i limiti e su quale ordine si legge il valore (§3.7, §3.11); test T4 (tile FITS), T8, T19. Stato `approvato` invariato. |
+| 2026-10-19 | Claude Code | **Sprint 4b-fix:** "Vai a" M31 dopo Sirius non funzionava (la base `TAN` non rappresenta il nuovo centro): ricreazione della base nel 05 (§3.2); ordine e risoluzione del valore del pixel nella barra di stato (§3.11); la barra non ridimensiona più il cielo. Ripiego sul primo tile coperto e 6 cifre significative confermati dal proprietario. Stato `approvato` invariato. |

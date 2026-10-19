@@ -693,6 +693,12 @@ def test_status_bar_cursor_values(window):
     text = bar.cursor_label.text()  # sessagesimale (default), frame ed epoca dichiarati, scritti da format_coordinates
     assert text.startswith("ICRS 03h47m00.00s +24°07′12.0″ (epoch unknown)")
     assert "105.5 adu" in text and "FITS (11, 11)" in text
+    sourced = dict(pixel, order=6, resolution={"value": 3.2, "unit": "arcsec"})
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": sourced}))
+    assert "105.5 adu · order 6 (≈ 3.2″/px)" in bar.cursor_label.text()
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": dict(
+        sourced, order=0, resolution={"value": 3600.0 * 7.3, "unit": "arcsec"})}))
+    assert "order 0 (≈ 7.3°/px)" in bar.cursor_label.text()
     bar.coordinate_style = "decimal"
     bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12, "galactic", epoch="J2016.0"), "pixel": pixel}))
     assert bar.cursor_label.text().startswith("Galactic 56.750000 +24.120000 (epoch J2016.0)")

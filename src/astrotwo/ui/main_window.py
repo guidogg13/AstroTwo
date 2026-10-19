@@ -637,6 +637,15 @@ def _quantity(value: Mapping) -> u.Quantity:
     return u.Quantity(value["value"], unit)
 
 
+def _format_resolution(value: Mapping) -> str:
+    """Risoluzione di un pixel HiPS con 2 cifre significative, in ″, ′ o ° secondo la grandezza."""
+    q = _quantity(value)
+    for unit, symbol in ((u.deg, "°"), (u.arcmin, "′")):
+        if q.to_value(unit) >= 1.0:
+            return f"{q.to_value(unit):.2g}{symbol}"
+    return f"{q.to_value(u.arcsec):.2g}″"
+
+
 def _json_text(value: object) -> str:
     """Valori dei moduli come testo JSON: punto decimale in ogni lingua (§3.9), numeri invariati."""
     return json.dumps(value, ensure_ascii=False, allow_nan=True)
@@ -774,6 +783,10 @@ class StatusBar(QStatusBar):
         self.command_label = QLabel()
         for label in (self.cursor_label, self.network_label, self.command_label):
             label.setFont(font)
+        # Il testo sotto il mouse cambia a ogni movimento: non deve mai cambiare la larghezza minima della finestra
+        # (il cielo si ridimensionerebbe e registrerebbe una nuova finestra, 41 §3.1); se non ci sta, si taglia.
+        self.cursor_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.cursor_label.setMinimumWidth(0)
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedSize(90, 4)
         self.progress_bar.setTextVisible(False)
@@ -809,7 +822,12 @@ class StatusBar(QStatusBar):
         else:
             unit = pixel.get("unit") or pixel.get("unit_label") or ""
             value = pixel["value"]
-            parts.append(f"{value:.6g} {unit}".strip() if math.isfinite(value) else self.tr("no data"))
+            text = f"{value:.6g} {unit}".strip() if math.isfinite(value) else self.tr("no data")
+            if pixel.get("order") is not None and math.isfinite(value):  # da quale ordine HiPS e a che risoluzione
+                text += " · " + self.tr("order %1").replace("%1", str(pixel["order"]))
+                if pixel.get("resolution") is not None:
+                    text += f" (≈ {_format_resolution(pixel['resolution'])}/px)"
+            parts.append(text)
             if pixel.get("fits") is not None:
                 parts.append(f"FITS ({pixel['fits']['x']}, {pixel['fits']['y']})")
         self.cursor_label.setText("  ·  ".join(parts))
