@@ -569,6 +569,14 @@
         <translation>Fuori dal cielo</translation>
     </message>
     <message>
+        <source>(unit not declared)</source>
+        <translation>(unità non dichiarata)</translation>
+    </message>
+    <message>
+        <source>no celestial coordinates</source>
+        <translation>nessuna coordinata celeste</translation>
+    </message>
+    <message>
         <source>no data</source>
         <translation>nessun dato</translation>
     </message>

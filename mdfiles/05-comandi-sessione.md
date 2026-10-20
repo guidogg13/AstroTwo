@@ -607,8 +607,23 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
      `COMMAND_UNKNOWN`.
   7. **Livelli:** `image.open` sostituisce l'immagine aperta (al più una,
      41 §3.5) e scrive nel comando registrato i limiti scelti da
-     `suggest_display_limits` (D41-3); `hips.set_survey` sostituisce lo
-     sfondo e lo mette in fondo all'ordine; **per un survey con tile FITS
+     `suggest_display_limits` (D41-3); **l'immagine appena aperta diventa la
+     base della vista e la inquadra intera nella finestra** (decisione del
+     proprietario del 2026-10-20: centro = centro dei pixel con `pixel_to_sky`,
+     scala = scala della base di `make_view_wcs` × max(colonne immagine /
+     colonne finestra, righe immagine / righe finestra), dichiarati in
+     `framing`; senza finestra nota la vista non cambia); **un'immagine senza WCS
+     o con WCS non utilizzabile (`WCS_INVALID`) è la base come griglia di pixel**
+     (`PixelGridGeometry`: solo pixel, nessun centro né scala in angolo, nessuna
+     griglia, nord o barra; `view.set_center`/`view.set_zoom` non la muovono, D41-5);
+     `cursor.read` sulla griglia di pixel dà `sky = null`, `wcs_problem` e l'avviso
+     `WCS_INVALID`, e legge comunque il valore originale con `fits` (x, y);
+     `simbad.pointer` dà `WCS_INVALID`; `cursor.read` dichiara `unit_declared`
+     (BUNIT presente o no) e, se la conversione al sistema scelto richiede
+     un'epoca che manca, dà le coordinate nel frame dell'immagine con l'avviso
+     del 10; `hips.set_survey` sostituisce lo
+     sfondo e lo mette in fondo all'ordine, con gli avvisi dei moduli senza
+     ripetizioni (ogni sorgente una volta sola); **per un survey con tile FITS
      (primo formato `fits`) sceglie i limiti di colore** (parametri `vmin` e
      `vmax`: se dati si usano, altrimenti `hips_pixel_cut` del servizio, altrimenti
      `suggest_display_limits` sul tile FITS che contiene ICRS (0°, 0°) — centro
@@ -652,3 +667,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-18 | Claude Code | **Sprint 4b del 41 (decisioni del proprietario del 2026-10-18):** `hips.set_survey` guadagna `vmin` e `vmax` facoltativi e, per i survey con tile FITS, sceglie i limiti di colore (`hips_pixel_cut`, altrimenti `suggest_display_limits` sul tile di ICRS (0°, 0°) all'ordine min(3, massimo), con ripiego sul primo tile coperto) e li registra nel comando (§3.6 punto 7, T19 del 41); `cursor.read` guadagna `order` facoltativo (valore del pixel all'ordine disegnato) e dà il cielo nel sistema scelto. Il ripiego sul primo tile coperto è una scelta minore (confermata il 2026-10-19). Stato `approvato` invariato. |
 | 2026-10-19 | Claude Code | **Sprint 4b-fix (decisioni del proprietario del 2026-10-19):** confermati il ripiego sul primo tile coperto e le 6 cifre significative del valore del pixel; `cursor.read` dichiara ordine e risoluzione del pixel letto; **correzione:** `view.go_to`/`view.set_center` da una vista `TAN` verso un centro fuori dalla sua proiezione (Sirius → M31) davano `VIEW_PARAMETERS_INVALID`, ora la base si ricrea con il punto di tangenza al centro (§3.6 punto 7). Stato `approvato` invariato. |
 | 2026-10-20 | Claude Code | **Sprint 4c del 41 (decisione del proprietario del 2026-10-20):** nuovo comando `view.set_overlays` (`compass`, `scale_bar`, default entrambi `true`, classe `session`, cambia la vista): acceso/spento di nord ed est e della barra di scala; i comandi di vista calcolano `compass_and_scale_bar` del 10 (frame della griglia se visibile, altrimenti ICRS) e lo restituiscono in `compass`; `state_json` guadagna `overlays`. Non aggiunto all'elenco degli strumenti del `32` (decisione del proprietario). |
+| 2026-10-20 | Claude Code | **Sprint 4d del 41 (decisioni del proprietario del 2026-10-20):** `image.open` inquadra l'immagine intera nella finestra (`framing` nel risultato) e, senza WCS valido, la rende base come griglia di pixel (`PixelGridGeometry`); `cursor.read` sulla griglia di pixel: `sky = null`, `wcs_problem`, avviso `WCS_INVALID`; `unit_declared` nel valore del pixel; epoca mancante → coordinate nel frame dell'immagine con l'avviso del 10; `hips.set_survey` elimina gli avvisi doppi (era `service.warnings` contato due volte). Stato `approvato` invariato. |

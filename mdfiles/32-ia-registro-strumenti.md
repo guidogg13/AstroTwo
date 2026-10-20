@@ -40,6 +40,7 @@ esterno, §3.6).
 | `view__set_center` | `view.set_center` | session; vista | no | |
 | `view__set_zoom` | `view.set_zoom` | session; vista | no | |
 | `view__set_grid` | `view.set_grid` | session; vista | no | |
+| `view__set_overlays` | `view.set_overlays` | session; vista | no | nord ed est e barra di scala; aggiunto il 2026-10-20 (decisione del proprietario) |
 | `hips__set_survey` | `hips.set_survey` | session; rete | sì (rete) | identificativo o URL |
 | `catalog__load_region` | `catalog.load_region` | session; rete, lungo | sì (rete, lungo) | la scheda mostra `max_rows` |
 | `catalog__select` | `catalog.select` | session | no | selezione: non cambia il livello |
@@ -333,3 +334,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: elenco esplicito dei comandi esposti e non esposti, schema da `export_schema` del `05`, nomi tradotti (`view.go_to` → `view__go_to`), validazione del `05`, stessa coda del `40` con `requested_by = ai`, conferme (rete, lungo, modifica di un livello; sola lettura senza conferma), risultati entro 50 righe e 20 kB senza numeri accorciati, nomi di file senza cartelle, `catalog.search` al posto del 33; **sicurezza**: testi esterni marcati come dati, conferma obbligatoria per i comandi chiesti dopo un testo esterno. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-20 | Claude Code | **`view.set_overlays` aggiunto all'elenco degli strumenti** (§3.2, decisione del proprietario del 2026-10-20): classe session, vista, nessuna conferma. Il codice dell'elenco non esiste ancora (si scrive con il 32): niente da cambiare. Stato `approvato` invariato. |

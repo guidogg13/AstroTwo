@@ -18,6 +18,20 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-20, parte 4, sprint 4d della v1 (41: immagine FITS
+  locale):** File → Apri su un FITS (`image.open` del 05, già previsto) lo
+  rende base della vista con il suo WCS, **inquadrato intero nella finestra**
+  (decisione del proprietario del 2026-10-20; lo fa `image.open` e lo scrive
+  in `framing`); colori da `set_display` dell'11; sotto il mouse il valore
+  **originale** con unità `BUNIT` (o «unit not declared»), la posizione
+  `FITS (x, y)` e le coordinate con frame ed epoca letti dall'intestazione,
+  mai assunti. **Senza WCS valido** (decisione del proprietario): griglia di
+  pixel, nessuna coordinata inventata, `WCS_INVALID` nella barra; zoom e
+  spostamento col mouse non ci sono su di essa (nuova **D41-5**, Gruppo 3).
+  `view.set_overlays` aggiunto all'elenco degli strumenti dell'IA (32).
+  Corretti gli avvisi doppi di `hips.set_survey` (`service.warnings` era
+  contato due volte), con test. Test: **690 di default**, di rete non
+  eseguiti (`--no-network`). Decisioni aperte: **14** (Gruppo 3 = 12).
 - **Stato al 2026-10-20, parte 4, sprint 4c della v1 (41: griglia, nord e
   barra di scala):** la griglia delle coordinate (ICRS o galattica) con
   etichette scritte dal 10 (precisione = passo), l'indicatore del nord e
@@ -836,8 +850,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    sprint 4a (41: sfondo HiPS, zoom, spostamento) scritta il 2026-10-17,
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
    2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
-   barra di scala) scritto il 2026-10-20**; prossimi sprint del 41: 4d immagine FITS,
-   4e cataloghi e clic, 4f MOC e livelli, 4g strumenti (distanza, Simbad),
+   barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
+   2026-10-20**; prossimi sprint del 41: 4e cataloghi e clic, 4f MOC e livelli, 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -938,3 +952,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-19 | Claude Code | **Parte 4b-fix della v1 (41):** correzione di "Vai a" da una vista `TAN` verso un centro lontano (`_recompute_view` del 05 ricrea la base), ordine e risoluzione del valore del pixel in `cursor.read` e nella barra di stato, barra di stato che non ridimensiona il cielo, `pytest-timeout` come dipendenza di sviluppo (`pyproject.toml`, `uv.lock`, `THIRD_PARTY_LICENSES`, `tests/conftest.py`, `tests/test_timeout_config.py`); test nuovi. Scelte minori dell'sprint 4b confermate dal proprietario. |
 | 2026-10-20 | Claude Code | **Parte 4b-fix2 della v1 (41):** barra di stato a due campi (coordinate; valore · ordine · risoluzione a larghezza fissa, mai tagliato), comando in corso a larghezza massima, test a 1280 e 900 px; 41 §3.11 e registro aggiornati, resta `approvato`. |
 | 2026-10-20 | Claude Code | **Parte 4, sprint 4c della v1 (41):** griglia con etichette, nord/est e barra di scala disegnati; nuovo comando `view.set_overlays` nel `05` (decisione del proprietario del 2026-10-20), voci di menu nel `40`; `05`, `40`, `41` modificati nel registro, restano `approvato`; verificati i 4 avvisi `FROM_CACHE` di `hips.set_survey`. |
+| 2026-10-20 | Claude Code | **Parte 4, sprint 4d della v1 (41):** immagine FITS locale come base della vista (inquadratura intera, colori di `set_display`, valore originale con unità, pixel FITS, frame ed epoca dall'intestazione), griglia di pixel con `WCS_INVALID` senza WCS valido; `view.set_overlays` nell'elenco del 32; avvisi doppi di `hips.set_survey` eliminati; nuova D41-5 (Gruppo 3, aperte 14); `05`, `32`, `41` modificati nel registro, restano `approvato`. |

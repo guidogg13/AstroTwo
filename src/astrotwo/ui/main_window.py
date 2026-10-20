@@ -828,15 +828,28 @@ class StatusBar(QStatusBar):
             self._show_message(self.tr("No data"))
             return
         values = result.values
-        if values.get("sky") is None:
+        pixel = values.get("pixel")
+        problem = values.get("wcs_problem")
+        if values.get("sky") is None and problem is None:
             self._show_message(self.tr("Outside the sky"))
             return
+        if problem is not None:
+            # Immagine senza WCS valido (41 §3.5): nessuna coordinata celeste, solo il codice del motivo e il pixel
+            self._sky_variants = [f"{problem['code']} · {self.tr('no celestial coordinates')}", problem["code"]]
+            self._show_pixel(pixel)
+            self.cursor_label.setToolTip(problem["text"])
+            return
         self._sky_variants = self._sky_text(values["sky"])
-        pixel = values.get("pixel")
+        self._show_pixel(pixel)
+
+    def _show_pixel(self, pixel: Mapping | None) -> None:
+        """Campo del valore: valore del pixel originale con unità (BUNIT), ordine HiPS e risoluzione se ci sono."""
         if pixel is None:
             self._value_text = self.tr("no data")
         else:
             unit = pixel.get("unit") or pixel.get("unit_label") or ""
+            if pixel.get("unit_declared") is False:  # BUNIT assente: lo si dice, senza inventare un'unità
+                unit = self.tr("(unit not declared)")
             value = pixel["value"]
             if not math.isfinite(value):
                 self._value_text = self.tr("no data")

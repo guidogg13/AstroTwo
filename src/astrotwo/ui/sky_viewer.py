@@ -329,6 +329,30 @@ def format_field(field: Mapping | None) -> str:
     return f"{q.to_value(u.arcsec):.2f}″"
 
 
+def sample_image(geometry, image) -> np.ndarray:
+    """Colori (RGBA, righe nell'ordine della finestra: riga 0 = sud) dell'immagine FITS base per ogni pixel della
+    finestra: pixel più vicino della base (le posizioni vengono da ``window_to_base`` del 10). Disegno: nessun numero
+    mostrato nasce da qui (41 §3.4). Con le immagini a due livelli (11) il piano è l'anteprima e l'indice si divide per
+    il passo; fuori dall'immagine, trasparente; ``visible`` e ``opacity`` del livello valgono qui."""
+    rows, cols = geometry.shape
+    canvas = np.zeros((rows, cols, 4), dtype=np.uint8)
+    plane = image.derived.get("plane")
+    if plane is None or not image.visible:
+        return canvas
+    rgba = plane.rgba
+    step = image.data.preview_step or 1
+    bx, by = geometry.window_to_base(np.arange(cols), np.arange(rows))
+    ix = np.floor((bx + 0.5) / step).astype(np.int64)
+    iy = np.floor((by + 0.5) / step).astype(np.int64)
+    ok_x = (ix >= 0) & (ix < rgba.shape[1])
+    ok_y = (iy >= 0) & (iy < rgba.shape[0])
+    if ok_x.any() and ok_y.any():
+        canvas[np.ix_(ok_y, ok_x)] = rgba[np.ix_(iy[ok_y], ix[ok_x])]
+        if image.opacity < 1.0:
+            canvas[..., 3] = (canvas[..., 3] * image.opacity).astype(np.uint8)
+    return canvas
+
+
 class SkyViewer(QWidget):
     """Widget del cielo (41 §7): tiene la ``ViewGeometry`` corrente, traduce i gesti in comandi, disegna i tile.
 
@@ -371,6 +395,7 @@ class SkyViewer(QWidget):
         self.view = None  # ViewState corrente
         self.service = None
         self.survey_layer: str | None = None
+        self.image_key: tuple | None = None  # (livello, piano di colori, visibilità, opacità) dell'immagine disegnata
         self.overlay_texts: Mapping[str, str] = DEFAULT_OVERLAY_TEXTS  # tradotti dalla finestra principale (40)
         self.overlay: Overlay | None = None
         self.display: Mapping | None = None  # limiti, palette e funzione di trasferimento del survey FITS (livello)
@@ -463,21 +488,32 @@ class SkyViewer(QWidget):
         self.show_state(state)
         self.view_changed.emit()
 
+    @property
+    def pixel_grid(self) -> bool:
+        """True se la base è la griglia di pixel di un'immagine senza WCS valido (41 §3.5): niente cielo, zoom e
+        spostamento col mouse non ci sono (decisione D41-5)."""
+        return self.geometry is not None and not hasattr(self.geometry, "window_to_sky")
+
     def show_state(self, state) -> None:
         view = state.view
-        layers = state.of_kind("hips")
+        base = state.find(view.base_layer) if view.base_layer else None
+        image = base if base is not None and base.kind == "image" else None
+        layers = [] if image is not None else state.of_kind("hips")  # con un'immagine aperta lo sfondo non si disegna
         layer = layers[-1] if layers else None
         self.view = view
         changed_geometry = view.geometry is not self.geometry
         changed_survey = (layer.id if layer else None) != self.survey_layer
+        image_key = None if image is None else (image.id, id(image.derived.get("plane")), image.visible, image.opacity)
+        changed_image = image_key != self.image_key
         if not changed_geometry:
             self.show_overlay()  # griglia, indicatore o barra cambiati sulla stessa geometria (view.set_grid, ...)
-        if not (changed_geometry or changed_survey):
+        if not (changed_geometry or changed_survey or changed_image):
             return
         self.geometry = view.geometry
         self.service = layer.data if layer else None
         self.display = layer.display if layer else None
         self.survey_layer = layer.id if layer else None
+        previous_image, self.image_key = self.image_key, image_key
         if changed_geometry and self._submitted is None:
             # Vista cambiata da altro che dal gesto in corso (Vai a, comando dell'assistente, cronologia): lo
             # spostamento o lo zoom ancora da registrare erano relativi alla geometria vecchia e non valgono più
@@ -495,11 +531,21 @@ class SkyViewer(QWidget):
         self._pending = {gen: sent}
         self.view_changed.emit()
         if self.geometry is None or self.service is None or self.service.tile_width is None:
-            # nessun pixel da disegnare (nessun survey o HiPS catalogo): niente campionamento, la trasformazione
-            # residua del gesto si chiude subito e griglia e indicatore seguono la nuova geometria
+            # nessun pixel da disegnare (nessun survey o HiPS catalogo) o immagine FITS come base: niente
+            # campionamento dei tile, la trasformazione residua del gesto si chiude subito e griglia e indicatore
+            # seguono la nuova geometria
+            self.sampling = None
             if changed_geometry and self.geometry is not None:
                 self._settle_transform(gen, *self.geometry.shape)
                 self.renderer.set_transform(self.k, self.tx, self.ty)
+            if not changed_geometry:
+                self._pending.pop(gen, None)
+            if self.geometry is not None and image is not None:
+                self.canvas = sample_image(self.geometry, image)
+                self._upload()
+            elif previous_image is not None and self.geometry is not None:
+                self.canvas = np.zeros((*self.geometry.shape, 4), dtype=np.uint8)  # immagine tolta: vista vuota
+                self._upload()
             self.show_overlay()
             return
         self.tiles.sample(gen, self.service, self.geometry, layer.derived.get("coverage"))
@@ -585,8 +631,8 @@ class SkyViewer(QWidget):
 
     def zoom_by(self, factor: float, at: QPointF) -> None:
         """Zoom di ``factor`` (dato in ingresso dal gesto) attorno al punto ``at`` (pixel logici), entro i limiti."""
-        if self.view is None or self.view.scale is None:
-            debug_input(f"zoom_by ignorato: vista non pronta (view={self.view is not None})")
+        if self.view is None or self.view.scale is None or self.pixel_grid:
+            debug_input(f"zoom_by ignorato: vista non pronta o griglia di pixel (view={self.view is not None})")
             return
         k_before, requested = self.k, factor
         scale = (self.view.scale / (self.k * factor)).to(u.deg)
@@ -627,7 +673,7 @@ class SkyViewer(QWidget):
                 self.zoom_by(ZOOM_STEP ** steps, event.position())
             else:
                 debug_input("wheelEvent: angleDelta.y = 0, nessuna azione")
-        elif not pixels.isNull():  # trackpad a due dita (fasi Begin/Update/End/Momentum): spostamento (41 §3.16)
+        elif not pixels.isNull() and not self.pixel_grid:  # trackpad a due dita (fasi Begin/Update/End/Momentum): spostamento (41 §3.16)
             self.pan_by(pixels.x(), pixels.y())  # lo zoom del trackpad è il pizzico
         event.accept()
         debug_input(f"wheelEvent accettato={event.isAccepted()}")
@@ -645,7 +691,7 @@ class SkyViewer(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if self._drag is not None:
+        if self._drag is not None and not self.pixel_grid:
             pos = event.position()
             self.pan_by(pos.x() - self._drag.x(), pos.y() - self._drag.y())
             self._drag = pos
@@ -698,6 +744,9 @@ class SkyViewer(QWidget):
     def _gesture_end(self) -> None:
         """Fine del gesto: ``view.set_zoom`` poi ``view.set_center`` con lo stato finale (05 §3.3)."""
         geometry = self.geometry
+        if self.pixel_grid:  # nessun comando di vista da registrare: resta solo il centramento dopo un ridimensionamento
+            self._zoomed = self._moved = False
+            return
         debug_input(f"debounce scaduto: zoomed={self._zoomed} moved={self._moved} k={self.k:.4f} "
                     f"tx={self.tx:.1f} ty={self.ty:.1f}")
         if geometry is None or self.view is None or self.view.scale is None:

@@ -1068,6 +1068,17 @@ def _module_warnings(items) -> list[ResultMessage]:
     return out
 
 
+def _unique_messages(messages: Sequence[ResultMessage]) -> list[ResultMessage]:
+    """Messaggi senza ripetizioni (stesso codice e stesso testo), nell'ordine di arrivo."""
+    seen: set[tuple[str, str]] = set()
+    out = []
+    for m in messages:
+        if (m.code, m.text) not in seen:
+            seen.add((m.code, m.text))
+            out.append(m)
+    return out
+
+
 def _overlay(state: WorkspaceState, new_data, force: bool, *, exclude: Sequence[str] = ()) -> list[ResultMessage]:
     """``check_overlay`` del 19 tra il nuovo dato e i livelli visibili (D19-4); BODY_MISMATCH passa invariato."""
     from astrotwo.core.planetary_data import check_overlay
@@ -1105,6 +1116,36 @@ def _image_unit(image) -> str | None:
     return None if image.unit is None else str(image.unit)
 
 
+def _frame_image(state: WorkspaceState, layer_id: str) -> tuple[WorkspaceState, dict]:
+    """L'immagine appena aperta diventa la base della vista e si inquadra intera nella finestra (decisione del
+    proprietario del 2026-10-20, 41 §3.2): centro = centro dei pixel dell'immagine (``pixel_to_sky`` del 10), scala =
+    scala della base (``make_view_wcs`` del 10) × il rapporto tra l'immagine e la finestra. Senza finestra la vista
+    non cambia; senza WCS valido la base è la griglia di pixel (``PixelGridGeometry``)."""
+    from astrotwo.core.coordinates_wcs import CoordinatesWcsError, make_view_wcs, pixel_to_sky
+
+    layer = state.layer(layer_id)
+    image = layer.data
+    view = dataclasses.replace(state.view, base_layer=layer_id)
+    framing: dict = {"fitted": False, "problem": None}
+    if image.wcs is not None and view.window is not None:
+        cols, rows = view.window
+        ny, nx = image.shape
+        try:
+            center = pixel_to_sky(image.wcs, (nx - 1) / 2, (ny - 1) / 2, convention="numpy").coords
+            probe = make_view_wcs(center, 1.0 * u.arcsec, (rows, cols), base=image.wcs)
+            scale = (probe.base_scale * max(nx / cols, ny / rows)).to(u.deg)
+            view = dataclasses.replace(view, center=center, scale=scale)
+            framing.update(fitted=True, center=sky_json(center), scale=quantity_json(scale),
+                           method="centro dei pixel con pixel_to_sky e scala della base con make_view_wcs (10) × "
+                                  "max(colonne immagine / colonne finestra, righe immagine / righe finestra)")
+        except CoordinatesWcsError as exc:  # WCS presente ma non utilizzabile: griglia di pixel, nessuna coordinata
+            problem = ("WCS_INVALID", f"WCS non valido ({exc.code}: {exc}): nessuna coordinata celeste")
+            layer = dataclasses.replace(layer, derived={**layer.derived, "wcs_problem": problem})
+            state = state.replace_layer(layer)
+            framing["problem"] = problem
+    return dataclasses.replace(state, view=_recompute_view(view, state)), framing
+
+
 def _exec_image_open(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.images_fits import list_image_hdus, load_image, set_display, suggest_display_limits
 
@@ -1131,14 +1172,13 @@ def _exec_image_open(ctx: ExecutionContext, p: Mapping) -> Outcome:
     display = _display_values(plane)
     layer_id, state = _add_layer(state, "image", name, image, source=path, display=display,
                                  force_body=p["force_body"], derived={"plane": plane})
-    view = state.view
-    if image.wcs is not None:
-        view = dataclasses.replace(view, base_layer=layer_id)
-        state = dataclasses.replace(state, view=_recompute_view(view, state))
+    state, framing = _frame_image(state, layer_id)
+    if framing.get("problem") is not None and image.wcs is not None:
+        warnings.append(ResultMessage(*framing["problem"]))
     values = {"layer": layer_id, "replaced": old, "hdu_index": image.hdu_index, "hdu_name": image.hdu_name,
               "hdus": [{"index": h.index, "name": h.name, "shape": list(h.shape)} for h in hdus],
               "shape": list(image.data.shape), "unit": _image_unit(image), "wcs": image.wcs is not None,
-              "display": _display_values(plane, limits), "provenance": image.provenance}
+              "display": _display_values(plane, limits), "provenance": image.provenance, "framing": framing}
     warnings += _module_warnings(image.warnings)
     if image.wcs is None:
         warnings.append(ResultMessage("WCS_MISSING", "immagine senza WCS: griglia di pixel; finché è aperta non si "
@@ -1238,7 +1278,8 @@ def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
               "tile_formats": list(service.tile_formats), "body": service.body,
               "coverage": active.coverage is not None, "display": display}
     return Outcome(values=values, state=state, layers_created=[layer_id], resolved=resolved,
-                   warnings=_module_warnings(active.warnings) + _module_warnings(service.warnings) + display_warnings,
+                   # ``active.warnings`` contiene già gli avvisi del servizio: ogni sorgente compare una volta sola
+                   warnings=_unique_messages(_module_warnings(active.warnings) + display_warnings),
                    provenance=[_source(service.origin, service.retrieved_at, service.from_cache)],
                    network_fingerprint=[_fingerprint(_json_digest(props), service.origin, service.retrieved_at,
                                                      service.from_cache)])
@@ -1385,6 +1426,49 @@ _TO_AIT_THRESHOLD = 33.0 * u.deg
 _TO_TAN_THRESHOLD = 27.0 * u.deg
 
 
+@dataclass(frozen=True)
+class PixelGridGeometry:
+    """Geometria di un'immagine senza WCS valido (41 §3.5): griglia di pixel inquadrata intera nella finestra.
+
+    Solo pixel (convenzione numpy, indice da 0, DC7): nessuna coordinata celeste, nessun campo, nessuna scala in
+    angolo. Pixel della base = ``origin + (x, y) / factor`` per il pixel ``(x, y)`` della finestra, come
+    ``ViewGeometry`` del 10.
+    """
+
+    shape: tuple[int, int]  # (righe, colonne) della finestra
+    image_shape: tuple[int, int]  # (righe, colonne) dell'immagine
+    factor: float
+    origin: tuple[float, float]
+    problem: tuple[str, str]  # (codice, testo) del motivo per cui mancano le coordinate
+
+    def window_to_base(self, x, y) -> tuple[np.ndarray, np.ndarray]:
+        x = np.asarray(x, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64)
+        return self.origin[0] + x / self.factor, self.origin[1] + y / self.factor
+
+    def base_to_window(self, bx, by) -> tuple[np.ndarray, np.ndarray]:
+        bx = np.asarray(bx, dtype=np.float64)
+        by = np.asarray(by, dtype=np.float64)
+        return (bx - self.origin[0]) * self.factor, (by - self.origin[1]) * self.factor
+
+
+def _wcs_problem(layer) -> tuple[str, str] | None:
+    """Perché un'immagine non ha coordinate celesti (WCS assente o non valido), o ``None`` se ce l'ha."""
+    image = layer.data
+    if image.wcs is None:
+        reasons = "; ".join(text for code, text in image.warnings if code in ("WCS_MISSING", "WCS_INVALID"))
+        return "WCS_INVALID", "WCS assente o non valido: nessuna coordinata celeste" + (f" ({reasons})" if reasons else "")
+    return layer.derived.get("wcs_problem")
+
+
+def _pixel_grid(layer, window: tuple[int, int], problem: tuple[str, str]) -> PixelGridGeometry:
+    cols, rows = window
+    ny, nx = layer.data.shape
+    factor = min(cols / nx, rows / ny)
+    origin = ((nx - 1) / 2 - (cols - 1) / 2 / factor, (ny - 1) / 2 - (rows - 1) / 2 / factor)
+    return PixelGridGeometry((rows, cols), (ny, nx), factor, origin, problem)
+
+
 def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = None) -> ViewState:
     """Nuova ``ViewGeometry`` con ``make_view_wcs`` del 10 (41 §3.2): base dell'immagine o base creata.
 
@@ -1395,17 +1479,25 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
 
     info = {} if info is None else info
     base = state.find(view.base_layer) if view.base_layer else None
-    if base is None or base.data.wcs is None:
+    if base is None:
         view = dataclasses.replace(view, base_layer=None)
+    problem = None if base is None else _wcs_problem(base)
+    if problem is not None and view.window is not None:
+        # Immagine senza WCS valido: griglia di pixel intera nella finestra, senza coordinate (41 §3.5)
+        info["base"] = f"griglia di pixel dell'immagine {base.id} ({problem[0]})"
+        return dataclasses.replace(view, projection=None, tangent_point=None, grid=None, compass=None,
+                                   geometry=_pixel_grid(base, view.window, problem))
     if view.center is None or view.scale is None or view.window is None:
         return dataclasses.replace(view, geometry=None, grid=None, compass=None)
     cols, rows = view.window
     shape = (rows, cols)
-    if view.base_layer is not None:
+    if view.base_layer is not None and problem is None:
         geometry = make_view_wcs(view.center, view.scale, shape, base=base.data.wcs)
         info["base"] = f"WCS dell'immagine {base.id}"
         view = dataclasses.replace(view, projection=geometry.projection, tangent_point=None, geometry=geometry)
     else:
+        if view.base_layer is not None:  # immagine senza WCS e finestra non nota: nessuna geometria
+            return dataclasses.replace(view, geometry=None, grid=None, compass=None)
         projection = view.projection or "TAN"
         outside = False
         try:
@@ -1445,7 +1537,8 @@ def _with_compass(view: ViewState) -> ViewState:
     ICRS (41 §3.18); non calcolati se né l'indicatore né la barra sono accesi."""
     from astrotwo.core.coordinates_wcs import compass_and_scale_bar
 
-    if view.geometry is None or not (view.compass_visible or view.scale_bar_visible):
+    if (view.geometry is None or isinstance(view.geometry, PixelGridGeometry)
+            or not (view.compass_visible or view.scale_bar_visible)):
         return dataclasses.replace(view, compass=None)
     frame = view.grid_frame if view.grid_visible else "icrs"
     return dataclasses.replace(view, compass=compass_and_scale_bar(view.geometry, frame=frame))
@@ -1454,7 +1547,7 @@ def _with_compass(view: ViewState) -> ViewState:
 def _with_grid(view: ViewState) -> ViewState:
     from astrotwo.core.coordinates_wcs import choose_grid_spacing, compute_grid_lines
 
-    if not view.grid_visible or view.geometry is None:
+    if not view.grid_visible or view.geometry is None or isinstance(view.geometry, PixelGridGeometry):
         return dataclasses.replace(view, grid=None)
     w = view.geometry.visible_wcs
     spacing = choose_grid_spacing(w, frame=view.grid_frame)
@@ -1468,7 +1561,10 @@ def _view_values(view: ViewState, info: dict) -> dict:
     out = {"center": None if view.center is None else sky_json(view.center), "scale": quantity_json(view.scale),
            "projection": view.projection, "frame": view.frame, "base_layer": view.base_layer,
            "window": None if view.window is None else {"width": view.window[0], "height": view.window[1]}}
-    if g is not None:
+    if isinstance(g, PixelGridGeometry):
+        out.update(pixel_grid={"image_shape": list(g.image_shape), "factor": g.factor, "origin": list(g.origin)},
+                   wcs_problem={"code": g.problem[0], "text": g.problem[1]}, **info)
+    elif g is not None:
         out.update(field_radius=quantity_json(g.field_radius), field_radius_method=g.field_radius_method,
                    field_of_view=quantity_json(2 * g.field_radius),
                    field_of_view_method="2 × field_radius della ViewGeometry del 10 (diametro del cerchio che "
@@ -1652,6 +1748,7 @@ def _exec_measure_distance(ctx: ExecutionContext, p: Mapping) -> Outcome:
 
 
 def _cursor_point(ctx: ExecutionContext, p: Mapping):
+    """Pixel della base sotto il mouse e cielo (``None`` su una griglia di pixel: nessuna coordinata inventata)."""
     from astrotwo.core.coordinates_wcs import pixel_to_sky
 
     g = ctx.state.view.geometry
@@ -1659,25 +1756,42 @@ def _cursor_point(ctx: ExecutionContext, p: Mapping):
         raise CommandError("VIEW_UNDEFINED", "vista senza centro, scala o finestra: nessuna geometria del 10")
     bx, by = g.window_to_base(p["position"]["x"], p["position"]["y"])
     bx, by = float(bx), float(by)
+    if isinstance(g, PixelGridGeometry):
+        return bx, by, None
     sky = pixel_to_sky(g.base, bx, by, convention="numpy")
     return bx, by, sky
 
 
 def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
-    from astrotwo.core.coordinates_wcs import PixelPosition, convert_pixel_convention
-    from astrotwo.core.measures import read_pixel
-
-    from astrotwo.core.coordinates_wcs import convert_coordinates
+    from astrotwo.core.coordinates_wcs import (
+        CoordinatesWcsError, PixelPosition, convert_coordinates, convert_pixel_convention)
+    from astrotwo.core.measures import UNDECLARED_UNIT, read_pixel
 
     bx, by, sky = _cursor_point(ctx, p)
     values: dict = {"base_pixel": {"x": bx, "y": by, "convention": "numpy"}}
     warnings: list[ResultMessage] = []
-    finite = bool(np.all(np.isfinite([sky.coords.lon.to_value(u.deg), sky.coords.lat.to_value(u.deg)])))
-    # Cielo nel sistema scelto per le coordinate mostrate (``view.set_coordinate_display``, 41 §3.11), con l'epoca
-    # dichiarata dal 10; il valore del pixel si legge sempre dalla posizione nel frame della base.
-    values["sky"] = sky_json(convert_coordinates(sky.coords, ctx.state.view.coordinate_frame)) if finite else None
-    if not finite:
-        warnings.append(ResultMessage("OUT_OF_SKY", "fuori dal cielo: il punto non ha coordinate nella proiezione"))
+    if sky is None:
+        # Griglia di pixel: nessuna coordinata celeste (41 §3.5); il motivo va nel risultato e nel messaggio
+        code, text = ctx.state.view.geometry.problem
+        values["sky"] = None
+        values["wcs_problem"] = {"code": code, "text": text}
+        warnings.append(ResultMessage(code, text))
+        finite = False
+    else:
+        finite = bool(np.all(np.isfinite([sky.coords.lon.to_value(u.deg), sky.coords.lat.to_value(u.deg)])))
+        # Cielo nel sistema scelto per le coordinate mostrate (``view.set_coordinate_display``, 41 §3.11), con
+        # l'epoca dichiarata dal 10; il valore del pixel si legge sempre dalla posizione nel frame della base. Se la
+        # conversione richiede un'epoca che l'intestazione non dà (EPOCH_REQUIRED) l'epoca non si assume: si
+        # mostrano le coordinate nel frame dell'immagine con l'avviso del 10.
+        shown = sky.coords
+        if finite:
+            try:
+                shown = convert_coordinates(sky.coords, ctx.state.view.coordinate_frame)
+            except CoordinatesWcsError as exc:
+                warnings.append(ResultMessage(exc.code, f"{exc}; coordinate nel frame dell'immagine"))
+        values["sky"] = sky_json(shown) if finite else None
+        if not finite:
+            warnings.append(ResultMessage("OUT_OF_SKY", "fuori dal cielo: il punto non ha coordinate nella proiezione"))
     base = ctx.state.find(ctx.state.view.base_layer) if ctx.state.view.base_layer else None
     if base is not None:
         try:
@@ -1685,7 +1799,7 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
             fits = convert_pixel_convention(reading.x, reading.y, "numpy", "fits")
             values["pixel"] = {"layer": base.id, "value": float(reading.value),
                                "unit": None if reading.unit is None else str(reading.unit),
-                               "unit_label": reading.unit_label,
+                               "unit_label": reading.unit_label, "unit_declared": reading.unit_label != UNDECLARED_UNIT,
                                "fits": {"x": int(np.ravel(fits.x)[0]), "y": int(np.ravel(fits.y)[0])}}
         except Exception as exc:  # noqa: BLE001 - "nessun dato" con il messaggio del modulo
             message = _module_error(exc)
@@ -1713,13 +1827,16 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
                 if message is None:
                     raise
                 warnings.append(message)
-    return Outcome(values=values, warnings=warnings + _module_warnings(sky.warnings))
+    return Outcome(values=values, warnings=warnings + ([] if sky is None else _module_warnings(sky.warnings)))
 
 
 def _exec_simbad_pointer(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.vo_protocols import simbad_pointer
 
     _, _, sky = _cursor_point(ctx, p)
+    if sky is None:
+        code, text = ctx.state.view.geometry.problem
+        raise CommandError(code, text)
     found = simbad_pointer(sky.coords, _q(p["radius"]), cache=ctx.cache)
     obj = found.object
     values = {"position": sky_json(sky.coords), "object": None if obj is None else {

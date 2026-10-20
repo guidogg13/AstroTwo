@@ -51,7 +51,9 @@ comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 2026-10-18):** tile FITS portati a colori da `set_display` dell'11 con i limiti scelti da
 `hips.set_survey` (§3.7), coordinate e valore del pixel sotto il mouse nella barra di stato
 (`cursor.read`, §3.11; il valore si legge all'ordine disegnato, decisione del proprietario del
-2026-10-18). **4c (scritto il 2026-10-20):** griglia, nord ed est, barra di scala (§3.10, §3.18). **Sprint successivi:** 4d immagine FITS (base del suo WCS); 4e
+2026-10-18). **4c (scritto il 2026-10-20):** griglia, nord ed est, barra di scala (§3.10, §3.18). **4d (scritto il 2026-10-20):** immagine FITS locale come base della vista, con inquadratura intera, colori di
+`set_display`, coordinate e valore originale sotto il mouse, griglia di pixel senza WCS valido (§3.2, §3.5, §3.6,
+§3.11). **Sprint successivi:** 4e
 cataloghi e clic su una sorgente; 4f MOC, corpi diversi e pannello dei
 livelli; 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
 (T17) e prestazioni (`perf`).
@@ -67,6 +69,15 @@ dei tile sulla vista, aggiunto al 12 il 2026-10-15).
   - **Con un'immagine FITS aperta** la base è il **WCS dell'immagine**
     (griglia dei pixel del file, senza ricampionare i pixel
     dell'immagine; orientamento del file).
+    **Inquadratura (decisione del proprietario del 2026-10-20, sprint 4d):**
+    appena aperta, l'immagine si inquadra **intera nella finestra**: centro =
+    centro dei suoi pixel (`pixel_to_sky` del 10), scala = scala della base
+    (`make_view_wcs`, 10) × max(colonne immagine / colonne finestra, righe
+    immagine / righe finestra). La fa `image.open` (05 §3.6 punto 7) e la
+    scrive nel suo risultato (`framing`), così la riapertura della sessione
+    dà la stessa vista; senza finestra nota la vista non cambia. Finché
+    l'immagine è la base lo sfondo HiPS non si disegna (la composizione
+    con opacità è dello sprint 4f).
   - **Senza immagine** la base è un WCS del cielo creato da
     `make_view_wcs` del 10 con punto di tangenza, proiezione (`TAN` o
     `AIT` da `choose_projection`, §3.3) e frame ICRS.
@@ -182,9 +193,17 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   errore `BODY_MISMATCH` del 19; la finestra d'errore offre la forzatura
   esplicita, che diventa un parametro del comando (`force_body`) citato nel
   risultato e nel pannello dei livelli.
-- **Immagine senza WCS** (`WCS_MISSING` dell'11/10): si apre come griglia
-  di pixel; finché è aperta non si sovrappongono HiPS, cataloghi o MOC
-  (`VIEW_NO_WCS`) e si mostrano solo le coordinate pixel.
+- **Immagine senza WCS** (`WCS_MISSING` dell'11/10) **o con WCS non utilizzabile**
+  (`WCS_INVALID`): si apre come griglia di pixel (scelta del proprietario del
+  2026-10-20, sprint 4d); finché è aperta non si sovrappongono HiPS, cataloghi o MOC
+  (`VIEW_NO_WCS`) e si mostrano solo le coordinate pixel. **Sprint 4d:** la
+  griglia di pixel (`PixelGridGeometry` del 05) inquadra l'immagine intera nella
+  finestra; non ha centro, scala in angolo, griglia delle coordinate, nord né barra
+  di scala, e **non ha zoom né spostamento col mouse** (D41-5); i pixel si leggono
+  con il valore originale e la posizione FITS (x, y), mai coordinate celesti:
+  `cursor.read` dà `sky = null` e `wcs_problem` con il codice `WCS_INVALID` (anche
+  quando manca del tutto il WCS) e il motivo del modulo; la barra di stato scrive
+  `WCS_INVALID` al posto delle coordinate.
 
 ### 3.6 Immagine FITS
 
@@ -197,6 +216,13 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   astropy; i limiti scelti, il metodo e i suoi parametri sono dichiarati nel
   risultato di `image.open` e registrati nel comando, così la riapertura
   della sessione dà la stessa visualizzazione.
+- **Disegno dell'immagine base (sprint 4d):** per ogni pixel della finestra si
+  prende il colore del pixel più vicino del piano di `set_display`
+  (`window_to_base` del 10, indice `floor(x + 0,5)`): è disegno, nessun numero
+  mostrato nasce da qui (§3.4). Fuori dall'immagine il pixel è trasparente;
+  visibilità e opacità del livello valgono qui. Il ricalcolo avviene a ogni nuova
+  geometria o nuovo piano di colori (`image.set_display`), e il gesto usa la
+  stessa traslazione e scala degli altri livelli.
 - **Immagini a due livelli** (anteprima dell'11 per le immagini enormi):
   si disegna l'anteprima con la dichiarazione dell'11 nel pannello dei
   livelli; le letture sotto il cursore seguono le regole dell'11
@@ -313,6 +339,16 @@ controllati; il passaggio a linee su GPU resta per i MOC dello sprint 4f).
   con «…»; se l'unità è lunghissima si accorcia l'unità, mai l'ordine. Il
   pixel FITS compare solo se c'è posto. Il testo completo è nel tooltip. Il
   nome del comando in corso ha larghezza massima e non toglie spazio al valore.
+- **Immagine FITS base (sprint 4d):** il valore è quello **originale** del pixel
+  (`read_pixel` del 17, mai il valore dei colori) con l'unità di `BUNIT` se
+  dichiarata, altrimenti «(unit not declared)»; la barra scrive anche la posizione
+  pixel `FITS (x, y)` (convenzione FITS, DC7) quando c'è posto, sempre nel tooltip.
+  Frame ed epoca sono quelli dell'intestazione (`pixel_to_sky` del 10): l'epoca si
+  scrive solo se l'intestazione la dà (MJD-OBS, DATE-OBS, EQUINOX…), altrimenti
+  «epoch unknown»; mai assunta. Se il cambio al sistema scelto per le coordinate
+  richiede un'epoca che manca (`EPOCH_REQUIRED` del 10), si mostrano le coordinate nel
+  frame dell'immagine con l'avviso del 10. Con l'anteprima di un'immagine a due
+  livelli la lettura segue l'11 (`PREVIEW_NOT_MEASURABLE`).
 - Fuori dalla proiezione (bordo dell'`AIT`): "fuori dal cielo".
 - Il risultato va nella barra di stato del `40`; il formato dei numeri
   è quello di `format_coordinates` del 10 con le cifre di DC3 (D41-2).
@@ -629,6 +665,10 @@ mai abbassare in silenzio".
 | T19 | Limiti iniziali | apertura di un FITS sintetico; survey FITS simulato senza `hips_pixel_cut` | limiti uguali a `suggest_display_limits` dell'11 (sull'immagine; sul tile che contiene il centro della prima vista), dichiarati e registrati nel comando; stessi limiti alla riapertura della sessione | ricalcolo con l'11 |
 | T20 | Modalità notte (`gl`) | vista con immagine, HiPS a colori, due cataloghi, griglia, in modalità notte, disegnata fuori schermo | nessun pixel con componente verde o blu sopra la soglia bassa dichiarata nel test; posizioni invariate (T1) | lettura dell'immagine fuori schermo |
 | T21 | Nord e barra di scala (A7) | viste `TAN` in ICRS e galattico, su un'immagine ruotata con distorsioni SIP, vista `AIT`, vista con il polo nel campo | frecce disegnate con le direzioni di `compass_and_scale_bar` del 10 entro 1° e barra lunga quanto dice il 10 entro 1 pixel; etichetta identica al testo del 10; "al centro" per `AIT`; "polo nel campo" con `NORTH_UNDEFINED`; presenti anche nel PNG | ricalcolo con il 10 |
+| T22 | Immagine FITS come base (sprint 4d) | File → Apri su un FITS con WCS | l'immagine è la base, inquadrata intera; i colori di ogni pixel disegnato sono quelli di `set_display` dell'11 con i limiti scritti nel comando; `image.set_display` cambia i colori | test (`tests/ui/test_image_base.py`) |
+| T23 | Valore, unità, pixel, epoca e frame (sprint 4d) | mouse su pixel noti di un'immagine con `BUNIT`, con e senza `MJD-OBS`, senza `BUNIT` | valore originale con unità; `FITS (x, y)`; coordinate da `pixel_to_sky` del 10; epoca solo se dichiarata dall'intestazione; «(unit not declared)» senza `BUNIT`; lettura mai in cronologia | test |
+| T24 | Senza WCS valido (sprint 4d) | FITS senza WCS e FITS con matrice del WCS nulla | griglia di pixel intera; `sky = null` e `WCS_INVALID` nella barra; valore e pixel (x, y) letti; nessuna griglia, nord o barra; rotella e trascinamento senza comandi; `simbad.pointer` dà `WCS_INVALID` | test (`tests/core/test_commands_image_base.py`, `tests/ui/test_image_base.py`) |
+| T25 | Zoom sull'immagine (sprint 4d) | rotella (4 scatti) sull'immagine | `view.set_zoom` e `view.set_center` registrati, scala dimezzata, immagine ancora disegnata, valore del pixel sotto il mouse corretto | test |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
 ## 13. Decisioni aperte
@@ -663,6 +703,12 @@ compilare il Mac di riferimento (§3.15).
   proprietario): esclusi di default; `gl` blocca il commit quando eseguito,
   `perf` si riporta (§12). **Dati del Mac di riferimento: da compilare**
   (§3.15), li indica il proprietario.
+- **D41-5 — Zoom e spostamento su una griglia di pixel: da decidere (aperta il 2026-10-20, sprint 4d).**
+  Un'immagine senza WCS valido si apre come griglia di pixel (scelta del proprietario), ma i comandi
+  di vista del 05 (`view.set_center`, `view.set_zoom`) lavorano in coordinate celesti e scala in angolo.
+  Nella v1 la griglia di pixel è inquadrata intera e **senza zoom né spostamento col mouse**.
+  Raccomandazione: versione successiva, con un modo «pixel» dei comandi di vista (centro in pixel, scala
+  in pixel dello schermo per pixel dell'immagine) da proporre in `panoramica.md` (AM1) e specificare nel 05.
 - **Scelte minori: CONFERMATE dal proprietario il 2026-10-15:** (1) una sola immagine FITS alla volta
   nella v1; (2) ricentramento della base quando il punto di tangenza esce
   dalla finestra; (3) catalogo senza moto proprio disegnato alle posizioni
@@ -704,3 +750,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-19 | Claude Code | **Sprint 4b-fix:** "Vai a" M31 dopo Sirius non funzionava (la base `TAN` non rappresenta il nuovo centro): ricreazione della base nel 05 (§3.2); ordine e risoluzione del valore del pixel nella barra di stato (§3.11); la barra non ridimensiona più il cielo. Ripiego sul primo tile coperto e 6 cifre significative confermati dal proprietario. Stato `approvato` invariato. |
 | 2026-10-20 | Claude Code | **Sprint 4b-fix2:** l'ordine e la risoluzione del valore sparivano dalla barra quando un comando era in corso (il nome del comando restringeva il campo e il testo veniva tagliato a destra; i dati arrivavano sempre da `cursor.read`). Barra a due campi, valore a larghezza fissa mai tagliato, coordinate che si accorciano, comando in corso a larghezza massima (§3.11); test a 1280 e 900 px. Stato `approvato` invariato. |
 | 2026-10-20 | Claude Code | **Sprint 4c del codice (decisione del proprietario del 2026-10-20: comando nuovo `view.set_overlays`):** griglia con etichette del 10 (passo e precisione, stile delle coordinate mostrate), nord ed est e barra di scala disegnati nell'angolo in basso a sinistra (§3.10, §3.18), grigi durante il gesto, rossi puri in modalità notte; disegno con `QPainter` sul widget OpenGL, etichette che non si sovrappongono. T3 (punti entro 1 pixel dalle linee del 10), T18 (testi di `format_coordinates`), T20 (`gl`) e T21 nei test; il test `gl` ha trovato e fatto correggere un rosso con verde nella notte. |
+| 2026-10-20 | Claude Code | **Sprint 4d del codice (decisioni del proprietario del 2026-10-20: inquadratura intera, griglia di pixel senza WCS):** File → Apri su un FITS locale (`image.open` del 05, già previsto) lo rende base della vista con il suo WCS e lo inquadra intero; colori da `set_display`; disegno a pixel più vicino (`sample_image`); `cursor.read` con valore originale, unità (`BUNIT` o «non dichiarata»), pixel FITS (x, y), frame ed epoca dall'intestazione senza assunzioni; senza WCS valido griglia di pixel (`PixelGridGeometry`) con `WCS_INVALID` e nessuna coordinata; nuova D41-5 (zoom e spostamento sulla griglia di pixel). T22–T25 nei test. Stato `approvato` invariato. |
