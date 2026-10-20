@@ -18,6 +18,17 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-20, parte 4, sprint 4c della v1 (41: griglia, nord e
+  barra di scala):** la griglia delle coordinate (ICRS o galattica) con
+  etichette scritte dal 10 (precisione = passo), l'indicatore del nord e
+  dell'est e la barra di scala (`compass_and_scale_bar` del 10) si
+  disegnano sul cielo; in modalità notte sono rossi puri, durante un gesto
+  indicatore e barra sono grigi. **Decisione del proprietario del
+  2026-10-20:** nuovo comando `view.set_overlays` nel 05 per accenderli e
+  spegnerli (voci nel menu Vista; non nell'elenco degli strumenti dell'IA,
+  32). Verificato: i 4 avvisi di `hips.set_survey` all'avvio sono
+  `FROM_CACHE` (2 sorgenti × 2, corretti; con cache vuota nessuno). Decisioni
+  aperte invariate: **13**.
 - **Stato al 2026-10-20, parte 4b-fix2 della v1:** l'ordine e la risoluzione
   del valore del pixel non comparivano nella barra di stato mentre un comando
   era in corso: i dati arrivavano sempre da `cursor.read`, era il testo a
@@ -824,7 +835,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    con licenza verificata); D40-4 decisa il 2026-10-17 (⌃⌘N). **Parte 4,
    sprint 4a (41: sfondo HiPS, zoom, spostamento) scritta il 2026-10-17,
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
-   2026-10-18, con correzioni il 2026-10-19**; prossimi sprint del 41: 4c griglia e nord/barra di scala, 4d immagine FITS,
+   2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
+   barra di scala) scritto il 2026-10-20**; prossimi sprint del 41: 4d immagine FITS,
    4e cataloghi e clic, 4f MOC e livelli, 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -925,3 +937,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-18 | Claude Code | **Parte 4, sprint 4b del codice della v1 (41):** tile FITS a colori con `set_display` (`ui/sky_viewer.py`, `colorize`), limiti di colore scelti da `hips.set_survey` e registrati nel comando (`core/commands.py`: parametri `vmin`/`vmax`), coordinate e valore del pixel sotto il mouse nella barra di stato (`cursor.read` con `order` e sistema scelto, `format_coordinates` del 10; `ui/main_window.py`), traduzioni; test nuovi in `tests/ui/test_sky_viewer.py` e `tests/core/test_commands_hips_display.py` (T4 FITS, T8, T19). Decisioni del proprietario del 2026-10-18 in `05` e `41`. Corretto `test_visual_guidelines` (rete reale verso SIMBAD → `fake_simbad`). |
 | 2026-10-19 | Claude Code | **Parte 4b-fix della v1 (41):** correzione di "Vai a" da una vista `TAN` verso un centro lontano (`_recompute_view` del 05 ricrea la base), ordine e risoluzione del valore del pixel in `cursor.read` e nella barra di stato, barra di stato che non ridimensiona il cielo, `pytest-timeout` come dipendenza di sviluppo (`pyproject.toml`, `uv.lock`, `THIRD_PARTY_LICENSES`, `tests/conftest.py`, `tests/test_timeout_config.py`); test nuovi. Scelte minori dell'sprint 4b confermate dal proprietario. |
 | 2026-10-20 | Claude Code | **Parte 4b-fix2 della v1 (41):** barra di stato a due campi (coordinate; valore · ordine · risoluzione a larghezza fissa, mai tagliato), comando in corso a larghezza massima, test a 1280 e 900 px; 41 §3.11 e registro aggiornati, resta `approvato`. |
+| 2026-10-20 | Claude Code | **Parte 4, sprint 4c della v1 (41):** griglia con etichette, nord/est e barra di scala disegnati; nuovo comando `view.set_overlays` nel `05` (decisione del proprietario del 2026-10-20), voci di menu nel `40`; `05`, `40`, `41` modificati nel registro, restano `approvato`; verificati i 4 avvisi `FROM_CACHE` di `hips.set_survey`. |

@@ -253,8 +253,24 @@
         <translation>Ingrandisci</translation>
     </message>
     <message>
+        <source>pole in field</source>
+        <translation>polo nel campo</translation>
+    </message>
+    <message>
+        <source>at the center</source>
+        <translation>al centro</translation>
+    </message>
+    <message>
         <source>Zoom out</source>
         <translation>Rimpicciolisci</translation>
+    </message>
+    <message>
+        <source>Show north and east</source>
+        <translation>Mostra nord ed est</translation>
+    </message>
+    <message>
+        <source>Show scale bar</source>
+        <translation>Mostra la barra di scala</translation>
     </message>
     <message>
         <source>Night mode</source>

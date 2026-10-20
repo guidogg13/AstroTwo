@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Visualizzatore del cielo (41), sprint 4a-4b: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il mouse.
+"""Visualizzatore del cielo (41), sprint 4a-4c: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il
+mouse, griglia delle coordinate, indicatore del nord e barra di scala.
 
 Nessun numero mostrato nasce qui: la geometria è la ``ViewGeometry`` del 10 (dai comandi di vista del 05), i tile
 e il loro campionamento sulla finestra vengono dal 12 (``view_sampling``, ``fetch_tile``, ``fill_view``).
@@ -11,6 +12,10 @@ Sfondo HiPS: un solo survey; i tile JPEG/PNG si disegnano com'è, i tile FITS so
 ``set_display`` dell'11 con i limiti scelti da ``hips.set_survey`` (campo ``display`` del livello, 41 §3.7). Sotto il
 mouse una lettura passiva ``cursor.read`` (05) nel gruppo di thread dei tile, al più una in corso (41 §3.11). I
 cataloghi, i livelli e gli strumenti arrivano negli sprint successivi.
+
+Griglia, nord/est e barra di scala (41 §3.10, §3.18): tutti i numeri sono del 10 (``compute_grid_lines``,
+``choose_grid_spacing``, ``compass_and_scale_bar``, ``format_coordinates``), calcolati dai comandi di vista del 05 e
+letti dallo stato; qui si portano solo i punti nello spazio dei pixel della finestra disegnata (``Overlay``).
 """
 
 from __future__ import annotations
@@ -51,6 +56,8 @@ MAX_WIDTH_ANGLE = 360.0 * u.deg
 START_CENTER = {"lon": {"value": 0.0, "unit": "deg"}, "lat": {"value": 0.0, "unit": "deg"}, "frame": "icrs",
                 "equinox": None, "obstime": None, "epoch": None,
                 "epoch_reason": "epoca delle posizioni non nota (non assunta)"}
+#: Testi dell'indicatore e della barra di scala nella lingua dell'interfaccia (la finestra principale li traduce, 40).
+DEFAULT_OVERLAY_TEXTS = {"pole": "pole in field", "at_center": "at the center"}
 #: Variabile d'ambiente che accende il log diagnostico degli ingressi (rotella, zoom, gesto) sul terminale.
 DEBUG_INPUT_ENV = "ASTROTWO_DEBUG_INPUT"
 
@@ -80,6 +87,82 @@ class _WheelSpy(QObject):
 TILE_THREADS = 6
 
 
+@dataclasses.dataclass(frozen=True)
+class GridLabel:
+    """Etichetta di una linea della griglia: punto nello spazio dei pixel della finestra disegnata (origine in alto a
+    sinistra, pixel fisici); ``side`` dice dove sta il testo rispetto al punto (``top``: sotto, centrato; ``left``: a
+    destra)."""
+
+    x: float
+    y: float
+    text: str
+    side: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Overlay:
+    """Ciò che sta sopra il cielo (41 §3.10, §3.18), già in pixel di disegno; nessun numero nasce qui.
+
+    ``grid_lines``: linee spezzate ``(N, 2)`` ``float32`` (solo disegno, DC6) nello spazio dei pixel della finestra
+    disegnata, che segue lo spostamento e lo zoom del gesto. Indicatore e barra stanno invece fissi nell'angolo:
+    ``north``/``east`` sono i vettori unitari del 10 in pixel della finestra (y verso l'alto), ``bar_pixels`` la
+    lunghezza della barra in pixel fisici. ``None`` = elemento spento.
+    """
+
+    grid_lines: tuple[np.ndarray, ...] = ()
+    grid_labels: tuple[GridLabel, ...] = ()
+    compass_shown: bool = False
+    north: tuple[float, float] | None = None
+    east: tuple[float, float] | None = None
+    pole_text: str | None = None
+    bar_pixels: float | None = None
+    bar_text: str | None = None
+
+
+def build_overlay(view, texts: Mapping[str, str] = DEFAULT_OVERLAY_TEXTS) -> Overlay | None:
+    """Dati da disegnare dallo stato della vista: linee e passi della griglia (10), etichette con
+    ``format_coordinates`` del 10 (precisione = passo), nord/est e barra di ``compass_and_scale_bar`` del 10."""
+    from astrotwo.core.coordinates_wcs import format_coordinates
+
+    g = view.geometry
+    if g is None:
+        return None
+    rows, cols = g.shape
+    lines: list[np.ndarray] = []
+    labels: list[GridLabel] = []
+    grid = view.grid
+    for line in () if grid is None else grid.lines:
+        points = []
+        for xs, ys in line.segments:  # pixel (numpy) della regione visibile → base → finestra → spazio del disegno
+            wx, wy = g.base_to_window(np.asarray(xs) + g.visible_origin[0], np.asarray(ys) + g.visible_origin[1])
+            q = np.column_stack([wx + 0.5, rows - wy - 0.5])
+            lines.append(q.astype(np.float32))
+            points.append(q)
+        if not points:
+            continue
+        q = np.concatenate(points)
+        inside = q[(q[:, 0] >= 0) & (q[:, 0] <= cols) & (q[:, 1] >= 0) & (q[:, 1] <= rows)]
+        if not len(inside):
+            continue
+        meridian = line.kind == "meridian"
+        # meridiani: etichetta vicino al bordo alto; paralleli: vicino al bordo sinistro (l'angolo in basso è
+        # dell'indicatore e della barra, quello in alto a destra dei pulsanti di zoom)
+        x, y = inside[np.argmin(inside[:, 1] if meridian else inside[:, 0])]
+        text = format_coordinates(values=line.value, frame=grid.frame_name, axis="lon" if meridian else "lat",
+                                  style=view.coordinate_format,
+                                  precision=grid.lon_spacing if meridian else grid.lat_spacing)
+        labels.append(GridLabel(float(x), float(y), (text.lon if meridian else text.lat)[0], "top" if meridian else "left"))
+    c = view.compass
+    compass_shown = c is not None and view.compass_visible
+    bar_shown = c is not None and view.scale_bar_visible
+    return Overlay(
+        grid_lines=tuple(lines), grid_labels=tuple(labels), compass_shown=compass_shown,
+        north=c.north if compass_shown else None, east=c.east if compass_shown else None,
+        pole_text=texts["pole"] if compass_shown and c.north is None else None,
+        bar_pixels=c.bar_pixels if bar_shown else None,
+        bar_text=(c.label + (" " + texts["at_center"] if c.local_only else "")) if bar_shown else None)
+
+
 class SkyRenderer:
     """Interfaccia di disegno (41 §3.13, §7); in questo sprint solo il piano dello sfondo e la trasformazione.
 
@@ -99,6 +182,11 @@ class SkyRenderer:
         raise NotImplementedError
 
     def set_night(self, night: bool) -> None:
+        raise NotImplementedError
+
+    def set_overlay(self, overlay: Overlay | None) -> None:
+        """Griglia, indicatore del nord e barra di scala (41 §3.10, §3.18). Durante un gesto (trasformazione diversa
+        dall'identità) indicatore e barra sono in grigio: restano quelli dell'ultimo comando di vista."""
         raise NotImplementedError
 
 
@@ -283,6 +371,8 @@ class SkyViewer(QWidget):
         self.view = None  # ViewState corrente
         self.service = None
         self.survey_layer: str | None = None
+        self.overlay_texts: Mapping[str, str] = DEFAULT_OVERLAY_TEXTS  # tradotti dalla finestra principale (40)
+        self.overlay: Overlay | None = None
         self.display: Mapping | None = None  # limiti, palette e funzione di trasferimento del survey FITS (livello)
         self.field: Mapping | None = None  # field_of_view dell'ultimo comando di vista
         self.sampling = None
@@ -380,6 +470,8 @@ class SkyViewer(QWidget):
         self.view = view
         changed_geometry = view.geometry is not self.geometry
         changed_survey = (layer.id if layer else None) != self.survey_layer
+        if not changed_geometry:
+            self.show_overlay()  # griglia, indicatore o barra cambiati sulla stessa geometria (view.set_grid, ...)
         if not (changed_geometry or changed_survey):
             return
         self.geometry = view.geometry
@@ -402,18 +494,19 @@ class SkyViewer(QWidget):
         gen = self.tiles.generation
         self._pending = {gen: sent}
         self.view_changed.emit()
-        if self.geometry is None or self.service is None:
+        if self.geometry is None or self.service is None or self.service.tile_width is None:
+            # nessun pixel da disegnare (nessun survey o HiPS catalogo): niente campionamento, la trasformazione
+            # residua del gesto si chiude subito e griglia e indicatore seguono la nuova geometria
+            if changed_geometry and self.geometry is not None:
+                self._settle_transform(gen, *self.geometry.shape)
+                self.renderer.set_transform(self.k, self.tx, self.ty)
+            self.show_overlay()
             return
-        if self.service.tile_width is None:
-            return  # HiPS catalogo: niente pixel da disegnare
         self.tiles.sample(gen, self.service, self.geometry, layer.derived.get("coverage"))
 
-    def _sampled(self, gen: int, sampling) -> None:
-        if not self.tiles.current(gen):
-            return
-        rows, cols = sampling.shape
-        self.sampling = sampling
-        self.canvas = np.zeros((rows, cols, 4), dtype=np.uint8)
+    def _settle_transform(self, gen: int, rows: int, cols: int) -> None:
+        """La geometria della generazione ``gen`` (finestra ``rows`` × ``cols``) è pronta: si chiude la
+        trasformazione del gesto che l'ha chiesta e si tiene quella residua, solo disegno (41 §3.4)."""
         sent = self._pending.pop(gen, None)
         if sent is None:
             self.k, self.tx, self.ty = 1.0, 0.0, 0.0
@@ -428,8 +521,22 @@ class SkyViewer(QWidget):
             debug_input(f"geometria ridisegnata: gesto RIPRISTINATO come residuo, k inviato={ks:.4f} k attuale={self.k:.4f}")
             kr = self.k / ks
             self.k, self.tx, self.ty = kr, self.tx - kr * txs, self.ty - kr * tys
+
+    def show_overlay(self) -> None:
+        """Griglia, indicatore e barra dallo stato corrente (dati del 10) al renderer."""
+        self.overlay = None if self.view is None else build_overlay(self.view, self.overlay_texts)
+        self.renderer.set_overlay(self.overlay)
+
+    def _sampled(self, gen: int, sampling) -> None:
+        if not self.tiles.current(gen):
+            return
+        rows, cols = sampling.shape
+        self.sampling = sampling
+        self.canvas = np.zeros((rows, cols, 4), dtype=np.uint8)
+        self._settle_transform(gen, rows, cols)
         self._upload()
         self.renderer.set_transform(self.k, self.tx, self.ty)
+        self.show_overlay()
         if "fits" in self.service.tile_formats[:1] and (self.display is None or self.display.get("vmin") is None):
             self._report("HIPS_DISPLAY_UNKNOWN", f"{self.service.hips_id}: limiti di colore del survey non noti, "
                          "i tile FITS non si disegnano; riaprire il survey indicando vmin e vmax")

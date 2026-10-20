@@ -61,7 +61,7 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   `05`, §3.8); Export view as PNG… (`view.export_png`, disegno del `41`);
   Quit.
 - **View:** Go to… (porta il fuoco sul campo "Vai a"); Zoom in (⌘+) e Zoom out (⌘−) (zoom del `41` §3.4); Coordinate grid
-  (`view.set_grid`, con frame ICRS o galattico); Coordinates shown (ICRS
+  (`view.set_grid`, con frame ICRS o galattico); Show north and east e Show scale bar (`view.set_overlays`, 41 §3.18); Coordinates shown (ICRS
   sessagesimale, ICRS decimale, galattico: `view.set_coordinate_display`);
   Full screen (A10, `ui.set_fullscreen`); Night mode (modalità notte rossa,
   `ui.set_appearance`, §3.11; ⌃⌘N, D40-4).
@@ -475,3 +475,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-17 | Claude Code | **D40-4 decisa dal proprietario: ⌃⌘N** per View → Night mode (§3.3, §13); codice e test T13 aggiornati. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | Sprint 4a del 41: visualizzatore al posto del segnaposto, scritta del survey nella barra, barra di stato ad altezza fissa (26 px, §13). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |
+| 2026-10-20 | Claude Code | **Sprint 4c del 41:** menu Vista con "Show north and east" e "Show scale bar" (`view.set_overlays`, 05); 4 testi nuovi tradotti nel file `.ts`/`.qm`. |

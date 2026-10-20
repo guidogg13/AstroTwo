@@ -51,7 +51,7 @@ comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 2026-10-18):** tile FITS portati a colori da `set_display` dell'11 con i limiti scelti da
 `hips.set_survey` (§3.7), coordinate e valore del pixel sotto il mouse nella barra di stato
 (`cursor.read`, §3.11; il valore si legge all'ordine disegnato, decisione del proprietario del
-2026-10-18). **Sprint successivi:** 4c griglia e nord/barra di scala; 4d immagine FITS (base del suo WCS); 4e
+2026-10-18). **4c (scritto il 2026-10-20):** griglia, nord ed est, barra di scala (§3.10, §3.18). **Sprint successivi:** 4d immagine FITS (base del suo WCS); 4e
 cataloghi e clic su una sorgente; 4f MOC, corpi diversi e pannello dei
 livelli; 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
 (T17) e prestazioni (`perf`).
@@ -278,7 +278,15 @@ asse, elenchi del 10), nel frame scelto (ICRS o galattico); ricalcolata a
 ogni comando di vista. Le etichette usano il valore della coordinata
 restituito dal 10, scritto con `format_coordinates` del 10 (D41-2) con
 la precisione uguale al passo della griglia (es. passo di 10′ → gradi e
-primi, senza secondi).
+primi, senza secondi), nello stile scelto in "Coordinate mostrate"
+(sessagesimale o decimale). **Sprint 4c:** i meridiani si etichettano vicino al
+bordo alto e i paralleli vicino al bordo sinistro (l'angolo in basso a sinistra è
+dell'indicatore e della barra, quello in alto a destra dei pulsanti di zoom);
+un'etichetta che si sovrappone a una già scritta o a quell'angolo si scarta, e il
+testo resta dentro la vista (solo disposizione del disegno). Griglia e testi si
+disegnano con `QPainter` sullo stesso widget OpenGL (linee comprese, scelta
+dell'implementazione 4c: poche centinaia di punti, spessore e antialiasing
+controllati; il passaggio a linee su GPU resta per i MOC dello sprint 4f).
 
 ### 3.11 Coordinate e valore sotto il mouse (A4)
 
@@ -439,6 +447,12 @@ funzione `compass_and_scale_bar`; qui solo il disegno.
 - **Dove:** nell'**angolo in basso a sinistra** della vista (scelta minore
   10), sopra i livelli e sotto le etichette degli strumenti; nessuna
   interazione.
+- **Attivazione (decisione del proprietario del 2026-10-20):** comando
+  `view.set_overlays` del `05` (`compass`, `scale_bar`, entrambi accesi di
+  default), voci "Show north and east" e "Show scale bar" nel menu Vista del
+  `40`; spenti entrambi il 10 non è chiamato. Registrato in cronologia e
+  rieseguibile; non è nell'elenco degli strumenti dell'assistente (`32`) finché
+  il proprietario non lo decide.
 - **Quando:** ricalcolato a **ogni comando di vista** (`view.set_center`,
   `view.set_zoom`, `view.go_to`, cambio di base) chiamando
   `compass_and_scale_bar` del 10 sulla `ViewGeometry` corrente, nel frame
@@ -689,3 +703,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-18 | Claude Code | **Sprint 4b del codice** (§3.1): tile FITS con `set_display`, limiti scelti da `hips.set_survey` (05) e registrati nel comando, coordinate e valore sotto il mouse nella barra di stato con `format_coordinates`; decisioni del proprietario del 2026-10-18 su dove si scelgono i limiti e su quale ordine si legge il valore (§3.7, §3.11); test T4 (tile FITS), T8, T19. Stato `approvato` invariato. |
 | 2026-10-19 | Claude Code | **Sprint 4b-fix:** "Vai a" M31 dopo Sirius non funzionava (la base `TAN` non rappresenta il nuovo centro): ricreazione della base nel 05 (§3.2); ordine e risoluzione del valore del pixel nella barra di stato (§3.11); la barra non ridimensiona più il cielo. Ripiego sul primo tile coperto e 6 cifre significative confermati dal proprietario. Stato `approvato` invariato. |
 | 2026-10-20 | Claude Code | **Sprint 4b-fix2:** l'ordine e la risoluzione del valore sparivano dalla barra quando un comando era in corso (il nome del comando restringeva il campo e il testo veniva tagliato a destra; i dati arrivavano sempre da `cursor.read`). Barra a due campi, valore a larghezza fissa mai tagliato, coordinate che si accorciano, comando in corso a larghezza massima (§3.11); test a 1280 e 900 px. Stato `approvato` invariato. |
+| 2026-10-20 | Claude Code | **Sprint 4c del codice (decisione del proprietario del 2026-10-20: comando nuovo `view.set_overlays`):** griglia con etichette del 10 (passo e precisione, stile delle coordinate mostrate), nord ed est e barra di scala disegnati nell'angolo in basso a sinistra (§3.10, §3.18), grigi durante il gesto, rossi puri in modalità notte; disegno con `QPainter` sul widget OpenGL, etichette che non si sovrappongono. T3 (punti entro 1 pixel dalle linee del 10), T18 (testi di `format_coordinates`), T20 (`gl`) e T21 nei test; il test `gl` ha trovato e fatto correggere un rosso con verde nella notte. |

@@ -1429,6 +1429,7 @@ class MainWindow(QMainWindow):
         from astrotwo.ui.sky_viewer import SkyViewer
 
         self.sky = SkyViewer(self.submit, cache=self.cache, passive=self.read_passive)
+        self.sky.overlay_texts = {"pole": self.tr("pole in field"), "at_center": self.tr("at the center")}
         self.sky.message.connect(lambda m: self.messages.add(None, m, error=m.code == "GL_UNAVAILABLE"))
         if hasattr(self.sky.renderer, "failed"):
             self.sky.renderer.failed.connect(
@@ -1536,6 +1537,10 @@ class MainWindow(QMainWindow):
         for act in (self.act_grid_icrs, self.act_grid_gal):
             self.grid_frames.addAction(act)
         self.act_grid_icrs.setChecked(True)
+        self.act_compass = a(self.tr("Show north and east"), self._overlays_toggled, checkable=True, name="compass")
+        self.act_scale_bar = a(self.tr("Show scale bar"), self._overlays_toggled, checkable=True, name="scaleBar")
+        self.act_compass.setChecked(True)
+        self.act_scale_bar.setChecked(True)
         self.coordinate_actions: dict[str, QAction] = {}
         self.coordinate_group = QActionGroup(self)
         for key, text in (("icrs_sexagesimal", self.tr("ICRS sexagesimal")), ("icrs_decimal", self.tr("ICRS decimal")),
@@ -1591,6 +1596,8 @@ class MainWindow(QMainWindow):
         grid.addSeparator()
         grid.addAction(self.act_grid_icrs)
         grid.addAction(self.act_grid_gal)
+        m.addAction(self.act_compass)
+        m.addAction(self.act_scale_bar)
         shown = m.addMenu(self.tr("Coordinates shown"))
         for act in self.coordinate_actions.values():
             shown.addAction(act)
@@ -1779,6 +1786,9 @@ class MainWindow(QMainWindow):
         elif name == "view.set_grid":
             self.act_grid.setChecked(command.parameters["visible"])
             (self.act_grid_icrs if command.parameters["frame"] == "icrs" else self.act_grid_gal).setChecked(True)
+        elif name == "view.set_overlays":
+            self.act_compass.setChecked(command.parameters["compass"])
+            self.act_scale_bar.setChecked(command.parameters["scale_bar"])
         elif name == "view.set_coordinate_display":
             for key, (frame, fmt) in COORDINATE_DISPLAYS.items():
                 if (frame, fmt) == (p["frame"], p["format"]):
@@ -1839,6 +1849,10 @@ class MainWindow(QMainWindow):
     def _grid_toggled(self, checked: bool) -> None:
         self.submit("view.set_grid", {"visible": checked,
                                       "frame": "icrs" if self.act_grid_icrs.isChecked() else "galactic"})
+
+    def _overlays_toggled(self, checked: bool = False) -> None:
+        self.submit("view.set_overlays", {"compass": self.act_compass.isChecked(),
+                                          "scale_bar": self.act_scale_bar.isChecked()})
 
     def _grid_frame(self, frame: str) -> None:
         self.submit("view.set_grid", {"visible": self.act_grid.isChecked(), "frame": frame})

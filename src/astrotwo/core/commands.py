@@ -721,6 +721,9 @@ class ViewState:
     grid_visible: bool = False
     grid_frame: str = "icrs"
     grid: object = field(default=None, compare=False, repr=False)  # GridLines del 10
+    compass_visible: bool = True  # nord ed est (41 §3.18)
+    scale_bar_visible: bool = True  # barra di scala (41 §3.18)
+    compass: object = field(default=None, compare=False, repr=False)  # CompassScaleBar del 10
     coordinate_frame: str = "icrs"
     coordinate_format: str = "sexagesimal"
 
@@ -730,6 +733,7 @@ class ViewState:
                 "tangent_point": None if self.tangent_point is None else sky_json(self.tangent_point),
                 "window": None if self.window is None else list(self.window), "base_layer": self.base_layer,
                 "grid": {"visible": self.grid_visible, "frame": self.grid_frame},
+                "overlays": {"compass": self.compass_visible, "scale_bar": self.scale_bar_visible},
                 "coordinate_display": {"frame": self.coordinate_frame, "format": self.coordinate_format}}
 
 
@@ -1394,7 +1398,7 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
     if base is None or base.data.wcs is None:
         view = dataclasses.replace(view, base_layer=None)
     if view.center is None or view.scale is None or view.window is None:
-        return dataclasses.replace(view, geometry=None, grid=None)
+        return dataclasses.replace(view, geometry=None, grid=None, compass=None)
     cols, rows = view.window
     shape = (rows, cols)
     if view.base_layer is not None:
@@ -1429,7 +1433,22 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
                                      "threshold_source": choice.threshold_source}
         view = dataclasses.replace(view, projection=geometry.projection, tangent_point=geometry.tangent_point,
                                    geometry=geometry)
-    return _with_grid(view)
+    return _with_overlays(view)
+
+
+def _with_overlays(view: ViewState) -> ViewState:
+    return _with_compass(_with_grid(view))
+
+
+def _with_compass(view: ViewState) -> ViewState:
+    """Nord, est e barra di scala del 10 sulla geometria corrente, nel frame della griglia se è visibile, altrimenti
+    ICRS (41 §3.18); non calcolati se né l'indicatore né la barra sono accesi."""
+    from astrotwo.core.coordinates_wcs import compass_and_scale_bar
+
+    if view.geometry is None or not (view.compass_visible or view.scale_bar_visible):
+        return dataclasses.replace(view, compass=None)
+    frame = view.grid_frame if view.grid_visible else "icrs"
+    return dataclasses.replace(view, compass=compass_and_scale_bar(view.geometry, frame=frame))
 
 
 def _with_grid(view: ViewState) -> ViewState:
@@ -1456,6 +1475,12 @@ def _view_values(view: ViewState, info: dict) -> dict:
                                         "contiene la finestra disegnata)",
                    base_scale=quantity_json(g.base_scale), base_scale_method=g.base_scale_method,
                    notes=list(g.notes), **info)
+    if view.compass is not None:
+        c = view.compass
+        out["compass"] = {"frame": c.frame_name, "north": None if c.north is None else list(c.north),
+                          "east": None if c.east is None else list(c.east), "bar_pixels": c.bar_pixels,
+                          "bar_label": c.label, "local_only": c.local_only,
+                          "warnings": [{"code": code, "text": text} for code, text in c.warnings], "method": c.method}
     if view.grid is not None:
         out["grid"] = {"frame": view.grid.frame_name, "lon_spacing": quantity_json(view.grid.lon_spacing),
                        "lat_spacing": quantity_json(view.grid.lat_spacing), "lines": len(view.grid.lines)}
@@ -1535,8 +1560,15 @@ def _exec_view_go_to(ctx: ExecutionContext, p: Mapping) -> Outcome:
 
 
 def _exec_view_set_grid(ctx: ExecutionContext, p: Mapping) -> Outcome:
-    view = _with_grid(dataclasses.replace(ctx.state.view, grid_visible=p["visible"], grid_frame=p["frame"]))
+    view = _with_overlays(dataclasses.replace(ctx.state.view, grid_visible=p["visible"], grid_frame=p["frame"]))
     return Outcome(values=_view_values(view, {}) | {"grid_visible": p["visible"], "grid_frame": p["frame"]},
+                   state=dataclasses.replace(ctx.state, view=view))
+
+
+def _exec_view_set_overlays(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    view = _with_compass(dataclasses.replace(ctx.state.view, compass_visible=p["compass"],
+                                             scale_bar_visible=p["scale_bar"]))
+    return Outcome(values=_view_values(view, {}) | {"compass_visible": p["compass"], "scale_bar_visible": p["scale_bar"]},
                    state=dataclasses.replace(ctx.state, view=view))
 
 
@@ -2187,6 +2219,13 @@ def default_registry(*, cache=None) -> CommandRegistry:
                         P("frame", "enum", "Grid frame.", "Frame della griglia.", default="icrs",
                           choices=_FRAMES_VIEW)),
                     "session", _exec_view_set_grid, changes_view=True),
+        CommandSpec("view.set_overlays", 1, "Show or hide the north/east indicator and the scale bar.",
+                    "Mostra o nasconde l'indicatore di nord ed est e la barra di scala.",
+                    ("10 compass_and_scale_bar",), (
+                        P("compass", "boolean", "North and east indicator.", "Indicatore di nord ed est.",
+                          default=True),
+                        P("scale_bar", "boolean", "Scale bar.", "Barra di scala.", default=True)),
+                    "session", _exec_view_set_overlays, changes_view=True),
         CommandSpec("view.set_coordinate_display", 1, "Frame and format of the shown coordinates.",
                     "Frame e formato delle coordinate mostrate.", (), (
                         P("frame", "enum", "Frame.", "Frame.", choices=_FRAMES_VIEW),

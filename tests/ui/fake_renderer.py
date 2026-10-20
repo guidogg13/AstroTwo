@@ -17,6 +17,7 @@ class MemoryRenderer(QWidget, SkyRenderer):
         self.uploads = 0
         self.transform = (1.0, 0.0, 0.0)
         self.night = False
+        self.overlay = None
 
     def widget(self):
         return self
@@ -30,3 +31,6 @@ class MemoryRenderer(QWidget, SkyRenderer):
 
     def set_night(self, night) -> None:
         self.night = night
+
+    def set_overlay(self, overlay) -> None:
+        self.overlay = overlay
