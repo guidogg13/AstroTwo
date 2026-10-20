@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QElapsedTimer, QLocale, QSettings, Qt, QTimer
-from PySide6.QtGui import QFont, QPalette
+from PySide6.QtGui import QFont, QFontMetrics, QPalette
 from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
 from astrotwo.core import catalogs, hips
@@ -336,7 +336,7 @@ def test_t7_decimal_point_in_italian(qtbot, settings_path, cache):
         win.status.coordinate_style = "decimal"
         win.status.show_cursor(win.session.history.entries[1].result.__class__(
             "ok", values={"sky": sky(56.75, 24.125), "pixel": {"value": 0.25, "unit": "Jy"}}))
-        assert "56.75" in win.status.cursor_label.text() and "0.25 Jy" in win.status.cursor_label.text()
+        assert "56.75" in win.status.cursor_label.text() and "0.25 Jy" in win.status.value_label.text()
         cat = win.catalog_dialog()
         assert cat.max_rows.text() == "100000"  # nessun separatore delle migliaia che sembri un decimale
         cat.reject()
@@ -692,18 +692,28 @@ def test_status_bar_cursor_values(window):
     bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": pixel}))
     text = bar.cursor_label.text()  # sessagesimale (default), frame ed epoca dichiarati, scritti da format_coordinates
     assert text.startswith("ICRS 03h47m00.00s +24°07′12.0″ (epoch unknown)")
-    assert "105.5 adu" in text and "FITS (11, 11)" in text
+    assert "105.5 adu" in bar.value_label.text() and "FITS (11, 11)" in bar.value_label.text()
     sourced = dict(pixel, order=6, resolution={"value": 3.2, "unit": "arcsec"})
     bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": sourced}))
-    assert "105.5 adu · order 6 (≈ 3.2″/px)" in bar.cursor_label.text()
+    assert "105.5 adu · order 6 (≈ 3.2″/px)" in bar.value_label.text()
     bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": dict(
         sourced, order=0, resolution={"value": 3600.0 * 7.3, "unit": "arcsec"})}))
-    assert "order 0 (≈ 7.3°/px)" in bar.cursor_label.text()
+    assert "order 0 (≈ 7.3°/px)" in bar.value_label.text()
     bar.coordinate_style = "decimal"
     bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12, "galactic", epoch="J2016.0"), "pixel": pixel}))
     assert bar.cursor_label.text().startswith("Galactic 56.750000 +24.120000 (epoch J2016.0)")
     bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": {"value": float("nan"), "unit": None}}))
-    assert bar.cursor_label.text().endswith("no data")
+    assert bar.value_label.text() == "no data"
+    # poco spazio: si accorciano le coordinate (senza epoca, poi "…"), mai il valore; testo completo nel tooltip
+    bar.coordinate_style = "sexagesimal"
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": sourced}))
+    bar.cursor_label.setFixedWidth(QFontMetrics(bar.cursor_label.font()).horizontalAdvance("ICRS 03h47m00.00s +24°07′12.0″") + 6)
+    bar._layout_cursor()
+    assert bar.cursor_label.text() == "ICRS 03h47m00.00s +24°07′12.0″"
+    assert "(epoch unknown)" in bar.cursor_label.toolTip()
+    assert "order 6" in bar.value_label.text() and "order 6" in bar.value_label.toolTip()
+    bar.show_cursor(CommandResult("ok", values={"sky": sky(56.75, 24.12), "pixel": dict(sourced, unit="a-very-long-unit/beam/channel/second")}))
+    assert "order 6 (≈ 3.2″/px)" in bar.value_label.text() and "…" in bar.value_label.text()
 
 
 def test_main_entry_point():

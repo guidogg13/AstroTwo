@@ -10,7 +10,7 @@ import astropy.units as u
 import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QMouseEvent, QNativeGestureEvent, QPointingDevice, QWheelEvent
+from PySide6.QtGui import QFontMetrics, QMouseEvent, QNativeGestureEvent, QPointingDevice, QWheelEvent
 from PySide6.QtWidgets import QApplication
 
 from astrotwo.core import hips
@@ -495,6 +495,11 @@ def hover(qtbot, win, x, y):
     return blocker.args[0]
 
 
+def shown_text(bar):
+    """Testo della barra di stato: campo delle coordinate e campo del valore, come li vede l'utente."""
+    return "  ·  ".join(t for t in (bar.cursor_label.text(), bar.value_label.text()) if t)
+
+
 def expected_text(win, x, y):
     """Testo atteso: cielo dalla finestra (10), scritto da ``format_coordinates``, valore da ``pixel_values`` (12)."""
     from astrotwo.core import coordinates_wcs as cw
@@ -523,7 +528,7 @@ def test_t8_cursor_coordinates_and_value_in_status_bar(qtbot, viewer_window, ser
     for x, y in ((w // 2, h // 2), (w // 3, h // 2 + 30)):
         result = hover(qtbot, win, x, y)
         assert result.status == "ok" and result.values["pixel"]["order"] == win.sky.sampling.order
-        assert win.status.cursor_label.text() == expected_text(win, x, y)
+        assert shown_text(win.status) == expected_text(win, x, y)
     assert len(win.session.history) == history  # lettura passiva: mai in cronologia (D05-1)
     assert (win.sky.width(), win.sky.height()) == (w, h)  # il testo della barra non ridimensiona il cielo
     # il sistema scelto per le coordinate vale anche qui
@@ -544,7 +549,7 @@ def test_t8_outside_sky_and_color_survey(qtbot, viewer_window):
     start(qtbot, win)  # survey a colori: nessun valore del pixel
     w, h = win.sky.width(), win.sky.height()
     result = hover(qtbot, win, w // 2, h // 2)
-    assert "pixel" not in result.values and win.status.cursor_label.text().endswith("no data")
+    assert "pixel" not in result.values and win.status.value_label.text() == "no data"
     result = hover(qtbot, win, 1, 1)  # angolo: fuori dall'ellisse dell'AIT
     assert result.values["sky"] is None and result.warnings[0].code == "OUT_OF_SKY"
     assert win.status.cursor_label.text() == "Outside the sky"
@@ -574,7 +579,7 @@ def test_t8_one_read_at_a_time_last_position_wins(qtbot, viewer_window, service)
     qtbot.waitUntil(lambda: len(results) >= 2, timeout=10000)
     assert len(calls) == 2  # una in corso, poi solo l'ultima posizione
     assert calls[1] == pytest.approx(w // 4 + 3 * 29 - 0.5)
-    assert win.status.cursor_label.text() == expected_text(win, w // 4 + 3 * 29, h // 2)
+    assert shown_text(win.status) == expected_text(win, w // 4 + 3 * 29, h // 2)
 
 
 def test_t8_reading_during_gesture_uses_drawn_transform(qtbot, viewer_window, service):
@@ -620,3 +625,25 @@ def test_go_to_far_target_from_tan_view(qtbot, viewer_window, monkeypatch):
         assert view.projection == "TAN" and win.sky.geometry is view.geometry
     codes = [win.messages.table.item(r, 1).text() for r in range(win.messages.table.rowCount())]
     assert "VIEW_PARAMETERS_INVALID" not in codes
+
+
+
+@pytest.mark.parametrize("width", [1280, 900])
+def test_t8_value_with_order_never_cut_while_command_runs(qtbot, viewer_window, service, width):
+    """Con un comando in corso (nome lungo, Annulla) la barra non taglia il valore: ordine e risoluzione restano."""
+    win = viewer_window
+    win.survey_url = serve_fits_survey(service)
+    start(qtbot, win)
+    win.resize(width, 800)
+    qtbot.wait(2000)  # i tile della nuova finestra arrivano
+    result = hover(qtbot, win, win.sky.width() // 2, win.sky.height() // 2)
+    assert "pixel" in result.values
+    win.status.show_running("hips.load_tiles_for_the_current_view", None)
+    hover(qtbot, win, win.sky.width() // 2 + 3, win.sky.height() // 2)
+    bar = win.status
+    text = bar.value_label.text()
+    assert "order" in text and any(m in text for m in ("″/px", "′/px", "°/px"))
+    metrics = QFontMetrics(bar.value_label.font())
+    assert metrics.horizontalAdvance(text) <= bar.value_label.width()  # per intero dentro il suo campo
+    assert bar.value_label.width() == bar.value_label.minimumWidth() == bar.value_label.maximumWidth()
+    assert bar.cursor_label.text().startswith("ICRS ")

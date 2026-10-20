@@ -18,6 +18,14 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-20, parte 4b-fix2 della v1:** l'ordine e la risoluzione
+  del valore del pixel non comparivano nella barra di stato mentre un comando
+  era in corso: i dati arrivavano sempre da `cursor.read`, era il testo a
+  essere tagliato a destra (il nome del comando restringeva il campo).
+  Barra a due campi: valore · ordine · risoluzione a larghezza fissa e mai
+  tagliato, coordinate che si accorciano per prime (senza epoca, poi «…»),
+  testo completo nel tooltip, comando in corso a larghezza massima; test a
+  1280 e 900 px. Decisioni aperte invariate: **13**.
 - **Stato al 2026-10-19, parte 4b-fix della v1:** dopo la prova del
   proprietario. (1) **"Vai a" M31 non funzionava dopo Sirius:** causa trovata
   con il servizio reale — il nome si risolveva bene (M31, m31, M 31,
@@ -916,3 +924,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026. Creati `LICENSE`, `NOTICE`, `CONTRIBUTING.md`; `pyproject.toml` (PEP 639); intestazioni SPDX in tutti i `.py` con test; `THIRD_PARTY_LICENSES` rigenerato; `01` §4.2/§6.1 (compatibilità, crediti dei dati con "da verificare" per Sesame, HiPS, MocServer, uso commerciale DSS, requisiti del `60`). Nessun cambiamento di comportamento. Aperte **13** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 11). Stati invariati. |
 | 2026-10-18 | Claude Code | **Parte 4, sprint 4b del codice della v1 (41):** tile FITS a colori con `set_display` (`ui/sky_viewer.py`, `colorize`), limiti di colore scelti da `hips.set_survey` e registrati nel comando (`core/commands.py`: parametri `vmin`/`vmax`), coordinate e valore del pixel sotto il mouse nella barra di stato (`cursor.read` con `order` e sistema scelto, `format_coordinates` del 10; `ui/main_window.py`), traduzioni; test nuovi in `tests/ui/test_sky_viewer.py` e `tests/core/test_commands_hips_display.py` (T4 FITS, T8, T19). Decisioni del proprietario del 2026-10-18 in `05` e `41`. Corretto `test_visual_guidelines` (rete reale verso SIMBAD → `fake_simbad`). |
 | 2026-10-19 | Claude Code | **Parte 4b-fix della v1 (41):** correzione di "Vai a" da una vista `TAN` verso un centro lontano (`_recompute_view` del 05 ricrea la base), ordine e risoluzione del valore del pixel in `cursor.read` e nella barra di stato, barra di stato che non ridimensiona il cielo, `pytest-timeout` come dipendenza di sviluppo (`pyproject.toml`, `uv.lock`, `THIRD_PARTY_LICENSES`, `tests/conftest.py`, `tests/test_timeout_config.py`); test nuovi. Scelte minori dell'sprint 4b confermate dal proprietario. |
+| 2026-10-20 | Claude Code | **Parte 4b-fix2 della v1 (41):** barra di stato a due campi (coordinate; valore · ordine · risoluzione a larghezza fissa, mai tagliato), comando in corso a larghezza massima, test a 1280 e 900 px; 41 §3.11 e registro aggiornati, resta `approvato`. |

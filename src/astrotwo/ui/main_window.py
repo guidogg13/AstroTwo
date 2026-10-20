@@ -51,6 +51,7 @@ from PySide6.QtGui import (
     QActionGroup,
     QColor,
     QFont,
+    QFontMetrics,
     QFontDatabase,
     QIcon,
     QKeySequence,
@@ -778,15 +779,27 @@ class StatusBar(QStatusBar):
         self.setContentsMargins(8, 0, 8, 0)
         font = _tabular(_scaled(self.font(), 0.92))
         self.coordinate_style = "sexagesimal"  # formato delle coordinate (``view.set_coordinate_display``)
-        self.cursor_label = QLabel(self.tr("No data"))
+        self.cursor_label = QLabel(self.tr("No data"))  # coordinate (o "Nessun dato" / "Fuori dal cielo")
+        self.value_label = QLabel()  # "valore unità · ordine N (≈ X″/px)" e pixel FITS: mai tagliato
         self.network_label = QLabel()
         self.command_label = QLabel()
-        for label in (self.cursor_label, self.network_label, self.command_label):
+        for label in (self.cursor_label, self.value_label, self.network_label, self.command_label):
             label.setFont(font)
         # Il testo sotto il mouse cambia a ogni movimento: non deve mai cambiare la larghezza minima della finestra
-        # (il cielo si ridimensionerebbe e registrerebbe una nuova finestra, 41 §3.1); se non ci sta, si taglia.
+        # (il cielo si ridimensionerebbe e registrerebbe una nuova finestra, 41 §3.1). Due campi: il valore ha
+        # larghezza fissa (il caso peggiore) e non si taglia mai, perché senza l'ordine è ingannevole; le coordinate
+        # prendono lo spazio che resta e si accorciano (senza epoca) prima di tagliarsi. Il testo completo è nel
+        # tooltip. Il comando in corso ha una larghezza massima, così non toglie spazio al valore.
         self.cursor_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.cursor_label.setMinimumWidth(0)
+        worst = "-1.23457e+06 mJy/beam · " + self.tr("order %1").replace("%1", "29") + " (≈ 0.0099″/px)"
+        self.value_label.setFixedWidth(QFontMetrics(font).horizontalAdvance(worst) + 8)
+        self._sky_variants: list[str] = []
+        self._value_text = ""
+        self._fits_text = ""
+        self._value_unit = self._value_source = ""
+        self.command_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.command_label.setFixedWidth(220)
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedSize(90, 4)
         self.progress_bar.setTextVisible(False)
@@ -796,6 +809,7 @@ class StatusBar(QStatusBar):
         self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_button.clicked.connect(self.cancelRequested)
         self.addWidget(self.cursor_label, 1)
+        self.addWidget(self.value_label)
         for w in (self.network_label, self.command_label, self.progress_bar, self.cancel_button):
             self.addPermanentWidget(w)
         # Altezza fissa del mockup (26 px): mostrare Annulla e l'avanzamento non ridimensiona il cielo (41), che
@@ -806,34 +820,80 @@ class StatusBar(QStatusBar):
 
     def show_cursor(self, result: CommandResult | None) -> None:
         """Valori di ``cursor.read`` (41 §3.11): coordinate scritte da ``format_coordinates`` del 10 (DC3) con frame ed
-        epoca dichiarati, valore del pixel con l'unità se nota; "fuori dal cielo"/"nessun dato" senza valore."""
+        epoca dichiarati nel campo delle coordinate; valore del pixel con unità, ordine HiPS e risoluzione nel campo
+        del valore; "fuori dal cielo"/"nessun dato" senza valore."""
+        self._sky_variants, self._value_text, self._fits_text = [], "", ""
+        self._value_unit = self._value_source = ""
         if result is None or result.status != "ok":
-            self.cursor_label.setText(self.tr("No data"))
+            self._show_message(self.tr("No data"))
             return
         values = result.values
         if values.get("sky") is None:
-            self.cursor_label.setText(self.tr("Outside the sky"))
+            self._show_message(self.tr("Outside the sky"))
             return
-        sky = values["sky"]
-        parts = [self._sky_text(sky)]
+        self._sky_variants = self._sky_text(values["sky"])
         pixel = values.get("pixel")
         if pixel is None:
-            parts.append(self.tr("no data"))
+            self._value_text = self.tr("no data")
         else:
             unit = pixel.get("unit") or pixel.get("unit_label") or ""
             value = pixel["value"]
-            text = f"{value:.6g} {unit}".strip() if math.isfinite(value) else self.tr("no data")
-            if pixel.get("order") is not None and math.isfinite(value):  # da quale ordine HiPS e a che risoluzione
-                text += " · " + self.tr("order %1").replace("%1", str(pixel["order"]))
-                if pixel.get("resolution") is not None:
-                    text += f" (≈ {_format_resolution(pixel['resolution'])}/px)"
-            parts.append(text)
+            if not math.isfinite(value):
+                self._value_text = self.tr("no data")
+            else:
+                self._value_text = f"{value:.6g}"
+                self._value_unit = unit
+                if pixel.get("order") is not None:  # da quale ordine HiPS e a che risoluzione
+                    self._value_source = self.tr("order %1").replace("%1", str(pixel["order"]))
+                    if pixel.get("resolution") is not None:
+                        self._value_source += f" (≈ {_format_resolution(pixel['resolution'])}/px)"
             if pixel.get("fits") is not None:
-                parts.append(f"FITS ({pixel['fits']['x']}, {pixel['fits']['y']})")
-        self.cursor_label.setText("  ·  ".join(parts))
+                self._fits_text = f"FITS ({pixel['fits']['x']}, {pixel['fits']['y']})"
+        self._layout_cursor()
 
-    def _sky_text(self, sky: Mapping) -> str:
-        """Frame, longitudine e latitudine (10 ``format_coordinates``) ed epoca come la dichiara il risultato."""
+    def _show_message(self, text: str) -> None:
+        self._sky_variants, self._value_text, self._fits_text = [], "", ""
+        self.cursor_label.setText(text)
+        self.cursor_label.setToolTip("")
+        self.value_label.clear()
+        self.value_label.setToolTip("")
+
+    def _layout_cursor(self) -> None:
+        """Mette i testi nei due campi: il valore con ordine e risoluzione sempre interi, le coordinate scelgono la
+        variante più completa che ci sta (poi si tagliano con "…"); FITS solo se c'è posto, sempre nel tooltip."""
+        if not self._sky_variants:
+            return
+        fm = QFontMetrics(self.value_label.font())
+        value = self._value_text
+        if value and self._value_source:
+            unit = self._value_unit
+            tail = " · " + self._value_source
+            budget = self.value_label.width() - 2 - fm.horizontalAdvance(value + tail) - fm.horizontalAdvance(" ")
+            if unit and fm.horizontalAdvance(unit) > budget:  # unità lunga: si accorcia l'unità, mai l'ordine
+                unit = fm.elidedText(unit, Qt.TextElideMode.ElideRight, max(budget, fm.horizontalAdvance("…")))
+            value = f"{value} {unit}".strip() + tail
+        elif value and self._value_unit:
+            value = f"{value} {self._value_unit}"
+        full_value = value
+        if self._fits_text and fm.horizontalAdvance(f"{value}  ·  {self._fits_text}") <= self.value_label.width() - 2:
+            value = f"{value}  ·  {self._fits_text}"
+        self.value_label.setText(value)
+        self.value_label.setToolTip(" · ".join(x for x in (full_value, self._fits_text) if x))
+        sky_fm = QFontMetrics(self.cursor_label.font())
+        room = max(self.cursor_label.width() - 2, 0)
+        shown = next((v for v in self._sky_variants if sky_fm.horizontalAdvance(v) <= room), None)
+        if shown is None:
+            shown = sky_fm.elidedText(self._sky_variants[-1], Qt.TextElideMode.ElideRight, room)
+        self.cursor_label.setText(shown)
+        self.cursor_label.setToolTip(self._sky_variants[0])
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._layout_cursor()
+
+    def _sky_text(self, sky: Mapping) -> list[str]:
+        """Frame, longitudine e latitudine (10 ``format_coordinates``) ed epoca come la dichiara il risultato: la
+        variante completa e, se manca spazio, quella senza epoca (l'epoca resta nel tooltip)."""
         frame = sky["frame"]
         lon = format_coordinates(values=_quantity(sky["lon"]), frame=frame, axis="lon", style=self.coordinate_style)
         lat = format_coordinates(values=_quantity(sky["lat"]), frame=frame, axis="lat", style=self.coordinate_style)
@@ -844,7 +904,8 @@ class StatusBar(QStatusBar):
             epoch_text = self.tr("epoch %1").replace("%1", epoch)
         else:
             epoch_text = self.tr("epoch %1").replace("%1", f"JD {sum(epoch['value']):.5f} {epoch['scale'].upper()}")
-        return f"{frame.upper() if frame == 'icrs' else frame.capitalize()} {lon.lon[0]} {lat.lat[0]} ({epoch_text})"
+        head = f"{frame.upper() if frame == 'icrs' else frame.capitalize()} {lon.lon[0]} {lat.lat[0]}"
+        return [f"{head} ({epoch_text})", head]
 
     def show_network(self, commands: int, tiles: int) -> None:
         self.network_label.setText(self.tr("Network: %1 commands, %2 tiles").replace("%1", str(commands))
@@ -855,12 +916,18 @@ class StatusBar(QStatusBar):
             self.progress_bar.setRange(0, report.total)
             self.progress_bar.setValue(report.step)
             step = self.tr("step %1 of %2").replace("%1", str(report.step)).replace("%2", str(report.total))
-            self.command_label.setText(f"{name} · {step}")
+            self._set_command(f"{name} · {step}")
         else:
             self.progress_bar.setRange(0, 0)  # indeterminato
-            self.command_label.setText(name)
+            self._set_command(name)
         for w in (self.command_label, self.progress_bar, self.cancel_button):
             w.setVisible(True)
+
+    def _set_command(self, text: str) -> None:
+        """Comando in corso a larghezza fissa: tagliato con "…", per intero nel tooltip."""
+        self.command_label.setText(QFontMetrics(self.command_label.font()).elidedText(
+            text, Qt.TextElideMode.ElideRight, self.command_label.width() - 2))
+        self.command_label.setToolTip(text)
 
     def show_idle(self) -> None:
         self.command_label.clear()
