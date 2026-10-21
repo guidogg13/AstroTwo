@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-20, con lo sprint 4d del 41: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **12** (nuova `D41-5`, zoom e spostamento su una griglia di pixel).
+**Dal 2026-10-21, con lo sprint 4e del 41: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **13** (nuova `D41-6`, epoca del COOSYS persa da `catalog.set_columns`; `D41-5` rinviata a dopo la v1, contata tra le aperte).
+
+Prima, **dal 2026-10-20, con lo sprint 4d del 41: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **12** (nuova `D41-5`, zoom e spostamento su una griglia di pixel).
 
 Prima, **dal 2026-10-17, con la decisione di A11 (GPL-3.0-or-later): 13 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3:
 **11**. A11 decisa dal proprietario il 2026-10-17 (prima nel file di origine `01` §6.1); il `60` resta bloccato solo da `A2` e `A6`.
@@ -289,7 +291,8 @@ gruppi successivi, A8 dopo il livello 1).
 | `D10-6` | Tempo massimo per le conversioni di massa di posizioni (valore e test)? | `10-core-coordinate-wcs.md` §9 (e `61`) |
 | `D05-3` | Adattatore del 19 (`PlanetaryCommand`) al formato del 05: **rimandata** (2026-10-15) a quando l'interfaccia userà i dati planetari; modifica del 19 da autorizzare | `05-comandi-sessione.md` §13 |
 | `D40-2` | Avvio tramite URL (H18): equivalente in AstroTwo, **rimandata** (2026-10-15) alla versione successiva del 40 | `40-ui-finestra-principale.md` §13 |
-| `D41-5` | Zoom e spostamento su una griglia di pixel (immagine FITS senza WCS valido): i comandi di vista del 05 lavorano in coordinate celesti; nella v1 la griglia è inquadrata intera e senza zoom né spostamento col mouse. Aperta il 2026-10-20 (sprint 4d); raccomandazione: modo «pixel» dei comandi di vista nella versione successiva (AM1) | `41-ui-visualizzatore-cielo.md` §13 |
+| `D41-5` | Zoom e spostamento su una griglia di pixel (immagine FITS senza WCS valido): i comandi di vista del 05 lavorano in coordinate celesti; nella v1 la griglia è inquadrata intera e senza zoom né spostamento col mouse. Aperta il 2026-10-20 (sprint 4d); **rinviata a dopo la v1** (decisione del proprietario del 2026-10-21); raccomandazione: modo «pixel» dei comandi di vista nella versione successiva (AM1) | `41-ui-visualizzatore-cielo.md` §13 |
+| `D41-6` | `catalog.set_columns` perde l'epoca del COOSYS (`confirm_position_columns` del 13), quindi il moto proprio non si propaga per i cataloghi con l'epoca solo nel COOSYS (Gaia DR3: `EPOCH_INVALID`, catalogo non disegnato). Aperta il 2026-10-21 (sprint 4e); raccomandazione: il 13 conserva equinozio ed epoca del COOSYS per le colonne collegate (modifica del 13 da autorizzare), in alternativa `source_epoch` in `catalog.set_columns` | `41-ui-visualizzatore-cielo.md` §13 (riguarda 13 e 05) |
 | `D40-3` | Messaggi dei moduli 10–19 in inglese con traduzione italiana, coerente con A9 (tabelle codice → testo nei moduli o testi con `tr()`)? Aperta dal proprietario il 2026-10-15; nella v1 codice + testo del modulo invariato | `40-ui-finestra-principale.md` §13 (riguarda i moduli 10–19) |
 | `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
 | `D14-13` | URL dei servizi dell'ESO in http (dal registro VO e nelle risposte SIA): il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata; oggi la demo usa https direttamente, nessuna modifica al codice del 14 | `14-core-protocolli-vo.md` §13 |
@@ -371,3 +374,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-17 | Claude Code | **`D40-4` decisa dal proprietario: ⌃⌘N** (prima nel file di origine 40 §13), tolta dal Gruppo 3. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11). |
 | 2026-10-17 | Claude Code | **`A11` decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti (prima nel file di origine `01` §4.2 e §6.1), tolta dal Gruppo 2. Conteggi: aperte **13** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 11). |
 | 2026-10-20 | Claude Code | **Nuova nel Gruppo 3: `D41-5`** (prima nel file di origine 41 §13): zoom e spostamento su una griglia di pixel, aperta con lo sprint 4d. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 12). |
+| 2026-10-21 | Claude Code | **`D41-5` rinviata a dopo la v1** (decisione del proprietario del 2026-10-21; resta nel Gruppo 3). **Nuova nel Gruppo 3: `D41-6`** (prima nel file di origine 41 §13): epoca del COOSYS persa da `catalog.set_columns`, trovata con lo sprint 4e. Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 13). |

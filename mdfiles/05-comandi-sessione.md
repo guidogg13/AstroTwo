@@ -347,7 +347,7 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.load_region` (catalogo, centro, raggio, `max_rows`) | 13 `load_catalog` con regione (rete del 14) | session | rete, lungo |
 | `catalog.set_columns` (livello, colonne di posizione, moto proprio, parallasse) | 13 `confirm_position_columns` | session | |
 | `catalog.set_style` (livello, forma, colore, dimensione) | 13 `set_plot_rules` | session | |
-| `catalog.select` (livello, righe) | — (stato della selezione) | session | |
+| `catalog.select` (livello, righe) | — (stato della selezione); con una sola riga 13 `record_view` e scheda della sorgente (sotto) | session | |
 | `table.sort` (livello, colonna, verso) | — (ordine delle righe mostrate, `42`) | session | |
 | `moc.open` (file) | 16 `read_moc`; 19 `check_overlay` | session | |
 | `view.go_to` (testo: nome o coordinate) | 10 `resolve_name` o `parse_sexagesimal`/`convert_coordinates`; poi come `view.set_center` | session | rete (nomi) |
@@ -370,6 +370,31 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.describe` (livello) — nuovo | metadati della tabella del 13 (colonne con nome, tipo, unità, UCD, descrizione; righe; colonne di posizione; epoca; sorgente con origine e data) | session | sola lettura |
 | `catalog.rows` (livello, prima riga, numero di righe ≤ 50, colonne facoltative, ordine della tabella o mostrato) — nuovo | 13 `record_view` per ogni riga | session | sola lettura |
 | `layer.list` — nuovo | — (stato dello spazio di lavoro: livelli con identificativo, tipo, nome, visibilità, opacità, ordine, sorgente, righe) | session | sola lettura |
+
+**Cataloghi sul cielo (sprint 4e del `41`, decisioni del proprietario del
+2026-10-21).**
+
+- **Stile iniziale nel comando di caricamento:** `catalog.load_region` e
+  `catalog.open_file` assegnano al nuovo livello lo stile iniziale e lo
+  scrivono nel risultato (`style`) e nello stato del livello, così la
+  riesecuzione dà lo stesso stile. Con `k` = numero di cataloghi già aperti
+  nella sessione (contatore dello stato, mai riusato come gli identificativi
+  dei livelli): colore = `k`-esimo della tavolozza di Okabe e Ito senza il
+  nero (`#E69F00`, `#56B4E9`, `#009E73`, `#F0E442`, `#0072B2`, `#D55E00`,
+  `#CC79A7`, poi da capo), forma = `k`-esima di `circle`, `square`,
+  `diamond`, `triangle`, `cross`, `plus` (poi da capo), dimensione 8 pixel
+  logici; colore e forma avanzano insieme, così in modalità notte la forma
+  distingue i cataloghi. Lo stile passa da `set_plot_rules` del 13 come in
+  `catalog.set_style`, che resta il modo per cambiarlo.
+- **Scheda della sorgente in `catalog.select`:** con **una sola riga** il
+  risultato dà `source`: `name` (colonna con UCD `meta.id;meta.main`,
+  altrimenti la prima con `meta.id`, altrimenti nessuna: l'interfaccia
+  scrive "riga N"), `position` (posizione **della tabella** dalle colonne di
+  posizione, nel loro frame, con l'equinozio e l'**epoca del catalogo**
+  come dichiarati dal 13, mai assunti; `null` con il motivo se la riga non
+  ha posizione), `catalog` (livello, nome, sorgente, origine e data) e
+  `record` (`record_view` del 13). Con zero o più righe, `source` = `null`.
+  Lettura senza rete. `rows` vuoto toglie la selezione.
 
 **Indicatore `confirm`** (dal 2026-10-16, regola del `32` §3.5): **sì** per
 `image.open`, `catalog.open_file`, `catalog.load_region`, `hips.set_survey`,
@@ -668,3 +693,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-19 | Claude Code | **Sprint 4b-fix (decisioni del proprietario del 2026-10-19):** confermati il ripiego sul primo tile coperto e le 6 cifre significative del valore del pixel; `cursor.read` dichiara ordine e risoluzione del pixel letto; **correzione:** `view.go_to`/`view.set_center` da una vista `TAN` verso un centro fuori dalla sua proiezione (Sirius → M31) davano `VIEW_PARAMETERS_INVALID`, ora la base si ricrea con il punto di tangenza al centro (§3.6 punto 7). Stato `approvato` invariato. |
 | 2026-10-20 | Claude Code | **Sprint 4c del 41 (decisione del proprietario del 2026-10-20):** nuovo comando `view.set_overlays` (`compass`, `scale_bar`, default entrambi `true`, classe `session`, cambia la vista): acceso/spento di nord ed est e della barra di scala; i comandi di vista calcolano `compass_and_scale_bar` del 10 (frame della griglia se visibile, altrimenti ICRS) e lo restituiscono in `compass`; `state_json` guadagna `overlays`. Non aggiunto all'elenco degli strumenti del `32` (decisione del proprietario). |
 | 2026-10-20 | Claude Code | **Sprint 4d del 41 (decisioni del proprietario del 2026-10-20):** `image.open` inquadra l'immagine intera nella finestra (`framing` nel risultato) e, senza WCS valido, la rende base come griglia di pixel (`PixelGridGeometry`); `cursor.read` sulla griglia di pixel: `sky = null`, `wcs_problem`, avviso `WCS_INVALID`; `unit_declared` nel valore del pixel; epoca mancante → coordinate nel frame dell'immagine con l'avviso del 10; `hips.set_survey` elimina gli avvisi doppi (era `service.warnings` contato due volte). Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Sprint 4e del 41 (decisioni del proprietario del 2026-10-21):** stile iniziale dei cataloghi assegnato da `catalog.load_region` e `catalog.open_file` (Okabe e Ito senza il nero, sei forme, 8 pixel logici, in ordine di apertura con un contatore dello stato) e scritto nel risultato e nello stato; `catalog.select` con una riga restituisce la scheda della sorgente (`name` da UCD `meta.id;meta.main`, posizione della tabella con l'epoca del catalogo, catalogo, `record_view` del 13); `rows` vuoto toglie la selezione (§7). Stato `approvato` invariato. |

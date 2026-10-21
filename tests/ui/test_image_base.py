@@ -10,6 +10,7 @@ Piattaforma ``offscreen`` con il renderer in memoria. Valori attesi ricalcolati 
 import astropy.units as u
 import numpy as np
 import pytest
+from astropy.time import Time
 from PySide6.QtCore import QEvent, QPoint
 
 from astrotwo.core import coordinates_wcs as cw
@@ -88,7 +89,10 @@ def test_t23_cursor_value_unit_pixel_and_header_frame(qtbot, win, tmp_path):
         frame = cw.SkyFrame(coord=sky.coord)
         lon, lat = (cw.format_coordinates(frame, style="sexagesimal").lon[0],
                     cw.format_coordinates(frame, style="sexagesimal").lat[0])
-        assert text.startswith(f"ICRS {lon} {lat} (epoch JD 2455000.50000 UTC)")  # epoca dall'intestazione (MJD-OBS)
+        # epoca dall'intestazione (MJD-OBS) in ISO 8601 con la scala, mai il JD (T29, DC1); attesa ricalcolata con astropy
+        iso = Time(55000.0, format="mjd", scale="utc").isot.removesuffix(".000")
+        assert iso == "2009-06-18T00:00:00"
+        assert text.startswith(f"ICRS {lon} {lat} (epoch {iso} UTC)") and "JD" not in text
         assert f"{float(data[by, bx]):.6g} MJy / sr" in text and f"FITS ({bx + 1}, {by + 1})" in text
     assert len(win.session.history) == history  # lettura passiva: mai in cronologia
 

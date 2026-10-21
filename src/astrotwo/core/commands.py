@@ -306,6 +306,22 @@ def time_json(value: object) -> object:
     raise TypeError(f"tempo {value!r}: Time o epoca 'J…'/'B…'")
 
 
+def time_text(value: object) -> str | None:
+    """Tempo scritto per l'interfaccia (DC1, correzione del proprietario del 2026-10-21): ISO 8601 con la scala
+    (millesimi solo se non nulli), epoche ``J…``/``B…`` come sono; mai il JD, che resta interno."""
+    if value is None or isinstance(value, str):
+        return value
+    t = _time_value(value) if isinstance(value, Mapping) else value
+    if isinstance(t, str):
+        return t
+    if not isinstance(t, Time):
+        raise TypeError(f"tempo {value!r}: Time, epoca 'J…'/'B…' o forma JSON del §3.1")
+    if t.format in ("jyear_str", "byear_str"):
+        return str(t.value)
+    text = t.isot
+    return f"{text[:-4] if text.endswith('.000') else text} {t.scale.upper()}"
+
+
 def quantity_json(q) -> dict | None:
     """Forma JSON di una ``Quantity`` scalare: ``{"value", "unit"}`` con l'unità in FITS o VOUnit."""
     if q is None:
@@ -744,6 +760,7 @@ class WorkspaceState:
     layers: tuple[Layer, ...] = ()
     next_layer: int = 1
     view: ViewState = ViewState()
+    catalogs_opened: int = 0  # cataloghi aperti nella sessione: stile iniziale in ordine di apertura (§7)
 
     def find(self, layer_id: str) -> Layer | None:
         for layer in self.layers:
@@ -1285,6 +1302,90 @@ def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
                                                      service.from_cache)])
 
 
+#: Stile iniziale dei cataloghi (§7, decisione del proprietario del 2026-10-21): tavolozza di Okabe e Ito (2008)
+#: senza il nero, sei forme del 13, 8 pixel logici; colore e forma avanzano insieme in ordine di apertura.
+CATALOG_COLORS = ("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+CATALOG_SHAPES = ("circle", "square", "diamond", "triangle", "cross", "plus")
+CATALOG_SIZE = 8.0
+
+
+def _initial_style(state: WorkspaceState, table) -> tuple[dict, dict, WorkspaceState]:
+    """Stile del ``k``-esimo catalogo aperto, passato da ``set_plot_rules`` del 13 come ``catalog.set_style``."""
+    from astrotwo.core.catalogs import PlotRule, set_plot_rules
+
+    k = state.catalogs_opened
+    style = {"shape": CATALOG_SHAPES[k % len(CATALOG_SHAPES)], "color": CATALOG_COLORS[k % len(CATALOG_COLORS)],
+             "size": CATALOG_SIZE}
+    plot = set_plot_rules(table, [PlotRule(**style)])
+    return style, {"plot_style": plot}, dataclasses.replace(state, catalogs_opened=k + 1)
+
+
+def catalog_positions(table, rows=None):
+    """Posizioni della tabella (colonne di posizione del 13, nel loro frame, con equinozio ed epoca del catalogo come
+    li dichiara il 13, mai assunti), senza propagazione (41 §3.8, scelta minore 3).
+
+    Restituisce ``(coords, valid)``: ``valid`` maschera delle righe (tutte o ``rows``) con una posizione leggibile e
+    nei limiti, ``coords`` ``SkyFrame`` del 10 delle sole righe valide (``None`` se nessuna). Senza colonne di
+    posizione, frame o unità angolare: ``(None, valid tutta False)``."""
+    from astrotwo.core.coordinates_wcs import SkyFrame
+
+    t = table.table
+    index = np.arange(len(t)) if rows is None else np.asarray(rows, dtype=np.int64)
+    pos = table.positions
+    valid = np.zeros(index.size, dtype=bool)
+    if pos is None or pos.frame is None:
+        return None, valid
+    values = []
+    for name in (pos.lon, pos.lat):
+        column = t[name]
+        if column.unit is None or not column.unit.is_equivalent(u.deg):
+            return None, valid
+        data = np.asarray(getattr(column, "data", column), dtype=np.float64)[index]
+        mask = np.asarray(getattr(column, "mask", np.zeros(len(t), dtype=bool)), dtype=bool)[index]
+        degrees = (data * column.unit).to_value(u.deg)
+        valid_ = ~mask & np.isfinite(degrees)
+        values.append((degrees, valid_))
+    (lon, lon_ok), (lat, lat_ok) = values
+    with np.errstate(invalid="ignore"):
+        valid = lon_ok & lat_ok & (lon >= 0.0) & (lon < 360.0) & (lat >= -90.0) & (lat <= 90.0)
+    if not valid.any():
+        return None, valid
+    coords = SkyFrame.from_lonlat(lon[valid] * u.deg, lat[valid] * u.deg, pos.frame, equinox=pos.equinox,
+                                  epoch=pos.epoch)
+    return coords, valid
+
+
+def _ucd_words(column) -> set[str]:
+    return {w.strip().lower() for w in (column.meta.get("ucd") or "").split(";") if w.strip()}
+
+
+def _source_card(layer: Layer, row: int) -> dict:
+    """Scheda della sorgente di ``catalog.select`` con una riga (§7): nome da UCD, posizione della tabella con
+    l'epoca del catalogo, catalogo con sorgente e data, ``record_view`` del 13."""
+    from astrotwo.core.catalogs import record_view
+    from astrotwo.core.coordinates_wcs import SkyFrame
+
+    table = layer.data
+    t = table.table
+    name_column = next((n for n in t.colnames if {"meta.id", "meta.main"} <= _ucd_words(t[n])), None) or \
+        next((n for n in t.colnames if "meta.id" in _ucd_words(t[n])), None)
+    name = None
+    if name_column is not None:
+        value = t[name_column][row]
+        if not (np.ma.is_masked(value) or value is None):
+            name = (value.decode() if isinstance(value, bytes) else str(value)).strip() or None
+    coords, _ = catalog_positions(table, [row])
+    position = None if coords is None else sky_json(SkyFrame(coord=coords.coord[0], epoch=coords.epoch))
+    reason = None if position is not None else (
+        "colonne di posizione non confermate (catalog.set_columns)" if table.positions is None
+        else "posizione mancante o non valida in questa riga")
+    return {"row": row, "name": {"column": name_column, "value": name}, "position": position,
+            "position_reason": reason,
+            "catalog": {"layer": layer.id, "name": layer.name, "source": table.source, "origin": table.origin,
+                        "retrieved_at": _iso(table.retrieved_at)},
+            "record": _jsonable(record_view(table, row))}
+
+
 def _catalog_values(layer_id: str, table) -> dict:
     pos = table.positions
     return {"layer": layer_id, "rows": len(table.table), "columns": list(table.table.colnames),
@@ -1304,9 +1405,11 @@ def _exec_catalog_open_file(ctx: ExecutionContext, p: Mapping) -> Outcome:
     ctx.step("check_overlay")
     warnings = _overlay(ctx.state, table, p["force_body"]) if table.body is not None else [ResultMessage(
         "POSITION_COLUMNS_REQUIRED", "colonne di posizione da confermare con catalog.set_columns (mai dai nomi)")]
-    layer_id, state = _add_layer(ctx.state, "catalog", table.table_name or Path(path).name, table, source=path,
-                                 force_body=p["force_body"])
+    style, derived, state = _initial_style(ctx.state, table)
+    layer_id, state = _add_layer(state, "catalog", table.table_name or Path(path).name, table, source=path,
+                                 force_body=p["force_body"], style=style, derived=derived)
     values = _catalog_values(layer_id, table)
+    values["style"] = style
     values["suggestions"] = [{"lon": s.lon, "lat": s.lat, "frame_hint": s.frame_hint, "reason": s.reason,
                               "kind": s.kind} for s in suggestions]
     return Outcome(values=values, state=state, layers_created=[layer_id],
@@ -1323,11 +1426,13 @@ def _exec_catalog_load_region(ctx: ExecutionContext, p: Mapping) -> Outcome:
     table = load_catalog(p["catalog"], region=(center, radius), max_rows=p["max_rows"], cache=ctx.cache)
     ctx.step("check_overlay")
     warnings = _overlay(ctx.state, table, p["force_body"])
-    layer_id, state = _add_layer(ctx.state, "catalog", p["catalog"], table, source=table.source,
-                                 force_body=p["force_body"])
+    style, derived, state = _initial_style(ctx.state, table)
+    layer_id, state = _add_layer(state, "catalog", p["catalog"], table, source=table.source,
+                                 force_body=p["force_body"], style=style, derived=derived)
     sha, rows = _table_digest(table.table)
     from_cache = bool(getattr(table.request, "from_cache", False)) if table.request is not None else None
-    return Outcome(values=_catalog_values(layer_id, table), state=state, layers_created=[layer_id],
+    return Outcome(values={**_catalog_values(layer_id, table), "style": style}, state=state,
+                   layers_created=[layer_id],
                    warnings=warnings + _module_warnings(table.warnings),
                    provenance=[_source(table.origin, table.retrieved_at, from_cache)],
                    network_fingerprint=[_fingerprint(sha, table.origin, table.retrieved_at, from_cache, rows)])
@@ -1364,7 +1469,8 @@ def _exec_catalog_select(ctx: ExecutionContext, p: Mapping) -> Outcome:
     if bad:
         raise _invalid("rows", f"righe {bad[:5]} fuori da 0…{n - 1}")
     rows = tuple(dict.fromkeys(p["rows"]))
-    return Outcome(values={"layer": layer.id, "selected": list(rows)},
+    card = _source_card(layer, rows[0]) if len(rows) == 1 else None
+    return Outcome(values={"layer": layer.id, "selected": list(rows), "source": card},
                    state=ctx.state.replace_layer(dataclasses.replace(layer, selection=rows)))
 
 

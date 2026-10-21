@@ -53,8 +53,8 @@ comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 (`cursor.read`, §3.11; il valore si legge all'ordine disegnato, decisione del proprietario del
 2026-10-18). **4c (scritto il 2026-10-20):** griglia, nord ed est, barra di scala (§3.10, §3.18). **4d (scritto il 2026-10-20):** immagine FITS locale come base della vista, con inquadratura intera, colori di
 `set_display`, coordinate e valore originale sotto il mouse, griglia di pixel senza WCS valido (§3.2, §3.5, §3.6,
-§3.11). **Sprint successivi:** 4e
-cataloghi e clic su una sorgente; 4f MOC, corpi diversi e pannello dei
+§3.11). **4e (scritto il 2026-10-21):** cataloghi disegnati come simboli sulla GPU, clic su una sorgente con
+scheda sul cielo, avviso di epoche diverse (§3.8). **Sprint successivi:** 4f MOC, corpi diversi e pannello dei
 livelli; 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
 (T17) e prestazioni (`perf`).
 
@@ -199,7 +199,8 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   (`VIEW_NO_WCS`) e si mostrano solo le coordinate pixel. **Sprint 4d:** la
   griglia di pixel (`PixelGridGeometry` del 05) inquadra l'immagine intera nella
   finestra; non ha centro, scala in angolo, griglia delle coordinate, nord né barra
-  di scala, e **non ha zoom né spostamento col mouse** (D41-5); i pixel si leggono
+  di scala, e **non ha zoom né spostamento col mouse** (D41-5, rinviata a dopo la v1 dal
+  proprietario il 2026-10-21); i pixel si leggono
   con il valore originale e la posizione FITS (x, y), mai coordinate celesti:
   `cursor.read` dà `sky = null` e `wcs_problem` con il codice `WCS_INVALID` (anche
   quando manca del tutto il WCS) e il motivo del modulo; la barra di stato scrive
@@ -284,6 +285,31 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   evidenziano qui (D7).
 - **Catalogo nel campo** (menu Data del `40`): centro e raggio della
   finestra da `ViewGeometry` del 10.
+- **Sprint 4e (decisioni del proprietario del 2026-10-21):**
+  - **Dove si calcola:** posizioni (`display_positions` del 13 se il livello ha le colonne di moto proprio
+    scelte con `catalog.set_columns`, altrimenti le posizioni della tabella, scelta minore 3) e pixel della base
+    (`sky_to_pixel` del 10) nel **gruppo di thread dei tile**, una volta per base e per livello; nel thread
+    principale solo `base_to_window` della `ViewGeometry` (fattore e spostamento, §3.4) e il disegno. Righe
+    senza posizione valida o fuori dalla proiezione non si disegnano. Con una griglia di pixel (§3.5) i cataloghi
+    non si disegnano (`VIEW_NO_WCS`, un messaggio).
+  - **Stile:** quello del livello (`catalog.load_region`/`catalog.open_file` assegnano lo stile iniziale, `05`
+    §7: Okabe e Ito senza il nero, sei forme, 8 pixel logici, in ordine di apertura), con forma, colore e
+    dimensione di ogni riga da `set_plot_rules` del 13.
+  - **Epoche diverse (D10-2):** se le posizioni non sono propagate e l'epoca del catalogo e quella
+    dell'immagine base sono entrambe dichiarate e diverse, avviso `CATALOG_EPOCH_DIFFERS` nel pannello Messaggi
+    (una volta per livello e base) e nella scheda della sorgente, con le due epoche in ISO 8601 o come epoca
+    giuliana (`J2016.0`) e la scala; epoca del catalogo non dichiarata con un'immagine datata →
+    `CATALOG_EPOCH_UNKNOWN`. Con lo sfondo HiPS (epoca non nota) nessun avviso.
+  - **Clic:** un clic (pressione e rilascio a meno di 3 pixel logici) sceglie il simbolo più vicino entro
+    **metà della sua dimensione** (il simbolo disegnato) o, se più grande, entro 4 pixel logici (scelta minore
+    5), tra i cataloghi visibili, a pari distanza il livello più in alto; ne nasce `catalog.select`
+    (`requested_by` = `mouse`). Un clic nel vuoto con una selezione attiva registra `catalog.select` con righe
+    vuote; senza selezione non registra nulla.
+  - **Scheda della sorgente (decisione del proprietario del 2026-10-21):** finché il `42` non c'è, e anche
+    dopo, un riquadro sul cielo vicino al simbolo con nome/ID, coordinate della tabella scritte da
+    `format_coordinates` del 10 nello stile scelto, epoca del catalogo, catalogo con sorgente e data (tutto dal
+    risultato di `catalog.select`, `05` §7) e la riga "disegnata all'epoca …" (propagata) o "non propagata";
+    si chiude con Esc o con un clic nel vuoto. La sorgente selezionata ha un anello nel colore d'accento.
 
 ### 3.9 MOC
 
@@ -347,7 +373,10 @@ controllati; il passaggio a linee su GPU resta per i MOC dello sprint 4f).
   scrive solo se l'intestazione la dà (MJD-OBS, DATE-OBS, EQUINOX…), altrimenti
   «epoch unknown»; mai assunta. Se il cambio al sistema scelto per le coordinate
   richiede un'epoca che manca (`EPOCH_REQUIRED` del 10), si mostrano le coordinate nel
-  frame dell'immagine con l'avviso del 10. Con l'anteprima di un'immagine a due
+  frame dell'immagine con l'avviso del 10. **Epoca scritta (correzione del proprietario del 2026-10-21, DC1):**
+  un'epoca data come tempo si scrive in **ISO 8601 con la scala** (es. `epoch 1990-12-22T13:49:00 UTC`; i
+  millesimi solo se non nulli), un'epoca giuliana o besseliana come `J2000.0`/`B1950.0`; mai il JD, che resta
+  interno. Il testo lo scrive `time_text` del `05`. Con l'anteprima di un'immagine a due
   livelli la lettura segue l'11 (`PREVIEW_NOT_MEASURABLE`).
 - Fuori dalla proiezione (bordo dell'`AIT`): "fuori dal cielo".
 - Il risultato va nella barra di stato del `40`; il formato dei numeri
@@ -385,7 +414,8 @@ controllati; il passaggio a linee su GPU resta per i MOC dello sprint 4f).
   un'implementazione **OpenGL su `QOpenGLWidget`** (OpenGL 4.1 core
   profile, il massimo su macOS): immagine e tile come texture, cataloghi
   come punti in buffer della GPU (posizioni nei pixel della base, `float32`
-  solo per il disegno, DC6), MOC e griglia come linee e poligoni;
+  solo per il disegno, DC6; sprint 4e: un punto per sorgente con `gl_PointSize` e la forma disegnata nel
+  programma di disegno con `gl_PointCoord`), MOC e griglia come linee e poligoni;
   traslazione e scala come una matrice sulla GPU. Testi (etichette della
   griglia, misure) con `QPainter` sullo stesso widget. Il resto del
   visualizzatore usa solo l'interfaccia, così un futuro passaggio a
@@ -669,6 +699,11 @@ mai abbassare in silenzio".
 | T23 | Valore, unità, pixel, epoca e frame (sprint 4d) | mouse su pixel noti di un'immagine con `BUNIT`, con e senza `MJD-OBS`, senza `BUNIT` | valore originale con unità; `FITS (x, y)`; coordinate da `pixel_to_sky` del 10; epoca solo se dichiarata dall'intestazione; «(unit not declared)» senza `BUNIT`; lettura mai in cronologia | test |
 | T24 | Senza WCS valido (sprint 4d) | FITS senza WCS e FITS con matrice del WCS nulla | griglia di pixel intera; `sky = null` e `WCS_INVALID` nella barra; valore e pixel (x, y) letti; nessuna griglia, nord o barra; rotella e trascinamento senza comandi; `simbad.pointer` dà `WCS_INVALID` | test (`tests/core/test_commands_image_base.py`, `tests/ui/test_image_base.py`) |
 | T25 | Zoom sull'immagine (sprint 4d) | rotella (4 scatti) sull'immagine | `view.set_zoom` e `view.set_center` registrati, scala dimezzata, immagine ancora disegnata, valore del pixel sotto il mouse corretto | test |
+| T26 | Cataloghi disegnati (sprint 4e) | catalogo sintetico su base `TAN`, poi sull'immagine FITS base; zoom e spostamento | posizioni disegnate entro 1 pixel da `sky_to_pixel` del 10 composto con `ViewGeometry`; forma, colore e dimensione dallo stile del livello (`set_plot_rules`); stile iniziale nel risultato del caricamento e nella riesecuzione | ricalcolo con il 10 e il 13 |
+| T27 | Clic e scheda (sprint 4e) | clic a 2 pixel logici da una sorgente, nel vuoto, Esc | `catalog.select` della riga giusta con `requested_by` = `mouse`; scheda con nome da UCD `meta.id;meta.main`, coordinate uguali a `format_coordinates` del 10, epoca del catalogo e sorgente; clic nel vuoto → selezione vuota; Esc chiude | test |
+| T28 | Epoche diverse (sprint 4e) | catalogo con epoca `J2016.0` su un'immagine con `MJD-OBS`; catalogo senza epoca; sfondo HiPS | `CATALOG_EPOCH_DIFFERS` con le due epoche; `CATALOG_EPOCH_UNKNOWN`; nessun avviso su HiPS | test |
+| T29 | Epoca nella barra (correzione del 2026-10-21) | mouse su un'immagine con `MJD-OBS` | `epoch AAAA-MM-GGThh:mm:ss UTC` (ISO 8601 con scala), nessun "JD" nei testi dell'interfaccia | test |
+| T30 | Qualche migliaio di sorgenti (sprint 4e) | 5000 sorgenti, gesti | un solo caricamento dei punti per base; durante il gesto solo la trasformazione; tempo del calcolo per base misurato e riportato | test (tempo riportato) |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
 ## 13. Decisioni aperte
@@ -703,7 +738,8 @@ compilare il Mac di riferimento (§3.15).
   proprietario): esclusi di default; `gl` blocca il commit quando eseguito,
   `perf` si riporta (§12). **Dati del Mac di riferimento: da compilare**
   (§3.15), li indica il proprietario.
-- **D41-5 — Zoom e spostamento su una griglia di pixel: da decidere (aperta il 2026-10-20, sprint 4d).**
+- **D41-5 — Zoom e spostamento su una griglia di pixel: RINVIATA a dopo la v1** (decisione del proprietario del
+  2026-10-21; aperta il 2026-10-20, sprint 4d).
   Un'immagine senza WCS valido si apre come griglia di pixel (scelta del proprietario), ma i comandi
   di vista del 05 (`view.set_center`, `view.set_zoom`) lavorano in coordinate celesti e scala in angolo.
   Nella v1 la griglia di pixel è inquadrata intera e **senza zoom né spostamento col mouse**.
@@ -719,6 +755,17 @@ compilare il Mac di riferimento (§3.15).
   eccesso dichiarato; (7) unità della distanza scelta nelle opzioni,
   default ′; (8) 6 thread per i tile; (9) due file Python (`sky_viewer.py`,
   `sky_renderer_gl.py`) per tenere l'OpenGL separato.
+- **D41-6 — Epoca del COOSYS persa da `catalog.set_columns`: da decidere (aperta il 2026-10-21, sprint 4e).**
+  `confirm_position_columns` del 13 crea colonne di posizione senza l'epoca del COOSYS e `catalog.set_columns` del
+  `05` non ha `source_epoch`: per un catalogo con l'epoca solo nel COOSYS (es. Gaia DR3 da VizieR, `J2016.0`), scegliere
+  le colonne di moto proprio porta a `EPOCH_INVALID` del 13 e il catalogo non si disegna (nessuna epoca assunta).
+  Funziona con una colonna `time.epoch`. Raccomandazione: `confirm_position_columns` conserva equinozio ed epoca del
+  COOSYS quando le colonne confermate sono quelle collegate al COOSYS (modifica del 13, approvato, da autorizzare);
+  in alternativa un parametro `source_epoch` in `catalog.set_columns` (modifica del `05`).
+- **Sprint 4e: decisioni del proprietario del 2026-10-21:** scheda della sorgente sul cielo (§3.8); stile
+  iniziale assegnato dal comando di caricamento (`05` §7); Okabe e Ito senza il nero, sei forme, 8 pixel logici;
+  nome da UCD `meta.id;meta.main` e posizione della tabella con l'epoca del catalogo. Precisazione della
+  scelta minore 5: "entro la sua dimensione" = entro il simbolo disegnato (metà della dimensione).
 - **A7 nella v1: DECISA il 2026-10-16** (decisione del proprietario,
   opzione b): indicatore del nord e barra di scala con la nuova
   `compass_and_scale_bar` del 10 (§3.18, T21). **Scelte minori: CONFERMATE dal proprietario il 2026-10-16 (come raccomandate):** (10) angolo in basso a sinistra; (11) frecce di 40 pixel
@@ -751,3 +798,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-20 | Claude Code | **Sprint 4b-fix2:** l'ordine e la risoluzione del valore sparivano dalla barra quando un comando era in corso (il nome del comando restringeva il campo e il testo veniva tagliato a destra; i dati arrivavano sempre da `cursor.read`). Barra a due campi, valore a larghezza fissa mai tagliato, coordinate che si accorciano, comando in corso a larghezza massima (§3.11); test a 1280 e 900 px. Stato `approvato` invariato. |
 | 2026-10-20 | Claude Code | **Sprint 4c del codice (decisione del proprietario del 2026-10-20: comando nuovo `view.set_overlays`):** griglia con etichette del 10 (passo e precisione, stile delle coordinate mostrate), nord ed est e barra di scala disegnati nell'angolo in basso a sinistra (§3.10, §3.18), grigi durante il gesto, rossi puri in modalità notte; disegno con `QPainter` sul widget OpenGL, etichette che non si sovrappongono. T3 (punti entro 1 pixel dalle linee del 10), T18 (testi di `format_coordinates`), T20 (`gl`) e T21 nei test; il test `gl` ha trovato e fatto correggere un rosso con verde nella notte. |
 | 2026-10-20 | Claude Code | **Sprint 4d del codice (decisioni del proprietario del 2026-10-20: inquadratura intera, griglia di pixel senza WCS):** File → Apri su un FITS locale (`image.open` del 05, già previsto) lo rende base della vista con il suo WCS e lo inquadra intero; colori da `set_display`; disegno a pixel più vicino (`sample_image`); `cursor.read` con valore originale, unità (`BUNIT` o «non dichiarata»), pixel FITS (x, y), frame ed epoca dall'intestazione senza assunzioni; senza WCS valido griglia di pixel (`PixelGridGeometry`) con `WCS_INVALID` e nessuna coordinata; nuova D41-5 (zoom e spostamento sulla griglia di pixel). T22–T25 nei test. Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Sprint 4e del codice (decisioni del proprietario del 2026-10-21):** cataloghi disegnati come punti sulla GPU con forma nel programma di disegno, posizioni e pixel della base nel gruppo di thread dei tile (una volta per base), stile iniziale dal comando di caricamento, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN` (§3.8, §3.13); epoca nella barra in ISO 8601 con la scala invece del JD (§3.11, DC1); D41-5 rinviata a dopo la v1; test T26–T30. Stato `approvato` invariato. |

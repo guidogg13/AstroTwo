@@ -113,6 +113,7 @@ from astrotwo.core.commands import (
     SESSION_EXTENSION,
     CancelToken,
     default_registry,
+    time_text,
 )
 from astrotwo.core.coordinates_wcs import format_coordinates
 
@@ -910,13 +911,8 @@ class StatusBar(QStatusBar):
         frame = sky["frame"]
         lon = format_coordinates(values=_quantity(sky["lon"]), frame=frame, axis="lon", style=self.coordinate_style)
         lat = format_coordinates(values=_quantity(sky["lat"]), frame=frame, axis="lat", style=self.coordinate_style)
-        epoch = sky.get("epoch")
-        if epoch is None:
-            epoch_text = self.tr("epoch unknown")
-        elif isinstance(epoch, str):
-            epoch_text = self.tr("epoch %1").replace("%1", epoch)
-        else:
-            epoch_text = self.tr("epoch %1").replace("%1", f"JD {sum(epoch['value']):.5f} {epoch['scale'].upper()}")
+        epoch = time_text(sky.get("epoch"))  # ISO 8601 con la scala o J…/B…, mai il JD (DC1)
+        epoch_text = self.tr("epoch unknown") if epoch is None else self.tr("epoch %1").replace("%1", epoch)
         head = f"{frame.upper() if frame == 'icrs' else frame.capitalize()} {lon.lon[0]} {lat.lat[0]}"
         return [f"{head} ({epoch_text})", head]
 
@@ -1443,6 +1439,13 @@ class MainWindow(QMainWindow):
 
         self.sky = SkyViewer(self.submit, cache=self.cache, passive=self.read_passive)
         self.sky.overlay_texts = {"pole": self.tr("pole in field"), "at_center": self.tr("at the center")}
+        self.sky.card_texts = {
+            "row": self.tr("row %1"), "epoch": self.tr("catalog epoch %1"),
+            "epoch_unknown": self.tr("catalog epoch not declared"), "no_position": self.tr("no position: %1"),
+            "not_propagated": self.tr("drawn at the table positions (not propagated)"),
+            "propagated": self.tr("drawn at epoch %1 (proper motion; %2)"),
+            "not_drawn": self.tr("not drawn in this view"), "catalog": self.tr("catalog %1"),
+            "retrieved": self.tr("retrieved %1")}
         self.sky.message.connect(lambda m: self.messages.add(None, m, error=m.code == "GL_UNAVAILABLE"))
         if hasattr(self.sky.renderer, "failed"):
             self.sky.renderer.failed.connect(

@@ -261,6 +261,42 @@
         <translation>al centro</translation>
     </message>
     <message>
+        <source>row %1</source>
+        <translation>riga %1</translation>
+    </message>
+    <message>
+        <source>catalog epoch %1</source>
+        <translation>epoca del catalogo %1</translation>
+    </message>
+    <message>
+        <source>catalog epoch not declared</source>
+        <translation>epoca del catalogo non dichiarata</translation>
+    </message>
+    <message>
+        <source>no position: %1</source>
+        <translation>nessuna posizione: %1</translation>
+    </message>
+    <message>
+        <source>drawn at the table positions (not propagated)</source>
+        <translation>disegnata alle posizioni della tabella (non propagata)</translation>
+    </message>
+    <message>
+        <source>drawn at epoch %1 (proper motion; %2)</source>
+        <translation>disegnata all'epoca %1 (moto proprio; %2)</translation>
+    </message>
+    <message>
+        <source>not drawn in this view</source>
+        <translation>non disegnata in questa vista</translation>
+    </message>
+    <message>
+        <source>catalog %1</source>
+        <translation>catalogo %1</translation>
+    </message>
+    <message>
+        <source>retrieved %1</source>
+        <translation>letto il %1</translation>
+    </message>
+    <message>
         <source>Zoom out</source>
         <translation>Rimpicciolisci</translation>
     </message>
@@ -573,16 +609,16 @@
         <translation>(unità non dichiarata)</translation>
     </message>
     <message>
-        <source>no celestial coordinates</source>
-        <translation>nessuna coordinata celeste</translation>
-    </message>
-    <message>
         <source>no data</source>
         <translation>nessun dato</translation>
     </message>
     <message>
         <source>order %1</source>
         <translation>ordine %1</translation>
+    </message>
+    <message>
+        <source>no celestial coordinates</source>
+        <translation>nessuna coordinata celeste</translation>
     </message>
     <message>
         <source>epoch unknown</source>

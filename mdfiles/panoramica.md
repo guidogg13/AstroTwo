@@ -18,6 +18,22 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-21, parte 4, sprint 4e della v1 (41: cataloghi e
+  clic):** un catalogo caricato (Data → Catalog in view…, `catalog.load_region`,
+  o File → Open catalog…) si disegna come simboli sulla GPU (forma nel programma
+  di disegno); posizioni dal 13 e pixel della base dal 10 nel gruppo di thread
+  dei tile, una volta per base. **Decisioni del proprietario del 2026-10-21:**
+  stile iniziale assegnato dal comando di caricamento (Okabe e Ito senza il
+  nero, sei forme, 8 pixel logici, in ordine di apertura); clic → `catalog.select`
+  con una **scheda della sorgente sul cielo** (nome da UCD `meta.id;meta.main`,
+  coordinate della tabella con `format_coordinates`, epoca del catalogo,
+  catalogo); avvisi `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN`; **D41-5
+  rinviata a dopo la v1**; **correzione: l'epoca nella barra di stato è in ISO
+  8601 con la scala** (DC1), non più in JD (`time_text` del 05; nessun altro JD
+  nell'interfaccia). Trovata la nuova **D41-6** (Gruppo 3: `catalog.set_columns`
+  perde l'epoca del COOSYS). Test: **704 di default** (più 3 `gl` eseguiti sulla
+  piattaforma `cocoa`: passano), di rete non eseguiti (`--no-network`); T30:
+  5000 sorgenti in 5.7 ms per base. Decisioni aperte: **15** (Gruppo 3 = 13).
 - **Stato al 2026-10-20, parte 4, sprint 4d della v1 (41: immagine FITS
   locale):** File → Apri su un FITS (`image.open` del 05, già previsto) lo
   rende base della vista con il suo WCS, **inquadrato intero nella finestra**
@@ -811,6 +827,7 @@ poi `decisioni-aperte.md`.
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
 | D05-3, D40-2 | Adattatore del 19; avvio tramite URL (H18) | `05`, `40` §13 | **rimandate** il 2026-10-15 (Gruppo 3) |
 | D40-3 | Messaggi dei moduli 10–19 in inglese con traduzione (coerente con A9) | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 3, aperta il 2026-10-15) |
+| D41-5, D41-6 | Zoom e spostamento su una griglia di pixel; epoca del COOSYS persa da `catalog.set_columns` | `41-ui-visualizzatore-cielo.md` §13 | D41-5 **rinviata a dopo la v1** il 2026-10-21; D41-6 **da decidere** (Gruppo 3, aperta il 2026-10-21) |
 | D40-4 | Scorciatoia da tastiera della modalità notte (View → Night mode) | `40-ui-finestra-principale.md` §13 | **decisa il 2026-10-17: ⌃⌘N** |
 | AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md`. **Proposta del 2026-10-15, ACCETTATA lo stesso giorno:** nuovo file generale `05-comandi-sessione.md` (livello 1, registro dei comandi e sessione), scritto in `bozza` |
 | D14-13 | URL dei servizi dell'ESO in http: il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata | `14-core-protocolli-vo.md` §13 | **da decidere** (aperta il 2026-10-14); oggi la demo usa https, nessuna modifica al codice del 14 |
@@ -851,7 +868,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
    2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
-   2026-10-20**; prossimi sprint del 41: 4e cataloghi e clic, 4f MOC e livelli, 4g strumenti (distanza, Simbad),
+   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21**; da decidere D41-6; prossimi sprint del 41: 4f MOC e livelli, 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -953,3 +970,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-20 | Claude Code | **Parte 4b-fix2 della v1 (41):** barra di stato a due campi (coordinate; valore · ordine · risoluzione a larghezza fissa, mai tagliato), comando in corso a larghezza massima, test a 1280 e 900 px; 41 §3.11 e registro aggiornati, resta `approvato`. |
 | 2026-10-20 | Claude Code | **Parte 4, sprint 4c della v1 (41):** griglia con etichette, nord/est e barra di scala disegnati; nuovo comando `view.set_overlays` nel `05` (decisione del proprietario del 2026-10-20), voci di menu nel `40`; `05`, `40`, `41` modificati nel registro, restano `approvato`; verificati i 4 avvisi `FROM_CACHE` di `hips.set_survey`. |
 | 2026-10-20 | Claude Code | **Parte 4, sprint 4d della v1 (41):** immagine FITS locale come base della vista (inquadratura intera, colori di `set_display`, valore originale con unità, pixel FITS, frame ed epoca dall'intestazione), griglia di pixel con `WCS_INVALID` senza WCS valido; `view.set_overlays` nell'elenco del 32; avvisi doppi di `hips.set_survey` eliminati; nuova D41-5 (Gruppo 3, aperte 14); `05`, `32`, `41` modificati nel registro, restano `approvato`. |
+| 2026-10-21 | Claude Code | **Parte 4, sprint 4e della v1 (41):** cataloghi disegnati come simboli sulla GPU, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi di epoche diverse; stile iniziale nel comando di caricamento e scheda della sorgente in `catalog.select` (05); decisioni del proprietario del 2026-10-21 (scheda sul cielo, stile nel comando, Okabe e Ito + sei forme + 8 px, nome da UCD e posizione della tabella); D41-5 rinviata; epoca della barra in ISO 8601 con la scala (DC1); nuova D41-6. Test 704 di default e 3 `gl` (piattaforma `cocoa`). |

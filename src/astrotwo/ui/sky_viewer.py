@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Visualizzatore del cielo (41), sprint 4a-4c: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il
-mouse, griglia delle coordinate, indicatore del nord e barra di scala.
+"""Visualizzatore del cielo (41), sprint 4a-4e: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il
+mouse, griglia delle coordinate, indicatore del nord e barra di scala, immagine FITS base, cataloghi e clic.
 
 Nessun numero mostrato nasce qui: la geometria è la ``ViewGeometry`` del 10 (dai comandi di vista del 05), i tile
 e il loro campionamento sulla finestra vengono dal 12 (``view_sampling``, ``fetch_tile``, ``fill_view``).
@@ -10,8 +10,14 @@ Traslazione e scala dello schermo durante un gesto sono solo disegno (41 §3.4);
 
 Sfondo HiPS: un solo survey; i tile JPEG/PNG si disegnano com'è, i tile FITS sono portati a colori da
 ``set_display`` dell'11 con i limiti scelti da ``hips.set_survey`` (campo ``display`` del livello, 41 §3.7). Sotto il
-mouse una lettura passiva ``cursor.read`` (05) nel gruppo di thread dei tile, al più una in corso (41 §3.11). I
-cataloghi, i livelli e gli strumenti arrivano negli sprint successivi.
+mouse una lettura passiva ``cursor.read`` (05) nel gruppo di thread dei tile, al più una in corso (41 §3.11). Il
+pannello dei livelli e gli strumenti arrivano negli sprint successivi.
+
+Cataloghi (41 §3.8, sprint 4e): posizioni dal 13 (``display_positions`` con le colonne di moto proprio scelte,
+altrimenti le posizioni della tabella, ``catalog_positions`` del 05) e pixel della base con ``sky_to_pixel`` del 10,
+nel gruppo di thread dei tile, una volta per base; qui solo ``base_to_window`` (fattore e spostamento della
+``ViewGeometry``) e il disegno. Un clic sceglie il simbolo più vicino (``cKDTree`` sullo schermo) e registra
+``catalog.select``; la scheda della sorgente mostra il risultato del comando.
 
 Griglia, nord/est e barra di scala (41 §3.10, §3.18): tutti i numeri sono del 10 (``compute_grid_lines``,
 ``choose_grid_spacing``, ``compass_and_scale_bar``, ``format_coordinates``), calcolati dai comandi di vista del 05 e
@@ -21,17 +27,19 @@ letti dallo stato; qui si portano solo i punti nello spazio dei pixel della fine
 from __future__ import annotations
 
 import dataclasses
+import html
 import os
 import sys
 import threading
+import time
 from collections.abc import Callable, Mapping
 
 import astropy.units as u
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtWidgets import QApplication, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QToolButton, QVBoxLayout, QWidget
 
-from astrotwo.core.commands import ResultMessage, quantity_json, sky_json
+from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
 
 #: Fine del gesto: puntatore fermo per 300 ms (05 §3.3).
@@ -58,6 +66,17 @@ START_CENTER = {"lon": {"value": 0.0, "unit": "deg"}, "lat": {"value": 0.0, "uni
                 "epoch_reason": "epoca delle posizioni non nota (non assunta)"}
 #: Testi dell'indicatore e della barra di scala nella lingua dell'interfaccia (la finestra principale li traduce, 40).
 DEFAULT_OVERLAY_TEXTS = {"pole": "pole in field", "at_center": "at the center"}
+#: Testi della scheda della sorgente nella lingua dell'interfaccia (la finestra principale li traduce, 40).
+DEFAULT_CARD_TEXTS = {
+    "row": "row %1", "epoch": "catalog epoch %1", "epoch_unknown": "catalog epoch not declared",
+    "no_position": "no position: %1", "not_propagated": "drawn at the table positions (not propagated)",
+    "propagated": "drawn at epoch %1 (proper motion; %2)", "not_drawn": "not drawn in this view",
+    "catalog": "catalog %1", "retrieved": "retrieved %1",
+}
+#: Tolleranza minima del clic su un simbolo, pixel logici (41 §3.8, scelta minore 5).
+CLICK_TOLERANCE = 4.0
+#: Movimento oltre il quale una pressione del mouse diventa trascinamento invece di clic (pixel logici).
+CLICK_SLOP = 3.0
 #: Variabile d'ambiente che accende il log diagnostico degli ingressi (rotella, zoom, gesto) sul terminale.
 DEBUG_INPUT_ENV = "ASTROTWO_DEBUG_INPUT"
 
@@ -163,6 +182,134 @@ def build_overlay(view, texts: Mapping[str, str] = DEFAULT_OVERLAY_TEXTS) -> Ove
         bar_text=(c.label + (" " + texts["at_center"] if c.local_only else "")) if bar_shown else None)
 
 
+@dataclasses.dataclass(frozen=True, eq=False)
+class CatalogPoints:
+    """Posizioni di un catalogo nei pixel della base (41 §3.8), calcolate nel gruppo di thread dei tile.
+
+    ``rows``: righe della tabella disegnate; ``base_xy``: pixel della base (convenzione numpy, ``float64``) da
+    ``sky_to_pixel`` del 10; ``rgba``/``size``/``shape``: stile per riga da ``set_plot_rules`` del 13 (colore in
+    [0, 1], dimensione in pixel logici, indice nella lista delle forme del 13). ``epoch`` è l'epoca delle posizioni
+    disegnate (13), ``propagated`` dice se viene da ``display_positions``; ``seconds`` il tempo del calcolo."""
+
+    key: tuple
+    layer: str
+    rows: np.ndarray
+    base_xy: np.ndarray
+    rgba: np.ndarray
+    size: np.ndarray
+    shape: np.ndarray
+    epoch: object = None
+    propagated: bool = False
+    epoch_source: str | None = None
+    warnings: tuple[ResultMessage, ...] = ()
+    seconds: float = 0.0
+
+
+@dataclasses.dataclass(frozen=True, eq=False)
+class PointSet:
+    """Simboli di un catalogo pronti per il renderer: ``xy`` nello spazio dei pixel della finestra disegnata
+    (origine in alto a sinistra, pixel fisici, ``float32`` solo per il disegno, DC6), come le linee della griglia."""
+
+    layer: str
+    rows: np.ndarray
+    xy: np.ndarray
+    rgba: np.ndarray
+    size: np.ndarray
+    shape: np.ndarray
+    selected: np.ndarray
+
+
+def _hex_rgba(colors: np.ndarray) -> np.ndarray:
+    """Colori ``#RRGGBB`` del 13 → RGBA in [0, 1] per il disegno."""
+    out = np.ones((len(colors), 4), dtype=np.float32)
+    for k, text in enumerate(colors):
+        out[k, :3] = [int(text[i:i + 2], 16) / 255.0 for i in (1, 3, 5)]
+    return out
+
+
+def base_key(geometry) -> tuple:
+    """Identità della base (41 §3.2): l'immagine (WCS del file) o la base creata dal 10 (tipo, punto di tangenza,
+    scala). Due geometrie con la stessa chiave hanno gli stessi pixel della base."""
+    w = geometry.base
+    if not geometry.base_created:
+        return ("image", id(w))
+    return ("created", tuple(w.wcs.ctype), tuple(float(v) for v in w.wcs.crval),
+            tuple(float(v) for v in w.wcs.cdelt), tuple(float(v) for v in w.wcs.crpix))
+
+
+def catalog_key(layer, image) -> tuple:
+    """Ciò da cui dipendono le posizioni disegnate di un catalogo: tabella, stile del 13, colonne di moto proprio
+    e immagine base (epoca di visualizzazione, D10-2)."""
+    columns = tuple(sorted((layer.columns or {}).items()))
+    return (layer.id, id(layer.data), id(layer.derived.get("plot_style")), columns,
+            None if image is None else id(image.data))
+
+
+def _epoch_warnings(table, image, layer_name: str) -> tuple[ResultMessage, ...]:
+    """Avviso di epoche diverse (D10-2, 41 §3.8) quando le posizioni non sono propagate: epoca del catalogo e
+    dell'immagine base entrambe dichiarate e diverse, o epoca del catalogo non dichiarata con un'immagine datata."""
+    wcs = None if image is None else image.data.wcs
+    image_epoch = None if wcs is None else wcs.image_epoch
+    if image_epoch is None:
+        return ()
+    epoch = table.positions.epoch
+    shown = time_text(image_epoch)
+    if epoch is None:
+        return (ResultMessage("CATALOG_EPOCH_UNKNOWN", f"{layer_name}: epoca del catalogo non dichiarata, immagine "
+                              f"all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
+                              "catalog.set_columns)"),)
+    from astrotwo.core.coordinates_wcs import SkyFrame
+
+    catalog_epoch = SkyFrame.from_lonlat(0 * u.deg, 0 * u.deg, "icrs", epoch=epoch).epoch  # lettura del 10
+    if (catalog_epoch - image_epoch).to_value(u.s) == 0.0:
+        return ()
+    return (ResultMessage("CATALOG_EPOCH_DIFFERS", f"{layer_name}: catalogo all'epoca {time_text(catalog_epoch)}, "
+                          f"immagine all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
+                          "catalog.set_columns)"),)
+
+
+def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
+    """Posizioni di un catalogo nei pixel della base (41 §3.8): con le colonne di moto proprio scelte
+    (``catalog.set_columns``) ``display_positions`` del 13 all'epoca di visualizzazione (D10-2), altrimenti le
+    posizioni della tabella con l'epoca del catalogo (scelta minore 3); poi ``sky_to_pixel`` del 10 sulla base. Si
+    disegnano le righe con posizione, stile del 13 e pixel finiti dentro la proiezione."""
+    from astrotwo.core.catalogs import PLOT_SHAPES, display_positions
+    from astrotwo.core.commands import catalog_positions
+    from astrotwo.core.coordinates_wcs import sky_to_pixel
+
+    start = time.perf_counter()
+    table = layer.data
+    style = layer.derived.get("plot_style")
+    columns = layer.columns or {}
+    empty = CatalogPoints(key, layer.id, np.zeros(0, dtype=np.int64), np.zeros((0, 2)), np.zeros((0, 4), np.float32),
+                          np.zeros(0, np.float32), np.zeros(0, np.float32))
+    if table.positions is None or style is None:
+        return empty
+    if columns.get("pm_ra") and columns.get("pm_dec"):
+        shown = display_positions(table, None if image is None else image.data, pm_ra=columns["pm_ra"],
+                                  pm_dec=columns["pm_dec"], pm_ra_includes_cosdec=columns.get("pm_ra_includes_cosdec"),
+                                  parallax=columns.get("parallax"), radial_velocity=columns.get("radial_velocity"))
+        coords, valid = shown.coords, shown.drawable
+        epoch, propagated, source, warnings_ = shown.epoch, True, shown.epoch_source, ()
+    else:
+        coords, valid = catalog_positions(table)
+        epoch, propagated, source = table.positions.epoch, False, None
+        warnings_ = _epoch_warnings(table, image, layer.name)
+    if coords is None:
+        return dataclasses.replace(empty, epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_)
+    rows = np.flatnonzero(valid)
+    pixels = sky_to_pixel(geometry.base, coords, convention="numpy")
+    bx, by = np.asarray(pixels.pixels.x, dtype=np.float64), np.asarray(pixels.pixels.y, dtype=np.float64)
+    keep = ~np.asarray(pixels.out_of_field, dtype=bool) & np.asarray(style.drawn, dtype=bool)[rows]
+    rows, bx, by = rows[keep], bx[keep], by[keep]
+    shapes = {name: float(k) for k, name in enumerate(PLOT_SHAPES)}
+    return CatalogPoints(
+        key, layer.id, rows, np.column_stack([bx, by]), _hex_rgba(style.color[rows]),
+        np.asarray(style.size[rows], dtype=np.float32), np.array([shapes[x] for x in style.shape[rows]], np.float32),
+        epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_,
+        seconds=time.perf_counter() - start)
+
+
 class SkyRenderer:
     """Interfaccia di disegno (41 §3.13, §7); in questo sprint solo il piano dello sfondo e la trasformazione.
 
@@ -187,6 +334,15 @@ class SkyRenderer:
     def set_overlay(self, overlay: Overlay | None) -> None:
         """Griglia, indicatore del nord e barra di scala (41 §3.10, §3.18). Durante un gesto (trasformazione diversa
         dall'identità) indicatore e barra sono in grigio: restano quelli dell'ultimo comando di vista."""
+        raise NotImplementedError
+
+    def upload_points(self, sets: tuple[PointSet, ...]) -> None:
+        """Simboli dei cataloghi (41 §3.8), dal basso verso l'alto; le sorgenti selezionate hanno un anello."""
+        raise NotImplementedError
+
+    def drawn_positions(self) -> list[tuple[str, np.ndarray, np.ndarray]]:
+        """Per i test (41 §7): ``(livello, righe, posizioni sullo schermo in pixel fisici)`` dei simboli disegnati,
+        con la trasformazione corrente."""
         raise NotImplementedError
 
 
@@ -224,6 +380,7 @@ class _Bridge(QObject):
     failed = Signal(int, str, str)  # generazione, codice, testo
     done = Signal(int)  # generazione (una richiesta di tile finita, riuscita o no)
     cursor = Signal(object)  # CommandResult di una lettura sotto il mouse
+    catalog = Signal(object, object)  # chiave, CatalogPoints o ResultMessage (errore del modulo)
 
 
 class _Task(QRunnable):
@@ -296,6 +453,20 @@ class TilePool:
             except Exception as exc:  # noqa: BLE001 - il gruppo di thread non si ferma mai
                 result = CommandResult("error", error=ResultMessage("UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}"))
             self.bridge.cursor.emit(result)
+
+        self.pool.start(_Task(run))
+
+    def catalog(self, key: tuple, layer, geometry, image) -> None:
+        """Posizioni di un catalogo sulla base (41 §3.8) nel gruppo di thread dei tile; l'errore di un modulo diventa
+        un messaggio."""
+
+        def run() -> None:
+            try:
+                result = catalog_points(key, layer, geometry, image)
+            except Exception as exc:  # noqa: BLE001 - errori del 10/13: catalogo non disegnato e un messaggio
+                code = getattr(exc, "code", type(exc).__name__)
+                result = ResultMessage(str(code), f"{layer.name}: {getattr(exc, 'message', None) or exc}")
+            self.bridge.catalog.emit(key, result)
 
         self.pool.start(_Task(run))
 
@@ -388,6 +559,25 @@ class SkyViewer(QWidget):
         self.tiles.bridge.failed.connect(self._failed)
         self.tiles.bridge.done.connect(self._tile_done)
         self.tiles.bridge.cursor.connect(self._cursor_done)
+        self.tiles.bridge.catalog.connect(self._catalog_done)
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)  # Esc chiude la scheda della sorgente
+        self.card_texts: Mapping[str, str] = DEFAULT_CARD_TEXTS  # tradotti dalla finestra principale (40)
+        self.card = QLabel(self)
+        self.card.setObjectName("sourceCard")
+        self.card.setTextFormat(Qt.TextFormat.RichText)
+        self.card.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.card.hide()
+        self._card: tuple[str, int, Mapping] | None = None  # livello, riga, scheda di catalog.select (05)
+        self._night = False
+        self.screen_geometry = None  # geometria del disegno sullo schermo (la sua finestra è lo spazio dei punti)
+        self.catalog_layers: tuple = ()
+        self.base_image = None  # livello dell'immagine base (epoca di visualizzazione, D10-2)
+        self.catalog_cache: dict[tuple, CatalogPoints] = {}
+        self._catalog_pending: set[tuple] = set()
+        self.point_sets: tuple[PointSet, ...] = ()
+        self._trees: dict[int, object] = {}
+        self._press: QPointF | None = None
+        self._dragging = False
         self._cursor_busy = False
         self._cursor_next: QPointF | None = None  # ultima posizione arrivata mentre una lettura era in corso
         self._cursor_inside = False
@@ -476,9 +666,15 @@ class SkyViewer(QWidget):
         self.submit("view.set_center", {"position": START_CENTER, "window": window})
 
     def command_finished(self, name: str, status: str, values: Mapping, state) -> None:
-        """Dopo ogni comando (riuscito o no): disegna la nuova geometria e il survey attivo, se sono cambiati."""
+        """Dopo ogni comando (riuscito o no): disegna la nuova geometria e il survey attivo, se sono cambiati; dopo
+        ``catalog.select`` mostra o chiude la scheda della sorgente."""
         if name in ("view.set_center", "view.set_zoom") and self._awaiting:
             self._awaiting -= 1
+        if name == "catalog.select" and status == "ok":
+            self.catalog_layers = state.of_kind("catalog")  # la scheda legge la selezione nuova
+            self.show_card(values)
+        elif name == "layer.remove" and self._card is not None and state.find(self._card[0]) is None:
+            self.hide_card()
         if status == "ok" and "field_of_view" in values:
             self.field = values["field_of_view"]  # campo della geometria disegnata, dal 05 con il 10
         if self._awaiting:
@@ -501,6 +697,8 @@ class SkyViewer(QWidget):
         layers = [] if image is not None else state.of_kind("hips")  # con un'immagine aperta lo sfondo non si disegna
         layer = layers[-1] if layers else None
         self.view = view
+        self.catalog_layers = state.of_kind("catalog")
+        self.base_image = image
         changed_geometry = view.geometry is not self.geometry
         changed_survey = (layer.id if layer else None) != self.survey_layer
         image_key = None if image is None else (image.id, id(image.derived.get("plane")), image.visible, image.opacity)
@@ -508,8 +706,10 @@ class SkyViewer(QWidget):
         if not changed_geometry:
             self.show_overlay()  # griglia, indicatore o barra cambiati sulla stessa geometria (view.set_grid, ...)
         if not (changed_geometry or changed_survey or changed_image):
+            self.update_catalogs()
             return
         self.geometry = view.geometry
+        self.update_catalogs()
         self.service = layer.data if layer else None
         self.display = layer.display if layer else None
         self.survey_layer = layer.id if layer else None
@@ -540,6 +740,8 @@ class SkyViewer(QWidget):
                 self.renderer.set_transform(self.k, self.tx, self.ty)
             if not changed_geometry:
                 self._pending.pop(gen, None)
+            self.screen_geometry = self.geometry
+            self.refresh_points()
             if self.geometry is not None and image is not None:
                 self.canvas = sample_image(self.geometry, image)
                 self._upload()
@@ -582,6 +784,8 @@ class SkyViewer(QWidget):
         self._settle_transform(gen, rows, cols)
         self._upload()
         self.renderer.set_transform(self.k, self.tx, self.ty)
+        self.screen_geometry = self.geometry  # tile e simboli passano alla nuova finestra insieme
+        self.refresh_points()
         self.show_overlay()
         if "fits" in self.service.tile_formats[:1] and (self.display is None or self.display.get("vmin") is None):
             self._report("HIPS_DISPLAY_UNKNOWN", f"{self.service.hips_id}: limiti di colore del survey non noti, "
@@ -621,12 +825,203 @@ class SkyViewer(QWidget):
         self.renderer.upload_texture(np.ascontiguousarray(self.canvas[::-1]))
 
     def set_night(self, night: bool) -> None:
+        self._night = bool(night)
         self.renderer.set_night(night)
+        self._style_card()
+
+    # --- cataloghi (41 §3.8) ---------------------------------------------------------------
+
+    def update_catalogs(self) -> None:
+        """Chiede le posizioni mancanti dei cataloghi visibili sulla base corrente e aggiorna il disegno."""
+        g = self.geometry
+        if g is not None and self.pixel_grid:
+            if self.catalog_layers:
+                self._report_once(("", "VIEW_NO_WCS"), ResultMessage(
+                    "VIEW_NO_WCS", "immagine senza WCS valido: i cataloghi non si sovrappongono alla griglia di pixel"))
+        elif g is not None:
+            keep = {base_key(g)} | ({base_key(self.screen_geometry)} if self._has_sky(self.screen_geometry) else set())
+            self.catalog_cache = {k: v for k, v in self.catalog_cache.items() if k[1] in keep}
+            for layer in self.catalog_layers:
+                key = (catalog_key(layer, self.base_image), base_key(g))
+                if layer.visible and key not in self.catalog_cache and key not in self._catalog_pending:
+                    self._catalog_pending.add(key)
+                    self.tiles.catalog(key, layer, g, self.base_image)
+        self.refresh_points()
+
+    @staticmethod
+    def _has_sky(geometry) -> bool:
+        return geometry is not None and hasattr(geometry, "window_to_sky")
+
+    def _catalog_done(self, key: tuple, result) -> None:
+        self._catalog_pending.discard(key)
+        if isinstance(result, ResultMessage):
+            self._report_once((key[0][0], result.code), result)
+            return
+        self.catalog_cache[key] = result
+        for message in result.warnings:  # epoche diverse: una volta per livello e immagine (41 §3.8)
+            self._report_once((key[0][0], message.code, key[0][4]), message)
+        self.refresh_points()
+
+    def _report_once(self, key: tuple, message: ResultMessage) -> None:
+        if key not in self._reported:
+            self._reported.add(key)
+            self.message.emit(message)
+
+    def points_for(self, layer) -> CatalogPoints | None:
+        """Posizioni disegnate del livello sulla base dello schermo, se già calcolate."""
+        g = self.screen_geometry
+        if not self._has_sky(g):
+            return None
+        return self.catalog_cache.get((catalog_key(layer, self.base_image), base_key(g)))
+
+    def refresh_points(self) -> None:
+        """Simboli nello spazio della finestra disegnata: solo ``base_to_window`` della ``ViewGeometry`` (fattore e
+        spostamento, 41 §3.4), opacità del livello e selezione; nessun numero mostrato nasce qui."""
+        sets: list[PointSet] = []
+        g = self.screen_geometry
+        for layer in self.catalog_layers if self._has_sky(g) else ():
+            points = self.points_for(layer)
+            if not layer.visible or points is None or not len(points.rows):
+                continue
+            wx, wy = g.base_to_window(points.base_xy[:, 0], points.base_xy[:, 1])
+            xy = np.column_stack([wx + 0.5, g.shape[0] - wy - 0.5]).astype(np.float32)
+            rgba = points.rgba.copy()
+            rgba[:, 3] *= np.float32(layer.opacity)
+            sets.append(PointSet(layer.id, points.rows, xy, rgba, points.size, points.shape,
+                                 np.isin(points.rows, np.asarray(layer.selection, dtype=np.int64))))
+        self.point_sets = tuple(sets)
+        self._trees = {}
+        self.renderer.upload_points(self.point_sets)
+        self._place_card()
+
+    def source_at(self, at: QPointF) -> tuple[str, int] | None:
+        """Simbolo disegnato più vicino al punto ``at`` (pixel logici) entro metà della sua dimensione o, se più
+        grande, entro ``CLICK_TOLERANCE`` (41 §3.8, scelta minore 5); a pari distanza il livello più in alto. È una
+        scelta sullo schermo (``cKDTree`` di scipy), non un numero mostrato."""
+        from scipy.spatial import cKDTree
+
+        r = self.ratio()
+        q = np.array([(at.x() * r - self.tx) / self.k, (at.y() * r - self.ty) / self.k])
+        best: tuple[float, str, int] | None = None
+        for i, points in enumerate(self.point_sets):
+            tolerance = np.maximum(points.size / 2.0, CLICK_TOLERANCE)  # pixel logici
+            tree = self._trees.get(i)
+            if tree is None:
+                tree = self._trees[i] = cKDTree(points.xy.astype(np.float64))
+            near = tree.query_ball_point(q, float(tolerance.max()) * r / self.k)
+            for j in near:
+                d = float(np.hypot(*(points.xy[j] - q))) * self.k / r
+                if d <= tolerance[j] and (best is None or d <= best[0]):
+                    best = (d, points.layer, int(points.rows[j]))
+        return None if best is None else (best[1], best[2])
+
+    def click_at(self, at: QPointF) -> None:
+        """Clic sul cielo: ``catalog.select`` della sorgente scelta; nel vuoto chiude la scheda e toglie le
+        selezioni attive con ``catalog.select`` a righe vuote (41 §3.8)."""
+        hit = self.source_at(at)
+        if hit is not None:
+            self.submit("catalog.select", {"layer": hit[0], "rows": [hit[1]]}, source="mouse")
+            return
+        self.hide_card()
+        for layer in self.catalog_layers:
+            if layer.selection:
+                self.submit("catalog.select", {"layer": layer.id, "rows": []}, source="mouse")
+
+    # --- scheda della sorgente (41 §3.8, decisione del proprietario del 2026-10-21) --------------
+
+    def show_card(self, values: Mapping) -> None:
+        card = values.get("source")
+        if card is None:
+            self.hide_card()
+            return
+        self._card = (values["layer"], int(card["row"]), card)
+        self.card.setText(self.card_html())
+        self.card.adjustSize()
+        self._style_card()
+        self.card.show()
+        self.card.raise_()
+        self._place_card()
+
+    def hide_card(self) -> None:
+        self._card = None
+        self.card.hide()
+
+    def card_html(self) -> str:
+        """Testo della scheda: tutto dal risultato di ``catalog.select`` (05) e dalle posizioni disegnate (13), le
+        coordinate scritte da ``format_coordinates`` del 10 nello stile scelto, le epoche con ``time_text`` (DC1)."""
+        from astrotwo.core.coordinates_wcs import format_coordinates
+
+        layer_id, row, card = self._card
+        t = self.card_texts
+        name = card["name"]["value"] or t["row"].replace("%1", str(row))
+        lines = [f"<b>{html.escape(name)}</b>"]
+        position = card.get("position")
+        style = self.view.coordinate_format if self.view is not None else "sexagesimal"
+        if position is None:
+            lines.append(html.escape(t["no_position"].replace("%1", card.get("position_reason") or "")))
+        else:
+            frame = position["frame"]
+            q = {axis: position[axis]["value"] * u.Unit(position[axis]["unit"]) for axis in ("lon", "lat")}
+            lon = format_coordinates(values=q["lon"], frame=frame, axis="lon", style=style).lon[0]
+            lat = format_coordinates(values=q["lat"], frame=frame, axis="lat", style=style).lat[0]
+            label = frame.upper() if frame in ("icrs", "fk5", "fk4") else frame.capitalize()
+            lines.append(html.escape(f"{label} {lon} {lat}"))
+            epoch = time_text(position.get("epoch"))
+            lines.append(html.escape(t["epoch"].replace("%1", epoch) if epoch else t["epoch_unknown"]))
+        layer = next((x for x in self.catalog_layers if x.id == layer_id), None)
+        points = None if layer is None else self.points_for(layer)
+        if points is not None:
+            if points.propagated:
+                lines.append(html.escape(t["propagated"].replace("%1", time_text(points.epoch) or "")
+                                         .replace("%2", points.epoch_source or "")))
+            else:
+                lines.append(html.escape(t["not_propagated"]))
+            for message in points.warnings:
+                lines.append(f"⚠ {html.escape(message.text)}")
+            if row not in set(points.rows.tolist()):
+                lines.append(html.escape(t["not_drawn"]))
+        catalog = card["catalog"]
+        lines.append(html.escape(t["catalog"].replace("%1", f"{catalog['name']} · {catalog['origin']}")))
+        if catalog.get("retrieved_at"):
+            lines.append(html.escape(t["retrieved"].replace("%1", catalog["retrieved_at"])))
+        return "<br>".join(lines)
+
+    def _style_card(self) -> None:
+        ink, edge = ("#ff2020", "#7a0000") if self._night else ("#e8eefc", "#3a4660")
+        self.card.setStyleSheet(f"QLabel#sourceCard {{ background: rgba(8, 10, 16, 225); color: {ink}; "
+                                f"border: 1px solid {edge}; border-radius: 6px; padding: 8px; }}")
+
+    def _place_card(self) -> None:
+        """La scheda sta vicino al simbolo e lo segue durante il gesto (stessa traslazione e scala, solo disegno)."""
+        if self._card is None:
+            return
+        layer_id, row, _ = self._card
+        x, y = 12.0, 12.0
+        r = self.ratio()
+        for points in self.point_sets:
+            if points.layer == layer_id:
+                hit = np.flatnonzero(points.rows == row)
+                if hit.size:
+                    qx, qy = points.xy[hit[0]]
+                    x, y = (self.k * qx + self.tx) / r + 12, (self.k * qy + self.ty) / r + 12
+                break
+        w, h = self.card.width(), self.card.height()
+        x = min(max(x, 4.0), max(4.0, self.width() - w - 4.0))
+        y = min(max(y, 4.0), max(4.0, self.height() - h - 4.0))
+        self.card.move(int(x), int(y))
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_Escape and self._card is not None:
+            self.hide_card()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     # --- gesti (41 §3.4, 05 §3.3) --------------------------------------------------------
 
     def _gesture_step(self) -> None:
         self.renderer.set_transform(self.k, self.tx, self.ty)
+        self._place_card()
         self.idle.start()
 
     def zoom_by(self, factor: float, at: QPointF) -> None:
@@ -687,14 +1082,18 @@ class SkyViewer(QWidget):
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag = event.position()
+            self._drag = self._press = event.position()
+            self._dragging = False
         event.accept()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if self._drag is not None and not self.pixel_grid:
             pos = event.position()
-            self.pan_by(pos.x() - self._drag.x(), pos.y() - self._drag.y())
-            self._drag = pos
+            # sotto CLICK_SLOP la pressione può ancora essere un clic: nessuno spostamento
+            if self._dragging or np.hypot(pos.x() - self._press.x(), pos.y() - self._press.y()) >= CLICK_SLOP:
+                self._dragging = True
+                self.pan_by(pos.x() - self._drag.x(), pos.y() - self._drag.y())
+                self._drag = pos
         self._cursor_inside = True
         self.read_cursor(event.position())
         event.accept()
@@ -738,7 +1137,11 @@ class SkyViewer(QWidget):
             self.read_cursor(pending)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
-        self._drag = None
+        clicked = event.button() == Qt.MouseButton.LeftButton and self._press is not None and not self._dragging
+        self._drag = self._press = None
+        self._dragging = False
+        if clicked and self._has_sky(self.screen_geometry):
+            self.click_at(event.position())
         event.accept()
 
     def _gesture_end(self) -> None:

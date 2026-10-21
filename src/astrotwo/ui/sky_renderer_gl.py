@@ -7,6 +7,9 @@ piano dello sfondo HiPS come una texture, traslazione e scala del gesto come uni
 modalità notte rossa nel programma di disegno (luminosità in scala di rossi: trasformazione di disegno).
 Sprint 4c: sopra il piano, griglia delle coordinate, indicatore del nord e barra di scala con ``QPainter`` sullo
 stesso widget (nessun numero calcolato qui: punti e testi arrivano già pronti da ``Overlay``).
+Sprint 4e: i cataloghi come punti in un buffer della GPU (un vertice per sorgente: posizione, colore, dimensione,
+forma), con ``gl_PointSize`` e la forma disegnata nel programma di disegno da ``gl_PointCoord``; anelli della
+selezione con ``QPainter``.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from PySide6.QtOpenGL import (QOpenGLBuffer, QOpenGLShader, QOpenGLShaderProgram
                               QOpenGLVertexArrayObject)
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from astrotwo.ui.sky_viewer import Overlay, SkyRenderer
+from astrotwo.ui.sky_viewer import Overlay, PointSet, SkyRenderer
 
 #: Versione minima di OpenGL (41 §3.13); sotto, ``GL_UNAVAILABLE`` (41 §10, nessun ripiego nella v1).
 GL_VERSION = (4, 1)
@@ -29,6 +32,8 @@ _GL_COLOR_BUFFER_BIT = 0x4000
 _GL_BLEND = 0x0BE2
 _GL_SRC_ALPHA = 0x0302
 _GL_ONE_MINUS_SRC_ALPHA = 0x0303
+_GL_POINTS = 0x0000
+_GL_PROGRAM_POINT_SIZE = 0x8642
 
 _VERTEX = """#version 410 core
 layout(location = 0) in vec2 corner;  // (0, 0) in alto a sinistra, (1, 1) in basso a destra
@@ -59,6 +64,69 @@ void main() {
 }
 """
 
+#: Simboli dei cataloghi (41 §3.8): un vertice per sorgente = x, y (spazio della finestra disegnata, pixel fisici),
+#: r, g, b, a, dimensione (pixel logici), forma (indice in PLOT_SHAPES del 13). Lato del punto = dimensione × rapporto
+#: dei pixel + margine per lo spessore del tratto.
+_POINT_FLOATS = 8
+_POINT_VERTEX = """#version 410 core
+layout(location = 0) in vec2 pos;
+layout(location = 1) in vec4 rgba;
+layout(location = 2) in float size;
+layout(location = 3) in float shape;
+uniform vec3 transform;   // k, tx, ty: schermo = k * pixel + t (pixel fisici)
+uniform vec2 viewport;
+uniform float ratio;      // pixel fisici per pixel logico
+out vec4 v_color;
+out float v_shape;
+out float v_side;
+void main() {
+    vec2 screen = transform.x * pos + transform.yz;
+    vec2 ndc = screen / viewport * 2.0 - 1.0;
+    gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
+    v_side = size * ratio + 3.0 * ratio;
+    gl_PointSize = v_side;
+    v_color = rgba;
+    v_shape = shape;
+}
+"""
+_POINT_FRAGMENT = """#version 410 core
+in vec4 v_color;
+in float v_shape;
+in float v_side;
+uniform bool night;
+uniform float ratio;
+out vec4 color;
+// forme del 13: 0 circle, 1 square, 2 diamond, 3 triangle, 4 cross, 5 plus, 6 dot (contorni, tranne dot)
+void main() {
+    vec2 p = gl_PointCoord * 2.0 - 1.0;
+    p.y = -p.y;                                  // y verso l'alto
+    float px = 2.0 / v_side;                     // un pixel fisico in unità del punto
+    float r = 1.0 - 1.5 * ratio * px;            // raggio del simbolo dentro il margine
+    float half_width = 0.75 * ratio * px;        // metà dello spessore del tratto (1.5 pixel logici)
+    float d;
+    int s = int(v_shape + 0.5);
+    if (s == 0) d = abs(length(p) - r);
+    else if (s == 1) d = abs(max(abs(p.x), abs(p.y)) - r * 0.85);
+    else if (s == 2) d = abs(abs(p.x) + abs(p.y) - r) * 0.7071;
+    else if (s == 3) {
+        float e = max(-p.y, max(dot(p, vec2(0.866, 0.5)), dot(p, vec2(-0.866, 0.5))));
+        d = abs(e - 0.5 * r);
+    } else if (s == 4) d = max(min(abs(p.x - p.y), abs(p.x + p.y)) * 0.7071, max(abs(p.x), abs(p.y)) - r * 0.8);
+    else if (s == 5) d = max(min(abs(p.x), abs(p.y)), max(abs(p.x), abs(p.y)) - r);
+    else d = max(length(p) - 0.45 * r, 0.0);
+    float a = 1.0 - smoothstep(half_width, half_width + px, d);
+    if (a <= 0.0) discard;
+    vec4 c = v_color;
+    if (night) {
+        // modalità notte rossa: luminanza (Rec. 709) portata sul rosso, mai sotto metà intensità perché il simbolo
+        // si veda sul nero; i cataloghi si distinguono per forma (41 §3.13). Trasformazione di disegno.
+        float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        c = vec4(0.5 + 0.5 * lum, 0.0, 0.0, c.a);
+    }
+    color = vec4(c.rgb, c.a * a);
+}
+"""
+
 #: Fondo del cielo dove non ci sono dati (stesso tono dell'area del cielo del 40 §3.11; nero in modalità notte).
 _CLEAR = (0x05 / 255, 0x07 / 255, 0x0C / 255)
 
@@ -67,10 +135,10 @@ _CLEAR = (0x05 / 255, 0x07 / 255, 0x0C / 255)
 #: rossi (41 §3.11). "stale" = durante un gesto (valori dell'ultimo comando di vista, 41 §3.18).
 _PALETTE = {
     False: {"grid": QColor(150, 195, 255, 120), "text": QColor(215, 228, 255, 235), "mark": QColor(240, 244, 250, 240),
-            "stale": QColor(150, 150, 150, 200)},
+            "stale": QColor(150, 150, 150, 200), "accent": QColor(10, 132, 255, 255)},
     # rossi puri (verde e blu a 0), come il piano del cielo in modalità notte (programma di disegno)
     True: {"grid": QColor(190, 0, 0, 150), "text": QColor(235, 0, 0, 240), "mark": QColor(235, 0, 0, 240),
-           "stale": QColor(125, 0, 0, 220)},
+           "stale": QColor(125, 0, 0, 220), "accent": QColor(255, 0, 0, 255)},
 }
 _SHADOW = QColor(0, 0, 0, 170)
 #: Dimensioni in pixel logici (disegno): margine dell'angolo, frecce di nord ed est (41 §3.18, scelte minori 10 e 11).
@@ -103,8 +171,12 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         self._transform = (1.0, 0.0, 0.0)
         self._night = False
         self._overlay: Overlay | None = None
+        self._points: tuple[PointSet, ...] = ()
+        self._points_dirty = False
+        self._point_count = 0
         self.available = True
         self.program: QOpenGLShaderProgram | None = None
+        self.point_program: QOpenGLShaderProgram | None = None
 
     # --- interfaccia SkyRenderer ---------------------------------------------------------
 
@@ -129,6 +201,15 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
     def set_overlay(self, overlay: Overlay | None) -> None:
         self._overlay = overlay
         self.update()
+
+    def upload_points(self, sets: tuple[PointSet, ...]) -> None:
+        self._points = tuple(sets)
+        self._points_dirty = True
+        self.update()
+
+    def drawn_positions(self) -> list[tuple[str, np.ndarray, np.ndarray]]:
+        k, tx, ty = self._transform
+        return [(s.layer, s.rows, k * s.xy.astype(np.float64) + np.array([tx, ty])) for s in self._points]
 
     def render_offscreen(self) -> QImage:
         """Immagine del disegno (pixel fisici), per i test ``gl`` e per il PNG (sprint successivo)."""
@@ -166,6 +247,31 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         program.release()
         self.vao.release()
         self.vbo.release()
+        points = QOpenGLShaderProgram(self)
+        ok = (points.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, _POINT_VERTEX)
+              and points.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _POINT_FRAGMENT)
+              and points.link())
+        if not ok:
+            self._unavailable(f"programma dei simboli non compilato: {points.log()}")
+            return
+        self.point_program = points
+        self.point_vao = QOpenGLVertexArrayObject(self)
+        self.point_vao.create()
+        self.point_vao.bind()
+        self.point_vbo = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
+        self.point_vbo.setUsagePattern(QOpenGLBuffer.UsagePattern.DynamicDraw)
+        self.point_vbo.create()
+        self.point_vbo.bind()
+        self.point_vbo.allocate(_POINT_FLOATS * 4)
+        points.bind()
+        stride = _POINT_FLOATS * 4
+        for location, offset, size in ((0, 0, 2), (1, 2, 4), (2, 6, 1), (3, 7, 1)):
+            points.enableAttributeArray(location)
+            points.setAttributeBuffer(location, _GL_FLOAT, offset * 4, size, stride)
+        points.release()
+        self.point_vao.release()
+        self.point_vbo.release()
+        self._points_dirty = True
 
     def _cleanup(self) -> None:
         """Texture distrutta con il suo contesto attivo (chiusura della finestra)."""
@@ -186,8 +292,38 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         f.glClear(_GL_COLOR_BUFFER_BIT)
         if self.program is not None and self._image is not None:
             self._paint_plane(f)
-        if self._overlay is not None:
+        if self.point_program is not None and self._points:
+            self._paint_points(f)
+        if self._overlay is not None or any(s.selected.any() for s in self._points):
             self._paint_overlay(self._overlay)
+
+    def _paint_points(self, f) -> None:
+        """Simboli dei cataloghi: un ``glDrawArrays(GL_POINTS)`` per tutti i livelli, trasformazione come uniforme."""
+        if self._points_dirty:
+            data = np.concatenate([np.column_stack([s.xy, s.rgba, s.size, s.shape]).astype(np.float32)
+                                   for s in self._points]) if self._points else np.zeros((0, _POINT_FLOATS), np.float32)
+            data = np.ascontiguousarray(data)
+            self._point_count = len(data)
+            self.point_vbo.bind()
+            self.point_vbo.allocate(data.tobytes(), max(data.nbytes, _POINT_FLOATS * 4))
+            self.point_vbo.release()
+            self._points_dirty = False
+        if not self._point_count:
+            return
+        ratio = self.devicePixelRatioF()
+        f.glEnable(_GL_BLEND)
+        f.glBlendFunc(_GL_SRC_ALPHA, _GL_ONE_MINUS_SRC_ALPHA)
+        f.glEnable(_GL_PROGRAM_POINT_SIZE)
+        program = self.point_program
+        program.bind()
+        program.setUniformValue("transform", *self._transform)
+        program.setUniformValue("viewport", float(self.width() * ratio), float(self.height() * ratio))
+        program.setUniformValue("ratio", float(ratio))
+        program.setUniformValue("night", self._night)
+        self.point_vao.bind()
+        f.glDrawArrays(_GL_POINTS, 0, self._point_count)
+        self.point_vao.release()
+        program.release()
 
     def _paint_plane(self, f) -> None:
         if self._dirty:
@@ -216,12 +352,25 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
 
     # --- griglia, indicatore, barra ------------------------------------------------------
 
-    def _paint_overlay(self, overlay: Overlay) -> None:
+    def _paint_overlay(self, overlay: Overlay | None) -> None:
         ratio = self.devicePixelRatioF()
         k, tx, ty = self._transform
         colors = _PALETTE[self._night]
         painter = QPainter(self)
         try:
+            # anello d'accento attorno alle sorgenti selezionate (41 §3.8)
+            for s in self._points:
+                for j in np.flatnonzero(s.selected):
+                    x, y = (k * float(s.xy[j, 0]) + tx) / ratio, (k * float(s.xy[j, 1]) + ty) / ratio
+                    radius = float(s.size[j]) / 2 + 4
+                    for width, color in ((3.4, _SHADOW), (1.8, colors["accent"])):
+                        pen = QPen(color, width)
+                        pen.setCosmetic(True)
+                        painter.setPen(pen)
+                        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                        painter.drawEllipse(QPointF(x, y), radius, radius)
+            if overlay is None:
+                return
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
             font = painter.font()

@@ -18,6 +18,8 @@ class MemoryRenderer(QWidget, SkyRenderer):
         self.transform = (1.0, 0.0, 0.0)
         self.night = False
         self.overlay = None
+        self.points: tuple = ()
+        self.point_uploads = 0
 
     def widget(self):
         return self
@@ -34,3 +36,11 @@ class MemoryRenderer(QWidget, SkyRenderer):
 
     def set_overlay(self, overlay) -> None:
         self.overlay = overlay
+
+    def upload_points(self, sets) -> None:
+        self.points = tuple(sets)
+        self.point_uploads += 1
+
+    def drawn_positions(self):
+        k, tx, ty = self.transform
+        return [(s.layer, s.rows, k * s.xy.astype(np.float64) + np.array([tx, ty])) for s in self.points]
