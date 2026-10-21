@@ -18,6 +18,26 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-21, parte 4, sprint 4f della v1 (41: MOC, livelli,
+  corpi diversi):** un MOC (File → Open MOC…) si disegna sulla GPU come
+  triangoli trasparenti e perimetro (celle di `healpix_grid` del 16, pixel della
+  base dal 10, nel gruppo di thread dei tile, una volta per base), con ordine
+  ridotto dichiarato "per eccesso" quando le celle superano il tetto del 16.
+  **Pannello dei livelli** nel 40: visibilità, opacità (al rilascio), su/giù e
+  trascinamento, rimozione, tutti comandi registrati del 05; dettagli con
+  sorgente, corpo, epoca e conteggi. **Lo sfondo HiPS torna visibile sotto
+  un'immagine FITS** (texture separate composte con l'opacità nell'ordine dei
+  livelli). **Decisioni del proprietario del 2026-10-21:** D41-6 (il 13 conserva
+  l'epoca del COOSYS con le stesse colonne e lo stesso sistema; `source_epoch`
+  annotato per il futuro); stile dei MOC da `moc.open` (Okabe e Ito in ordine
+  inverso, riempimento 0,25 × opacità); solo il perimetro (`HealpixGrid.boundary`
+  nuovo nel 16); `BODY_MISMATCH` prima dell'opzione dei dati planetari (19); MOC
+  di un altro corpo forzato: nel pannello ma non disegnato. Correzioni trovate:
+  uniformi float di PySide6 (`setUniformValue1f`), simboli e MOC disegnati anche
+  oltre il riquadro dell'immagine. Test: **718 di default** (più 4 `gl`
+  eseguiti su `cocoa`: passano), di rete non eseguiti (`--no-network`). Risposta
+  di Gaia DR3 registrata in `tests/core/data/` (condizioni di ridistribuzione da
+  verificare). Decisioni aperte: **14** (Gruppo 3 = 12).
 - **Stato al 2026-10-21, parte 4, sprint 4e della v1 (41: cataloghi e
   clic):** un catalogo caricato (Data → Catalog in view…, `catalog.load_region`,
   o File → Open catalog…) si disegna come simboli sulla GPU (forma nel programma
@@ -868,7 +888,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
    2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
-   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21**; da decidere D41-6; prossimi sprint del 41: 4f MOC e livelli, 4g strumenti (distanza, Simbad),
+   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -971,3 +991,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-20 | Claude Code | **Parte 4, sprint 4c della v1 (41):** griglia con etichette, nord/est e barra di scala disegnati; nuovo comando `view.set_overlays` nel `05` (decisione del proprietario del 2026-10-20), voci di menu nel `40`; `05`, `40`, `41` modificati nel registro, restano `approvato`; verificati i 4 avvisi `FROM_CACHE` di `hips.set_survey`. |
 | 2026-10-20 | Claude Code | **Parte 4, sprint 4d della v1 (41):** immagine FITS locale come base della vista (inquadratura intera, colori di `set_display`, valore originale con unità, pixel FITS, frame ed epoca dall'intestazione), griglia di pixel con `WCS_INVALID` senza WCS valido; `view.set_overlays` nell'elenco del 32; avvisi doppi di `hips.set_survey` eliminati; nuova D41-5 (Gruppo 3, aperte 14); `05`, `32`, `41` modificati nel registro, restano `approvato`. |
 | 2026-10-21 | Claude Code | **Parte 4, sprint 4e della v1 (41):** cataloghi disegnati come simboli sulla GPU, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi di epoche diverse; stile iniziale nel comando di caricamento e scheda della sorgente in `catalog.select` (05); decisioni del proprietario del 2026-10-21 (scheda sul cielo, stile nel comando, Okabe e Ito + sei forme + 8 px, nome da UCD e posizione della tabella); D41-5 rinviata; epoca della barra in ISO 8601 con la scala (DC1); nuova D41-6. Test 704 di default e 3 `gl` (piattaforma `cocoa`). |
+| 2026-10-21 | Claude Code | **Parte 4, sprint 4f della v1 (41):** MOC sulla GPU (riempimento e perimetro, ordine per eccesso dichiarato), pannello dei livelli (visibilità, opacità, ordine, rimozione come comandi del 05), sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`. Decisioni del proprietario del 2026-10-21: **D41-6 decisa** (13), stile dei MOC in `moc.open` (05), perimetro `HealpixGrid.boundary` (16), ordine dei controlli di `check_overlay` (19), MOC di un altro corpo forzato non disegnato; 05, 13, 16, 19, 41 modificati nel registro, restano `approvato`. Esempio `examples/moc_esempi.py`. Aperte 14. |

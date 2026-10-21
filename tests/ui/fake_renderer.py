@@ -20,13 +20,36 @@ class MemoryRenderer(QWidget, SkyRenderer):
         self.overlay = None
         self.points: tuple = ()
         self.point_uploads = 0
+        self.textures: dict = {}  # chiave (livello) → RGBA
+        self.texture_uploads: dict = {}
+        self.layers = None  # ordine di disegno (tipo, livello, opacità), dal basso
+        self.polygons: tuple = ()
+        self.polygon_uploads = 0
 
     def widget(self):
         return self
 
-    def upload_texture(self, rgba) -> None:
-        self.texture = np.array(rgba, copy=True)
+    def upload_texture(self, rgba, key="plane") -> None:
+        self.texture = np.array(rgba, copy=True)  # l'ultimo piano caricato
+        self.textures[key] = self.texture
+        self.texture_uploads[key] = self.texture_uploads.get(key, 0) + 1
         self.uploads += 1
+
+    def drop_texture(self, key) -> None:
+        self.textures.pop(key, None)
+
+    def set_layers(self, items) -> None:
+        self.layers = tuple(items)
+
+    def upload_polygons(self, sets) -> None:
+        self.polygons = tuple(sets)
+        self.polygon_uploads += 1
+
+    def drawn_polygons(self):
+        k, tx, ty = self.transform
+        t = np.array([tx, ty])
+        return [(s.layer, k * s.triangles.astype(np.float64) + t, k * s.lines.astype(np.float64) + t)
+                for s in self.polygons]
 
     def set_transform(self, k, tx, ty) -> None:
         self.transform = (k, tx, ty)

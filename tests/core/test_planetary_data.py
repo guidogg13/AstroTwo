@@ -456,3 +456,26 @@ def test_t7_epntap_real_service(cache, planetary_on):
     result = query_epntap("http://voparis-tap-planeto.obspm.fr/tap", adql, cache=cache)
     assert result.table.rows == 5 and result.table.body == "Mars"
     assert result.table.table.meta["planetary_longitude_direction"] == "east"
+
+
+def test_t12_body_mismatch_before_option():
+    """Sprint 4f del 41: con corpi diversi BODY_MISMATCH anche con l'opzione spenta; l'opzione si controlla solo se la
+    sovrapposizione passerebbe (forzatura o stesso corpo planetario)."""
+    assert not pd.planetary_data_enabled()
+    mars = Moc(moc=MOC.from_string("3/1"), kind="space", body="Mars", origin="marte")
+    with pytest.raises(PlanetaryDataError) as exc:
+        check_overlay([celestial_moc(), mars])
+    assert exc.value.code == "BODY_MISMATCH" and "Mars" in exc.value.message and "celestial" in exc.value.message
+    for call in (lambda: check_overlay([celestial_moc(), mars], force=True), lambda: check_overlay([mars, mars])):
+        with pytest.raises(PlanetaryDataError) as exc:
+            call()
+        assert exc.value.code == "PLANETARY_DATA_DISABLED"
+
+
+def test_t12_option_on_unchanged(planetary_on):
+    mars = Moc(moc=MOC.from_string("3/1"), kind="space", body="Mars", origin="marte")
+    with pytest.raises(PlanetaryDataError) as exc:
+        check_overlay([celestial_moc(), mars])
+    assert exc.value.code == "BODY_MISMATCH"
+    assert check_overlay([celestial_moc(), mars], force=True).forced
+    assert check_overlay([mars, mars]).body == "Mars"

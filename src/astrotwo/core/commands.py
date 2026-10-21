@@ -761,6 +761,7 @@ class WorkspaceState:
     next_layer: int = 1
     view: ViewState = ViewState()
     catalogs_opened: int = 0  # cataloghi aperti nella sessione: stile iniziale in ordine di apertura (§7)
+    mocs_opened: int = 0  # MOC aperti nella sessione: stile iniziale in ordine di apertura (§7, sprint 4f)
 
     def find(self, layer_id: str) -> Layer | None:
         for layer in self.layers:
@@ -1320,6 +1321,12 @@ def _initial_style(state: WorkspaceState, table) -> tuple[dict, dict, WorkspaceS
     return style, {"plot_style": plot}, dataclasses.replace(state, catalogs_opened=k + 1)
 
 
+#: Stile iniziale dei MOC (§7, decisione del proprietario del 2026-10-21): la stessa tavolozza in ordine inverso, così
+#: il primo MOC e il primo catalogo non hanno lo stesso colore; riempimento = 0,25 × opacità del livello.
+MOC_COLORS = CATALOG_COLORS[::-1]
+MOC_FILL = 0.25
+
+
 def catalog_positions(table, rows=None):
     """Posizioni della tabella (colonne di posizione del 13, nel loro frame, con equinozio ed epoca del catalogo come
     li dichiara il 13, mai assunti), senza propagazione (41 §3.8, scelta minore 3).
@@ -1515,9 +1522,12 @@ def _exec_moc_open(ctx: ExecutionContext, p: Mapping) -> Outcome:
     path = p["file"]["path"]
     moc = read_moc(path, cache=ctx.cache)
     warnings = _overlay(ctx.state, moc, p["force_body"])
-    layer_id, state = _add_layer(ctx.state, "moc", Path(path).name, moc, source=path, force_body=p["force_body"])
+    m = ctx.state.mocs_opened
+    style = {"color": MOC_COLORS[m % len(MOC_COLORS)], "fill": MOC_FILL}
+    layer_id, state = _add_layer(dataclasses.replace(ctx.state, mocs_opened=m + 1), "moc", Path(path).name, moc,
+                                 source=path, force_body=p["force_body"], style=style)
     values = {"layer": layer_id, "kind": moc.kind, "version": moc.version, "body": moc.body,
-              "provenance": moc.provenance}
+              "provenance": moc.provenance, "style": style}
     return Outcome(values=values, state=state, layers_created=[layer_id],
                    warnings=warnings + _module_warnings(moc.warnings),
                    provenance=[_source(moc.origin, None, False, file=path, sha256=p["file"]["sha256"])])

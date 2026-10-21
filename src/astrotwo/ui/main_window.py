@@ -78,6 +78,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMainWindow,
     QMessageBox,
+    QStackedWidget,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -836,7 +837,8 @@ class StatusBar(QStatusBar):
             return
         if problem is not None:
             # Immagine senza WCS valido (41 §3.5): nessuna coordinata celeste, solo il codice del motivo e il pixel
-            self._sky_variants = [f"{problem['code']} · {self.tr('no celestial coordinates')}", problem["code"]]
+            no_sky = self.tr("no celestial coordinates")  # fuori dalla f-string: lupdate la vede
+            self._sky_variants = [f"{problem['code']} · {no_sky}", problem["code"]]
             self._show_pixel(pixel)
             self.cursor_label.setToolTip(problem["text"])
             return
@@ -1400,6 +1402,7 @@ class MainWindow(QMainWindow):
         self.confirm: Callable[[str, str], bool] = self._ask_confirmation
         self.show_modal: Callable[[str, str], None] = self._modal
         self.open_path: Callable[[str], str | None] = self._ask_open_path
+        self.ask_force_body: Callable[[str], bool] = self._ask_force_body
         self.last_modal: tuple[str, str] | None = None
         self.setWindowTitle("AstroTwo")
         self.setUnifiedTitleAndToolBarOnMac(True)
@@ -1465,8 +1468,8 @@ class MainWindow(QMainWindow):
         self.messages = MessagesPanel()
         self.empty_states = {
             "layers": EmptyState("layers", self.tr("No layers yet"), self.tr(
-                "Arrive with the sky viewer (module 41): one row for each HiPS survey, image, catalog, MOC and "
-                "measurement, with order, visibility and opacity.")),
+                "Open a HiPS survey, an image, a catalog or a MOC: each layer appears here with visibility, "
+                "order and opacity.")),
             "assistant": EmptyState("sparkles", self.tr("Assistant"), self.tr(
                 "The assistant is not available: its panel (module 44) is not written yet. "
                 "The rest of AstroTwo works normally.")),
@@ -1474,8 +1477,12 @@ class MainWindow(QMainWindow):
                 "Arrives with module 42: one tab for each catalog layer, column headers with units, sorting, "
                 "and selection synchronised with the sky.")),
         }
+        self.layer_panel = self._build_layer_panel()
+        self.layer_stack = QStackedWidget()
+        self.layer_stack.addWidget(self.empty_states["layers"])
+        self.layer_stack.addWidget(self.layer_panel)
         specs = (
-            ("layers", self.tr("Layers"), self._panel(self.empty_states["layers"]),
+            ("layers", self.tr("Layers"), self._panel(self.layer_stack),
              Qt.DockWidgetArea.LeftDockWidgetArea),
             ("assistant", self.tr("Assistant"), self._panel(self.empty_states["assistant"]),
              Qt.DockWidgetArea.RightDockWidgetArea),
@@ -1501,6 +1508,29 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self.docks["commands"], self.docks["messages"])
         self.docks["commands"].raise_()
         self._refresh_headers()
+
+    def _build_layer_panel(self):
+        """Pannello dei livelli del 41 (§3.5, sprint 4f) con i testi tradotti; ogni azione è un comando del 05."""
+        from astrotwo.ui.sky_viewer import LayerPanel
+
+        panel = LayerPanel(self.submit, self.sky)
+        panel.texts = {
+            "image": self.tr("image"), "hips": self.tr("HiPS"), "catalog": self.tr("catalog"), "moc": self.tr("MOC"),
+            "measure": self.tr("measure"), "visible": self.tr("Visible"), "opacity": self.tr("Opacity"),
+            "up": self.tr("Move up"), "down": self.tr("Move down"), "remove": self.tr("Remove layer"),
+            "body": self.tr("body %1"), "body_unknown": self.tr("body unknown (%1)"),
+            "forced": self.tr("overlay forced (force_body)"), "retrieved": self.tr("retrieved %1"),
+            "epoch": self.tr("epoch %1"), "epoch_unknown": self.tr("epoch unknown"),
+            "drawn": self.tr("%1 of %2 rows drawn"), "propagated": self.tr("drawn at epoch %1"),
+            "not_propagated": self.tr("table positions (not propagated)"), "order": self.tr("drawn at order %1"),
+            "by_excess": self.tr("drawn at order %1, by excess (MOC order %2)"), "cells": self.tr("%1 cells"),
+            "not_drawn": self.tr("not drawn: %1")}
+        return panel
+
+    def show_layers(self, state) -> None:
+        """Pannello dei livelli dallo stato; senza livelli lo stato vuoto del 40."""
+        self.layer_panel.show_state(state)
+        self.layer_stack.setCurrentIndex(1 if state.layers else 0)
 
     def _schedule_headers(self, *_) -> None:
         QTimer.singleShot(0, self._refresh_headers)
@@ -1767,12 +1797,15 @@ class MainWindow(QMainWindow):
             self.messages.add(number, result.error, error=True)
             if done.registered.name == "view.go_to":  # il pannello Messaggi è in una scheda: errore anche qui
                 self.status.showMessage(f"{result.error.code}: {result.error.text}", 10000)
-            if done.registered.name in ("image.open", "catalog.open_file", "moc.open"):
+            if result.error.code == "BODY_MISMATCH" and self._can_force(done.registered):
+                self._offer_force(done.registered, result.error)
+            elif done.registered.name in ("image.open", "catalog.open_file", "moc.open"):
                 self.show_modal(self.tr("The file cannot be opened"), f"{result.error.code}: {result.error.text}")
         elif result.status == "ok":
             self._apply_effect(done.registered, result)
         self.sky.command_finished(done.registered.name, result.status, result.values,
                                   self.session.workspace.state)
+        self.show_layers(self.session.workspace.state)
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
 
@@ -2055,6 +2088,24 @@ class MainWindow(QMainWindow):
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                       QMessageBox.StandardButton.No)
         return answer == QMessageBox.StandardButton.Yes
+
+    def _can_force(self, command: Command) -> bool:
+        spec = self.session.registry.spec(command.name)
+        return any(p.name == "force_body" for p in spec.parameters) and not command.parameters.get("force_body")
+
+    def _offer_force(self, command: Command, error) -> None:
+        """Corpi diversi (41 §3.5, D19-4): la finestra offre la forzatura esplicita, che ripete lo stesso comando con
+        ``force_body`` = vero (registrato e citato nel risultato e nel pannello dei livelli)."""
+        if self.ask_force_body(f"{error.code}: {error.text}"):
+            self.submit(command.name, {**command.parameters, "force_body": True}, source="mouse")
+
+    def _ask_force_body(self, text: str) -> bool:
+        box = QMessageBox(QMessageBox.Icon.Warning, self.tr("Layers of different bodies"), text,
+                          QMessageBox.StandardButton.Cancel, self)
+        force = box.addButton(self.tr("Force overlay"), QMessageBox.ButtonRole.AcceptRole)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is force
 
     def _modal(self, title: str, text: str) -> None:
         """Finestra modale solo quando l'azione non può proseguire (§3.7), come foglio della finestra."""

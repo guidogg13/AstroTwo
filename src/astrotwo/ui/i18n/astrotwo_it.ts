@@ -165,10 +165,6 @@
         <translation>Ancora nessun livello</translation>
     </message>
     <message>
-        <source>Arrive with the sky viewer (module 41): one row for each HiPS survey, image, catalog, MOC and measurement, with order, visibility and opacity.</source>
-        <translation>Arrivano con il visualizzatore del cielo (modulo 41): una riga per ogni survey HiPS, immagine, catalogo, MOC e misura, con ordine, visibilità e opacità.</translation>
-    </message>
-    <message>
         <source>No catalog yet</source>
         <translation>Ancora nessun catalogo</translation>
     </message>
@@ -282,7 +278,7 @@
     </message>
     <message>
         <source>drawn at epoch %1 (proper motion; %2)</source>
-        <translation>disegnata all'epoca %1 (moto proprio; %2)</translation>
+        <translation>disegnata all&apos;epoca %1 (moto proprio; %2)</translation>
     </message>
     <message>
         <source>not drawn in this view</source>
@@ -295,6 +291,98 @@
     <message>
         <source>retrieved %1</source>
         <translation>letto il %1</translation>
+    </message>
+    <message>
+        <source>Open a HiPS survey, an image, a catalog or a MOC: each layer appears here with visibility, order and opacity.</source>
+        <translation>Apri un survey HiPS, un&apos;immagine, un catalogo o un MOC: ogni livello compare qui con visibilità, ordine e opacità.</translation>
+    </message>
+    <message>
+        <source>image</source>
+        <translation>immagine</translation>
+    </message>
+    <message>
+        <source>HiPS</source>
+        <translation>HiPS</translation>
+    </message>
+    <message>
+        <source>catalog</source>
+        <translation>catalogo</translation>
+    </message>
+    <message>
+        <source>MOC</source>
+        <translation>MOC</translation>
+    </message>
+    <message>
+        <source>measure</source>
+        <translation>misura</translation>
+    </message>
+    <message>
+        <source>Visible</source>
+        <translation>Visibile</translation>
+    </message>
+    <message>
+        <source>Opacity</source>
+        <translation>Opacità</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Sposta su</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Sposta giù</translation>
+    </message>
+    <message>
+        <source>Remove layer</source>
+        <translation>Rimuovi il livello</translation>
+    </message>
+    <message>
+        <source>body %1</source>
+        <translation>corpo %1</translation>
+    </message>
+    <message>
+        <source>body unknown (%1)</source>
+        <translation>corpo non noto (%1)</translation>
+    </message>
+    <message>
+        <source>overlay forced (force_body)</source>
+        <translation>sovrapposizione forzata (force_body)</translation>
+    </message>
+    <message>
+        <source>epoch %1</source>
+        <translation>epoca %1</translation>
+    </message>
+    <message>
+        <source>epoch unknown</source>
+        <translation>epoca non nota</translation>
+    </message>
+    <message>
+        <source>%1 of %2 rows drawn</source>
+        <translation>%1 righe disegnate su %2</translation>
+    </message>
+    <message>
+        <source>drawn at epoch %1</source>
+        <translation>disegnato all&apos;epoca %1</translation>
+    </message>
+    <message>
+        <source>table positions (not propagated)</source>
+        <translation>posizioni della tabella (non propagato)</translation>
+    </message>
+    <message>
+        <source>drawn at order %1</source>
+        <translation>disegnato all&apos;ordine %1</translation>
+    </message>
+    <message>
+        <source>drawn at order %1, by excess (MOC order %2)</source>
+        <translation>disegnato all&apos;ordine %1, per eccesso (ordine del MOC %2)</translation>
+    </message>
+    <message>
+        <source>%1 cells</source>
+        <translation>%1 celle</translation>
+    </message>
+    <message>
+        <source>not drawn: %1</source>
+        <translation>non disegnato: %1</translation>
     </message>
     <message>
         <source>Zoom out</source>
@@ -443,6 +531,14 @@
     <message>
         <source>The session was stopped</source>
         <translation>La sessione è stata fermata</translation>
+    </message>
+    <message>
+        <source>Layers of different bodies</source>
+        <translation>Livelli di corpi diversi</translation>
+    </message>
+    <message>
+        <source>Force overlay</source>
+        <translation>Forza la sovrapposizione</translation>
     </message>
     <message>
         <source>Some commands are still running: they will be cancelled.</source>

@@ -1048,6 +1048,13 @@ class HealpixGrid:
     scheme: str
     frame: str
     description: str
+    boundary: np.ndarray | None = None  # (celle, 4) lati sul perimetro: il vicino oltre il lato non è nella griglia
+
+
+#: Vicino oltre il lato ``j`` del contorno di ``boundaries_lonlat`` (lato j: punti j × step … (j + 1) × step), come
+#: indice nell'uscita di ``neighbours`` di astropy-healpix (SW, W, NW, N, NE, E, SE, S). Verificato il 2026-10-21 su
+#: tutte le celle dell'ordine 4 (i due vertici del lato sono vertici del vicino): lato 0 → NW, 1 → SW, 2 → SE, 3 → NE.
+_SIDE_NEIGHBOUR = (2, 0, 6, 4)
 
 
 def healpix_grid(order: int, *, within: Moc | None = None, step: int = 1) -> HealpixGrid:
@@ -1078,10 +1085,13 @@ def healpix_grid(order: int, *, within: Moc | None = None, step: int = 1) -> Hea
             raise MocError("GRID_TOO_LARGE", f"griglia di {cells.size} celle oltre {GRID_MAX_CELLS}")
         where = f"celle che toccano il MOC {within.origin}"
     lon, lat = hp.boundaries_lonlat(cells, step=step)
+    with np.errstate(invalid="ignore"):  # i vicini mancanti (-1) sono solo agli angoli, mai oltre un lato
+        neighbours = hp.neighbours(cells)[list(_SIDE_NEIGHBOUR)]  # (4, celle)
+    boundary = ~np.isin(neighbours, cells).T
     description = (f"griglia HEALPix {HEALPIX_SCHEME} in {HEALPIX_FRAME}, ordine {order}: {cells.size} celle, "
-                   f"{where} (calcolo: {_healpix_provenance()})")
+                   f"{where}, {int(boundary.sum())} lati sul perimetro (calcolo: {_healpix_provenance()})")
     return HealpixGrid(order=order, cells=cells, lon=lon.to_value(u.deg), lat=lat.to_value(u.deg),
-                       scheme=HEALPIX_SCHEME, frame=HEALPIX_FRAME, description=description)
+                       scheme=HEALPIX_SCHEME, frame=HEALPIX_FRAME, description=description, boundary=boundary)
 
 
 # --------------------------------------------------------------------------

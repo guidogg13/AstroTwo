@@ -10,6 +10,8 @@ stesso widget (nessun numero calcolato qui: punti e testi arrivano già pronti d
 Sprint 4e: i cataloghi come punti in un buffer della GPU (un vertice per sorgente: posizione, colore, dimensione,
 forma), con ``gl_PointSize`` e la forma disegnata nel programma di disegno da ``gl_PointCoord``; anelli della
 selezione con ``QPainter``.
+Sprint 4f: una texture per piano (sfondo HiPS, immagine) con l'opacità del livello; i MOC come triangoli (riempimento)
+e linee (perimetro) in un buffer della GPU con colore per vertice; tutto nell'ordine dei livelli (``set_layers``).
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from PySide6.QtOpenGL import (QOpenGLBuffer, QOpenGLShader, QOpenGLShaderProgram
                               QOpenGLVertexArrayObject)
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from astrotwo.ui.sky_viewer import Overlay, PointSet, SkyRenderer
+from astrotwo.ui.sky_viewer import Overlay, PointSet, PolygonSet, SkyRenderer
 
 #: Versione minima di OpenGL (41 §3.13); sotto, ``GL_UNAVAILABLE`` (41 §10, nessun ripiego nella v1).
 GL_VERSION = (4, 1)
@@ -34,6 +36,8 @@ _GL_SRC_ALPHA = 0x0302
 _GL_ONE_MINUS_SRC_ALPHA = 0x0303
 _GL_POINTS = 0x0000
 _GL_PROGRAM_POINT_SIZE = 0x8642
+_GL_TRIANGLES = 0x0004
+_GL_LINES = 0x0001
 
 _VERTEX = """#version 410 core
 layout(location = 0) in vec2 corner;  // (0, 0) in alto a sinistra, (1, 1) in basso a destra
@@ -53,6 +57,7 @@ _FRAGMENT = """#version 410 core
 in vec2 uv;
 uniform sampler2D image;
 uniform bool night;
+uniform float opacity;                // opacità del livello (41 §3.5)
 out vec4 color;
 void main() {
     vec4 c = texture(image, uv);
@@ -60,7 +65,7 @@ void main() {
         float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));  // luminanza (Rec. 709) portata sul rosso
         c = vec4(lum, 0.0, 0.0, c.a);
     }
-    color = c;
+    color = vec4(c.rgb, c.a * opacity);
 }
 """
 
@@ -127,6 +132,36 @@ void main() {
 }
 """
 
+#: MOC (41 §3.9): un vertice = x, y (spazio della finestra disegnata, pixel fisici), r, g, b, a (opacità già applicata).
+_POLY_FLOATS = 6
+_POLY_VERTEX = """#version 410 core
+layout(location = 0) in vec2 pos;
+layout(location = 1) in vec4 rgba;
+uniform vec3 transform;   // k, tx, ty: schermo = k * pixel + t (pixel fisici)
+uniform vec2 viewport;
+out vec4 v_color;
+void main() {
+    vec2 screen = transform.x * pos + transform.yz;
+    vec2 ndc = screen / viewport * 2.0 - 1.0;
+    gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
+    v_color = rgba;
+}
+"""
+_POLY_FRAGMENT = """#version 410 core
+in vec4 v_color;
+uniform bool night;
+out vec4 color;
+void main() {
+    vec4 c = v_color;
+    if (night) {
+        // come i simboli: luminanza sul rosso, mai sotto metà intensità (trasformazione di disegno)
+        float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        c = vec4(0.5 + 0.5 * lum, 0.0, 0.0, c.a);
+    }
+    color = c;
+}
+"""
+
 #: Fondo del cielo dove non ci sono dati (stesso tono dell'area del cielo del 40 §3.11; nero in modalità notte).
 _CLEAR = (0x05 / 255, 0x07 / 255, 0x0C / 255)
 
@@ -165,9 +200,13 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setFormat(surface_format())
-        self._image: QImage | None = None
-        self._dirty = False
-        self._texture: QOpenGLTexture | None = None
+        self._planes: dict[str, list] = {}  # chiave → [QImage, QOpenGLTexture | None, da ricaricare]
+        self._dead: list[QOpenGLTexture] = []  # texture da distruggere con il contesto attivo
+        self._layers: tuple[tuple[str, str, float], ...] | None = None
+        self._polygons: tuple[PolygonSet, ...] = ()
+        self._polygons_dirty = False
+        self._poly_ranges: dict[str, tuple[int, int, int, int]] = {}
+        self._point_ranges: dict[str, tuple[int, int]] = {}
         self._transform = (1.0, 0.0, 0.0)
         self._night = False
         self._overlay: Overlay | None = None
@@ -177,18 +216,41 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         self.available = True
         self.program: QOpenGLShaderProgram | None = None
         self.point_program: QOpenGLShaderProgram | None = None
+        self.poly_program: QOpenGLShaderProgram | None = None
 
     # --- interfaccia SkyRenderer ---------------------------------------------------------
 
     def widget(self):
         return self
 
-    def upload_texture(self, rgba: np.ndarray) -> None:
+    def upload_texture(self, rgba: np.ndarray, key: str = "plane") -> None:
         rows, cols = rgba.shape[:2]
         data = np.ascontiguousarray(rgba, dtype=np.uint8)
-        self._image = QImage(data.data, cols, rows, 4 * cols, QImage.Format.Format_RGBA8888).copy()
-        self._dirty = True
+        image = QImage(data.data, cols, rows, 4 * cols, QImage.Format.Format_RGBA8888).copy()
+        old = self._planes.get(key)
+        self._planes[key] = [image, None if old is None else old[1], True]
         self.update()
+
+    def drop_texture(self, key: str) -> None:
+        old = self._planes.pop(key, None)
+        if old is not None and old[1] is not None:
+            self._dead.append(old[1])
+        self.update()
+
+    def set_layers(self, items) -> None:
+        self._layers = tuple(items)
+        self.update()
+
+    def upload_polygons(self, sets) -> None:
+        self._polygons = tuple(sets)
+        self._polygons_dirty = True
+        self.update()
+
+    def drawn_polygons(self) -> list[tuple[str, np.ndarray, np.ndarray]]:
+        k, tx, ty = self._transform
+        t = np.array([tx, ty])
+        return [(s.layer, k * s.triangles.astype(np.float64) + t, k * s.lines.astype(np.float64) + t)
+                for s in self._polygons]
 
     def set_transform(self, k: float, tx: float, ty: float) -> None:
         self._transform = (float(k), float(tx), float(ty))
@@ -272,13 +334,42 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         self.point_vao.release()
         self.point_vbo.release()
         self._points_dirty = True
+        poly = QOpenGLShaderProgram(self)
+        ok = (poly.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, _POLY_VERTEX)
+              and poly.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _POLY_FRAGMENT)
+              and poly.link())
+        if not ok:
+            self._unavailable(f"programma dei MOC non compilato: {poly.log()}")
+            return
+        self.poly_program = poly
+        self.poly_vao = QOpenGLVertexArrayObject(self)
+        self.poly_vao.create()
+        self.poly_vao.bind()
+        self.poly_vbo = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
+        self.poly_vbo.setUsagePattern(QOpenGLBuffer.UsagePattern.DynamicDraw)
+        self.poly_vbo.create()
+        self.poly_vbo.bind()
+        self.poly_vbo.allocate(_POLY_FLOATS * 4)
+        poly.bind()
+        stride = _POLY_FLOATS * 4
+        for location, offset, size in ((0, 0, 2), (1, 2, 4)):
+            poly.enableAttributeArray(location)
+            poly.setAttributeBuffer(location, _GL_FLOAT, offset * 4, size, stride)
+        poly.release()
+        self.poly_vao.release()
+        self.poly_vbo.release()
+        self._polygons_dirty = True
 
     def _cleanup(self) -> None:
-        """Texture distrutta con il suo contesto attivo (chiusura della finestra)."""
-        if self._texture is not None:
+        """Texture distrutte con il loro contesto attivo (chiusura della finestra)."""
+        textures = [p[1] for p in self._planes.values() if p[1] is not None] + self._dead
+        if textures:
             self.makeCurrent()
-            self._texture.destroy()
-            self._texture = None
+            for texture in textures:
+                texture.destroy()
+            for plane in self._planes.values():
+                plane[1], plane[2] = None, True
+            self._dead = []
             self.doneCurrent()
 
     def _unavailable(self, text: str) -> None:
@@ -290,25 +381,85 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         clear = (0.0, 0.0, 0.0) if self._night else _CLEAR
         f.glClearColor(*clear, 1.0)
         f.glClear(_GL_COLOR_BUFFER_BIT)
-        if self.program is not None and self._image is not None:
-            self._paint_plane(f)
-        if self.point_program is not None and self._points:
-            self._paint_points(f)
+        for texture in self._dead:
+            texture.destroy()
+        self._dead = []
+        items = self._layers
+        if items is None:  # nessun ordine dato: piani, poi MOC, poi simboli
+            items = (tuple(("texture", k, 1.0) for k in self._planes) + tuple(("polygons", s.layer, 1.0)
+                     for s in self._polygons) + tuple(("points", s.layer, 1.0) for s in self._points))
+        if self.point_program is not None:
+            self._upload_points()
+        if self.poly_program is not None:
+            self._upload_polygons()
+        for kind, key, opacity in items:
+            if kind == "texture" and self.program is not None and key in self._planes:
+                self._paint_plane(f, key, opacity)
+            elif kind == "points" and self.point_program is not None and key in self._point_ranges:
+                self._paint_points(f, key)
+            elif kind == "polygons" and self.poly_program is not None and key in self._poly_ranges:
+                self._paint_polygons(f, key)
         if self._overlay is not None or any(s.selected.any() for s in self._points):
             self._paint_overlay(self._overlay)
 
-    def _paint_points(self, f) -> None:
-        """Simboli dei cataloghi: un ``glDrawArrays(GL_POINTS)`` per tutti i livelli, trasformazione come uniforme."""
-        if self._points_dirty:
-            data = np.concatenate([np.column_stack([s.xy, s.rgba, s.size, s.shape]).astype(np.float32)
-                                   for s in self._points]) if self._points else np.zeros((0, _POINT_FLOATS), np.float32)
-            data = np.ascontiguousarray(data)
-            self._point_count = len(data)
-            self.point_vbo.bind()
-            self.point_vbo.allocate(data.tobytes(), max(data.nbytes, _POINT_FLOATS * 4))
-            self.point_vbo.release()
-            self._points_dirty = False
-        if not self._point_count:
+    def _upload_points(self) -> None:
+        """Simboli di tutti i cataloghi in un solo buffer, con l'intervallo di ogni livello."""
+        if not self._points_dirty:
+            return
+        data = np.concatenate([np.column_stack([s.xy, s.rgba, s.size, s.shape]).astype(np.float32)
+                               for s in self._points]) if self._points else np.zeros((0, _POINT_FLOATS), np.float32)
+        data = np.ascontiguousarray(data)
+        self._point_count = len(data)
+        self._point_ranges, first = {}, 0
+        for s in self._points:
+            self._point_ranges[s.layer] = (first, len(s.xy))
+            first += len(s.xy)
+        self.point_vbo.bind()
+        self.point_vbo.allocate(data.tobytes(), max(data.nbytes, _POINT_FLOATS * 4))
+        self.point_vbo.release()
+        self._points_dirty = False
+
+    def _upload_polygons(self) -> None:
+        """MOC di tutti i livelli in un solo buffer: per livello prima i triangoli, poi i segmenti del perimetro."""
+        if not self._polygons_dirty:
+            return
+        chunks, self._poly_ranges, first = [], {}, 0
+        for s in self._polygons:
+            tri = np.column_stack([s.triangles, np.tile(np.asarray(s.fill, np.float32), (len(s.triangles), 1))])
+            lines = np.column_stack([s.lines, np.tile(np.asarray(s.line, np.float32), (len(s.lines), 1))])
+            chunks += [tri, lines]
+            self._poly_ranges[s.layer] = (first, len(tri), first + len(tri), len(lines))
+            first += len(tri) + len(lines)
+        data = np.ascontiguousarray(np.concatenate(chunks).astype(np.float32) if chunks
+                                    else np.zeros((0, _POLY_FLOATS), np.float32))
+        self.poly_vbo.bind()
+        self.poly_vbo.allocate(data.tobytes(), max(data.nbytes, _POLY_FLOATS * 4))
+        self.poly_vbo.release()
+        self._polygons_dirty = False
+
+    def _paint_polygons(self, f, layer: str) -> None:
+        """Riempimento (``GL_TRIANGLES``) e perimetro (``GL_LINES``) di un MOC, trasformazione come uniforme."""
+        tri_first, tri_n, line_first, line_n = self._poly_ranges[layer]
+        ratio = self.devicePixelRatioF()
+        f.glEnable(_GL_BLEND)
+        f.glBlendFunc(_GL_SRC_ALPHA, _GL_ONE_MINUS_SRC_ALPHA)
+        program = self.poly_program
+        program.bind()
+        program.setUniformValue("transform", *self._transform)
+        program.setUniformValue("viewport", float(self.width() * ratio), float(self.height() * ratio))
+        program.setUniformValue("night", self._night)
+        self.poly_vao.bind()
+        if tri_n:
+            f.glDrawArrays(_GL_TRIANGLES, tri_first, tri_n)
+        if line_n:
+            f.glDrawArrays(_GL_LINES, line_first, line_n)
+        self.poly_vao.release()
+        program.release()
+
+    def _paint_points(self, f, layer: str) -> None:
+        """Simboli di un catalogo: ``glDrawArrays(GL_POINTS)`` sul suo intervallo, trasformazione come uniforme."""
+        first, count = self._point_ranges[layer]
+        if not count:
             return
         ratio = self.devicePixelRatioF()
         f.glEnable(_GL_BLEND)
@@ -318,36 +469,40 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         program.bind()
         program.setUniformValue("transform", *self._transform)
         program.setUniformValue("viewport", float(self.width() * ratio), float(self.height() * ratio))
-        program.setUniformValue("ratio", float(ratio))
+        program.setUniformValue1f("ratio", float(ratio))  # 1f: con il rapporto 1.0 non diventa un int
         program.setUniformValue("night", self._night)
         self.point_vao.bind()
-        f.glDrawArrays(_GL_POINTS, 0, self._point_count)
+        f.glDrawArrays(_GL_POINTS, first, count)
         self.point_vao.release()
         program.release()
 
-    def _paint_plane(self, f) -> None:
-        if self._dirty:
-            if self._texture is not None:
-                self._texture.destroy()
-            self._texture = QOpenGLTexture(self._image, QOpenGLTexture.MipMapGeneration.DontGenerateMipMaps)
-            self._texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
-            self._texture.setMagnificationFilter(QOpenGLTexture.Filter.Nearest)
-            self._texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
-            self._dirty = False
+    def _paint_plane(self, f, key: str, opacity: float) -> None:
+        plane = self._planes[key]
+        image = plane[0]
+        if plane[2]:
+            if plane[1] is not None:
+                plane[1].destroy()
+            texture = QOpenGLTexture(image, QOpenGLTexture.MipMapGeneration.DontGenerateMipMaps)
+            texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
+            texture.setMagnificationFilter(QOpenGLTexture.Filter.Nearest)
+            texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
+            plane[1], plane[2] = texture, False
+        texture = plane[1]
         ratio = self.devicePixelRatioF()
         f.glEnable(_GL_BLEND)
         f.glBlendFunc(_GL_SRC_ALPHA, _GL_ONE_MINUS_SRC_ALPHA)
         self.program.bind()
-        self.program.setUniformValue("image_size", float(self._image.width()), float(self._image.height()))
+        self.program.setUniformValue("image_size", float(image.width()), float(image.height()))
         self.program.setUniformValue("transform", *self._transform)
         self.program.setUniformValue("viewport", float(self.width() * ratio), float(self.height() * ratio))
         self.program.setUniformValue("night", self._night)
+        self.program.setUniformValue1f("opacity", float(opacity))  # 1f: un float intero non diventa un int
         self.program.setUniformValue("image", 0)
-        self._texture.bind(0)
+        texture.bind(0)
         self.vao.bind()
         f.glDrawArrays(_GL_TRIANGLE_STRIP, 0, 4)
         self.vao.release()
-        self._texture.release()
+        texture.release()
         self.program.release()
 
     # --- griglia, indicatore, barra ------------------------------------------------------

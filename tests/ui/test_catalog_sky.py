@@ -125,14 +125,17 @@ def test_t26_catalog_on_image_base_and_propagation(qtbot, win, tmp_path):
     wait_points(qtbot, win, 2)
     coords, _ = catalog_positions(load_table(path))
     check_within_one_pixel(win, coords, "L2")
-    # moto proprio scelto con catalog.set_columns: posizioni di display_positions del 13 all'epoca dell'immagine.
-    # confirm_position_columns non conserva l'epoca del COOSYS (decisione aperta D41-6): la propagazione
-    # non è possibile e il 13 lo dice con EPOCH_INVALID, il catalogo non si disegna (mai un'epoca assunta).
+    # moto proprio scelto con catalog.set_columns: posizioni di display_positions del 13 all'epoca dell'immagine;
+    # l'epoca J2016.0 del COOSYS resta dopo la conferma delle colonne (D41-6, decisa il 2026-10-21).
     win.submit("catalog.set_columns", {"layer": "L2", "lon": "RA_ICRS", "lat": "DE_ICRS", "frame": "icrs",
                                        "pm_ra": "pmRA", "pm_dec": "pmDE", "pm_ra_includes_cosdec": True})
-    wait_idle(qtbot, win)
-    qtbot.waitUntil(lambda: any(m.code == "EPOCH_INVALID" for m in win.seen), timeout=10000)
-    assert not win.sky.point_sets
+    wait_points(qtbot, win, 2)
+    assert not any(m.code == "EPOCH_INVALID" for m in win.seen)
+    layer = win.session.workspace.state.layer("L2")
+    assert layer.data.positions.epoch == "J2016.0"
+    shown = display_positions(layer.data, load_image(image), pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True)
+    check_within_one_pixel(win, shown.coords, "L2")
+    assert win.sky.points_for(layer).propagated
 
 
 def test_propagated_positions_with_epoch_column(qtbot, win, tmp_path):

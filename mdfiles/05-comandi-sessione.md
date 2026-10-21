@@ -396,6 +396,17 @@ le scelte minori di §13; tutti versione 1):
   `record` (`record_view` del 13). Con zero o più righe, `source` = `null`.
   Lettura senza rete. `rows` vuoto toglie la selezione.
 
+**MOC sul cielo (sprint 4f del `41`, decisione del proprietario del
+2026-10-21).** `moc.open` assegna al nuovo livello lo **stile iniziale** e lo
+scrive nel risultato (`style`) e nello stato del livello, come per i
+cataloghi: con `m` = numero di MOC già aperti nella sessione (contatore dello
+stato, mai riusato), colore = `m`-esimo della tavolozza di Okabe e Ito senza il
+nero **in ordine inverso** (`#CC79A7`, `#D55E00`, `#0072B2`, `#F0E442`,
+`#009E73`, `#56B4E9`, `#E69F00`, poi da capo; così il primo MOC e il primo
+catalogo non hanno lo stesso colore), riempimento `fill` = 0,25 (frazione
+dell'opacità del livello), contorno con l'opacità del livello. Nessun comando
+per cambiarlo nella v1.
+
 **Indicatore `confirm`** (dal 2026-10-16, regola del `32` §3.5): **sì** per
 `image.open`, `catalog.open_file`, `catalog.load_region`, `hips.set_survey`,
 `view.go_to` (rete o lungo), `image.set_display`, `catalog.set_columns`,
@@ -694,3 +705,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-20 | Claude Code | **Sprint 4c del 41 (decisione del proprietario del 2026-10-20):** nuovo comando `view.set_overlays` (`compass`, `scale_bar`, default entrambi `true`, classe `session`, cambia la vista): acceso/spento di nord ed est e della barra di scala; i comandi di vista calcolano `compass_and_scale_bar` del 10 (frame della griglia se visibile, altrimenti ICRS) e lo restituiscono in `compass`; `state_json` guadagna `overlays`. Non aggiunto all'elenco degli strumenti del `32` (decisione del proprietario). |
 | 2026-10-20 | Claude Code | **Sprint 4d del 41 (decisioni del proprietario del 2026-10-20):** `image.open` inquadra l'immagine intera nella finestra (`framing` nel risultato) e, senza WCS valido, la rende base come griglia di pixel (`PixelGridGeometry`); `cursor.read` sulla griglia di pixel: `sky = null`, `wcs_problem`, avviso `WCS_INVALID`; `unit_declared` nel valore del pixel; epoca mancante → coordinate nel frame dell'immagine con l'avviso del 10; `hips.set_survey` elimina gli avvisi doppi (era `service.warnings` contato due volte). Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4e del 41 (decisioni del proprietario del 2026-10-21):** stile iniziale dei cataloghi assegnato da `catalog.load_region` e `catalog.open_file` (Okabe e Ito senza il nero, sei forme, 8 pixel logici, in ordine di apertura con un contatore dello stato) e scritto nel risultato e nello stato; `catalog.select` con una riga restituisce la scheda della sorgente (`name` da UCD `meta.id;meta.main`, posizione della tabella con l'epoca del catalogo, catalogo, `record_view` del 13); `rows` vuoto toglie la selezione (§7). Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Sprint 4f del 41 (decisione del proprietario del 2026-10-21):** `moc.open` assegna lo stile iniziale del MOC (Okabe e Ito senza il nero in ordine inverso, contatore dello stato, `fill` 0,25) e lo scrive nel risultato e nello stato (§7). Stato `approvato` invariato. |

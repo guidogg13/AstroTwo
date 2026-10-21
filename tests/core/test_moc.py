@@ -1001,3 +1001,38 @@ def test_moc_from_image_blocks_dss_network():
         reference = reference.union(MOC.from_lonlat(lon=world.ra.ravel(), lat=world.dec.ravel(), max_norder=11))
     assert moc.moc == reference
     assert moc.area.to_value(u.deg ** 2) == pytest.approx(4.1399, abs=5e-5)
+
+
+def _boundary_expected(grid):
+    """Lati di perimetro ricalcolati nel test: un lato è di perimetro se nessun'altra cella della griglia ha un lato con
+    gli stessi due vertici (vertici sulla sfera, dai contorni di astropy-healpix)."""
+    hp = HEALPix(nside=2 ** grid.order, order="nested", frame=ICRS())
+    lon, lat = hp.boundaries_lonlat(grid.cells, step=1)
+    lo, la = lon.to_value(u.rad), lat.to_value(u.rad)
+    v = np.round(np.stack([np.cos(la) * np.cos(lo), np.cos(la) * np.sin(lo), np.sin(la)], -1), 9)
+    sides = {}
+    for c in range(len(grid.cells)):
+        for j in range(4):
+            key = frozenset((tuple(v[c, j]), tuple(v[c, (j + 1) % 4])))
+            sides.setdefault(key, []).append((c, j))
+    expected = np.zeros((len(grid.cells), 4), dtype=bool)
+    for owners in sides.values():
+        if len(owners) == 1:
+            expected[owners[0]] = True
+    return expected
+
+
+def test_t15_grid_boundary():
+    circle = moc_from_region(CircleRegion(SkyCoord(40 * u.deg, -20 * u.deg), 2 * u.deg), 6)
+    ring = circle.difference(moc_from_region(CircleRegion(SkyCoord(40 * u.deg, -20 * u.deg), 1 * u.deg), 6))
+    one = Moc(moc=MOC.from_string("6/1234"), kind="space", body="celestial", origin="test")
+    for moc, order in ((circle, 6), (ring, 6), (one, 6), (circle, 4)):
+        for step in (1, 3):
+            grid = healpix_grid(order, within=moc, step=step)
+            assert grid.boundary.shape == (grid.cells.size, 4)
+            assert np.array_equal(grid.boundary, _boundary_expected(grid))
+            assert f"{int(grid.boundary.sum())} lati sul perimetro" in grid.description
+    assert healpix_grid(6, within=one).boundary.tolist() == [[True] * 4]
+    assert not healpix_grid(2).boundary.any()  # tutto il cielo: nessun perimetro
+    # il buco dell'anello ha il suo perimetro: più lati di perimetro del cerchio pieno
+    assert healpix_grid(6, within=ring).boundary.sum() > healpix_grid(6, within=circle).boundary.sum()

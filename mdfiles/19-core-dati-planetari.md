@@ -170,7 +170,13 @@ l'avviso `BODY_UNSUPPORTED` (il dato si apre da solo).
    tocca dati planetari dà `PLANETARY_DATA_DISABLED`; restano attivi solo
    `normalize_body_name` (lettura dei metadati del 12) e `body_of` /
    `check_overlay` **quando tutti i livelli sono celesti** (il livello 1
-   celeste funziona come sempre).
+   celeste funziona come sempre). **Ordine dei controlli in `check_overlay`
+   (decisione del proprietario del 2026-10-21, sprint 4f del 41):** con due o
+   più livelli di corpi diversi (o celeste + planetario) e senza forzatura
+   l'esito è **sempre `BODY_MISMATCH`** con i corpi coinvolti, anche con
+   l'opzione spenta: l'errore dice che cosa non va; l'opzione si controlla
+   solo quando la sovrapposizione passerebbe (stesso corpo planetario, o
+   forzatura), e allora con l'opzione spenta → `PLANETARY_DATA_DISABLED`.
 2. **`PlanetaryBody.from_name(name)`:** nome normalizzato con la tabella,
    identificativo NAIF, raggi `RADII` (km) letti dal kernel con
    `bodvrd`, fonte (`pck00011.tpc`, SHA-256, `spiceypy` e CSPICE con le
@@ -396,6 +402,7 @@ corpo di un dato né calcola coordinate.
 | T9 | Opzione disattivata | chiamare una funzione del modulo con l'opzione disattivata | `PLANETARY_DATA_DISABLED`; funzioni celesti non toccate | test di unità |
 | T11 | Sovrapposizione forzata | ripetere T1 con l'opzione di forzatura | sovrapposizione eseguita, avviso `BODY_MISMATCH_FORCED` nel risultato e nel comando registrato | test di unità |
 | T10 | Riproducibilità | rieseguire il comando registrato di T4 e T5 | risultati identici | confronto con il registro del modulo 24 |
+| T12 | Corpi diversi con l'opzione spenta (sprint 4f del 41) | opzione spenta: MOC celeste + MOC di Marte senza e con forzatura; due MOC di Marte | senza forzatura `BODY_MISMATCH` con i due corpi (mai `PLANETARY_DATA_DISABLED`); con forzatura `PLANETARY_DATA_DISABLED`; due MOC di Marte `PLANETARY_DATA_DISABLED`; con l'opzione accesa come T1, T11 | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -479,3 +486,4 @@ corpo di un dato né calcola coordinate.
 | 2026-10-13 | Claude Code | **P3 scritta** (`list_planetary_collections`/`PlanetaryCollections` con la copia locale delle collezioni del 12, `query_epntap` con `tap_query` del 14 ed `EPNTAP_CONVENTIONS`; T7 esteso alle collezioni). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **P4 scritta — modulo 19 completo tranne PDS3 (D19-8) e PDS da URL (D19-9)** (`load_pds_image`/`PdsImage`, `body_of` sulle immagini PDS; T8). Test di rete: tabella dei corpi contro il MocServer (ogni corpo ha un HiPS), EPN-TAP reale (`mars_craters.epn_core` del servizio TAP di VO-Paris). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori 1–9 di §3 confermate; **D19-9 decisa e scritta** (PDS4 da URL: etichetta + file nominati nella stessa cartella, rete del 14, cache comune, `downloads` e `PDS_DOWNLOADED` nel risultato; T8 esteso con un server HTTP locale); **D19-8 rimandata** (bassa priorità): PDS3 → `PDS_UNREADABLE` "formato PDS3 non ancora supportato". Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Ordine dei controlli di `check_overlay` (decisione del proprietario del 2026-10-21, autorizzazione esplicita a modificare il file approvato, sprint 4f del 41):** con corpi diversi senza forzatura `BODY_MISMATCH` anche con l'opzione dei dati planetari spenta; l'opzione si controlla solo se la sovrapposizione passerebbe (scelta minore 1); T12. Stato `approvato` invariato. |

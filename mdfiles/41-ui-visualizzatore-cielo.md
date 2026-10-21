@@ -54,8 +54,9 @@ comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 2026-10-18). **4c (scritto il 2026-10-20):** griglia, nord ed est, barra di scala (§3.10, §3.18). **4d (scritto il 2026-10-20):** immagine FITS locale come base della vista, con inquadratura intera, colori di
 `set_display`, coordinate e valore originale sotto il mouse, griglia di pixel senza WCS valido (§3.2, §3.5, §3.6,
 §3.11). **4e (scritto il 2026-10-21):** cataloghi disegnati come simboli sulla GPU, clic su una sorgente con
-scheda sul cielo, avviso di epoche diverse (§3.8). **Sprint successivi:** 4f MOC, corpi diversi e pannello dei
-livelli; 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
+scheda sul cielo, avviso di epoche diverse (§3.8). **4f (scritto il 2026-10-21):** MOC disegnati sulla GPU
+(§3.9), pannello dei livelli con visibilità, ordine, opacità e rimozione, sfondo HiPS sotto l'immagine FITS
+(§3.5, §3.7), finestra della forzatura per i corpi diversi (§3.5). **Sprint successivi:** 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
 (T17) e prestazioni (`perf`).
 
 ### 3.2 Geometria della vista: base e finestra
@@ -75,9 +76,10 @@ dei tile sulla vista, aggiunto al 12 il 2026-10-15).
     (`make_view_wcs`, 10) × max(colonne immagine / colonne finestra, righe
     immagine / righe finestra). La fa `image.open` (05 §3.6 punto 7) e la
     scrive nel suo risultato (`framing`), così la riapertura della sessione
-    dà la stessa vista; senza finestra nota la vista non cambia. Finché
-    l'immagine è la base lo sfondo HiPS non si disegna (la composizione
-    con opacità è dello sprint 4f).
+    dà la stessa vista; senza finestra nota la vista non cambia. **Dallo
+    sprint 4f** lo sfondo HiPS si disegna anche con l'immagine come base,
+    campionato sulla stessa `ViewGeometry` (§3.7), e i livelli si compongono
+    nell'ordine del pannello con la loro opacità (§3.5).
   - **Senza immagine** la base è un WCS del cielo creato da
     `make_view_wcs` del 10 con punto di tangenza, proiezione (`TAN` o
     `AIT` da `choose_projection`, §3.3) e frame ICRS.
@@ -193,6 +195,26 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   errore `BODY_MISMATCH` del 19; la finestra d'errore offre la forzatura
   esplicita, che diventa un parametro del comando (`force_body`) citato nel
   risultato e nel pannello dei livelli.
+- **Sprint 4f (decisioni del proprietario del 2026-10-21):**
+  - **Pannello dei livelli** nel pannello "Layers" del `40`: un riga per livello, **in alto il livello disegnato
+    sopra** (ordine inverso a quello dello stato, dove il primo è in basso). Per ogni riga: casella della
+    visibilità (`layer.set_visible`), nome, tipo, una riga di dettagli (sorgente: file o servizio, con la data per
+    i cataloghi; corpo; epoca usata per il disegno: per un catalogo "disegnato all'epoca …" o "posizioni della
+    tabella (non propagato)", per un'immagine l'epoca dell'intestazione o "epoca non nota"; conteggi: righe
+    disegnate e non disegnabili, ordine di disegno del MOC con "per eccesso"; "sovrapposizione forzata" con
+    `force_body`), cursore dell'opacità 0–100 % (`layer.set_opacity` **al rilascio**, un comando per gesto come
+    per la vista), pulsanti su e giù e trascinamento (`layer.move`), pulsante di rimozione (`layer.remove`). Ogni
+    azione è un comando registrato del `05` (`requested_by` = `mouse`); dopo ogni comando l'elenco si ricostruisce
+    dallo stato (il pannello non tiene stato suo). Senza livelli resta lo stato vuoto del `40`.
+  - **Ordine di disegno:** tutti i livelli nell'ordine dello stato, dal basso: piani (sfondo HiPS, immagine) come
+    texture con la loro opacità, MOC (riempimento e perimetro), simboli dei cataloghi; sopra tutto griglia,
+    indicatore, barra, anelli della selezione e scheda.
+  - **Finestra della forzatura:** un errore `BODY_MISMATCH` di `moc.open`, `image.open`, `catalog.open_file`,
+    `catalog.load_region` o `layer.set_visible` apre la finestra "Layers of different bodies" con il testo del 19 e
+    i pulsanti Annulla e **Forza la sovrapposizione**; questo ripete lo stesso comando con `force_body` = vero
+    (registrato, citato nel risultato e nel pannello). Con l'opzione dei dati planetari spenta (default, D19-5,
+    nessuna preferenza nella v1) il 19 risponde allora `PLANETARY_DATA_DISABLED` (ordine dei controlli del 19,
+    decisione del proprietario del 2026-10-21).
 - **Immagine senza WCS** (`WCS_MISSING` dell'11/10) **o con WCS non utilizzabile**
   (`WCS_INVALID`): si apre come griglia di pixel (scelta del proprietario del
   2026-10-20, sprint 4d); finché è aperta non si sovrappongono HiPS, cataloghi o MOC
@@ -238,6 +260,11 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   con `fetch_tile` del 12 (memoria entro 512 MB, poi cache del 04, poi
   rete) nel **gruppo di thread dei tile** (§3.13) e ciascuno, appena
   arriva, riempie i suoi pixel della finestra (funzione del 12).
+- **Sotto un'immagine FITS (sprint 4f):** con l'immagine come base il campionamento usa la `ViewGeometry`
+  dell'immagine (`window_to_sky` del 10 è esatto anche con le distorsioni); sfondo e immagine hanno ciascuno la
+  sua texture e si compongono sulla GPU nell'ordine dei livelli con la loro opacità (fuori dall'immagine il pixel è
+  trasparente, quindi si vede lo sfondo). Visibilità e opacità non richiedono nuovi tile. Con una griglia di pixel
+  (§3.5) lo sfondo non si disegna (`VIEW_NO_WCS`).
 - **Tile FITS:** valori portati a colori con `set_display` dell'11; limiti
   iniziali da `hips_pixel_cut` del servizio se dichiarato, altrimenti
   `suggest_display_limits` dell'11 (D41-3) sui valori del **tile che
@@ -290,7 +317,8 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
     scelte con `catalog.set_columns`, altrimenti le posizioni della tabella, scelta minore 3) e pixel della base
     (`sky_to_pixel` del 10) nel **gruppo di thread dei tile**, una volta per base e per livello; nel thread
     principale solo `base_to_window` della `ViewGeometry` (fattore e spostamento, §3.4) e il disegno. Righe
-    senza posizione valida o fuori dalla proiezione non si disegnano. Con una griglia di pixel (§3.5) i cataloghi
+    senza posizione valida o fuori dalla proiezione non si disegnano (pixel non finito del 10; **dallo sprint 4f**
+    anche le righe oltre il riquadro dell'immagine base si disegnano, perché attorno si vede lo sfondo). Con una griglia di pixel (§3.5) i cataloghi
     non si disegnano (`VIEW_NO_WCS`, un messaggio).
   - **Stile:** quello del livello (`catalog.load_region`/`catalog.open_file` assegnano lo stile iniziale, `05`
     §7: Okabe e Ito senza il nero, sei forme, 8 pixel logici, in ordine di apertura), con forma, colore e
@@ -321,6 +349,24 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   l'ordine più alto sotto il tetto, con la dichiarazione "disegnato
   all'ordine k, per eccesso" nel pannello dei livelli (le celle a ordine
   più basso che toccano il MOC lo contengono).
+- **Sprint 4f (decisioni del proprietario del 2026-10-21):**
+  - **Dove si calcola:** nel gruppo di thread dei tile, una volta per base e per livello: `healpix_grid` del 16 con
+    `within` = il MOC e pixel della base di ogni punto dei contorni con `sky_to_pixel` del 10; nel thread
+    principale solo `base_to_window` (§3.4) e il disegno.
+  - **Ordine di disegno:** si prova `healpix_grid` all'ordine `k` e, se il 16 risponde `GRID_TOO_LARGE`, a `k − 1`,
+    finché passa. Per non provare ordini enormi si parte da min(ordine del MOC, il più alto `k` con frazione di
+    cielo del MOC × 12 × 4^k ≤ `GRID_MAX_CELLS`), con `sky_fraction` del 16 (le celle che toccano il MOC non sono
+    mai meno di così). Con `k` minore dell'ordine del MOC il pannello scrive "disegnato all'ordine k, per eccesso".
+  - **Punti per lato** (`step` del 16, scelta di disegno): 2^(6 − k) sotto l'ordine 6, altrimenti 1, così le celle
+    grandi seguono la curvatura della proiezione.
+  - **Riempimento:** ogni cella come ventaglio di triangoli dal primo vertice, colore dello stile del livello
+    (`05`) con trasparenza `fill` (0,25) × opacità. **Perimetro:** solo i lati di `HealpixGrid.boundary` del 16
+    (vicino non nel MOC), colore pieno × opacità, linee di 1 pixel fisico (il profilo core di OpenGL 4.1 non ha
+    linee più spesse). Una cella con un punto fuori dalla proiezione, o tagliata dal bordo dell'`AIT` (un lato più
+    lungo di 8 volte la mediana dei lati della griglia in pixel della base), non si disegna: è solo disegno.
+  - **Non disegnabili:** MOC solo temporale (`MOC_TYPE_MISMATCH` del 16), MOC di un altro corpo o misto anche se la
+    sovrapposizione è forzata (`MOC_BODY_UNSUPPORTED` del 16): livello presente nel pannello, nessun disegno, un
+    messaggio. Con una griglia di pixel `VIEW_NO_WCS`.
 
 ### 3.10 Griglia (A6)
 
@@ -415,7 +461,8 @@ controllati; il passaggio a linee su GPU resta per i MOC dello sprint 4f).
   profile, il massimo su macOS): immagine e tile come texture, cataloghi
   come punti in buffer della GPU (posizioni nei pixel della base, `float32`
   solo per il disegno, DC6; sprint 4e: un punto per sorgente con `gl_PointSize` e la forma disegnata nel
-  programma di disegno con `gl_PointCoord`), MOC e griglia come linee e poligoni;
+  programma di disegno con `gl_PointCoord`), MOC come triangoli e linee in buffer della GPU (sprint 4f: un
+  programma con posizione e colore per vertice, trasparenza, modalità notte), griglia come linee;
   traslazione e scala come una matrice sulla GPU. Testi (etichette della
   griglia, misure) con `QPainter` sullo stesso widget. Il resto del
   visualizzatore usa solo l'interfaccia, così un futuro passaggio a
@@ -599,7 +646,10 @@ dell'interfaccia di disegno; scelta minore 9); test in
   (traslazione e scala), `upload_texture`, `upload_points`,
   `upload_polygons`, `upload_lines`, `draw_labels`, `render`,
   `render_offscreen` (per i test e per il PNG), `drawn_positions` (posizioni
-  sullo schermo dei simboli disegnati, per i test).
+  sullo schermo dei simboli disegnati, per i test). **Sprint 4f:**
+  `upload_texture(rgba, key)` (una texture per piano), `set_layers` (ordine dal basso e opacità dei livelli
+  disegnati), `upload_polygons` (MOC: triangoli e lati del perimetro), `drawn_polygons` (vertici sullo
+  schermo, per i test).
 - **`GlSkyRenderer`** — implementazione su `QOpenGLWidget`.
 - **`LayerPanel`** — pannello dei livelli (A11 minimo).
 - **`TilePool`** — gruppo di thread dei tile, con annullamento delle
@@ -703,6 +753,11 @@ mai abbassare in silenzio".
 | T27 | Clic e scheda (sprint 4e) | clic a 2 pixel logici da una sorgente, nel vuoto, Esc | `catalog.select` della riga giusta con `requested_by` = `mouse`; scheda con nome da UCD `meta.id;meta.main`, coordinate uguali a `format_coordinates` del 10, epoca del catalogo e sorgente; clic nel vuoto → selezione vuota; Esc chiude | test |
 | T28 | Epoche diverse (sprint 4e) | catalogo con epoca `J2016.0` su un'immagine con `MJD-OBS`; catalogo senza epoca; sfondo HiPS | `CATALOG_EPOCH_DIFFERS` con le due epoche; `CATALOG_EPOCH_UNKNOWN`; nessun avviso su HiPS | test |
 | T29 | Epoca nella barra (correzione del 2026-10-21) | mouse su un'immagine con `MJD-OBS` | `epoch AAAA-MM-GGThh:mm:ss UTC` (ISO 8601 con scala), nessun "JD" nei testi dell'interfaccia | test |
+| T31 | MOC disegnato (sprint 4f) | MOC da cerchio all'ordine 8 su base `TAN`, poi sull'immagine FITS base; MOC all'ordine 12 su gran parte del cielo; zoom | vertici dei triangoli e del perimetro entro 1 pixel da `sky_to_pixel` del 10 sui punti di `healpix_grid` del 16; solo i lati di `boundary`; ordine ridotto finché il 16 accetta, "per eccesso" nel pannello; colore e `fill` dallo stile del `05` | ricalcolo con 10 e 16 (`tests/ui/test_layers_moc.py`) |
+| T32 | Sfondo sotto l'immagine (sprint 4f) | immagine FITS con WCS e survey a colori simulato; opacità dell'immagine 0,5; spostare lo sfondo sopra | tile richiesti anche con l'immagine base; texture dello sfondo e dell'immagine nell'ordine dei livelli con le opacità scelte; nessun nuovo tile per opacità e visibilità | ispezione del renderer |
+| T33 | Pannello dei livelli (sprint 4f) | casella, cursore, su/giù, trascinamento e rimozione | un comando registrato del `05` per azione (opacità al rilascio); elenco con il livello in alto in cima; dettagli con sorgente, corpo, epoca e conteggi; "sovrapposizione forzata" | test |
+| T34 | Gaia DR3 propagato (D41-6) | risposta registrata di TAP VizieR (Gaia DR3) caricata con `catalog.load_region`, `catalog.set_columns` con `pmRA`/`pmDE` su un'immagine con `MJD-OBS` | posizioni di `display_positions` del 13 da J2016.0 all'epoca dell'immagine, nessun `EPOCH_INVALID`; scheda e pannello "disegnato all'epoca …" | ricalcolo con il 13 |
+| T35 | MOC e notte sulla GPU (`gl`) | MOC, catalogo e sfondo a colori, in modalità normale e notte | riempimento e perimetro visibili nel colore dello stile; in notte nessun pixel con verde o blu sopra la soglia di T20 | lettura dell'immagine fuori schermo |
 | T30 | Qualche migliaio di sorgenti (sprint 4e) | 5000 sorgenti, gesti | un solo caricamento dei punti per base; durante il gesto solo la trasformazione; tempo del calcolo per base misurato e riportato | test (tempo riportato) |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
@@ -755,13 +810,23 @@ compilare il Mac di riferimento (§3.15).
   eccesso dichiarato; (7) unità della distanza scelta nelle opzioni,
   default ′; (8) 6 thread per i tile; (9) due file Python (`sky_viewer.py`,
   `sky_renderer_gl.py`) per tenere l'OpenGL separato.
-- **D41-6 — Epoca del COOSYS persa da `catalog.set_columns`: da decidere (aperta il 2026-10-21, sprint 4e).**
+- **D41-6 — Epoca del COOSYS persa da `catalog.set_columns`: DECISA il 2026-10-21 (sotto).** Aperta il 2026-10-21, sprint 4e:
   `confirm_position_columns` del 13 crea colonne di posizione senza l'epoca del COOSYS e `catalog.set_columns` del
   `05` non ha `source_epoch`: per un catalogo con l'epoca solo nel COOSYS (es. Gaia DR3 da VizieR, `J2016.0`), scegliere
   le colonne di moto proprio porta a `EPOCH_INVALID` del 13 e il catalogo non si disegna (nessuna epoca assunta).
   Funziona con una colonna `time.epoch`. Raccomandazione: `confirm_position_columns` conserva equinozio ed epoca del
   COOSYS quando le colonne confermate sono quelle collegate al COOSYS (modifica del 13, approvato, da autorizzare);
   in alternativa un parametro `source_epoch` in `catalog.set_columns` (modifica del `05`).
+- **D41-6 — DECISA il 2026-10-21** (decisione del proprietario): il 13 conserva l'epoca del `COOSYS` quando
+  colonne e sistema confermati sono quelli dei metadati e la usa per la propagazione; mai un'epoca assunta
+  (`EPOCH_INVALID`). Applicata nel 13 (§3, T35 del 13) e qui (T34). `source_epoch` come parametro: possibile
+  aggiunta futura, non ora.
+- **Sprint 4f: decisioni del proprietario del 2026-10-21:** stile dei MOC dal comando `moc.open` (Okabe e Ito
+  in ordine inverso, riempimento 0,25 × opacità, contorno pieno); solo il perimetro della regione (nuovo
+  `HealpixGrid.boundary` nel 16); con corpi diversi `BODY_MISMATCH` prima dell'opzione dei dati planetari (19); un
+  MOC di un altro corpo forzato sul cielo resta nel pannello senza disegno (`MOC_BODY_UNSUPPORTED` del 16).
+  Scelte di disegno nostre, scritte in §3.9: ordine di partenza dalla frazione di cielo, punti per lato, taglio
+  dell'`AIT`, opacità al rilascio del cursore.
 - **Sprint 4e: decisioni del proprietario del 2026-10-21:** scheda della sorgente sul cielo (§3.8); stile
   iniziale assegnato dal comando di caricamento (`05` §7); Okabe e Ito senza il nero, sei forme, 8 pixel logici;
   nome da UCD `meta.id;meta.main` e posizione della tabella con l'epoca del catalogo. Precisazione della
@@ -799,3 +864,4 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-20 | Claude Code | **Sprint 4c del codice (decisione del proprietario del 2026-10-20: comando nuovo `view.set_overlays`):** griglia con etichette del 10 (passo e precisione, stile delle coordinate mostrate), nord ed est e barra di scala disegnati nell'angolo in basso a sinistra (§3.10, §3.18), grigi durante il gesto, rossi puri in modalità notte; disegno con `QPainter` sul widget OpenGL, etichette che non si sovrappongono. T3 (punti entro 1 pixel dalle linee del 10), T18 (testi di `format_coordinates`), T20 (`gl`) e T21 nei test; il test `gl` ha trovato e fatto correggere un rosso con verde nella notte. |
 | 2026-10-20 | Claude Code | **Sprint 4d del codice (decisioni del proprietario del 2026-10-20: inquadratura intera, griglia di pixel senza WCS):** File → Apri su un FITS locale (`image.open` del 05, già previsto) lo rende base della vista con il suo WCS e lo inquadra intero; colori da `set_display`; disegno a pixel più vicino (`sample_image`); `cursor.read` con valore originale, unità (`BUNIT` o «non dichiarata»), pixel FITS (x, y), frame ed epoca dall'intestazione senza assunzioni; senza WCS valido griglia di pixel (`PixelGridGeometry`) con `WCS_INVALID` e nessuna coordinata; nuova D41-5 (zoom e spostamento sulla griglia di pixel). T22–T25 nei test. Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4e del codice (decisioni del proprietario del 2026-10-21):** cataloghi disegnati come punti sulla GPU con forma nel programma di disegno, posizioni e pixel della base nel gruppo di thread dei tile (una volta per base), stile iniziale dal comando di caricamento, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN` (§3.8, §3.13); epoca nella barra in ISO 8601 con la scala invece del JD (§3.11, DC1); D41-5 rinviata a dopo la v1; test T26–T30. Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Sprint 4f del codice (decisioni del proprietario del 2026-10-21):** MOC sulla GPU (triangoli e perimetro, ordine ridotto dichiarato, stile da `moc.open`), pannello dei livelli con visibilità, ordine, opacità e rimozione come comandi del `05`, sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`; D41-6 decisa (13). §3.1, §3.2, §3.5, §3.7, §3.9, §3.13, §7, §13; test T31–T35. Stato `approvato` invariato. |

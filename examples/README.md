@@ -38,3 +38,13 @@ Passi (modulo di AstroTwo usato):
 
 Uscite: `examples/output/demo_pleiadi.png`, `examples/output/demo_pleiadi.txt`.
 Test di rete: `tests/test_demo_pleiadi.py` (marcatore `network`).
+
+## `moc_esempi.py` — due MOC per provare il visualizzatore (sprint 4f del 41)
+
+Senza rete. Scrive con il modulo 16 `examples/output/moc_m31.fits` (cerchio di 1,5° attorno a M31, ordine 9) e
+`examples/output/moc_marte.fits` (MOC di Marte con la parola chiave `A2BODY`, per vedere l'errore `BODY_MISMATCH`
+sopra il cielo).
+
+```sh
+uv run python examples/moc_esempi.py
+```

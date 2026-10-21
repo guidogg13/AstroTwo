@@ -495,14 +495,26 @@ def confirm_position_columns(table: CatalogTable, lon: str, lat: str, frame: str
         if new[name].unit is None:
             new[name].unit = u.Unit(unit)
             notes.append(("UNIT_DECLARED", f"colonna {name!r}: unità {u.Unit(unit)} dichiarata dall'utente"))
-    positions = PositionColumns(lon=lon, lat=lat, frame=frame, equinox=None if equinox is None else str(equinox),
-                                source="confirmed", system=frame)
+    # D41-6: stesse colonne e stesso sistema dei metadati (COOSYS, utype MANGO, ECSV) → epoca ed equinozio
+    # dichiarati conservati; altrimenti nessuna epoca (mai assunta).
+    old = table.positions
+    same = old is not None and old.source == "ucd" and (old.lon, old.lat, old.frame) == (lon, lat, frame)
+    epoch = old.epoch if same else None
+    kept_equinox = old.equinox if same and equinox is None else (None if equinox is None else str(equinox))
+    positions = PositionColumns(lon=lon, lat=lat, frame=frame, equinox=kept_equinox, epoch=epoch,
+                                source="confirmed", system=old.system if same else frame)
+    history = (f"colonne di posizione confermate dall'utente: {lon}/{lat}, frame {frame}"
+               + (f", equinozio {kept_equinox}" if kept_equinox is not None else ""),)
+    if epoch is not None:
+        text = (f"colonne {lon}/{lat}: epoca {epoch} dichiarata nei metadati ({old.system or frame}) conservata "
+                "dopo la conferma (stesse colonne e sistema)")
+        notes.append(("EPOCH_FROM_METADATA", text))
+        history += (text,)
     kept = tuple(w for w in table.warnings if w[0] not in ("NO_COORD_COLUMNS", "BODY_UNKNOWN", "FRAME_UNKNOWN"))
     return dataclasses.replace(
         table, table=new, positions=positions, body="celestial",
         warnings=kept + tuple(notes),
-        history=table.history + (f"colonne di posizione confermate dall'utente: {lon}/{lat}, frame {frame}"
-                                 + (f", equinozio {equinox}" if equinox is not None else ""),),
+        history=table.history + history,
     )
 
 

@@ -264,7 +264,16 @@ di un dato sia sempre verificabile e confrontabile.
   disegno del 41. **Scelta minore (confermata il 2026-10-12):** senza `within` la
   griglia di tutto il cielo è ammessa fino a 12 × 4⁷ = 196 608 celle
   (ordine 7), oltre → `GRID_TOO_LARGE`; con `within` (MOC spaziale) solo le
-  celle che toccano il MOC all'ordine dato.
+  celle che toccano il MOC all'ordine dato. **Perimetro (decisione del
+  proprietario del 2026-10-21, sprint 4f del 41):** `HealpixGrid.boundary`
+  (celle × 4, booleani) dice per ogni lato della cella se sta sul perimetro
+  della griglia, cioè se la cella vicina oltre quel lato **non** è tra le
+  celle della griglia; vicini con `neighbours` di `astropy-healpix`. Il lato
+  `j` va dal punto `j × step` al punto `(j + 1) × step` del contorno (l'ultimo
+  si chiude sul punto 0); corrispondenza lato → vicino **verificata il
+  2026-10-21 su tutte le 3072 celle dell'ordine 4** (vertici in comune):
+  lato 0 → NW, 1 → SW, 2 → SE, 3 → NE (indici 2, 0, 6, 4 di `neighbours`).
+  È topologia delle celle, nessuna misura; il 41 disegna solo questi lati.
 
 **P4 — tempo e probabilità (scritta il 2026-10-11):**
 
@@ -540,6 +549,7 @@ L'IA non calcola né approssima mai superfici o coperture.
 | T12 | Corpo misto (scelta 5) | intersezione forzata celeste × Luna; poi unione, differenza, complemento, `contains` senza forzatura; con forzatura e un terzo corpo | `body = "mixed"` con i corpi ordinati; ogni operazione successiva senza forzatura → `BODY_MISMATCH`; con forzatura elenco dei corpi aggiornato e `BODY_FORCED` | test di unità |
 | T13 | MOC planetari e misti in FITS (scelta 6) | scrivere e rileggere un MOC di Marte, un MOC misto e uno ST-MOC della Luna; JSON e testo di Marte; `A2BODIES` tolto | stesso MOC e stesso corpo dopo andata e ritorno; `A2BODY`, `MOCVERS='2.0'`, `COORDSYS='C'`; `MOC_NONSTANDARD_EXTENSION` in scrittura e lettura; nessuna parola chiave per un MOC celeste; `MOC_BODY_UNSUPPORTED`; `MOC_UNREADABLE` | lettura dell'intestazione con `astropy.io.fits` |
 | T14 | Complemento ST-MOC (D16-7) | ST-MOC da due osservazioni; complemento | ordini conservati; ¬¬A = A; A ∩ ¬A = ∅; A ∪ ¬A copre tutto il cielo in tutto il tempo; su istanti e posizioni campione il complemento contiene esattamente ciò che A non contiene | ricalcolo con `mocpy` (`query_by_time`, `contains_lonlat`, `TimeMOC` di tutto il tempo) |
+| T15 | Perimetro della griglia (sprint 4f del 41) | griglia con `within` di un cerchio all'ordine 6, di un MOC con un buco, di una sola cella, di tutto il cielo all'ordine 2; `step` 1 e 3 | un lato è di perimetro se e solo se i suoi due vertici non sono vertici di un lato di un'altra cella della griglia (ricalcolo nel test con i contorni di `astropy-healpix`); una sola cella: 4 lati; tutto il cielo: nessun lato; il buco ha il suo perimetro | ricalcolo nel test |
 
 ## 13. Decisioni aperte
 
@@ -636,3 +646,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-13 | Claude Code | **Difetto trovato dalla demo delle Pleiadi** (correzione che rispetta la specifica; registrata su indicazione del proprietario): la descrizione di `FilterResult` diceva "righe dentrol MOC" per `inside=True`; ora "righe dentro il MOC" ("fuori dal MOC" invariato). Test T4 esteso col controllo del testo. Nessun cambiamento di comportamento o di valori. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **D16-8 aperta (Gruppo 3)**: la regola dei blocchi per `moc_from_image` decisa il 2026-10-14 perde celle sul bordo (misure in §13); regola e codice dei blocchi non applicati, in attesa della decisione del proprietario. §3 invariato. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **D16-8 decisa e applicata** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 — MOC da immagine con pixel piccolo su blocchi di b × b pixel (regola del proprietario del 2026-10-14) più gli angoli dei pixel lungo il contorno della regione dei blocchi validi; crescita massima ai bordi b − 1 pixel (corretto "mezzo blocco"); dimensione del blocco, passo e punti dichiarati nel risultato. §12 T10 esteso (300 maschere casuali contro il MOC pixel per pixel; immagine DSS della demo con test di rete). §13 D16-8 decisa. Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Perimetro della griglia (decisione del proprietario del 2026-10-21, autorizzazione esplicita a modificare il file approvato, sprint 4f del 41):** `HealpixGrid.boundary` con i lati di perimetro (vicini di `neighbours` di `astropy-healpix`, corrispondenza lato → vicino verificata sull'ordine 4); T15. Stato `approvato` invariato. |

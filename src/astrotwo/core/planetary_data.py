@@ -339,14 +339,16 @@ def check_overlay(layers, force: bool = False) -> OverlayCheck:
         raise PlanetaryDataError("BODY_UNKNOWN", "; ".join(unknown) + ": il dato non si sovrappone ad altri "
                                  "(si apre da solo)")
     all_bodies = tuple(dict.fromkeys(b for bodies, _ in found for b in bodies))
-    if any(b != CELESTIAL for b in all_bodies):
-        _require_enabled("check_overlay")
     involved = ", ".join(f"{n} → {'/'.join(bodies)}" for n, (bodies, _) in zip(names, found))
-    if len(all_bodies) == 1:
-        return OverlayCheck(all_bodies[0], all_bodies, False, names, (), command)
-    if not force:
+    # Corpi diversi senza forzatura: sempre BODY_MISMATCH, anche con l'opzione spenta (decisione del proprietario
+    # del 2026-10-21); l'opzione si controlla solo se la sovrapposizione passerebbe.
+    if len(all_bodies) > 1 and not force:
         raise PlanetaryDataError("BODY_MISMATCH", f"livelli di corpi diversi ({involved}): sovrapposizione "
                                  "rifiutata; forzabile solo con force=True, citato nel risultato", bodies=all_bodies)
+    if any(b != CELESTIAL for b in all_bodies):
+        _require_enabled("check_overlay")
+    if len(all_bodies) == 1:
+        return OverlayCheck(all_bodies[0], all_bodies, False, names, (), command)
     warning = ("BODY_MISMATCH_FORCED", f"sovrapposizione forzata dall'utente tra corpi diversi ({involved}): la "
                "coerenza della vista non è garantita")
     return OverlayCheck(None, all_bodies, True, names, (warning,), command)

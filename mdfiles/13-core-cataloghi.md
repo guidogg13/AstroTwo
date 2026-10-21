@@ -205,7 +205,17 @@ suo VOTable.
   suggerimento**, con il sistema eventualmente indicato dal nome come sola
   ipotesi: l'interfaccia le propone, l'utente conferma con
   `confirm_position_columns` (colonne e sistema espliciti; la conferma è
-  scritta nella provenienza). **Senza UCD né conferma:**
+  scritta nella provenienza). **Epoca ed equinozio dei metadati conservati
+  (D41-6, decisione del proprietario del 2026-10-21):** se le colonne
+  confermate sono le stesse già trovate nei metadati (`positions` con
+  `source = "ucd"`, cioè collegate al `COOSYS`, all'`utype` MANGO o ai
+  metadati ECSV) e il sistema confermato è lo stesso, la nuova tabella
+  **conserva l'epoca dichiarata** (e l'equinozio, se `equinox` non è dato)
+  e la usa per la propagazione (`propagate`, `display_positions`), con
+  l'avviso `EPOCH_FROM_METADATA` e la voce nella storia; con colonne o
+  sistema diversi l'epoca **non si conserva** e non si assume mai (le
+  funzioni di propagazione danno `EPOCH_INVALID` senza un'altra fonte).
+  Possibile aggiunta futura, non ora: un parametro `source_epoch` esplicito. **Senza UCD né conferma:**
   `NO_COORD_COLUMNS` (avviso al caricamento; errore per le funzioni di
   posizione) e `body` non ricavabile (`BODY_UNKNOWN`). **Corpo:** `celestial`
   quando le colonne di posizione sono celesti (UCD `pos.eq`, `pos.galactic`,
@@ -564,7 +574,9 @@ suo VOTable.
 - **`suggest_position_columns(table)`** — candidate dal nome, ognuna marcata
   come suggerimento, con il motivo; **`confirm_position_columns(table, lon,
   lat, frame, equinox=None)`** — nuova `CatalogTable` con le colonne
-  confermate dall'utente (scritto nella provenienza) e il corpo ricavato.
+  confermate dall'utente (scritto nella provenienza) e il corpo ricavato;
+  epoca ed equinozio dei metadati conservati quando colonne e sistema sono
+  gli stessi (D41-6, §3).
 - **`search(table, expression, selection=None, case_sensitive=False)`** —
   selezione dei record per espressione (D6); l'espressione è **validata
   prima dell'esecuzione** con la grammatica di §3 (D13-1), altrimenti
@@ -758,6 +770,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T33 | `load_catalog` con regione (D13-19) | TAP simulato con `TAP_SCHEMA` (nomi tra virgolette) e `COOSYS` `FK5` equinozio `2000.0`; centro ICRS; poi senza `COOSYS`, con due RA senza `meta.main`, raggi non validi, regione oltre `max_rows`; termini `refframe` nel `COOSYS`; SIMBAD simulato con l'`utype` MANGO e senza `COOSYS` (D13-20), poi con `utype` diversi sulle due colonne e con `FK5`; test di rete su 2MASS attorno a M31 e su SIMBAD | ADQL con il centro convertito in FK5 J2000 uguale ad astropy; sistema e colonne dichiarati; `FRAME_UNKNOWN`, `NO_COORD_COLUMNS`, `REGION_INVALID`, `REGION_TOO_LARGE`; in rete tutte le righe entro il raggio (separazione ricalcolata con astropy); SIMBAD: centro convertito in ICRS, sistema ICRS epoca J2000 dichiarato (`POSITIONS_FROM_MANGO`), `utype` diversi o `FK5` → `FRAME_UNKNOWN` | test con servizio simulato (più un test di rete) |
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T34 | Posizioni all'epoca di visualizzazione (D10-2) | tabella con righe `full`, `pm_only` e `missing`; immagine con `MJD-OBS`, immagine senza epoca, nessuna immagine, epoca dell'utente, tipo non valido | con l'immagine: epoca = `MJD-OBS` (scala del WCS), fonte "immagine"; senza epoca o senza immagine: J2000 (TT) con la fonte dichiarata; posizioni uguali a `propagate` alla stessa epoca; `drawable` = righe non `missing`; conteggi per modo; spostamento uguale ad `astropy.coordinates.angular_separation` ricalcolato nel test, media e massimo sulle righe disegnabili; `coords` alle stesse posizioni con l'epoca di visualizzazione; tipo non valido → `EPOCH_INVALID` | ricalcolo con Astropy |
+| T35 | Epoca del `COOSYS` dopo la conferma delle colonne (D41-6) | risposta di TAP VizieR registrata (Gaia DR3 `I/355/gaiadr3`, 11 righe attorno ad Alcyone, `COOSYS` ICRS `epoch="2016.0"`), servita da un servizio simulato; `confirm_position_columns` con le stesse colonne `RA_ICRS`/`DE_ICRS` e `icrs`, poi con un altro sistema, poi su colonne diverse | stesse colonne e sistema: epoca `J2016` conservata, `EPOCH_FROM_METADATA`, `display_positions` uguale a `propagate` ricalcolato da J2016.0; sistema o colonne diversi: epoca non conservata e `EPOCH_INVALID` nella propagazione | test con risposta registrata, senza rete |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
 | T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
@@ -927,6 +940,12 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
   dimensione mancante **contati nel risultato** delle regole
   (`PlotStyle.missing_size`); `FILE_EXISTS` senza `overwrite=True`.
 
+- **D41-6 — Epoca del `COOSYS` dopo `confirm_position_columns`: DECISA il 2026-10-21** (decisione del
+  proprietario, autorizzazione esplicita a modificare questo file approvato): con le stesse colonne e lo stesso
+  sistema dei metadati si conservano epoca ed equinozio dichiarati e si usano per la propagazione; mai un'epoca
+  assunta se i metadati non la dichiarano (`EPOCH_INVALID`). Applicata in §3, §7, T35. **Possibile aggiunta
+  futura** (non ora): parametro `source_epoch` esplicito in `confirm_position_columns`/`catalog.set_columns`.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -964,3 +983,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-11 | Claude Code | **D13-20 decisa e applicata** (decisione del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): sistema delle posizioni dall'`utype` MANGO (ICRS, epoca J2000 per SIMBAD) quando manca il `COOSYS`, dichiarato con l'avviso `POSITIONS_FROM_MANGO`; regione su SIMBAD attiva; T33 esteso. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **`display_positions` aggiunta** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 (regola: D10-2 in un passo, epoca dell'immagine se nota altrimenti J2000 o epoca dell'utente, fonte dichiarata, calcolo di `propagate`, posizioni, righe disegnabili, conteggi per modo e spostamento), §7 (firma e `DisplayPositions`, nessuna dipendenza dall'11), §10 (epoca dell'immagine assente; tipo non riconosciuto → `EPOCH_INVALID`), §12 (T34). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica): D17-3 rimanda alla sessione di `05-comandi-sessione.md` invece che al `24` (§3, §13); `05` e funzioni usate dal `41` in "Usato da" (§5). Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **D41-6 decisa dal proprietario (autorizzazione esplicita a modificare il file approvato):** `confirm_position_columns` conserva epoca ed equinozio dei metadati (`COOSYS`, `utype` MANGO, ECSV) quando colonne e sistema confermati sono gli stessi, con l'avviso `EPOCH_FROM_METADATA`; altrimenti nessuna epoca (mai assunta). `source_epoch` annotato come possibile aggiunta futura. Nuovo T35 con la risposta registrata di Gaia DR3. Stato `approvato` invariato. |

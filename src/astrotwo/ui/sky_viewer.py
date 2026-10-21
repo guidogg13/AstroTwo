@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Visualizzatore del cielo (41), sprint 4a-4e: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il
-mouse, griglia delle coordinate, indicatore del nord e barra di scala, immagine FITS base, cataloghi e clic.
+"""Visualizzatore del cielo (41), sprint 4a-4f: sfondo HiPS (a colori o FITS), zoom, spostamento, lettura sotto il
+mouse, griglia delle coordinate, indicatore del nord e barra di scala, immagine FITS base, cataloghi e clic, MOC,
+pannello dei livelli.
 
 Nessun numero mostrato nasce qui: la geometria è la ``ViewGeometry`` del 10 (dai comandi di vista del 05), i tile
 e il loro campionamento sulla finestra vengono dal 12 (``view_sampling``, ``fetch_tile``, ``fill_view``).
@@ -10,8 +11,13 @@ Traslazione e scala dello schermo durante un gesto sono solo disegno (41 §3.4);
 
 Sfondo HiPS: un solo survey; i tile JPEG/PNG si disegnano com'è, i tile FITS sono portati a colori da
 ``set_display`` dell'11 con i limiti scelti da ``hips.set_survey`` (campo ``display`` del livello, 41 §3.7). Sotto il
-mouse una lettura passiva ``cursor.read`` (05) nel gruppo di thread dei tile, al più una in corso (41 §3.11). Il
-pannello dei livelli e gli strumenti arrivano negli sprint successivi.
+mouse una lettura passiva ``cursor.read`` (05) nel gruppo di thread dei tile, al più una in corso (41 §3.11). Dallo
+sprint 4f lo sfondo si campiona anche sulla geometria di un'immagine FITS base, e sfondo e immagine sono due texture
+composte nell'ordine dei livelli con la loro opacità (41 §3.5, §3.7).
+
+MOC (41 §3.9, sprint 4f): celle e perimetro da ``healpix_grid`` del 16 e pixel della base con ``sky_to_pixel`` del
+10, nel gruppo di thread dei tile, una volta per base; qui solo ``base_to_window`` e il disegno. Pannello dei livelli
+(``LayerPanel``, 41 §3.5): ogni azione è un comando del 05, l'elenco si ricostruisce dallo stato.
 
 Cataloghi (41 §3.8, sprint 4e): posizioni dal 13 (``display_positions`` con le colonne di moto proprio scelte,
 altrimenti le posizioni della tabella, ``catalog_positions`` del 05) e pixel della base con ``sky_to_pixel`` del 10,
@@ -37,7 +43,8 @@ from collections.abc import Callable, Mapping
 import astropy.units as u
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtWidgets import QApplication, QLabel, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QHBoxLayout, QLabel, QListWidget,
+                               QListWidgetItem, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
@@ -73,6 +80,16 @@ DEFAULT_CARD_TEXTS = {
     "propagated": "drawn at epoch %1 (proper motion; %2)", "not_drawn": "not drawn in this view",
     "catalog": "catalog %1", "retrieved": "retrieved %1",
 }
+#: Testi del pannello dei livelli nella lingua dell'interfaccia (la finestra principale li traduce, 40).
+DEFAULT_PANEL_TEXTS = {
+    "image": "image", "hips": "HiPS", "catalog": "catalog", "moc": "MOC", "measure": "measure",
+    "visible": "Visible", "opacity": "Opacity", "up": "Move up", "down": "Move down", "remove": "Remove layer",
+    "body": "body %1", "body_unknown": "body unknown (%1)", "forced": "overlay forced (force_body)",
+    "retrieved": "retrieved %1", "epoch": "epoch %1", "epoch_unknown": "epoch unknown",
+    "drawn": "%1 of %2 rows drawn", "propagated": "drawn at epoch %1", "not_propagated": "table positions (not propagated)",
+    "order": "drawn at order %1", "by_excess": "drawn at order %1, by excess (MOC order %2)", "cells": "%1 cells",
+    "not_drawn": "not drawn: %1",
+}
 #: Tolleranza minima del clic su un simbolo, pixel logici (41 §3.8, scelta minore 5).
 CLICK_TOLERANCE = 4.0
 #: Movimento oltre il quale una pressione del mouse diventa trascinamento invece di clic (pixel logici).
@@ -104,6 +121,9 @@ class _WheelSpy(QObject):
 
 #: Thread del gruppo dei tile (41 §3.13, scelta minore 8).
 TILE_THREADS = 6
+#: Taglio del bordo dell'``AIT`` (41 §3.9, scelta di disegno): una cella con un lato più lungo di questo multiplo della
+#: mediana dei lati della griglia, in pixel della base, è attraversata dal bordo della proiezione e non si disegna.
+MOC_CUT = 8.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -219,6 +239,38 @@ class PointSet:
     selected: np.ndarray
 
 
+@dataclasses.dataclass(frozen=True, eq=False)
+class MocShapes:
+    """Celle e perimetro di un MOC nei pixel della base (41 §3.9), calcolati nel gruppo di thread dei tile.
+
+    ``triangles``: vertici dei triangoli (ventaglio per cella) ``(3 × T, 2)``; ``lines``: estremi dei segmenti del
+    perimetro ``(2 × L, 2)``; pixel della base (convenzione numpy, ``float64``) da ``sky_to_pixel`` del 10 sui punti di
+    ``healpix_grid`` del 16. ``order`` è l'ordine disegnato, ``moc_order`` quello del MOC (per eccesso se minore)."""
+
+    key: tuple
+    layer: str
+    order: int
+    moc_order: int
+    cells: int
+    drawn_cells: int
+    triangles: np.ndarray
+    lines: np.ndarray
+    description: str = ""
+    seconds: float = 0.0
+
+
+@dataclasses.dataclass(frozen=True, eq=False)
+class PolygonSet:
+    """MOC pronto per il renderer: ``triangles`` e ``lines`` nello spazio dei pixel della finestra disegnata (come i
+    simboli, ``float32`` solo per il disegno); colori RGBA in [0, 1] con l'opacità del livello già applicata."""
+
+    layer: str
+    triangles: np.ndarray
+    fill: tuple[float, float, float, float]
+    lines: np.ndarray
+    line: tuple[float, float, float, float]
+
+
 def _hex_rgba(colors: np.ndarray) -> np.ndarray:
     """Colori ``#RRGGBB`` del 13 → RGBA in [0, 1] per il disegno."""
     out = np.ones((len(colors), 4), dtype=np.float32)
@@ -300,7 +352,9 @@ def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
     rows = np.flatnonzero(valid)
     pixels = sky_to_pixel(geometry.base, coords, convention="numpy")
     bx, by = np.asarray(pixels.pixels.x, dtype=np.float64), np.asarray(pixels.pixels.y, dtype=np.float64)
-    keep = ~np.asarray(pixels.out_of_field, dtype=bool) & np.asarray(style.drawn, dtype=bool)[rows]
+    # Fuori dalla proiezione = pixel non finito; fuori dal riquadro dell'immagine base si disegna (lo sfondo HiPS si
+    # vede attorno all'immagine, sprint 4f), quindi ``out_of_field`` del 10 non basta da solo.
+    keep = np.isfinite(bx) & np.isfinite(by) & np.asarray(style.drawn, dtype=bool)[rows]
     rows, bx, by = rows[keep], bx[keep], by[keep]
     shapes = {name: float(k) for k, name in enumerate(PLOT_SHAPES)}
     return CatalogPoints(
@@ -310,10 +364,70 @@ def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
         seconds=time.perf_counter() - start)
 
 
-class SkyRenderer:
-    """Interfaccia di disegno (41 §3.13, §7); in questo sprint solo il piano dello sfondo e la trasformazione.
+def moc_key(layer) -> tuple:
+    """Ciò da cui dipende il disegno di un MOC: livello e oggetto del 16 (lo stile si applica dopo, nel disegno)."""
+    return (layer.id, id(layer.data))
 
-    ``upload_texture``: immagine RGBA a 8 bit della finestra, riga 0 = riga in alto sullo schermo.
+
+def moc_step(order: int) -> int:
+    """Punti per lato del contorno (``step`` del 16, scelta di disegno, 41 §3.9): 2^(6 − k) sotto l'ordine 6."""
+    return 2 ** (6 - order) if order < 6 else 1
+
+
+def moc_shapes(key: tuple, layer, geometry) -> MocShapes:
+    """Celle e perimetro di un MOC sulla base (41 §3.9): ``healpix_grid`` del 16 all'ordine del MOC o, se il 16
+    risponde ``GRID_TOO_LARGE``, all'ordine sotto, finché passa (si parte dall'ordine che la frazione di cielo del 16
+    rende possibile); poi ``sky_to_pixel`` del 10. Gli errori del 16 (MOC temporale, di un altro corpo) passano."""
+    from astrotwo.core.coordinates_wcs import SkyFrame, sky_to_pixel
+    from astrotwo.core.moc import GRID_MAX_CELLS, MocError, healpix_grid
+
+    start = time.perf_counter()
+    moc = layer.data
+    top = moc.space_order
+    if top is None:  # MOC solo temporale: il 16 lo dice (MOC_TYPE_MISMATCH)
+        healpix_grid(0, within=moc)
+    order = top
+    fraction = moc.sky_fraction or 0.0
+    while order > 0 and fraction * 12 * 4 ** order > GRID_MAX_CELLS:  # meno celle di così non ce ne sono
+        order -= 1
+    while True:
+        try:
+            grid = healpix_grid(order, within=moc, step=moc_step(order))
+            break
+        except MocError as exc:
+            if exc.code != "GRID_TOO_LARGE" or order == 0:
+                raise
+            order -= 1
+    cells, n = grid.lon.shape
+    empty = np.zeros((0, 2))
+    if not cells:
+        return MocShapes(key, layer.id, order, top, 0, 0, empty, empty, grid.description)
+    coords = SkyFrame.from_lonlat(grid.lon.ravel() * u.deg, grid.lat.ravel() * u.deg, grid.frame.lower())
+    pixels = sky_to_pixel(geometry.base, coords, convention="numpy")
+    xy = np.column_stack([np.asarray(pixels.pixels.x, dtype=np.float64),
+                          np.asarray(pixels.pixels.y, dtype=np.float64)]).reshape(cells, n, 2)
+    ok = np.all(np.isfinite(xy), axis=(1, 2))  # fuori dalla proiezione = non finito (anche oltre il riquadro
+    # dell'immagine base la cella si disegna: lo sfondo si vede attorno, come per i cataloghi)
+    side = np.hypot(*(np.roll(xy, -1, axis=1) - xy).transpose(2, 0, 1))  # (celle, n)
+    if ok.any():
+        ok &= side.max(axis=1) <= MOC_CUT * float(np.median(side[ok]))  # celle tagliate dal bordo dell'AIT
+    fan = np.stack([np.zeros(n - 2, dtype=np.int64), np.arange(1, n - 1), np.arange(2, n)], axis=1).ravel()
+    triangles = xy[ok][:, fan].reshape(-1, 2)
+    step = n // 4
+    a = (np.arange(4)[:, None] * step + np.arange(step)[None, :])  # (4 lati, step) primo punto di ogni segmento
+    b = (a + 1) % n
+    cell, j = np.nonzero(grid.boundary & ok[:, None])
+    lines = np.stack([xy[cell[:, None], a[j]], xy[cell[:, None], b[j]]], axis=2).reshape(-1, 2)
+    return MocShapes(key, layer.id, order, top, cells, int(ok.sum()), triangles, lines, grid.description,
+                     time.perf_counter() - start)
+
+
+class SkyRenderer:
+    """Interfaccia di disegno (41 §3.13, §7): piani come texture, simboli, MOC, sovrapposizioni e trasformazione.
+
+    ``upload_texture``: immagine RGBA a 8 bit della finestra, riga 0 = riga in alto sullo schermo, una per piano
+    (``key`` = livello; sprint 4f). ``set_layers``: ordine di disegno dal basso, ``(tipo, livello, opacità)`` con tipo
+    ``texture``, ``points`` o ``polygons``; senza elenco si disegnano piani e poi simboli.
     ``set_transform``: scala ``k`` e traslazione ``(tx, ty)`` in pixel fisici: il pixel ``q`` dell'immagine va
     sullo schermo in ``k * q + t`` (solo disegno, 41 §3.4). ``set_night``: modalità notte rossa (luminosità in
     scala di rossi, trasformazione di disegno).
@@ -322,7 +436,23 @@ class SkyRenderer:
     def widget(self) -> QWidget:
         raise NotImplementedError
 
-    def upload_texture(self, rgba: np.ndarray) -> None:
+    def upload_texture(self, rgba: np.ndarray, key: str = "plane") -> None:
+        raise NotImplementedError
+
+    def drop_texture(self, key: str) -> None:
+        """Toglie il piano ``key`` (livello rimosso o sostituito)."""
+        raise NotImplementedError
+
+    def set_layers(self, items: tuple[tuple[str, str, float], ...]) -> None:
+        raise NotImplementedError
+
+    def upload_polygons(self, sets: tuple[PolygonSet, ...]) -> None:
+        """MOC (41 §3.9): triangoli del riempimento e segmenti del perimetro, uno per livello."""
+        raise NotImplementedError
+
+    def drawn_polygons(self) -> list[tuple[str, np.ndarray, np.ndarray]]:
+        """Per i test (41 §7): ``(livello, vertici dei triangoli, estremi dei segmenti)`` sullo schermo in pixel
+        fisici, con la trasformazione corrente."""
         raise NotImplementedError
 
     def set_transform(self, k: float, tx: float, ty: float) -> None:
@@ -381,6 +511,7 @@ class _Bridge(QObject):
     done = Signal(int)  # generazione (una richiesta di tile finita, riuscita o no)
     cursor = Signal(object)  # CommandResult di una lettura sotto il mouse
     catalog = Signal(object, object)  # chiave, CatalogPoints o ResultMessage (errore del modulo)
+    moc = Signal(object, object)  # chiave, MocShapes o ResultMessage (errore del modulo)
 
 
 class _Task(QRunnable):
@@ -415,8 +546,8 @@ class TilePool:
                 return
             try:
                 sampling = view_sampling(service, geometry, coverage=coverage)
-            except HiPSError as exc:
-                self.bridge.failed.emit(generation, exc.code, str(exc))
+            except Exception as exc:  # noqa: BLE001 - errori del 12/10 (es. frame dell'immagine base): un messaggio
+                self.bridge.failed.emit(generation, str(getattr(exc, "code", type(exc).__name__)), str(exc))
                 return
             self.bridge.sampled.emit(generation, sampling)
 
@@ -470,6 +601,20 @@ class TilePool:
 
         self.pool.start(_Task(run))
 
+    def moc(self, key: tuple, layer, geometry) -> None:
+        """Celle e perimetro di un MOC sulla base (41 §3.9) nel gruppo di thread dei tile; l'errore di un modulo
+        diventa un messaggio."""
+
+        def run() -> None:
+            try:
+                result = moc_shapes(key, layer, geometry)
+            except Exception as exc:  # noqa: BLE001 - errori del 10/16: MOC non disegnato e un messaggio
+                code = getattr(exc, "code", type(exc).__name__)
+                result = ResultMessage(str(code), f"{layer.name}: {getattr(exc, 'message', None) or exc}")
+            self.bridge.moc.emit(key, result)
+
+        self.pool.start(_Task(run))
+
     def wait(self, msecs: int = 30000) -> bool:
         return self.pool.waitForDone(msecs)
 
@@ -504,11 +649,11 @@ def sample_image(geometry, image) -> np.ndarray:
     """Colori (RGBA, righe nell'ordine della finestra: riga 0 = sud) dell'immagine FITS base per ogni pixel della
     finestra: pixel più vicino della base (le posizioni vengono da ``window_to_base`` del 10). Disegno: nessun numero
     mostrato nasce da qui (41 §3.4). Con le immagini a due livelli (11) il piano è l'anteprima e l'indice si divide per
-    il passo; fuori dall'immagine, trasparente; ``visible`` e ``opacity`` del livello valgono qui."""
+    il passo; fuori dall'immagine, trasparente. Visibilità e opacità del livello le applica il renderer (sprint 4f)."""
     rows, cols = geometry.shape
     canvas = np.zeros((rows, cols, 4), dtype=np.uint8)
     plane = image.derived.get("plane")
-    if plane is None or not image.visible:
+    if plane is None:
         return canvas
     rgba = plane.rgba
     step = image.data.preview_step or 1
@@ -519,8 +664,6 @@ def sample_image(geometry, image) -> np.ndarray:
     ok_y = (iy >= 0) & (iy < rgba.shape[0])
     if ok_x.any() and ok_y.any():
         canvas[np.ix_(ok_y, ok_x)] = rgba[np.ix_(iy[ok_y], ix[ok_x])]
-        if image.opacity < 1.0:
-            canvas[..., 3] = (canvas[..., 3] * image.opacity).astype(np.uint8)
     return canvas
 
 
@@ -536,6 +679,7 @@ class SkyViewer(QWidget):
     view_changed = Signal()  # nuova geometria o nuovo survey disegnati (scritta della barra)
     first_shown = Signal()  # la finestra ha la sua dimensione vera: si può chiedere la vista iniziale
     cursor_read = Signal(object)  # CommandResult di cursor.read, o None se il mouse esce dal cielo
+    layers_drawn = Signal()  # posizioni di un catalogo o celle di un MOC pronte (dettagli del pannello dei livelli)
 
     def __init__(self, submit: Callable[..., int], cache=None, renderer: SkyRenderer | None = None,
                  parent=None, passive: Callable[..., object] | None = None) -> None:
@@ -560,6 +704,7 @@ class SkyViewer(QWidget):
         self.tiles.bridge.done.connect(self._tile_done)
         self.tiles.bridge.cursor.connect(self._cursor_done)
         self.tiles.bridge.catalog.connect(self._catalog_done)
+        self.tiles.bridge.moc.connect(self._moc_done)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)  # Esc chiude la scheda della sorgente
         self.card_texts: Mapping[str, str] = DEFAULT_CARD_TEXTS  # tradotti dalla finestra principale (40)
         self.card = QLabel(self)
@@ -575,6 +720,15 @@ class SkyViewer(QWidget):
         self.catalog_cache: dict[tuple, CatalogPoints] = {}
         self._catalog_pending: set[tuple] = set()
         self.point_sets: tuple[PointSet, ...] = ()
+        self.layers: tuple = ()  # livelli dello stato, nell'ordine di disegno (il primo in basso)
+        self.moc_layers: tuple = ()
+        self.moc_cache: dict[tuple, MocShapes] = {}
+        self._moc_pending: set[tuple] = set()
+        self.moc_errors: dict[str, ResultMessage] = {}  # livello → perché il MOC non si disegna
+        self.polygon_sets: tuple[PolygonSet, ...] = ()
+        self.image_layer: str | None = None  # livello dell'immagine il cui piano è nel renderer
+        self.image_canvas: np.ndarray | None = None
+        self._image_next: np.ndarray | None = None  # piano dell'immagine per la geometria in arrivo (con lo sfondo)
         self._trees: dict[int, object] = {}
         self._press: QPointF | None = None
         self._dragging = False
@@ -585,7 +739,7 @@ class SkyViewer(QWidget):
         self.view = None  # ViewState corrente
         self.service = None
         self.survey_layer: str | None = None
-        self.image_key: tuple | None = None  # (livello, piano di colori, visibilità, opacità) dell'immagine disegnata
+        self.image_key: tuple | None = None  # (livello, piano di colori) dell'immagine disegnata
         self.overlay_texts: Mapping[str, str] = DEFAULT_OVERLAY_TEXTS  # tradotti dalla finestra principale (40)
         self.overlay: Overlay | None = None
         self.display: Mapping | None = None  # limiti, palette e funzione di trasferimento del survey FITS (livello)
@@ -694,26 +848,44 @@ class SkyViewer(QWidget):
         view = state.view
         base = state.find(view.base_layer) if view.base_layer else None
         image = base if base is not None and base.kind == "image" else None
-        layers = [] if image is not None else state.of_kind("hips")  # con un'immagine aperta lo sfondo non si disegna
+        # Lo sfondo si disegna anche sotto un'immagine base (sprint 4f), non sulla griglia di pixel (niente cielo).
+        layers = state.of_kind("hips") if view.geometry is None or self._has_sky(view.geometry) else ()
         layer = layers[-1] if layers else None
+        if view.geometry is not None and not self._has_sky(view.geometry) and state.of_kind("hips"):
+            self._report_once(("", "VIEW_NO_WCS", "hips"), ResultMessage(
+                "VIEW_NO_WCS", "immagine senza WCS valido: lo sfondo HiPS non si disegna sotto la griglia di pixel"))
         self.view = view
+        self.layers = state.layers
         self.catalog_layers = state.of_kind("catalog")
+        self.moc_layers = state.of_kind("moc")
         self.base_image = image
         changed_geometry = view.geometry is not self.geometry
         changed_survey = (layer.id if layer else None) != self.survey_layer
-        image_key = None if image is None else (image.id, id(image.derived.get("plane")), image.visible, image.opacity)
+        image_key = None if image is None else (image.id, id(image.derived.get("plane")))
         changed_image = image_key != self.image_key
         if not changed_geometry:
             self.show_overlay()  # griglia, indicatore o barra cambiati sulla stessa geometria (view.set_grid, ...)
-        if not (changed_geometry or changed_survey or changed_image):
+        if not (changed_geometry or changed_survey):
+            if changed_image:  # nuovi colori (image.set_display) sulla stessa geometria
+                self.image_key = image_key
+                self._image_next = None if image is None or self.geometry is None else sample_image(self.geometry, image)
+                self._show_image(image.id if image is not None else None)
             self.update_catalogs()
+            self.update_mocs()
+            self.refresh_layers()
             return
         self.geometry = view.geometry
         self.update_catalogs()
+        self.update_mocs()
+        if changed_survey and self.survey_layer is not None:
+            self.renderer.drop_texture(self.survey_layer)
+            self.canvas = None
         self.service = layer.data if layer else None
         self.display = layer.display if layer else None
         self.survey_layer = layer.id if layer else None
-        previous_image, self.image_key = self.image_key, image_key
+        self.image_key = image_key
+        self._image_next = None if image is None or self.geometry is None else sample_image(self.geometry, image)
+        self.refresh_layers()
         if changed_geometry and self._submitted is None:
             # Vista cambiata da altro che dal gesto in corso (Vai a, comando dell'assistente, cronologia): lo
             # spostamento o lo zoom ancora da registrare erano relativi alla geometria vecchia e non valgono più
@@ -742,15 +914,38 @@ class SkyViewer(QWidget):
                 self._pending.pop(gen, None)
             self.screen_geometry = self.geometry
             self.refresh_points()
-            if self.geometry is not None and image is not None:
-                self.canvas = sample_image(self.geometry, image)
-                self._upload()
-            elif previous_image is not None and self.geometry is not None:
-                self.canvas = np.zeros((*self.geometry.shape, 4), dtype=np.uint8)  # immagine tolta: vista vuota
-                self._upload()
+            self.refresh_polygons()
+            self._show_image(image.id if image is not None else None)
             self.show_overlay()
             return
         self.tiles.sample(gen, self.service, self.geometry, layer.derived.get("coverage"))
+
+    def _show_image(self, layer_id: str | None) -> None:
+        """Piano dell'immagine base per la geometria dello schermo (texture con chiave = livello); immagine tolta o
+        cambiata → il piano vecchio si toglie."""
+        if self.image_layer is not None and self.image_layer != layer_id:
+            self.renderer.drop_texture(self.image_layer)
+        self.image_layer, self.image_canvas = layer_id, self._image_next
+        if layer_id is not None and self.image_canvas is not None:
+            self.renderer.upload_texture(np.ascontiguousarray(self.image_canvas[::-1]), layer_id)
+        self.refresh_layers()
+
+    def refresh_layers(self) -> None:
+        """Ordine di disegno dal basso, come nello stato, con l'opacità dei piani (41 §3.5, sprint 4f): sfondo e
+        immagine come texture, MOC come poligoni, cataloghi come simboli; i livelli nascosti non si disegnano."""
+        items = []
+        for layer in self.layers:
+            if not layer.visible:
+                continue
+            if layer.kind == "hips" and layer.id == self.survey_layer:
+                items.append(("texture", layer.id, float(layer.opacity)))
+            elif layer.kind == "image" and layer.id == self.image_layer:
+                items.append(("texture", layer.id, float(layer.opacity)))
+            elif layer.kind == "moc":
+                items.append(("polygons", layer.id, 1.0))
+            elif layer.kind == "catalog":
+                items.append(("points", layer.id, 1.0))
+        self.renderer.set_layers(tuple(items))
 
     def _settle_transform(self, gen: int, rows: int, cols: int) -> None:
         """La geometria della generazione ``gen`` (finestra ``rows`` × ``cols``) è pronta: si chiude la
@@ -784,8 +979,10 @@ class SkyViewer(QWidget):
         self._settle_transform(gen, rows, cols)
         self._upload()
         self.renderer.set_transform(self.k, self.tx, self.ty)
-        self.screen_geometry = self.geometry  # tile e simboli passano alla nuova finestra insieme
+        self.screen_geometry = self.geometry  # tile, immagine, MOC e simboli passano alla nuova finestra insieme
+        self._show_image(self.base_image.id if self.base_image is not None else None)
         self.refresh_points()
+        self.refresh_polygons()
         self.show_overlay()
         if "fits" in self.service.tile_formats[:1] and (self.display is None or self.display.get("vmin") is None):
             self._report("HIPS_DISPLAY_UNKNOWN", f"{self.service.hips_id}: limiti di colore del survey non noti, "
@@ -822,7 +1019,7 @@ class SkyViewer(QWidget):
 
     def _upload(self) -> None:
         # Riga 0 della finestra = sud (asse y del WCS verso nord): sullo schermo va in basso.
-        self.renderer.upload_texture(np.ascontiguousarray(self.canvas[::-1]))
+        self.renderer.upload_texture(np.ascontiguousarray(self.canvas[::-1]), self.survey_layer or "plane")
 
     def set_night(self, night: bool) -> None:
         self._night = bool(night)
@@ -861,6 +1058,7 @@ class SkyViewer(QWidget):
         for message in result.warnings:  # epoche diverse: una volta per livello e immagine (41 §3.8)
             self._report_once((key[0][0], message.code, key[0][4]), message)
         self.refresh_points()
+        self.layers_drawn.emit()
 
     def _report_once(self, key: tuple, message: ResultMessage) -> None:
         if key not in self._reported:
@@ -893,6 +1091,65 @@ class SkyViewer(QWidget):
         self._trees = {}
         self.renderer.upload_points(self.point_sets)
         self._place_card()
+
+    # --- MOC (41 §3.9, sprint 4f) ---------------------------------------------------------
+
+    def update_mocs(self) -> None:
+        """Chiede le celle mancanti dei MOC visibili sulla base corrente e aggiorna il disegno."""
+        g = self.geometry
+        if g is not None and self.pixel_grid:
+            if self.moc_layers:
+                self._report_once(("", "VIEW_NO_WCS", "moc"), ResultMessage(
+                    "VIEW_NO_WCS", "immagine senza WCS valido: i MOC non si sovrappongono alla griglia di pixel"))
+        elif g is not None:
+            keep = {base_key(g)} | ({base_key(self.screen_geometry)} if self._has_sky(self.screen_geometry) else set())
+            self.moc_cache = {k: v for k, v in self.moc_cache.items() if k[1] in keep}
+            for layer in self.moc_layers:
+                key = (moc_key(layer), base_key(g))
+                if layer.visible and key not in self.moc_cache and key not in self._moc_pending:
+                    self._moc_pending.add(key)
+                    self.tiles.moc(key, layer, g)
+        self.refresh_polygons()
+
+    def _moc_done(self, key: tuple, result) -> None:
+        self._moc_pending.discard(key)
+        if isinstance(result, ResultMessage):
+            self.moc_errors[key[0][0]] = result
+            self._report_once((key[0][0], result.code), result)
+        else:
+            self.moc_cache[key] = result
+            self.refresh_polygons()
+        self.layers_drawn.emit()
+
+    def shapes_for(self, layer) -> MocShapes | None:
+        """Celle disegnate del MOC sulla base dello schermo, se già calcolate."""
+        g = self.screen_geometry
+        if not self._has_sky(g):
+            return None
+        return self.moc_cache.get((moc_key(layer), base_key(g)))
+
+    def refresh_polygons(self) -> None:
+        """MOC nello spazio della finestra disegnata: solo ``base_to_window`` (41 §3.4); colori dallo stile del livello
+        (05) con ``fill`` × opacità per il riempimento e l'opacità per il perimetro."""
+        sets: list[PolygonSet] = []
+        g = self.screen_geometry
+        for layer in self.moc_layers if self._has_sky(g) else ():
+            shapes = self.shapes_for(layer)
+            if not layer.visible or shapes is None or not (len(shapes.triangles) or len(shapes.lines)):
+                continue
+
+            def window(xy: np.ndarray) -> np.ndarray:
+                wx, wy = g.base_to_window(xy[:, 0], xy[:, 1])
+                return np.column_stack([wx + 0.5, g.shape[0] - wy - 0.5]).astype(np.float32)
+
+            style = layer.style or {}
+            r, gg, b, _ = _hex_rgba(np.array([style.get("color", "#CC79A7")]))[0]
+            opacity = float(layer.opacity)
+            fill = float(style.get("fill", 0.25)) * opacity
+            sets.append(PolygonSet(layer.id, window(shapes.triangles), (float(r), float(gg), float(b), fill),
+                                   window(shapes.lines), (float(r), float(gg), float(b), opacity)))
+        self.polygon_sets = tuple(sets)
+        self.renderer.upload_polygons(self.polygon_sets)
 
     def source_at(self, at: QPointF) -> tuple[str, int] | None:
         """Simbolo disegnato più vicino al punto ``at`` (pixel logici) entro metà della sua dimensione o, se più
@@ -1194,3 +1451,239 @@ class SkyViewer(QWidget):
             return
         # Stesso centro; a fine gesto (300 ms) view.set_center con la nuova finestra (05 §3.2, parametro window).
         self.pan_by((new.width() - old.width()) / 2, (new.height() - old.height()) / 2)
+
+
+# --- pannello dei livelli (41 §3.5, A11 minimo; sprint 4f) ----------------------------------
+
+
+class _LayerList(QListWidget):
+    """Elenco con il trascinamento: il rilascio non sposta la riga, chiede ``layer.move`` (``dropped``); l'elenco si
+    ricostruisce dallo stato dopo il comando."""
+
+    dropped = Signal(int, int)  # riga trascinata, riga di arrivo (righe del pannello, 0 = in alto)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+
+    def dropEvent(self, event) -> None:  # noqa: N802 - nome di Qt
+        source = self.currentRow()
+        item = self.itemAt(event.position().toPoint())
+        indicator = self.dropIndicatorPosition()
+        if item is None or indicator == QAbstractItemView.DropIndicatorPosition.OnViewport:
+            index = self.count()
+        else:
+            index = self.row(item) + (1 if indicator == QAbstractItemView.DropIndicatorPosition.BelowItem else 0)
+        if index > source:
+            index -= 1  # posizione nell'elenco senza la riga trascinata
+        event.ignore()
+        if source >= 0 and index != source:
+            self.dropped.emit(source, index)
+
+
+class _LayerRow(QWidget):
+    """Una riga del pannello: visibilità, nome e tipo, dettagli, opacità, su/giù, rimozione."""
+
+    def __init__(self, layer_id: str, texts: Mapping[str, str], parent=None) -> None:
+        super().__init__(parent)
+        self.layer_id = layer_id
+        self.setObjectName("layerRow")
+        self.visible = QCheckBox(self)
+        self.visible.setObjectName("layerVisible")
+        self.visible.setToolTip(texts["visible"])
+        self.name = QLabel(self)
+        self.name.setObjectName("layerName")
+        self.name.setTextFormat(Qt.TextFormat.RichText)
+        self.details = QLabel(self)
+        self.details.setObjectName("layerDetails")
+        self.details.setWordWrap(True)
+        self.opacity = QSlider(Qt.Orientation.Horizontal, self)
+        self.opacity.setObjectName("layerOpacity")
+        self.opacity.setRange(0, 100)
+        self.opacity.setToolTip(texts["opacity"])
+        self.percent = QLabel(self)
+        self.percent.setObjectName("layerPercent")
+        self.percent.setMinimumWidth(36)
+        self.up, self.down, self.remove = (self._button(name, text, tip) for name, text, tip in (
+            ("layerUp", "▲", texts["up"]), ("layerDown", "▼", texts["down"]), ("layerRemove", "✕", texts["remove"])))
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.addWidget(self.visible)
+        top.addWidget(self.name, 1)
+        for button in (self.up, self.down, self.remove):
+            top.addWidget(button)
+        bottom = QHBoxLayout()
+        bottom.setContentsMargins(22, 0, 0, 0)
+        bottom.addWidget(self.opacity, 1)
+        bottom.addWidget(self.percent)
+        box = QVBoxLayout(self)
+        box.setContentsMargins(6, 4, 6, 4)
+        box.setSpacing(2)
+        box.addLayout(top)
+        details = QHBoxLayout()
+        details.setContentsMargins(22, 0, 0, 0)
+        details.addWidget(self.details)
+        box.addLayout(details)
+        box.addLayout(bottom)
+        self.opacity.valueChanged.connect(lambda v: self.percent.setText(f"{v} %"))
+
+    def _button(self, name: str, text: str, tip: str) -> QToolButton:
+        button = QToolButton(self)
+        button.setObjectName(name)
+        button.setText(text)
+        button.setToolTip(tip)
+        button.setAccessibleName(tip)
+        button.setAutoRaise(True)
+        return button
+
+
+class LayerPanel(QWidget):
+    """Pannello dei livelli (41 §3.5): in alto il livello disegnato sopra. Ogni azione è un comando del 05
+    (``requested_by`` = ``mouse``): ``layer.set_visible``, ``layer.set_opacity`` (al rilascio del cursore),
+    ``layer.move`` (su/giù e trascinamento), ``layer.remove``. I dettagli vengono dai moduli (corpo dal 19, epoche con
+    ``time_text``) e dal disegno del visualizzatore (righe disegnate, ordine del MOC)."""
+
+    def __init__(self, submit: Callable[..., int], viewer: SkyViewer | None = None, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("layerPanel")
+        self.submit = submit
+        self.viewer = viewer
+        self.texts: Mapping[str, str] = DEFAULT_PANEL_TEXTS  # tradotti dalla finestra principale (40)
+        self.list = _LayerList(self)
+        self.list.setObjectName("layerList")
+        self.list.dropped.connect(self.move_row)
+        box = QVBoxLayout(self)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.addWidget(self.list)
+        self.state = None
+        self.rows: dict[str, _LayerRow] = {}
+        self._order: tuple[str, ...] = ()
+        if viewer is not None:
+            viewer.layers_drawn.connect(self.refresh)
+
+    # --- stato -------------------------------------------------------------------------
+
+    def panel_order(self) -> tuple[str, ...]:
+        """Identificativi dall'alto (livello disegnato sopra) in basso."""
+        return tuple(layer.id for layer in reversed(self.state.layers)) if self.state is not None else ()
+
+    def show_state(self, state) -> None:
+        """Elenco dallo stato: si ricostruisce se cambiano livelli o ordine, altrimenti si aggiornano le righe."""
+        self.state = state
+        order = self.panel_order()
+        if order != self._order:
+            self._order = order
+            self.list.clear()
+            self.rows = {}
+            for layer_id in order:
+                row = _LayerRow(layer_id, self.texts)
+                row.visible.toggled.connect(lambda on, i=layer_id: self.set_visible(i, on))
+                row.opacity.sliderReleased.connect(lambda i=layer_id, r=row: self.set_opacity(i, r.opacity.value()))
+                row.opacity.valueChanged.connect(
+                    lambda v, i=layer_id, r=row: None if r.opacity.isSliderDown() or r.opacity.signalsBlocked()
+                    else self.set_opacity(i, v))
+                row.up.clicked.connect(lambda _=False, i=layer_id: self.step(i, -1))
+                row.down.clicked.connect(lambda _=False, i=layer_id: self.step(i, +1))
+                row.remove.clicked.connect(lambda _=False, i=layer_id: self.remove(i))
+                item = QListWidgetItem(self.list)
+                self.list.setItemWidget(item, row)
+                self.rows[layer_id] = row
+        self.refresh()
+
+    def refresh(self) -> None:
+        """Righe aggiornate dallo stato e dal disegno, senza nuovi comandi."""
+        if self.state is None:
+            return
+        last = len(self._order) - 1
+        for index, layer_id in enumerate(self._order):
+            layer = self.state.find(layer_id)
+            row = self.rows.get(layer_id)
+            if layer is None or row is None:
+                continue
+            row.visible.blockSignals(True)
+            row.visible.setChecked(layer.visible)
+            row.visible.blockSignals(False)
+            if not row.opacity.isSliderDown():
+                row.opacity.blockSignals(True)
+                row.opacity.setValue(round(layer.opacity * 100))
+                row.opacity.blockSignals(False)
+                row.percent.setText(f"{row.opacity.value()} %")
+            row.up.setEnabled(index > 0)
+            row.down.setEnabled(index < last)
+            kind = self.texts.get(layer.kind, layer.kind)
+            row.name.setText(f"<b>{html.escape(layer.name)}</b> · {html.escape(kind)}")
+            row.details.setText(self.details(layer))
+            item = self.list.item(index)
+            if item is not None:
+                item.setSizeHint(row.sizeHint())
+
+    def details(self, layer) -> str:
+        """Riga dei dettagli (41 §3.5): sorgente, corpo, epoca usata per il disegno, conteggi, forzatura."""
+        from astrotwo.core.planetary_data import body_of
+
+        t = self.texts
+        data = layer.data
+        parts: list[str] = []
+        if layer.kind == "hips":
+            parts.append(getattr(data, "title", None) or getattr(data, "hips_id", "") or layer.source)
+        elif layer.source:
+            parts.append(os.path.basename(layer.source) or layer.source)
+        retrieved = getattr(data, "retrieved_at", None) if layer.kind == "catalog" else None
+        if retrieved is not None:
+            parts.append(t["retrieved"].replace("%1", retrieved.strftime("%Y-%m-%dT%H:%M:%SZ")))
+        if layer.kind != "measure" and data is not None:
+            try:
+                parts.append(t["body"].replace("%1", body_of(data)))
+            except Exception as exc:  # noqa: BLE001 - corpo non ricavabile: il codice del 19
+                parts.append(t["body_unknown"].replace("%1", str(getattr(exc, "code", type(exc).__name__))))
+        if layer.kind == "image":
+            epoch = None if data is None or data.wcs is None else data.wcs.image_epoch
+            parts.append(t["epoch"].replace("%1", time_text(epoch)) if epoch is not None else t["epoch_unknown"])
+        viewer = self.viewer
+        if layer.kind == "catalog" and viewer is not None:
+            points = viewer.points_for(layer)
+            if points is not None:
+                parts.append(t["drawn"].replace("%1", str(len(points.rows))).replace("%2", str(len(data.table))))
+                parts.append(t["propagated"].replace("%1", time_text(points.epoch) or "") if points.propagated
+                             else t["not_propagated"])
+        if layer.kind == "moc" and viewer is not None:
+            shapes = viewer.shapes_for(layer)
+            error = viewer.moc_errors.get(layer.id)
+            if shapes is not None:
+                key = "order" if shapes.order >= shapes.moc_order else "by_excess"
+                parts.append(t[key].replace("%1", str(shapes.order)).replace("%2", str(shapes.moc_order)))
+                parts.append(t["cells"].replace("%1", str(shapes.cells)))
+            elif error is not None:
+                parts.append(t["not_drawn"].replace("%1", error.code))
+        if layer.force_body:
+            parts.append(t["forced"])
+        return html.escape(" · ".join(p for p in parts if p))
+
+    # --- azioni (comandi del 05) ---------------------------------------------------------
+
+    def set_visible(self, layer_id: str, visible: bool) -> int:
+        return self.submit("layer.set_visible", {"layer": layer_id, "visible": bool(visible)}, source="mouse")
+
+    def set_opacity(self, layer_id: str, percent: int) -> int | None:
+        layer = self.state.find(layer_id) if self.state is not None else None
+        value = percent / 100.0
+        if layer is not None and round(layer.opacity * 100) == percent:
+            return None  # stessa opacità: nessun comando
+        return self.submit("layer.set_opacity", {"layer": layer_id, "opacity": value}, source="mouse")
+
+    def step(self, layer_id: str, direction: int) -> int | None:
+        """Su (−1) o giù (+1) di una riga del pannello."""
+        row = self._order.index(layer_id)
+        return self.move_row(row, row + direction)
+
+    def move_row(self, source: int, target: int) -> int | None:
+        """Riga ``source`` del pannello alla riga ``target`` → ``layer.move`` (posizione nello stato: 0 = in basso)."""
+        n = len(self._order)
+        if not (0 <= source < n and 0 <= target < n) or source == target:
+            return None
+        return self.submit("layer.move", {"layer": self._order[source], "position": n - 1 - target}, source="mouse")
+
+    def remove(self, layer_id: str) -> int:
+        return self.submit("layer.remove", {"layer": layer_id}, source="mouse")

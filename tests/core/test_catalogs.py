@@ -1372,3 +1372,47 @@ def test_coosys_refframe_terms(tmp_path):
     path.write_text(REGION_DATA.format(coosys='<COOSYS ID="c" system="GALACTIC"/>', status="OK", rows="")
                     .replace("pos.eq.ra", "pos.galactic.lon").replace("pos.eq.dec", "pos.galactic.lat"), encoding="utf-8")
     assert read_table(path).positions.frame == "galactic"
+
+
+# =============================================================================
+# T35 — epoca del COOSYS conservata da confirm_position_columns (D41-6), risposta registrata di Gaia DR3
+
+def test_t35_coosys_epoch_kept_after_confirmation(service, cache, monkeypatch):
+    from astropy.time import Time
+
+    from astrotwo.core.catalogs import confirm_position_columns, display_positions, propagate
+    from tests.core import gaia_recorded as gaia
+
+    gaia.serve(service, monkeypatch)
+    cat = load_catalog(gaia.CATALOG, region=(gaia.center(), gaia.RADIUS), max_rows=100, cache=cache)
+    assert cat.rows == gaia.ROWS and (cat.positions.lon, cat.positions.lat) == ("RA_ICRS", "DE_ICRS")
+    assert (cat.positions.frame, cat.positions.epoch) == ("icrs", "J2016")  # COOSYS epoch="2016.0", giuliana
+    pm = {"pm_ra": "pmRA", "pm_dec": "pmDE", "pm_ra_includes_cosdec": True}
+    # stesse colonne e sistema: epoca conservata e dichiarata, usata dalla propagazione
+    same = confirm_position_columns(cat, "RA_ICRS", "DE_ICRS", "icrs")
+    assert same.positions.epoch == "J2016" and same.positions.source == "confirmed"
+    assert "EPOCH_FROM_METADATA" in dict(same.warnings) and any("J2016" in h for h in same.history)
+    target = Time("2009-06-18T00:00:00", scale="utc")
+    shown = display_positions(same, target, **pm)
+    moved = propagate(same, target, **pm)
+    assert "J2016" in moved.source_epoch and "J2016" in shown.source_epoch
+    lon = np.asarray(moved.table.table["RA_ICRS_prop"], dtype=float)
+    lat = np.asarray(moved.table.table["DE_ICRS_prop"], dtype=float)
+    ok = shown.drawable
+    assert ok.any() and np.allclose(shown.lon[ok], lon[ok], rtol=0, atol=1e-12)
+    assert np.allclose(shown.lat[ok], lat[ok], rtol=0, atol=1e-12)
+    # la propagazione parte davvero da J2016.0: spostamento uguale a quello di astropy ricalcolato nel test
+    from astropy.coordinates import SkyCoord as _Sky
+    row = int(np.flatnonzero(np.isfinite(np.asarray(cat.table["pmRA"], dtype=float)))[0])
+    t = cat.table
+    star = _Sky(ra=t["RA_ICRS"][row] * u.deg, dec=t["DE_ICRS"][row] * u.deg, pm_ra_cosdec=t["pmRA"][row] * u.mas / u.yr,
+                pm_dec=t["pmDE"][row] * u.mas / u.yr, obstime=Time("J2016.0"), frame="icrs")
+    back = star.apply_space_motion(new_obstime=target)
+    assert back.separation(_Sky(shown.lon[row] * u.deg, shown.lat[row] * u.deg, frame="icrs")) < 1 * u.mas
+    # sistema o colonne diversi: nessuna epoca conservata (mai assunta), la propagazione la chiede
+    for other in (confirm_position_columns(cat, "RA_ICRS", "DE_ICRS", "fk5", equinox="J2000"),
+                  confirm_position_columns(cat, "e_RA_ICRS", "DE_ICRS", "icrs", unit="deg")):
+        assert other.positions.epoch is None and "EPOCH_FROM_METADATA" not in dict(other.warnings)
+        with pytest.raises(CatalogsError) as err:
+            propagate(other, target, **pm)
+        assert err.value.code == "EPOCH_INVALID"
