@@ -563,7 +563,9 @@ def test_visual_guidelines(qtbot, window, fake_simbad):
     assert win.docks["layers"].header.title.font().capitalization() == QFont.Capitalization.AllUppercase
     assert win.history.table.verticalHeader().defaultSectionSize() == mw.ROW_HEIGHT
     assert win.messages.table.verticalHeader().defaultSectionSize() == mw.ROW_HEIGHT
-    assert "42" in win.docks["table"].widget().text()
+    table = win.docks["table"].widget()  # pannello del 42: senza cataloghi lo stato vuoto del 40
+    assert table is win.catalog_panel and table.stack.currentWidget() is win.empty_states["table"]
+    assert "catalog" in win.empty_states["table"].text()
     # stati vuoti: spariscono alla prima riga senza cambiare le misure della vista
     size = win.view_window()
     assert win.history.empty.isVisibleTo(win.history) and win.messages.empty.isVisibleTo(win.messages)

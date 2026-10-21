@@ -140,8 +140,9 @@ def planetary_data_enabled() -> bool:
 
 def _require_enabled(what: str) -> None:
     if not _ENABLED:
-        raise PlanetaryDataError("PLANETARY_DATA_DISABLED", f"{what}: dati planetari disattivati; attivarli nelle "
-                                 "preferenze (opzione dei dati planetari, D19-5)")
+        # nessuna preferenza per accenderli nella v1: il testo non la cita (decisione del proprietario del 2026-10-21)
+        raise PlanetaryDataError("PLANETARY_DATA_DISABLED",
+                                 f"{what}: i dati planetari non sono disponibili in questa versione")
 
 
 # --------------------------------------------------------------------------

@@ -462,6 +462,18 @@ def test_xy_plot_and_record_view(tmp_path):
         record_view(cat, 6)
 
 
+def test_record_view_array_column(tmp_path):
+    """Colonna array con una maschera per elemento (VOTable ``arraysize``): mancante solo se lo sono tutti gli elementi
+    (correzione della parte 5 della v1: prima ``record_view`` andava in errore)."""
+    vec = MaskedColumn([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], name="vec",
+                       mask=[[False, False], [True, False], [True, True]])
+    cat = dataclasses.replace(search_table(tmp_path), table=Table([vec]))
+    rows = [record_view(cat, i)[0] for i in range(3)]
+    assert [r["missing"] for r in rows] == [False, False, True]
+    assert rows[0]["value"].tolist() == [1.0, 2.0] and rows[1]["value"].tolist() == [None, 4.0]
+    assert rows[2]["value"] is None
+
+
 def test_t29_skydist_and_function_table():
     ra1, dec1 = np.array([10.0, 200.0, 0.0]), np.array([20.0, -30.0, 89.9])
     expected = angular_separation(ra1 * u.deg, dec1 * u.deg, 10.0 * u.deg, 20.0 * u.deg).to_value(u.deg)

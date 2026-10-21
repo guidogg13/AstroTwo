@@ -134,6 +134,9 @@ def test_t9_option_disabled():
         with pytest.raises(PlanetaryDataError) as exc:
             call()
         assert exc.value.code == "PLANETARY_DATA_DISABLED"
+        # nessuna preferenza nella v1: il testo non la cita (decisione del proprietario del 2026-10-21)
+        assert exc.value.message.endswith("i dati planetari non sono disponibili in questa versione")
+        assert "preferenz" not in exc.value.message and "attivarli" not in exc.value.message
     # Funzioni celesti non toccate.
     sky = hips("equatorial", None, "cielo")
     assert body_of(sky) == CELESTIAL and body_of(celestial_moc()) == CELESTIAL

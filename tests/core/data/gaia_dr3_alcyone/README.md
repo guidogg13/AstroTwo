@@ -9,4 +9,6 @@ Usata da T35 del 13 e T34 del 41 (D41-6), senza rete.
   ICRS `epoch="2016.0"`), `region.xml` (11 righe nel cerchio).
 - **Crediti:** questi dati vengono dalla missione Gaia dell'ESA (https://www.cosmos.esa.int/gaia), elaborati dal
   Gaia Data Processing and Analysis Consortium (DPAC); il servizio è VizieR del CDS (Strasburgo, Francia).
-- **Condizioni d'uso per la ridistribuzione in un repository GPL:** da verificare.
+- **Condizioni d'uso:** questi file non sono coperti dalla GPL di AstroTwo; licenza CC BY-NC 3.0 IGO dei dati Gaia
+  e regole d'uso di VizieR, con i link ufficiali, in [`../README.md`](../README.md). Permesso esplicito di
+  ridistribuzione in un repository GPL: da verificare.

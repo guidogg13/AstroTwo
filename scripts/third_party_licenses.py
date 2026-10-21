@@ -208,6 +208,15 @@ EXTRA_COMPONENTS: tuple[Component, ...] = (
 )
 
 
+#: Dati di terze parti inclusi solo per i test (tests/core/data/README.md), con le condizioni d'uso delle fonti.
+TEST_DATA: tuple[tuple[str, str], ...] = (
+    ("tests/core/data/gaia_dr3_alcyone/ (Gaia DR3 da VizieR, CDS)",
+     "dati Gaia dell'ESA con licenza CC BY-NC 3.0 IGO (https://www.cosmos.esa.int/web/gaia-users/license); "
+     "regole d'uso di VizieR (https://cds.unistra.fr/vizier-org/licences_vizier.html) e condizioni generali del CDS "
+     "(https://cds.unistra.fr/legals/); permesso esplicito di ridistribuzione in un repository GPL: da verificare"),
+)
+
+
 def _roots() -> list[Requirement]:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     return [Requirement(text) for text in project["dependencies"]]
@@ -332,6 +341,12 @@ def render() -> str:
                   f"Licenza: {_license(distribution)}"]
         for filename, text in _license_files(distribution):
             lines += ["", f"--- {filename} ---", "", text.rstrip()]
+    lines += ["", "", "Dati di terze parti nei test (solo nel repository, non distribuiti nel .dmg)",
+              "==========================================================================", "",
+              "I file in tests/core/data/ NON sono coperti dalla GPL di AstroTwo ma dalle condizioni d'uso delle",
+              "loro fonti; testo completo, link ufficiali e attribuzioni in tests/core/data/README.md.", ""]
+    for name, terms in TEST_DATA:
+        lines.append(f"- {name}: {terms}")
     return "\n".join(lines) + "\n"
 
 

@@ -255,7 +255,7 @@ def test_t30_thousands_of_sources(qtbot, win, tmp_path):
     open_file(qtbot, win, "catalog.open_file", write_catalog(tmp_path / "c.xml", rows))
     drawn_rows = int(np.count_nonzero(np.isfinite(win.sky.geometry.sky_to_window(
         catalog_positions(load_table(str(tmp_path / "c.xml")))[0])[0])))
-    qtbot.waitUntil(lambda: win.sky.point_sets and not win.sky._catalog_pending, timeout=20000)
+    qtbot.waitUntil(lambda: bool(win.sky.point_sets) and not win.sky._catalog_pending, timeout=20000)
     total = time.perf_counter() - start
     points = win.sky.points_for(win.session.workspace.state.layer("L1"))
     assert len(points.rows) == drawn_rows == n

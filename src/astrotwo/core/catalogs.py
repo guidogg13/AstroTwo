@@ -1676,7 +1676,8 @@ def record_view(table: CatalogTable, index: int) -> list[dict[str, object]]:
     out = []
     for name in table.table.colnames:
         column = table.table[name]
-        missing = bool(np.asarray(getattr(column, "mask", np.zeros(len(column), dtype=bool)))[index])
+        # colonne array (una maschera per elemento): mancante solo se tutti gli elementi lo sono
+        missing = bool(np.all(np.asarray(getattr(column, "mask", np.zeros(len(column), dtype=bool)))[index]))
         out.append({"name": name, "value": None if missing else column[index], "unit": column.unit,
                     "unit_unrecognized": column.meta.get("unit_unrecognized"), "ucd": column.meta.get("ucd"),
                     "missing": missing})

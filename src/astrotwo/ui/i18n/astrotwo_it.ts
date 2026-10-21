@@ -169,10 +169,6 @@
         <translation>Ancora nessun catalogo</translation>
     </message>
     <message>
-        <source>Arrives with module 42: one tab for each catalog layer, column headers with units, sorting, and selection synchronised with the sky.</source>
-        <translation>Arriva con il modulo 42: una scheda per ogni livello di catalogo, intestazioni delle colonne con le unità, ordinamento e selezione sincronizzata con il cielo.</translation>
-    </message>
-    <message>
         <source>Commands</source>
         <translation>Comandi</translation>
     </message>
@@ -295,6 +291,66 @@
     <message>
         <source>Open a HiPS survey, an image, a catalog or a MOC: each layer appears here with visibility, order and opacity.</source>
         <translation>Apri un survey HiPS, un&apos;immagine, un catalogo o un MOC: ogni livello compare qui con visibilità, ordine e opacità.</translation>
+    </message>
+    <message>
+        <source>Open a catalog file or load a catalog region: its rows appear here, one tab for each catalog, with units, sorting and selection linked to the sky.</source>
+        <translation>Apri un file di catalogo o carica un catalogo in una regione: le righe compaiono qui, una scheda per catalogo, con unità, ordinamento e selezione collegata al cielo.</translation>
+    </message>
+    <message>
+        <source>missing value</source>
+        <translation>valore mancante</translation>
+    </message>
+    <message>
+        <source>%1 rows</source>
+        <translation>%1 righe</translation>
+    </message>
+    <message>
+        <source>sorted by %1 (%2)</source>
+        <translation>ordinata per %1 (%2)</translation>
+    </message>
+    <message>
+        <source>ascending</source>
+        <translation>crescente</translation>
+    </message>
+    <message>
+        <source>descending</source>
+        <translation>decrescente</translation>
+    </message>
+    <message>
+        <source>table order</source>
+        <translation>ordine della tabella</translation>
+    </message>
+    <message>
+        <source>UCD: %1</source>
+        <translation>UCD: %1</translation>
+    </message>
+    <message>
+        <source>Select one row to see the full record.</source>
+        <translation>Seleziona una riga per vedere il record completo.</translation>
+    </message>
+    <message>
+        <source>%1 rows selected.</source>
+        <translation>%1 righe selezionate.</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation>Campo</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation>Valore</translation>
+    </message>
+    <message>
+        <source>Unit</source>
+        <translation>Unità</translation>
+    </message>
+    <message>
+        <source>UCD</source>
+        <translation>UCD</translation>
+    </message>
+    <message>
+        <source>unit not recognised: %1</source>
+        <translation>unità non riconosciuta: %1</translation>
     </message>
     <message>
         <source>image</source>

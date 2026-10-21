@@ -1474,9 +1474,10 @@ class MainWindow(QMainWindow):
                 "The assistant is not available: its panel (module 44) is not written yet. "
                 "The rest of AstroTwo works normally.")),
             "table": EmptyState("table-2", self.tr("No catalog yet"), self.tr(
-                "Arrives with module 42: one tab for each catalog layer, column headers with units, sorting, "
-                "and selection synchronised with the sky.")),
+                "Open a catalog file or load a catalog region: its rows appear here, one tab for each catalog, "
+                "with units, sorting and selection linked to the sky.")),
         }
+        self.catalog_panel = self._build_catalog_panel()
         self.layer_panel = self._build_layer_panel()
         self.layer_stack = QStackedWidget()
         self.layer_stack.addWidget(self.empty_states["layers"])
@@ -1486,7 +1487,7 @@ class MainWindow(QMainWindow):
              Qt.DockWidgetArea.LeftDockWidgetArea),
             ("assistant", self.tr("Assistant"), self._panel(self.empty_states["assistant"]),
              Qt.DockWidgetArea.RightDockWidgetArea),
-            ("table", self.tr("Table"), self._panel(self.empty_states["table"]), Qt.DockWidgetArea.BottomDockWidgetArea),
+            ("table", self.tr("Table"), self._panel(self.catalog_panel), Qt.DockWidgetArea.BottomDockWidgetArea),
             ("commands", self.tr("Commands"), self.history, Qt.DockWidgetArea.BottomDockWidgetArea),
             ("messages", self.tr("Messages"), self.messages, Qt.DockWidgetArea.BottomDockWidgetArea),
         )
@@ -1508,6 +1509,22 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self.docks["commands"], self.docks["messages"])
         self.docks["commands"].raise_()
         self._refresh_headers()
+
+    def _build_catalog_panel(self):
+        """Pannello della tabella del 42 (sprint 5a) con i testi tradotti; ogni azione è un comando del 05."""
+        from astrotwo.ui.catalog_panel import CatalogPanel
+
+        panel = CatalogPanel(self.submit, self.sky, self.empty_states["table"])
+        panel.texts = {
+            "missing": self.tr("missing value"), "not_drawn": self.tr("not drawn in this view"),
+            "row": self.tr("row %1"), "rows": self.tr("%1 rows"), "sorted": self.tr("sorted by %1 (%2)"),
+            "ascending": self.tr("ascending"), "descending": self.tr("descending"),
+            "table_order": self.tr("table order"), "retrieved": self.tr("retrieved %1"), "ucd": self.tr("UCD: %1"),
+            "record_empty": self.tr("Select one row to see the full record."),
+            "record_many": self.tr("%1 rows selected."), "field": self.tr("Field"), "value": self.tr("Value"),
+            "unit": self.tr("Unit"), "ucd_header": self.tr("UCD"),
+            "unit_unrecognized": self.tr("unit not recognised: %1")}
+        return panel
 
     def _build_layer_panel(self):
         """Pannello dei livelli del 41 (§3.5, sprint 4f) con i testi tradotti; ogni azione è un comando del 05."""
@@ -1806,6 +1823,8 @@ class MainWindow(QMainWindow):
         self.sky.command_finished(done.registered.name, result.status, result.values,
                                   self.session.workspace.state)
         self.show_layers(self.session.workspace.state)
+        self.catalog_panel.command_finished(done.registered.name, result.status, result.values,
+                                            self.session.workspace.state)
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
 
@@ -2039,6 +2058,8 @@ class MainWindow(QMainWindow):
             self.saved_path = done.path
             self.history.set_entries(self.session.history.entries)
             self.sky.show_state(self.session.workspace.state)
+            self.show_layers(self.session.workspace.state)
+            self.catalog_panel.show_state(self.session.workspace.state)
         for w in report.warnings:
             self.messages.add(None, w, error=False)
         if report.status == "stopped" and report.stop is not None:

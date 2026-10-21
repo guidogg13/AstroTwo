@@ -625,7 +625,9 @@ suo VOTable.
   per istogramma (bin obbligatori) e grafico x-y (H8, P4): il calcolo
   numerico è del modulo, il disegno della UI.
 - **`record_view(table, index)`** (P4) — tutti i valori di un record con
-  unità e UCD.
+  unità e UCD; per una colonna array (una maschera per elemento) il valore
+  è "mancante" solo se lo sono tutti gli elementi (correzione del
+  2026-10-21).
 - **`time_filter(table, start, end, *, column, time_format=None,
   scale=None)`** (H3, P5) — selezione per epoca osservativa (D13-16);
   restituisce maschera, formato, scala, fonte e mancanti esclusi.
@@ -984,3 +986,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-14 | Claude Code | **`display_positions` aggiunta** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 (regola: D10-2 in un passo, epoca dell'immagine se nota altrimenti J2000 o epoca dell'utente, fonte dichiarata, calcolo di `propagate`, posizioni, righe disegnabili, conteggi per modo e spostamento), §7 (firma e `DisplayPositions`, nessuna dipendenza dall'11), §10 (epoca dell'immagine assente; tipo non riconosciuto → `EPOCH_INVALID`), §12 (T34). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica): D17-3 rimanda alla sessione di `05-comandi-sessione.md` invece che al `24` (§3, §13); `05` e funzioni usate dal `41` in "Usato da" (§5). Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **D41-6 decisa dal proprietario (autorizzazione esplicita a modificare il file approvato):** `confirm_position_columns` conserva epoca ed equinozio dei metadati (`COOSYS`, `utype` MANGO, ECSV) quando colonne e sistema confermati sono gli stessi, con l'avviso `EPOCH_FROM_METADATA`; altrimenti nessuna epoca (mai assunta). `source_epoch` annotato come possibile aggiunta futura. Nuovo T35 con la risposta registrata di Gaia DR3. Stato `approvato` invariato. |
+| 2026-10-21 | Claude Code | **Correzione di `record_view` (parte 5 della v1, pannello della tabella del 42):** con una colonna array (VOTable `arraysize`, maschera per elemento) `record_view` andava in errore ("truth value of an array…") e con lui `catalog.select`; ora una cella array è mancante solo se lo sono tutti i suoi elementi, gli elementi mancanti restano mascherati nel valore. Test `test_record_view_array_column`. Stato `approvato` invariato. |

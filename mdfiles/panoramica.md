@@ -18,6 +18,26 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-21, parte 5, sprint 5a della v1 (42: pannello
+  Tabella):** il pannello in basso mostra **una scheda per livello di
+  catalogo** con la tabella virtuale in sola lettura (nessuna copia: 1 milione
+  di righe aperto in 0,3 ms, ordinamento in 114 ms, T6); posizioni scritte con
+  `format_coordinates` del 10 nel frame della colonna e nello stile di
+  "Coordinates shown", magnitudini a 3 decimali, altre colonne col formato
+  dichiarato o la forma più breve, valore pieno nel suggerimento e nella copia;
+  **ordinamento** con `table.sort` (clic sull'intestazione), **selezione nei due
+  versi** con `catalog.select` (tabella → cielo e cielo → tabella, riga portata
+  in vista), **record completo** da `record_view` del 13 accanto alla tabella,
+  righe non disegnate marcate "◌". **Decisioni del proprietario del
+  2026-10-21:** filtro con la grammatica `search` fuori dalla v1 (come la 42);
+  testo di `PLANETARY_DATA_DISABLED` onesto ("i dati planetari non sono
+  disponibili in questa versione", solo italiano per D40-1). Scelte minori di
+  presentazione del 42 da confermare (42 §13). Corretto un difetto del 13
+  (`record_view` con colonne array). Dati di test di terze parti: README in
+  `tests/core/data/` (non coperti dalla GPL: Gaia CC BY-NC 3.0 IGO, regole di
+  VizieR e del CDS; permesso esplicito di ridistribuzione da verificare) e
+  sezione in `THIRD_PARTY_LICENSES`. Resta lo **sprint 5b** (dialoghi delle
+  colonne di posizione e di moto proprio, T7). Test: **726 di default** (T6 `perf` a parte), di rete non eseguiti (`--no-network`). Decisioni aperte: **14**.
 - **Stato al 2026-10-21, parte 4, sprint 4f della v1 (41: MOC, livelli,
   corpi diversi):** un MOC (File → Open MOC…) si disegna sulla GPU come
   triangoli trasparenti e perimetro (celle di `healpix_grid` del 16, pixel della
@@ -641,7 +661,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | **Interfaccia** | | | |
 | `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1); **codice scritto il 2026-10-17** (`ui/main_window.py`, parte 3 della v1) | — | approvato |
 | `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | approvato |
-| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record) | — | approvato |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record); **sprint 5a scritto il 2026-10-21** (`ui/catalog_panel.py`), 5b (dialoghi delle colonne) da fare | — | approvato |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
 | `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso | — | approvato |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
@@ -785,6 +805,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `httpx2` | Accettato come trasporto degli SDK `anthropic` e `openai` dopo la verifica dell'origine (Pydantic, non `encode/httpx`); versioni bloccate nel `uv.lock`, aggiornamento solo esplicito con nuovo controllo delle impronte | 2026-10-17 | decisione del proprietario, `01` §6, `30` §13 | |
 | Profili predefiniti dei provider IA | Anthropic, OpenAI, Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, Ollama, LM Studio; indirizzi dalla documentazione ufficiale con la fonte; stato della chiamata di strumenti `verified`/`documented`/`unverified`, marcato nel 44; nessun modello fisso; una chiave per profilo | 2026-10-17 | decisione del proprietario, `30` §3.1.1, `31` §3.1, `44` §3.6 | |
 | D04 | Cache da più thread e processi: orfani eliminati solo se più vecchi di 10 minuti (configurabile, nel log), pulizia una volta per processo alla prima apertura | 2026-10-16 | decisione del proprietario, `04` §3 | dalla verifica fallita del 05 §3.2 |
+| Filtro della tabella (42) nella v1 | Fuori dalla v1, come scritto nella 42 §3.1 (D6/D8 dopo la v1) | 2026-10-21 | decisione del proprietario, `42` §13 | richiesta della parte 5 |
+| Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
 
 ## 6. Decisioni aperte
 
@@ -889,7 +911,9 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
    2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
-   4h PNG e prestazioni. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
+   4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
+   il 2026-10-21**; prossimo: sprint 5b (dialoghi delle colonne di posizione e di moto proprio, T7) e conferma delle
+   scelte minori di presentazione del 42 §13. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -992,3 +1016,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-20 | Claude Code | **Parte 4, sprint 4d della v1 (41):** immagine FITS locale come base della vista (inquadratura intera, colori di `set_display`, valore originale con unità, pixel FITS, frame ed epoca dall'intestazione), griglia di pixel con `WCS_INVALID` senza WCS valido; `view.set_overlays` nell'elenco del 32; avvisi doppi di `hips.set_survey` eliminati; nuova D41-5 (Gruppo 3, aperte 14); `05`, `32`, `41` modificati nel registro, restano `approvato`. |
 | 2026-10-21 | Claude Code | **Parte 4, sprint 4e della v1 (41):** cataloghi disegnati come simboli sulla GPU, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi di epoche diverse; stile iniziale nel comando di caricamento e scheda della sorgente in `catalog.select` (05); decisioni del proprietario del 2026-10-21 (scheda sul cielo, stile nel comando, Okabe e Ito + sei forme + 8 px, nome da UCD e posizione della tabella); D41-5 rinviata; epoca della barra in ISO 8601 con la scala (DC1); nuova D41-6. Test 704 di default e 3 `gl` (piattaforma `cocoa`). |
 | 2026-10-21 | Claude Code | **Parte 4, sprint 4f della v1 (41):** MOC sulla GPU (riempimento e perimetro, ordine per eccesso dichiarato), pannello dei livelli (visibilità, opacità, ordine, rimozione come comandi del 05), sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`. Decisioni del proprietario del 2026-10-21: **D41-6 decisa** (13), stile dei MOC in `moc.open` (05), perimetro `HealpixGrid.boundary` (16), ordine dei controlli di `check_overlay` (19), MOC di un altro corpo forzato non disegnato; 05, 13, 16, 19, 41 modificati nel registro, restano `approvato`. Esempio `examples/moc_esempi.py`. Aperte 14. |
+| 2026-10-21 | Claude Code | **Parte 5, sprint 5a della v1 (42):** pannello Tabella (`ui/catalog_panel.py`) con schede per catalogo, modello virtuale, valori di §3.2, ordinamento (`table.sort`), selezione sincronizzata (`catalog.select`), record (`record_view`), righe non disegnate marcate; test T1–T6 (T6 `perf`). Decisioni del proprietario del 2026-10-21: filtro `search` fuori dalla v1; testo di `PLANETARY_DATA_DISABLED` senza rinvio alle preferenze (19). Correzioni: `record_view` con colonne array (13), attesa instabile di T30 del 41 nei test. README dei dati di test di terze parti e sezione in `THIRD_PARTY_LICENSES`. 13, 19, 40, 42 modificati nel registro, restano `approvato`. Aperte 14. |

@@ -149,6 +149,11 @@ Nomi proposti, descrizione in parole. File Python
   copiare i dati (memoria aggiuntiva da misurare, con l'obiettivo P2 del
   `41`); tempo dell'ordinamento di 1 milione di righe da misurare e
   riportare (nessun obiettivo scritto finché non è misurato).
+  **Misura del 2026-10-21 (T6, sprint 5a, Mac del proprietario):** modello
+  di 1 000 000 di righe aperto in 0,3 ms senza copia dei dati (22,9 MiB di
+  dati, 7,7 MiB di memoria aggiuntiva al picco: l'ordine mostrato e i testi
+  delle righe visibili); ordinamento di una colonna `float64` con l'1 % di
+  mancanti in 114 ms.
 
 ## 10. Casi limite ed errori
 
@@ -194,6 +199,30 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   ordinamento nel 13 (modifica da autorizzare); (3) selezione e ordinamento
   registrati come comandi di classe `session` (rieseguiti alla
   riapertura).
+- **Filtro con la grammatica `search` del 13: resta fuori dalla v1**
+  (conferma del proprietario del 2026-10-21, richiesta della parte 5:
+  "Fuori, come la 42"); si riapre dopo la v1 con D6/D8.
+- **Scelte minori di presentazione dello sprint 5a (2026-10-21), DA
+  CONFERMARE** (non scritte sopra; nessun valore ne dipende):
+  (a) cella mancante = trattino "–" nel colore attenuato del tema, con
+  "valore mancante" nel suggerimento; NaN e infiniti non mascherati sono
+  scritti come sono ("nan"), perché per il 13 non sono mancanti
+  (`record_view`); (b) riga non disegnata = numero della riga della tabella
+  del 13 nell'intestazione verticale seguito da "◌", con "non disegnata in
+  questa vista" nel suggerimento e nel titolo del record (vale per la base
+  corrente del `41`, come la scheda della sorgente); (c) clic
+  sull'intestazione: salita, poi discesa sulla stessa colonna; nessun
+  ritorno all'ordine della tabella nella v1 (`table.sort` non lo prevede);
+  (d) un solo `catalog.select` 120 ms dopo l'ultima modifica della
+  selezione (clic, ⇧, ⌘, trascinamento), con le righe nell'ordine
+  mostrato; (e) riquadro del record a destra della tabella (divisore
+  spostabile), con colonne Campo, Valore (pieno), Unità, UCD; con più righe
+  dice quante sono selezionate; (f) copia (⌘C): riga d'intestazione
+  "nome [unità]" e una riga per ogni riga selezionata con i valori pieni
+  separati da tabulazioni; (g) intestazione delle colonne di posizione con
+  l'unità del testo del 10 ("h m s", "° ′ ″" o "deg" in decimale), quella
+  della colonna nel suggerimento; (h) riga sopra la tabella con livello,
+  sorgente, origine, data di recupero, numero di righe e ordinamento.
 - **Da verificare prima del codice:** testi delle licenze di PySide6/Qt
   (LGPL-3) e di pytest-qt (`40` §8).
 - **Linee guida visive:** valgono quelle del `40` §3.11 (cifre tabulari
@@ -208,3 +237,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** scelte minori confermate; rimando alle linee guida visive del `40` §3.11. Nessuna decisione dei Gruppi 1 e 2 aperta. |
 | 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (proposta della fase 1 sull'IA, autorizzazione a modificare la bozza come proposto): valori della tabella — colonne di posizione con `format_coordinates` del 10 nel frame della colonna, magnitudini (UCD `phot.mag`) a 3 decimali, valore pieno nel suggerimento e nella copia, altre colonne come sono; sostituisce la scelta minore 1 del 2026-10-15; dipendenza dal 10; test T5 aggiornato. |
 | 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-21 | Claude Code | **Codice dello sprint 5a** ("FASE: CODICE – interfaccia v1", parte 5): `src/astrotwo/ui/catalog_panel.py` (`CatalogPanel`, `CatalogTab`, `CatalogTableModel` virtuale con l'ordine di `shown_order` del 05), pannello Tabella del 40 al posto dello stato vuoto; valori di §3.2 (posizioni con `format_coordinates` del 10 nel frame della colonna e nello stile di "Coordinates shown", magnitudini a 3 decimali, formato dichiarato o rappresentazione più breve, valore pieno nel suggerimento e nella copia), ordinamento con `table.sort`, selezione nei due versi con `catalog.select`, record da `record_view` nel risultato del comando, righe non disegnate marcate. Test T1–T6 in `tests/ui/test_catalog_panel.py` (T6 `perf`, misura in §9), modalità notte e punto decimale in italiano. Filtro `search` fuori dalla v1 confermato dal proprietario; scelte minori di presentazione da confermare (§13). Trovato e corretto un difetto del 13 (`record_view` con colonne array). **Resta lo sprint 5b:** dialoghi delle colonne di posizione e di moto proprio (§3.5, `PositionColumnsDialog`, `ProperMotionColumnsDialog`, T7). Stato `approvato` invariato. |
