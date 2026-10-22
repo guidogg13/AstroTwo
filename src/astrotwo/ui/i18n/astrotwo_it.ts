@@ -409,6 +409,118 @@
         <translation>epoca %1</translation>
     </message>
     <message>
+        <source>Columns…</source>
+        <translation>Colonne…</translation>
+    </message>
+    <message>
+        <source>Choose the position and proper motion columns of this catalog</source>
+        <translation>Scegli le colonne di posizione e di moto proprio di questo catalogo</translation>
+    </message>
+    <message>
+        <source>Position columns</source>
+        <translation>Colonne di posizione</translation>
+    </message>
+    <message>
+        <source>Proper motion columns</source>
+        <translation>Colonne di moto proprio</translation>
+    </message>
+    <message>
+        <source>Choose the columns that hold the position of each source and say in which system they are.</source>
+        <translation>Scegli le colonne che contengono la posizione di ogni sorgente e indica in quale sistema sono.</translation>
+    </message>
+    <message>
+        <source>Hypothesis from the column names, to be confirmed: %1</source>
+        <translation>Ipotesi dai nomi delle colonne, da confermare: %1</translation>
+    </message>
+    <message>
+        <source>No column was recognised as a position: choose them.</source>
+        <translation>Nessuna colonna è stata riconosciuta come posizione: sceglile tu.</translation>
+    </message>
+    <message>
+        <source>Longitude column</source>
+        <translation>Colonna della longitudine</translation>
+    </message>
+    <message>
+        <source>Latitude column</source>
+        <translation>Colonna della latitudine</translation>
+    </message>
+    <message>
+        <source>Coordinate system</source>
+        <translation>Sistema di coordinate</translation>
+    </message>
+    <message>
+        <source>Equinox (e.g. J2000)</source>
+        <translation>Equinozio (es. J2000)</translation>
+    </message>
+    <message>
+        <source>Angular unit of the columns</source>
+        <translation>Unità angolare delle colonne</translation>
+    </message>
+    <message>
+        <source>A selected column has no unit: say which one it uses.</source>
+        <translation>Una colonna scelta non ha unità: indica quale usa.</translation>
+    </message>
+    <message>
+        <source>Choose…</source>
+        <translation>Scegli…</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Nessuna</translation>
+    </message>
+    <message>
+        <source>Use these columns</source>
+        <translation>Usa queste colonne</translation>
+    </message>
+    <message>
+        <source>Skip</source>
+        <translation>Salta</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annulla</translation>
+    </message>
+    <message>
+        <source>Optional. Choose the proper motion columns to draw the sources at the epoch of the view; without them the positions in the table are used, not propagated.</source>
+        <translation>Facoltativo. Scegli le colonne del moto proprio per disegnare le sorgenti all&apos;epoca della vista; senza, si usano le posizioni della tabella, non propagate.</translation>
+    </message>
+    <message>
+        <source>Position: %1 / %2, %3</source>
+        <translation>Posizione: %1 / %2, %3</translation>
+    </message>
+    <message>
+        <source>Proper motion in RA</source>
+        <translation>Moto proprio in AR</translation>
+    </message>
+    <message>
+        <source>Proper motion in Dec</source>
+        <translation>Moto proprio in Dec</translation>
+    </message>
+    <message>
+        <source>Parallax (optional)</source>
+        <translation>Parallasse (facoltativa)</translation>
+    </message>
+    <message>
+        <source>Radial velocity (optional)</source>
+        <translation>Velocità radiale (facoltativa)</translation>
+    </message>
+    <message>
+        <source>The proper motion in RA…</source>
+        <translation>Il moto proprio in AR…</translation>
+    </message>
+    <message>
+        <source>already includes cos δ (μα* = μα cos δ)</source>
+        <translation>include già cos δ (μα* = μα cos δ)</translation>
+    </message>
+    <message>
+        <source>does not include cos δ (μα)</source>
+        <translation>non include cos δ (μα)</translation>
+    </message>
+    <message>
+        <source>Choose both proper motion columns, or none: parallax and radial velocity are used only together with the proper motion.</source>
+        <translation>Scegli entrambe le colonne del moto proprio, oppure nessuna: parallasse e velocità radiale si usano solo insieme al moto proprio.</translation>
+    </message>
+    <message>
         <source>epoch unknown</source>
         <translation>epoca non nota</translation>
     </message>

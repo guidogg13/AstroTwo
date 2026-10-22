@@ -1,27 +1,19 @@
-# Dati di test di terze parti
+# Dati di test
 
-**Questi file NON sono coperti dalla licenza di AstroTwo (GPL-3.0-or-later).** Sono risposte registrate di servizi
-esterni, incluse senza modifiche solo per eseguire i test senza rete. Restano soggetti alle condizioni d'uso delle
-loro fonti, riassunte qui sotto con i link ufficiali (consultati il 2026-10-21). Non vanno nel `.dmg`.
+**Nessun dato di terze parti.** Dal 2026-10-22 (decisione del proprietario) i dati di test sono **sintetici**: stelle
+inventate, generate da [`scripts/make_synthetic_catalog.py`](../../../scripts/make_synthetic_catalog.py) con seme
+fisso, e coperti dalla licenza di AstroTwo (GPL-3.0-or-later). I precedenti file di Gaia DR3 (CC BY-NC 3.0 IGO, uso
+non commerciale) sono stati rimossi dal ramo attuale.
 
-Chi riusa questi file deve rispettare quelle condizioni, non la GPL.
+## `synthetic_vizier/` — risposta TAP sintetica
 
-## `gaia_dr3_alcyone/` — Gaia DR3 da VizieR (CDS)
+Usata da T35 del 13 e T34 del 41 (D41-6), senza rete, tramite `tests/core/synthetic_catalog.py`.
 
-Dettagli della registrazione in [`gaia_dr3_alcyone/README.md`](gaia_dr3_alcyone/README.md).
-
-- **Dati: missione Gaia dell'ESA.** Le condizioni ufficiali
-  (<https://www.cosmos.esa.int/web/gaia-users/license>) dicono che i dati Gaia sono distribuiti con la licenza
-  **CC BY-NC 3.0 IGO** (<https://creativecommons.org/licenses/by-nc/3.0/igo/>): attribuzione obbligatoria, **uso
-  commerciale non ammesso** senza le condizioni dell'ESA per gli archivi scientifici. Attribuzione: "This work has
-  made use of data from the European Space Agency (ESA) mission Gaia (https://www.cosmos.esa.int/gaia), processed by
-  the Gaia Data Processing and Analysis Consortium (DPAC)."
-- **Servizio: VizieR del CDS (Strasburgo).** Regole d'uso di VizieR
-  (<https://cds.unistra.fr/vizier-org/licences_vizier.html>): dati liberi in contesto scientifico, citando autori,
-  produttore ed editore del catalogo; l'uso commerciale segue le regole dell'origine dei dati (qui: ESA, sopra).
-  Condizioni generali del CDS (<https://cds.unistra.fr/legals/>): il riuso deve rispettare la licenza di ogni
-  insieme di dati e citare il servizio ("CDS/VizieR"). Ringraziamento richiesto: "This research has made use of the
-  VizieR catalogue access tool, CDS, Strasbourg, France (DOI: 10.26093/cds/vizier)."
-- **Ridistribuzione in un repository pubblico:** nessuna delle due fonti la vieta esplicitamente per l'uso
-  scientifico e non commerciale con attribuzione; un permesso scritto esplicito per la ridistribuzione dentro un
-  repository GPL **da verificare** (eventualmente chiedendolo all'ESA e al CDS).
+- **Struttura:** tre VOTable come quelle di un servizio TAP: `tap_schema.xml` (UCD delle colonne), `top0.xml`
+  (`SELECT TOP 0`, con il `COOSYS` ICRS `epoch="2016.0"`), `region.xml` (11 stelle inventate in un cerchio di 1′
+  attorno a RA 56.75°, Dec 24.1167°, con moto proprio, parallasse e magnitudini; una riga su quattro senza moto
+  proprio né parallasse).
+- **Colonne:** `DR3Name`, `RA_ICRS`, `DE_ICRS`, `Source`, `e_RA_ICRS`, `e_DE_ICRS`, `Plx`, `e_Plx`, `pmRA`, `e_pmRA`,
+  `pmDE`, `e_pmDE`, `Gmag`, `BPmag`, `RPmag`, con unità e UCD nello stesso stile del catalogo reale. Il nome del
+  catalogo `I/355/gaiadr3` serve solo a farlo riconoscere ai test; **i valori non sono quelli di Gaia**.
+- **Rigenerare:** `uv run python scripts/make_synthetic_catalog.py`.

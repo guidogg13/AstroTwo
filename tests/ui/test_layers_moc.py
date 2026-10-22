@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
 """Test del visualizzatore del cielo (41 §12), sprint 4f: MOC disegnati (T31, T3 per i MOC), sfondo sotto l'immagine
-(T32), pannello dei livelli (T33, T15), corpi diversi con la forzatura (T13), Gaia DR3 propagato con la risposta
+(T32), pannello dei livelli (T33, T15), corpi diversi con la forzatura (T13), catalogo sintetico J2016.0 propagato con la risposta
 registrata (T34), MOC e notte sulla GPU (T35, ``gl``).
 
 Piattaforma ``offscreen`` con il renderer in memoria; valori attesi ricalcolati con il 10 (``sky_to_window``) e il 16
@@ -22,7 +22,7 @@ from astrotwo.core.commands import MOC_COLORS, quantity_json, sky_json
 from astrotwo.core.images_fits import load_image
 from astrotwo.core.moc import CircleRegion, Moc, healpix_grid, moc_from_region, write_moc
 from astrotwo.ui.sky_viewer import moc_step
-from tests.core import gaia_recorded as gaia
+from tests.core import synthetic_catalog as gaia
 from tests.core.test_commands_image_base import header, write
 from tests.ui.test_catalog_sky import check_within_one_pixel, wait_points
 from tests.ui.test_main_window import make_window, names, settings_path, wait_idle  # noqa: F401 - fixture

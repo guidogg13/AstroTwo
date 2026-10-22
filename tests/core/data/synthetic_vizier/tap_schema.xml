@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VOTABLE version="1.3" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
+<RESOURCE type="results">
+<INFO name="QUERY_STATUS" value="OK"/>
+<INFO name="PROVIDER" value="AstroTwo tests">SYNTHETIC DATA: invented stars, not a real catalogue</INFO>
+<TABLE name="schema">
+<FIELD arraysize="*" datatype="char" name="column_name" ucd="Metadata">
+<DESCRIPTION>the column name</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="*" datatype="char" name="ucd" ucd="Metadata">
+<DESCRIPTION>the UCD</DESCRIPTION>
+</FIELD>
+<DATA>
+<TABLEDATA>
+  <TR>
+    <TD>"DR3Name"</TD>
+    <TD>meta.id</TD>
+  </TR>
+  <TR>
+    <TD>"RA_ICRS"</TD>
+    <TD>pos.eq.ra;meta.main</TD>
+  </TR>
+  <TR>
+    <TD>"DE_ICRS"</TD>
+    <TD>pos.eq.dec;meta.main</TD>
+  </TR>
+  <TR>
+    <TD>"Source"</TD>
+    <TD>meta.id;meta.main</TD>
+  </TR>
+  <TR>
+    <TD>"e_RA_ICRS"</TD>
+    <TD>stat.error;pos.eq.ra</TD>
+  </TR>
+  <TR>
+    <TD>"e_DE_ICRS"</TD>
+    <TD>stat.error;pos.eq.dec</TD>
+  </TR>
+  <TR>
+    <TD>"Plx"</TD>
+    <TD>pos.parallax.trig</TD>
+  </TR>
+  <TR>
+    <TD>"e_Plx"</TD>
+    <TD>stat.error;pos.parallax.trig</TD>
+  </TR>
+  <TR>
+    <TD>"pmRA"</TD>
+    <TD>pos.pm;pos.eq.ra</TD>
+  </TR>
+  <TR>
+    <TD>"e_pmRA"</TD>
+    <TD>stat.error;pos.pm;pos.eq.ra</TD>
+  </TR>
+  <TR>
+    <TD>"pmDE"</TD>
+    <TD>pos.pm;pos.eq.dec</TD>
+  </TR>
+  <TR>
+    <TD>"e_pmDE"</TD>
+    <TD>stat.error;pos.pm;pos.eq.dec</TD>
+  </TR>
+  <TR>
+    <TD>"Gmag"</TD>
+    <TD>phot.mag;em.opt</TD>
+  </TR>
+  <TR>
+    <TD>"BPmag"</TD>
+    <TD>phot.mag;em.opt.B</TD>
+  </TR>
+  <TR>
+    <TD>"RPmag"</TD>
+    <TD>phot.mag;em.opt.R</TD>
+  </TR>
+</TABLEDATA>
+</DATA>
+</TABLE>
+</RESOURCE>
+</VOTABLE>

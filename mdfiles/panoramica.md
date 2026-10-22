@@ -18,6 +18,26 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-22, parte 5, sprint 5b della v1 (42: dialoghi delle
+  colonne):** all'apertura di un catalogo (`catalog.open_file`,
+  `catalog.load_region`) si apre da solo il dialogo delle **colonne di
+  posizione** se il 13 non le ha determinate, e quello del **moto proprio**
+  se gli UCD indicano un moto in RA e in Dec; il pulsante **"Colonne…"** della
+  scheda li apre quando si vuole. Nulla è assunto: sistema, unità, equinozio
+  (FK4/FK5) e "include cos δ" li dichiara l'utente (ipotesi dai nomi marcate
+  "da confermare"; moto preselezionato solo dagli UCD); un solo
+  `catalog.set_columns` per apertura (T7). **Decisioni del proprietario del
+  2026-10-22:** confermate le 8 scelte di presentazione del 42 (5a, a–h);
+  **dati di test di Gaia (CC BY-NC 3.0 IGO) sostituiti da dati SINTETICI**
+  (stelle inventate, stessa struttura VOTable con `COOSYS` J2016.0, generate
+  da `scripts/make_synthetic_catalog.py`; file Gaia rimossi dal ramo attuale;
+  altri dati di terze parti nei test: nessun file; restano soltanto sei
+  numeri astrometrici della stella di Barnard scritti a mano in
+  `tests/core/test_coordinates_wcs.py` (valori di Gaia DR3, ricalcolati con
+  Astropy; da segnalare al proprietario) e un test di rete che interroga Gaia
+  dal vivo senza salvarne i dati). Scelte minori di 5b da confermare (42
+  §13). Test: **730 di default**, di rete non eseguiti (`--no-network`).
+  Decisioni aperte: **14**.
 - **Stato al 2026-10-21, parte 5, sprint 5a della v1 (42: pannello
   Tabella):** il pannello in basso mostra **una scheda per livello di
   catalogo** con la tabella virtuale in sola lettura (nessuna copia: 1 milione
@@ -661,7 +681,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | **Interfaccia** | | | |
 | `40-ui-finestra-principale.md` | Finestra, menu, barra di stato, preferenze essenziali, cronologia e messaggi, coda dei comandi (v1); **codice scritto il 2026-10-17** (`ui/main_window.py`, parte 3 della v1) | — | approvato |
 | `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | approvato |
-| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record); **sprint 5a scritto il 2026-10-21** (`ui/catalog_panel.py`), 5b (dialoghi delle colonne) da fare | — | approvato |
+| `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record); **sprint 5a scritto il 2026-10-21, 5b (dialoghi delle colonne) il 2026-10-22** (`ui/catalog_panel.py`) | — | approvato |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
 | `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso | — | approvato |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
@@ -912,8 +932,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
    2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
-   il 2026-10-21**; prossimo: sprint 5b (dialoghi delle colonne di posizione e di moto proprio, T7) e conferma delle
-   scelte minori di presentazione del 42 §13. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
+   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; da confermare le scelte minori di 5b (42 §13). Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -1017,3 +1036,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-21 | Claude Code | **Parte 4, sprint 4e della v1 (41):** cataloghi disegnati come simboli sulla GPU, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi di epoche diverse; stile iniziale nel comando di caricamento e scheda della sorgente in `catalog.select` (05); decisioni del proprietario del 2026-10-21 (scheda sul cielo, stile nel comando, Okabe e Ito + sei forme + 8 px, nome da UCD e posizione della tabella); D41-5 rinviata; epoca della barra in ISO 8601 con la scala (DC1); nuova D41-6. Test 704 di default e 3 `gl` (piattaforma `cocoa`). |
 | 2026-10-21 | Claude Code | **Parte 4, sprint 4f della v1 (41):** MOC sulla GPU (riempimento e perimetro, ordine per eccesso dichiarato), pannello dei livelli (visibilità, opacità, ordine, rimozione come comandi del 05), sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`. Decisioni del proprietario del 2026-10-21: **D41-6 decisa** (13), stile dei MOC in `moc.open` (05), perimetro `HealpixGrid.boundary` (16), ordine dei controlli di `check_overlay` (19), MOC di un altro corpo forzato non disegnato; 05, 13, 16, 19, 41 modificati nel registro, restano `approvato`. Esempio `examples/moc_esempi.py`. Aperte 14. |
 | 2026-10-21 | Claude Code | **Parte 5, sprint 5a della v1 (42):** pannello Tabella (`ui/catalog_panel.py`) con schede per catalogo, modello virtuale, valori di §3.2, ordinamento (`table.sort`), selezione sincronizzata (`catalog.select`), record (`record_view`), righe non disegnate marcate; test T1–T6 (T6 `perf`). Decisioni del proprietario del 2026-10-21: filtro `search` fuori dalla v1; testo di `PLANETARY_DATA_DISABLED` senza rinvio alle preferenze (19). Correzioni: `record_view` con colonne array (13), attesa instabile di T30 del 41 nei test. README dei dati di test di terze parti e sezione in `THIRD_PARTY_LICENSES`. 13, 19, 40, 42 modificati nel registro, restano `approvato`. Aperte 14. |
+| 2026-10-22 | Claude Code | **Parte 5, sprint 5b della v1 (42):** `PositionColumnsDialog` e `ProperMotionColumnsDialog` (`ui/catalog_panel.py`), aperti dopo `catalog.open_file`/`catalog.load_region` e dal pulsante "Colonne…"; un solo `catalog.set_columns`; test T7 e correlati (`tests/ui/test_column_dialogs.py`), traduzioni italiane. Decisioni del proprietario del 2026-10-22: confermate le 8 scelte di presentazione del 42; dati di test di Gaia sostituiti da dati sintetici (`scripts/make_synthetic_catalog.py`, `tests/core/data/synthetic_vizier/`, file Gaia rimossi), README dei dati e `THIRD_PARTY_LICENSES` aggiornati (nessun dato di terze parti nei test). 42 modificato nel registro, resta `approvato`. Aperte 14. |

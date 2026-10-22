@@ -1477,7 +1477,10 @@ class MainWindow(QMainWindow):
                 "Open a catalog file or load a catalog region: its rows appear here, one tab for each catalog, "
                 "with units, sorting and selection linked to the sky.")),
         }
+        self.auto_column_dialogs = True  # i test lo spengono; con il pulsante "Colonne…" i dialoghi si aprono comunque
+        self.column_dialog: QDialog | None = None
         self.catalog_panel = self._build_catalog_panel()
+        self.catalog_panel.columns_requested.connect(lambda layer_id: self.columns_dialogs(layer_id, manual=True))
         self.layer_panel = self._build_layer_panel()
         self.layer_stack = QStackedWidget()
         self.layer_stack.addWidget(self.empty_states["layers"])
@@ -1523,8 +1526,90 @@ class MainWindow(QMainWindow):
             "record_empty": self.tr("Select one row to see the full record."),
             "record_many": self.tr("%1 rows selected."), "field": self.tr("Field"), "value": self.tr("Value"),
             "unit": self.tr("Unit"), "ucd_header": self.tr("UCD"),
-            "unit_unrecognized": self.tr("unit not recognised: %1")}
+            "unit_unrecognized": self.tr("unit not recognised: %1"), "columns_button": self.tr("Columns…"),
+            "columns_tip": self.tr("Choose the position and proper motion columns of this catalog")}
         return panel
+
+    def _column_texts(self) -> dict[str, str]:
+        """Testi tradotti dei dialoghi delle colonne (42 §3.5)."""
+        return {
+            "position_title": self.tr("Position columns"), "motion_title": self.tr("Proper motion columns"),
+            "position_intro": self.tr("Choose the columns that hold the position of each source and say in which "
+                                      "system they are."),
+            "position_hint": self.tr("Hypothesis from the column names, to be confirmed: %1"),
+            "none_found": self.tr("No column was recognised as a position: choose them."),
+            "longitude": self.tr("Longitude column"), "latitude": self.tr("Latitude column"),
+            "system": self.tr("Coordinate system"), "equinox": self.tr("Equinox (e.g. J2000)"),
+            "unit": self.tr("Angular unit of the columns"),
+            "unit_needed": self.tr("A selected column has no unit: say which one it uses."),
+            "choose": self.tr("Choose…"), "none": self.tr("None"), "use": self.tr("Use these columns"),
+            "skip": self.tr("Skip"), "cancel": self.tr("Cancel"),
+            "motion_intro": self.tr("Optional. Choose the proper motion columns to draw the sources at the epoch of "
+                                    "the view; without them the positions in the table are used, not propagated."),
+            "position_is": self.tr("Position: %1 / %2, %3"), "epoch_is": self.tr("epoch %1"),
+            "pm_ra": self.tr("Proper motion in RA"), "pm_dec": self.tr("Proper motion in Dec"),
+            "parallax": self.tr("Parallax (optional)"), "radial_velocity": self.tr("Radial velocity (optional)"),
+            "cosdec": self.tr("The proper motion in RA…"),
+            "cosdec_yes": self.tr("already includes cos δ (μα* = μα cos δ)"),
+            "cosdec_no": self.tr("does not include cos δ (μα)"),
+            "motion_pair": self.tr("Choose both proper motion columns, or none: parallax and radial velocity are "
+                                   "used only together with the proper motion.")}
+
+    def columns_dialogs(self, layer_id: str, *, manual: bool = False) -> QDialog | None:
+        """Dialoghi di 42 §3.5 per un livello di catalogo: posizione se non è determinata (sempre se ``manual``),
+        poi moto proprio (se gli UCD indicano un moto, sempre se ``manual``). Tutto finisce in un solo
+        ``catalog.set_columns``; chiudere il dialogo di posizione non registra nulla. Restituisce il primo dialogo."""
+        from astrotwo.ui.catalog_panel import PositionColumnsDialog, ProperMotionColumnsDialog, motion_candidates
+
+        state = self.session.workspace.state
+        try:
+            layer = state.layer(layer_id)
+        except Exception:
+            return None
+        table, texts = layer.data, self._column_texts()
+        known = table.positions
+        candidates = motion_candidates(table.table)
+        need_position = manual or known is None or known.frame is None
+        want_motion = manual or bool(candidates["pm_ra"] and candidates["pm_dec"])
+        if not need_position and not want_motion:
+            return None
+
+        def submit(position: Mapping, motion: Mapping) -> None:
+            params = {"layer": layer_id, **position, **motion}
+            self.submit("catalog.set_columns", {k: v for k, v in params.items() if v is not None},
+                        source="mouse")
+
+        def motion_dialog(position: Mapping | None) -> QDialog:
+            chosen = position or {"lon": known.lon, "lat": known.lat, "frame": known.frame, "equinox": known.equinox}
+            frame = chosen["frame"] + (f" {chosen['equinox']}" if chosen.get("equinox") else "")
+            text = texts["position_is"].replace("%1", chosen["lon"]).replace("%2", chosen["lat"]).replace("%3", frame)
+            if known is not None and known.epoch and position is None:
+                text += ", " + texts["epoch_is"].replace("%1", known.epoch)
+            dialog = ProperMotionColumnsDialog(table, text, layer.columns, texts, self)
+            dialog.accepted.connect(lambda: submit(chosen, dialog.choice()))
+            if position is not None:  # "Salta" dopo la scelta delle posizioni: confermano comunque le posizioni
+                dialog.rejected.connect(lambda: submit(chosen, {}))
+            self.column_dialog = dialog
+            dialog.open()
+            return dialog
+
+        if not need_position:
+            return motion_dialog(None)
+        from astrotwo.core.catalogs import suggest_position_columns
+
+        dialog = PositionColumnsDialog(table, suggest_position_columns(table) if known is None else (), texts, self)
+
+        def accepted() -> None:
+            chosen = dialog.choice()
+            if want_motion:
+                motion_dialog(chosen)
+            else:
+                submit(chosen, {})
+
+        dialog.accepted.connect(accepted)
+        self.column_dialog = dialog
+        dialog.open()
+        return dialog
 
     def _build_layer_panel(self):
         """Pannello dei livelli del 41 (§3.5, sprint 4f) con i testi tradotti; ogni azione è un comando del 05."""
@@ -1825,6 +1910,9 @@ class MainWindow(QMainWindow):
         self.show_layers(self.session.workspace.state)
         self.catalog_panel.command_finished(done.registered.name, result.status, result.values,
                                             self.session.workspace.state)
+        if (self.auto_column_dialogs and result.status == "ok"
+                and done.registered.name in ("catalog.open_file", "catalog.load_region")):
+            self.columns_dialogs(result.values["layer"])
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
 

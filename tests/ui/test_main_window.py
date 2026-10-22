@@ -39,6 +39,7 @@ def make_window(qtbot, settings_path, cache, **kw):
     win.confirm = lambda title, text: True
     win.modals = []
     win.show_modal = lambda title, text: win.modals.append((title, text))
+    win.auto_column_dialogs = False  # i dialoghi delle colonne (42 §3.5) sono provati in test_column_dialogs.py
     qtbot.addWidget(win)
     win.resize(1000, 700)
     win.show()

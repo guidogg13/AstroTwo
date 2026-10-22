@@ -11,7 +11,11 @@ comando del 05 (``table.sort``, ``catalog.select``, ``requested_by`` = ``mouse``
 non cambia mai (D13-5). Il modello è virtuale (``QAbstractTableModel``): le righe si leggono solo quando sono
 visibili, senza copie.
 
-I dialoghi delle colonne di posizione e di moto proprio (42 §3.5) arrivano con lo sprint 5b.
+Sprint 5b: i dialoghi delle colonne di posizione e di moto proprio (42 §3.5, ``PositionColumnsDialog`` e
+``ProperMotionColumnsDialog``). Scelgono soltanto i nomi delle colonne, il sistema e le unità dichiarate: la conferma è
+``catalog.set_columns`` del 05 (che chiama ``confirm_position_columns`` del 13) e nulla viene assunto (né dai nomi, né
+con cos δ, né l'unità, né l'equinozio). I suggerimenti dai nomi sono ipotesi dichiarate come tali; il moto proprio
+è preselezionato solo dagli UCD, e solo se univoco.
 """
 
 from __future__ import annotations
@@ -21,10 +25,13 @@ from collections.abc import Callable, Mapping
 import astropy.units as u
 import numpy as np
 from astropy.table.pprint import get_auto_format_func
-from PySide6.QtCore import QAbstractTableModel, QItemSelection, QItemSelectionModel, QModelIndex, Qt, QTimer
+from PySide6.QtCore import (QAbstractTableModel, QItemSelection, QItemSelectionModel, QModelIndex, Qt, QTimer,
+                            Signal)
 from PySide6.QtGui import QFont, QGuiApplication, QKeySequence, QPalette
-from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QSplitter, QStackedWidget,
-                               QTableView, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPushButton, QRadioButton, QSplitter,
+                               QStackedWidget, QTableView, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
+                               QWidget)
 
 from astrotwo.core.commands import shown_order
 
@@ -35,8 +42,32 @@ DEFAULT_TEXTS = {
     "table_order": "table order", "retrieved": "retrieved %1", "ucd": "UCD: %1",
     "record_empty": "Select one row to see the full record.", "record_many": "%1 rows selected.",
     "field": "Field", "value": "Value", "unit": "Unit", "ucd_header": "UCD",
-    "unit_unrecognized": "unit not recognised: %1",
+    "unit_unrecognized": "unit not recognised: %1", "columns_button": "Columns…",
+    "columns_tip": "Choose the position and proper motion columns of this catalog",
 }
+
+#: Testi dei dialoghi delle colonne (inglese); la finestra principale passa quelli tradotti con ``tr()``.
+DEFAULT_COLUMN_TEXTS = {
+    "position_title": "Position columns", "motion_title": "Proper motion columns",
+    "position_intro": "Choose the columns that hold the position of each source and say in which system they are.",
+    "position_hint": "Hypothesis from the column names, to be confirmed: %1",
+    "none_found": "No column was recognised as a position: choose them.",
+    "longitude": "Longitude column", "latitude": "Latitude column", "system": "Coordinate system",
+    "equinox": "Equinox (e.g. J2000)", "unit": "Angular unit of the columns",
+    "unit_needed": "A selected column has no unit: say which one it uses.",
+    "choose": "Choose…", "none": "None", "use": "Use these columns", "skip": "Skip", "cancel": "Cancel",
+    "motion_intro": ("Optional. Choose the proper motion columns to draw the sources at the epoch of the view; "
+                     "without them the positions in the table are used, not propagated."),
+    "position_is": "Position: %1 / %2, %3", "epoch_is": "epoch %1",
+    "pm_ra": "Proper motion in RA", "pm_dec": "Proper motion in Dec", "parallax": "Parallax (optional)",
+    "radial_velocity": "Radial velocity (optional)",
+    "cosdec": "The proper motion in RA…", "cosdec_yes": "already includes cos δ (μα* = μα cos δ)",
+    "cosdec_no": "does not include cos δ (μα)", "motion_pair": ("Choose both proper motion columns, or none: parallax and radial velocity "
+                    "are used only together with the proper motion."),
+}
+
+#: Unità angolari offerte quando le colonne di posizione non ne dichiarano una (``unit`` di ``catalog.set_columns``).
+_UNIT_CHOICES = ("deg", "hourangle", "rad", "arcmin", "arcsec")
 
 #: Segno grafico delle celle senza valore (42 §3.2): la cella resta vuota di numeri.
 MISSING_MARK = "–"
@@ -386,6 +417,11 @@ class CatalogTab(QWidget):
         top = QHBoxLayout()
         top.setContentsMargins(8, 4, 8, 4)
         top.addWidget(self.info, 1)
+        self.columns_button = QPushButton(texts["columns_button"], self)
+        self.columns_button.setObjectName("columnsButton")
+        self.columns_button.setToolTip(texts["columns_tip"])
+        self.columns_button.clicked.connect(lambda: panel.columns_requested.emit(self.layer_id))
+        top.addWidget(self.columns_button)
         box.addLayout(top)
         box.addWidget(self.splitter, 1)
         self._syncing = False
@@ -539,6 +575,8 @@ class CatalogTab(QWidget):
 class CatalogPanel(QWidget):
     """Pannello in basso (42): una scheda per livello di catalogo del 41; senza cataloghi lo stato vuoto del 40."""
 
+    columns_requested = Signal(str)  # "Colonne…" di una scheda: la finestra apre i dialoghi di §3.5
+
     def __init__(self, submit: Callable[..., int], viewer=None, empty: QWidget | None = None, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("catalogPanel")
@@ -619,3 +657,253 @@ class CatalogPanel(QWidget):
         if selected:
             self.tabs.setCurrentWidget(page)
             page.scroll_to_row(int(selected[0]))
+
+
+# --- dialoghi delle colonne (42 §3.5, sprint 5b) -------------------------------------------------------------------
+
+
+def _column_ucd(table, name: str) -> list[str]:
+    """Parole UCD di una colonna come le legge il 13 (``meta['ucd']`` o ``description`` del VOTable)."""
+    column = table[name]
+    ucd = (getattr(column, "meta", None) or {}).get("ucd")
+    return [w.strip().lower() for w in str(ucd or "").split(";") if w.strip()]
+
+
+def numeric_columns(table) -> list[str]:
+    """Colonne scalari numeriche: le uniche che possono contenere una posizione o un moto (13)."""
+    return [n for n in table.colnames if table[n].dtype.kind in "iuf" and table[n].ndim == 1]
+
+
+def column_label(table, name: str) -> str:
+    unit = table[name].unit
+    return name if unit is None else f"{name} [{unit}]"
+
+
+def motion_candidates(table) -> dict[str, list[str]]:
+    """Colonne candidate di moto proprio, parallasse e velocità radiale **dai soli UCD** (mai dai nomi); le colonne
+    di errore (parola ``stat.*``) non sono candidate."""
+    found: dict[str, list[str]] = {"pm_ra": [], "pm_dec": [], "parallax": [], "radial_velocity": []}
+    for name in numeric_columns(table):
+        words = _column_ucd(table, name)
+        if any(w.startswith("stat.") for w in words):
+            continue
+        if "pos.pm" in words and "pos.eq.ra" in words:
+            found["pm_ra"].append(name)
+        elif "pos.pm" in words and "pos.eq.dec" in words:
+            found["pm_dec"].append(name)
+        elif any(w.startswith("pos.parallax") for w in words):
+            found["parallax"].append(name)
+        elif any(w.startswith("spect.dopplervel") for w in words):
+            found["radial_velocity"].append(name)
+    return found
+
+
+def frames_with_equinox() -> set[str]:
+    """Nomi dei frame supportati dal 10 che hanno un equinozio (FK4, FK5…)."""
+    from astropy.coordinates.baseframe import frame_transform_graph
+
+    from astrotwo.core.coordinates_wcs import supported_frames
+
+    return {n for n in supported_frames() if "equinox" in frame_transform_graph.lookup_name(n).frame_attributes}
+
+
+def _buttons(dialog: QDialog, ok: str, cancel: str) -> QDialogButtonBox:
+    box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, dialog)
+    box.button(QDialogButtonBox.StandardButton.Ok).setText(ok)
+    box.button(QDialogButtonBox.StandardButton.Cancel).setText(cancel)
+    box.accepted.connect(dialog.accept)
+    box.rejected.connect(dialog.reject)
+    return box
+
+
+class PositionColumnsDialog(QDialog):
+    """Colonne di posizione (42 §3.5): longitudine, latitudine, sistema, equinozio e unità, tutti dichiarati
+    dall'utente. Le ipotesi dai nomi (``suggest_position_columns``) sono preselezionate e marcate come tali; nulla
+    si assume: senza scelta esplicita il pulsante resta spento. ``choice()`` dà i parametri di ``catalog.set_columns``."""
+
+    def __init__(self, table, suggestions=(), texts: Mapping[str, str] = DEFAULT_COLUMN_TEXTS, parent=None) -> None:
+        super().__init__(parent)
+        from astrotwo.core.coordinates_wcs import supported_frames
+
+        self.table = table.table
+        self.setWindowTitle(texts["position_title"])
+        self.setObjectName("positionColumnsDialog")
+        self._equinox_frames = frames_with_equinox()
+        names = numeric_columns(self.table)
+        self.lon = QComboBox(self)
+        self.lon.setObjectName("lonColumn")
+        self.lat = QComboBox(self)
+        self.lat.setObjectName("latColumn")
+        for combo in (self.lon, self.lat):
+            combo.addItem(texts["choose"], None)
+            for n in names:
+                combo.addItem(column_label(self.table, n), n)
+        self.frame = QComboBox(self)
+        self.frame.setObjectName("frameCombo")
+        self.frame.addItem(texts["choose"], None)
+        for f in supported_frames():
+            self.frame.addItem(f, f)
+        self.equinox = QLineEdit(self)
+        self.equinox.setObjectName("equinoxField")
+        self.equinox.setPlaceholderText("J2000")
+        self.unit = QComboBox(self)
+        self.unit.setObjectName("unitCombo")
+        self.unit.addItem(texts["choose"], None)
+        for unit in _UNIT_CHOICES:
+            self.unit.addItem(unit, unit)
+        self.note = QLabel(self)
+        self.note.setObjectName("positionNote")
+        self.note.setWordWrap(True)
+        self.unit_note = QLabel(texts["unit_needed"], self)
+        self.unit_note.setWordWrap(True)
+        intro = QLabel(texts["position_intro"], self)
+        intro.setWordWrap(True)
+        # ipotesi: dalla posizione già nota (frame non dichiarato) oppure dalla prima ipotesi dai nomi
+        known = table.positions
+        if known is not None:
+            self._select(self.lon, known.lon)
+            self._select(self.lat, known.lat)
+            self._select(self.frame, known.frame)
+            self.equinox.setText(known.equinox or "")
+        elif suggestions:
+            first = suggestions[0]
+            self._select(self.lon, first.lon)
+            self._select(self.lat, first.lat)
+            self._select(self.frame, first.frame_hint)
+            self.note.setText(texts["position_hint"].replace("%1", first.reason))
+        else:
+            self.note.setText(texts["none_found"])
+        form = QFormLayout()
+        form.addRow(texts["longitude"], self.lon)
+        form.addRow(texts["latitude"], self.lat)
+        form.addRow(texts["system"], self.frame)
+        self.equinox_label = QLabel(texts["equinox"], self)
+        form.addRow(self.equinox_label, self.equinox)
+        self.unit_label = QLabel(texts["unit"], self)
+        form.addRow(self.unit_label, self.unit)
+        box = QVBoxLayout(self)
+        box.addWidget(intro)
+        box.addWidget(self.note)
+        box.addLayout(form)
+        box.addWidget(self.unit_note)
+        self.buttons = _buttons(self, texts["use"], texts["cancel"])
+        box.addWidget(self.buttons)
+        for combo in (self.lon, self.lat, self.frame, self.unit):
+            combo.currentIndexChanged.connect(self._validate)
+        self.equinox.textChanged.connect(self._validate)
+        self._validate()
+
+    @staticmethod
+    def _select(combo: QComboBox, value) -> None:
+        index = -1 if value is None else combo.findData(value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+    def _unit_needed(self) -> bool:
+        names = [self.lon.currentData(), self.lat.currentData()]
+        return any(n is not None and self.table[n].unit is None for n in names)
+
+    def _validate(self, *_) -> None:
+        frame = self.frame.currentData()
+        has_equinox = frame in self._equinox_frames
+        for w in (self.equinox, self.equinox_label):
+            w.setVisible(has_equinox)
+        need_unit = self._unit_needed()
+        for w in (self.unit, self.unit_label, self.unit_note):
+            w.setVisible(need_unit)
+        ok = (self.lon.currentData() is not None and self.lat.currentData() is not None and frame is not None
+              and self.lon.currentData() != self.lat.currentData()
+              and (not has_equinox or bool(self.equinox.text().strip()))
+              and (not need_unit or self.unit.currentData() is not None))
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ok)
+
+    def choice(self) -> dict:
+        """Parametri di posizione di ``catalog.set_columns`` (equinozio e unità solo se servono)."""
+        frame = self.frame.currentData()
+        return {"lon": self.lon.currentData(), "lat": self.lat.currentData(), "frame": frame,
+                "equinox": self.equinox.text().strip() if frame in self._equinox_frames else None,
+                "unit": self.unit.currentData() if self._unit_needed() else None}
+
+
+class ProperMotionColumnsDialog(QDialog):
+    """Moto proprio, parallasse e velocità radiale (42 §3.5), tutti facoltativi. La scelta del moto in RA obbliga a
+    dire se include cos δ (mai assunto, 13). Gli UCD preselezionano solo se la colonna candidata è una sola.
+    ``choice()`` dà i parametri di moto di ``catalog.set_columns``; ``Skip`` (reject) lascia le posizioni della
+    tabella, non propagate (scelta minore 3 del 41)."""
+
+    def __init__(self, table, position_text: str, current: Mapping | None = None,
+                 texts: Mapping[str, str] = DEFAULT_COLUMN_TEXTS, parent=None) -> None:
+        super().__init__(parent)
+        self.table = table.table
+        self.setWindowTitle(texts["motion_title"])
+        self.setObjectName("motionColumnsDialog")
+        names = numeric_columns(self.table)
+        found = motion_candidates(self.table)
+        current = dict(current or {})
+        self.combos: dict[str, QComboBox] = {}
+        form = QFormLayout()
+        for key, label, objname in (("pm_ra", "pm_ra", "pmRaColumn"), ("pm_dec", "pm_dec", "pmDecColumn"),
+                                    ("parallax", "parallax", "parallaxColumn"),
+                                    ("radial_velocity", "radial_velocity", "rvColumn")):
+            combo = QComboBox(self)
+            combo.setObjectName(objname)
+            combo.addItem(texts["none"], None)
+            for n in names:
+                combo.addItem(column_label(self.table, n), n)
+            wanted = current.get(key) or (found[key][0] if len(found[key]) == 1 else None)
+            if wanted is not None and combo.findData(wanted) >= 0:
+                combo.setCurrentIndex(combo.findData(wanted))
+            combo.currentIndexChanged.connect(self._validate)
+            self.combos[key] = combo
+            form.addRow(texts[label], combo)
+        self.cos_yes = QRadioButton(texts["cosdec_yes"], self)
+        self.cos_yes.setObjectName("cosdecYes")
+        self.cos_no = QRadioButton(texts["cosdec_no"], self)
+        self.cos_no.setObjectName("cosdecNo")
+        group = QButtonGroup(self)
+        group.setExclusive(True)
+        group.addButton(self.cos_yes)
+        group.addButton(self.cos_no)
+        if current.get("pm_ra_includes_cosdec") is True:
+            self.cos_yes.setChecked(True)
+        elif current.get("pm_ra_includes_cosdec") is False:
+            self.cos_no.setChecked(True)
+        self.cos_yes.toggled.connect(self._validate)
+        self.cos_no.toggled.connect(self._validate)
+        self.cos_label = QLabel(texts["cosdec"], self)
+        self.pair_note = QLabel(texts["motion_pair"], self)
+        self.pair_note.setWordWrap(True)
+        intro = QLabel(texts["motion_intro"], self)
+        intro.setWordWrap(True)
+        where = QLabel(position_text, self)
+        where.setObjectName("motionPosition")
+        where.setWordWrap(True)
+        box = QVBoxLayout(self)
+        box.addWidget(intro)
+        box.addWidget(where)
+        box.addLayout(form)
+        box.addWidget(self.cos_label)
+        box.addWidget(self.cos_yes)
+        box.addWidget(self.cos_no)
+        box.addWidget(self.pair_note)
+        self.buttons = _buttons(self, texts["use"], texts["skip"])
+        box.addWidget(self.buttons)
+        self._validate()
+
+    def _validate(self, *_) -> None:
+        ra, dec = self.combos["pm_ra"].currentData(), self.combos["pm_dec"].currentData()
+        extras = any(self.combos[k].currentData() is not None for k in ("parallax", "radial_velocity"))
+        for w in (self.cos_label, self.cos_yes, self.cos_no):
+            w.setVisible(ra is not None)
+        columns_ok = (ra is None) == (dec is None) and (ra is not None or not extras)
+        self.pair_note.setVisible(not columns_ok)
+        cos_ok = ra is None or self.cos_yes.isChecked() or self.cos_no.isChecked()
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(columns_ok and cos_ok)
+
+    def choice(self) -> dict:
+        """Parametri di moto di ``catalog.set_columns``: tutti ``None`` se non è stato scelto nulla."""
+        ra = self.combos["pm_ra"].currentData()
+        return {"pm_ra": ra, "pm_dec": self.combos["pm_dec"].currentData(),
+                "pm_ra_includes_cosdec": None if ra is None else self.cos_yes.isChecked(),
+                "parallax": self.combos["parallax"].currentData(),
+                "radial_velocity": self.combos["radial_velocity"].currentData()}

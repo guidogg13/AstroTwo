@@ -13638,7 +13638,4 @@ THE SOFTWARE.
 Dati di terze parti nei test (solo nel repository, non distribuiti nel .dmg)
 ==========================================================================
 
-I file in tests/core/data/ NON sono coperti dalla GPL di AstroTwo ma dalle condizioni d'uso delle
-loro fonti; testo completo, link ufficiali e attribuzioni in tests/core/data/README.md.
-
-- tests/core/data/gaia_dr3_alcyone/ (Gaia DR3 da VizieR, CDS): dati Gaia dell'ESA con licenza CC BY-NC 3.0 IGO (https://www.cosmos.esa.int/web/gaia-users/license); regole d'uso di VizieR (https://cds.unistra.fr/vizier-org/licences_vizier.html) e condizioni generali del CDS (https://cds.unistra.fr/legals/); permesso esplicito di ridistribuzione in un repository GPL: da verificare
+Nessuno: i dati di test in tests/core/data/ sono sintetici (stelle inventate, generate da scripts/make_synthetic_catalog.py) e coperti dalla GPL di AstroTwo; vedi tests/core/data/README.md.

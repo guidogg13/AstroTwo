@@ -1387,13 +1387,13 @@ def test_coosys_refframe_terms(tmp_path):
 
 
 # =============================================================================
-# T35 — epoca del COOSYS conservata da confirm_position_columns (D41-6), risposta registrata di Gaia DR3
+# T35 — epoca del COOSYS conservata da confirm_position_columns (D41-6), risposta sintetica con COOSYS J2016.0
 
 def test_t35_coosys_epoch_kept_after_confirmation(service, cache, monkeypatch):
     from astropy.time import Time
 
     from astrotwo.core.catalogs import confirm_position_columns, display_positions, propagate
-    from tests.core import gaia_recorded as gaia
+    from tests.core import synthetic_catalog as gaia
 
     gaia.serve(service, monkeypatch)
     cat = load_catalog(gaia.CATALOG, region=(gaia.center(), gaia.RADIUS), max_rows=100, cache=cache)

@@ -209,12 +209,7 @@ EXTRA_COMPONENTS: tuple[Component, ...] = (
 
 
 #: Dati di terze parti inclusi solo per i test (tests/core/data/README.md), con le condizioni d'uso delle fonti.
-TEST_DATA: tuple[tuple[str, str], ...] = (
-    ("tests/core/data/gaia_dr3_alcyone/ (Gaia DR3 da VizieR, CDS)",
-     "dati Gaia dell'ESA con licenza CC BY-NC 3.0 IGO (https://www.cosmos.esa.int/web/gaia-users/license); "
-     "regole d'uso di VizieR (https://cds.unistra.fr/vizier-org/licences_vizier.html) e condizioni generali del CDS "
-     "(https://cds.unistra.fr/legals/); permesso esplicito di ridistribuzione in un repository GPL: da verificare"),
-)
+TEST_DATA: tuple[tuple[str, str], ...] = ()  # dal 2026-10-22 nessuno: i dati di test sono sintetici
 
 
 def _roots() -> list[Requirement]:
@@ -342,9 +337,13 @@ def render() -> str:
         for filename, text in _license_files(distribution):
             lines += ["", f"--- {filename} ---", "", text.rstrip()]
     lines += ["", "", "Dati di terze parti nei test (solo nel repository, non distribuiti nel .dmg)",
-              "==========================================================================", "",
-              "I file in tests/core/data/ NON sono coperti dalla GPL di AstroTwo ma dalle condizioni d'uso delle",
-              "loro fonti; testo completo, link ufficiali e attribuzioni in tests/core/data/README.md.", ""]
+              "==========================================================================", ""]
+    if not TEST_DATA:
+        lines.append("Nessuno: i dati di test in tests/core/data/ sono sintetici (stelle inventate, generate da "
+                     "scripts/make_synthetic_catalog.py) e coperti dalla GPL di AstroTwo; vedi tests/core/data/README.md.")
+    else:
+        lines += ["I file in tests/core/data/ elencati qui NON sono coperti dalla GPL di AstroTwo ma dalle condizioni",
+                  "d'uso delle loro fonti; testo completo e link ufficiali in tests/core/data/README.md.", ""]
     for name, terms in TEST_DATA:
         lines.append(f"- {name}: {terms}")
     return "\n".join(lines) + "\n"

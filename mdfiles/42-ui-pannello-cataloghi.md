@@ -202,8 +202,9 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 - **Filtro con la grammatica `search` del 13: resta fuori dalla v1**
   (conferma del proprietario del 2026-10-21, richiesta della parte 5:
   "Fuori, come la 42"); si riapre dopo la v1 con D6/D8.
-- **Scelte minori di presentazione dello sprint 5a (2026-10-21), DA
-  CONFERMARE** (non scritte sopra; nessun valore ne dipende):
+- **Scelte minori di presentazione dello sprint 5a (2026-10-21):
+  CONFERMATE dal proprietario il 2026-10-22** (non scritte sopra; nessun
+  valore ne dipende):
   (a) cella mancante = trattino "–" nel colore attenuato del tema, con
   "valore mancante" nel suggerimento; NaN e infiniti non mascherati sono
   scritti come sono ("nan"), perché per il 13 non sono mancanti
@@ -223,6 +224,29 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   l'unità del testo del 10 ("h m s", "° ′ ″" o "deg" in decimale), quella
   della colonna nel suggerimento; (h) riga sopra la tabella con livello,
   sorgente, origine, data di recupero, numero di righe e ordinamento.
+- **Scelte minori dello sprint 5b (2026-10-22), DA CONFERMARE** (§3.5 non
+  dice quando i dialoghi compaiono; nessun valore ne dipende): (a) il
+  dialogo di **posizione** si apre da solo dopo `catalog.open_file` o
+  `catalog.load_region` solo se il 13 non ha determinato colonne e sistema
+  (altrimenti non appare, come in §3.5); (b) il dialogo di **moto proprio**
+  si apre da solo solo se gli **UCD** indicano sia un moto proprio in RA sia
+  uno in Dec (`pos.pm` con `pos.eq.ra`/`pos.eq.dec`, escluse le colonne
+  `stat.*`), altrimenti non disturba; (c) il pulsante **"Colonne…"** nella
+  riga sopra la tabella apre i due dialoghi in qualsiasi momento (prima
+  posizione, poi moto), così la scelta si può rifare e vale anche per
+  cataloghi senza UCD; (d) suggerimenti: le ipotesi dai nomi
+  (`suggest_position_columns`) sono preselezionate e marcate "da
+  confermare", il sistema e l'unità non si indovinano mai (restano da
+  scegliere), l'equinozio è richiesto per i frame che ne hanno uno (FK4,
+  FK5); (e) il moto proprio si preseleziona **solo dagli UCD** e solo se la
+  colonna candidata è una sola; "include cos δ" non è mai preselezionato
+  (obbligatorio, `pm_ra_includes_cosdec` del 13); parallasse e velocità
+  radiale si usano solo insieme al moto proprio; (f) una sola chiamata di
+  `catalog.set_columns` per apertura (posizione e moto insieme); "Salta"
+  nel dialogo del moto dopo aver scelto le posizioni conferma comunque le
+  posizioni; annullare il dialogo di posizione non registra nulla e il
+  catalogo resta in tabella ma non disegnato (§10); (g) il comando è
+  registrato con `requested_by` = `mouse`.
 - **Da verificare prima del codice:** testi delle licenze di PySide6/Qt
   (LGPL-3) e di pytest-qt (`40` §8).
 - **Linee guida visive:** valgono quelle del `40` §3.11 (cifre tabulari
@@ -238,3 +262,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | **Decisione del proprietario del 2026-10-16** (proposta della fase 1 sull'IA, autorizzazione a modificare la bozza come proposto): valori della tabella — colonne di posizione con `format_coordinates` del 10 nel frame della colonna, magnitudini (UCD `phot.mag`) a 3 decimali, valore pieno nel suggerimento e nella copia, altre colonne come sono; sostituisce la scelta minore 1 del 2026-10-15; dipendenza dal 10; test T5 aggiornato. |
 | 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-21 | Claude Code | **Codice dello sprint 5a** ("FASE: CODICE – interfaccia v1", parte 5): `src/astrotwo/ui/catalog_panel.py` (`CatalogPanel`, `CatalogTab`, `CatalogTableModel` virtuale con l'ordine di `shown_order` del 05), pannello Tabella del 40 al posto dello stato vuoto; valori di §3.2 (posizioni con `format_coordinates` del 10 nel frame della colonna e nello stile di "Coordinates shown", magnitudini a 3 decimali, formato dichiarato o rappresentazione più breve, valore pieno nel suggerimento e nella copia), ordinamento con `table.sort`, selezione nei due versi con `catalog.select`, record da `record_view` nel risultato del comando, righe non disegnate marcate. Test T1–T6 in `tests/ui/test_catalog_panel.py` (T6 `perf`, misura in §9), modalità notte e punto decimale in italiano. Filtro `search` fuori dalla v1 confermato dal proprietario; scelte minori di presentazione da confermare (§13). Trovato e corretto un difetto del 13 (`record_view` con colonne array). **Resta lo sprint 5b:** dialoghi delle colonne di posizione e di moto proprio (§3.5, `PositionColumnsDialog`, `ProperMotionColumnsDialog`, T7). Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Sprint 5b** ("FASE: CODICE – interfaccia v1", parte 5): `PositionColumnsDialog` e `ProperMotionColumnsDialog` in `src/astrotwo/ui/catalog_panel.py`, aperti dalla finestra principale dopo `catalog.open_file`/`catalog.load_region` e dal pulsante "Colonne…" della scheda; un solo `catalog.set_columns` per apertura, nulla assunto (sistema, unità, equinozio e cos δ sempre dichiarati dall'utente; ipotesi dai nomi marcate; moto preselezionato solo dagli UCD). Test T7 e correlati in `tests/ui/test_column_dialogs.py`; traduzioni italiane. **Decisione del proprietario del 2026-10-22:** le 8 scelte di presentazione dello sprint 5a (a–h) sono confermate (tolto "da confermare"). Scelte minori dello sprint 5b da confermare in §13. Stato `approvato` invariato. |
