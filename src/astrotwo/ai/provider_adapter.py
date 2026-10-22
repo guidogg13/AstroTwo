@@ -42,6 +42,7 @@ __all__ = [
     "AssistantMessage",
     "ToolResultMessage",
     "ToolDefinition",
+    "TOOL_CHOICES",
     "TurnOptions",
     "TextDelta",
     "ToolCallRequest",
@@ -309,12 +310,21 @@ class ToolDefinition:
     input_schema: dict
 
 
+#: Valori di ``TurnOptions.tool_choice`` (§3.5, decisione del proprietario del 2026-10-22).
+TOOL_CHOICES = ("auto", "none")
+
+
 @dataclass(frozen=True)
 class TurnOptions:
     max_output_tokens: int | None = None  # None: quello del profilo
     connect_timeout: float = CONNECT_TIMEOUT
     read_timeout: float = READ_TIMEOUT
     silence_timeout: float = SILENCE_TIMEOUT
+    tool_choice: str = "auto"  # auto: nessun campo inviato; none: il modello non chiama strumenti (con strumenti)
+
+    def __post_init__(self) -> None:
+        if self.tool_choice not in TOOL_CHOICES:
+            raise ValueError(f"tool_choice {self.tool_choice!r}: {' o '.join(TOOL_CHOICES)}")
 
 
 @dataclass(frozen=True)
@@ -775,6 +785,8 @@ class AnthropicAdapter(ProviderAdapter):
         if tools:
             body["tools"] = [{"name": t.name, "description": t.description, "input_schema": t.input_schema}
                              for t in tools]
+            if options.tool_choice == "none":
+                body["tool_choice"] = {"type": "none"}
         return body
 
     def _open(self, client, body):
@@ -875,6 +887,8 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         if tools:
             body["tools"] = [{"type": "function", "function": {"name": t.name, "description": t.description,
                                                                "parameters": t.input_schema}} for t in tools]
+            if options.tool_choice == "none":
+                body["tool_choice"] = "none"
         return body
 
     def _open(self, client, body):

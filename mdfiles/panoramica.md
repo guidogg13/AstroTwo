@@ -18,6 +18,31 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-22, parte 7, sprint 7a della v1 (44: pannello
+  dell'assistente):** `src/astrotwo/ui/ai_panel.py` nell'area a destra
+  della finestra (400 pt, ⌃⌘A): intestazione con profilo, modello,
+  lucchetto della chiave e simbolo "locale · nulla esce dal Mac", riga
+  sulla privacy, messaggi in Markdown semplice (HTML come testo, immagini
+  non caricate, indirizzi dei collegamenti scritti per intero, apertura
+  solo con un clic), testo grigio durante lo streaming, schede dei comandi
+  (`#n`, parametri con unità, esito, fonte; clic → riga del pannello
+  Comandi), schede di conferma (Conferma, Annulla, "per questa
+  conversazione" assente dopo un testo esterno), riepilogo della verifica
+  del 34, note dei limiti, token e costo con il prezzo dell'utente, "Cosa è
+  stato inviato" (JSON esatto), Invia/Stop, consenso al primo messaggio
+  (salvato con `prefs.set`), stato "non disponibile" con il pulsante
+  verso l'impostazione mancante, impostazioni (profili, provider
+  predefiniti con contrassegno, modello da `list_models`, chiave solo nel
+  Portachiavi, "Prova il modello", modalità rigorosa, limiti, prezzo),
+  testo delle conversazioni nel salvataggio della sessione su richiesta,
+  modalità notte e italiano. Markdown di Qt verificato (Qt 6.12). Scelte
+  minori da confermare nel 44 §3.10, §13. **Decisioni del proprietario del
+  2026-10-22 sullo sprint 6c:** 12 scelte minori del 35 confermate; ultima
+  richiesta dopo il limite di chiamate con gli strumenti e `tool_choice =
+  none` (nuova opzione del turno del 30, T16), da provare con le chiavi
+  dell'utente. Resta lo sprint 7b (evidenziazione dei numeri T5, latenza
+  T14, prove di modelli/prova/errori). Test: **799 di default**, di rete
+  non eseguiti (`--no-network`). Decisioni aperte: **14**.
 - **Stato al 2026-10-22, parte 6, sprint 6c della v1 (35: assistente):**
   `src/astrotwo/ai/chat_assistant.py` collega provider (30), chiavi (31),
   strumenti (32) e verifica (34): regole di sistema R1–R9 in inglese
@@ -747,7 +772,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | approvato |
 | `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record); **sprint 5a scritto il 2026-10-21, 5b (dialoghi delle colonne) il 2026-10-22** (`ui/catalog_panel.py`) | — | approvato |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
-| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso | — | approvato |
+| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso; codice dello sprint 7a (2026-10-22, `ui/ai_panel.py`) | — | approvato |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
 | **Funzioni avanzate (livello 4)** | | | |
 | `50-avanzate-transienti.md` | Caccia ai transienti | 4 | non esiste |
@@ -895,6 +920,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Limiti dell'assistente (35) | Valgono le specifiche: 10 comandi e 5 minuti per risposta | 2026-10-22 | decisione del proprietario, `35` §3 | sprint 6c |
 | Tolleranza di R2 (34) | Vale solo l'arrotondamento (mezza unità dell'ultima cifra scritta); "e troncamento" tolto dalla scelta (3) | 2026-10-22 | decisione del proprietario, `34` §13 | sprint 6c |
 | Scelte minori dello sprint 6b (34) e scelte 4, 5, 6 del 32 | Confermate: identificativi solo per testo, numeri nelle stringhe solo per testi esterni, parametri e utente, ordine delle categorie e altre (34 §3.6bis); niente SHA-256, stringhe delle calcolatrici di AstroTwo, `ASTROTWO_MESSAGE_CODES` (32 §13) | 2026-10-22 | decisione del proprietario | sprint 6c |
+| Ultima richiesta dopo il limite di chiamate (30, 35) | Gli strumenti restano nella richiesta con `tool_choice = none` (`{"type": "none"}` per Anthropic, `"none"` per Chat Completions) invece di una richiesta senza strumenti; da provare con le chiavi dell'utente | 2026-10-22 | decisione del proprietario, `30` §3.5, `35` §3.3 | sprint 7a |
+| Scelte minori dello sprint 6c (35) | Confermate tutte e 12 (§3.11 del 35) | 2026-10-22 | decisione del proprietario, `35` §13 | sprint 7a |
 | Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
 
 ## 6. Decisioni aperte
@@ -1001,7 +1028,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
    2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
-   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; prossimo: il 44 (pannello dell'assistente), poi le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12, richiesta senza strumenti con Anthropic). Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
+   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori da confermare nel 44 §13); prossimo: sprint 7b (evidenziazione dei numeri per stato, T5; sonda di latenza, T14; prove con il servizio simulato di elenco dei modelli, "Prova il modello" ed errori del provider), poi le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -1109,3 +1136,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6a della v1 (32):** `src/astrotwo/ai/tool_registry.py` (22 strumenti dell'elenco chiuso, schema ridotto da `export_schema`, validazione del 05, conferme, testi esterni marcati, risultati ridotti) e `tests/ai/test_tool_registry.py` (T1–T12), con `tests/ai/ai_workspace.py` (spazio di lavoro senza rete con un catalogo che contiene un'istruzione). Decisioni del proprietario del 2026-10-22: testi esterni con due elenchi chiusi per percorso (32 §3.6, nuovo T12); divisione della parte 6 in 6a/6b/6c; confermate le scelte minori dello sprint 5b (42 §13); Gaia DR3 citata come fonte dei sei valori della stella di Barnard nei test. 32 e 42 modificati nel registro, restano `approvato`. Aperte 14. |
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6b della v1 (34):** `src/astrotwo/ai/result_verification.py` (estrazione dei numeri, eccezioni chiuse, confronto alla precisione e con l'unità scritte, stati, riepilogo, controllo delle conferme, modalità rigorosa) e `tests/ai/test_result_verification.py` (T1–T14, T14 `perf` 20 ms; flusso con un finto provider che inventa un numero, segnalato). Decisioni del proprietario del 2026-10-22: T5 del 34 corretto (vince §3.5), fonte dei testi esterni una volta in testa in `catalog.rows` (32, codice e T7), scelte 1–3 del 32 confermate, limiti del 35 come da specifica; scelte del 42 §13 (a–g) già registrate come confermate. 32 e 34 modificati nel registro, restano `approvato`. Aperte 14. |
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6c della v1 (35):** `src/astrotwo/ai/chat_assistant.py` (assistente: regole R1–R9, ciclo degli strumenti uno alla volta nella coda del 40, conferme, limiti di 10 chiamate e 5 minuti, Stop, verifica del 34 con rigenerazione rigorosa, token e costo, disponibilità e consenso, blocco `conversations`), `AssistantQueueExecutor` nel 40; T1–T14 in `tests/ai/test_chat_assistant.py` e `tests/ui/test_assistant_queue.py`. Decisioni del proprietario sullo sprint 6b applicate (34: solo arrotondamento, scelte confermate; 32: scelte 4–6 confermate). `35`, `40`, `32`, `34` modificati nel registro, stato `approvato` invariato. Test 780 di default. |
+| 2026-10-22 | Claude Code | **Parte 7, sprint 7a della v1 (44):** `src/astrotwo/ui/ai_panel.py` (`AiPanel`, `MessageView`, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`) nell'area a destra del 40, impostazioni `assistant/…` con `prefs.set`, testo delle conversazioni nel salvataggio, uscita con risposta in corso, 8 icone Lucide, traduzione italiana; `tests/ui/test_ai_panel.py` (T1–T4, T6–T13, T15 e altri; Portachiavi simulato per tutte le finestre dei test in `tests/conftest.py`). **Decisioni del proprietario del 2026-10-22:** 12 scelte minori del 35 confermate; ultima richiesta dopo il limite con gli strumenti e `tool_choice = none` (`TurnOptions.tool_choice` del 30, T16; T4 del 35 con entrambi i formati). `30`, `35`, `40`, `44` modificati nel registro, stato `approvato` invariato. Test: 799 di default. |

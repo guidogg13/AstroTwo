@@ -293,7 +293,8 @@ def test_t6_translations_complete(qapp, tmp_path):
     copy = tmp_path / "check_it.ts"
     shutil.copy(TS_FILE, copy)
     lupdate = Path(sys.executable).parent / "pyside6-lupdate"
-    subprocess.run([str(lupdate), mw.__file__, "-ts", str(copy), "-no-obsolete", "-locations", "none"],
+    sources = [mw.__file__, str(Path(mw.__file__).with_name("ai_panel.py"))]  # finestra e pannello del 44
+    subprocess.run([str(lupdate), *sources, "-ts", str(copy), "-no-obsolete", "-locations", "none"],
                    check=True, capture_output=True)
     messages = list(ET.parse(copy).getroot().iter("message"))
     assert len(messages) > 100
@@ -432,7 +433,8 @@ def test_t10_assistant_area(qtbot, window):
     dock = win.docks["assistant"]
     assert win.dockWidgetArea(dock) == Qt.DockWidgetArea.RightDockWidgetArea
     assert dock.minimumWidth() == 380 and dock.maximumWidth() == 420
-    assert "not available" in dock.widget().text()
+    assert dock.widget() is win.ai_panel  # pannello del 44; senza profilo dice perché non è disponibile
+    assert "not available" in win.ai_panel.unavailable.text() and win.ai_panel.bottom.currentIndex() == 1
     action = win.panel_actions["assistant"]
     assert action.shortcut().toString() == "Meta+Ctrl+A" and action.isEnabled()
     assert action in win.toolbar.actions()
@@ -544,7 +546,10 @@ def test_visual_guidelines(qtbot, window, fake_simbad):
     ``go_to("%%%")`` risolve un nome: con ``fake_simbad`` nessuna richiesta di rete reale."""
     win = window
     names_used = set(win.toolbar_icons.values()) | {"search", "x", "picture-in-picture-2", "telescope", "table-2",
-                                                    "history", "message-square-warning", "sparkles", "layers", "plus", "minus"}
+                                                    "history", "message-square-warning", "sparkles", "layers", "plus", "minus",
+                                                    # pannello dell'assistente (44)
+                                                    "lock", "lock-open", "shield", "send", "square", "settings",
+                                                    "message-square-plus", "laptop"}
     for name in names_used:
         assert (mw.ICONS_DIR / f"{name}.svg").is_file(), name
     assert {p.stem for p in mw.ICONS_DIR.glob("*.svg")} == names_used  # nessuna icona inutilizzata

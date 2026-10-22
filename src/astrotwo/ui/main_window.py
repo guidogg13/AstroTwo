@@ -9,8 +9,8 @@ eseguita da un thread di lavoro (``CommandRunner`` in un ``QThread``, §3.8): un
 arrivo; i risultati tornano al thread principale con i segnali di Qt. La finestra **non calcola nulla**:
 mostra valori, codici e testi dei moduli invariati (§4, D40-1).
 
-Il visualizzatore del cielo (41), la tabella (42) e il pannello dell'assistente (44) sono parti successive
-della v1: qui la finestra riserva il loro spazio con uno stato vuoto che dice cosa arriverà.
+Il visualizzatore del cielo (41) sta al centro, la tabella (42) in basso e il pannello dell'assistente (44,
+``ui/ai_panel.py``) nell'area a destra; senza assistente il resto della finestra non cambia (regola d'oro n. 7).
 
 Aspetto (§3.11, mockup in ``mdfiles/mockup/``): tavolozza e foglio di stile dai colori del tema, icone Lucide
 (``ui/icons/``, licenza ISC in ``ui/icons/LICENSE``) disegnate con QtSvg nel colore del tema.
@@ -117,6 +117,7 @@ from astrotwo.core.commands import (
     time_text,
 )
 from astrotwo.core.coordinates_wcs import format_coordinates
+from astrotwo.ui.ai_panel import PANEL_WIDTH
 
 __all__ = [
     "MainWindow",
@@ -194,12 +195,22 @@ PREFERENCES: dict[str, Preference] = {p.key: p for p in (
 
 
 def _check_preference(key: str, value: str) -> str:
-    """Valore valido nella forma testuale, oppure ``PREFERENCE_INVALID`` (§10)."""
-    pref = PREFERENCES.get(key)
-    if pref is None:
-        raise CommandError("PREFERENCE_INVALID", f"preferenza {key!r} sconosciuta ({', '.join(PREFERENCES)})")
+    """Valore valido nella forma testuale, oppure ``PREFERENCE_INVALID`` (§10). Le impostazioni della sezione
+    Assistant (``assistant/…``, 44 §3.6) le controlla il pannello del 44; la chiave API non è mai tra queste."""
+    if key.startswith("assistant/"):
+        from astrotwo.ui.ai_panel import ASSISTANT_DEFAULTS, check_assistant_preference
+
+        if key not in ASSISTANT_DEFAULTS:
+            raise CommandError("PREFERENCE_INVALID", f"impostazione {key!r} sconosciuta "
+                               f"({', '.join(ASSISTANT_DEFAULTS)})")
+        check = functools.partial(check_assistant_preference, key)
+    else:
+        pref = PREFERENCES.get(key)
+        if pref is None:
+            raise CommandError("PREFERENCE_INVALID", f"preferenza {key!r} sconosciuta ({', '.join(PREFERENCES)})")
+        check = pref.check
     try:
-        return pref.check(value)
+        return check(value)
     except ValueError as exc:
         raise CommandError("PREFERENCE_INVALID", f"{key}: {exc}; resta il valore precedente") from None
 
@@ -1099,6 +1110,18 @@ class HistoryPanel(QWidget):
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
         return [self.shown[r] for r in rows]
 
+    def select_number(self, number: int) -> bool:
+        """Seleziona e mostra la riga del comando ``#number`` (anche togliendo i filtri che la nascondono)."""
+        if not any(e.number == number for e in self.shown):
+            self.class_filter.setCurrentIndex(self.class_filter.findData("all"))
+            self.who_filter.setCurrentIndex(self.who_filter.findData("all"))
+        for row, entry in enumerate(self.shown):
+            if entry.number == number:
+                self.table.selectRow(row)
+                self.table.scrollToItem(self.table.item(row, 0))
+                return True
+        return False
+
     def _show_detail(self) -> None:
         chosen = self.selected()
         if not chosen:
@@ -1332,9 +1355,11 @@ class PreferencesDialog(QDialog):
         for key, text in (("system", self.tr("System")), ("dark", self.tr("Dark")), ("light", self.tr("Light")),
                           ("night", self.tr("Red night mode"))):
             self.appearance.addItem(text, key)
-        assistant = QLabel(self.tr("The assistant settings arrive with the assistant panel (module 44). "
-                                   "API keys are kept only in the macOS Keychain."))
-        assistant.setWordWrap(True)
+        assistant = QPushButton(self.tr("Assistant settings…"))
+        assistant.setObjectName("prefAssistant")
+        assistant.setToolTip(self.tr("Profiles, model, strict mode, limits, price. API keys are kept only in the "
+                                     "macOS Keychain."))
+        assistant.clicked.connect(window.ai_panel.open_settings)
         restart = QLabel(self.tr("A new language applies when AstroTwo restarts."))
         restart.setWordWrap(True)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -1388,6 +1413,27 @@ class PreferencesDialog(QDialog):
         self.accept()
 
 
+def default_keychain():
+    """Il Portachiavi di macOS del 31; se non c'è, un sostituto che dà sempre l'errore del 31 (l'assistente non è
+    disponibile, il resto dell'app funziona: regola d'oro n. 7)."""
+    from astrotwo.ai.keychain_keys import KeychainError, KeychainStore
+
+    try:
+        return KeychainStore()
+    except KeychainError as exc:
+        return _MissingKeychain(exc)
+
+
+class _MissingKeychain:
+    def __init__(self, error) -> None:
+        self.error = error
+
+    def _fail(self, *_args):
+        raise self.error
+
+    has_key = get_key = store_key = delete_key = _fail
+
+
 def _licenses_text() -> str:
     for candidate in (Path(astrotwo.__file__).resolve().parents[2] / "THIRD_PARTY_LICENSES",
                       Path(sys.prefix) / "THIRD_PARTY_LICENSES"):
@@ -1412,7 +1458,7 @@ class MainWindow(QMainWindow):
     _assistant_submit = Signal(object, object, object)  # comando, CancelToken, _AssistantTicket (dal thread del 35)
 
     def __init__(self, registry: CommandRegistry | None = None, settings: QSettings | None = None, *,
-                 startup_commands: bool = True) -> None:
+                 startup_commands: bool = True, keychain=None, ai_adapter_factory: Callable | None = None) -> None:
         super().__init__()
         self.settings = settings if settings is not None else QSettings()
         QLocale.setDefault(QLocale.c())  # punto decimale per tutti i numeri in ogni lingua (§3.9)
@@ -1441,6 +1487,8 @@ class MainWindow(QMainWindow):
         self.open_path: Callable[[str], str | None] = self._ask_open_path
         self.ask_force_body: Callable[[str], bool] = self._ask_force_body
         self.last_modal: tuple[str, str] | None = None
+        self.keychain = keychain if keychain is not None else default_keychain()
+        self._ai_adapter_factory = ai_adapter_factory
         self.setWindowTitle("AstroTwo")
         self.setUnifiedTitleAndToolBarOnMac(True)
         self.setDockOptions(QMainWindow.DockOption.AnimatedDocks | QMainWindow.DockOption.AllowTabbedDocks)
@@ -1507,9 +1555,6 @@ class MainWindow(QMainWindow):
             "layers": EmptyState("layers", self.tr("No layers yet"), self.tr(
                 "Open a HiPS survey, an image, a catalog or a MOC: each layer appears here with visibility, "
                 "order and opacity.")),
-            "assistant": EmptyState("sparkles", self.tr("Assistant"), self.tr(
-                "The assistant is not available: its panel (module 44) is not written yet. "
-                "The rest of AstroTwo works normally.")),
             "table": EmptyState("table-2", self.tr("No catalog yet"), self.tr(
                 "Open a catalog file or load a catalog region: its rows appear here, one tab for each catalog, "
                 "with units, sorting and selection linked to the sky.")),
@@ -1522,11 +1567,11 @@ class MainWindow(QMainWindow):
         self.layer_stack = QStackedWidget()
         self.layer_stack.addWidget(self.empty_states["layers"])
         self.layer_stack.addWidget(self.layer_panel)
+        self.ai_panel = self._build_ai_panel()
         specs = (
             ("layers", self.tr("Layers"), self._panel(self.layer_stack),
              Qt.DockWidgetArea.LeftDockWidgetArea),
-            ("assistant", self.tr("Assistant"), self._panel(self.empty_states["assistant"]),
-             Qt.DockWidgetArea.RightDockWidgetArea),
+            ("assistant", self.tr("Assistant"), self.ai_panel, Qt.DockWidgetArea.RightDockWidgetArea),
             ("table", self.tr("Table"), self._panel(self.catalog_panel), Qt.DockWidgetArea.BottomDockWidgetArea),
             ("commands", self.tr("Commands"), self.history, Qt.DockWidgetArea.BottomDockWidgetArea),
             ("messages", self.tr("Messages"), self.messages, Qt.DockWidgetArea.BottomDockWidgetArea),
@@ -1545,10 +1590,27 @@ class MainWindow(QMainWindow):
         self.docks["layers"].setMinimumWidth(232)
         self.docks["assistant"].setMinimumWidth(380)
         self.docks["assistant"].setMaximumWidth(420)
+        self.resizeDocks([self.docks["assistant"]], [PANEL_WIDTH], Qt.Orientation.Horizontal)  # 44 §3.1
         self.tabifyDockWidget(self.docks["table"], self.docks["commands"])
         self.tabifyDockWidget(self.docks["commands"], self.docks["messages"])
         self.docks["commands"].raise_()
         self._refresh_headers()
+
+    def _build_ai_panel(self):
+        """Pannello dell'assistente del 44 (parte 7) nell'area a destra; un clic su una scheda di comando apre la
+        riga del pannello Comandi."""
+        from astrotwo.ai.provider_adapter import make_adapter
+        from astrotwo.ui.ai_panel import AiPanel
+
+        panel = AiPanel(self, self.keychain, adapter_factory=self._ai_adapter_factory or make_adapter)
+        panel.open_command.connect(self.show_command)
+        return panel
+
+    def show_command(self, number: int) -> None:
+        """Mostra il comando ``#number`` nel pannello Comandi (scheda del 44)."""
+        self.docks["commands"].show()
+        self.docks["commands"].raise_()
+        self.history.select_number(number)
 
     def _build_catalog_panel(self):
         """Pannello della tabella del 42 (sprint 5a) con i testi tradotti; ogni azione è un comando del 05."""
@@ -1984,6 +2046,8 @@ class MainWindow(QMainWindow):
             self.settings.sync()
             if p["key"] == "appearance":
                 self.apply_appearance(p["value"])
+            elif p["key"].startswith("assistant/"):
+                self.ai_panel.settings_changed(p["key"])
             elif p["key"] == "cache/limit_bytes" and isinstance(self.cache, ThreadCache):
                 self.cache.limit_bytes = int(p["value"])
         elif name == "ui.set_appearance":
@@ -2164,7 +2228,8 @@ class MainWindow(QMainWindow):
         """Salva la sessione del 05 (non è un comando della sessione stessa, 05 §3.4)."""
         if not path.endswith(SESSION_EXTENSION):
             path += SESSION_EXTENSION
-        conversations = [] if include_conversations else None  # testi del 35: con il pannello 44
+        # testi delle conversazioni (35 §3.9) solo se chiesti con la casella del salvataggio
+        conversations = self.ai_panel.assistant.export_conversations() if include_conversations else None
         try:
             self.session.save(path, app_version=astrotwo.__version__, conversations=conversations)
         except (OSError, ValueError) as exc:
@@ -2240,6 +2305,7 @@ class MainWindow(QMainWindow):
             dock.header.set_theme(tokens)
         for empty in (*self.empty_states.values(), self.history.empty, self.messages.empty):
             empty.set_theme(tokens)
+        self.ai_panel.set_theme(tokens)
 
     def _system_scheme_changed(self, scheme) -> None:
         if getattr(self, "appearance_mode", None) == "system" and not getattr(self, "_reapplying", False):
@@ -2285,15 +2351,18 @@ class MainWindow(QMainWindow):
     # --- uscita -------------------------------------------------------------------------
 
     def closeEvent(self, event) -> None:  # noqa: N802 - nome di Qt
-        if self.busy() or self.unsaved():
+        if self.busy() or self.unsaved() or self.ai_panel.busy:
             parts = []
             if self.busy():
                 parts.append(self.tr("Some commands are still running: they will be cancelled."))
+            if self.ai_panel.busy:
+                parts.append(self.tr("The assistant is answering: the answer will be stopped."))
             if self.unsaved():
                 parts.append(self.tr("Some commands are not saved in a session."))
             if not self.confirm(self.tr("Quit AstroTwo"), " ".join(parts) + " " + self.tr("Quit anyway?")):
                 event.ignore()
                 return
+        self.ai_panel.stop()  # Stop della risposta in corso (44 §10)
         for job in self._jobs.values():
             job.cancel.cancel()
         for job_id in list(self._assistant_waiters):

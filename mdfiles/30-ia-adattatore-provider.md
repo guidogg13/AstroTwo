@@ -159,6 +159,20 @@ provider e restituisce, man mano che arrivano, **eventi normalizzati**:
   aggiungere, togliere o riscrivere contenuti.
 - **Strumenti in ingresso:** nome, descrizione e schema JSON preparati dal
   `32`; l'adattatore li traduce nel formato del provider senza cambiarli.
+- **Scelta degli strumenti (`tool_choice`, decisione del proprietario del
+  2026-10-22):** opzione del turno con due valori: `auto` (default: nessun
+  campo inviato, decide il modello) e `none` (il modello non deve chiamare
+  strumenti). Con `none` e strumenti presenti l'adattatore manda
+  `"tool_choice": {"type": "none"}` (API Messages di Anthropic) oppure
+  `"tool_choice": "none"` (Chat Completions); senza strumenti il campo non
+  si manda. La usa il `35` per l'ultima richiesta dopo il limite di
+  chiamate (`35` §3.3): gli strumenti restano nella richiesta, perché un
+  provider può rifiutare una conversazione con chiamate e risultati di
+  strumenti senza strumenti definiti. Un servizio compatibile che ignora il
+  campo e chiama comunque uno strumento non cambia nulla: il `35` non esegue
+  quelle chiamate. **Da verificare con le chiavi dell'utente** (lista di
+  controllo manuale di §12): che Anthropic e i servizi compatibili usati
+  accettino il campo.
 - **Nessun parametro di campionamento** inviato (temperatura e simili):
   vale il default del provider (scelta minore 2). La correttezza dei numeri
   non dipende dal modello: i numeri vengono dai comandi e li controlla il
@@ -241,7 +255,7 @@ provider e restituisce, man mano che arrivano, **eventi normalizzati**:
 | in | chiave | `SecretKey` del `31` | — | letta a ogni turno |
 | in | messaggi | lista normalizzata | testo UTF-8; risultati come JSON del `32` | §3.5 |
 | in | strumenti | lista | nome, descrizione, JSON Schema dal `32` | §3.5 |
-| in | opzioni | struttura | `max_output_tokens` (intero), tempi massimi (s) | §3.1, §3.7 |
+| in | opzioni | struttura | `max_output_tokens` (intero), tempi massimi (s), `tool_choice` (`auto`, `none`) | §3.1, §3.5, §3.7 |
 | in | `CancelToken` | segnale | — | Stop del `44` |
 | out | eventi | `TextDelta`, `ToolCallRequest`, `Usage`, `ProviderNotice`, `TurnEnd`, `ProviderError` | token come interi | §3.5 |
 | out | elenco dei modelli | lista | identificativo, nome, contesto massimo se dichiarato | §3.4 |
@@ -351,11 +365,15 @@ Ogni test vale per **entrambi** gli adattatori, salvo dove indicato.
 | T13 | Modello senza strumenti (`openai_compatible`) | il servizio rifiuta `tools` come fanno i server senza chiamata di strumenti (risposta registrata nel test) | `AI_NO_TOOLS` | servizio simulato |
 | T14 | Contratto uguale | stessa conversazione normalizzata sui due servizi simulati con risposte equivalenti | stessa sequenza di eventi normalizzati | confronto diretto |
 | T15 | Profili predefiniti (§3.1.1) | `PROVIDER_PRESETS`; `profile_from_preset` per ciascuno; un turno con il servizio simulato al posto dell'indirizzo di ogni profilo | ogni profilo ha `base_url`, fonte e uno dei tre stati; `https` per i remoti, `local` = sì solo per Ollama e LM Studio; `id` = `openai-compatible:<host>[:<porta>]` (diverso per ogni profilo); nessun identificativo di modello nell'elenco; nessuna intestazione facoltativa inviata | test di unità e servizio simulato |
+| T16 | `tool_choice` (2026-10-22) | turno con strumenti e `tool_choice = none`; turno con `auto` | corpo con `{"type": "none"}` (Anthropic) o `"none"` (compatibile OpenAI) e gli strumenti; con `auto` nessun campo `tool_choice` | ispezione del corpo ricevuto dal servizio simulato |
 
 **Lista di controllo manuale** (prima di approvare il codice, con le
 chiavi dell'utente e a sue spese): un turno con strumenti con un modello
 Anthropic scelto dall'utente; uno con OpenAI in cloud; uno con Ollama o LM
-Studio in locale. Esito annotato nel registro modifiche.
+Studio in locale; con Anthropic e con il servizio compatibile usato, una
+richiesta con `tool_choice = none` dopo chiamate e risultati di strumenti
+(§3.5, ultima richiesta del `35` dopo il limite) accettata. Esito annotato
+nel registro modifiche.
 
 ## 13. Decisioni aperte
 
@@ -434,3 +452,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-17 | Claude Code | **Decisioni del proprietario del 2026-10-17** (autorizzazione esplicita a modificare il file approvato): (A) verifica dell'origine di `httpx2` registrata e accettata (§8, §13; regola delle versioni bloccate nel `uv.lock`); (B) **profili predefiniti** (§3.1.1, campo `preset` in §3.1, `PROVIDER_PRESETS` e `profile_from_preset` in §7, T15): OpenAI, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, Ollama e LM Studio in locale, più Anthropic; indirizzi e note dalla documentazione ufficiale con la fonte (consultata il 2026-10-17); stato della chiamata di strumenti `verified`/`documented`/`unverified`, marcato nel `44` se non `verified`; nessun modello fisso; una chiave per profilo con l'identificativo già deciso. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | Prima del codice della parte 2 (precisazioni dalle fonti e dal codice degli SDK, autorizzazione del 2026-10-17): indirizzo del profilo `anthropic` dalla documentazione ufficiale; `max_completion_tokens` per il profilo `openai` (`max_tokens_field`); variabili d'ambiente lette dagli SDK anche con chiave esplicita (`ANTHROPIC_CUSTOM_HEADERS`, `OPENAI_ORG_ID`, `OPENAI_PROJECT_ID`, `OPENAI_CUSTOM_HEADERS`) neutralizzate con un elenco chiuso di intestazioni (§3.6). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 2 della v1:** `src/astrotwo/ai/provider_adapter.py` (profili e `PROVIDER_PRESETS`, messaggi ed eventi normalizzati, `AnthropicAdapter` e `OpenAICompatibleAdapter` con gli SDK ufficiali, ripetizioni solo prima del primo evento, tempi massimi con il silenzio dello streaming, annullamento, `RequestRecord`, `list_models`, `probe_tools`, `make_adapter`) e `tests/ai/test_provider_adapter.py` con servizi simulati locali (T1–T15 per entrambi gli adattatori dove previsto, 26 test). Scelte minori della parte 2 in §13, da confermare. Lista di controllo manuale con le chiavi dell'utente ancora da fare. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22** (sprint 6c del 35): nuova opzione del turno `tool_choice` (`auto` di default, nessun campo inviato; `none` → `{"type": "none"}` per Anthropic, `"none"` per Chat Completions, solo con strumenti presenti) per l'ultima richiesta del `35` dopo il limite di chiamate (§3.5, §6, T16, lista di controllo manuale). Codice in `TurnOptions.tool_choice` e test T16 in `tests/ai/test_provider_adapter.py`. Stato `approvato` invariato. |

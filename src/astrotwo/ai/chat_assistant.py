@@ -14,6 +14,7 @@ dell'utente), non usa Qt e lavora in un thread proprio: gli eventi per il 44 arr
 from __future__ import annotations
 
 import json
+import dataclasses
 import queue
 import threading
 import time
@@ -880,10 +881,12 @@ class ChatAssistant:
             if run.cancel.cancelled:
                 return "".join(pieces), None, "cancelled"
             last = run.tool_limit
-            tools = () if last else self.tools.tool_definitions()
+            # Dopo il limite gli strumenti restano nella richiesta con tool_choice = none (§3.3, decisione del
+            # proprietario del 2026-10-22): un provider può rifiutare chiamate e risultati senza strumenti definiti.
+            options = dataclasses.replace(self.options or TurnOptions(), tool_choice="none") if last else self.options
             limit = (SystemMessage(TOOL_LIMIT_MESSAGE.replace("{limit}", str(self.limits.max_calls))),) if last else ()
             text, calls, usage, error, reason = self._request(run, self._request_messages(run, (*extra, *limit)),
-                                                              tools, pieces)
+                                                              self.tools.tool_definitions(), pieces, options)
             run.tokens = run.tokens + TokenCount.of(usage)
             if reason == "cancelled" or run.cancel.cancelled:
                 # Comandi chiesti e non eseguiti: non entrano nella conversazione (nessun risultato da mandare).
@@ -902,7 +905,7 @@ class ChatAssistant:
             for call in calls:  # una alla volta, nell'ordine ricevuto
                 conversation.messages.append(self._call(run, call))
 
-    def _request(self, run: _Run, messages: list, tools, pieces: list[str]):
+    def _request(self, run: _Run, messages: list, tools, pieces: list[str], options: TurnOptions | None):
         """Una richiesta: testo (anche al 44 man mano), chiamate, token, errore, motivo di fine."""
         text: list[str] = []
         calls: list[ToolCallRequest] = []
@@ -913,7 +916,7 @@ class ChatAssistant:
             separator = "\n\n"
         else:
             separator = ""
-        for event in self.adapter.stream_turn(messages, tools, self.options, run.cancel):
+        for event in self.adapter.stream_turn(messages, tools, options, run.cancel):
             if isinstance(event, TextDelta):
                 if event.text:
                     if separator and not text:

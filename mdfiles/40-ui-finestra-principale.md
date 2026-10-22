@@ -188,7 +188,11 @@ Finestra delle preferenze con cinque voci e, dal 2026-10-16, la sezione
 facoltativo: tabella del `44` §3.6; la chiave va **solo** nel Portachiavi
 tramite il `31`, mai in `QSettings`); ogni modifica è un comando
 `prefs.set` (classe `application`). Salvate nelle impostazioni dell'app di
-macOS con `QSettings` (scelta minore 1), mai nella sessione.
+macOS con `QSettings` (scelta minore 1), mai nella sessione. Nel codice
+(sprint 7a del `44`, 2026-10-22) la sezione Assistant è un pulsante che
+apre la finestra delle impostazioni del `44`; le sue impostazioni hanno
+chiavi `assistant/…` controllate dal `44` (§3.10 del `44`) e passano dallo
+stesso `prefs.set`.
 
 | Preferenza | Valori | Effetto |
 |---|---|---|
@@ -484,3 +488,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-20 | Claude Code | **Sprint 4c del 41:** menu Vista con "Show north and east" e "Show scale bar" (`view.set_overlays`, 05); 4 testi nuovi tradotti nel file `.ts`/`.qm`. |
 | 2026-10-21 | Claude Code | **Parte 5, sprint 5a (42):** il pannello Tabella contiene il pannello del 42 (schede dei cataloghi); senza cataloghi resta lo stato vuoto, con il testo aggiornato ("Open a catalog file or load a catalog region…"); dopo l'apertura di una sessione anche il pannello dei livelli e la tabella si ricostruiscono dallo stato; 15 testi nuovi tradotti nel `.ts`/`.qm`. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6c (35):** collegamento dell'assistente alla coda (§3.8): `assistant_executor()`, `submit_command` con il `CancelToken` della risposta, attese chiuse all'uscita; test in `tests/ui/test_assistant_queue.py`. Nessun cambiamento di comportamento per l'utente. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Sprint 7a del `44`:** l'area a destra ospita il pannello dell'assistente (`AiPanel`, larghezza iniziale 400 pt) al posto dello stato vuoto; preferenze Assistant come pulsante verso le impostazioni del `44` (§3.10), chiavi `assistant/…` accettate da `prefs.set`; Save session con il testo delle conversazioni del `35` quando la casella è attiva; uscita con una risposta in corso: stessa conferma dei comandi in corso, poi Stop; `HistoryPanel.select_number` per il clic sulle schede del `44`. T6 controlla anche le traduzioni di `ui/ai_panel.py`. Stato `approvato` invariato. |

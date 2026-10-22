@@ -10,6 +10,7 @@ con risposte scritte a mano nei test. I profili puntano a ``http://127.0.0.1``, 
 import json
 import logging
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -191,6 +192,23 @@ def test_t3_tool_results_sent(kind, provider_service):
                                         {"role": "tool", "tool_call_id": "call_b", "content": err_json}]
         assert body["tools"][0]["function"]["parameters"] == TOOL.input_schema
     assert "temperature" not in body and "top_p" not in body  # nessun parametro di campionamento
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_t16_tool_choice(kind, provider_service):
+    """§3.5 (decisione del proprietario del 2026-10-22): ``none`` con gli strumenti presenti; ``auto`` non si manda."""
+    provider_service.script = [text_reply(kind, ["ok"])]
+    a, _, _ = adapter(kind, provider_service)
+    list(a.stream_turn(CONVERSATION, [TOOL], FAST))
+    assert "tool_choice" not in provider_service.requests[-1]["body"]
+    list(a.stream_turn(CONVERSATION, [TOOL], replace(FAST, tool_choice="none")))
+    body = provider_service.requests[-1]["body"]
+    assert body["tool_choice"] == ({"type": "none"} if kind == "anthropic" else "none")
+    assert len(body["tools"]) == 1 and a.last_request().body == body
+    list(a.stream_turn(CONVERSATION, [], replace(FAST, tool_choice="none")))  # senza strumenti: nessun campo
+    assert "tool_choice" not in provider_service.requests[-1]["body"]
+    with pytest.raises(ValueError):
+        TurnOptions(tool_choice="required")
 
 
 @pytest.mark.parametrize("kind", KINDS)

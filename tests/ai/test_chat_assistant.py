@@ -97,7 +97,8 @@ class Recorder:
 
 
 def make(session, tools, script=(), *, adapter=None, executor=None, choices=(), consent=True, **kw):
-    adapter = adapter if adapter is not None else ScriptedAdapter(script, keychain=None)
+    kind = kw.pop("kind", "openai_compatible")
+    adapter = adapter if adapter is not None else ScriptedAdapter(script, keychain=None, kind=kind)
     if adapter.keychain is not None and hasattr(adapter.keychain, "keys"):
         adapter.keychain.keys.setdefault(adapter.profile.id, SECRET)
     recorder = Recorder(choices)
@@ -220,21 +221,25 @@ def test_t3_confirmations(session, tools):
     assert assistant.conversation.allowed == {"catalog.load_region"}
 
 
-def test_t4_tool_limit(session, tools):
+@pytest.mark.parametrize("kind", ["openai_compatible", "anthropic"])
+def test_t4_tool_limit(session, tools, kind):
     script = [calls_turn(tool_call(f"c{k}", "layer__list")) for k in range(1, 12)]
-    # dodicesima richiesta, senza strumenti: il modello ne chiede ancora uno (ignorato) e risponde
+    # dodicesima richiesta, con tool_choice = none: il modello ne chiede ancora uno (ignorato) e risponde
     script.append([tool_call("c12", "layer__list"), *text_turn("Ecco i livelli.")[:-1], TurnEnd("tool_use")])
-    assistant, adapter, _ = make(session, tools, script)
+    assistant, adapter, _ = make(session, tools, script, kind=kind)
     before = len(session.history)
     answer = ask(assistant, "Elenca i livelli più volte")
     assert len(session.history) - before == 10
     assert [c.executed for c in answer.calls] == [True] * 10 + [False]
     assert answer.calls[-1].error_code == "AI_TOOL_LIMIT"
-    assert len(adapter.requests) == 12  # 11 con gli strumenti, poi l'ultima senza
+    assert len(adapter.requests) == 12  # 11 con gli strumenti liberi, poi l'ultima con tool_choice = none
     messages, last_tools = adapter.requests[-1]
-    assert last_tools == [] and all(t for _, t in adapter.requests[:-1])
+    assert all(t for _, t in adapter.requests) and last_tools == adapter.requests[0][1]
+    assert [o.tool_choice for o in adapter.options] == ["auto"] * 11 + ["none"]
     assert isinstance(messages[-1], SystemMessage) and "Limit of 10 commands" in messages[-1].text
-    assert "tools" not in adapter.records[-1].body  # nessuno strumento nel JSON inviato
+    body = adapter.records[-1].body  # JSON inviato: strumenti presenti e scelta "none" nel formato del provider
+    assert body["tools"] and body["tool_choice"] == ({"type": "none"} if kind == "anthropic" else "none")
+    assert all("tool_choice" not in r.body for r in adapter.records[:-1])
     assert last_result(messages)["error"]["code"] == "AI_TOOL_LIMIT"
     assert [(n.code, n.text) for n in answer.notes] == [("AI_TOOL_LIMIT", "limite di 10 comandi raggiunto")]
     assert answer.text == "Ecco i livelli."

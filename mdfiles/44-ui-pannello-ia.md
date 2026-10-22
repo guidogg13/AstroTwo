@@ -128,6 +128,73 @@ scelta nel `40`, temi scuro/chiaro e **modalità notte rossa**; i messaggi
 dell'utente e dell'assistente si distinguono per allineamento e sfondo
 leggero, non per colori forti.
 
+### 3.10 Precisazioni del codice (sprint 7a, 2026-10-22)
+
+Come il codice applica §3.1–§3.9 dove la specifica non scende nel
+dettaglio (scelte minori **da confermare** in §13):
+
+1. **Impostazioni in `QSettings`** (sezione `assistant/`, scritte solo con
+   `prefs.set`): `assistant/profiles` (oggetto JSON `{id: profilo}` con i
+   campi del `30` §3.1 e il prezzo facoltativo `price_input`,
+   `price_output`, `currency`; un profilo per endpoint, scelta minore 4 del
+   `30`), `assistant/active` (identificativo del profilo in uso),
+   `assistant/strict` (`true`/`false`), `assistant/max_calls` (1–100),
+   `assistant/max_minutes` (1–60), `assistant/consents` (`{id: {version,
+   given_at}}`). **Modalità rigorosa e limiti valgono per tutti i
+   profili; il prezzo è del profilo** (`35` §3.6: "nel profilo"). Un
+   indirizzo remoto in `http` si rifiuta già nel controllo di `prefs.set`
+   (`AI_INSECURE_ENDPOINT`). La chiave non è mai tra queste impostazioni.
+2. **Consenso:** "Accetto" scrive `assistant/consents` con un `prefs.set`
+   (classe `application`, come ogni impostazione: resta nella cronologia
+   dell'app, regola d'oro n. 6); il messaggio scritto prima del consenso
+   parte quando il comando è applicato; "Non ora" lo scarta e il pannello
+   mostra il motivo con il pulsante "Dai il consenso…".
+3. **Messaggi dell'utente** mostrati come testo semplice (non Markdown):
+   si vede esattamente ciò che è stato scritto.
+4. **Collegamenti e immagini** (Markdown di Qt con `MarkdownDialectGitHub`
+   e `MarkdownNoHTML`): il testo del collegamento è seguito
+   dall'indirizzo **scritto per intero** (`testo <indirizzo>`), così nessun
+   indirizzo è nascosto; un clic apre solo `http`/`https` nel browser del
+   sistema (altri schemi ignorati); un'immagine diventa il testo
+   "[immagine non mostrata: indirizzo]" e non si carica. Al cambio di tema
+   le risposte si riconvertono (Qt scrive il colore dei collegamenti nel
+   documento: in modalità notte solo rossi).
+5. **Scheda del comando:** risultato in breve = i primi 4 valori `nome =
+   valore` scritti per intero (unità accanto alle quantità `{value,
+   unit}`), tutti i valori nel suggerimento; fonte = funzioni dei moduli
+   dichiarate dal registro del `05` ("modulo 17 angular_distance") più
+   origine, data e "dalla cache" dalla provenienza del risultato. Il
+   registro del `05` non dichiara la libreria: la scheda mostra modulo e
+   funzione (la libreria resta nel `.md` del modulo). Chiamate non
+   eseguite (validazione, limite, non confermate): scheda senza `#n` con
+   codice e testo dell'errore.
+6. **Testi sotto la risposta tradotti dal 44** (`35` §3.11 punto 12): il
+   riepilogo della verifica si ricompone dai conteggi del rapporto del
+   `34` (stessa regola del §3.5 del `34`), le note dei limiti dai codici
+   (`AI_TOOL_LIMIT`, `AI_TIME_LIMIT`, `AI_CANCELLED`), i token con "token
+   non dichiarati dal provider"; token della risposta e della
+   conversazione; costo solo con il prezzo dell'utente, valore pieno con
+   la nota. Errori del provider: codice e testo del `30` invariati (D40-1).
+7. **Rigenerazione** (modalità rigorosa): la prima risposta resta visibile
+   in grigio con la nota "il testo sopra è sostituito da quello sotto".
+8. **Uscita con una risposta in corso:** stessa conferma dei comandi in
+   corso del `40`, poi Stop.
+9. **Icone:** 8 icone in più della stessa raccolta Lucide (`lock`,
+   `lock-open`, `shield`, `send`, `square`, `settings`,
+   `message-square-plus`, `laptop`), copiate senza modifiche dallo stesso
+   pacchetto `lucide-static` 1.59.0 verificato il 2026-10-17 (SHA-1
+   identico), licenza già in `THIRD_PARTY_LICENSES`.
+10. **Preferenze del `40`:** la sezione Assistant è un pulsante che apre la
+    stessa finestra delle impostazioni del pannello.
+11. **Elenco dei modelli e "Prova il modello"** girano in un thread
+    (`QThreadPool`), non sono comandi (non modificano nulla) e mostrano
+    esito, avvisi e token nella finestra.
+12. **Campo della chiave:** mascherato, senza menu contestuale (nessuna
+    copia), svuotato con `setText("")` dopo Salva (anche la cronologia di
+    annulla del campo); la stringa Python letta dal campo non si può
+    cancellare dalla memoria (testo immutabile) e si lascia al garbage
+    collector, senza altre copie.
+
 ## 4. Cosa NON fa
 
 - Non parla con il provider e non esegue comandi da sé (`35`, `32`, coda
@@ -181,7 +248,7 @@ test in `tests/ui/test_ai_panel.py`.
 
 | Libreria / standard | Uso nel modulo | Motivazione |
 |---|---|---|
-| PySide6 (QtWidgets; `QTextDocument` con Markdown) | pannello, testo, schede, finestre | A1; Markdown di Qt senza HTML esterno (**da verificare** che il Markdown di Qt si possa limitare come in §3.2) |
+| PySide6 (QtWidgets; `QTextDocument` con Markdown) | pannello, testo, schede, finestre | A1; Markdown di Qt senza HTML esterno: **verificato il 2026-10-22** (Qt 6.12, md4c) che con `MarkdownDialectGitHub \| MarkdownNoHTML` l'HTML resta testo; immagini e indirizzi dei collegamenti trattati dopo la conversione (§3.10 punto 4) |
 | **pytest-qt** | test | come nel `40` (licenza da verificare) |
 
 ## 9. Regole e vincoli
@@ -235,6 +302,17 @@ Portachiavi simulato del `31`, in `tests/ui/`.
 | T14 | Reattività | risposta lenta e comando lungo | sonda del thread principale < 100 ms | sonda di latenza |
 | T15 | Scelta del provider (2026-10-17) | aprire il menu Provider; scegliere ogni voce | voci nell'ordine di §3.6 più "Altro endpoint…"; indirizzo riempito come nel `30` §3.1.1; contrassegno su ogni provider non `verified` con il suo stato; nessun modello preselezionato; il lucchetto segue la chiave del profilo scelto | ispezione dei widget |
 
+Note sul codice (sprint 7a, 2026-10-22): test in `tests/ui/test_ai_panel.py`
+con la finestra del `40`, il provider simulato a copione del `35`
+(`ScriptedAdapter`, corpo JSON vero del `30`) e il Portachiavi simulato
+(`FakeKeychain`; nei test nessuna finestra usa il Portachiavi vero,
+`tests/conftest.py`). Scritti nello sprint 7a: T1, T2, T3 (con Annulla e
+Conferma), T4 (catalogo con l'istruzione, opacità invariata), T6, T7, T8,
+T9, T10, T11, T12, T13 (anche i collegamenti dei messaggi), T15 (con il
+rifiuto di `http` remoto), più sessione con il testo delle conversazioni,
+nuova conversazione e traduzione italiana. Restano allo sprint 7b T5 e
+T14.
+
 ## 13. Decisioni aperte
 
 Nessuna decisione dei Gruppi 1 e 2 aperta.
@@ -243,9 +321,32 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   (intervallo 380–420); (2) scorciatoia ⌃⌘A per il pannello; (3) Invio
   invia, ⇧Invio va a capo; (4) Markdown semplice senza HTML né immagini,
   collegamenti come testo.
-- **Da verificare prima del codice:** Markdown di `QTextDocument`
-  limitabile come in §3.2; svuotamento del campo della chiave dalla
-  memoria del widget (`31` §3.5); licenze di PySide6/Qt e pytest-qt (`40`).
+- **Verifiche prima del codice (2026-10-22):** Markdown di `QTextDocument`
+  limitabile come in §3.2: **verificato** (§8; immagini e collegamenti
+  trattati dopo la conversione, §3.10 punto 4); svuotamento del campo
+  della chiave: il widget si svuota (testo e annulla), la stringa Python
+  letta non si può cancellare (§3.10 punto 12); licenze di PySide6/Qt e
+  pytest-qt già verificate per il `40`.
+- **Scelte minori dello sprint 7a (2026-10-22), DA CONFERMARE** (§3.10; la
+  specifica non le dice): (1) impostazioni in `QSettings` con le chiavi
+  `assistant/…`, modalità rigorosa e limiti comuni a tutti i profili,
+  prezzo nel profilo, limiti 1–100 comandi e 1–60 minuti; (2) consenso
+  scritto con `prefs.set` e messaggio in attesa inviato dopo "Accetto";
+  (3) messaggi dell'utente come testo semplice; (4) indirizzo dei
+  collegamenti scritto per intero, clic solo `http`/`https`, immagini come
+  testo; (5) contenuto della scheda del comando (primi 4 valori, fonte =
+  modulo e funzione dal registro del `05`, senza libreria); (6) testi sotto
+  la risposta ricomposti e tradotti dal 44; (7) prima risposta della
+  rigenerazione visibile in grigio; (8) uscita con risposta in corso
+  come i comandi in corso; (9) 8 icone Lucide in più; (10) pulsante nelle
+  preferenze del `40`; (11) modelli e prova in un thread, non comandi;
+  (12) campo della chiave senza menu contestuale.
+- **Resta per lo sprint 7b:** evidenziazione dei numeri per stato con il
+  suggerimento (§3.4, T5), sonda di latenza (T14), prove con il servizio
+  simulato dell'elenco dei modelli e di "Prova il modello", errori del
+  provider e conversazione troppo lunga (§10), conferma in attesa con il
+  pannello chiuso, uscita con risposta in corso; lista di controllo
+  manuale con le chiavi dell'utente.
 - **Linee guida visive:** valgono quelle del `40` §3.11; nessuno
   scostamento.
 
@@ -256,3 +357,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: pannello a destra di 380–420 pt con intestazione (profilo, modello, lucchetto, "locale"), riga sulla privacy, messaggi, schede dei comandi e di conferma (senza "per questa conversazione" dopo un testo esterno), evidenziazione dei numeri del `34`, token e costo facoltativo, "Cosa è stato inviato", impostazioni con la chiave tramite il `31`, consenso al primo uso, stato "non disponibile" con il resto dell'app invariato, modalità notte rossa. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (profili predefiniti del `30` §3.1.1; aggiornamento del 44 chiesto dal proprietario): §3.6 voce "Tipo" sostituita da "Provider" (menu con i profili predefiniti e "Altro endpoint compatibile OpenAI…", contrassegno per i provider non `verified`, indirizzo riempito e modificabile); T15. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Codice dello sprint 7a** ("FASE: CODICE – interfaccia v1", parte 7): `src/astrotwo/ui/ai_panel.py` (`AiPanel` nell'area a destra al posto dello stato vuoto, `MessageView` con Markdown semplice e sicuro, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`), collegamento alla finestra del `40` (impostazioni `assistant/…` con `prefs.set`, pulsante nelle preferenze, testo delle conversazioni nel salvataggio della sessione, uscita con risposta in corso, clic su una scheda → riga del pannello Comandi), traduzione italiana, 8 icone Lucide. Verifica del Markdown di Qt fatta (§8, §13). Precisazioni in §3.10, scelte minori da confermare e resto per lo sprint 7b in §13, note ai test in §12. Stato `approvato` invariato. |

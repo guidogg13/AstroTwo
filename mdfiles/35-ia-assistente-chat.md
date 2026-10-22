@@ -57,9 +57,13 @@ sotto la risposta** quando si raggiungono:
 - **10 chiamate di strumenti per risposta** (contano anche quelle rifiutate
   dalla validazione o non confermate, così un ciclo di errori si ferma).
   All'undicesima richiesta il 35 non esegue nulla e manda al modello
-  un'ultima richiesta **senza strumenti** con il messaggio di sistema
-  "limite di 10 comandi raggiunto: rispondi con i risultati che hai"; la
-  risposta dice "limite di 10 comandi raggiunto".
+  un'ultima richiesta **in cui non si possono chiamare strumenti** con il
+  messaggio di sistema "limite di 10 comandi raggiunto: rispondi con i
+  risultati che hai"; la risposta dice "limite di 10 comandi raggiunto".
+  Dal 2026-10-22 (decisione del proprietario) la richiesta contiene gli
+  strumenti con `tool_choice = none` del `30` (§3.5 del `30`): un provider
+  può rifiutare una conversazione con chiamate e risultati di strumenti ma
+  senza strumenti definiti.
 - **5 minuti per risposta** (dall'invio del messaggio dell'utente, attese
   di conferma escluse): allo scadere il 35 fa come Stop (§3.5) e scrive
   "limite di 5 minuti raggiunto".
@@ -207,7 +211,7 @@ Aggiunta di sicurezza obbligatoria (decisione del proprietario del
 ### 3.11 Precisazioni del codice (sprint 6c, 2026-10-22)
 
 Come il codice applica §3.1–§3.10 dove la specifica non scende nel
-dettaglio (scelte minori da confermare in §13):
+dettaglio (scelte minori confermate dal proprietario il 2026-10-22, §13):
 
 1. **Esecuzione:** il 35 usa un esecutore con due operazioni, "esegui e
    aspetta il risultato" e "spazio di lavoro attuale". Nella finestra è la
@@ -229,13 +233,14 @@ dettaglio (scelte minori da confermare in §13):
    "Conferma" per quella sola chiamata.
 5. **Limite di 10:** ogni chiamata chiesta riceve un risultato (i provider
    lo richiedono); quelle oltre il limite ricevono l'errore `AI_TOOL_LIMIT`
-   "non eseguito". L'ultima richiesta è senza strumenti, con il messaggio di
-   sistema in inglese come le regole: "Limit of 10 commands for this answer
-   reached: answer with the results you have. No more tools can be called."
-   Le chiamate chieste comunque in quella richiesta si ignorano. **Da
-   verificare con una chiave di Anthropic:** se l'API Messages accetta una
-   richiesta con blocchi `tool_use`/`tool_result` e senza `tools`;
-   altrimenti servirà `tool_choice: none` (modifica del `30`, da decidere).
+   "non eseguito". L'ultima richiesta ha gli strumenti con `tool_choice =
+   none` (decisione del proprietario del 2026-10-22, `30` §3.5), con il
+   messaggio di sistema in inglese come le regole: "Limit of 10 commands for
+   this answer reached: answer with the results you have. No more tools can
+   be called." Le chiamate chieste comunque in quella richiesta (un servizio
+   compatibile può ignorare `tool_choice`) si ignorano. **Da verificare con
+   le chiavi dell'utente** (lista di controllo manuale di §12): che la
+   richiesta sia accettata da Anthropic e dal servizio compatibile usato.
 6. **Stop e limite di tempo:** le chiamate chieste e non iniziate ricevono
    `AI_CANCELLED` "non eseguito"; se lo Stop arriva durante lo streaming, le
    chiamate di quella richiesta non entrano nella conversazione (resta il
@@ -357,7 +362,7 @@ manda eventi (eseguito in un thread proprio, non nel thread principale).
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
-| Limite di 10 chiamate | ultima richiesta senza strumenti; nota sotto la risposta | `AI_TOOL_LIMIT` |
+| Limite di 10 chiamate | ultima richiesta con gli strumenti e `tool_choice = none`; nota sotto la risposta | `AI_TOOL_LIMIT` |
 | Limite di 5 minuti | come Stop; nota | `AI_TIME_LIMIT` |
 | Errore del provider in un turno | turno fermato, errore del `30` mostrato; i comandi già eseguiti restano | codici del `30` |
 | Conversazione troppo lunga | turno fermato; il `44` propone una nuova conversazione | `AI_CONTEXT_TOO_LONG` |
@@ -389,7 +394,7 @@ chiave reale.
 | T1 | Ciclo degli strumenti | il modello finto chiede `coords__resolve_name`, poi `measure__distance`, poi risponde citando `#n` | due comandi in cronologia con `requested_by = ai`; terzo turno con i risultati; risposta verificata dal `34` | ispezione |
 | T2 | Ordine e uno alla volta | tre chiamate nello stesso turno | eseguite in ordine, mai due insieme | ispezione della coda |
 | T3 | Conferma | `catalog__load_region`: Conferma; poi Annulla; poi "Conferma per questa conversazione" e una seconda chiamata | eseguito; non eseguito con `TOOL_NOT_CONFIRMED` al modello; la seconda senza scheda | test |
-| T4 | Limite di 10 | il modello finto chiede 12 strumenti | 10 chiamate, poi richiesta senza strumenti; nota `AI_TOOL_LIMIT` | conteggio |
+| T4 | Limite di 10 | il modello finto chiede 12 strumenti | 10 chiamate, poi una richiesta con gli strumenti e `tool_choice = none` (corpo JSON di entrambi i formati); nota `AI_TOOL_LIMIT` | conteggio |
 | T5 | Limite di 5 minuti | orologio simulato, comando lento | Stop a 5 minuti (attese di conferma escluse); nota | orologio simulato |
 | T6 | Stop | Stop durante un comando lungo e durante lo streaming | comando `cancelled`, stato invariato, comandi precedenti in cronologia; risposta "interrotta" verificata | ispezione |
 | T7 | Regole di sistema | prima richiesta di una conversazione | `RequestRecord` con `SYSTEM_RULES` versione 1, R1–R9 presenti, lingua dell'interfaccia | ispezione del corpo |
@@ -414,9 +419,9 @@ e compatibile OpenAI).
 dell'utente): con un modello reale, chiedere "vai alle Pleiadi e misura la
 distanza tra Alcyone e Atlas"; controllare comandi, conferme, citazioni
 `#n`, verifica e token; ripetere la prova di T8 con un catalogo di prova
-che contiene istruzioni; con Anthropic, impostare il limite a 1 chiamata e
-controllare che l'ultima richiesta senza strumenti sia accettata (§3.11
-punto 5).
+che contiene istruzioni; con Anthropic e con il servizio compatibile usato,
+impostare il limite a 1 chiamata e controllare che l'ultima richiesta con
+`tool_choice = none` sia accettata (§3.11 punto 5).
 
 ## 13. Decisioni aperte
 
@@ -427,8 +432,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   o non confermate contano nel limite di 10; (3) le attese di conferma non
   contano nei 5 minuti; (4) casella "Includi il testo delle conversazioni"
   nella finestra di salvataggio della sessione, spenta di default.
-- **Scelte minori dello sprint 6c (2026-10-22), DA CONFERMARE** (§3.11; la
-  specifica non le dice): (1) esecutore con la coda del `40` e, senza
+- **Scelte minori dello sprint 6c (2026-10-22): CONFERMATE dal proprietario
+  il 2026-10-22** (§3.11): (1) esecutore con la coda del `40` e, senza
   interfaccia, coda nel thread proprietario della sessione; (2) turno =
   numero della risposta; (3) testo verificato = testo di tutte le richieste
   della risposta; (4) "dopo un testo esterno" fino alla fine della
@@ -440,8 +445,11 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   versione 1 del testo; (11) contenuto del blocco `conversations`; (12)
   note in italiano con il codice; codici nuovi `AI_NO_PROFILE`, `AI_BUSY`,
   `AI_ASSISTANT_FAILED` (§10).
-- **Da verificare con le chiavi dell'utente:** richiesta senza strumenti
-  dopo il limite con Anthropic (§3.11 punto 5).
+- **Richiesta finale dopo il limite: DECISA dal proprietario il
+  2026-10-22:** strumenti presenti con `tool_choice = none` dove il provider
+  lo supporta (`30` §3.5). **Da verificare con le chiavi dell'utente:** che
+  sia accettata da Anthropic e dai servizi compatibili usati (§12, lista di
+  controllo manuale).
 
 ## 14. Registro modifiche
 
@@ -450,3 +458,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: conversazione in memoria, ciclo degli strumenti uno alla volta con conferme, limiti di 10 chiamate e 5 minuti, regole di sistema R1–R9, Stop con `CancelToken`, token e costo solo con il prezzo dell'utente, disponibilità, privacy (cosa esce e cosa no, consenso per profilo, "Cosa è stato inviato", "locale"), comandi nella sessione e testo solo su richiesta; **sicurezza**: testi esterni come dati (R4), marcatura, conferma obbligatoria dopo un testo esterno, test di prompt injection. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 6c** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/chat_assistant.py` (`ChatAssistant`, `Conversation`, `AssistantLimits`, `SYSTEM_RULES` versione 1, `CallLogEntry`, `SessionExecutor`, eventi per il `44`, `TokenCount`, `Pricing`, `estimate_cost`) e collegamento alla coda del `40` (`AssistantQueueExecutor`); test T1–T14 in `tests/ai/test_chat_assistant.py` con un provider simulato a copione (`ScriptedAdapter`, corpo JSON vero del `30`) e in `tests/ui/test_assistant_queue.py`. Precisazioni del codice in §3.11, interfaccia in §7, codici in §10, note ai test in §12, scelte minori da confermare e verifica con Anthropic in §13. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22** sullo sprint 6c: le 12 scelte minori di §3.11 confermate (§13); ultima richiesta dopo il limite di chiamate con gli strumenti e `tool_choice = none` del `30` invece che senza strumenti (§3.3, §3.11 punto 5, §10, T4, lista di controllo manuale); verifica con le chiavi dell'utente nella lista di controllo manuale. Codice e T4 aggiornati (entrambi i formati di richiesta). Stato `approvato` invariato. |

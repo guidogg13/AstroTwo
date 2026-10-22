@@ -109,6 +109,12 @@ class FakeKeychain:
     def has_key(self, profile_id):
         return profile_id in self.keys
 
+    def store_key(self, profile_id, key):
+        self.keys[profile_id] = key.strip()
+
+    def delete_key(self, profile_id):
+        return "deleted" if self.keys.pop(profile_id, None) is not None else "nothing_to_delete"
+
 
 class UnavailableKeychain:
     """Portachiavi che non risponde (KEYCHAIN_UNAVAILABLE)."""
@@ -165,6 +171,7 @@ class ScriptedAdapter:
         self._real = make_adapter(self.profile, self.keychain)
         self.script = list(script)
         self.requests = []  # (messaggi, strumenti) di ogni richiesta
+        self.options = []  # TurnOptions di ogni richiesta
         self.records = []
         self.tool_calling = tool_calling
 
@@ -180,7 +187,9 @@ class ScriptedAdapter:
         from astrotwo.ai.provider_adapter import RequestRecord, TurnEnd, TurnOptions
 
         messages, tools = list(messages), list(tools)
-        body = self._real._body(messages, tools, options or TurnOptions())
+        options = options or TurnOptions()
+        self.options.append(options)
+        body = self._real._body(messages, tools, options)
         self.records.append(RequestRecord(self._real._url(), "2026-10-22T12:00:00+00:00", body))
         self.requests.append((messages, tools))
         step = self.script.pop(0) if self.script else text_turn("")

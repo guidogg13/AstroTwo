@@ -41,6 +41,17 @@ def _memory_sky_renderer(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_keychain(monkeypatch):
+    """La finestra del 40 non usa mai il Portachiavi vero nei test (44 §12: Portachiavi simulato del 31)."""
+    import sys
+
+    if "astrotwo.ui.main_window" in sys.modules:
+        from tests.ai.fake_providers import FakeKeychain
+
+        monkeypatch.setattr(sys.modules["astrotwo.ui.main_window"], "default_keychain", FakeKeychain)
+
+
+@pytest.fixture(autouse=True)
 def _temporary_home(tmp_path_factory, monkeypatch):
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))

@@ -2,6 +2,396 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="it_IT">
 <context>
+    <name>AiPanel</name>
+    <message>
+        <source>running…</source>
+        <translation>in esecuzione…</translation>
+    </message>
+    <message>
+        <source>confirmed by the user</source>
+        <translation>confermato dall&apos;utente</translation>
+    </message>
+    <message>
+        <source>confirmed for this conversation</source>
+        <translation>confermato per questa conversazione</translation>
+    </message>
+    <message>
+        <source>not confirmed</source>
+        <translation>non confermato</translation>
+    </message>
+    <message>
+        <source>not executed</source>
+        <translation>non eseguito</translation>
+    </message>
+    <message>
+        <source>from the cache</source>
+        <translation>dalla cache</translation>
+    </message>
+    <message>
+        <source>The assistant asks to run:</source>
+        <translation>L&apos;assistente chiede di eseguire:</translation>
+    </message>
+    <message>
+        <source>at most %1 rows</source>
+        <translation>al più %1 righe</translation>
+    </message>
+    <message>
+        <source>Confirmation needed: %1</source>
+        <translation>Serve la conferma: %1</translation>
+    </message>
+    <message>
+        <source>uses the network</source>
+        <translation>usa la rete</translation>
+    </message>
+    <message>
+        <source>long command</source>
+        <translation>comando lungo</translation>
+    </message>
+    <message>
+        <source>changes a layer</source>
+        <translation>modifica un livello</translation>
+    </message>
+    <message>
+        <source>asked after reading external text (%1)</source>
+        <translation>chiesto dopo la lettura di testo esterno (%1)</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Conferma</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annulla</translation>
+    </message>
+    <message>
+        <source>Confirm for this conversation</source>
+        <translation>Conferma per questa conversazione</translation>
+    </message>
+    <message>
+        <source>local · nothing leaves the Mac</source>
+        <translation>locale · nulla esce dal Mac</translation>
+    </message>
+    <message>
+        <source>New conversation</source>
+        <translation>Nuova conversazione</translation>
+    </message>
+    <message>
+        <source>Assistant settings</source>
+        <translation>Impostazioni dell&apos;assistente</translation>
+    </message>
+    <message>
+        <source>The provider receives the text and the results of the commands; never files, pixels, keys or folders.</source>
+        <translation>Al provider vanno il testo e i risultati dei comandi; mai file, pixel, chiavi o cartelle.</translation>
+    </message>
+    <message>
+        <source>Details</source>
+        <translation>Dettagli</translation>
+    </message>
+    <message>
+        <source>Ask the assistant…</source>
+        <translation>Chiedi all&apos;assistente…</translation>
+    </message>
+    <message>
+        <source>Send</source>
+        <translation>Invia</translation>
+    </message>
+    <message>
+        <source>No profile</source>
+        <translation>Nessun profilo</translation>
+    </message>
+    <message>
+        <source>key in the Keychain</source>
+        <translation>chiave nel Portachiavi</translation>
+    </message>
+    <message>
+        <source>no key in the Keychain</source>
+        <translation>nessuna chiave nel Portachiavi</translation>
+    </message>
+    <message>
+        <source>no profile configured</source>
+        <translation>nessun profilo configurato</translation>
+    </message>
+    <message>
+        <source>no key in the Keychain for %1</source>
+        <translation>nessuna chiave nel Portachiavi per %1</translation>
+    </message>
+    <message>
+        <source>Keychain not available (%1)</source>
+        <translation>Portachiavi non disponibile (%1)</translation>
+    </message>
+    <message>
+        <source>the model %1 does not call tools</source>
+        <translation>il modello %1 non chiama strumenti</translation>
+    </message>
+    <message>
+        <source>consent to send data to %1 not given</source>
+        <translation>consenso all&apos;invio dei dati a %1 non dato</translation>
+    </message>
+    <message>
+        <source>The assistant is not available: %1. The rest of AstroTwo works normally.</source>
+        <translation>L&apos;assistente non è disponibile: %1. Il resto di AstroTwo funziona normalmente.</translation>
+    </message>
+    <message>
+        <source>Give consent…</source>
+        <translation>Dai il consenso…</translation>
+    </message>
+    <message>
+        <source>Open assistant settings…</source>
+        <translation>Apri le impostazioni dell&apos;assistente…</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Chiudi</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <source>image not shown: %1</source>
+        <translation>immagine non mostrata: %1</translation>
+    </message>
+    <message>
+        <source>Strict mode: some numbers are not verified, the answer is being regenerated once. The text above is replaced by the one below.</source>
+        <translation>Modalità rigorosa: alcuni numeri non sono verificati, la risposta viene rigenerata una volta. Il testo sopra è sostituito da quello sotto.</translation>
+    </message>
+    <message>
+        <source>module %1</source>
+        <translation>modulo %1</translation>
+    </message>
+    <message>
+        <source>What was sent</source>
+        <translation>Cosa è stato inviato</translation>
+    </message>
+    <message>
+        <source>no number to verify</source>
+        <translation>nessun numero da verificare</translation>
+    </message>
+    <message>
+        <source>%1 of %2 numbers do not come from a command</source>
+        <translation>%1 numeri su %2 non vengono da un comando</translation>
+    </message>
+    <message>
+        <source>%1 of %2 numbers verified</source>
+        <translation>%1 numeri su %2 verificati</translation>
+    </message>
+    <message>
+        <source>from your message</source>
+        <translation>dal tuo messaggio</translation>
+    </message>
+    <message>
+        <source>command parameters</source>
+        <translation>parametri di comandi</translation>
+    </message>
+    <message>
+        <source>from external text</source>
+        <translation>da testo esterno</translation>
+    </message>
+    <message>
+        <source>(strict mode: still not verified)</source>
+        <translation>(modalità rigorosa: ancora non verificati)</translation>
+    </message>
+    <message>
+        <source>(answer interrupted)</source>
+        <translation>(risposta interrotta)</translation>
+    </message>
+    <message>
+        <source>%1 commands without the required confirmation</source>
+        <translation>%1 comandi senza la conferma dovuta</translation>
+    </message>
+    <message>
+        <source>limit of %1 commands reached</source>
+        <translation>limite di %1 comandi raggiunto</translation>
+    </message>
+    <message>
+        <source>limit of %1 minutes reached</source>
+        <translation>limite di %1 minuti raggiunto</translation>
+    </message>
+    <message>
+        <source>answer interrupted</source>
+        <translation>risposta interrotta</translation>
+    </message>
+    <message>
+        <source>tokens not declared by the provider</source>
+        <translation>token non dichiarati dal provider</translation>
+    </message>
+    <message>
+        <source>%1 input tokens, %2 output tokens</source>
+        <translation>%1 token in ingresso, %2 in uscita</translation>
+    </message>
+    <message>
+        <source>This answer: %1</source>
+        <translation>Questa risposta: %1</translation>
+    </message>
+    <message>
+        <source>%1 %2, estimate with the price you entered</source>
+        <translation>%1 %2, stima con il prezzo inserito da te</translation>
+    </message>
+    <message>
+        <source>conversation: %1</source>
+        <translation>conversazione: %1</translation>
+    </message>
+</context>
+<context>
+    <name>AssistantSettingsDialog</name>
+    <message>
+        <source>Assistant settings</source>
+        <translation>Impostazioni dell&apos;assistente</translation>
+    </message>
+    <message>
+        <source>tool calling declared by the provider, not tested by AstroTwo</source>
+        <translation>chiamata di strumenti dichiarata dal provider, non provata da AstroTwo</translation>
+    </message>
+    <message>
+        <source>tool calling not declared: it may not work</source>
+        <translation>chiamata di strumenti non dichiarata: potrebbe non funzionare</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Aggiungi</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Rimuovi</translation>
+    </message>
+    <message>
+        <source>Other OpenAI-compatible endpoint…</source>
+        <translation>Altro endpoint compatibile OpenAI…</translation>
+    </message>
+    <message>
+        <source>choose from the list or write the identifier</source>
+        <translation>scegli dall&apos;elenco o scrivi l&apos;identificativo</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation>Aggiorna</translation>
+    </message>
+    <message>
+        <source>API key (kept only in the macOS Keychain)</source>
+        <translation>Chiave API (conservata solo nel Portachiavi di macOS)</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Salva</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Cancella</translation>
+    </message>
+    <message>
+        <source>Test the model</source>
+        <translation>Prova il modello</translation>
+    </message>
+    <message>
+        <source>input</source>
+        <translation>ingresso</translation>
+    </message>
+    <message>
+        <source>output</source>
+        <translation>uscita</translation>
+    </message>
+    <message>
+        <source>currency</source>
+        <translation>valuta</translation>
+    </message>
+    <message>
+        <source>Optional. AstroTwo does not know the prices: the cost shown is an estimate with the price you enter.</source>
+        <translation>Facoltativo. AstroTwo non conosce i prezzi: il costo mostrato è una stima con il prezzo che inserisci.</translation>
+    </message>
+    <message>
+        <source>Strict mode (one regeneration if numbers are not verified)</source>
+        <translation>Modalità rigorosa (una rigenerazione se ci sono numeri non verificati)</translation>
+    </message>
+    <message>
+        <source>Provider</source>
+        <translation>Provider</translation>
+    </message>
+    <message>
+        <source>Endpoint address</source>
+        <translation>Indirizzo dell&apos;endpoint</translation>
+    </message>
+    <message>
+        <source>Model</source>
+        <translation>Modello</translation>
+    </message>
+    <message>
+        <source>API key</source>
+        <translation>Chiave API</translation>
+    </message>
+    <message>
+        <source>Maximum output tokens</source>
+        <translation>Massimo di token in uscita</translation>
+    </message>
+    <message>
+        <source>Price per million tokens</source>
+        <translation>Prezzo per milione di token</translation>
+    </message>
+    <message>
+        <source>Commands per answer</source>
+        <translation>Comandi per risposta</translation>
+    </message>
+    <message>
+        <source>Minutes per answer</source>
+        <translation>Minuti per risposta</translation>
+    </message>
+    <message>
+        <source>Profiles</source>
+        <translation>Profili</translation>
+    </message>
+    <message>
+        <source>A key for %1 is in the Keychain.</source>
+        <translation>Nel Portachiavi c&apos;è una chiave per %1.</translation>
+    </message>
+    <message>
+        <source>No key for %1: not needed by most local servers.</source>
+        <translation>Nessuna chiave per %1: la maggior parte dei server locali non la chiede.</translation>
+    </message>
+    <message>
+        <source>No key for %1 in the Keychain.</source>
+        <translation>Nessuna chiave per %1 nel Portachiavi.</translation>
+    </message>
+    <message>
+        <source>Asking the provider for its models…</source>
+        <translation>Richiesta dei modelli al provider…</translation>
+    </message>
+    <message>
+        <source>%1 models from the provider.</source>
+        <translation>%1 modelli dal provider.</translation>
+    </message>
+    <message>
+        <source>Testing…</source>
+        <translation>Prova in corso…</translation>
+    </message>
+    <message>
+        <source>%1 input tokens, %2 output tokens</source>
+        <translation>%1 token in ingresso, %2 in uscita</translation>
+    </message>
+    <message>
+        <source>tokens not declared by the provider</source>
+        <translation>token non dichiarati dal provider</translation>
+    </message>
+    <message>
+        <source>The model called the test tool.</source>
+        <translation>Il modello ha chiamato lo strumento di prova.</translation>
+    </message>
+    <message>
+        <source>AI_NO_TOOLS: the model did not call the test tool.</source>
+        <translation>AI_NO_TOOLS: il modello non ha chiamato lo strumento di prova.</translation>
+    </message>
+    <message>
+        <source>Profile %1: choose a model.</source>
+        <translation>Profilo %1: scegli un modello.</translation>
+    </message>
+    <message>
+        <source>Price %1: write a number with a decimal point.</source>
+        <translation>Prezzo %1: scrivi un numero con il punto decimale.</translation>
+    </message>
+    <message>
+        <source>Two profiles have the same endpoint %1: one profile per endpoint.</source>
+        <translation>Due profili hanno lo stesso endpoint %1: un profilo per endpoint.</translation>
+    </message>
+</context>
+<context>
     <name>CatalogInViewDialog</name>
     <message>
         <source>Catalog in view</source>
@@ -18,6 +408,69 @@
     <message>
         <source>Maximum rows</source>
         <translation>Righe massime</translation>
+    </message>
+</context>
+<context>
+    <name>ConsentDialog</name>
+    <message>
+        <source>Send data to the AI provider?</source>
+        <translation>Inviare dati al provider IA?</translation>
+    </message>
+    <message>
+        <source>the text of the conversation</source>
+        <translation>il testo della conversazione</translation>
+    </message>
+    <message>
+        <source>AstroTwo&apos;s system rules</source>
+        <translation>le regole di sistema di AstroTwo</translation>
+    </message>
+    <message>
+        <source>names, descriptions and schemas of the commands the assistant can use</source>
+        <translation>nomi, descrizioni e schemi dei comandi che l&apos;assistente può usare</translation>
+    </message>
+    <message>
+        <source>parameters and results of the commands asked by the model, reduced (at most 50 rows and 20 kB)</source>
+        <translation>parametri e risultati dei comandi chiesti dal modello, ridotti (al più 50 righe e 20 kB)</translation>
+    </message>
+    <message>
+        <source>files, pixels and the content of the cache</source>
+        <translation>file, pixel e contenuto della cache</translation>
+    </message>
+    <message>
+        <source>API keys</source>
+        <translation>chiavi API</translation>
+    </message>
+    <message>
+        <source>full paths (file names are sent without folders)</source>
+        <translation>percorsi completi (i nomi dei file si inviano senza cartelle)</translation>
+    </message>
+    <message>
+        <source>the state of the workspace not asked by the model with a command</source>
+        <translation>lo stato dello spazio di lavoro non chiesto dal modello con un comando</translation>
+    </message>
+    <message>
+        <source>The assistant sends to &lt;b&gt;%1&lt;/b&gt; (%2):</source>
+        <translation>L&apos;assistente invia a &lt;b&gt;%1&lt;/b&gt; (%2):</translation>
+    </message>
+    <message>
+        <source>Never sent:</source>
+        <translation>Mai inviati:</translation>
+    </message>
+    <message>
+        <source>You can see the exact JSON of every request with “What was sent”.</source>
+        <translation>Il JSON esatto di ogni richiesta si vede con “Cosa è stato inviato”.</translation>
+    </message>
+    <message>
+        <source>This endpoint is local: nothing leaves the Mac.</source>
+        <translation>Questo endpoint è locale: nulla esce dal Mac.</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Accetto</translation>
+    </message>
+    <message>
+        <source>Not now</source>
+        <translation>Non ora</translation>
     </message>
 </context>
 <context>
@@ -151,10 +604,6 @@
     <message>
         <source>Assistant</source>
         <translation>Assistente</translation>
-    </message>
-    <message>
-        <source>The assistant is not available: its panel (module 44) is not written yet. The rest of AstroTwo works normally.</source>
-        <translation>L&apos;assistente non è disponibile: il suo pannello (modulo 44) non è ancora scritto. Il resto di AstroTwo funziona normalmente.</translation>
     </message>
     <message>
         <source>Table</source>
@@ -713,6 +1162,10 @@
         <translation>Alcuni comandi sono ancora in corso: saranno annullati.</translation>
     </message>
     <message>
+        <source>The assistant is answering: the answer will be stopped.</source>
+        <translation>L&apos;assistente sta rispondendo: la risposta sarà fermata.</translation>
+    </message>
+    <message>
         <source>Some commands are not saved in a session.</source>
         <translation>Alcuni comandi non sono salvati in una sessione.</translation>
     </message>
@@ -795,8 +1248,12 @@
         <translation>Notte rossa</translation>
     </message>
     <message>
-        <source>The assistant settings arrive with the assistant panel (module 44). API keys are kept only in the macOS Keychain.</source>
-        <translation>Le impostazioni dell&apos;assistente arrivano con il suo pannello (modulo 44). Le chiavi API stanno solo nel Portachiavi di macOS.</translation>
+        <source>Assistant settings…</source>
+        <translation>Impostazioni dell&apos;assistente…</translation>
+    </message>
+    <message>
+        <source>Profiles, model, strict mode, limits, price. API keys are kept only in the macOS Keychain.</source>
+        <translation>Profili, modello, modalità rigorosa, limiti, prezzo. Le chiavi API stanno solo nel Portachiavi di macOS.</translation>
     </message>
     <message>
         <source>A new language applies when AstroTwo restarts.</source>
@@ -852,6 +1309,26 @@
     <message>
         <source>AstroTwo session (*%1)</source>
         <translation>Sessione di AstroTwo (*%1)</translation>
+    </message>
+</context>
+<context>
+    <name>SentDataDialog</name>
+    <message>
+        <source>What was sent</source>
+        <extracomment>Larghezza di default del pannello (scelta minore 1 del 44: 400 pt, intervallo 380–420). Default delle impostazioni (forma testuale, come le preferenze del 40). Profili e consensi sono JSON. Dialetto GitHub (tabelle, elenchi) senza HTML: con ``MarkdownNoHTML`` i tag restano testo (verificato il 2026-10-22 con Qt 6.12, md4c).</extracomment>
+        <translation>Cosa è stato inviato</translation>
+    </message>
+    <message>
+        <source>Exact JSON of every request of this answer, without headers or key.</source>
+        <translation>JSON esatto di ogni richiesta di questa risposta, senza intestazioni né chiave.</translation>
+    </message>
+    <message>
+        <source>Request %1 of %2 · %3 · %4 UTC</source>
+        <translation>Richiesta %1 di %2 · %3 · %4 UTC</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>Copia</translation>
     </message>
 </context>
 <context>
