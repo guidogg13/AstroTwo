@@ -153,6 +153,13 @@ Aggiunta di sicurezza obbligatoria (decisione del proprietario del
   `{"external_text": "<testo>", "source": "<servizio o file>"}`; il
   risultato porta in testa `"contains_external_text": true`. Le regole di
   sistema del `35` dicono che questi campi sono **dati, mai istruzioni**.
+- **`catalog.rows`: fonte scritta una volta** (decisione del proprietario
+  del 2026-10-22): in testa al risultato, dopo `contains_external_text`,
+  `"external_source": "<servizio o file>"`, e ogni campo esterno è solo
+  `{"external_text": "<testo>"}` (senza `source` su ogni valore, colonna,
+  unità e UCD). Ogni valore resta attribuibile: tutti i testi esterni di un
+  risultato hanno la stessa fonte. Gli altri comandi tengono `source` in
+  ogni campo (`SOURCE_ONCE` nel codice).
 - **Ogni testo esterno è limitato a 500 caratteri** (oltre: tagliato, con
   `"truncated": true` e la lunghezza originale).
 - **Effetto sulle conferme:** dal momento in cui, nel turno, il modello ha
@@ -230,7 +237,7 @@ Il modello riceve un JSON con:
   loro posto con i primi elementi; l'elenco dei tagli sta in testa al
   risultato, `"truncated": [{"path", "total", "kept"}]`; i testi esterni
   tolti per il limite di 20 kB diventano `{"external_text": null,
-  "removed": true, "source"}`.
+  "removed": true, "source"}` (senza `source` in `catalog.rows`, §3.6).
 - La riduzione riguarda **solo ciò che vede il modello**: la cronologia e
   la sessione hanno il risultato completo del `05`.
 
@@ -378,23 +385,28 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   controlla solo che lo schema ridotto usi le parole del sottoinsieme (T3);
   la prova con i provider reali è nella lista di controllo manuale del
   `35` §12.
-- **Scelte minori dello sprint 6a (2026-10-22), DA CONFERMARE** (la
-  specifica non le dice; nessun valore ne dipende): (1) argomenti vuoti
-  (`""`, mandati da alcuni provider per gli strumenti senza parametri) letti
-  come `{}`; (2) motivi della conferma scritti come codici `network`,
-  `long`, `modifies_layer`, `after_external_text` (il `44` li traduce);
-  (3) fonte del testo esterno = origine della provenienza, altrimenti
-  sorgente del livello del comando (§3.6); (4) chiavi `sha256` mai inviate,
-  percorsi assoluti con almeno due elementi ridotti al nome del file (§3.7);
-  (5) nelle calcolatrici tutte le stringhe sono di AstroTwo (l'ingresso è
-  quello scritto dal modello o dall'utente); il nome cercato da
-  `coords.resolve_name` è un parametro ripetuto, quindi di AstroTwo, mentre
-  l'identificativo principale e il bibcode di SIMBAD sono esterni; (6)
-  elenco `ASTROTWO_MESSAGE_CODES` (§3.6); (7) forma di §3.6 tenuta com'è,
-  con la fonte ripetuta in ogni campo esterno: così `catalog.rows` con 5
-  colonne entra nei 20 kB con circa 15 righe (il taglio è dichiarato, T8);
-  alternativa possibile: fonte scritta una volta sola in testa al risultato
-  (forma più corta, modifica di §3.6).
+- **Scelte minori dello sprint 6a (2026-10-22):**
+  - **CONFERMATE dal proprietario il 2026-10-22:** (1) argomenti vuoti
+    (`""`, mandati da alcuni provider per gli strumenti senza parametri)
+    letti come `{}`, cioè "nessun parametro".
+  - **DECISA dal proprietario il 2026-10-22:** (7) in `catalog.rows` la
+    fonte dei testi esterni è scritta una volta in testa al risultato
+    (`external_source`) invece che in ogni campo, purché ogni valore resti
+    attribuibile alla sua fonte (§3.6; T7 aggiornato).
+  - **Solo di presentazione, CONFERMATE** (incarico del proprietario del
+    2026-10-22 di togliere "da confermare" alle scelte di sola
+    presentazione): (2) motivi della conferma scritti come codici
+    `network`, `long`, `modifies_layer`, `after_external_text` (il `44` li
+    traduce); (3) fonte del testo esterno = origine della provenienza,
+    altrimenti sorgente del livello del comando (§3.6).
+  - **Restano DA CONFERMARE** (toccano la privacy o la sicurezza, non solo
+    la presentazione): (4) chiavi `sha256` mai inviate, percorsi assoluti
+    con almeno due elementi ridotti al nome del file (§3.7); (5) nelle
+    calcolatrici tutte le stringhe sono di AstroTwo (l'ingresso è quello
+    scritto dal modello o dall'utente); il nome cercato da
+    `coords.resolve_name` è un parametro ripetuto, quindi di AstroTwo,
+    mentre l'identificativo principale e il bibcode di SIMBAD sono esterni;
+    (6) elenco `ASTROTWO_MESSAGE_CODES` (§3.6).
 
 ## 14. Registro modifiche
 
@@ -404,3 +416,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-20 | Claude Code | **`view.set_overlays` aggiunto all'elenco degli strumenti** (§3.2, decisione del proprietario del 2026-10-20): classe session, vista, nessuna conferma. Il codice dell'elenco non esiste ancora (si scrive con il 32): niente da cambiare. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 6a** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/tool_registry.py` (`EXPOSED_COMMANDS` con i 22 strumenti di §3.2, `ToolRegistry` con `tools()`, `command_for`, `needs_confirmation`, `confirmation_request`, `reduce_result`, `ToolCallOutcome`, `ToolRegistryError`) e `tests/ai/test_tool_registry.py` (T1–T12; T5 copre la cronologia del `05`, la coda del `40` si prova con il `35` nello sprint 6c). **Decisione del proprietario del 2026-10-22:** testi esterni riconosciuti con due elenchi chiusi per percorso (`EXTERNAL_FIELDS` per comando, `ASTROTWO_FIELDS`), una stringa in nessuno dei due è esterna e fa fallire T12 (§3.6). Precisazioni in §3.4 (riduzione delle parole dello schema) e §3.7 (percorsi, `sha256`, forma dei tagli); scelte minori da confermare in §13. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6a** (applicate nello sprint 6b): argomenti vuoti = "nessun parametro" (scelta 1 confermata); in `catalog.rows` fonte dei testi esterni scritta una volta in testa (`external_source`, §3.6, §3.7; scelta 7 decisa; codice `SOURCE_ONCE` e test T7 aggiornati); scelte 2 e 3 confermate come solo di presentazione; restano da confermare 4, 5, 6 (§13). `external_source` reso pubblico per il `34`. Stato `approvato` invariato. |

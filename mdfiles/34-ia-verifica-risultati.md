@@ -74,7 +74,13 @@ verifica**.
 
 Gli identificativi che compaiono **come testo nei risultati** (es.
 identificativi Gaia, nomi SIMBAD, tipi spettrali come `B7IIIe`) non hanno
-bisogno di eccezioni: si verificano per uguaglianza di testo (§3.4, R1).
+bisogno di eccezioni: si **cercano** per uguaglianza di testo (§3.4, R1), e
+lo stato segue §3.5 (decisione del proprietario del 2026-10-22, sprint 6b:
+in caso di contrasto vince §3.5): un numero trovato **solo** in un testo di
+terzi (32 §3.6: valori di testo dei cataloghi, nomi SIMBAD, …) è
+`external_text`, **mai** `verified`; un valore **numerico** di un risultato
+(anche una colonna numerica di un catalogo, es. `source_id`) è un valore del
+comando e si verifica.
 
 ### 3.4 Confronto con i risultati
 
@@ -143,6 +149,54 @@ numero su 4 non viene da un comando"; i numeri `excluded` non si contano;
   verificati". **Mai** una seconda rigenerazione.
 - I token di entrambe le risposte si contano (`35` §3.6).
 
+### 3.6bis Precisazioni del codice (sprint 6b, 2026-10-22)
+
+Come il codice applica §3.2–§3.5 dove la specifica non scende nel dettaglio
+(scelte minori da confermare in §13):
+
+- **Identificativi:** cifre attaccate a una lettera (`B7IIIe`, `H2O`) e
+  sequenze con più punti (`1.2.3`) si cercano **solo** per uguaglianza di
+  testo (R1), mai per valore (altrimenti il 7 di `B7IIIe` sarebbe
+  "verificato" da un 7 qualunque). Gli interi di 16 cifre o più (es.
+  `source_id` di Gaia) solo per uguaglianza esatta: un `float64` non
+  distingue interi vicini.
+- **Numeri dentro le stringhe:** si cercano solo nei testi esterni (→
+  `external_text`), nei parametri (→ `command_parameter`, "G < 10" in
+  un'espressione) e nei messaggi dell'utente; le stringhe scritte da
+  AstroTwo valgono solo per intero (R1), così una cifra in un nome di file
+  non "verifica" un numero.
+- **Unità:** dopo uno spazio le parole della prosa che `astropy.units`
+  leggerebbe come unità (`a` = anno, `da`, `as`) non sono unità, né una
+  parola seguita da apostrofo ("3 l'oggetto"); un'unità attaccata non
+  riconosciuta (`3x`) dà la nota "unità non riconosciuta"; le unità con
+  spazio si uniscono solo se i pezzi seguenti hanno un esponente
+  (`km s-1`). Le cifre di un'unità scritta senza numero (`deg2`, `s-1`) non
+  sono numeri. Nessuna equivalenza di `astropy.units` (solo conversioni
+  dirette).
+- **Sessagesimali:** R1 per le posizioni si ottiene con R2 sul valore letto
+  da `parse_sexagesimal` del 10, che accetta ogni testo di
+  `format_coordinates` a qualunque precisione (nessun testo generato); con i
+  due punti senza segno si provano ore e gradi (basta una lettura), con il
+  segno solo gradi; gli angoli si confrontano anche a ±360°.
+- **Date:** una data scritta corrisponde anche a una data-ora del risultato
+  che comincia con lo stesso testo fino a un confine di campo (precisione
+  scritta, come R2); i tempi del 05 (JD in due parti con la scala) si
+  confrontano con il loro testo ISO 8601 (`time_text` del 05).
+- **`#n` citato:** sono citati tutti i `#n` della stessa frase (il più vicino
+  prima); la frase finisce a `. ! ? ;` seguiti da uno spazio o all'a capo.
+- **X5:** la designazione comprende i gruppi di cifre separati da trattino
+  (`TYC 1800-1234-1`).
+- **Ordine tra le categorie:** valori dei comandi (citato, poi gli altri dal
+  più recente), parametri, dati dell'utente, testi esterni.
+- **Posizioni** nel testo normalizzato NFC (`VerificationReport.text`), il
+  testo che il `44` mostra; il segno meno `−` resta com'è nel testo.
+- **X2:** esistono i livelli dello spazio di lavoro attuale e quelli creati
+  dai comandi della conversazione.
+- **Rigenerazione:** il messaggio di sistema (in inglese, come le regole del
+  `35`) è scritto da `regeneration_request`; `needs_regeneration` dice sì
+  solo in modalità rigorosa e solo per la prima risposta; la chiamata al
+  modello resta del `35`.
+
 ### 3.7 Sicurezza: la verifica non si lascia istruire
 
 Aggiunta di sicurezza obbligatoria (decisione del proprietario del
@@ -199,13 +253,21 @@ Nomi proposti, descrizione in parole. File Python
 `src/astrotwo/ai/result_verification.py`; test in
 `tests/ai/test_result_verification.py`.
 
-- **`extract_numbers(text)`** — sequenze numeriche di §3.2 con posizione,
-  valore, precisione scritta, unità ed eventuale `#n` citato; marca le
-  eccezioni di §3.3.
-- **`verify_answer(text, user_messages, results, call_log)`** →
-  `VerificationReport` (stati di §3.5, controllo delle azioni di §3.7).
-- **`VerificationReport`** — elenco dei numeri con stato, riepilogo,
-  `has_unverified`, problemi di azioni.
+- **`extract_numbers(text)`** → `WrittenNumber`: sequenze numeriche di
+  §3.2 con posizione, valore, precisione scritta, unità ed eventuali `#n`
+  citati; marca le eccezioni di §3.3.
+- **`verify_answer(text, user_messages, results, call_log, *, tools, state,
+  interrupted, strict_retry)`** → `VerificationReport` (stati di §3.5,
+  controllo delle azioni di §3.7). `results`: comandi della conversazione
+  (`HistoryEntry` del `05`: numero, comando, risultato completo);
+  `call_log`: chiamate della risposta (`ToolCallOutcome` del `32`); `tools`:
+  `ToolRegistry` del `32` (classificazione dei testi esterni); `state`:
+  spazio di lavoro (livelli e fonte dei testi esterni).
+- **`VerificationReport`** — `CheckedNumber` con stato, comando, valore e
+  unità corrispondenti, percorso nel risultato, fonte e note; `issues`
+  (`VerificationIssue`); `summary`; `has_unverified`; `action_issues`.
+- **`needs_regeneration(report, strict, regenerated)`**,
+  **`regeneration_request(report)`** — modalità rigorosa (§3.6).
 - **`EXCEPTIONS`** — l'elenco chiuso di §3.3, come dati.
 
 ## 8. Librerie e standard di riferimento
@@ -248,7 +310,11 @@ di citare `#n` e di non calcolare).
 ## 12. Test di accettazione
 
 In `tests/ai/test_result_verification.py`, senza rete e senza provider:
-risposte scritte nei test e risultati sintetici dei comandi.
+risposte scritte nei test e risultati sintetici dei comandi. In più (sprint
+6b) un flusso con un **finto provider** locale (servizio simulato del `30`,
+nessuna chiave reale): il modello chiama `catalog__rows`, risponde con un
+numero inventato, che è segnalato; in modalità rigorosa una sola
+rigenerazione.
 
 | # | Descrizione | Passi | Atteso | Verifica |
 |---|---|---|---|---|
@@ -256,7 +322,7 @@ risposte scritte nei test e risultati sintetici dei comandi.
 | T2 | Sessagesimali | posizione ICRS nel risultato; risposta con il testo di `format_coordinates`, con meno decimali, con una cifra sbagliata | primi due `verified`; il terzo `not_verified` | ricalcolo con il 10 |
 | T3 | Eccezioni chiuse | testo con `#3`, `L2`, `J2000`, `Gaia DR3`, `I/355/gaiadr3`, `M 45`, `NGC 1432`, `1.` di un elenco, `ISO 8601` | tutti `excluded`; `#99` inesistente segnalato | test di unità |
 | T4 | Nel dubbio si verifica | `B7IIIe` assente dai risultati; `3x`; `Pleiadi a 136 pc` senza comando | numeri `not_verified` | test di unità |
-| T5 | Identificativi dai risultati | identificativo Gaia e tipo spettrale presenti come testo nel risultato | `verified` per uguaglianza di testo | test di unità |
+| T5 | Identificativi dai risultati (corretto il 2026-10-22: vince §3.5) | identificativo Gaia e tipo spettrale presenti come testo di un catalogo nel risultato; `source_id` in una colonna numerica | i primi due `external_text` (trovati per uguaglianza di testo, ma solo in un testo di terzi); il `source_id` numerico `verified` (intero esatto; l'intero vicino `not_verified`) | test di unità |
 | T6 | Dati in ingresso e parametri | domanda "con G < 10 entro 10′"; comando con raggio 10 arcmin | `10` della risposta `user_input` o `command_parameter` (dichiarato quale) | test di unità |
 | T7 | Unità diverse | risultato in `mag`, risposta con lo stesso numero in `pc` | `not_verified` | test di unità |
 | T8 | Risposte precedenti non contano | risposta 1 con `42.0′` non verificato; risposta 2 ripete `42.0′` | `not_verified` anche nella seconda | test di unità |
@@ -277,6 +343,29 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   chiuso di §3.3 (cataloghi X4, prefissi X5, standard X7); (3) tolleranza
   di R2 = mezza unità dell'ultima cifra scritta (accetta arrotondamento e
   troncamento).
+- **Da chiarire (sprint 6b):** la formula di R2 (mezza unità dell'ultima
+  cifra) accetta l'arrotondamento, ma il troncamento solo quando coincide
+  con l'arrotondamento: `23.18526…′` scritto `23.18′` (troncato) **non** è
+  verificato (scarto 0.0053 > 0.005). Il codice applica la formula e gli
+  esempi di R2 e T1; le parole "e troncamento" della scelta (3) sono da
+  togliere o, se il troncamento va accettato, la tolleranza diventa
+  "un'unità intera dell'ultima cifra verso lo zero" (modifica di R2).
+- **Scelte minori dello sprint 6b (2026-10-22), DA CONFERMARE** (§3.6bis;
+  la specifica non le dice; nessun valore ne dipende, cambiano solo quali
+  numeri sono segnalati): (1) identificativi (cifre attaccate a una
+  lettera, più punti) solo per uguaglianza di testo; interi di 16 cifre o
+  più solo esatti; (2) numeri dentro le stringhe solo per testi esterni,
+  parametri e messaggi dell'utente; (3) parole `a`, `da`, `as` dopo uno
+  spazio non sono unità; unità con spazio solo con esponenti; nessuna
+  equivalenza; (4) R1 delle posizioni tramite `parse_sexagesimal`; due punti
+  senza segno letti come ore o gradi; angoli a ±360°; (5) data scritta
+  uguale all'inizio di una data-ora fino a un confine di campo; tempi del
+  05 confrontati come ISO 8601; (6) tutti i `#n` della frase sono citati;
+  (7) X5 con i gruppi separati da trattino; (8) ordine valori → parametri →
+  dati dell'utente → testi esterni; (9) testi del riepilogo come in §3.5,
+  con "+ n parametri di comandi", "+ n da testi esterni", "(risposta
+  interrotta)", "(modalità rigorosa: ancora non verificati)" e "⛔ n comandi
+  senza la conferma dovuta".
 
 ## 14. Registro modifiche
 
@@ -284,3 +373,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: estrazione di tutti i numeri (decimali, scientifici, sessagesimali con il 10, date, forme ambigue), **elenco chiuso delle eccezioni** (numeri di comando, livelli, epoche, cataloghi, designazioni, numerazioni, standard), confronto per testo e alla precisione scritta con unità convertibili solo per confrontare, dati in ingresso e parametri, stati ed evidenziazione, modalità rigorosa con una sola rigenerazione; **sicurezza**: nessuna istruzione letta dai risultati, numeri dei testi esterni mai verificati, controllo delle conferme dopo un testo esterno; test con istruzioni malevole. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-22 | Claude Code | **Codice dello sprint 6b** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/result_verification.py` (`extract_numbers`, `verify_answer`, `VerificationReport`, `CheckedNumber`, `VerificationIssue`, `EXCEPTIONS`, `needs_regeneration`, `regeneration_request`) e `tests/ai/test_result_verification.py` (T1–T14, T14 `perf`: 20 ms per 10 kB e 50 risultati; flusso con un finto provider che inventa un numero). **Decisione del proprietario del 2026-10-22:** contrasto tra T5 e §3.5 risolto a favore di §3.5 (un numero trovato solo in un testo di terzi è `external_text`): corretti §3.3 e T5. Interfaccia di §7 precisata, precisazioni del codice in §3.6bis, scelte minori da confermare e incongruenza "troncamento" in §13. Stato `approvato` invariato. |

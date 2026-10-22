@@ -38,11 +38,13 @@ __all__ = [
     "MAX_ITEMS",
     "MAX_RESULT_BYTES",
     "MAX_EXTERNAL_CHARS",
+    "SOURCE_ONCE",
     "TOOL_NAME_PATTERN",
     "Confirmation",
     "ToolCallOutcome",
     "ToolRegistry",
     "ToolRegistryError",
+    "external_source",
     "string_paths",
 ]
 
@@ -79,6 +81,10 @@ TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 MAX_ITEMS = 50  # righe di una tabella o elementi di un elenco (§3.7)
 MAX_RESULT_BYTES = 20 * 1024  # JSON in UTF-8 (§3.7)
 MAX_EXTERNAL_CHARS = 500  # ogni testo esterno (§3.6)
+
+#: Comandi con la fonte dei testi esterni scritta una volta in testa al risultato (``external_source``) invece che
+#: in ogni campo (decisione del proprietario del 2026-10-22: tutti i testi esterni del risultato hanno quella fonte).
+SOURCE_ONCE = frozenset({"catalog.rows"})
 
 # --------------------------------------------------------------------------
 # Testi esterni (§3.6, decisione del proprietario del 2026-10-22: "entrambe le liste")
@@ -513,14 +519,17 @@ class ToolRegistry:
                       state: WorkspaceState | None = None) -> dict:
         """JSON per il modello: ``#n``, parametri registrati, valori pieni, testi esterni marcati, limiti fissi."""
         full = result.to_json()
-        source = _external_source(command, full, state)
-        marker = _Marker(self, command.name, source)
+        source = external_source(command, full, state)
+        once = command.name in SOURCE_ONCE
+        marker = _Marker(self, command.name, source, inline_source=not once)
         values = marker.walk(_private(full["values"]), "values")
         provenance = marker.walk(_private(full["provenance"]), "provenance")
         warnings = [marker.message(w) for w in _private(full["warnings"])]
         error = None if full["error"] is None else marker.message(_private(full["error"]))
-        out = {"contains_external_text": marker.found,
-               "command": {"number": number, "name": command.name, "tool": self._by_command.get(command.name),
+        out = {"contains_external_text": marker.found}
+        if once and marker.found:
+            out["external_source"] = source
+        out |= {"command": {"number": number, "name": command.name, "tool": self._by_command.get(command.name),
                            "parameters": _private(dict(command.parameters)), "status": result.status},
                "values": values, "provenance": provenance, "warnings": warnings, "error": error,
                "layers": list(full["layers_created"])}
@@ -531,7 +540,7 @@ class ToolRegistry:
         return _fit(out)
 
 
-def _external_source(command: Command, full: Mapping, state: WorkspaceState | None) -> str:
+def external_source(command: Command, full: Mapping, state: WorkspaceState | None) -> str:
     """Fonte dei testi esterni: origine della provenienza, altrimenti sorgente del livello del comando."""
     for item in full.get("provenance", ()):
         if item.get("origin"):
@@ -547,14 +556,18 @@ def _external_source(command: Command, full: Mapping, state: WorkspaceState | No
 
 
 class _Marker:
-    """Sostituisce i testi esterni con ``{"external_text", "source"}`` limitati a 500 caratteri (§3.6)."""
+    """Sostituisce i testi esterni con ``{"external_text", "source"}`` limitati a 500 caratteri (§3.6); senza
+    ``source`` nei campi se la fonte è scritta una volta in testa al risultato (``SOURCE_ONCE``)."""
 
-    def __init__(self, tools: ToolRegistry, command: str, source: str) -> None:
+    def __init__(self, tools: ToolRegistry, command: str, source: str, *, inline_source: bool = True) -> None:
         self.tools, self.command, self.source, self.found = tools, command, source, False
+        self.inline_source = inline_source
 
     def text(self, value: str) -> dict:
         self.found = True
-        out = {"external_text": value[:MAX_EXTERNAL_CHARS], "source": self.source}
+        out = {"external_text": value[:MAX_EXTERNAL_CHARS]}
+        if self.inline_source:
+            out["source"] = self.source
         if len(value) > MAX_EXTERNAL_CHARS:
             out.update(truncated=True, length=len(value))
         return out
@@ -606,7 +619,8 @@ def _lists(value: object, path: str):
 def _drop_external(value: object) -> object:
     if isinstance(value, dict):
         if "external_text" in value:
-            return {"external_text": None, "removed": True, "source": value.get("source")}
+            return {"external_text": None, "removed": True} | ({"source": value["source"]} if "source" in value
+                                                               else {})
         return {k: _drop_external(v) for k, v in value.items()}
     if isinstance(value, list):
         return [_drop_external(v) for v in value]
