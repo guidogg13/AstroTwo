@@ -204,6 +204,68 @@ Aggiunta di sicurezza obbligatoria (decisione del proprietario del
    nelle risposte non si aprono da soli; il `44` li mostra come testo
    (aprirli è un clic dell'utente).
 
+### 3.11 Precisazioni del codice (sprint 6c, 2026-10-22)
+
+Come il codice applica §3.1–§3.10 dove la specifica non scende nel
+dettaglio (scelte minori da confermare in §13):
+
+1. **Esecuzione:** il 35 usa un esecutore con due operazioni, "esegui e
+   aspetta il risultato" e "spazio di lavoro attuale". Nella finestra è la
+   coda del `40` (`MainWindow.assistant_executor()`, stesso `CancelToken`
+   della risposta). Senza interfaccia (test) `SessionExecutor` è una coda
+   della stessa forma: i comandi si eseguono nel thread proprietario della
+   sessione, perché la cache del `04` (SQLite) si usa da un solo thread.
+2. **Turno** in `requested_by` = numero progressivo della risposta (un
+   messaggio dell'utente = una risposta, anche con più richieste al
+   provider).
+3. **Testo della risposta** = testo di tutte le richieste della risposta,
+   nell'ordine, separato da una riga vuota tra una richiesta e l'altra; il
+   `34` lo verifica tutto (anche le frasi scritte prima di chiamare gli
+   strumenti).
+4. **"Dopo un testo esterno"** vale fino alla fine della risposta (§3.10
+   punto 3, "della stessa risposta"); un nuovo messaggio dell'utente lo
+   azzera. "Conferma per questa conversazione" si ricorda per nome del
+   comando; scelta dall'utente su una scheda dopo un testo esterno vale come
+   "Conferma" per quella sola chiamata.
+5. **Limite di 10:** ogni chiamata chiesta riceve un risultato (i provider
+   lo richiedono); quelle oltre il limite ricevono l'errore `AI_TOOL_LIMIT`
+   "non eseguito". L'ultima richiesta è senza strumenti, con il messaggio di
+   sistema in inglese come le regole: "Limit of 10 commands for this answer
+   reached: answer with the results you have. No more tools can be called."
+   Le chiamate chieste comunque in quella richiesta si ignorano. **Da
+   verificare con una chiave di Anthropic:** se l'API Messages accetta una
+   richiesta con blocchi `tool_use`/`tool_result` e senza `tools`;
+   altrimenti servirà `tool_choice: none` (modifica del `30`, da decidere).
+6. **Stop e limite di tempo:** le chiamate chieste e non iniziate ricevono
+   `AI_CANCELLED` "non eseguito"; se lo Stop arriva durante lo streaming, le
+   chiamate di quella richiesta non entrano nella conversazione (resta il
+   testo ricevuto). Il tempo si misura con un orologio monotono; le attese
+   di conferma si tolgono.
+7. **Rigenerazione** (modalità rigorosa, `34` §3.6): la prima risposta non
+   si rimanda al modello come messaggio dell'assistente (con Anthropic un
+   messaggio finale dell'assistente è un "prefill", rifiutato dai modelli
+   recenti); la richiesta finisce con i risultati dei comandi (o il
+   messaggio dell'utente) più il messaggio di sistema di
+   `regeneration_request` del `34`. Gli strumenti restano disponibili entro
+   i limiti rimasti della risposta.
+8. **Token:** se anche una sola richiesta della risposta non dichiara i
+   token, la risposta (e la conversazione) mostra "token non dichiarati dal
+   provider": nessuna somma parziale.
+9. **Versione delle regole:** il `RequestRecord` del `30` contiene il testo
+   esatto delle regole; la versione lo accompagna nell'evento della
+   richiesta inviata e nel blocco `conversations`.
+10. **Consenso:** salvato per profilo con versione del testo
+    (`CONSENT_TEXT_VERSION` = 1) e data; il testo lo mostra il `44`.
+11. **Blocco `conversations`:** per ogni conversazione con messaggi:
+    identificativo, chiusa sì/no, profilo, modello, versione delle regole,
+    messaggi (utente; assistente con le chiamate; risultati come inviati al
+    modello), risposte (testo, rapporto del `34` con stati e posizioni,
+    risposte sostituite, note, errore, chiamate con conferme, token) e
+    token totali.
+12. **Note sotto la risposta:** testi in italiano come il riepilogo del
+    `34` ("limite di 10 comandi raggiunto", "limite di 5 minuti raggiunto",
+    "risposta interrotta"), con il codice; la traduzione è del `44`.
+
 ## 4. Cosa NON fa
 
 - Non calcola nulla: i numeri vengono dai comandi; la sola aritmetica del
@@ -257,6 +319,17 @@ Nomi proposti, descrizione in parole. File Python
 - **`CallLogEntry`** — chiamata, testo esterno prima sì/no, conferma
   chiesta e risposta (per il `34`).
 
+Precisazioni del codice (sprint 6c): `send` restituisce una `Response`
+(`wait` → `AnswerRecord` con testo, rapporto del `34`, note, chiamate,
+richieste inviate, token e costo); `record_consent()` per "Accetto";
+`set_adapter()` al cambio di profilo; eventi per il `44` dal thread
+dell'assistente: `ResponseStarted`, `TextChunk`, `ToolCallStarted`,
+`ConfirmationRequested`, `ToolCallFinished`, `RequestSent`,
+`ProviderNoticeEvent`, `RegenerationStarted`, `ResponseFinished`.
+Esecutori: `CommandExecutor` (contratto), `SessionExecutor` (senza Qt),
+`AssistantQueueExecutor` del `40`. Token e costo: `TokenCount`, `Pricing`,
+`estimate_cost`.
+
 ## 8. Librerie e standard di riferimento
 
 | Libreria / standard | Uso nel modulo | Motivazione |
@@ -294,6 +367,10 @@ manda eventi (eseguito in un thread proprio, non nel thread principale).
 | Il modello chiede strumenti in parallelo | eseguiti uno alla volta, in ordine | — |
 | Il modello risponde senza citare `#n` o con numeri non verificati | risposta mostrata con l'evidenziazione del `34` (rigenerazione solo in modalità rigorosa) | — |
 | Testo esterno con istruzioni | trattato come dato; un'azione successiva chiede conferma | — |
+| Nessun profilo configurato | assistente non disponibile | `AI_NO_PROFILE` |
+| Messaggio mentre un'altra risposta è in corso | rifiutato (il `44` mostra Stop al posto di Invia) | `AI_BUSY` |
+| Errore di programmazione nel thread dell'assistente | solo quella risposta si ferma con il messaggio; i comandi già eseguiti restano | `AI_ASSISTANT_FAILED` |
+| Streaming finito senza motivo di fine | turno fermato | `AI_BAD_RESPONSE` (del `30`) |
 
 ## 11. Esposizione all'IA
 
@@ -324,11 +401,22 @@ chiave reale.
 | T13 | Disponibilità | nessun profilo; chiave mancante; Portachiavi non disponibile; modello senza strumenti; consenso negato | assistente non disponibile con il motivo; le funzioni dei livelli 1 e 2 funzionano | test |
 | T14 | Token e costo | eventi `Usage` simulati, prezzo inserito | totali per risposta e conversazione; costo = token × prezzo / 10⁶ con la nota | ricalcolo nel test |
 
+Note sul codice (sprint 6c): T3 si fa con una chiamata per risposta (il
+risultato di `catalog.load_region` ha i nomi delle colonne, testo esterno:
+nella stessa risposta "per questa conversazione" non varrebbe, §3.10); T9
+usa la nota di terzi nel nome di una riga di un catalogo (stessa
+marcatura `external_text` di una nota SIMBAD); T2 si prova anche con la
+coda vera della finestra in `tests/ui/test_assistant_queue.py` (con Stop di
+un comando in coda); T7 e T11 con entrambi i formati di richiesta (Anthropic
+e compatibile OpenAI).
+
 **Lista di controllo manuale** (prima di approvare il codice, con le chiavi
 dell'utente): con un modello reale, chiedere "vai alle Pleiadi e misura la
 distanza tra Alcyone e Atlas"; controllare comandi, conferme, citazioni
 `#n`, verifica e token; ripetere la prova di T8 con un catalogo di prova
-che contiene istruzioni.
+che contiene istruzioni; con Anthropic, impostare il limite a 1 chiamata e
+controllare che l'ultima richiesta senza strumenti sia accettata (§3.11
+punto 5).
 
 ## 13. Decisioni aperte
 
@@ -339,6 +427,21 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   o non confermate contano nel limite di 10; (3) le attese di conferma non
   contano nei 5 minuti; (4) casella "Includi il testo delle conversazioni"
   nella finestra di salvataggio della sessione, spenta di default.
+- **Scelte minori dello sprint 6c (2026-10-22), DA CONFERMARE** (§3.11; la
+  specifica non le dice): (1) esecutore con la coda del `40` e, senza
+  interfaccia, coda nel thread proprietario della sessione; (2) turno =
+  numero della risposta; (3) testo verificato = testo di tutte le richieste
+  della risposta; (4) "dopo un testo esterno" fino alla fine della
+  risposta, "per questa conversazione" per nome del comando; (5) chiamate
+  oltre il limite con `AI_TOOL_LIMIT` e testo inglese del messaggio di
+  sistema; (6) chiamate non iniziate con `AI_CANCELLED`; (7) prima risposta
+  non rimandata nella rigenerazione; (8) nessuna somma parziale dei token;
+  (9) versione delle regole accanto al `RequestRecord`; (10) consenso con
+  versione 1 del testo; (11) contenuto del blocco `conversations`; (12)
+  note in italiano con il codice; codici nuovi `AI_NO_PROFILE`, `AI_BUSY`,
+  `AI_ASSISTANT_FAILED` (§10).
+- **Da verificare con le chiavi dell'utente:** richiesta senza strumenti
+  dopo il limite con Anthropic (§3.11 punto 5).
 
 ## 14. Registro modifiche
 
@@ -346,3 +449,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 |---|---|---|
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: conversazione in memoria, ciclo degli strumenti uno alla volta con conferme, limiti di 10 chiamate e 5 minuti, regole di sistema R1–R9, Stop con `CancelToken`, token e costo solo con il prezzo dell'utente, disponibilità, privacy (cosa esce e cosa no, consenso per profilo, "Cosa è stato inviato", "locale"), comandi nella sessione e testo solo su richiesta; **sicurezza**: testi esterni come dati (R4), marcatura, conferma obbligatoria dopo un testo esterno, test di prompt injection. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
+| 2026-10-22 | Claude Code | **Codice dello sprint 6c** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/chat_assistant.py` (`ChatAssistant`, `Conversation`, `AssistantLimits`, `SYSTEM_RULES` versione 1, `CallLogEntry`, `SessionExecutor`, eventi per il `44`, `TokenCount`, `Pricing`, `estimate_cost`) e collegamento alla coda del `40` (`AssistantQueueExecutor`); test T1–T14 in `tests/ai/test_chat_assistant.py` con un provider simulato a copione (`ScriptedAdapter`, corpo JSON vero del `30`) e in `tests/ui/test_assistant_queue.py`. Precisazioni del codice in §3.11, interfaccia in §7, codici in §10, note ai test in §12, scelte minori da confermare e verifica con Anthropic in §13. Stato `approvato` invariato. |

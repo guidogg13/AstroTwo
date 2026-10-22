@@ -105,3 +105,88 @@ class FakeKeychain:
         if profile_id not in self.keys:
             raise KeychainError("KEY_NOT_FOUND", f"nessuna chiave per {profile_id!r}")
         return SecretKey(self.keys[profile_id])
+
+    def has_key(self, profile_id):
+        return profile_id in self.keys
+
+
+class UnavailableKeychain:
+    """Portachiavi che non risponde (KEYCHAIN_UNAVAILABLE)."""
+
+    def has_key(self, profile_id):
+        from astrotwo.ai.keychain_keys import KeychainError
+
+        raise KeychainError("KEYCHAIN_UNAVAILABLE", "Portachiavi non disponibile (simulato)")
+
+    get_key = has_key
+
+
+# --------------------------------------------------------------------------
+# Provider simulato a copione per il 35 (35 §12): sequenze di eventi del 30 scritte nei test
+# --------------------------------------------------------------------------
+
+
+def tool_call(call_id, tool, **arguments):
+    from astrotwo.ai.provider_adapter import ToolCallRequest
+
+    return ToolCallRequest(call_id, tool, json.dumps(arguments))
+
+
+def calls_turn(*requests, usage=(100, 10)):
+    from astrotwo.ai.provider_adapter import TurnEnd, Usage
+
+    return [*requests, Usage(*usage), TurnEnd("tool_use")]
+
+
+def text_turn(text, usage=(200, 30)):
+    from astrotwo.ai.provider_adapter import TextDelta, TurnEnd, Usage
+
+    return [TextDelta(text), *([Usage(*usage)] if usage else []), TurnEnd("end")]
+
+
+def numbers_sent(messages):
+    """Numeri ``#n`` dei risultati degli strumenti già mandati al modello, in ordine."""
+    from astrotwo.ai.provider_adapter import ToolResultMessage
+
+    return [json.loads(m.content)["command"]["number"] for m in messages if isinstance(m, ToolResultMessage)]
+
+
+class ScriptedAdapter:
+    """``ProviderAdapter`` finto (35 §12): ogni richiesta consuma un passo di ``script`` (lista di eventi, oppure
+    funzione ``(messaggi, strumenti, cancel)`` che li genera). Il corpo JSON registrato è quello vero del 30
+    (``_body`` dell'adattatore del tipo del profilo), così i test controllano ciò che uscirebbe dal Mac."""
+
+    def __init__(self, script, *, kind="openai_compatible", base_url="https://api.example.invalid/v1",
+                 model="modello-finto", keychain=None, tool_calling=True):
+        from astrotwo.ai.provider_adapter import ProviderProfile, make_adapter
+
+        self.profile = ProviderProfile(kind=kind, base_url=base_url, model=model)
+        self.keychain = keychain if keychain is not None else FakeKeychain({self.profile.id: "sk-finta-0123456789"})
+        self._real = make_adapter(self.profile, self.keychain)
+        self.script = list(script)
+        self.requests = []  # (messaggi, strumenti) di ogni richiesta
+        self.records = []
+        self.tool_calling = tool_calling
+
+    def capabilities(self):
+        from astrotwo.ai.provider_adapter import ProviderCapabilities
+
+        return ProviderCapabilities(self.tool_calling, True, None, None, self.profile.local)
+
+    def last_request(self):
+        return self.records[-1] if self.records else None
+
+    def stream_turn(self, messages, tools=(), options=None, cancel=None):
+        from astrotwo.ai.provider_adapter import RequestRecord, TurnEnd, TurnOptions
+
+        messages, tools = list(messages), list(tools)
+        body = self._real._body(messages, tools, options or TurnOptions())
+        self.records.append(RequestRecord(self._real._url(), "2026-10-22T12:00:00+00:00", body))
+        self.requests.append((messages, tools))
+        step = self.script.pop(0) if self.script else text_turn("")
+        events = step(messages, tools, cancel) if callable(step) else step
+        for event in events:
+            if cancel is not None and cancel.cancelled:
+                yield TurnEnd("cancelled")
+                return
+            yield event

@@ -121,6 +121,7 @@ from astrotwo.core.coordinates_wcs import format_coordinates
 __all__ = [
     "MainWindow",
     "CommandRunner",
+    "AssistantQueueExecutor",
     "StatusBar",
     "HistoryPanel",
     "MessagesPanel",
@@ -301,6 +302,40 @@ class ReplayDone:
     session: Session | None
     report: ReplayReport | None
     error: ResultMessage | None = None
+
+
+@dataclass
+class _AssistantTicket:
+    """Attesa di un comando dell'assistente: il thread del 35 aspetta ``event``; ``done`` arriva da ``_job_finished``."""
+
+    event: threading.Event = field(default_factory=threading.Event)
+    done: CommandDone | None = None
+
+
+class AssistantQueueExecutor:
+    """Esecutore del 35 sulla coda della finestra (35 §3.2, 32 §3.5): il comando entra nella stessa coda dei comandi
+    dell'utente, con il ``CancelToken`` della risposta, e il thread dell'assistente aspetta il ``CommandDone``. Il
+    thread principale non aspetta mai l'assistente (35 §9): ``execute`` dal thread principale è un errore."""
+
+    def __init__(self, window: MainWindow) -> None:
+        self.window = window
+
+    def execute(self, command: Command, cancel: CancelToken):
+        from astrotwo.ai.chat_assistant import ExecutedCommand
+
+        if threading.current_thread() is threading.main_thread():
+            raise RuntimeError("l'assistente esegue i comandi dal suo thread, mai da quello dell'interfaccia")
+        ticket = _AssistantTicket()
+        self.window._assistant_submit.emit(command, cancel, ticket)
+        ticket.event.wait()
+        done = ticket.done
+        if done is None:  # finestra chiusa con il comando in coda
+            return ExecutedCommand(command, CommandResult("cancelled", error=ResultMessage(
+                "COMMAND_CANCELLED", "comando annullato: finestra chiusa")), None)
+        return ExecutedCommand(done.registered, done.result, done.entry)
+
+    def state(self):
+        return self.window.session.workspace.state
 
 
 class CommandRunner(QObject):
@@ -1374,6 +1409,7 @@ class MainWindow(QMainWindow):
     """
 
     _submit_job = Signal(object)
+    _assistant_submit = Signal(object, object, object)  # comando, CancelToken, _AssistantTicket (dal thread del 35)
 
     def __init__(self, registry: CommandRegistry | None = None, settings: QSettings | None = None, *,
                  startup_commands: bool = True) -> None:
@@ -1398,6 +1434,7 @@ class MainWindow(QMainWindow):
         self._ids = itertools.count(1)
         self._jobs: dict[int, CommandJob | ReplayJob] = {}
         self._running: int | None = None
+        self._assistant_waiters: dict[int, _AssistantTicket] = {}
         self.collection_index_loader: Callable = self._load_collection_index
         self.confirm: Callable[[str, str], bool] = self._ask_confirmation
         self.show_modal: Callable[[str, str], None] = self._modal
@@ -1812,6 +1849,7 @@ class MainWindow(QMainWindow):
         self.runner = CommandRunner(self.session)
         self.runner.moveToThread(self._thread)
         self._submit_job.connect(self.runner.run_job, Qt.ConnectionType.QueuedConnection)
+        self._assistant_submit.connect(self._assistant_enqueue, Qt.ConnectionType.QueuedConnection)
         self.runner.started.connect(self._job_started)
         self.runner.progress.connect(self._job_progress)
         self.runner.finished.connect(self._job_finished)
@@ -1838,17 +1876,32 @@ class MainWindow(QMainWindow):
             version = 1  # nome sconosciuto: il 05 risponde COMMAND_UNKNOWN
         return self.submit_command(Command(name, version, dict(params), RequestedBy(source)))
 
-    def submit_command(self, command: Command) -> int:
-        """Mette in coda un comando già formato (Riesegui, assistente con ``requested_by = ai``)."""
+    def submit_command(self, command: Command, cancel: CancelToken | None = None) -> int:
+        """Mette in coda un comando già formato (Riesegui, assistente con ``requested_by = ai`` e il ``CancelToken``
+        della sua risposta, così Stop annulla anche il comando in coda o in corso)."""
         try:
             network = self.registry.spec(command.name).network
         except CommandError:
             network = False
-        job = CommandJob(next(self._ids), command, network=network)
+        job = CommandJob(next(self._ids), command, cancel if cancel is not None else CancelToken(), network=network)
         self._jobs[job.id] = job
         self._update_network()
         self._submit_job.emit(job)
         return job.id
+
+    def assistant_executor(self) -> AssistantQueueExecutor:
+        """Esecutore per il 35: comandi dell'assistente nella stessa coda di quelli dell'utente."""
+        return AssistantQueueExecutor(self)
+
+    @Slot(object, object, object)
+    def _assistant_enqueue(self, command: Command, cancel: CancelToken, ticket: _AssistantTicket) -> None:
+        self._assistant_waiters[self.submit_command(command, cancel)] = ticket
+
+    def _release_assistant(self, job_id: int, done: CommandDone | None) -> None:
+        ticket = self._assistant_waiters.pop(job_id, None)
+        if ticket is not None:
+            ticket.done = done
+            ticket.event.set()
 
     def read_passive(self, name: str, params: Mapping[str, object], source: str = "mouse") -> CommandResult:
         """Esegue subito un comando ``passive`` (D05-1) fuori dalla coda e dalla cronologia; si chiama da un thread
@@ -1888,6 +1941,12 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _job_finished(self, done: CommandDone) -> None:
+        try:
+            self._show_finished(done)
+        finally:  # l'assistente riprende dopo l'aggiornamento della finestra, anche se questo fallisce
+            self._release_assistant(done.job_id, done)
+
+    def _show_finished(self, done: CommandDone) -> None:
         self._job_done(done.job_id)
         result = done.result
         number = None if done.entry is None else done.entry.number
@@ -2237,6 +2296,8 @@ class MainWindow(QMainWindow):
                 return
         for job in self._jobs.values():
             job.cancel.cancel()
+        for job_id in list(self._assistant_waiters):
+            self._release_assistant(job_id, None)
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/state", self.saveState())
         self.settings.sync()

@@ -156,6 +156,12 @@ Architettura approvata dal proprietario il 2026-10-15:
   `requested_by = ai` (`32` §3.5); l'assistente (`35`) gira in un thread
   proprio e aspetta il risultato con i segnali di Qt; Annulla nella barra di
   stato e Stop del `44` impostano lo stesso `CancelToken` del comando.
+  Nel codice (sprint 6c del 2026-10-22): `MainWindow.assistant_executor()`
+  dà al `35` l'esecutore della coda; `submit_command(command, cancel)`
+  accetta il `CancelToken` della risposta, così Stop annulla anche un
+  comando dell'assistente ancora in coda; il thread dell'assistente riprende
+  dopo che la finestra ha mostrato il risultato; all'uscita le attese
+  dell'assistente si chiudono come annullate.
 - **Sessione:** Open session riapre con la riesecuzione del `05` (comando
   lungo, con avanzamento e Annulla); gli stop del `05` si mostrano in una
   finestra modale. Prima di aprire una sessione o di uscire con comandi non
@@ -477,3 +483,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-17 | Claude Code | **Parte 4a-fix (seconda parte), decisioni del proprietario dello stesso giorno:** pulsanti **+** e **−** sul cielo e voci Zoom in/out del menu View (⌘+, ⌘=, ⌘−; ×2 e ÷2 come un gesto); dopo un "Vai a" riuscito con campo > 1,25° la vista va a circa 1° con un `view.set_zoom` registrato (`05` invariato). Specifiche aggiornate prima: `41` §3.4 e `40` (menu View, §3.4). Icone Lucide `plus` e `minus` (ISC), traduzioni italiane, 2 test nuovi. |
 | 2026-10-20 | Claude Code | **Sprint 4c del 41:** menu Vista con "Show north and east" e "Show scale bar" (`view.set_overlays`, 05); 4 testi nuovi tradotti nel file `.ts`/`.qm`. |
 | 2026-10-21 | Claude Code | **Parte 5, sprint 5a (42):** il pannello Tabella contiene il pannello del 42 (schede dei cataloghi); senza cataloghi resta lo stato vuoto, con il testo aggiornato ("Open a catalog file or load a catalog region…"); dopo l'apertura di una sessione anche il pannello dei livelli e la tabella si ricostruiscono dallo stato; 15 testi nuovi tradotti nel `.ts`/`.qm`. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Parte 6, sprint 6c (35):** collegamento dell'assistente alla coda (§3.8): `assistant_executor()`, `submit_command` con il `CancelToken` della risposta, attese chiuse all'uscita; test in `tests/ui/test_assistant_queue.py`. Nessun cambiamento di comportamento per l'utente. Stato `approvato` invariato. |

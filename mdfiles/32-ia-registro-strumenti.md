@@ -124,7 +124,7 @@ dalla v1. Entreranno quando diventano comandi del `05` (regola §3.1); per
    dell'utente i comandi con indicatore `network` o `long` e quelli che
    **modificano un livello esistente**; **i comandi di sola lettura non
    chiedono conferma** (anche `coords.resolve_name`, che usa la rete:
-   interpretazione da confermare, §13). La regola è scritta nel `05` come
+   interpretazione confermata il 2026-10-16, §13). La regola è scritta nel `05` come
    indicatore `confirm` di ogni definizione; questa tabella lo riporta. La
    scheda di conferma e i pulsanti sono del `44` (Conferma, Annulla,
    "Conferma per questa conversazione", che vale solo per quel comando).
@@ -399,8 +399,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
     `network`, `long`, `modifies_layer`, `after_external_text` (il `44` li
     traduce); (3) fonte del testo esterno = origine della provenienza,
     altrimenti sorgente del livello del comando (§3.6).
-  - **Restano DA CONFERMARE** (toccano la privacy o la sicurezza, non solo
-    la presentazione): (4) chiavi `sha256` mai inviate, percorsi assoluti
+  - **CONFERMATE dal proprietario il 2026-10-22** (toccano la privacy o la
+    sicurezza, non solo la presentazione): (4) chiavi `sha256` mai inviate, percorsi assoluti
     con almeno due elementi ridotti al nome del file (§3.7); (5) nelle
     calcolatrici tutte le stringhe sono di AstroTwo (l'ingresso è quello
     scritto dal modello o dall'utente); il nome cercato da
@@ -417,3 +417,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-20 | Claude Code | **`view.set_overlays` aggiunto all'elenco degli strumenti** (§3.2, decisione del proprietario del 2026-10-20): classe session, vista, nessuna conferma. Il codice dell'elenco non esiste ancora (si scrive con il 32): niente da cambiare. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 6a** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/tool_registry.py` (`EXPOSED_COMMANDS` con i 22 strumenti di §3.2, `ToolRegistry` con `tools()`, `command_for`, `needs_confirmation`, `confirmation_request`, `reduce_result`, `ToolCallOutcome`, `ToolRegistryError`) e `tests/ai/test_tool_registry.py` (T1–T12; T5 copre la cronologia del `05`, la coda del `40` si prova con il `35` nello sprint 6c). **Decisione del proprietario del 2026-10-22:** testi esterni riconosciuti con due elenchi chiusi per percorso (`EXTERNAL_FIELDS` per comando, `ASTROTWO_FIELDS`), una stringa in nessuno dei due è esterna e fa fallire T12 (§3.6). Precisazioni in §3.4 (riduzione delle parole dello schema) e §3.7 (percorsi, `sha256`, forma dei tagli); scelte minori da confermare in §13. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6a** (applicate nello sprint 6b): argomenti vuoti = "nessun parametro" (scelta 1 confermata); in `catalog.rows` fonte dei testi esterni scritta una volta in testa (`external_source`, §3.6, §3.7; scelta 7 decisa; codice `SOURCE_ONCE` e test T7 aggiornati); scelte 2 e 3 confermate come solo di presentazione; restano da confermare 4, 5, 6 (§13). `external_source` reso pubblico per il `34`. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6b:** confermate le scelte minori 4 (niente SHA-256, solo il nome del file), 5 (stringhe delle calcolatrici come testo di AstroTwo) e 6 (elenco `ASTROTWO_MESSAGE_CODES`) (§13); tolto l'ultimo "da confermare" rimasto in §3.5. Nessuna modifica del codice. Stato `approvato` invariato. |

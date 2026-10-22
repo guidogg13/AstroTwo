@@ -152,7 +152,7 @@ numero su 4 non viene da un comando"; i numeri `excluded` non si contano;
 ### 3.6bis Precisazioni del codice (sprint 6b, 2026-10-22)
 
 Come il codice applica §3.2–§3.5 dove la specifica non scende nel dettaglio
-(scelte minori da confermare in §13):
+(scelte minori confermate dal proprietario il 2026-10-22, §13):
 
 - **Identificativi:** cifre attaccate a una lettera (`B7IIIe`, `H2O`) e
   sequenze con più punti (`1.2.3`) si cercano **solo** per uguaglianza di
@@ -341,16 +341,14 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   esterno mostrati come `external_text`, contati a parte e non come errore
   (la modalità rigorosa non li fa rigenerare); (2) contenuto dell'elenco
   chiuso di §3.3 (cataloghi X4, prefissi X5, standard X7); (3) tolleranza
-  di R2 = mezza unità dell'ultima cifra scritta (accetta arrotondamento e
-  troncamento).
-- **Da chiarire (sprint 6b):** la formula di R2 (mezza unità dell'ultima
-  cifra) accetta l'arrotondamento, ma il troncamento solo quando coincide
-  con l'arrotondamento: `23.18526…′` scritto `23.18′` (troncato) **non** è
-  verificato (scarto 0.0053 > 0.005). Il codice applica la formula e gli
-  esempi di R2 e T1; le parole "e troncamento" della scelta (3) sono da
-  togliere o, se il troncamento va accettato, la tolleranza diventa
-  "un'unità intera dell'ultima cifra verso lo zero" (modifica di R2).
-- **Scelte minori dello sprint 6b (2026-10-22), DA CONFERMARE** (§3.6bis;
+  di R2 = mezza unità dell'ultima cifra scritta (accetta l'arrotondamento;
+  "e troncamento" tolto su decisione del proprietario del 2026-10-22).
+- **DECISO dal proprietario il 2026-10-22 (contraddizione sulla
+  tolleranza):** vale solo l'arrotondamento, mezza unità dell'ultima cifra
+  scritta (R2), come già fa il codice; il troncamento non è accettato
+  quando non coincide con l'arrotondamento (`23.18526…′` scritto `23.18′`
+  **non** è verificato, scarto 0.0053 > 0.005).
+- **Scelte minori dello sprint 6b (2026-10-22), CONFERMATE dal proprietario il 2026-10-22** (§3.6bis;
   la specifica non le dice; nessun valore ne dipende, cambiano solo quali
   numeri sono segnalati): (1) identificativi (cifre attaccate a una
   lettera, più punti) solo per uguaglianza di testo; interi di 16 cifre o
@@ -374,3 +372,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: estrazione di tutti i numeri (decimali, scientifici, sessagesimali con il 10, date, forme ambigue), **elenco chiuso delle eccezioni** (numeri di comando, livelli, epoche, cataloghi, designazioni, numerazioni, standard), confronto per testo e alla precisione scritta con unità convertibili solo per confrontare, dati in ingresso e parametri, stati ed evidenziazione, modalità rigorosa con una sola rigenerazione; **sicurezza**: nessuna istruzione letta dai risultati, numeri dei testi esterni mai verificati, controllo delle conferme dopo un testo esterno; test con istruzioni malevole. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 6b** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/result_verification.py` (`extract_numbers`, `verify_answer`, `VerificationReport`, `CheckedNumber`, `VerificationIssue`, `EXCEPTIONS`, `needs_regeneration`, `regeneration_request`) e `tests/ai/test_result_verification.py` (T1–T14, T14 `perf`: 20 ms per 10 kB e 50 risultati; flusso con un finto provider che inventa un numero). **Decisione del proprietario del 2026-10-22:** contrasto tra T5 e §3.5 risolto a favore di §3.5 (un numero trovato solo in un testo di terzi è `external_text`): corretti §3.3 e T5. Interfaccia di §7 precisata, precisazioni del codice in §3.6bis, scelte minori da confermare e incongruenza "troncamento" in §13. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6b:** contraddizione sulla tolleranza risolta: tolto "e troncamento" dalla scelta (3), vale solo l'arrotondamento (mezza unità dell'ultima cifra), come già fa il codice; confermate tutte le scelte minori dello sprint 6b (§3.6bis, §13). Nessuna modifica del codice. Stato `approvato` invariato. |
