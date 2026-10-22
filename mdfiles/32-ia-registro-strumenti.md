@@ -98,6 +98,14 @@ dalla v1. Entreranno quando diventano comandi del `05` (regola §3.1); per
    numeri senza unità**. Modalità rigida dei provider (`strict`) non usata
    (scelta minore 1). **Da verificare prima del codice:** che entrambi i
    provider accettino questo sottoinsieme senza errori.
+   **Riduzione delle parole dello schema del `05` fuori dal sottoinsieme**
+   (sprint 6a): `anyOf` con `null` → `type` con `"null"` aggiunto (o `null`
+   nell'`enum`); altri `anyOf` (tempi) → `type` con l'unione dei tipi, le
+   `properties` della forma a oggetto e le forme scritte nella
+   descrizione; `const` → `enum` di un valore; `exclusiveMinimum` →
+   `minimum` più "(exclusive)" nella descrizione; `pattern`, `maxItems`,
+   tipi di livello ammessi e regole (`x-*`) → testo nella descrizione;
+   `additionalProperties` tolto (la validazione resta del `05`).
 4. Lo schema si ricalcola all'avvio dell'assistente da `export_schema`:
    nessuna copia scritta a mano.
 
@@ -156,6 +164,37 @@ Aggiunta di sicurezza obbligatoria (decisione del proprietario del
   (fonte)". Così **un'azione suggerita da un testo esterno non viene mai
   eseguita senza la conferma dell'utente**.
 
+**Come si riconosce un testo esterno** (decisione del proprietario del
+2026-10-22, sprint 6a: "entrambe le liste"). I risultati del `05` non
+marcano le stringhe; il 32 le classifica per **percorso** nel risultato
+(`values.rows[].values[].value`: chiavi separate da `.`, `[]` per gli
+elementi di un elenco) con due elenchi chiusi scritti nel codice
+(`EXTERNAL_FIELDS`, `ASTROTWO_FIELDS`):
+
+- `EXTERNAL_FIELDS`, **per comando esposto**: i campi che contengono testo
+  di terzi. Nella v1: valori, nomi di colonna, UCD, unità e descrizioni dei
+  cataloghi (`catalog.rows`, `catalog.select`, `catalog.describe`, colonne
+  e colonne di posizione di `catalog.load_region`, epoca ed equinozio letti
+  dal file o dal servizio); titolo, identificativo, frame e formati dei
+  tile e unità `BUNIT` di un survey (`hips.set_survey`); identificativo
+  principale e bibcode di SIMBAD (`coords.resolve_name`, `view.go_to`);
+  nomi dei livelli, colonne e unità in `layer.list`.
+- `ASTROTWO_FIELDS`, per comando o comuni: i campi scritti dal codice di
+  AstroTwo (identificativi `L<n>`, frame normalizzati, unità dei valori
+  calcolati, metodi, note dei moduli, date ISO, URL dei servizi
+  configurati, parametri ripetuti dal comando, tutti i campi delle
+  calcolatrici).
+- **Una stringa che non è in nessuno dei due elenchi è testo esterno**
+  (nel dubbio, esterno) e un test (`T12`) esegue ogni comando esposto su
+  dati sintetici e **fallisce** finché ogni sua stringa non è classificata.
+- **Avvisi ed errori:** il codice è sempre di AstroTwo; il testo è di
+  AstroTwo solo per l'elenco chiuso dei codici scritti dal `05` e dai
+  moduli senza testo di terzi (`ASTROTWO_MESSAGE_CODES`), altrimenti è
+  testo esterno (un servizio può scrivere nel messaggio d'errore).
+- **Fonte** (`source`) del testo esterno: l'origine dei dati del risultato
+  (provenienza), altrimenti la sorgente del livello del comando, con il
+  solo nome del file (§3.7).
+
 ### 3.7 Risultati ridotti per il modello
 
 Il modello riceve un JSON con:
@@ -183,7 +222,15 @@ Il modello riceve un JSON con:
   tolto. **Nessun numero viene accorciato** nelle sue cifre.
 - **Nomi dei file senza cartelle** (privacy): un parametro o un valore di
   tipo `file` diventa il solo nome del file (es. `pleiadi.fits`), senza
-  percorso né SHA-256.
+  percorso né SHA-256. In pratica (sprint 6a): ogni percorso assoluto
+  (`/…`, `~/…`, `file://…`) in qualunque stringa del risultato o dei
+  parametri diventa il suo ultimo elemento, e le chiavi `sha256` non si
+  inviano.
+- **Forma degli elenchi accorciati** (sprint 6a): gli elenchi restano al
+  loro posto con i primi elementi; l'elenco dei tagli sta in testa al
+  risultato, `"truncated": [{"path", "total", "kept"}]`; i testi esterni
+  tolti per il limite di 20 kB diventano `{"external_text": null,
+  "removed": true, "source"}`.
 - La riduzione riguarda **solo ciò che vede il modello**: la cronologia e
   la sessione hanno il risultato completo del `05`.
 
@@ -311,6 +358,7 @@ provider (richieste di strumenti scritte nei test).
 | T9 | Nomi dei file | comando con parametro `file` `/Users/nome/dati/pleiadi.fits` | il modello riceve `pleiadi.fits`; nessuna cartella, nessun SHA-256 | ricerca nel JSON |
 | T10 | Numeri pieni | risultato con `23.18526...′` | nel JSON per il modello lo stesso `float64` (rilettura identica) con l'unità | confronto bit per bit |
 | T11 | Riesecuzione senza IA | sessione con comandi chiesti dall'IA, riaperta senza profilo IA | stessi comandi rieseguiti, nessuna chiamata a un provider | `05` T4 con un provider simulato che fallisce se chiamato |
+| T12 | Ogni stringa classificata (2026-10-22) | ogni strumento esposto eseguito su dati sintetici (catalogo con un'istruzione nel nome di una riga), poi `reduce_result` | nessuna stringa fuori da `EXTERNAL_FIELDS` e `ASTROTWO_FIELDS`; testi esterni marcati nei risultati di cataloghi, survey e SIMBAD, nessuno nei risultati di vista, misure e calcolatrici; nessuna cartella nel JSON | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -325,8 +373,28 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   fuori dalla v1; (5) `catalog.search` restituisce il conteggio e i primi
   50 indici senza cambiare la selezione (selezionare tutte le righe di
   un'espressione: versione successiva).
-- **Da verificare prima del codice:** sottoinsieme di JSON Schema
-  accettato da entrambi i provider (§3.4).
+- **Da verificare con le chiavi dell'utente:** sottoinsieme di JSON Schema
+  accettato da entrambi i provider (§3.4). Senza chiavi né rete si
+  controlla solo che lo schema ridotto usi le parole del sottoinsieme (T3);
+  la prova con i provider reali è nella lista di controllo manuale del
+  `35` §12.
+- **Scelte minori dello sprint 6a (2026-10-22), DA CONFERMARE** (la
+  specifica non le dice; nessun valore ne dipende): (1) argomenti vuoti
+  (`""`, mandati da alcuni provider per gli strumenti senza parametri) letti
+  come `{}`; (2) motivi della conferma scritti come codici `network`,
+  `long`, `modifies_layer`, `after_external_text` (il `44` li traduce);
+  (3) fonte del testo esterno = origine della provenienza, altrimenti
+  sorgente del livello del comando (§3.6); (4) chiavi `sha256` mai inviate,
+  percorsi assoluti con almeno due elementi ridotti al nome del file (§3.7);
+  (5) nelle calcolatrici tutte le stringhe sono di AstroTwo (l'ingresso è
+  quello scritto dal modello o dall'utente); il nome cercato da
+  `coords.resolve_name` è un parametro ripetuto, quindi di AstroTwo, mentre
+  l'identificativo principale e il bibcode di SIMBAD sono esterni; (6)
+  elenco `ASTROTWO_MESSAGE_CODES` (§3.6); (7) forma di §3.6 tenuta com'è,
+  con la fonte ripetuta in ogni campo esterno: così `catalog.rows` con 5
+  colonne entra nei 20 kB con circa 15 righe (il taglio è dichiarato, T8);
+  alternativa possibile: fonte scritta una volta sola in testa al risultato
+  (forma più corta, modifica di §3.6).
 
 ## 14. Registro modifiche
 
@@ -335,3 +403,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16: elenco esplicito dei comandi esposti e non esposti, schema da `export_schema` del `05`, nomi tradotti (`view.go_to` → `view__go_to`), validazione del `05`, stessa coda del `40` con `requested_by = ai`, conferme (rete, lungo, modifica di un livello; sola lettura senza conferma), risultati entro 50 righe e 20 kB senza numeri accorciati, nomi di file senza cartelle, `catalog.search` al posto del 33; **sicurezza**: testi esterni marcati come dati, conferma obbligatoria per i comandi chiesti dopo un testo esterno. |
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-20 | Claude Code | **`view.set_overlays` aggiunto all'elenco degli strumenti** (§3.2, decisione del proprietario del 2026-10-20): classe session, vista, nessuna conferma. Il codice dell'elenco non esiste ancora (si scrive con il 32): niente da cambiare. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Codice dello sprint 6a** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/tool_registry.py` (`EXPOSED_COMMANDS` con i 22 strumenti di §3.2, `ToolRegistry` con `tools()`, `command_for`, `needs_confirmation`, `confirmation_request`, `reduce_result`, `ToolCallOutcome`, `ToolRegistryError`) e `tests/ai/test_tool_registry.py` (T1–T12; T5 copre la cronologia del `05`, la coda del `40` si prova con il `35` nello sprint 6c). **Decisione del proprietario del 2026-10-22:** testi esterni riconosciuti con due elenchi chiusi per percorso (`EXTERNAL_FIELDS` per comando, `ASTROTWO_FIELDS`), una stringa in nessuno dei due è esterna e fa fallire T12 (§3.6). Precisazioni in §3.4 (riduzione delle parole dello schema) e §3.7 (percorsi, `sha256`, forma dei tagli); scelte minori da confermare in §13. Stato `approvato` invariato. |

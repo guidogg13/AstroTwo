@@ -18,6 +18,26 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-22, parte 6, sprint 6a della v1 (32: registro degli
+  strumenti per l'IA):** `src/astrotwo/ai/tool_registry.py` espone all'IA
+  **solo i 22 comandi del 32 §3.2** (compreso `view.set_overlays`), con nome,
+  descrizione e schema presi da `export_schema` del 05 e ridotti al
+  sottoinsieme accettato dai provider; ogni chiamata si valida con il 05 come
+  quelle dell'utente (errori restituiti al modello, nulla in cronologia),
+  diventa un comando con `requested_by = ai` e il suo risultato arriva al
+  modello ridotto (≤ 50 elementi, ≤ 20 kB, nessun numero accorciato, file
+  senza cartelle, niente SHA-256). **Conferme:** rete, lungo o modifica di un
+  livello; dopo un testo esterno ogni comando che non sia di sola lettura
+  senza rete chiede conferma, senza "per questa conversazione".
+  **Decisione del proprietario del 2026-10-22:** i testi esterni si
+  riconoscono con due elenchi chiusi per percorso (campi esterni per
+  comando, campi di AstroTwo); una stringa non classificata è esterna e fa
+  fallire T12. **Decisioni del proprietario del 2026-10-22 sullo sprint
+  5b:** confermate le scelte minori del 42 §13; i sei valori della stella di
+  Barnard restano nei test con Gaia DR3 citata come fonte. Divisione della
+  parte 6 approvata: **6a 32 (fatto), 6b 34, 6c 35**, poi il 44. Scelte
+  minori di 6a da confermare (32 §13). Test: **744 di default**, di rete
+  non eseguiti (`--no-network`). Decisioni aperte: **14**.
 - **Stato al 2026-10-22, parte 5, sprint 5b della v1 (42: dialoghi delle
   colonne):** all'apertura di un catalogo (`catalog.open_file`,
   `catalog.load_region`) si apre da solo il dialogo delle **colonne di
@@ -35,7 +55,7 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
   numeri astrometrici della stella di Barnard scritti a mano in
   `tests/core/test_coordinates_wcs.py` (valori di Gaia DR3, ricalcolati con
   Astropy; da segnalare al proprietario) e un test di rete che interroga Gaia
-  dal vivo senza salvarne i dati). Scelte minori di 5b da confermare (42
+  dal vivo senza salvarne i dati). Scelte minori di 5b confermate il 2026-10-22 (42
   §13). Test: **730 di default**, di rete non eseguiti (`--no-network`).
   Decisioni aperte: **14**.
 - **Stato al 2026-10-21, parte 5, sprint 5a della v1 (42: pannello
@@ -674,7 +694,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | **IA (livello 3)** | | | |
 | `30-ia-adattatore-provider.md` | Adattatore per provider IA (v1): profili, SDK `anthropic` e `openai` con endpoint configurabile, capacità, `list_models`, `stream_turn` con eventi normalizzati | 3 | approvato |
 | `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS (v1): `keyring` col solo backend macOS, nessun ripiego | 3 | approvato |
-| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA (v1, dal 2026-10-16: elenco esplicito di comandi del `05`; dei candidati qui sotto entrano solo `describe_table` → `catalog.describe` e `search` → `catalog.search`, gli altri quando diventano comandi del `05`). **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10); **dal 14 (2026-10-10, D14-9 punto 16):** `cone_search` (centro, raggio con unità, catalogo; tabella con provenienza), `tap_query` (URL TAP, ADQL, `max_rows`; tabella o errore del servizio), `validate_adql` (controlli minimi), `describe_services` (elenco dei server, `ServerRegistry`), `ssa_search` / `ssa_load` (spettri con provenienza; analisi nel 21) | 3 | approvato |
+| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA (v1, dal 2026-10-16: elenco esplicito di comandi del `05`; **codice scritto con lo sprint 6a il 2026-10-22** (`ai/tool_registry.py`, testi esterni con due elenchi chiusi per percorso); dei candidati qui sotto entrano solo `describe_table` → `catalog.describe` e `search` → `catalog.search`, gli altri quando diventano comandi del `05`). **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10); **dal 14 (2026-10-10, D14-9 punto 16):** `cone_search` (centro, raggio con unità, catalogo; tabella con provenienza), `tap_query` (URL TAP, ADQL, `max_rows`; tabella o errore del servizio), `validate_adql` (controlli minimi), `describe_services` (elenco dei server, `ServerRegistry`), `ssa_search` / `ssa_load` (spettri con provenienza; analisi nel 21) | 3 | approvato |
 | `33-ia-query-adql.md` | Costruzione ed esecuzione di query ADQL (**rimandato** il 2026-10-16: nella v1 `catalog.search`) | 3 | non esiste |
 | `34-ia-verifica-risultati.md` | Verifica dei numeri delle risposte dell'IA (v1): ogni numero contro i risultati dei comandi, eccezioni chiuse, evidenziazione, modalità rigorosa | 3 | approvato |
 | `35-ia-assistente-chat.md` | Assistente conversazionale (v1): ciclo degli strumenti, regole di sistema, limiti, privacy, sicurezza contro le istruzioni nei testi esterni | 3 | approvato |
@@ -932,7 +952,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
    2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
-   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; da confermare le scelte minori di 5b (42 §13). Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
+   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) scritto il 2026-10-22**; prossimi sprint: 6b verifica dei numeri (34), 6c assistente con provider simulato, limiti e prompt injection (35), poi il 44. Da verificare all'inizio delle parti che li usano: Markdown di Qt (44), sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -1037,3 +1057,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-21 | Claude Code | **Parte 4, sprint 4f della v1 (41):** MOC sulla GPU (riempimento e perimetro, ordine per eccesso dichiarato), pannello dei livelli (visibilità, opacità, ordine, rimozione come comandi del 05), sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`. Decisioni del proprietario del 2026-10-21: **D41-6 decisa** (13), stile dei MOC in `moc.open` (05), perimetro `HealpixGrid.boundary` (16), ordine dei controlli di `check_overlay` (19), MOC di un altro corpo forzato non disegnato; 05, 13, 16, 19, 41 modificati nel registro, restano `approvato`. Esempio `examples/moc_esempi.py`. Aperte 14. |
 | 2026-10-21 | Claude Code | **Parte 5, sprint 5a della v1 (42):** pannello Tabella (`ui/catalog_panel.py`) con schede per catalogo, modello virtuale, valori di §3.2, ordinamento (`table.sort`), selezione sincronizzata (`catalog.select`), record (`record_view`), righe non disegnate marcate; test T1–T6 (T6 `perf`). Decisioni del proprietario del 2026-10-21: filtro `search` fuori dalla v1; testo di `PLANETARY_DATA_DISABLED` senza rinvio alle preferenze (19). Correzioni: `record_view` con colonne array (13), attesa instabile di T30 del 41 nei test. README dei dati di test di terze parti e sezione in `THIRD_PARTY_LICENSES`. 13, 19, 40, 42 modificati nel registro, restano `approvato`. Aperte 14. |
 | 2026-10-22 | Claude Code | **Parte 5, sprint 5b della v1 (42):** `PositionColumnsDialog` e `ProperMotionColumnsDialog` (`ui/catalog_panel.py`), aperti dopo `catalog.open_file`/`catalog.load_region` e dal pulsante "Colonne…"; un solo `catalog.set_columns`; test T7 e correlati (`tests/ui/test_column_dialogs.py`), traduzioni italiane. Decisioni del proprietario del 2026-10-22: confermate le 8 scelte di presentazione del 42; dati di test di Gaia sostituiti da dati sintetici (`scripts/make_synthetic_catalog.py`, `tests/core/data/synthetic_vizier/`, file Gaia rimossi), README dei dati e `THIRD_PARTY_LICENSES` aggiornati (nessun dato di terze parti nei test). 42 modificato nel registro, resta `approvato`. Aperte 14. |
+| 2026-10-22 | Claude Code | **Parte 6, sprint 6a della v1 (32):** `src/astrotwo/ai/tool_registry.py` (22 strumenti dell'elenco chiuso, schema ridotto da `export_schema`, validazione del 05, conferme, testi esterni marcati, risultati ridotti) e `tests/ai/test_tool_registry.py` (T1–T12), con `tests/ai/ai_workspace.py` (spazio di lavoro senza rete con un catalogo che contiene un'istruzione). Decisioni del proprietario del 2026-10-22: testi esterni con due elenchi chiusi per percorso (32 §3.6, nuovo T12); divisione della parte 6 in 6a/6b/6c; confermate le scelte minori dello sprint 5b (42 §13); Gaia DR3 citata come fonte dei sei valori della stella di Barnard nei test. 32 e 42 modificati nel registro, restano `approvato`. Aperte 14. |

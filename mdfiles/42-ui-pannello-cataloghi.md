@@ -224,8 +224,9 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   l'unità del testo del 10 ("h m s", "° ′ ″" o "deg" in decimale), quella
   della colonna nel suggerimento; (h) riga sopra la tabella con livello,
   sorgente, origine, data di recupero, numero di righe e ordinamento.
-- **Scelte minori dello sprint 5b (2026-10-22), DA CONFERMARE** (§3.5 non
-  dice quando i dialoghi compaiono; nessun valore ne dipende): (a) il
+- **Scelte minori dello sprint 5b (2026-10-22): CONFERMATE dal proprietario
+  il 2026-10-22** (§3.5 non dice quando i dialoghi compaiono; nessun valore
+  ne dipende): (a) il
   dialogo di **posizione** si apre da solo dopo `catalog.open_file` o
   `catalog.load_region` solo se il 13 non ha determinato colonne e sistema
   (altrimenti non appare, come in §3.5); (b) il dialogo di **moto proprio**
@@ -263,3 +264,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-21 | Claude Code | **Codice dello sprint 5a** ("FASE: CODICE – interfaccia v1", parte 5): `src/astrotwo/ui/catalog_panel.py` (`CatalogPanel`, `CatalogTab`, `CatalogTableModel` virtuale con l'ordine di `shown_order` del 05), pannello Tabella del 40 al posto dello stato vuoto; valori di §3.2 (posizioni con `format_coordinates` del 10 nel frame della colonna e nello stile di "Coordinates shown", magnitudini a 3 decimali, formato dichiarato o rappresentazione più breve, valore pieno nel suggerimento e nella copia), ordinamento con `table.sort`, selezione nei due versi con `catalog.select`, record da `record_view` nel risultato del comando, righe non disegnate marcate. Test T1–T6 in `tests/ui/test_catalog_panel.py` (T6 `perf`, misura in §9), modalità notte e punto decimale in italiano. Filtro `search` fuori dalla v1 confermato dal proprietario; scelte minori di presentazione da confermare (§13). Trovato e corretto un difetto del 13 (`record_view` con colonne array). **Resta lo sprint 5b:** dialoghi delle colonne di posizione e di moto proprio (§3.5, `PositionColumnsDialog`, `ProperMotionColumnsDialog`, T7). Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Sprint 5b** ("FASE: CODICE – interfaccia v1", parte 5): `PositionColumnsDialog` e `ProperMotionColumnsDialog` in `src/astrotwo/ui/catalog_panel.py`, aperti dalla finestra principale dopo `catalog.open_file`/`catalog.load_region` e dal pulsante "Colonne…" della scheda; un solo `catalog.set_columns` per apertura, nulla assunto (sistema, unità, equinozio e cos δ sempre dichiarati dall'utente; ipotesi dai nomi marcate; moto preselezionato solo dagli UCD). Test T7 e correlati in `tests/ui/test_column_dialogs.py`; traduzioni italiane. **Decisione del proprietario del 2026-10-22:** le 8 scelte di presentazione dello sprint 5a (a–h) sono confermate (tolto "da confermare"). Scelte minori dello sprint 5b da confermare in §13. Stato `approvato` invariato. |
+| 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22 (ripresa della parte 6):** confermate le scelte minori dello sprint 5b (§13, tolto "da confermare"). Stato `approvato` invariato. |

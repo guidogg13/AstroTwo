@@ -138,7 +138,9 @@ def test_t3_roundtrip_pixel_sky():
 
 # --- T4 ---------------------------------------------------------------------
 
-# Stella di Barnard, Gaia DR3 (source_id 4472832130942575872), epoca J2016.0
+# Stella di Barnard: fonte dei sei valori qui sotto (posizione, moto proprio, parallasse, velocità radiale) è il
+# catalogo Gaia DR3 (ESA/Gaia/DPAC; Gaia Collaboration, Vallenari et al. 2023, A&A 674, A1), source_id
+# 4472832130942575872, epoca J2016.0 (restano nel test per decisione del proprietario del 2026-10-22).
 # TCB: dati d'ingresso scelti dal tester; l'atteso è ricalcolato con Astropy.
 # La corrispondenza con l'archivio Gaia si controlla nel test di rete.
 BARNARD = dict(
