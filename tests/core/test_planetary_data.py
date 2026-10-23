@@ -309,7 +309,7 @@ def test_t7_epntap_simulated_service(service, cache, planetary_on):
 # =============================================================================
 # P4 — immagini PDS4 (T8). pds4_tools non fornisce file di esempio: prodotto PDS4 scritto nel test.
 
-from astrotwo.core.planetary_data import PdsImage, load_pds_image  # noqa: E402
+from astrotwo.core.planetary_data import load_pds_image  # noqa: E402
 
 _ARRAY = """    <Array_2D_Image>
       <name>{name}</name>

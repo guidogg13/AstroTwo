@@ -20,7 +20,7 @@ import threading
 import time
 import urllib.parse
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from astrotwo.ai.keychain_keys import KeychainError, _clean_text

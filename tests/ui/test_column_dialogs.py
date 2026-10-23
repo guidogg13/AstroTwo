@@ -13,7 +13,6 @@ from PySide6.QtWidgets import QDialogButtonBox
 from astrotwo.core import catalogs
 from astrotwo.ui.catalog_panel import PositionColumnsDialog, ProperMotionColumnsDialog
 from tests.ui.test_catalog_panel import open_catalog, votable  # noqa: F401 - votable() per i dati con UCD
-from tests.ui.test_catalog_sky import open_file
 from tests.ui.test_main_window import make_window, settings_path, wait_idle  # noqa: F401 - fixture
 
 #: CSV senza UCD né unità: nessuna colonna è riconosciuta (mai dai nomi), le colonne vanno dichiarate dall'utente.

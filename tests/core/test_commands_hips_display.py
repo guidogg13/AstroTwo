@@ -136,7 +136,6 @@ def test_t8_cursor_read_frame_and_order(session, service):
     center = {"lon": {"value": 56.75, "unit": "deg"}, "lat": {"value": 24.12, "unit": "deg"}, "frame": "icrs",
               "equinox": None, "obstime": None, "epoch": None, "epoch_reason": "prova senza epoca"}
     assert run(session, "view.set_center", position=center, window=window).status == "ok"
-    geometry = session.workspace.state.view.geometry
     position = {"x": 400.0, "y": 200.0, "convention": "numpy"}
     history = len(session.history)
     base = session.workspace.state.view.geometry

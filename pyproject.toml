@@ -36,6 +36,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-qt>=4.5.0",
     "pytest-timeout>=2.4.0",
+    "ruff>=0.17.2",
 ]
 
 [build-system]
@@ -59,3 +60,15 @@ markers = [
     "perf: misure di prestazioni sul Mac di riferimento (escluse di default, riportate, D41-4)",
     "gl: test del disegno OpenGL (esclusi di default, bloccanti quando si eseguono, D41-4)",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Solo errori veri (variabili e import inutilizzati, nomi ridefiniti, f-string vuote); lo stile non si controlla.
+select = ["E", "F"]
+ignore = ["E501", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+# I fixture di pytest importati da altri file di test sembrano ridefiniti (F811): è il modo in cui pytest li trova.
+"tests/**" = ["F811"]

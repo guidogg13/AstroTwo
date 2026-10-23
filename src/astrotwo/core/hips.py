@@ -1395,18 +1395,18 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
         if not found:
             break
     vtable.create_arrays(nrows=len(rows))
-    for j, field in enumerate(vtable.fields):
-        column = vtable.array[field.name]
+    for j, vfield in enumerate(vtable.fields):
+        column = vtable.array[vfield.name]
         for i, row in enumerate(rows):
             text = row[j]
             if text == "":
                 column.mask[i] = True
                 continue
             try:
-                value, mask = field.converter.parse(text, config={"version": template.version})
+                value, mask = vfield.converter.parse(text, config={"version": template.version})
             except Exception as exc:  # valore non conforme al tipo dichiarato
-                raise HiPSError("HIPS_BAD_TILE", f"{service.hips_id}: valore {text!r} della colonna {field.name} non "
-                                f"conforme al tipo {field.datatype} ({exc})") from exc
+                raise HiPSError("HIPS_BAD_TILE", f"{service.hips_id}: valore {text!r} della colonna {vfield.name} non "
+                                f"conforme al tipo {vfield.datatype} ({exc})") from exc
             column[i] = value
             column.mask[i] = mask
     fd, tmp = tempfile.mkstemp(prefix="astrotwo-hipscat-", suffix=".xml")

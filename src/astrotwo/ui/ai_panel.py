@@ -43,7 +43,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,

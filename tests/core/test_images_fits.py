@@ -713,7 +713,7 @@ from astropy.convolution import Box2DKernel, Gaussian2DKernel
 from astropy.convolution import convolve as astropy_convolve_ref
 from astropy.utils.data import get_pkg_data_filename
 
-from astrotwo.core.coordinates_wcs import SkyFrame, convert_pixel_convention, wcs_from_header
+from astrotwo.core.coordinates_wcs import SkyFrame, convert_pixel_convention
 from astrotwo.core.images_fits import OPERATIONS, contours, cutout, image_operation, save_fits
 
 

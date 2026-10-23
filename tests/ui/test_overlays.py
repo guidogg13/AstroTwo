@@ -73,7 +73,7 @@ def test_t18_grid_labels_are_written_by_the_core_with_the_step_precision(qtbot, 
         assert 0 <= label.x <= cols and 0 <= label.y <= rows
     # passo di circa 1′ o più: nessun secondo nelle etichette dei paralleli (precisione = passo)
     assert grid.lat_spacing >= 1 * u.arcmin
-    assert all("″" not in l.text for l, line in zip(overlay.grid_labels, grid.lines) if line.kind == "parallel"
+    assert all("″" not in label.text for label, line in zip(overlay.grid_labels, grid.lines) if line.kind == "parallel"
                and grid.lat_spacing >= 1 * u.arcmin)
     # grid spenta: nessuna linea
     win.submit("view.set_grid", {"visible": False, "frame": "icrs"})

@@ -1722,7 +1722,7 @@ _DECIMAL = r"[+-]?(?:\d+\.?\d*|\.\d+)"
 _DECIMAL_PAIR = re.compile(rf"\s*({_DECIMAL})\s*[,\s]\s*({_DECIMAL})\s*")
 _SEXA_TOKEN = r"[+-]?\d+(?:\.\d*)?"
 _SEXA_COLON_PAIR = re.compile(rf"\s*({_SEXA_TOKEN}:\d+(?::\d+(?:\.\d*)?)?)\s*[,\s]\s*([+-]?\d+:\d+(?::\d+(?:\.\d*)?)?)\s*")
-_SEXA_SPACE_PAIR = re.compile(rf"\s*(\d+\s+\d+\s+\d+(?:\.\d*)?)\s*[,\s]\s*([+-]?\d+\s+\d+\s+\d+(?:\.\d*)?)\s*")
+_SEXA_SPACE_PAIR = re.compile(r"\s*(\d+\s+\d+\s+\d+(?:\.\d*)?)\s*[,\s]\s*([+-]?\d+\s+\d+\s+\d+(?:\.\d*)?)\s*")
 
 
 def _parse_go_to(text: str, frame: str):

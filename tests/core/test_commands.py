@@ -29,7 +29,6 @@ from astrotwo.core.commands import (
     CommandRegistry,
     CommandSpec,
     Outcome,
-    P,
     RequestedBy,
     Session,
     Workspace,

@@ -7,7 +7,6 @@ senza WCS valido come griglia di pixel (``WCS_INVALID``).
 Piattaforma ``offscreen`` con il renderer in memoria. Valori attesi ricalcolati con i moduli 10, 11 e 17.
 """
 
-import astropy.units as u
 import numpy as np
 import pytest
 from astropy.time import Time

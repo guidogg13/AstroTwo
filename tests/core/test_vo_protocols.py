@@ -29,7 +29,7 @@ from astropy.time import Time
 import astrotwo
 import astrotwo.core.vo_protocols as vo
 from astrotwo.core.coordinates_wcs import SkyFrame
-from astrotwo.core.cache import NetworkTimeouts, SharedCache
+from astrotwo.core.cache import NetworkTimeouts
 from astrotwo.core.catalogs import CatalogsError, read_table
 from astrotwo.core.vo_protocols import (
     DEFAULT_MAX_ROWS,
