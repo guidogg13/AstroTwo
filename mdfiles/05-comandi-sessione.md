@@ -374,6 +374,16 @@ le scelte minori di §13; tutti versione 1):
 **Cataloghi sul cielo (sprint 4e del `41`, decisioni del proprietario del
 2026-10-21).**
 
+- **Identificativi dei cataloghi nella descrizione (D32-1 (c), decisa il
+  2026-10-23):** la descrizione del parametro `catalog` di
+  `catalog.load_region` (inglese e italiano, quindi anche nello schema per
+  l'IA, `export_schema`) scrive che serve l'identificativo di una
+  **tabella** (non di un'intera collezione: `I/355` non è una tabella,
+  `I/355/gaiadr3` sì) e elenca gli identificativi del gruppo fisso del 13
+  (`FIXED_COLLECTIONS`: `simbad`, `I/355/gaiadr3`, `II/246/out`), letti
+  da quel gruppo e non copiati a mano. Il parametro resta una stringa libera:
+  l'elenco è un aiuto, non un elenco chiuso.
+
 - **Stile iniziale nel comando di caricamento:** `catalog.load_region` e
   `catalog.open_file` assegnano al nuovo livello lo stile iniziale e lo
   scrivono nel risultato (`style`) e nello stato del livello, così la
@@ -706,3 +716,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-20 | Claude Code | **Sprint 4d del 41 (decisioni del proprietario del 2026-10-20):** `image.open` inquadra l'immagine intera nella finestra (`framing` nel risultato) e, senza WCS valido, la rende base come griglia di pixel (`PixelGridGeometry`); `cursor.read` sulla griglia di pixel: `sky = null`, `wcs_problem`, avviso `WCS_INVALID`; `unit_declared` nel valore del pixel; epoca mancante → coordinate nel frame dell'immagine con l'avviso del 10; `hips.set_survey` elimina gli avvisi doppi (era `service.warnings` contato due volte). Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4e del 41 (decisioni del proprietario del 2026-10-21):** stile iniziale dei cataloghi assegnato da `catalog.load_region` e `catalog.open_file` (Okabe e Ito senza il nero, sei forme, 8 pixel logici, in ordine di apertura con un contatore dello stato) e scritto nel risultato e nello stato; `catalog.select` con una riga restituisce la scheda della sorgente (`name` da UCD `meta.id;meta.main`, posizione della tabella con l'epoca del catalogo, catalogo, `record_view` del 13); `rows` vuoto toglie la selezione (§7). Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4f del 41 (decisione del proprietario del 2026-10-21):** `moc.open` assegna lo stile iniziale del MOC (Okabe e Ito senza il nero in ordine inverso, contatore dello stato, `fill` 0,25) e lo scrive nel risultato e nello stato (§7). Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **D32-1 (c) decisa dal proprietario (il 05 resta `approvato`):** la descrizione del parametro `catalog` di `catalog.load_region` elenca gli identificativi del gruppo fisso del 13 e dice che serve una tabella (§7, nota "Identificativi dei cataloghi nella descrizione"). |

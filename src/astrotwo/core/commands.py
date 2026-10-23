@@ -2319,9 +2319,16 @@ def _calc_specs() -> list[CommandSpec]:
 
 def default_registry(*, cache=None) -> CommandRegistry:
     """Registro con i comandi della prima versione dell'interfaccia (§7), tutti in versione 1."""
-    from astrotwo.core.catalogs import PLOT_SHAPES
+    from astrotwo.core.catalogs import FIXED_COLLECTIONS, PLOT_SHAPES
     from astrotwo.core.images_fits import STRETCHES
     from astrotwo.core.vo_protocols import DEFAULT_MAX_ROWS
+
+    # D32-1 (c): gli identificativi del gruppo fisso del 13, letti da lì (05 §7)
+    fixed_ids = ", ".join(f'"{c.id}"' for c in FIXED_COLLECTIONS)
+    _catalog_id_help_en = ("Identifier of one catalog table, not of a whole collection (a prefix such as \"I/355\" "
+                           f"is not a table). Most used: {fixed_ids}.")
+    _catalog_id_help_it = ("Identificativo di una tabella di catalogo, non di una collezione intera (un prefisso come "
+                           f"\"I/355\" non è una tabella). Più usati: {fixed_ids}.")
 
     reg = CommandRegistry(cache=cache)
     angle = dict(physical_type=_ANGLE)
@@ -2379,7 +2386,7 @@ def default_registry(*, cache=None) -> CommandRegistry:
         CommandSpec("catalog.load_region", 1, "Load the rows of a catalog in a circular region.",
                     "Carica le righe di un catalogo in una regione circolare.",
                     ("13 load_catalog", "14 tap_query", "19 check_overlay"), (
-                        P("catalog", "string", "Catalog identifier (e.g. VizieR).", "Identificativo del catalogo."),
+                        P("catalog", "string", _catalog_id_help_en, _catalog_id_help_it),
                         P("center", "sky_position", "Center of the region.", "Centro della regione."),
                         P("radius", "quantity", "Radius.", "Raggio.", minimum=0.0, exclusive_minimum=True,
                           maximum=180.0, range_unit="deg", **angle),

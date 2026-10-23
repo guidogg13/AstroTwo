@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 from astrotwo.core import coordinates_wcs as cw
 from astrotwo.core.catalogs import display_positions, load_table
@@ -44,13 +45,13 @@ def center_on(qtbot, win, lon, lat, scale_arcsec):
     win.submit("view.set_zoom", {"scale": quantity_json((scale_arcsec * u.arcsec).to(u.deg)), "window": window})
     position = sky_json(cw.SkyFrame.from_lonlat(lon * u.deg, lat * u.deg, "icrs"))
     win.submit("view.set_center", {"position": position, "window": window})
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
 
 
 def open_file(qtbot, win, name, path):
     win.open_path = lambda _name: path
     {"image.open": win.act_open_image, "catalog.open_file": win.act_open_catalog}[name].trigger()
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
 
 
 def wait_points(qtbot, win, n, timeout=15000):
@@ -61,6 +62,20 @@ def wait_points(qtbot, win, n, timeout=15000):
                 and sky.screen_geometry is win.session.workspace.state.view.geometry
                 and sum(len(s.rows) for s in sky.point_sets) == n)
     qtbot.waitUntil(ready, timeout=timeout)
+
+
+def wait_settled(qtbot, win, timeout=30000):
+    """Tutto quello che arriva dopo un comando, senza tempi fissi: comandi finiti, posizioni dei cataloghi calcolate
+    sulla base dello schermo (gruppo di thread), nessun timer di fine gesto (vista 300 ms, pannello 120 ms) in
+    attesa. Si legge lo stato solo dopo questa condizione, mai dopo un ``wait_idle`` da solo."""
+    def settled():
+        QApplication.processEvents()  # richieste di layout e ridimensionamenti già in coda: il timer parte prima del controllo
+        sky, state = win.sky, win.session.workspace.state
+        return (not win.busy() and not sky._catalog_pending and not sky.idle.isActive()
+                and (state.view.geometry is None or sky.screen_geometry is state.view.geometry)
+                and not any(getattr(win.catalog_panel.tabs.widget(i), "_timer").isActive()
+                            for i in range(win.catalog_panel.tabs.count())))
+    qtbot.waitUntil(settled, timeout=timeout)
 
 
 def expected_screen(win, coords):
@@ -255,7 +270,8 @@ def test_t30_thousands_of_sources(qtbot, win, tmp_path):
     open_file(qtbot, win, "catalog.open_file", write_catalog(tmp_path / "c.xml", rows))
     drawn_rows = int(np.count_nonzero(np.isfinite(win.sky.geometry.sky_to_window(
         catalog_positions(load_table(str(tmp_path / "c.xml")))[0])[0])))
-    qtbot.waitUntil(lambda: bool(win.sky.point_sets) and not win.sky._catalog_pending, timeout=20000)
+    wait_points(qtbot, win, n, timeout=30000)  # posizioni sulla base finale dello schermo, non solo "ce ne sono"
+    wait_settled(qtbot, win)
     total = time.perf_counter() - start
     points = win.sky.points_for(win.session.workspace.state.layer("L1"))
     assert len(points.rows) == drawn_rows == n

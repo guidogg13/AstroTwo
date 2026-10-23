@@ -88,6 +88,13 @@ dalla v1. Entreranno quando diventano comandi del `05` (regola §3.1); per
 2. **Descrizione:** la descrizione inglese del `05`, più una riga fissa
    sugli indicatori ("requires user confirmation", "read-only", "uses the
    network").
+   La descrizione del parametro `catalog` di `catalog__load_region` porta
+   gli identificativi dei cataloghi del gruppo fisso del 13 (`simbad`,
+   `I/355/gaiadr3`, `II/246/out`) e dice che serve una tabella (D32-1 (c),
+   decisa il 2026-10-23; il testo è nel `05`, il 32 lo riporta com'è). Un
+   identificativo che non è una tabella dà `CATALOG_UNKNOWN` con le tabelle
+   che cominciano con quello scritto (13, D32-1 (b)): il modello le
+   riferisce all'utente, non ne sceglie una da solo.
 3. **Parametri:** lo schema JSON del `05` (draft 2020-12) ridotto al
    sottoinsieme accettato da entrambi i provider: `type`, `properties`,
    `required`, `enum`, `minimum`, `maximum`, `items`, `description`,
@@ -361,7 +368,7 @@ provider (richieste di strumenti scritte nei test).
 |---|---|---|---|---|
 | T1 | Elenco chiuso | `tools()` | esattamente gli strumenti di §3.2; nessun comando di §3.3 | confronto con la tabella |
 | T2 | Nomi tradotti | per ogni strumento, nome → comando → nome | corrispondenza biunivoca; nomi validi per i due provider (regex `^[A-Za-z0-9_-]{1,64}$`) | test di unità |
-| T3 | Schema dal `05` | confronto tra `tools()` ed `export_schema()` | stessi parametri, tipi, intervalli, elenchi chiusi; unità nella descrizione; nessun parametro aggiunto | confronto diretto |
+| T3 | Schema dal `05` | confronto tra `tools()` ed `export_schema()`; descrizione di `catalog` di `catalog__load_region` | stessi parametri, tipi, intervalli, elenchi chiusi; unità nella descrizione; nessun parametro aggiunto; la descrizione di `catalog` contiene tutti gli `id` di `FIXED_COLLECTIONS` (2026-10-23) | confronto diretto |
 | T4 | Validazione come l'utente | raggio senza unità; unità `m`; livello `L9` inesistente; JSON rotto | errori `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`, `TOOL_ARGUMENTS_INVALID` come risultato al modello; nome sconosciuto (`catalog_search`, `catalog.search`, `image__open`) → `TOOL_NOT_EXPOSED` con `valid_tools` uguale a `tools()` (2026-10-23); nessun comando in cronologia | test di unità |
 | T5 | Stessa coda, `requested_by` | un comando dall'utente e uno dall'IA | eseguiti in ordine di arrivo; il secondo in cronologia con `requested_by = ai`, conversazione, turno, chiamata, profilo, modello | ispezione della cronologia |
 | T6 | Conferme | `catalog.load_region`, `layer.set_opacity`, `view.set_center`, `catalog.rows` | conferma chiesta per i primi due, non per gli altri; Annulla → `TOOL_NOT_CONFIRMED`, nessuna esecuzione | test di unità |
@@ -413,7 +420,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
     mentre l'identificativo principale e il bibcode di SIMBAD sono esterni;
     (6) elenco `ASTROTWO_MESSAGE_CODES` (§3.6).
 
-- **D32-1 — Come l'assistente trova l'identificativo di un catalogo VizieR: DA DECIDERE** (aperta il 2026-10-23, Gruppo 3). Nella prova reale del proprietario il modello ha scritto un identificativo che non è una tabella (`catalog.load_region` → oggi `CATALOG_UNKNOWN`, prima `NO_COORD_COLUMNS`): nessuno strumento della v1 elenca i cataloghi di VizieR. Opzioni: (a) nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13 (`collection_tree`: identificativo e titolo, ricerca nel titolo), esposto qui; (b) `CATALOG_UNKNOWN` con le tabelle che iniziano con l'identificativo scritto (es. `I/355` → `I/355/gaiadr3`, `I/355/paramp`), da `TAP_SCHEMA.tables` (solo 13); (c) nella descrizione del parametro `catalog` del `05` gli identificativi del gruppo fisso del 13 (`simbad`, `I/355/gaiadr3`, `II/246/out`). **Raccomandazione:** (c) subito, (a) con la prossima versione del 32. La decisione è del proprietario.
+- **D32-1 — Come l'assistente trova l'identificativo di un catalogo VizieR: DECISA il 2026-10-23** dal proprietario: **(c)** gli identificativi del gruppo fisso nella descrizione del parametro `catalog` (§3.4 punto 2, `05`) e **(b)** `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo scritto (`13` §7), subito. **(a)**, un comando di ricerca nell'elenco dei cataloghi (nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13), **dopo la v1**: registrata come `D32-2` (Gruppo 3, rinviata) e come proposta nella panoramica.
+- **D32-2 — Comando di ricerca nell'elenco dei cataloghi per l'assistente: RINVIATA a dopo la v1** (aperta e rinviata il 2026-10-23, Gruppo 3). Nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13 (`collection_tree`: identificativo e titolo, ricerca nel titolo), poi esposto qui con una nuova versione dell'elenco di §3.2 (richiede la decisione del proprietario sulla scheda del comando).
 
 ## 14. Registro modifiche
 
@@ -427,3 +435,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6b:** confermate le scelte minori 4 (niente SHA-256, solo il nome del file), 5 (stringhe delle calcolatrici come testo di AstroTwo) e 6 (elenco `ASTROTWO_MESSAGE_CODES`) (§13); tolto l'ultimo "da confermare" rimasto in §3.5. Nessuna modifica del codice. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Richiesta del proprietario del 2026-10-23** (prova reale dell'assistente con un modello gratuito di OpenRouter): il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco dei nomi validi (`valid_tools`, §3.5 punto 2, §10, T4). Verificato che un nome sconosciuto non esegue nulla e non entra in cronologia. Nota: `catalog__search` **è** uno strumento della v1 (§3.2: conta le righe di un livello già aperto); non cerca i cataloghi di VizieR. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | Aperta **D32-1** (come l'assistente trova l'identificativo di un catalogo VizieR, Gruppo 3, §13), dalla prova reale del proprietario. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **D32-1 decisa** (proprietario, 2026-10-23): (c) identificativi del gruppo fisso nella descrizione di `catalog` (§3.4 punto 2) e (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13); (a) rinviata a dopo la v1 come nuova **D32-2**. Test T3 esteso. Stato `approvato` invariato. |

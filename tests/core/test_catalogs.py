@@ -1261,6 +1261,9 @@ def test_load_catalog_region_metadata_missing(service, cache, monkeypatch):
     with pytest.raises(CatalogsError) as err:  # due RA senza meta.main: nessuna scelta
         load_catalog("II/246/out", region=(center, 1 * u.arcmin), cache=cache, refresh=True)
     assert err.value.code == "NO_COORD_COLUMNS"
+    # D13-21 (a): le colonne candidate per RA e per Dec sono nel messaggio, nulla è scelto
+    assert "pos.eq.ra: RA1, RA2" in err.value.message and "pos.eq.dec: DE" in err.value.message
+    assert err.value.details["candidates"] == {"pos.eq.ra": ["RA1", "RA2"], "pos.eq.dec": ["DE"]}
 
 # Struttura di TAP_SCHEMA di Gaia DR3 su TAP VizieR (verificata sul servizio reale il 2026-10-23; solo nomi e UCD, nessun
 # valore del catalogo): una coppia meta.main (posizione all'epoca 2016) e una senza (posizione J2000 ricalcolata), più
@@ -1295,6 +1298,72 @@ def test_load_catalog_region_main_pair_and_unknown_table(service, cache, monkeyp
             load_catalog(name, region=(center, 5 * u.arcmin), cache=cache, refresh=True)
         assert err.value.code == "CATALOG_UNKNOWN" and repr(name) in err.value.message
         assert "I/355/gaiadr3" in err.value.message  # esempio di identificativo di una tabella
+        assert err.value.details["candidates"] == ()  # il servizio non dà l'elenco: errore di prima, senza elenco
+
+
+# Risposta di TAPVizieR a SELECT TOP 21 table_name FROM TAP_SCHEMA.tables WHERE table_name LIKE 'I/355%' OR table_name
+# LIKE '"I/355%' (registrata il 2026-10-23; solo nomi di tabelle, nessun dato di catalogo, nell'ordine del servizio).
+VIZIER_I355_TABLES = tuple(f'"I/355/{n}"' for n in (
+    "gcrf3xm", "oaninfo", "oaxpsp", "tgextmap", "tgextopt", "xpmerge", "xpsamp", "epphot", "gaiadr3", "paramp",
+    "paramsup", "rvsmean", "spectra", "xpcont", "xpsummary"))
+
+
+def tables_tap(names=VIZIER_I355_TABLES, count_columns=0):
+    """Servizio simulato: ``TAP_SCHEMA.columns`` vuota (identificativo che non è una tabella) e l'elenco registrato di
+    ``TAP_SCHEMA.tables``, filtrato come farebbe il ``LIKE`` (``_`` jolly escluso: basta il prefisso)."""
+    def tap(request):
+        query = request["params"]["QUERY"]
+        if "TAP_SCHEMA.columns" in query:
+            return 200, "application/x-votable+xml", REGION_SCHEMA.format(rows="")
+        assert "TAP_SCHEMA.tables" in query and query.startswith("SELECT TOP 21 table_name")
+        prefix = query.split("LIKE '", 1)[1].split("%'", 1)[0]
+        cells = "".join(f"<TR><TD>{n}</TD></TR>" for n in names if n.strip('"').startswith(prefix))
+        return 200, "application/x-votable+xml", (
+            '<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">'
+            '<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/><TABLE>'
+            '<FIELD name="table_name" datatype="char" arraysize="*"/>'
+            f'<DATA><TABLEDATA>{cells}</TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>')
+    return tap
+
+
+def test_catalog_unknown_lists_vizier_tables(service, cache, monkeypatch):
+    """D32-1 (b): l'identificativo che non è una tabella elenca le tabelle che cominciano con quello scritto."""
+    from astropy.coordinates import SkyCoord
+
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    center = SkyCoord(56.75 * u.deg, 24.1167 * u.deg)
+    service.routes["/viz/sync"] = tables_tap()
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("I/355", region=(center, 5 * u.arcmin), cache=cache)
+    assert err.value.code == "CATALOG_UNKNOWN"
+    assert err.value.details["candidates"] == tuple(sorted(n.strip('"') for n in VIZIER_I355_TABLES))
+    assert "I/355/gaiadr3" in err.value.message and "I/355/paramp" in err.value.message
+    queries = [r["params"]["QUERY"] for r in service.requests]
+    assert queries[-1] == ("SELECT TOP 21 table_name FROM TAP_SCHEMA.tables WHERE table_name LIKE 'I/355%' "
+                           "OR table_name LIKE '\"I/355%'")
+    # nessuna tabella comincia con "gaiadr3": errore di prima, senza elenco
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("gaiadr3", region=(center, 5 * u.arcmin), cache=cache, refresh=True)
+    assert err.value.details["candidates"] == () and "che cominciano" not in err.value.message
+    # più di 20 tabelle: le prime 20, dichiarato
+    many = tuple(f'"I/355/t{k:02d}"' for k in range(25))
+    service.routes["/viz/sync"] = tables_tap(many)
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("I/355", region=(center, 5 * u.arcmin), cache=cache, refresh=True)
+    assert len(err.value.details["candidates"]) == 20 and "limitato a 20" in err.value.message
+    # il servizio rifiuta l'elenco: l'errore resta CATALOG_UNKNOWN, senza elenco
+    def refuse(request):
+        if "TAP_SCHEMA.columns" in request["params"]["QUERY"]:
+            return 200, "application/x-votable+xml", REGION_SCHEMA.format(rows="")
+        return 400, "application/x-votable+xml", (
+            '<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">'
+            '<RESOURCE type="results"><INFO name="QUERY_STATUS" value="ERROR">no</INFO></RESOURCE></VOTABLE>')
+    service.routes["/viz/sync"] = refuse
+    with pytest.raises(CatalogsError) as err:
+        load_catalog("I/355", region=(center, 5 * u.arcmin), cache=cache, refresh=True)
+    assert err.value.code == "CATALOG_UNKNOWN" and err.value.details["candidates"] == ()
 
 
 SIMBAD_DATA = """<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">

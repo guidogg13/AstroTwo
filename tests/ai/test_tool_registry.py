@@ -166,6 +166,18 @@ def test_t3_schema_from_05(tools, registry):
                     assert f"≤ {plain['x-maximum']!r}" in got["description"]
 
 
+def test_t3_catalog_description_lists_fixed_ids(tools):
+    """D32-1 (c): la descrizione di ``catalog`` porta tutti gli identificativi del gruppo fisso del 13 e dice che serve
+    una tabella; il parametro resta una stringa libera."""
+    from astrotwo.core.catalogs import FIXED_COLLECTIONS
+
+    tool = next(t for t in tools.tools() if t["name"] == "catalog__load_region")
+    catalog = tool["input_schema"]["properties"]["catalog"]
+    assert catalog["type"] == "string" and "enum" not in catalog
+    assert all(f'"{c.id}"' in catalog["description"] for c in FIXED_COLLECTIONS)
+    assert "I/355/gaiadr3" in catalog["description"] and "not a table" in catalog["description"]
+
+
 # =============================================================================
 # T4, T5, T6 — validazione, requested_by, conferme
 

@@ -24,7 +24,7 @@ from astrotwo.core import coordinates_wcs as cw
 from astrotwo.core.catalogs import load_table, record_view
 from astrotwo.core.commands import Layer, _jsonable
 from astrotwo.ui.catalog_panel import MISSING_MARK, NOT_DRAWN_MARK, CatalogTableModel
-from tests.ui.test_catalog_sky import PLEIADES, center_on, open_file, screen_point, wait_points
+from tests.ui.test_catalog_sky import PLEIADES, center_on, open_file, screen_point, wait_points, wait_settled
 from tests.ui.test_main_window import make_window, settings_path, wait_idle  # noqa: F401 - fixture
 from tests.ui.test_sky_viewer import mouse
 
@@ -84,7 +84,7 @@ GALACTIC = """<?xml version="1.0" encoding="utf-8"?>
 def win(qtbot, settings_path, cache):  # noqa: F811
     win = make_window(qtbot, settings_path, cache)
     win.sky.start_view()
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)  # anche il centramento che la vista invia da sola dopo la prima comparsa (300 ms)
     yield win
     win.close()
 
@@ -93,6 +93,7 @@ def open_catalog(qtbot, win, tmp_path, text=None, name="c.xml"):
     path = tmp_path / name
     path.write_text(votable() if text is None else text)
     open_file(qtbot, win, "catalog.open_file", str(path))
+    wait_settled(qtbot, win)  # simboli calcolati sulla base finale prima di leggere o cliccare
     return str(path)
 
 
@@ -104,11 +105,26 @@ def history(win):
     return win.session.history.entries
 
 
+def wait_command(qtbot, win, name, since, where=lambda entry: True):
+    """Il comando ``name`` registrato dopo le prime ``since`` voci, cercato per nome: dopo un cambio di layout la vista
+    manda da sola un ``view.set_center`` 300 ms più tardi (41), quindi l'ultima voce dipende dalla velocità del Mac."""
+    found = []
+
+    def registered():
+        found[:] = [e for e in history(win)[since:] if e.command.name == name and where(e)]
+        return bool(found)
+
+    qtbot.waitUntil(registered, timeout=30000)
+    wait_settled(qtbot, win)
+    return found[0]
+
+
 def click_header(qtbot, win, tab, column):
     header = tab.view.horizontalHeader()
     x = header.sectionViewportPosition(tab.model.names.index(column)) + 5
+    since = len(history(win))
     QTest.mouseClick(header.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(x, 5))
-    wait_idle(qtbot, win)
+    return wait_command(qtbot, win, "table.sort", since)
 
 
 def click_row(tab, shown, modifier=Qt.KeyboardModifier.NoModifier):
@@ -144,9 +160,8 @@ def test_t1_sort_from_header(qtbot, win, tmp_path):
     assert shown == [0, 1, 2, 3, 4]  # ordine della tabella
     values, mask = np.asarray(table["Vmag"].data, dtype=float), np.asarray(table["Vmag"].mask, dtype=bool)
     for direction in ("ascending", "descending"):
-        click_header(qtbot, win, tab, "Vmag")
-        entry = history(win)[-1]
-        assert entry.command.name == "table.sort" and entry.result.status == "ok"
+        entry = click_header(qtbot, win, tab, "Vmag")
+        assert entry.result.status == "ok"
         assert entry.command.parameters == {"layer": "L1", "column": "Vmag", "direction": direction}
         assert entry.command.requested_by.source == "mouse"
         shown = [tab.model.table_row(r) for r in range(tab.model.rowCount())]
@@ -165,10 +180,9 @@ def test_t1_sort_from_header(qtbot, win, tmp_path):
         np.testing.assert_array_equal(np.array(getattr(after[n], "mask", False)), masks[n])
     # colonna non ordinabile (array per riga): rifiuto con messaggio, ordine invariato
     shown_before = [tab.model.table_row(r) for r in range(tab.model.rowCount())]
-    click_header(qtbot, win, tab, "Vec")
-    entry = history(win)[-1]
-    assert entry.command.name == "table.sort" and entry.result.error.code == "TABLE_SORT_UNSUPPORTED"
-    assert win.messages.messages[-1][1] == "TABLE_SORT_UNSUPPORTED"
+    entry = click_header(qtbot, win, tab, "Vec")
+    assert entry.result.error.code == "TABLE_SORT_UNSUPPORTED"
+    assert [m for m in win.messages.messages if m[1] == "TABLE_SORT_UNSUPPORTED"]
     assert [tab.model.table_row(r) for r in range(tab.model.rowCount())] == shown_before
 
 
@@ -181,12 +195,11 @@ def test_t2_select_rows_from_table(qtbot, win, tmp_path):
     open_catalog(qtbot, win, tmp_path)
     wait_points(qtbot, win, 4)  # la riga D non ha posizione
     tab = page(win)
+    since = len(history(win))
     click_row(tab, 0)
     click_row(tab, 2, Qt.KeyboardModifier.ControlModifier)
     click_row(tab, 4, Qt.KeyboardModifier.ControlModifier)
-    qtbot.waitUntil(lambda: history(win)[-1].command.name == "catalog.select"
-                    and len(history(win)[-1].command.parameters["rows"]) == 3, timeout=5000)
-    wait_idle(qtbot, win)
+    wait_command(qtbot, win, "catalog.select", since, lambda e: len(e.command.parameters["rows"]) == 3)
     selects = [e for e in history(win) if e.command.name == "catalog.select"]
     assert len(selects) == 1  # una sola richiesta a fine gesto
     entry = selects[0]
@@ -200,9 +213,9 @@ def test_t2_select_rows_from_table(qtbot, win, tmp_path):
     # riga non disegnabile: selezionabile qui, marcata "non disegnata"
     assert tab.model.headerData(3, Qt.Orientation.Vertical) == f"3 {NOT_DRAWN_MARK}"
     assert tab.model.headerData(0, Qt.Orientation.Vertical) == "0"
+    since = len(history(win))
     click_row(tab, 3)
-    qtbot.waitUntil(lambda: history(win)[-1].command.parameters.get("rows") == [3], timeout=5000)
-    wait_idle(qtbot, win)
+    wait_command(qtbot, win, "catalog.select", since, lambda e: e.command.parameters["rows"] == [3])
     assert "not drawn" in tab.record_title.text() and tab.record_shown[0] == 3
     assert not win.sky.card.isVisible() or "no position" in win.sky.card.text()
 
@@ -215,11 +228,11 @@ def test_t3_select_from_sky(qtbot, win, tmp_path):
     click_header(qtbot, win, tab, "Vmag")  # ordinata: la riga 2 della tabella è la prima mostrata
     tab.view.verticalScrollBar().setValue(tab.view.verticalScrollBar().maximum())
     at = screen_point(win, index=2)
+    since = len(history(win))
     mouse(win.sky, QEvent.Type.MouseButtonPress, at)
     mouse(win.sky, QEvent.Type.MouseButtonRelease, at)
-    wait_idle(qtbot, win)
-    entry = history(win)[-1]
-    assert entry.command.name == "catalog.select" and entry.command.parameters["rows"] == [2]
+    entry = wait_command(qtbot, win, "catalog.select", since)
+    assert entry.command.parameters["rows"] == [2]
     assert tab.selected_rows() == [2]
     shown = tab.model.shown_row(2)
     assert shown == 0
@@ -231,7 +244,7 @@ def test_t3_select_from_sky(qtbot, win, tmp_path):
     corner = QPoint(30, 30)
     mouse(win.sky, QEvent.Type.MouseButtonPress, corner)
     mouse(win.sky, QEvent.Type.MouseButtonRelease, corner)
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
     assert tab.selected_rows() == [] and tab.record_shown is None
 
 
@@ -243,7 +256,7 @@ def test_t4_record_equals_record_view(qtbot, win, tmp_path):
     path = open_catalog(qtbot, win, tmp_path)
     tab = page(win)
     click_row(tab, 1)  # riga B: Vmag e Flag mancanti
-    qtbot.waitUntil(lambda: tab.record_shown is not None, timeout=5000)
+    qtbot.waitUntil(lambda: tab.record_shown is not None, timeout=30000)
     expected = _jsonable(record_view(load_table(path), 1))
     row, record = tab.record_shown
     assert row == 1 and record == expected
@@ -299,7 +312,7 @@ def test_t5_values_shown(qtbot, win, tmp_path):
     header_tip = model.headerData(model.names.index("Vmag"), Qt.Orientation.Horizontal, Qt.ItemDataRole.ToolTipRole)
     assert "UCD: phot.mag;em.opt.V" in header_tip and "V magnitude" in header_tip and "[mag]" in header_tip
     click_row(tab, 0)
-    qtbot.waitUntil(lambda: tab.selected_rows() == [0], timeout=5000)
+    qtbot.waitUntil(lambda: tab.selected_rows() == [0], timeout=30000)
     QTest.keySequence(tab.view, QKeySequence.StandardKey.Copy)
     lines = QGuiApplication.clipboard().text().split("\n")
     assert lines[0].split("\t")[:4] == ["Name", "RA_ICRS [deg]", "DE_ICRS [deg]", "Vmag [mag]"]
@@ -307,7 +320,7 @@ def test_t5_values_shown(qtbot, win, tmp_path):
     assert copied[:6] == ["A", "56.8711", "24.1051", "3.5", "7.123", "0.1"]
     # stile decimale di "Coordinates shown" (view.set_coordinate_display)
     win.submit("view.set_coordinate_display", {"frame": "icrs", "format": "decimal"})
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
     assert cell(tab, 0, "RA_ICRS") == cw.format_coordinates(
         values=t["RA_ICRS"][0] * u.deg, frame="icrs", axis="lon", style="decimal").lon[0] == "56.871100"
     assert model.headerData(1, Qt.Orientation.Horizontal) == "RA_ICRS\ndeg"
@@ -321,12 +334,12 @@ def test_t5_values_shown(qtbot, win, tmp_path):
         assert cell(gal, r, "GLAT") == cw.format_coordinates(values=lat * u.deg, frame="galactic", axis="lat",
                                                              style="decimal").lat[0]
     win.submit("view.set_coordinate_display", {"frame": "icrs", "format": "sexagesimal"})
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
     assert cell(gal, 1, "GLON") == cw.format_coordinates(values=0.25 * u.deg, frame="galactic", axis="lon").lon[0]
     assert model.headerData(model.names.index("Vmag"), Qt.Orientation.Horizontal) == "Vmag\nmag"
     # livello rimosso: scheda chiusa
     win.submit("layer.remove", {"layer": "L2"})
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
     assert page(win, "L2") is None and win.catalog_panel.tabs.count() == 1
 
 
@@ -348,7 +361,7 @@ def test_t5_decimal_point_in_italian(qtbot, settings_path, cache, tmp_path):  # 
 def test_night_mode_table(qtbot, win, tmp_path):
     open_catalog(qtbot, win, tmp_path)
     win.submit("ui.set_appearance", {"mode": "night"})
-    wait_idle(qtbot, win)
+    wait_settled(qtbot, win)
     from PySide6.QtGui import QPalette
     for role in (QPalette.ColorRole.Base, QPalette.ColorRole.Text, QPalette.ColorRole.PlaceholderText):
         color = page(win).view.palette().color(role)

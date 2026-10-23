@@ -198,7 +198,7 @@ dettaglio (scelte minori **confermate dal proprietario il 2026-10-23**, §13):
 ### 3.11 Precisazioni del codice (sprint 7b, 2026-10-23)
 
 Come il codice applica §3.4 e §10 dove la specifica non scende nel
-dettaglio (scelte minori **da confermare** in §13):
+dettaglio (scelte minori **confermate dal proprietario il 2026-10-23**, §13):
 
 1. **Dal testo della risposta al documento:** il rapporto del `34` dà le
    posizioni nel testo Markdown (NFC). Prima della conversione il pannello
@@ -402,8 +402,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   (T14), elenco dei modelli e "Prova il modello" con un servizio simulato,
   errori del provider e conversazione troppo lunga (§10), conferma in
   attesa con il pannello chiuso, uscita con risposta in corso.
-- **Scelte minori dello sprint 7b (2026-10-23), DA CONFERMARE** (§3.11; la
-  specifica non le dice): (1) segni invisibili dell'area privata di
+- **Scelte minori dello sprint 7b (2026-10-23): CONFERMATE dal proprietario
+  il 2026-10-23** (§3.11; la specifica non le dice): (1) segni invisibili dell'area privata di
   Unicode per ritrovare i numeri dopo la conversione del Markdown; (2)
   testo intero nel primo blocco se i blocchi non coincidono con il
   rapporto, prima risposta della rigenerazione evidenziata; (3) stili
@@ -423,3 +423,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (profili predefiniti del `30` §3.1.1; aggiornamento del 44 chiesto dal proprietario): §3.6 voce "Tipo" sostituita da "Provider" (menu con i profili predefiniti e "Altro endpoint compatibile OpenAI…", contrassegno per i provider non `verified`, indirizzo riempito e modificabile); T15. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 7a** ("FASE: CODICE – interfaccia v1", parte 7): `src/astrotwo/ui/ai_panel.py` (`AiPanel` nell'area a destra al posto dello stato vuoto, `MessageView` con Markdown semplice e sicuro, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`), collegamento alla finestra del `40` (impostazioni `assistant/…` con `prefs.set`, pulsante nelle preferenze, testo delle conversazioni nel salvataggio della sessione, uscita con risposta in corso, clic su una scheda → riga del pannello Comandi), traduzione italiana, 8 icone Lucide. Verifica del Markdown di Qt fatta (§8, §13). Precisazioni in §3.10, scelte minori da confermare e resto per lo sprint 7b in §13, note ai test in §12. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Decisione del proprietario del 2026-10-23:** confermate le 12 scelte minori dello sprint 7a (§3.10, §13). **Codice dello sprint 7b** ("FASE: CODICE – interfaccia v1", parte 7): evidenziazione di ogni numero secondo lo stato del `34` con suggerimento (valore pieno con unità, `#n`, funzioni del modulo) e copia, sonda di latenza, test di Aggiorna, "Prova il modello", errori del provider e conversazione troppo lunga. Precisazioni in §3.11, scelte minori dello sprint 7b da confermare in §13, note ai test in §12. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **Decisione del proprietario del 2026-10-23:** confermate le 5 scelte minori dello sprint 7b (§3.11, §13). Nessun codice. Stato `approvato` invariato. |

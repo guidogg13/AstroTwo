@@ -2323,6 +2323,39 @@ class CatalogRegion:
                 "del servizio; centro convertito con il modulo 10)")
 
 
+#: Tabelle elencate al più in un ``CATALOG_UNKNOWN`` (D32-1 (b)); se ce ne sono di più il messaggio lo dice.
+MAX_TABLE_CANDIDATES = 20
+
+
+def _table_candidates(vo, server: str, name: str, kwargs: dict) -> tuple[tuple[str, ...], bool]:
+    """Tabelle di VizieR che cominciano con ``name`` da ``TAP_SCHEMA.tables`` (D32-1 (b)): solo nomi che passano
+    ``_CATALOG_ID``, al più ``MAX_TABLE_CANDIDATES``; ``_`` nel ``LIKE`` è un jolly, il filtro vero è qui. Se il
+    servizio non risponde l'elenco manca e l'errore resta quello di prima."""
+    if server != "cds-vizier-tap":
+        return (), False
+    plain = name.replace("'", "''")
+    adql = (f"SELECT TOP {MAX_TABLE_CANDIDATES + 1} table_name FROM TAP_SCHEMA.tables WHERE "
+            f"table_name LIKE '{plain}%' OR table_name LIKE '\"{plain}%'")
+    try:
+        rows = vo.tap_query(server, adql, **kwargs).table.table
+    except vo.VoProtocolsError:
+        return (), False
+    if "table_name" not in rows.colnames:  # risposta inattesa: nessun elenco
+        return (), False
+    found = sorted({str(r["table_name"]).strip('"') for r in rows if not np.ma.is_masked(r["table_name"])})
+    found = [n for n in found if n.startswith(name) and _CATALOG_ID.match(n)]
+    return tuple(found[:MAX_TABLE_CANDIDATES]), len(found) > MAX_TABLE_CANDIDATES
+
+
+def _catalog_unknown(vo, server: str, name: str, kwargs: dict, message: str) -> CatalogsError:
+    """``CATALOG_UNKNOWN`` con le tabelle che cominciano con l'identificativo scritto, se il servizio le dà."""
+    candidates, more = _table_candidates(vo, server, name, kwargs)
+    if candidates:
+        message += (f"; tabelle di {server} che cominciano con {name!r}: {', '.join(candidates)}"
+                    + (f" (elenco limitato a {MAX_TABLE_CANDIDATES})" if more else ""))
+    return CatalogsError("CATALOG_UNKNOWN", message, candidates=candidates)
+
+
 def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]:
     """Colonne di posizione principali dagli UCD di ``TAP_SCHEMA.columns`` (mai dai nomi)."""
     plain = name.replace("'", "''")
@@ -2330,17 +2363,22 @@ def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]
             f"table_name = '{plain}' OR table_name = '\"{plain}\"'")
     schema = vo.tap_query(server, adql, **kwargs).table.table
     if len(schema) == 0:  # il servizio non ha la tabella: identificativo sconosciuto, non colonne mancanti
-        raise CatalogsError("CATALOG_UNKNOWN", f"catalogo {name!r} non trovato su {server}: nessuna colonna in "
-                            "TAP_SCHEMA (serve l'identificativo di una tabella, es. \"I/355/gaiadr3\")")
-    found = {}
+        raise _catalog_unknown(vo, server, name, kwargs, f"catalogo {name!r} non trovato su {server}: nessuna colonna "
+                               "in TAP_SCHEMA (serve l'identificativo di una tabella, es. \"I/355/gaiadr3\")")
+    candidates, chosen = {}, {}
     for ucd_word in ("pos.eq.ra", "pos.eq.dec"):
         rows = [(str(r["column_name"]), _ucd_words(str(r["ucd"]))) for r in schema
                 if not np.ma.is_masked(r["ucd"]) and ucd_word in _ucd_words(str(r["ucd"]))]
-        if len(rows) > 1:
-            rows = [row for row in rows if "meta.main" in row[1]]
-        if len(rows) != 1:
-            raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nessuna colonna {ucd_word} univoca negli "
-                                f"UCD di TAP_SCHEMA ({len(rows)} candidate): regione non applicabile")
+        candidates[ucd_word] = [row[0].strip('"') for row in rows if _IDENTIFIER.match(row[0])]
+        chosen[ucd_word] = [row for row in rows if "meta.main" in row[1]] if len(rows) > 1 else rows
+    unclear = [word for word, rows in chosen.items() if len(rows) != 1]
+    if unclear:  # D13-21 (a): le colonne candidate nel messaggio, così il modello le riferisce all'utente
+        shown = "; ".join(f"{word}: " + (", ".join(candidates[word]) or "nessuna")
+                          for word in candidates)
+        raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nessuna colonna {unclear[0]} univoca negli UCD "
+                            f"di TAP_SCHEMA (candidate, {shown}): regione non applicabile", candidates=candidates)
+    found = {}
+    for ucd_word, rows in chosen.items():
         if not _IDENTIFIER.match(rows[0][0]):
             raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nome di colonna non ammesso {rows[0][0]!r}")
         found[ucd_word] = rows[0][0]
@@ -2415,8 +2453,8 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
                               limits=limits, **kwargs)
     except vo.VoProtocolsError as exc:
         if exc.code == "ADQL_INVALID":  # il servizio rifiuta la tabella: catalogo sconosciuto
-            raise CatalogsError("CATALOG_UNKNOWN", f"catalogo {catalog_id!r} non trovato su {server}: "
-                                f"{exc.details.get('service_message', exc.message)}") from exc
+            raise _catalog_unknown(vo, server, name, kwargs, f"catalogo {catalog_id!r} non trovato su {server}: "
+                                   f"{exc.details.get('service_message', exc.message)}") from exc
         raise
     if result.truncated and not allow_partial:
         declared = dict(result.warnings).get("ROW_LIMIT_EXCEEDED", "troncamento dichiarato")

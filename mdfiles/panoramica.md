@@ -18,6 +18,23 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-23, parte 7, sprint 7c della v1 (decisioni e
+  stabilità dei test):** decise **D32-1** (identificativi del gruppo fisso
+  nella descrizione di `catalog` di `catalog.load_region`, letti da
+  `FIXED_COLLECTIONS`; `CATALOG_UNKNOWN` elenca le tabelle di VizieR che
+  cominciano con l'identificativo scritto, da `TAP_SCHEMA.tables`, con la
+  risposta vera di VizieR registrata per il test) e **D13-21** (nella v1
+  `NO_COORD_COLUMNS` con le colonne candidate per RA e Dec nel messaggio);
+  il comando di ricerca nell'elenco dei cataloghi è rinviato a dopo la v1
+  (nuova **D32-2**). Confermate le 5 scelte minori dello sprint 7b del 44.
+  **Test instabili** (T1 e T2 del 42, T30 del 41): causa comune = i test
+  leggevano lo stato dopo `wait_idle`, che aspetta solo i comandi, mentre
+  altre cose arrivano dopo da sole (calcolo dei simboli nel gruppo di thread,
+  timer di 120 ms del pannello, timer di 300 ms della vista che dopo ogni
+  cambio di layout manda un `view.set_center`): su un Mac lento l'ultima voce
+  della cronologia non era più il comando atteso. Ora attese su condizioni
+  (`wait_settled`, `wait_command`), niente tempi fissi. Test: **810 di
+  default**, di rete non eseguiti (`--no-network`). Decisioni aperte: **15**.
 - **Stato al 2026-10-23, parte 7, sprint 7b della v1 (44: numeri
   evidenziati e prove):** ogni numero della risposta ha lo stile del suo
   stato del 34 (sottolineatura continua = verificato, tratteggiata =
@@ -947,6 +964,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Ultima richiesta dopo il limite di chiamate (30, 35) | Gli strumenti restano nella richiesta con `tool_choice = none` (`{"type": "none"}` per Anthropic, `"none"` per Chat Completions) invece di una richiesta senza strumenti; da provare con le chiavi dell'utente | 2026-10-22 | decisione del proprietario, `30` §3.5, `35` §3.3 | sprint 7a |
 | Scelte minori dello sprint 6c (35) | Confermate tutte e 12 (§3.11 del 35) | 2026-10-22 | decisione del proprietario, `35` §13 | sprint 7a |
 | Scelte minori dello sprint 7a (44) | Confermate tutte e 12 (§3.10 del 44) | 2026-10-23 | decisione del proprietario, `44` §13 | sprint 7b |
+| Scelte minori dello sprint 7b (44) | Confermate tutte e 5 (§3.11 del 44) | 2026-10-23 | decisione del proprietario, `44` §13 | sprint 7c |
+| D32-1 | (c) identificativi del gruppo fisso nella descrizione di `catalog` (05, 32); (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13); (a) comando di ricerca nell'elenco dei cataloghi dopo la v1 (D32-2) | 2026-10-23 | decisione del proprietario, `32` §13, `13` §7 | sprint 7c |
+| D13-21 | (a) nella v1 `NO_COORD_COLUMNS` con le colonne candidate per RA e Dec nel messaggio; (b) `lon`/`lat` scelti dall'utente solo se un catalogo reale lo richiede | 2026-10-23 | decisione del proprietario, `13` §13 | sprint 7c |
 | Strumento sconosciuto (32) | Il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco `valid_tools`; nulla eseguito | 2026-10-23 | richiesta del proprietario, `32` §3.5 | sprint 7b |
 | Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
 
@@ -1003,7 +1023,9 @@ Lo stesso giorno, con la parte 3b del codice della v1, aperta D40-4
 3, Gruppo 3 = 12). Il 2026-10-23 aperte D32-1 (come l'assistente trova
 l'identificativo di un catalogo VizieR) e D13-21 (colonne di posizione ambigue
 in una regione chiesta dall'assistente): **16 aperte** (Gruppo 1 = 0, Gruppo 2 =
-2, Gruppo 3 = 14).
+2, Gruppo 3 = 14). Lo stesso giorno, con lo sprint 7c, decise D32-1 e D13-21 e
+rinviata a dopo la v1 la nuova D32-2 (comando di ricerca nell'elenco dei
+cataloghi): **15 aperte** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 13).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -1017,7 +1039,7 @@ poi `decisioni-aperte.md`.
 | D41-5, D41-6 | Zoom e spostamento su una griglia di pixel; epoca del COOSYS persa da `catalog.set_columns` | `41-ui-visualizzatore-cielo.md` §13 | D41-5 **rinviata a dopo la v1** il 2026-10-21; D41-6 **da decidere** (Gruppo 3, aperta il 2026-10-21) |
 | D40-4 | Scorciatoia da tastiera della modalità notte (View → Night mode) | `40-ui-finestra-principale.md` §13 | **decisa il 2026-10-17: ⌃⌘N** |
 | AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md`. **Proposta del 2026-10-15, ACCETTATA lo stesso giorno:** nuovo file generale `05-comandi-sessione.md` (livello 1, registro dei comandi e sessione), scritto in `bozza` |
-| D32-1, D13-21 | Come l'assistente trova l'identificativo di un catalogo VizieR; colonne ambigue in una regione chiesta dall'assistente | `32` §13, `13` §13 | **da decidere** (Gruppo 3, aperte il 2026-10-23) |
+| D32-1, D13-21, D32-2 | Come l'assistente trova l'identificativo di un catalogo VizieR; colonne ambigue in una regione chiesta dall'assistente; comando di ricerca nell'elenco dei cataloghi | `32` §13, `13` §13 | D32-1 e D13-21 **decise il 2026-10-23**; D32-2 **rinviata a dopo la v1** (Gruppo 3, proposta di comando nuovo del `05`: attende la decisione del proprietario) |
 | D14-13 | URL dei servizi dell'ESO in http: il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata | `14-core-protocolli-vo.md` §13 | **da decidere** (aperta il 2026-10-14); oggi la demo usa https, nessuna modifica al codice del 14 |
 | AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
 
@@ -1058,7 +1080,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
    2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
-   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori confermate il 2026-10-23) **e sprint 7b scritto il 2026-10-23** (numeri evidenziati per stato, latenza, prove con il servizio simulato; scelte minori da confermare nel 44 §13); prossimo: decisioni D32-1 e D13-21, poi le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
+   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori confermate il 2026-10-23) **e sprint 7b scritto il 2026-10-23** (numeri evidenziati per stato, latenza, prove con il servizio simulato; scelte minori confermate il 2026-10-23) **e sprint 7c scritto il 2026-10-23** (D32-1 e D13-21 decise, test instabili resi deterministici); prossimo: le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -1168,3 +1190,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6c della v1 (35):** `src/astrotwo/ai/chat_assistant.py` (assistente: regole R1–R9, ciclo degli strumenti uno alla volta nella coda del 40, conferme, limiti di 10 chiamate e 5 minuti, Stop, verifica del 34 con rigenerazione rigorosa, token e costo, disponibilità e consenso, blocco `conversations`), `AssistantQueueExecutor` nel 40; T1–T14 in `tests/ai/test_chat_assistant.py` e `tests/ui/test_assistant_queue.py`. Decisioni del proprietario sullo sprint 6b applicate (34: solo arrotondamento, scelte confermate; 32: scelte 4–6 confermate). `35`, `40`, `32`, `34` modificati nel registro, stato `approvato` invariato. Test 780 di default. |
 | 2026-10-22 | Claude Code | **Parte 7, sprint 7a della v1 (44):** `src/astrotwo/ui/ai_panel.py` (`AiPanel`, `MessageView`, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`) nell'area a destra del 40, impostazioni `assistant/…` con `prefs.set`, testo delle conversazioni nel salvataggio, uscita con risposta in corso, 8 icone Lucide, traduzione italiana; `tests/ui/test_ai_panel.py` (T1–T4, T6–T13, T15 e altri; Portachiavi simulato per tutte le finestre dei test in `tests/conftest.py`). **Decisioni del proprietario del 2026-10-22:** 12 scelte minori del 35 confermate; ultima richiesta dopo il limite con gli strumenti e `tool_choice = none` (`TurnOptions.tool_choice` del 30, T16; T4 del 35 con entrambi i formati). `30`, `35`, `40`, `44` modificati nel registro, stato `approvato` invariato. Test: 799 di default. |
 | 2026-10-23 | Claude Code | **Parte 7, sprint 7b della v1 (44):** in `ui/ai_panel.py` evidenziazione di ogni numero secondo lo stato del 34 (segni invisibili prima della conversione del Markdown, numeri negli indirizzi cercati dopo), suggerimento con valore pieno, `#n` e funzioni del modulo, copia col clic destro, colori della modalità notte; esiti di Aggiorna e "Prova il modello" su un oggetto dei segnali figlio della finestra (prima il secondo esito si perdeva); T5, T14 e test di Aggiorna, "Prova il modello", errori del provider, `AI_CONTEXT_TOO_LONG`, conferma con il pannello chiuso e uscita in `tests/ui/test_ai_panel.py`; traduzioni italiane. **Prova reale del proprietario:** causa di `NO_COORD_COLUMNS` = identificativo che non è una tabella (verificato sul servizio reale di VizieR); `load_catalog` con regione dà ora `CATALOG_UNKNOWN` (13, T33 esteso con la struttura di `TAP_SCHEMA` di Gaia DR3 senza dati di terzi); `TOOL_NOT_EXPOSED` con `valid_tools` (32, T4; anche nel 35). **Decisione del proprietario del 2026-10-23:** scelte minori dello sprint 7a confermate. Aperte D32-1 e D13-21 (16 aperte). `13`, `32`, `44` modificati nel registro, stato `approvato` invariato. Test 808 di default. |
+| 2026-10-23 | Claude Code | **Parte 7, sprint 7c della v1 (decisioni e stabilità dei test).** Decisioni del proprietario: D32-1 (c) identificativi del gruppo fisso nella descrizione di `catalog` (05 §7, `commands.py`, 32 §3.4) e (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13 §7, `catalogs.py`, risposta registrata di VizieR per `I/355`, T33); D13-21 (a) colonne candidate nel messaggio di `NO_COORD_COLUMNS`; (a) di D32-1 rinviata a dopo la v1 come nuova D32-2; 5 scelte minori dello sprint 7b del 44 confermate. Test instabili (T1, T2 del 42, T30 del 41): attese su condizioni (`wait_settled`, `wait_command`) invece di `wait_idle` e `history[-1]`; causa comune descritta in §2. Aperte 15 (Gruppo 3 = 13). Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |
