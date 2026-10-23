@@ -1830,35 +1830,54 @@ def _exec_layer_remove(ctx: ExecutionContext, p: Mapping) -> Outcome:
 
 
 def _exec_measure_distance(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    """Due forme (05 §7): pixel di un'immagine (``layer``, ``p1``, ``p2``) o posizioni celesti (``sky1``, ``sky2``)."""
     from astrotwo.core.coordinates_wcs import convert_pixel_convention, pixel_to_sky
     from astrotwo.core.images_fits import star_centroid
     from astrotwo.core.measures import angular_distance
 
-    layer = ctx.state.layer(p["layer"])
-    image = layer.data
-    if image.wcs is None:
-        raise CommandError("NO_WCS", f"livello {layer.id}: immagine senza WCS, distanza angolare non misurabile")
-    if p["snap"] and p["box_size"] is None:
-        raise _invalid("box_size", "con l'aggancio al centroide serve box_size (intero dispari ≥ 3)")
-    points, centroids = [], []
-    for name in ("p1", "p2"):
-        x, y = p[name]["x"], p[name]["y"]
+    pixel_form = [name for name in ("layer", "p1", "p2") if p[name] is not None]
+    sky_form = [name for name in ("sky1", "sky2") if p[name] is not None]
+    if bool(pixel_form) == bool(sky_form):
+        raise _invalid("layer", "serve una sola forma: (layer, p1, p2) per i pixel di un'immagine oppure "
+                       "(sky1, sky2) per due posizioni celesti")
+    if sky_form:
+        if len(sky_form) != 2:
+            raise _invalid("sky2" if "sky1" in sky_form else "sky1", "la forma cielo vuole sky1 e sky2")
         if p["snap"]:
-            c = star_centroid(image, (x, y), p["box_size"])
-            x, y = float(c.x), float(c.y)
-            centroids.append({"point": name, "x": x, "y": y, "convention": c.convention,
-                              "background": float(c.background), "annulus_inner": float(c.annulus_inner),
-                              "annulus_outer": float(c.annulus_outer), "provenance": c.provenance})
-        sky = pixel_to_sky(image.wcs, x, y, convention="numpy").coords
-        fits = convert_pixel_convention(x, y, "numpy", "fits")
-        points.append((x, y, sky, (float(np.ravel(fits.x)[0]), float(np.ravel(fits.y)[0]))))
+            raise _invalid("snap", "l'aggancio al centroide vuole i pixel di un'immagine (layer, p1, p2)")
+        points = [(None, None, _sky(p[name]), None) for name in ("sky1", "sky2")]
+        centroids: list = []
+        source, name = None, "distance"
+    else:
+        if len(pixel_form) != 3:
+            missing = [x for x in ("layer", "p1", "p2") if x not in pixel_form]
+            raise _invalid(missing[0], "la forma pixel vuole layer, p1 e p2")
+        layer = ctx.state.layer(p["layer"])
+        image = layer.data
+        if image.wcs is None:
+            raise CommandError("NO_WCS", f"livello {layer.id}: immagine senza WCS, distanza angolare non misurabile")
+        if p["snap"] and p["box_size"] is None:
+            raise _invalid("box_size", "con l'aggancio al centroide serve box_size (intero dispari ≥ 3)")
+        points, centroids = [], []
+        for name in ("p1", "p2"):
+            x, y = p[name]["x"], p[name]["y"]
+            if p["snap"]:
+                c = star_centroid(image, (x, y), p["box_size"])
+                x, y = float(c.x), float(c.y)
+                centroids.append({"point": name, "x": x, "y": y, "convention": c.convention,
+                                  "background": float(c.background), "annulus_inner": float(c.annulus_inner),
+                                  "annulus_outer": float(c.annulus_outer), "provenance": c.provenance})
+            sky = pixel_to_sky(image.wcs, x, y, convention="numpy").coords
+            fits = convert_pixel_convention(x, y, "numpy", "fits")
+            points.append((x, y, sky, (float(np.ravel(fits.x)[0]), float(np.ravel(fits.y)[0]))))
+        source, name = layer.id, f"distance {layer.id}"
     distance = angular_distance(points[0][2], points[1][2], p["unit"])
     values = {"distance": quantity_json(distance.value), "frame": distance.report.frame,
-              "points": [{"pixel_numpy": {"x": x, "y": y}, "pixel_fits": {"x": fx, "y": fy}, "sky": sky_json(s)}
-                         for x, y, s, (fx, fy) in points],
+              "points": [{"pixel_numpy": None if x is None else {"x": x, "y": y},
+                          "pixel_fits": None if fits is None else {"x": fits[0], "y": fits[1]},
+                          "sky": sky_json(s)} for x, y, s, fits in points],
               "centroids": centroids, "notes": list(distance.report.notes)}
-    layer_id, state = _add_layer(ctx.state, "measure", f"distance {layer.id}", distance, source=layer.id,
-                                 derived={"values": values})
+    layer_id, state = _add_layer(ctx.state, "measure", name, distance, source=source, derived={"values": values})
     values["layer"] = layer_id
     return Outcome(values=values, state=state, layers_created=[layer_id])
 
@@ -2489,9 +2508,15 @@ def default_registry(*, cache=None) -> CommandRegistry:
         CommandSpec("measure.distance", 1, "Angular distance between two pixels of an image.",
                     "Distanza angolare tra due pixel di un'immagine.",
                     ("11 star_centroid", "10 pixel_to_sky", "17 angular_distance"), (
-                        _layer_param(_LAYER_IMAGE),
-                        P("p1", "pixel_position", "First point (image pixel).", "Primo punto (pixel dell'immagine)."),
-                        P("p2", "pixel_position", "Second point.", "Secondo punto."),
+                        P("layer", "layer_ref", "Image layer (pixel form: with p1 and p2).",
+                          "Livello dell'immagine (forma pixel: con p1 e p2).", default=None, layer_kinds=_LAYER_IMAGE),
+                        P("p1", "pixel_position", "First point (image pixel).", "Primo punto (pixel dell'immagine).",
+                          default=None),
+                        P("p2", "pixel_position", "Second point.", "Secondo punto.", default=None),
+                        P("sky1", "sky_position", "First point (sky form: with sky2, no layer).",
+                          "Primo punto (forma cielo: con sky2, senza livello).", default=None),
+                        P("sky2", "sky_position", "Second point (sky form).", "Secondo punto (forma cielo).",
+                          default=None),
                         P("unit", "string", "Angular unit of the result.", "Unità angolare del risultato.",
                           default="arcsec"),
                         P("snap", "boolean", "Snap to the star centroid.", "Aggancio al centroide.", default=False),

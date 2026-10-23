@@ -357,7 +357,7 @@ le scelte minori di §13; tutti versione 1):
 | `view.set_overlays` (`compass`, `scale_bar`; entrambi accesi di default) | 10 `compass_and_scale_bar` | session | vista |
 | `view.set_coordinate_display` (frame, formato) | — | session | |
 | `layer.set_visible`, `layer.set_opacity`, `layer.move`, `layer.remove` | 19 `check_overlay` (quando un livello torna visibile) | session | |
-| `measure.distance` (p1, p2, unità, aggancio al centroide, `box_size`) | 11 `star_centroid` (se aggancio), 10 `pixel_to_sky`, 17 `angular_distance` | session | |
+| `measure.distance` (livello, p1, p2 **oppure** sky1, sky2; unità, aggancio al centroide, `box_size`) | 11 `star_centroid` (se aggancio), 10 `pixel_to_sky`, 17 `angular_distance` | session | |
 | `view.export_png` (file) | disegno del `41` | application | |
 | `cache.clear` (modulo) | 04 `clear` | application | |
 | `prefs.set` (chiave, valore) | — | application | |
@@ -383,6 +383,22 @@ le scelte minori di §13; tutti versione 1):
   (`FIXED_COLLECTIONS`: `simbad`, `I/355/gaiadr3`, `II/246/out`), letti
   da quel gruppo e non copiati a mano. Il parametro resta una stringa libera:
   l'elenco è un aiuto, non un elenco chiuso.
+
+- **`measure.distance` anche tra posizioni celesti (sprint 4g del 41,
+  decisione del proprietario del 2026-10-23):** due forme, esattamente una
+  per chiamata. **Forma pixel** (come prima): `layer` (immagine con WCS),
+  `p1`, `p2` (pixel dell'immagine, convenzione numpy), con l'aggancio
+  facoltativo al centroide. **Forma cielo:** `sky1`, `sky2` (`sky_position`,
+  frame ed epoca dichiarati come per ogni posizione), senza `layer`, `p1`,
+  `p2`: serve a misurare quando la base della vista è uno sfondo HiPS e non
+  c'è un'immagine. Nella forma cielo `snap = true` è rifiutato
+  (`COMMAND_PARAMETER_INVALID`: l'aggancio al centroide vuole i pixel di un
+  immagine); mancano o avanzano parametri di una forma →
+  `COMMAND_PARAMETER_INVALID` che dice quali. Nei due casi la distanza è
+  `angular_distance` del 17 e il risultato crea un livello `measure`
+  (`values.points[].pixel_numpy` e `pixel_fits` sono `null` nella forma
+  cielo). I parametri nuovi sono facoltativi (default `null`): le sessioni
+  registrate prima restano valide, la versione del comando resta 1.
 
 - **Stile iniziale nel comando di caricamento:** `catalog.load_region` e
   `catalog.open_file` assegnano al nuovo livello lo stile iniziale e lo
@@ -717,3 +733,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-21 | Claude Code | **Sprint 4e del 41 (decisioni del proprietario del 2026-10-21):** stile iniziale dei cataloghi assegnato da `catalog.load_region` e `catalog.open_file` (Okabe e Ito senza il nero, sei forme, 8 pixel logici, in ordine di apertura con un contatore dello stato) e scritto nel risultato e nello stato; `catalog.select` con una riga restituisce la scheda della sorgente (`name` da UCD `meta.id;meta.main`, posizione della tabella con l'epoca del catalogo, catalogo, `record_view` del 13); `rows` vuoto toglie la selezione (§7). Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4f del 41 (decisione del proprietario del 2026-10-21):** `moc.open` assegna lo stile iniziale del MOC (Okabe e Ito senza il nero in ordine inverso, contatore dello stato, `fill` 0,25) e lo scrive nel risultato e nello stato (§7). Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **D32-1 (c) decisa dal proprietario (il 05 resta `approvato`):** la descrizione del parametro `catalog` di `catalog.load_region` elenca gli identificativi del gruppo fisso del 13 e dice che serve una tabella (§7, nota "Identificativi dei cataloghi nella descrizione"). |
+| 2026-10-23 | Claude Code | **`measure.distance` esteso (sprint 4g del 41, decisione del proprietario del 2026-10-23):** `layer`, `p1`, `p2` facoltativi e nuova forma cielo con `sky1`, `sky2` (§7, nota "`measure.distance` anche tra posizioni celesti"); versione 1 invariata. Stato `approvato` invariato. |
+

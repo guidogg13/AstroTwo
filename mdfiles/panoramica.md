@@ -18,6 +18,23 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-23, parte 4, sprint 4g della v1 (41: distanza e
+  puntatore Simbad):** nuovo `ui/sky_tools.py`. **Distanza:** con lo
+  strumento attivo il trascinamento (o due clic) invia `measure.distance`;
+  con un'immagine come base usa i pixel, con solo uno sfondo HiPS le
+  posizioni celesti (nuova forma cielo `sky1`/`sky2` del comando, decisione
+  del proprietario); barra delle opzioni sul cielo (unità, aggancio al
+  centroide, finestra del centroide) ricordata con `prefs.set`; segmento ed
+  etichetta (4 cifre significative) disegnati con `QPainter`, rossi di
+  notte; la vista non si sposta. **Puntatore Simbad:** mouse fermo 500 ms o
+  clic, raggio di 12 pixel logici in angolo (10 e 17), una richiesta alla
+  volta, riquadro con oggetto, tipo, coordinate, magnitudini con sistema,
+  citazioni, fonte e collegamento (si apre solo la pagina di Simbad).
+  `measure.distance` è già tra gli strumenti dell'IA (schema esteso);
+  `simbad.pointer` resta fuori (`passive`, regola del 32). Ruff 0.17.2 come
+  strumento di sviluppo, 12 errori veri corretti. Scelte minori del 41
+  §3.19 da confermare. Test: **822 di default**, di rete non eseguiti
+  (`--no-network`). Decisioni aperte: **15**.
 - **Stato al 2026-10-23, parte 7, sprint 7c della v1 (decisioni e
   stabilità dei test):** decise **D32-1** (identificativi del gruppo fisso
   nella descrizione di `catalog` di `catalog.load_region`, letti da
@@ -967,6 +984,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Scelte minori dello sprint 7b (44) | Confermate tutte e 5 (§3.11 del 44) | 2026-10-23 | decisione del proprietario, `44` §13 | sprint 7c |
 | D32-1 | (c) identificativi del gruppo fisso nella descrizione di `catalog` (05, 32); (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13); (a) comando di ricerca nell'elenco dei cataloghi dopo la v1 (D32-2) | 2026-10-23 | decisione del proprietario, `32` §13, `13` §7 | sprint 7c |
 | D13-21 | (a) nella v1 `NO_COORD_COLUMNS` con le colonne candidate per RA e Dec nel messaggio; (b) `lon`/`lat` scelti dall'utente solo se un catalogo reale lo richiede | 2026-10-23 | decisione del proprietario, `13` §13 | sprint 7c |
+| Distanza su sfondo HiPS (05, 41) | `measure.distance` ha due forme: pixel di un'immagine o posizioni celesti (`sky1`, `sky2`), così si misura anche senza immagine | 2026-10-23 | decisione del proprietario, `05` §7, `41` §3.19 | sprint 4g |
+| Opzioni della distanza (41) | Barra sul cielo con unità, aggancio e finestra del centroide, ricordate con `prefs.set` (`tools/…`) | 2026-10-23 | decisione del proprietario, `41` §3.19 | sprint 4g |
 | Strumento sconosciuto (32) | Il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco `valid_tools`; nulla eseguito | 2026-10-23 | richiesta del proprietario, `32` §3.5 | sprint 7b |
 | Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
 
@@ -1078,7 +1097,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
    2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
-   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
+   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: (4g scritto il 2026-10-23) strumenti (distanza, Simbad),
    4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
    il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori confermate il 2026-10-23) **e sprint 7b scritto il 2026-10-23** (numeri evidenziati per stato, latenza, prove con il servizio simulato; scelte minori confermate il 2026-10-23) **e sprint 7c scritto il 2026-10-23** (D32-1 e D13-21 decise, test instabili resi deterministici); prossimo: le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
@@ -1192,4 +1211,5 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-23 | Claude Code | **Parte 7, sprint 7b della v1 (44):** in `ui/ai_panel.py` evidenziazione di ogni numero secondo lo stato del 34 (segni invisibili prima della conversione del Markdown, numeri negli indirizzi cercati dopo), suggerimento con valore pieno, `#n` e funzioni del modulo, copia col clic destro, colori della modalità notte; esiti di Aggiorna e "Prova il modello" su un oggetto dei segnali figlio della finestra (prima il secondo esito si perdeva); T5, T14 e test di Aggiorna, "Prova il modello", errori del provider, `AI_CONTEXT_TOO_LONG`, conferma con il pannello chiuso e uscita in `tests/ui/test_ai_panel.py`; traduzioni italiane. **Prova reale del proprietario:** causa di `NO_COORD_COLUMNS` = identificativo che non è una tabella (verificato sul servizio reale di VizieR); `load_catalog` con regione dà ora `CATALOG_UNKNOWN` (13, T33 esteso con la struttura di `TAP_SCHEMA` di Gaia DR3 senza dati di terzi); `TOOL_NOT_EXPOSED` con `valid_tools` (32, T4; anche nel 35). **Decisione del proprietario del 2026-10-23:** scelte minori dello sprint 7a confermate. Aperte D32-1 e D13-21 (16 aperte). `13`, `32`, `44` modificati nel registro, stato `approvato` invariato. Test 808 di default. |
 | 2026-10-23 | Claude Code | **Parte 7, sprint 7c della v1 (decisioni e stabilità dei test).** Decisioni del proprietario: D32-1 (c) identificativi del gruppo fisso nella descrizione di `catalog` (05 §7, `commands.py`, 32 §3.4) e (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13 §7, `catalogs.py`, risposta registrata di VizieR per `I/355`, T33); D13-21 (a) colonne candidate nel messaggio di `NO_COORD_COLUMNS`; (a) di D32-1 rinviata a dopo la v1 come nuova D32-2; 5 scelte minori dello sprint 7b del 44 confermate. Test instabili (T1, T2 del 42, T30 del 41): attese su condizioni (`wait_settled`, `wait_command`) invece di `wait_idle` e `history[-1]`; causa comune descritta in §2. Aperte 15 (Gruppo 3 = 13). Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |
 | 2026-10-23 | Claude Code | **Lint con ruff** (decisione del proprietario del 2026-10-23): ruff 0.17.2 (MIT) tra le dipendenze di sviluppo, `THIRD_PARTY_LICENSES` rigenerato; configurazione in `pyproject.toml` con solo errori veri (regole E e F, senza lunghezza della riga né ordine degli import). Corretti 12 errori veri senza cambiare il comportamento (import inutilizzati, una variabile inutilizzata, una f-string vuota, `field` ridefinito da una variabile di ciclo in `hips.py`). **D32-2 resta aperta** come promemoria (comando di ricerca nell'elenco dei cataloghi, dopo la v1). |
+| 2026-10-23 | Claude Code | **Parte 4, sprint 4g della v1 (41):** `measure.distance` esteso con la forma cielo (05, 32), `ui/sky_tools.py` con `DistanceTool`, `SimbadPointerTool`, `MeasureOverlay` e barra delle opzioni, collegamento in `sky_viewer.py` e `main_window.py` (`ui.set_tool`, preferenze `tools/…`), 12 testi tradotti, T36 e T37; 05, 32, 40, 41 modificati nel registro, stato `approvato` invariato. Aperte 15 invariate. Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |
 

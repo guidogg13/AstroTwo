@@ -56,7 +56,7 @@ comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 §3.11). **4e (scritto il 2026-10-21):** cataloghi disegnati come simboli sulla GPU, clic su una sorgente con
 scheda sul cielo, avviso di epoche diverse (§3.8). **4f (scritto il 2026-10-21):** MOC disegnati sulla GPU
 (§3.9), pannello dei livelli con visibilità, ordine, opacità e rimozione, sfondo HiPS sotto l'immagine FITS
-(§3.5, §3.7), finestra della forzatura per i corpi diversi (§3.5). **Sprint successivi:** 4g distanza e puntatore Simbad; 4h PNG, cambio di base in un passo
+(§3.5, §3.7), finestra della forzatura per i corpi diversi (§3.5). **Sprint 4g scritto il 2026-10-23** (distanza e puntatore Simbad, §3.19). **Sprint successivi:** 4h PNG, cambio di base in un passo
 (T17) e prestazioni (`perf`).
 
 ### 3.2 Geometria della vista: base e finestra
@@ -585,6 +585,62 @@ funzione `compass_and_scale_bar`; qui solo il disegno.
 - **Disegno:** colori del tema (in modalità notte rossa solo rossi), cifre
   tabulari; nessun numero calcolato qui.
 
+### 3.19 Strumenti: dettagli di distanza e puntatore Simbad (sprint 4g, 2026-10-23)
+
+Completano §3.12 dove non scendeva nel dettaglio. Decisioni del
+proprietario del 2026-10-23: la distanza si misura anche con uno sfondo HiPS
+senza immagine (`measure.distance` esteso nel `05` con la forma cielo) e le
+opzioni stanno in una barra sul cielo. Il resto è scelta minore (§13).
+
+- **Strumento attivo:** lo dice `ui.set_tool` (menu Strumenti, `40`). Con
+  uno strumento attivo il cursore è a croce; la rotella e il pizzico
+  continuano a fare zoom, ma il **trascinamento col tasto sinistro non
+  sposta la vista** e il clic non seleziona sorgenti (`catalog.select`).
+- **Distanza, gesto:** trascinamento da p1 a p2 (almeno `CLICK_SLOP`) oppure
+  due clic; durante il gesto una linea di anteprima dal primo punto al
+  mouse con la distanza provvisoria non scritta (nessun numero stimato:
+  solo la linea). Esc annulla il primo punto. Il comando parte al rilascio
+  o al secondo clic e porta `requested_by.source = mouse`.
+- **Distanza, comando:** con un'**immagine con WCS come base** si manda la
+  forma pixel (`layer` = la base, `p1`, `p2` = pixel della base, che con
+  un'immagine base sono i pixel dell'immagine, convenzione numpy); con un
+  **altro sfondo** (HiPS) la forma cielo (`sky1`, `sky2` da `window_to_sky`
+  del 10). Un punto fuori dal cielo (bordo dell'`AIT`) o una griglia di
+  pixel senza WCS: nessun comando e messaggio (`OUT_OF_SKY`, `VIEW_NO_WCS`).
+  L'aggancio al centroide è possibile solo con la forma pixel (la casella è
+  disattivata con la spiegazione nella descrizione).
+- **Barra delle opzioni:** una barra sovrapposta in alto nell'area del
+  cielo, visibile solo con lo strumento distanza: unità (″, ′, °; default ′),
+  «Snap to centroid» (default spento) e `box_size` (dispari ≥ 3, default 15,
+  §3.12). I valori si ricordano con `prefs.set` (`tools/distance_unit`,
+  `tools/distance_snap`, `tools/distance_box_size`).
+- **Disegno delle misure:** ogni livello `measure` visibile è un segmento fra
+  i due punti (posizioni del cielo del suo risultato, portate sullo schermo
+  con la geometria corrente, quindi segue spostamento e zoom) con un'etichetta
+  al centro: valore con **4 cifre significative** e l'unità (″, ′, °); il
+  valore pieno e l'unità sono nella descrizione del livello nel pannello
+  dei livelli. Colori: accento in chiaro e scuro, rosso in modalità notte.
+  Disegnate con `QPainter` su un widget trasparente sopra il cielo (§3.13).
+- **Puntatore Simbad, quando:** con lo strumento attivo, **mouse fermo
+  500 ms** oppure **clic** (il clic non aspetta). Una richiesta alla volta:
+  durante una richiesta un nuovo arresto aspetta e parte solo l'ultimo.
+  Raggio = distanza angolare (17) tra il punto e un punto a 12 pixel
+  logici (× rapporto dei pixel) portati in cielo con il 10.
+- **Puntatore Simbad, riquadro:** vicino al cursore, con identificatore,
+  tipo, coordinate (`format_coordinates` del 10 nello stile scelto), le
+  magnitudini con banda e sistema (come le dà il 14, mai assunti), citazioni,
+  separazione, origine e data e il collegamento alla pagina SIMBAD (si apre
+  solo `https://simbad.cds.unistra.fr/`). Nessun oggetto nel raggio:
+  «No SIMBAD object within R» con il raggio, più gli avvisi del 14. Errore del
+  comando (rete, WCS): il testo del 14 o del 05 con ⚠. Il riquadro si
+  chiude al primo movimento oltre `CLICK_SLOP`, con Esc, a strumento spento o
+  quando il mouse esce.
+- **Assistente:** `measure.distance` è già nell'elenco del `32` (con lo
+  schema esteso); `simbad.pointer` è `passive`, non è nell'elenco e non lo
+  diventa (regola del `32` §3.2).
+- **Modalità notte e lingue:** barra, etichette e riquadro usano i rossi di
+  §3.11 del `40`; i testi sono inglesi con traduzione italiana (`40`, `.ts`).
+
 ## 4. Cosa NON fa
 
 - Non calcola proiezioni, coordinate, distanze, valori, epoche né scale da
@@ -758,6 +814,8 @@ mai abbassare in silenzio".
 | T33 | Pannello dei livelli (sprint 4f) | casella, cursore, su/giù, trascinamento e rimozione | un comando registrato del `05` per azione (opacità al rilascio); elenco con il livello in alto in cima; dettagli con sorgente, corpo, epoca e conteggi; "sovrapposizione forzata" | test |
 | T34 | Gaia DR3 propagato (D41-6) | risposta registrata di TAP VizieR (Gaia DR3) caricata con `catalog.load_region`, `catalog.set_columns` con `pmRA`/`pmDE` su un'immagine con `MJD-OBS` | posizioni di `display_positions` del 13 da J2016.0 all'epoca dell'immagine, nessun `EPOCH_INVALID`; scheda e pannello "disegnato all'epoca …" | ricalcolo con il 13 |
 | T35 | MOC e notte sulla GPU (`gl`) | MOC, catalogo e sfondo a colori, in modalità normale e notte | riempimento e perimetro visibili nel colore dello stile; in notte nessun pixel con verde o blu sopra la soglia di T20 | lettura dell'immagine fuori schermo |
+| T36 | Distanza (sprint 4g) | immagine base con WCS e poi solo HiPS; trascinamento e due clic; opzioni; punto fuori dal cielo | forma pixel o cielo scelta dalla base; distanza = `angular_distance` del 17 ricalcolata nel test; unità e aggancio dalle opzioni; nessuno spostamento della vista; segmento ed etichetta disegnati, rossi in notte | ricalcolo con 10, 11, 17 |
+| T37 | Puntatore Simbad (sprint 4g) | servizio simulato; mouse fermo 500 ms, clic, risposta lenta con secondo arresto, nessun oggetto, errore | una richiesta con il raggio di T9; riquadro con i campi del 14 e il collegamento; ultima richiesta sola dopo l'attesa; messaggi di errore; chiusura con Esc | servizio simulato |
 | T30 | Qualche migliaio di sorgenti (sprint 4e) | 5000 sorgenti, gesti | un solo caricamento dei punti per base; durante il gesto solo la trasformazione; tempo del calcolo per base misurato e riportato | test (tempo riportato) |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
@@ -810,6 +868,11 @@ compilare il Mac di riferimento (§3.15).
   eccesso dichiarato; (7) unità della distanza scelta nelle opzioni,
   default ′; (8) 6 thread per i tile; (9) due file Python (`sky_viewer.py`,
   `sky_renderer_gl.py`) per tenere l'OpenGL separato.
+- **Sprint 4g (2026-10-23): decisioni del proprietario** — distanza anche su sfondo HiPS con `measure.distance`
+  esteso (`05`); opzioni dello strumento in una barra sul cielo (§3.19). **Scelte minori DA CONFERMARE** (§3.19):
+  (1) 4 cifre significative nell'etichetta; (2) opzioni ricordate con `prefs.set`; (3) anche il clic fa partire il
+  puntatore Simbad, senza aspettare i 500 ms; (4) il trascinamento non sposta la vista con uno strumento attivo;
+  (5) il riquadro Simbad si chiude al primo movimento oltre `CLICK_SLOP`; (6) un livello `measure` per ogni misura.
 - **D41-6 — Epoca del COOSYS persa da `catalog.set_columns`: DECISA il 2026-10-21 (sotto).** Aperta il 2026-10-21, sprint 4e:
   `confirm_position_columns` del 13 crea colonne di posizione senza l'epoca del COOSYS e `catalog.set_columns` del
   `05` non ha `source_epoch`: per un catalogo con l'epoca solo nel COOSYS (es. Gaia DR3 da VizieR, `J2016.0`), scegliere
@@ -865,3 +928,6 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-20 | Claude Code | **Sprint 4d del codice (decisioni del proprietario del 2026-10-20: inquadratura intera, griglia di pixel senza WCS):** File → Apri su un FITS locale (`image.open` del 05, già previsto) lo rende base della vista con il suo WCS e lo inquadra intero; colori da `set_display`; disegno a pixel più vicino (`sample_image`); `cursor.read` con valore originale, unità (`BUNIT` o «non dichiarata»), pixel FITS (x, y), frame ed epoca dall'intestazione senza assunzioni; senza WCS valido griglia di pixel (`PixelGridGeometry`) con `WCS_INVALID` e nessuna coordinata; nuova D41-5 (zoom e spostamento sulla griglia di pixel). T22–T25 nei test. Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4e del codice (decisioni del proprietario del 2026-10-21):** cataloghi disegnati come punti sulla GPU con forma nel programma di disegno, posizioni e pixel della base nel gruppo di thread dei tile (una volta per base), stile iniziale dal comando di caricamento, clic con `catalog.select` e scheda della sorgente sul cielo, avvisi `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN` (§3.8, §3.13); epoca nella barra in ISO 8601 con la scala invece del JD (§3.11, DC1); D41-5 rinviata a dopo la v1; test T26–T30. Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Sprint 4f del codice (decisioni del proprietario del 2026-10-21):** MOC sulla GPU (triangoli e perimetro, ordine ridotto dichiarato, stile da `moc.open`), pannello dei livelli con visibilità, ordine, opacità e rimozione come comandi del `05`, sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`; D41-6 decisa (13). §3.1, §3.2, §3.5, §3.7, §3.9, §3.13, §7, §13; test T31–T35. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **Sprint 4g (decisioni del proprietario del 2026-10-23):** distanza anche con sfondo HiPS (`measure.distance` esteso nel `05`) e opzioni dello strumento in una barra sul cielo; nuova §3.19 con i dettagli di distanza e puntatore Simbad, scelte minori da confermare in §13, test T36 e T37. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **Codice dello sprint 4g** ("FASE: CODICE – interfaccia v1", parte 4): `src/astrotwo/ui/sky_tools.py` (`DistanceTool`, `SimbadPointerTool`, `MeasureOverlay`, `DistanceOptionsBar`; terzo file Python del 41 oltre ai due della scelta minore 9, per non gonfiare `sky_viewer.py`) e collegamento in `sky_viewer.py`; `Bridge.simbad` e `TilePool.read(..., signal)`; descrizione del livello `measure` con valore pieno e unità; test T36 e T37 in `tests/ui/test_sky_tools.py`. Scelte minori di §3.19 da confermare in §13. Stato `approvato` invariato. |
+

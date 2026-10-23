@@ -45,7 +45,7 @@ esterno, §3.6).
 | `catalog__load_region` | `catalog.load_region` | session; rete, lungo | sì (rete, lungo) | la scheda mostra `max_rows` |
 | `catalog__select` | `catalog.select` | session | no | selezione: non cambia il livello |
 | `catalog__set_style` | `catalog.set_style` | session | sì (modifica un livello) | |
-| `measure__distance` | `measure.distance` | session | no | |
+| `measure__distance` | `measure.distance` | session | no | due forme: pixel di un'immagine (`layer`, `p1`, `p2`) o posizioni celesti (`sky1`, `sky2`), dal 2026-10-23 (`05`); `simbad.pointer` resta non esposto (classe `passive`, §3.2) |
 | `calc__evaluate_expression`, `calc__convert_units`, `calc__convert_pixel_value`, `calc__calculate_coordinates`, `calc__convert_time` | `calc.*` (18) | session | no | **ogni numero derivato** si ottiene da qui (§3.7) |
 | `layer__set_visible` | `layer.set_visible` | session | sì (modifica un livello) | |
 | `layer__set_opacity` | `layer.set_opacity` | session | sì (modifica un livello) | |
@@ -436,3 +436,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-23 | Claude Code | **Richiesta del proprietario del 2026-10-23** (prova reale dell'assistente con un modello gratuito di OpenRouter): il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco dei nomi validi (`valid_tools`, §3.5 punto 2, §10, T4). Verificato che un nome sconosciuto non esegue nulla e non entra in cronologia. Nota: `catalog__search` **è** uno strumento della v1 (§3.2: conta le righe di un livello già aperto); non cerca i cataloghi di VizieR. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | Aperta **D32-1** (come l'assistente trova l'identificativo di un catalogo VizieR, Gruppo 3, §13), dalla prova reale del proprietario. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **D32-1 decisa** (proprietario, 2026-10-23): (c) identificativi del gruppo fisso nella descrizione di `catalog` (§3.4 punto 2) e (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13); (a) rinviata a dopo la v1 come nuova **D32-2**. Test T3 esteso. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | Sprint 4g del 41: `measure__distance` porta lo schema esteso del `05` (forma cielo con `sky1`, `sky2`); `simbad.pointer` non è esposto (classe `passive`, regola di §3.2 invariata). Nessun'altra modifica; stato `approvato` invariato. |
+

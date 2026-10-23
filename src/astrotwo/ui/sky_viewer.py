@@ -48,6 +48,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QHBox
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
+from astrotwo.ui.sky_tools import (
+    DEFAULT_TOOL_TEXTS, DistanceOptionsBar, DistanceTool, MeasureOverlay, SimbadPointerTool)
 
 #: Fine del gesto: puntatore fermo per 300 ms (05 §3.3).
 GESTURE_IDLE_MS = 300
@@ -510,6 +512,7 @@ class _Bridge(QObject):
     failed = Signal(int, str, str)  # generazione, codice, testo
     done = Signal(int)  # generazione (una richiesta di tile finita, riuscita o no)
     cursor = Signal(object)  # CommandResult di una lettura sotto il mouse
+    simbad = Signal(object)  # CommandResult di simbad.pointer (puntatore Simbad, 41 §3.12)
     catalog = Signal(object, object)  # chiave, CatalogPoints o ResultMessage (errore del modulo)
     moc = Signal(object, object)  # chiave, MocShapes o ResultMessage (errore del modulo)
 
@@ -573,7 +576,7 @@ class TilePool:
 
         self.pool.start(_Task(run))
 
-    def read(self, passive: Callable[..., object], name: str, params: Mapping) -> None:
+    def read(self, passive: Callable[..., object], name: str, params: Mapping, signal: str = "cursor") -> None:
         """Lettura passiva (``cursor.read``, 41 §3.11) nel gruppo di thread dei tile; il risultato torna al thread
         principale con ``bridge.cursor`` (un errore imprevisto diventa un risultato in errore, mai un'eccezione)."""
         from astrotwo.core.commands import CommandResult
@@ -583,7 +586,7 @@ class TilePool:
                 result = passive(name, params, "mouse")
             except Exception as exc:  # noqa: BLE001 - il gruppo di thread non si ferma mai
                 result = CommandResult("error", error=ResultMessage("UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}"))
-            self.bridge.cursor.emit(result)
+            getattr(self.bridge, signal).emit(result)
 
         self.pool.start(_Task(run))
 
@@ -695,6 +698,10 @@ class SkyViewer(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(child)
+        self.tool = "none"  # strumento attivo (ui.set_tool del 05): none, distance, simbad_pointer
+        self.tool_texts: Mapping[str, str] = DEFAULT_TOOL_TEXTS  # tradotti dalla finestra principale (40)
+        self._loading_options = False
+        self.measure_overlay = MeasureOverlay(self)  # misure disegnate sopra il cielo (41 §3.19)
         self.zoom_in_button = self._zoom_button("zoomIn", +1)
         self.zoom_out_button = self._zoom_button("zoomOut", -1)
         self.tiles = TilePool(cache)
@@ -703,6 +710,7 @@ class SkyViewer(QWidget):
         self.tiles.bridge.failed.connect(self._failed)
         self.tiles.bridge.done.connect(self._tile_done)
         self.tiles.bridge.cursor.connect(self._cursor_done)
+        self.tiles.bridge.simbad.connect(lambda result: self.simbad_tool.done(result))
         self.tiles.bridge.catalog.connect(self._catalog_done)
         self.tiles.bridge.moc.connect(self._moc_done)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)  # Esc chiude la scheda della sorgente
@@ -712,6 +720,10 @@ class SkyViewer(QWidget):
         self.card.setTextFormat(Qt.TextFormat.RichText)
         self.card.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.card.hide()
+        self.distance_tool = DistanceTool(self)
+        self.simbad_tool = SimbadPointerTool(self)
+        self.options_bar = DistanceOptionsBar(self)
+        self.options_bar.show_options(self.distance_tool.options, False)
         self._card: tuple[str, int, Mapping] | None = None  # livello, riga, scheda di catalog.select (05)
         self._night = False
         self.screen_geometry = None  # geometria del disegno sullo schermo (la sua finestra è lo spazio dei punti)
@@ -775,6 +787,9 @@ class SkyViewer(QWidget):
         return button
 
     def _place_buttons(self) -> None:
+        self.measure_overlay.setGeometry(self.rect())
+        self.options_bar.move(12, 12)
+        self.options_bar.raise_()
         x = self.width() - self.zoom_in_button.width() - 12
         self.zoom_in_button.move(x, 12)
         self.zoom_out_button.move(x, 12 + self.zoom_in_button.height() + 4)
@@ -859,6 +874,8 @@ class SkyViewer(QWidget):
         self.catalog_layers = state.of_kind("catalog")
         self.moc_layers = state.of_kind("moc")
         self.base_image = image
+        self._refresh_options_bar()
+        self.measure_overlay.update()
         changed_geometry = view.geometry is not self.geometry
         changed_survey = (layer.id if layer else None) != self.survey_layer
         image_key = None if image is None else (image.id, id(image.derived.get("plane")))
@@ -1025,6 +1042,8 @@ class SkyViewer(QWidget):
         self._night = bool(night)
         self.renderer.set_night(night)
         self._style_card()
+        self.simbad_tool.style()
+        self.measure_overlay.update()
 
     # --- cataloghi (41 §3.8) ---------------------------------------------------------------
 
@@ -1091,6 +1110,7 @@ class SkyViewer(QWidget):
         self._trees = {}
         self.renderer.upload_points(self.point_sets)
         self._place_card()
+        self.measure_overlay.update()
 
     # --- MOC (41 §3.9, sprint 4f) ---------------------------------------------------------
 
@@ -1268,16 +1288,60 @@ class SkyViewer(QWidget):
         self.card.move(int(x), int(y))
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_Escape:
+            if self.tool == "distance" and self.distance_tool.cancel():
+                event.accept()
+                return
+            if self.tool == "simbad_pointer" and self.simbad_tool.card.isVisible():
+                self.simbad_tool.hide()
+                event.accept()
+                return
         if event.key() == Qt.Key.Key_Escape and self._card is not None:
             self.hide_card()
             event.accept()
             return
         super().keyPressEvent(event)
 
+    # --- strumenti (41 §3.12, §3.19) ---------------------------------------------------------
+
+    def set_tool(self, tool: str) -> None:
+        """Strumento attivo dopo ``ui.set_tool``: cursore a croce, barra delle opzioni della distanza."""
+        if tool != self.tool:
+            self.distance_tool.reset()
+            self.simbad_tool.reset()
+        self.tool = tool
+        self.setCursor(Qt.CursorShape.CrossCursor if tool != "none" else Qt.CursorShape.ArrowCursor)
+        self._refresh_options_bar()
+
+    def set_tool_option(self, key: str, value: str) -> None:
+        """Opzione dello strumento di distanza dalla preferenza ``tools/…`` (`prefs.set`, 40)."""
+        options = self.distance_tool.options
+        if key == "tools/distance_unit":
+            options["unit"] = value
+        elif key == "tools/distance_snap":
+            options["snap"] = value == "true"
+        elif key == "tools/distance_box_size":
+            options["box_size"] = int(value)
+        self._refresh_options_bar()
+
+    def image_is_base(self) -> bool:
+        """Base della vista = immagine con WCS: solo allora la distanza usa i pixel e si può agganciare."""
+        return self.base_image is not None and getattr(self.base_image.data, "wcs", None) is not None
+
+    def _refresh_options_bar(self) -> None:
+        self.options_bar.setVisible(self.tool == "distance")
+        self.options_bar.show_options(self.distance_tool.options, self.image_is_base())
+        self.options_bar.raise_()
+        self.options_bar.setStyleSheet(
+            "QFrame#distanceOptions { background: rgba(8, 10, 16, 225); border-radius: 6px; } "
+            + "QFrame#distanceOptions QLabel, QFrame#distanceOptions QCheckBox { color: "
+            + ("#ff2020" if self._night else "#e8eefc") + "; }")
+
     # --- gesti (41 §3.4, 05 §3.3) --------------------------------------------------------
 
     def _gesture_step(self) -> None:
         self.renderer.set_transform(self.k, self.tx, self.ty)
+        self.measure_overlay.update()
         self._place_card()
         self.idle.start()
 
@@ -1339,11 +1403,24 @@ class SkyViewer(QWidget):
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
+            if self.tool == "distance":  # il trascinamento misura, non sposta la vista (41 §3.19)
+                self.distance_tool.press(event.position())
+                event.accept()
+                return
+            if self.tool == "simbad_pointer":
+                self.simbad_tool.hide()
+                self._press = event.position()
+                event.accept()
+                return
             self._drag = self._press = event.position()
             self._dragging = False
         event.accept()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self.tool == "distance":
+            self.distance_tool.move(event.position())
+        elif self.tool == "simbad_pointer":
+            self.simbad_tool.move(event.position())
         if self._drag is not None and not self.pixel_grid:
             pos = event.position()
             # sotto CLICK_SLOP la pressione può ancora essere un clic: nessuno spostamento
@@ -1359,6 +1436,7 @@ class SkyViewer(QWidget):
         self._cursor_inside = False
         self._cursor_next = None
         self.cursor_read.emit(None)
+        self.simbad_tool.leave()
         super().leaveEvent(event)
 
     # --- coordinate e valore sotto il mouse (41 §3.11) -----------------------------------
@@ -1394,6 +1472,14 @@ class SkyViewer(QWidget):
             self.read_cursor(pending)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.tool != "none":
+            self._press = None
+            if self.tool == "distance":
+                self.distance_tool.release(event.position())
+            else:
+                self.simbad_tool.click(event.position())
+            event.accept()
+            return
         clicked = event.button() == Qt.MouseButton.LeftButton and self._press is not None and not self._dragging
         self._drag = self._press = None
         self._dragging = False
@@ -1638,6 +1724,8 @@ class LayerPanel(QWidget):
                 parts.append(t["body"].replace("%1", body_of(data)))
             except Exception as exc:  # noqa: BLE001 - corpo non ricavabile: il codice del 19
                 parts.append(t["body_unknown"].replace("%1", str(getattr(exc, "code", type(exc).__name__))))
+        if layer.kind == "measure" and hasattr(data, "value"):  # valore pieno e unità del 17 (41 §3.19)
+            parts.append(f"{float(data.value.value)!r} {data.value.unit}")
         if layer.kind == "image":
             epoch = None if data is None or data.wcs is None else data.wcs.image_epoch
             parts.append(t["epoch"].replace("%1", time_text(epoch)) if epoch is not None else t["epoch_unknown"])

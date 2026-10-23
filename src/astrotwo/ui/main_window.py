@@ -194,6 +194,25 @@ PREFERENCES: dict[str, Preference] = {p.key: p for p in (
 )}
 
 
+#: Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo.
+TOOL_PREFERENCES: dict[str, Preference] = {p.key: p for p in (
+    Preference("tools/distance_unit", "arcmin", _choice(("arcsec", "arcmin", "deg"))),
+    Preference("tools/distance_snap", "false", _choice(("true", "false"))),
+    Preference("tools/distance_box_size", "15", lambda text: _odd_box(text)),
+)}
+
+
+def _odd_box(text: str) -> str:
+    """Finestra del centroide: intero dispari da 3 a 201 (11 ``star_centroid``)."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise ValueError(f"{text!r} non è un intero") from None
+    if value < 3 or value > 201 or value % 2 == 0:
+        raise ValueError(f"{value} non è un intero dispari tra 3 e 201")
+    return str(value)
+
+
 def _check_preference(key: str, value: str) -> str:
     """Valore valido nella forma testuale, oppure ``PREFERENCE_INVALID`` (§10). Le impostazioni della sezione
     Assistant (``assistant/…``, 44 §3.6) le controlla il pannello del 44; la chiave API non è mai tra queste."""
@@ -205,9 +224,10 @@ def _check_preference(key: str, value: str) -> str:
                                f"({', '.join(ASSISTANT_DEFAULTS)})")
         check = functools.partial(check_assistant_preference, key)
     else:
-        pref = PREFERENCES.get(key)
+        pref = PREFERENCES.get(key) or TOOL_PREFERENCES.get(key)
         if pref is None:
-            raise CommandError("PREFERENCE_INVALID", f"preferenza {key!r} sconosciuta ({', '.join(PREFERENCES)})")
+            raise CommandError("PREFERENCE_INVALID", f"preferenza {key!r} sconosciuta "
+                               f"({', '.join([*PREFERENCES, *TOOL_PREFERENCES])})")
         check = pref.check
     try:
         return check(value)
@@ -1527,6 +1547,22 @@ class MainWindow(QMainWindow):
 
         self.sky = SkyViewer(self.submit, cache=self.cache, passive=self.read_passive)
         self.sky.overlay_texts = {"pole": self.tr("pole in field"), "at_center": self.tr("at the center")}
+        self.sky.tool_texts = {
+            "unit": self.tr("Unit"), "snap": self.tr("Snap to centroid"),
+            "snap_needs_image": self.tr("Needs an image as the base of the view"), "box": self.tr("Box (px)"),
+            "box_tip": self.tr("Centroid box size in pixels (odd, 3 or more)"),
+            "simbad_none": self.tr("No SIMBAD object within %1"), "simbad_citations": self.tr("%1 citations"),
+            "simbad_separation": self.tr("%1 from the pointer"),
+            "simbad_system_unknown": self.tr("system not declared"),
+            "simbad_more": self.tr("+%1 more magnitudes (in the command result)"),
+            "simbad_link": self.tr("SIMBAD page"), "simbad_retrieved": self.tr("retrieved %1"),
+            "simbad_from": self.tr("source %1"), "simbad_error": self.tr("SIMBAD: %1")}
+        for key, pref in TOOL_PREFERENCES.items():  # opzioni ricordate dello strumento di distanza
+            value = self.settings.value(key, pref.default)
+            try:
+                self.sky.set_tool_option(key, pref.check(str(value)))
+            except ValueError:
+                self.sky.set_tool_option(key, pref.default)
         self.sky.card_texts = {
             "row": self.tr("row %1"), "epoch": self.tr("catalog epoch %1"),
             "epoch_unknown": self.tr("catalog epoch not declared"), "no_position": self.tr("no position: %1"),
@@ -2048,6 +2084,8 @@ class MainWindow(QMainWindow):
                 self.apply_appearance(p["value"])
             elif p["key"].startswith("assistant/"):
                 self.ai_panel.settings_changed(p["key"])
+            elif p["key"] in TOOL_PREFERENCES:
+                self.sky.set_tool_option(p["key"], p["value"])
             elif p["key"] == "cache/limit_bytes" and isinstance(self.cache, ThreadCache):
                 self.cache.limit_bytes = int(p["value"])
         elif name == "ui.set_appearance":
@@ -2060,6 +2098,7 @@ class MainWindow(QMainWindow):
             self.panel_actions[p["panel"]].setChecked(p["visible"])
         elif name == "ui.set_tool":
             self.active_tool = p["tool"]
+            self.sky.set_tool(p["tool"])
             self.act_distance.setChecked(p["tool"] == "distance")
             self.act_simbad.setChecked(p["tool"] == "simbad_pointer")
         elif name == "view.set_grid":

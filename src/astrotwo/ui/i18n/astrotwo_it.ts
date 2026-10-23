@@ -551,7 +551,7 @@
     <name>HistoryPanel</name>
     <message>
         <source>AI</source>
-        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
+        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
         <translation>IA</translation>
     </message>
     <message>
@@ -900,6 +900,54 @@
     <message>
         <source>epoch %1</source>
         <translation>epoca %1</translation>
+    </message>
+    <message>
+        <source>Snap to centroid</source>
+        <translation>Aggancia al centroide</translation>
+    </message>
+    <message>
+        <source>Needs an image as the base of the view</source>
+        <translation>Serve un'immagine come base della vista</translation>
+    </message>
+    <message>
+        <source>Box (px)</source>
+        <translation>Finestra (px)</translation>
+    </message>
+    <message>
+        <source>Centroid box size in pixels (odd, 3 or more)</source>
+        <translation>Lato della finestra del centroide in pixel (dispari, almeno 3)</translation>
+    </message>
+    <message>
+        <source>No SIMBAD object within %1</source>
+        <translation>Nessun oggetto SIMBAD entro %1</translation>
+    </message>
+    <message>
+        <source>%1 citations</source>
+        <translation>%1 citazioni</translation>
+    </message>
+    <message>
+        <source>%1 from the pointer</source>
+        <translation>%1 dal puntatore</translation>
+    </message>
+    <message>
+        <source>system not declared</source>
+        <translation>sistema non dichiarato</translation>
+    </message>
+    <message>
+        <source>+%1 more magnitudes (in the command result)</source>
+        <translation>+%1 altre magnitudini (nel risultato del comando)</translation>
+    </message>
+    <message>
+        <source>SIMBAD page</source>
+        <translation>Pagina SIMBAD</translation>
+    </message>
+    <message>
+        <source>source %1</source>
+        <translation>fonte %1</translation>
+    </message>
+    <message>
+        <source>SIMBAD: %1</source>
+        <translation>SIMBAD: %1</translation>
     </message>
     <message>
         <source>Columns…</source>

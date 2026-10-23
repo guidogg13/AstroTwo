@@ -685,6 +685,32 @@ def test_measure_distance(registry, files):
         "COMMAND_PARAMETER_INVALID"
 
 
+def test_measure_distance_sky_form(registry, files):
+    """05 §7 (sprint 4g): la forma cielo misura senza immagine; una sola forma per chiamata."""
+    from astrotwo.core.measures import angular_distance
+
+    def position(lon, lat):
+        return {"lon": {"value": lon, "unit": "deg"}, "lat": {"value": lat, "unit": "deg"}, "frame": "icrs",
+                "equinox": None, "obstime": None, "epoch": None, "epoch_reason": "prova senza epoca"}
+
+    s = Session(registry)
+    result = run(s, "measure.distance", sky1=position(10.0, 41.0), sky2=position(10.0, 41.5), unit="arcmin")
+    assert result.status == "ok", result.error
+    a = cw.SkyFrame.from_lonlat(10.0 * u.deg, 41.0 * u.deg, "icrs")
+    b = cw.SkyFrame.from_lonlat(10.0 * u.deg, 41.5 * u.deg, "icrs")
+    assert result.values["distance"] == {"value": float(angular_distance(a, b, "arcmin").value.value),
+                                         "unit": "arcmin"}
+    assert result.values["points"][0]["pixel_numpy"] is None and result.values["points"][0]["pixel_fits"] is None
+    layer = s.workspace.state.layer(result.layers_created[0])
+    assert layer.kind == "measure" and layer.source is None
+    both = run(s, "measure.distance", sky1=position(1, 2), sky2=position(3, 4), snap=True)
+    assert both.error.code == "COMMAND_PARAMETER_INVALID" and "snap" in both.error.text
+    run(s, "image.open", file={"path": files["image"]})
+    for params in ({}, {"sky1": position(1, 2)}, {"layer": "L1", "p1": pix(1, 1)},
+                   {"layer": "L1", "p1": pix(1, 1), "p2": pix(2, 2), "sky1": position(1, 2), "sky2": position(3, 4)}):
+        assert run(s, "measure.distance", **params).error.code == "COMMAND_PARAMETER_INVALID", params
+
+
 def test_interface_commands_bound(registry, tmp_path):
     s = Session(registry)
     unbound = run(s, "prefs.set", key="appearance", value="night")
