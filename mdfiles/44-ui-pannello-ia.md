@@ -131,7 +131,7 @@ leggero, non per colori forti.
 ### 3.10 Precisazioni del codice (sprint 7a, 2026-10-22)
 
 Come il codice applica §3.1–§3.9 dove la specifica non scende nel
-dettaglio (scelte minori **da confermare** in §13):
+dettaglio (scelte minori **confermate dal proprietario il 2026-10-23**, §13):
 
 1. **Impostazioni in `QSettings`** (sezione `assistant/`, scritte solo con
    `prefs.set`): `assistant/profiles` (oggetto JSON `{id: profilo}` con i
@@ -194,6 +194,57 @@ dettaglio (scelte minori **da confermare** in §13):
     annulla del campo); la stringa Python letta dal campo non si può
     cancellare dalla memoria (testo immutabile) e si lascia al garbage
     collector, senza altre copie.
+
+### 3.11 Precisazioni del codice (sprint 7b, 2026-10-23)
+
+Come il codice applica §3.4 e §10 dove la specifica non scende nel
+dettaglio (scelte minori **da confermare** in §13):
+
+1. **Dal testo della risposta al documento:** il rapporto del `34` dà le
+   posizioni nel testo Markdown (NFC). Prima della conversione il pannello
+   mette attorno a ogni numero non `excluded` dei **segni invisibili**
+   (caratteri dell'area privata di Unicode, U+E000–U+E019, con il numero
+   d'ordine del numero); dopo la conversione li cerca nel documento, applica
+   lo stile a ciò che sta fra i segni e li toglie, anche dagli indirizzi dei
+   collegamenti. Così ogni numero si ritrova anche dopo elenchi, tabelle,
+   grassetti e codice. Un numero che sparisce nella conversione (testo
+   alternativo di un'immagine, titolo di un collegamento) non è mostrato e
+   quindi non si evidenzia; il riepilogo lo conta lo stesso.
+2. **Più blocchi di testo:** il testo verificato è l'unione dei blocchi
+   mostrati tra le schede dei comandi; le posizioni si dividono fra i
+   blocchi. Se l'unione non coincide con il testo del rapporto (caso solo
+   teorico della normalizzazione NFC al confine fra due blocchi) il testo
+   verificato si mostra intero nel primo blocco, così nessun numero resta
+   senza stile. La prima risposta della rigenerazione (§3.10 punto 7) si
+   evidenzia con il suo rapporto.
+3. **Stili** (colori del tema del `40`): `verified` e
+   `verified_other_command` sottolineatura continua nel colore d'accento
+   (`focus`); `user_input`, `command_parameter`, `external_text`
+   sottolineatura **tratteggiata** nel colore del testo secondario;
+   `not_verified` e `ambiguous` **sfondo** nel colore d'errore del tema
+   (trasparente al 30 %) con sottolineatura ondulata; `excluded` nessuno
+   stile. In modalità notte gli stessi stili con i colori rossi del tema.
+4. **Suggerimento** (al passaggio del mouse sul numero), tradotto dal `44`
+   (gli stati e le note del `34` non si mostrano in italiano fisso):
+   `verified`: "Verificato: <valore pieno> <unità> · comando #n · <funzioni
+   del modulo>"; `verified_other_command`: lo stesso con "con un altro
+   comando"; `command_parameter`: "Parametro del comando #n: <valore>";
+   `user_input`: "Dal tuo messaggio"; `external_text`: "Da testo esterno,
+   non calcolato (<fonte>)"; `not_verified`: "Non viene da un comando";
+   `ambiguous`: "Formato ambiguo". Note in più del `34`: "unità non
+   riconosciuta", "comando inesistente: #n". Valore pieno = valore del
+   risultato completo del `05` (`repr` di Python) con la sua unità; funzioni
+   del modulo come nella scheda del comando (§3.10 punto 5).
+5. **Copiabile** (`02` §6, §9 qui): clic destro su un numero → "Copia il
+   valore pieno" (valore e unità) e "Copia la nota"; il resto del menu è
+   quello del testo in sola lettura.
+6. **Errori del provider** (§10): codice e testo del `30` in rosso sotto la
+   risposta, con il testo arrivato prima dell'errore verificato come gli
+   altri; `AI_CONTEXT_TOO_LONG` con il pulsante "Nuova conversazione".
+7. **Sonda di latenza (T14):** un temporizzatore di 10 ms sul thread
+   principale durante una risposta che arriva lentamente e un comando
+   lungo confermato; nessun intervallo oltre 100 ms (`41` P). Il testo in
+   arrivo si ridisegna al più ogni 50 ms.
 
 ## 4. Cosa NON fa
 
@@ -310,8 +361,13 @@ con la finestra del `40`, il provider simulato a copione del `35`
 Conferma), T4 (catalogo con l'istruzione, opacità invariata), T6, T7, T8,
 T9, T10, T11, T12, T13 (anche i collegamenti dei messaggi), T15 (con il
 rifiuto di `http` remoto), più sessione con il testo delle conversazioni,
-nuova conversazione e traduzione italiana. Restano allo sprint 7b T5 e
-T14.
+nuova conversazione e traduzione italiana. Sprint 7b (2026-10-23): T5 (un
+numero per ogni stato, stili, suggerimenti, copia, anche dopo il cambio di
+tema e in modalità notte), T14 (sonda con risposta lenta e comando lungo),
+Aggiorna e "Prova il modello" con il servizio simulato del `30`
+(`StreamingService`), errori del provider (`AI_AUTH`) e
+`AI_CONTEXT_TOO_LONG`, conferma in attesa con il pannello chiuso, uscita
+con una risposta in corso.
 
 ## 13. Decisioni aperte
 
@@ -327,8 +383,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   della chiave: il widget si svuota (testo e annulla), la stringa Python
   letta non si può cancellare (§3.10 punto 12); licenze di PySide6/Qt e
   pytest-qt già verificate per il `40`.
-- **Scelte minori dello sprint 7a (2026-10-22), DA CONFERMARE** (§3.10; la
-  specifica non le dice): (1) impostazioni in `QSettings` con le chiavi
+- **Scelte minori dello sprint 7a (2026-10-22): CONFERMATE dal proprietario
+  il 2026-10-23** (§3.10): (1) impostazioni in `QSettings` con le chiavi
   `assistant/…`, modalità rigorosa e limiti comuni a tutti i profili,
   prezzo nel profilo, limiti 1–100 comandi e 1–60 minuti; (2) consenso
   scritto con `prefs.set` e messaggio in attesa inviato dopo "Accetto";
@@ -341,12 +397,20 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   come i comandi in corso; (9) 8 icone Lucide in più; (10) pulsante nelle
   preferenze del `40`; (11) modelli e prova in un thread, non comandi;
   (12) campo della chiave senza menu contestuale.
-- **Resta per lo sprint 7b:** evidenziazione dei numeri per stato con il
-  suggerimento (§3.4, T5), sonda di latenza (T14), prove con il servizio
-  simulato dell'elenco dei modelli e di "Prova il modello", errori del
-  provider e conversazione troppo lunga (§10), conferma in attesa con il
-  pannello chiuso, uscita con risposta in corso; lista di controllo
-  manuale con le chiavi dell'utente.
+- **Sprint 7b (2026-10-23), scritto:** evidenziazione dei numeri per stato
+  con il suggerimento e la copia (§3.4, §3.11, T5), sonda di latenza
+  (T14), elenco dei modelli e "Prova il modello" con un servizio simulato,
+  errori del provider e conversazione troppo lunga (§10), conferma in
+  attesa con il pannello chiuso, uscita con risposta in corso.
+- **Scelte minori dello sprint 7b (2026-10-23), DA CONFERMARE** (§3.11; la
+  specifica non le dice): (1) segni invisibili dell'area privata di
+  Unicode per ritrovare i numeri dopo la conversione del Markdown; (2)
+  testo intero nel primo blocco se i blocchi non coincidono con il
+  rapporto, prima risposta della rigenerazione evidenziata; (3) stili
+  (continua nell'accento, tratteggiata nel testo secondario, sfondo
+  d'errore al 30 % con ondulata); (4) testi dei suggerimenti; (5) clic
+  destro "Copia il valore pieno" e "Copia la nota".
+- **Resta:** lista di controllo manuale con le chiavi dell'utente.
 - **Linee guida visive:** valgono quelle del `40` §3.11; nessuno
   scostamento.
 
@@ -358,3 +422,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (profili predefiniti del `30` §3.1.1; aggiornamento del 44 chiesto dal proprietario): §3.6 voce "Tipo" sostituita da "Provider" (menu con i profili predefiniti e "Altro endpoint compatibile OpenAI…", contrassegno per i provider non `verified`, indirizzo riempito e modificabile); T15. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 7a** ("FASE: CODICE – interfaccia v1", parte 7): `src/astrotwo/ui/ai_panel.py` (`AiPanel` nell'area a destra al posto dello stato vuoto, `MessageView` con Markdown semplice e sicuro, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`), collegamento alla finestra del `40` (impostazioni `assistant/…` con `prefs.set`, pulsante nelle preferenze, testo delle conversazioni nel salvataggio della sessione, uscita con risposta in corso, clic su una scheda → riga del pannello Comandi), traduzione italiana, 8 icone Lucide. Verifica del Markdown di Qt fatta (§8, §13). Precisazioni in §3.10, scelte minori da confermare e resto per lo sprint 7b in §13, note ai test in §12. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **Decisione del proprietario del 2026-10-23:** confermate le 12 scelte minori dello sprint 7a (§3.10, §13). **Codice dello sprint 7b** ("FASE: CODICE – interfaccia v1", parte 7): evidenziazione di ogni numero secondo lo stato del `34` con suggerimento (valore pieno con unità, `#n`, funzioni del modulo) e copia, sonda di latenza, test di Aggiorna, "Prova il modello", errori del provider e conversazione troppo lunga. Precisazioni in §3.11, scelte minori dello sprint 7b da confermare in §13, note ai test in §12. Stato `approvato` invariato. |

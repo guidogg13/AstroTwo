@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Test del pannello dell'assistente (``mdfiles/44-ui-pannello-ia.md`` §12), sprint 7a.
+"""Test del pannello dell'assistente (``mdfiles/44-ui-pannello-ia.md`` §12), sprint 7a e 7b.
 
 pytest-qt sulla piattaforma ``offscreen``, provider simulato a copione del 35 (``ScriptedAdapter``: corpo JSON vero
 del 30), Portachiavi simulato del 31 (``FakeKeychain``), nessuna rete e nessuna chiave reale. I numeri che il
@@ -12,13 +12,32 @@ import threading
 import time
 
 import pytest
-from PySide6.QtCore import QSettings, Qt, QUrl
+from PySide6.QtCore import QElapsedTimer, QPoint, QSettings, Qt, QTimer, QUrl
+from PySide6.QtGui import QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QApplication, QPushButton
 
-from astrotwo.ai.provider_adapter import PROVIDER_PRESETS, ProviderProfile, TextDelta, TurnEnd
-from astrotwo.ui.ai_panel import CommandCard, ConfirmationCard, MessageView
+from astrotwo.ai.provider_adapter import (
+    PROVIDER_PRESETS,
+    ProviderError,
+    ProviderProfile,
+    TextDelta,
+    TurnEnd,
+    make_adapter,
+)
+from astrotwo.ai.result_verification import CheckedNumber, VerificationReport, WrittenNumber
+from astrotwo.ui.ai_panel import MARK_STATE_PROPERTY, CommandCard, ConfirmationCard, MessageView
 from tests.ai.ai_workspace import INJECTION, INJECTION_ROWS, offline  # noqa: F401 - fixture
-from tests.ai.fake_providers import FakeKeychain, ScriptedAdapter, calls_turn, numbers_sent, text_turn, tool_call
+from tests.ai.fake_providers import (  # noqa: F401 - fixture provider_service
+    FakeKeychain,
+    Reply,
+    ScriptedAdapter,
+    calls_turn,
+    numbers_sent,
+    provider_service,
+    text_turn,
+    tool_call,
+)
+from tests.ai.test_provider_adapter import error_reply, text_reply, tools_reply
 from tests.core.test_commands import region_command
 from tests.core.test_commands_catalog_sky import write_catalog
 from tests.ui.test_main_window import (  # noqa: F401 - fixture
@@ -40,8 +59,10 @@ def entry_for(url, model=MODEL, preset="custom"):
             "max_output_tokens": 4096, "max_tokens_field": "max_tokens"}
 
 
-def ai_window(qtbot, settings_path, cache, script=(), *, url=REMOTE, key=True, consent=True):  # noqa: F811
-    """Finestra con un profilo attivo (impostazioni scritte prima dell'avvio) e il provider simulato a copione."""
+def ai_window(qtbot, settings_path, cache, script=(), *, url=REMOTE, key=True, consent=True,  # noqa: F811
+              factory=None):
+    """Finestra con un profilo attivo (impostazioni scritte prima dell'avvio) e il provider simulato a copione
+    (``factory``: un altro adattatore, es. quello vero del 30 verso un servizio simulato)."""
     profile = ProviderProfile("openai_compatible", url, MODEL)
     settings = QSettings(settings_path, QSettings.Format.IniFormat)
     settings.setValue("assistant/profiles", json.dumps({profile.id: entry_for(url)}))
@@ -53,12 +74,12 @@ def ai_window(qtbot, settings_path, cache, script=(), *, url=REMOTE, key=True, c
     keychain = FakeKeychain({profile.id: SECRET} if key else {})
     adapters = {}
 
-    def factory(p, kc):
+    def scripted(p, kc):
         if p.id not in adapters:
             adapters[p.id] = ScriptedAdapter(script, kind=p.kind, base_url=p.base_url, model=p.model, keychain=kc)
         return adapters[p.id]
 
-    win = make_window(qtbot, settings_path, cache, keychain=keychain, ai_adapter_factory=factory)
+    win = make_window(qtbot, settings_path, cache, keychain=keychain, ai_adapter_factory=factory or scripted)
     return win, adapters, keychain
 
 
@@ -467,7 +488,306 @@ def test_italian(qtbot, settings_path, cache, closing):  # noqa: F811
         assert win.language == "it" and panel.send_button.text() == "Invia"
         assert panel.unavailable.text().startswith("L'assistente non è disponibile: nessuna chiave nel Portachiavi")
         assert panel.privacy.text().startswith("Al provider vanno il testo e i risultati dei comandi")
+        unverified = CheckedNumber(WrittenNumber("7", 0, 1, "decimal"), "not_verified")
+        assert panel.number_tooltip(unverified) == ("Non viene da un comando", None)
     finally:
         from astrotwo.ui.main_window import load_translations
 
         load_translations("en")
+
+
+# =============================================================================
+# T5 — evidenziazione dei numeri (sprint 7b)
+
+
+def marked(view):
+    """Frammenti del documento con uno stato del 34: (testo, stato, sottolineatura, sfondo, suggerimento, formato)."""
+    out, block = [], view.document().begin()
+    while block.isValid():
+        it = block.begin()
+        while not it.atEnd():
+            fragment = it.fragment()
+            fmt = fragment.charFormat()
+            state = fmt.property(MARK_STATE_PROPERTY)
+            if state:
+                brush = fmt.background()
+                alpha = brush.color().alpha() if brush.style() != Qt.BrushStyle.NoBrush else 0
+                out.append((fragment.text(), state, fmt.underlineStyle(), alpha, fmt.toolTip(), fmt))
+            it += 1
+        block = block.next()
+    return out
+
+
+SOLID = QTextCharFormat.UnderlineStyle.SingleUnderline
+DASHED = QTextCharFormat.UnderlineStyle.DashUnderline
+WAVE = QTextCharFormat.UnderlineStyle.WaveUnderline
+
+
+def no_markers(view):
+    return not any(0xE000 <= ord(c) <= 0xE019 for c in view.toPlainText())
+
+
+def test_t5_highlight_from_the_answer(qtbot, settings_path, cache, closing):  # noqa: F811
+    """Flusso vero: comandi del 05, rapporto del 34, stili e suggerimenti nel documento della risposta."""
+    def answer(messages, tools, cancel):
+        a, b = numbers_sent(messages)
+        return text_turn(f"**Risultato:** 24 (#{a}).\n\nCon #{a} la conversione dà 100000000 nm.\n\n"
+                         f"Hai scritto 42; `7.25` invece è mio, e 1,5 è dubbio. Vedi https://example.org/p/9.75 ora.")
+
+    script = [calls_turn(tool_call("a", "calc__evaluate_expression", expression="3*8"),
+                         tool_call("b", "calc__convert_units", value=0.1, from_unit="m", to_unit="nm")), answer]
+    win, _, _ = ai_window(qtbot, settings_path, cache, script)
+    closing.append(win)
+    result = ask(qtbot, win, "Calcola 3*8 e converti 0.1 m in nm; il mio numero è 42")
+    a = result.calls[0].number
+    states = [(n.number.text, n.state) for n in result.report.numbers]
+    assert states == [("24", "verified"), (f"#{a}", "excluded"), (f"#{a}", "excluded"),
+                      ("100000000", "verified_other_command"), ("42", "user_input"), ("7.25", "not_verified"),
+                      ("1,5", "ambiguous"), ("9.75", "not_verified")]
+    view = win.ai_panel.messages.findChildren(MessageView)[-1]
+    assert no_markers(view)  # i segni invisibili sono tolti
+    assert "Risultato: 24 (#" in view.toPlainText() and "https://example.org/p/9.75" in view.toPlainText()
+    got = {text: (state, style, alpha) for text, state, style, alpha, _, _ in marked(view)}
+    assert got == {"24": ("verified", SOLID, 0), "100000000": ("verified_other_command", SOLID, 0),
+                   "42": ("user_input", DASHED, 0), "7.25": ("not_verified", WAVE, 77),
+                   "1,5": ("ambiguous", WAVE, 77), "9.75": ("not_verified", WAVE, 77)}
+    tips = {text: tip for text, _, _, _, tip, _ in marked(view)}
+    full = repr(result.report.numbers[0].matched_value)
+    assert tips["24"] == f"Verified: {full} · command #{a} · module 18 evaluate_expression"
+    assert tips["100000000"].startswith("Verified with another command: ")
+    assert tips["42"] == "From your message" and tips["1,5"] == "Ambiguous format"
+    assert tips["7.25"] == "Does not come from a command"
+    # l'indirizzo con il numero resta un collegamento intero (nessun segno dentro)
+    fmt = next(f for t, *_, f in marked(view) if t == "9.75")
+    assert fmt.isAnchor() and fmt.anchorHref() == "https://example.org/p/9.75"
+    summary = win.ai_panel.findChild(type(win.ai_panel.privacy), "verifySummary").text()
+    assert summary.startswith("⚠ 3 of 5 numbers do not come from a command") and "+ 1 from your message" in summary
+
+
+def report_for(text, items):
+    """Rapporto del 34 scritto nel test: ``items`` = (sottostringa, stato, comando, valore, unità, fonte)."""
+    numbers, start = [], 0
+    for sub, state, command, value, unit, source in items:
+        start = text.index(sub, start)
+        written = WrittenNumber(sub, start, start + len(sub), "decimal")
+        numbers.append(CheckedNumber(written, state, command, value, unit, None, source))
+        start += len(sub)
+    return VerificationReport(text, tuple(numbers))
+
+
+def test_t5_every_state_hover_copy_and_night(qtbot, settings_path, cache, closing):  # noqa: F811
+    win, _, _ = ai_window(qtbot, settings_path, cache)
+    closing.append(win)
+    win.submit("view.set_grid", {"visible": True})  # #1 nella cronologia
+    wait_idle(qtbot, win)
+    text = ("Valori: **1.5** e 2.5\n\n| a | b |\n|---|---|\n| 3.5 | 4.5 |\n\n- 5.5 in un elenco\n\n"
+            "`6.5` e 7,5 e #1 e [link](http://x.example/8.5)")
+    report = report_for(text, [
+        ("1.5", "verified", 1, 1.5000000001, "deg", None), ("2.5", "verified_other_command", 1, 2.5, None, None),
+        ("3.5", "command_parameter", 1, 3.5, "arcmin", None), ("4.5", "user_input", None, 4.5, None, None),
+        ("5.5", "external_text", 1, 5.5, None, "pleiadi.xml"), ("6.5", "not_verified", None, None, None, None),
+        ("7,5", "ambiguous", None, None, None, None), ("#1", "excluded", None, None, None, None),
+        ("8.5", "not_verified", None, None, None, None)])
+    panel = win.ai_panel
+    view = MessageView(text)
+    view.mark_colors = panel._mark_colors()
+    panel._add(view)
+    qtbot.waitUntil(lambda: view.isVisible() and view.width() > 100, timeout=5000)
+    panel._show_marks([view], report)
+    assert no_markers(view)
+    got = [(t, state, style, alpha) for t, state, style, alpha, _, _ in marked(view)]
+    assert got == [("1.5", "verified", SOLID, 0), ("2.5", "verified_other_command", SOLID, 0),
+                   ("3.5", "command_parameter", DASHED, 0), ("4.5", "user_input", DASHED, 0),
+                   ("5.5", "external_text", DASHED, 0), ("6.5", "not_verified", WAVE, 77),
+                   ("7,5", "ambiguous", WAVE, 77), ("8.5", "not_verified", WAVE, 77)]  # #1 escluso: nessuno stile
+    tips = [tip for *_, tip, _ in marked(view)]
+    assert tips[0] == ("Verified: 1.5000000001 deg · command #1 · module 10 choose_grid_spacing · "
+                       "module 10 compute_grid_lines")
+    assert tips[1] == "Verified with another command: 2.5 · command #1 · module 10 choose_grid_spacing · " \
+        "module 10 compute_grid_lines"
+    assert tips[3] == "From your message" and tips[5] == tips[7] == "Does not come from a command"
+    assert tips[6] == "Ambiguous format"
+    assert tips[2] == "Parameter of command #1: 3.5 arcmin"
+    assert tips[4] == "From external text, not computed (pleiadi.xml)"
+    # passaggio del mouse: il numero sotto il punto; clic destro: copia del valore pieno
+    start = view.toPlainText().index("1.5")
+    cursor = QTextCursor(view.document())
+    cursor.setPosition(start)
+    left = view.cursorRect(cursor)
+    cursor.setPosition(start + 1)
+    point = QPoint((left.x() + view.cursorRect(cursor).x()) // 2, left.center().y())
+    mark = view.mark_at(point)
+    assert mark is not None and mark.state == "verified" and mark.full_value == "1.5000000001 deg"
+    menu = view.mark_menu(point)
+    copy = next(a for a in menu.actions() if a.objectName() == "copyFullValue")
+    copy.trigger()
+    assert QApplication.clipboard().text() == "1.5000000001 deg"
+    next(a for a in menu.actions() if a.objectName() == "copyNote").trigger()
+    assert QApplication.clipboard().text() == mark.tooltip
+    assert view.mark_at(QPoint(view.width() - 2, view.height() - 2)) is None
+    # modalità notte: stessi stili, solo toni di rosso; il collegamento resta intero
+    win.act_night.trigger()
+    wait_idle(qtbot, win)
+    after = marked(view)
+    assert [(t, s, st, a) for t, s, st, a, _, _ in after] == got
+    for *_, fmt in after:
+        for color in (fmt.underlineColor(), fmt.background().color()):
+            assert color.green() <= NIGHT_THRESHOLD and color.blue() <= NIGHT_THRESHOLD
+    assert "link <http://x.example/8.5>" in view.toPlainText()
+
+
+# =============================================================================
+# T14 — reattività: risposta lenta e comando lungo
+
+
+def test_t14_latency(qtbot, settings_path, cache, closing, monkeypatch):  # noqa: F811
+    from astrotwo.core import catalogs
+
+    running = []
+
+    def slow_catalog(*a, **k):
+        running.append(time.monotonic())
+        time.sleep(2.0)  # comando lungo nel thread dei comandi
+        raise catalogs.CatalogsError("CATALOG_UNKNOWN", "catalogo finto e lento")
+
+    def slow_text(messages, tools, cancel):
+        for _ in range(60):
+            yield TextDelta("parola ")
+            time.sleep(0.02)  # risposta che arriva lentamente, a pezzi
+        yield from calls_turn(tool_call("c1", "catalog__load_region", **region_command()))
+
+    monkeypatch.setattr(catalogs, "load_catalog", slow_catalog)
+    win, _, _ = ai_window(qtbot, settings_path, cache, [slow_text, text_turn("Fatto.")])
+    closing.append(win)
+    gaps, clock = [], QElapsedTimer()
+    probe = QTimer()
+    probe.setInterval(10)
+    probe.timeout.connect(lambda: gaps.append(clock.restart()))
+    clock.start()
+    probe.start()
+    panel = win.ai_panel
+    panel.input.setPlainText("Carica 2MASS lentamente")
+    panel.send_button.click()
+    qtbot.waitUntil(lambda: bool(cards(win, ConfirmationCard)), timeout=15000)
+    cards(win, ConfirmationCard)[0].confirm_button.click()
+    qtbot.waitUntil(lambda: len(panel.answers) == 1, timeout=20000)
+    probe.stop()
+    assert running and len(gaps) > 100
+    assert max(gaps[1:]) < 100, max(gaps)  # sonda di latenza del thread principale (§9)
+    assert panel.answers[0].text.endswith("Fatto.")
+    assert cards(win, CommandCard)[0].result.text().startswith("CATALOG_UNKNOWN")
+
+
+# =============================================================================
+# Aggiorna e "Prova il modello" con il servizio simulato del 30; errori del provider; conversazione troppo lunga
+
+
+def local_window(qtbot, settings_path, cache, service):  # noqa: F811
+    return ai_window(qtbot, settings_path, cache, url=service.url + "/v1", factory=make_adapter)
+
+
+def test_refresh_models_and_probe(qtbot, settings_path, cache, closing, provider_service):  # noqa: F811
+    win, _, _ = local_window(qtbot, settings_path, cache, provider_service)
+    closing.append(win)
+    dialog = win.ai_panel.open_settings()
+    listing = {"object": "list", "data": [{"id": "test-model", "object": "model", "created": 1, "owned_by": "x"},
+                                          {"id": "altro-modello", "object": "model", "created": 1, "owned_by": "x"}]}
+    provider_service.routes["/v1/models"] = [Reply(chunks=[json.dumps(listing)], ctype="application/json")]
+    dialog.findChild(QPushButton, "refreshModels").click()
+    qtbot.waitUntil(lambda: dialog.models_note.text() == "2 models from the provider.", timeout=10000)
+    assert [dialog.model.itemText(i) for i in range(dialog.model.count())] == ["test-model", "altro-modello"]
+    assert dialog.model.currentText() == MODEL  # nessun modello scelto al posto dell'utente
+    provider_service.routes["/v1/models"] = [error_reply("openai_compatible", 404, "not found")]
+    dialog.findChild(QPushButton, "refreshModels").click()
+    qtbot.waitUntil(lambda: dialog.models_note.text().startswith("AI_MODELS_UNAVAILABLE"), timeout=10000)
+    probe = dialog.findChild(QPushButton, "probeModel")
+    provider_service.script = [tools_reply("openai_compatible", [("c1", "astrotwo_probe", ["{}"])])]
+    probe.click()
+    qtbot.waitUntil(lambda: dialog.probe_state.text().startswith("The model called"), timeout=10000)
+    assert dialog.probe_state.text() == "The model called the test tool. 11 input tokens, 22 output tokens"
+    provider_service.script = [text_reply("openai_compatible", ["niente strumenti"])]
+    probe.click()
+    qtbot.waitUntil(lambda: dialog.probe_state.text().startswith("AI_NO_TOOLS"), timeout=10000)
+    provider_service.script = [error_reply("openai_compatible", 401, "invalid api key")]
+    probe.click()
+    qtbot.waitUntil(lambda: dialog.probe_state.text().startswith("AI_AUTH"), timeout=10000)
+    assert SECRET not in dialog.probe_state.text()
+    assert not any(e.command.name == "prefs.set" for e in win.session.history)  # nessun comando registrato
+    sent = [r for r in provider_service.requests if r["method"] == "POST"]
+    assert sent and all(SECRET not in json.dumps(r["body"]) for r in sent)
+    dialog.reject()
+
+
+def test_provider_error_and_context_too_long(qtbot, settings_path, cache, closing):  # noqa: F811
+    script = [[TextDelta("Inizio la risposta"), ProviderError("AI_AUTH", "chiave rifiutata dal provider (401)")],
+              [ProviderError("AI_CONTEXT_TOO_LONG", "conversazione oltre il contesto del modello")]]
+    win, _, _ = ai_window(qtbot, settings_path, cache, script)
+    closing.append(win)
+    panel = win.ai_panel
+    first = ask(qtbot, win, "Ciao")
+    assert first.error.code == "AI_AUTH"
+    errors = [label.text() for label in panel.messages.findChildren(type(panel.privacy), "aiError")]
+    assert errors == ["AI_AUTH: chiave rifiutata dal provider (401)"]  # codice e testo del 30 invariati
+    assert "Inizio la risposta" in panel.messages.findChildren(MessageView)[-1].toPlainText()
+    assert panel.send_button.text() == "Send" and panel.bottom.currentIndex() == 0
+    ask(qtbot, win, "Ancora")
+    footer = panel.messages.findChildren(type(panel.privacy), "aiError")[-1]
+    assert footer.text() == "AI_CONTEXT_TOO_LONG: conversazione oltre il contesto del modello"
+    again = next(b for b in panel.messages.findChildren(QPushButton) if b.text() == "New conversation")
+    conversation = panel.assistant.conversation
+    again.click()
+    assert panel.assistant.conversation is not conversation
+    qtbot.waitUntil(lambda: panel.messages.findChildren(MessageView) == [], timeout=5000)
+
+
+# =============================================================================
+# Conferma in attesa con il pannello chiuso; uscita con una risposta in corso (§10)
+
+
+def test_confirmation_waits_with_panel_closed(qtbot, settings_path, cache, closing, offline):  # noqa: F811
+    load = region_command()
+    win, _, _ = ai_window(qtbot, settings_path, cache,
+                          [calls_turn(tool_call("c1", "catalog__load_region", **load)), text_turn("Caricato.")])
+    closing.append(win)
+    panel = win.ai_panel
+    panel.input.setPlainText("Carica 2MASS")
+    panel.send_button.click()
+    qtbot.waitUntil(lambda: bool(cards(win, ConfirmationCard)), timeout=15000)
+    win.panel_actions["assistant"].trigger()  # pannello chiuso
+    wait_idle(qtbot, win)
+    assert not win.docks["assistant"].isVisible() and panel.busy
+    qtbot.wait(300)
+    assert panel.busy and panel.answers == []  # la conferma resta in attesa
+    win.panel_actions["assistant"].trigger()
+    wait_idle(qtbot, win)
+    card, = cards(win, ConfirmationCard)
+    assert win.docks["assistant"].isVisible() and card.isVisible() and card.choice is None
+    card.confirm_button.click()
+    qtbot.waitUntil(lambda: len(panel.answers) == 1, timeout=20000)
+    assert panel.answers[0].text == "Caricato."
+
+
+def test_quit_with_answer_in_progress(qtbot, settings_path, cache):  # noqa: F811
+    started = threading.Event()
+
+    def slow(messages, tools, cancel):
+        yield TextDelta("Comincio")
+        started.set()
+        while not cancel.cancelled:
+            time.sleep(0.01)
+        yield TurnEnd("cancelled")
+
+    win, _, _ = ai_window(qtbot, settings_path, cache, [slow])
+    panel = win.ai_panel
+    panel.input.setPlainText("Racconta")
+    panel.send_button.click()
+    assert started.wait(10)
+    asked = []
+    win.confirm = lambda title, text: asked.append(text) or False
+    win.close()  # "No": l'app resta aperta e la risposta continua
+    assert asked and "The assistant is answering: the answer will be stopped." in asked[0]
+    assert win.isVisible() and panel.busy
+    win.confirm = lambda *a: True
+    win.close()
+    qtbot.waitUntil(lambda: not panel.busy, timeout=10000)
+    assert not win.isVisible() and panel.assistant.conversation.answers[-1].interrupted

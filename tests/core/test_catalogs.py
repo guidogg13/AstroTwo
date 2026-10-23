@@ -1262,6 +1262,40 @@ def test_load_catalog_region_metadata_missing(service, cache, monkeypatch):
         load_catalog("II/246/out", region=(center, 1 * u.arcmin), cache=cache, refresh=True)
     assert err.value.code == "NO_COORD_COLUMNS"
 
+# Struttura di TAP_SCHEMA di Gaia DR3 su TAP VizieR (verificata sul servizio reale il 2026-10-23; solo nomi e UCD, nessun
+# valore del catalogo): una coppia meta.main (posizione all'epoca 2016) e una senza (posizione J2000 ricalcolata), più
+# errori, moti propri e correlazioni che contengono la parola pos.eq.ra o pos.eq.dec.
+GAIA_DR3_SCHEMA = ('"RA_ICRS"', "pos.eq.ra;meta.main", '"DE_ICRS"', "pos.eq.dec;meta.main",
+                   '"e_RA_ICRS"', "stat.error;pos.eq.ra", '"e_DE_ICRS"', "stat.error;pos.eq.dec",
+                   '"pmRA"', "pos.pm;pos.eq.ra", '"pmDE"', "pos.pm;pos.eq.dec",
+                   '"RApscolCorr"', "stat.correlation;em.wavenumber;pos.eq.ra",
+                   '"RAJ2000"', "pos.eq.ra", '"DEJ2000"', "pos.eq.dec",
+                   '"RADEcorJ2000"', "stat.correlation;pos.eq.ra;pos.eq.dec")
+ICRS_COOSYS = '<COOSYS ID="c" system="ICRS" epoch="2016.0"/>'
+
+
+def test_load_catalog_region_main_pair_and_unknown_table(service, cache, monkeypatch):
+    """T33 (2026-10-23): con più coppie vale quella meta.main (come Gaia DR3); una tabella assente da TAP_SCHEMA è un
+    identificativo sconosciuto (CATALOG_UNKNOWN), non una tabella senza colonne di posizione."""
+    from astropy.coordinates import SkyCoord
+
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    center = SkyCoord(56.75 * u.deg, 24.1167 * u.deg)
+    service.routes["/viz/sync"] = region_tap(coosys=ICRS_COOSYS, schema=GAIA_DR3_SCHEMA)
+    cat = load_catalog("I/355/gaiadr3", region=(center, 5 * u.arcmin), cache=cache)
+    queries = [r["params"]["QUERY"] for r in service.requests]
+    assert queries[1] == 'SELECT TOP 0 "RA_ICRS", "DE_ICRS" FROM "I/355/gaiadr3"'
+    assert "POINT('ICRS', \"RA_ICRS\", \"DE_ICRS\")" in queries[2]
+    assert "RA_ICRS/DE_ICRS" in dict(cat.warnings)["REGION"]
+    for name in ("I/355", "gaiadr3"):  # identificativi provati dall'assistente: non sono tabelle
+        service.routes["/viz/sync"] = region_tap(coosys=ICRS_COOSYS, schema=())
+        with pytest.raises(CatalogsError) as err:
+            load_catalog(name, region=(center, 5 * u.arcmin), cache=cache, refresh=True)
+        assert err.value.code == "CATALOG_UNKNOWN" and repr(name) in err.value.message
+        assert "I/355/gaiadr3" in err.value.message  # esempio di identificativo di una tabella
+
 
 SIMBAD_DATA = """<?xml version="1.0"?><VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3">
 <RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/><TABLE>

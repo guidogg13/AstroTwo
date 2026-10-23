@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-21, con lo sprint 4f del 41: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **12** (`D41-6` decisa dal proprietario il 2026-10-21: il 13 conserva l'epoca del COOSYS; prima nel file di origine, 13 §13 e 41 §13).
+**Dal 2026-10-23, con lo sprint 7b del 44: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **14** (nuove `D32-1`, identificativo di un catalogo VizieR per l'assistente, e `D13-21`, colonne ambigue in una regione chiesta dall'assistente).
+
+Prima, **dal 2026-10-21, con lo sprint 4f del 41: 14 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **12** (`D41-6` decisa dal proprietario il 2026-10-21: il 13 conserva l'epoca del COOSYS; prima nel file di origine, 13 §13 e 41 §13).
 
 Prima, **dal 2026-10-21, con lo sprint 4e del 41: 15 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **13** (nuova `D41-6`, epoca del COOSYS persa da `catalog.set_columns`; `D41-5` rinviata a dopo la v1, contata tra le aperte).
 
@@ -282,7 +284,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (12)
+## 5. GRUPPO 3 — rimandabili al momento del codice (14)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -297,6 +299,8 @@ gruppi successivi, A8 dopo il livello 1).
 | `D40-3` | Messaggi dei moduli 10–19 in inglese con traduzione italiana, coerente con A9 (tabelle codice → testo nei moduli o testi con `tr()`)? Aperta dal proprietario il 2026-10-15; nella v1 codice + testo del modulo invariato | `40-ui-finestra-principale.md` §13 (riguarda i moduli 10–19) |
 | `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
 | `D14-13` | URL dei servizi dell'ESO in http (dal registro VO e nelle risposte SIA): il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata; oggi la demo usa https direttamente, nessuna modifica al codice del 14 | `14-core-protocolli-vo.md` §13 |
+| `D32-1` | Come l'assistente trova l'identificativo di un catalogo VizieR (nuovo comando sull'albero delle collezioni, elenco delle tabelle nell'errore, identificativi del gruppo fisso nella descrizione)? Aperta il 2026-10-23 dopo la prova reale del proprietario; raccomandazione: identificativi del gruppo fisso nella descrizione subito, comando sull'albero con la prossima versione del 32 | `32-ia-registro-strumenti.md` §13 |
+| `D13-21` | Colonne di posizione ambigue in una regione chiesta dall'assistente: errore con le coppie candidate (come oggi) o scelta dell'utente in una finestra con `lon`/`lat` nuovi di `catalog.load_region`? Aperta il 2026-10-23; raccomandazione: errore con le candidate nella v1 | `13-core-cataloghi.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
 ## 6. Note
@@ -377,3 +381,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-20 | Claude Code | **Nuova nel Gruppo 3: `D41-5`** (prima nel file di origine 41 §13): zoom e spostamento su una griglia di pixel, aperta con lo sprint 4d. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 12). |
 | 2026-10-21 | Claude Code | **`D41-5` rinviata a dopo la v1** (decisione del proprietario del 2026-10-21; resta nel Gruppo 3). **Nuova nel Gruppo 3: `D41-6`** (prima nel file di origine 41 §13): epoca del COOSYS persa da `catalog.set_columns`, trovata con lo sprint 4e. Conteggi: aperte **15** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 13). |
 | 2026-10-21 | Claude Code | **`D41-6` decisa** (decisione del proprietario del 2026-10-21, prima nei file di origine 13 §13 e 41 §13): `confirm_position_columns` conserva l'epoca del COOSYS con le stesse colonne e lo stesso sistema; tolta dal Gruppo 3. Conteggi: aperte **14** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 12). |
+| 2026-10-23 | Claude Code | **Aperte `D32-1` e `D13-21`** (Gruppo 3), prima nei file di origine 32 §13 e 13 §13, dalla prova reale del proprietario ("Carica Gaia DR3 attorno alle Pleiadi" dall'assistente). Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 14). |

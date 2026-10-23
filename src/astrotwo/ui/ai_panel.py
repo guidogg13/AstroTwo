@@ -20,12 +20,15 @@ from __future__ import annotations
 
 import json
 import math
+import re
+import unicodedata
 import urllib.parse
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
 from PySide6.QtGui import (
+    QColor,
     QDesktopServices,
     QFontDatabase,
     QGuiApplication,
@@ -33,6 +36,7 @@ from PySide6.QtGui import (
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
+    QTextFormat,
 )
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -46,6 +50,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -54,6 +59,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QTextBrowser,
     QToolButton,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -90,6 +96,7 @@ from astrotwo.ai.tool_registry import ToolRegistry
 __all__ = [
     "AiPanel",
     "MessageView",
+    "NumberMark",
     "CommandCard",
     "ConfirmationCard",
     "SentDataDialog",
@@ -258,11 +265,71 @@ MARKDOWN_FEATURES = _F(_F.MarkdownDialectGitHub.value | _F.MarkdownNoHTML.value)
 _OPEN_SCHEMES = ("http", "https")
 
 
-def set_safe_markdown(document: QTextDocument, text: str, image_text: str = "image not shown: %1") -> None:
+@dataclass(frozen=True)
+class NumberMark:
+    """Un numero della risposta da evidenziare (44 §3.4): posizione nel testo Markdown, stato del 34, suggerimento e
+    valore pieno da copiare (solo per i numeri trovati nei comandi)."""
+
+    start: int
+    end: int
+    state: str
+    tooltip: str
+    full_value: str | None = None
+
+
+#: Stile di ogni stato del 34 (44 §3.4, §3.11 punto 3); ``excluded`` non ha stile.
+MARK_STYLES = {"verified": "solid", "verified_other_command": "solid", "command_parameter": "dashed",
+               "user_input": "dashed", "external_text": "dashed", "not_verified": "warn", "ambiguous": "warn"}
+#: Proprietà del formato con lo stato (ispezione del documento, T5).
+MARK_STATE_PROPERTY = QTextFormat.Property.UserProperty + 1
+_DEFAULT_MARK_COLORS = {"accent": "#0a84ff", "secondary": "#a0a2a8", "warn": "#ff453a"}
+# Segni invisibili dell'area privata di Unicode attorno a ogni numero prima della conversione (§3.11 punto 1).
+_START, _SEP, _END, _DIGIT0 = "\ue000", "\ue001", "\ue002", 0xE010
+_MARKED = re.compile("\ue000([\ue010-\ue019]+)\ue001([^\ue000-\ue019]*)\ue002")
+_MARK_CHAR = re.compile("[\ue000-\ue019]")
+# Indirizzi scritti senza parentesi: un segno dentro li spezzerebbe (md4c non li riconosce più come collegamenti), i
+# loro numeri si ritrovano cercando l'indirizzo nel documento.
+_URL = re.compile(r"(?:https?://|www\.)[^\s<>]*")
+_URL_TRAILING = ".,:;!?*_~'\""
+
+
+def _url_spans(text: str) -> list[tuple[int, int]]:
+    spans = []
+    for m in _URL.finditer(text):
+        end = m.end()
+        while end > m.start() and (text[end - 1] in _URL_TRAILING or (
+                text[end - 1] == ")" and text.count("(", m.start(), end) < text.count(")", m.start(), end))):
+            end -= 1
+        spans.append((m.start(), end))
+    return spans
+
+
+def _ident(k: int) -> str:
+    return "".join(chr(_DIGIT0 + int(d)) for d in str(k))
+
+
+def set_safe_markdown(document: QTextDocument, text: str, image_text: str = "image not shown: %1",
+                      marks: Sequence[NumberMark] = (), colors: Mapping[str, str] | None = None
+                      ) -> list[tuple[int, int, NumberMark]]:
     """Markdown semplice: HTML mostrato come testo; immagini sostituite dal loro indirizzo come testo (nessun
     caricamento); collegamenti con l'indirizzo **scritto per intero** accanto al testo (nessun indirizzo nascosto).
-    Nulla si apre da solo: l'apertura è un clic dell'utente (``MessageView``)."""
-    document.setMarkdown(text, MARKDOWN_FEATURES)
+    Nulla si apre da solo: l'apertura è un clic dell'utente (``MessageView``).
+
+    ``marks``: numeri da evidenziare (posizioni in ``text``); restituisce le loro posizioni nel documento."""
+    spans = _url_spans(text)
+    pieces, last, tagged, in_urls = [], 0, [], []
+    for mark in sorted(marks, key=lambda m: m.start):
+        if not 0 <= last <= mark.start < mark.end <= len(text):
+            continue
+        span = next((k for k, (a, b) in enumerate(spans) if a <= mark.start and mark.end <= b), None)
+        if span is not None:
+            in_urls.append((span, mark))
+            continue
+        pieces += [text[last:mark.start], _START + _ident(len(tagged)) + _SEP + text[mark.start:mark.end] + _END]
+        tagged.append(mark)
+        last = mark.end
+    pieces.append(text[last:])
+    document.setMarkdown("".join(pieces), MARKDOWN_FEATURES)
     edits = []
     block = document.begin()
     while block.isValid():
@@ -285,6 +352,86 @@ def set_safe_markdown(document: QTextDocument, text: str, image_text: str = "ima
         else:
             cursor.setPosition(position + length)
             cursor.insertText(f" <{target}>", QTextCharFormat())
+    ranges = _place_marks(document, tagged)
+    ranges += _find_in_urls(document, text, spans, in_urls)
+    _format_marks(document, ranges, colors or _DEFAULT_MARK_COLORS)
+    return sorted(ranges, key=lambda r: r[0])
+
+
+def _place_marks(document: QTextDocument, tagged: Sequence[NumberMark]) -> list[tuple[int, int, NumberMark]]:
+    """Trova i segni nel documento convertito, li toglie (anche quelli rimasti soli) e dà le posizioni dei numeri."""
+    deletions: list[tuple[int, int]] = []
+    found: list[tuple[int, int, NumberMark]] = []
+    block = document.begin()
+    while block.isValid():
+        text, base = block.text(), block.position()
+        covered = set()
+        for m in _MARKED.finditer(text):
+            k = int("".join(str(ord(c) - _DIGIT0) for c in m.group(1)))
+            deletions += [(base + m.start(), m.start(2) - m.start()), (base + m.end(2), 1)]
+            if k < len(tagged) and m.group(2):
+                found.append((base + m.start(2), len(m.group(2)), tagged[k]))
+            covered.update(range(m.start(), m.end()))
+        deletions += [(base + m.start(), 1) for m in _MARK_CHAR.finditer(text) if m.start() not in covered]
+        block = block.next()
+    cursor = QTextCursor(document)
+    for position, length in sorted(deletions, reverse=True):
+        cursor.setPosition(position)
+        cursor.setPosition(position + length, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+    out = []
+    for position, length, mark in found:
+        shift = sum(n for p, n in deletions if p < position)
+        out.append((position - shift, position - shift + length, mark))
+    return out
+
+
+def _find_in_urls(document: QTextDocument, text: str, spans: Sequence[tuple[int, int]],
+                  in_urls: Sequence[tuple[int, NumberMark]]) -> list[tuple[int, int, NumberMark]]:
+    """Numeri dentro un indirizzo: l'indirizzo si cerca nel documento (k-esima occorrenza per il k-esimo indirizzo
+    uguale del testo), il numero sta alla stessa distanza dall'inizio."""
+    out = []
+    flags = QTextDocument.FindFlag.FindCaseSensitively
+    for span, mark in in_urls:
+        a, b = spans[span]
+        url = text[a:b]
+        k = sum(1 for j in range(span) if text[spans[j][0]:spans[j][1]] == url)
+        cursor = QTextCursor(document)
+        for _ in range(k + 1):
+            cursor = document.find(url, cursor, flags)
+            if cursor.isNull():
+                break
+        if not cursor.isNull():
+            start = cursor.selectionStart() + mark.start - a
+            out.append((start, start + mark.end - mark.start, mark))
+    return out
+
+
+def _format_marks(document: QTextDocument, ranges, colors: Mapping[str, str]) -> None:
+    """Stili di §3.11 punto 3: continua nell'accento, tratteggiata nel testo secondario, sfondo d'avviso."""
+    cursor = QTextCursor(document)
+    for start, end, mark in ranges:
+        style = MARK_STYLES.get(mark.state)
+        if style is None:
+            continue
+        fmt = QTextCharFormat()
+        if style == "solid":
+            fmt.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SingleUnderline)
+            fmt.setUnderlineColor(QColor(colors["accent"]))
+        elif style == "dashed":
+            fmt.setUnderlineStyle(QTextCharFormat.UnderlineStyle.DashUnderline)
+            fmt.setUnderlineColor(QColor(colors["secondary"]))
+        else:
+            fmt.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
+            fmt.setUnderlineColor(QColor(colors["warn"]))
+            background = QColor(colors["warn"])
+            background.setAlpha(77)  # 30 %
+            fmt.setBackground(background)
+        fmt.setToolTip(mark.tooltip)
+        fmt.setProperty(MARK_STATE_PROPERTY, mark.state)
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        cursor.mergeCharFormat(fmt)
 
 
 # --------------------------------------------------------------------------
@@ -309,6 +456,12 @@ def _params_text(params: Mapping) -> str:
 
 def _elide(text: str, limit: int = 160) -> str:
     return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _fill(template: str, *values: str) -> str:
+    """``%1``, ``%2``… sostituiti in un solo passaggio (un valore che contiene ``%2`` resta com'è)."""
+    return re.sub(r"%(\d)", lambda m: values[int(m.group(1)) - 1] if 0 < int(m.group(1)) <= len(values)
+                  else m.group(0), template)
 
 
 # --------------------------------------------------------------------------
@@ -340,15 +493,71 @@ class MessageView(QTextBrowser):
         self.anchorClicked.connect(self._clicked)
         self.document().documentLayout().documentSizeChanged.connect(lambda _s: self._fit())
         self.source_text = ""
+        self.marks: tuple[NumberMark, ...] = ()
+        self.mark_ranges: list[tuple[int, int, NumberMark]] = []
+        self.mark_colors: Mapping[str, str] = _DEFAULT_MARK_COLORS
+        self.copy_texts = {"value": "Copy full value", "note": "Copy note"}
         self.set_text(text)
 
-    def set_text(self, text: str) -> None:
+    def set_text(self, text: str, marks: Sequence[NumberMark] | None = None) -> None:
+        """Testo del messaggio; ``marks`` (posizioni in ``text``) evidenzia i numeri, ``None`` tiene quelli di prima
+        (cambio di tema)."""
         self.source_text = text
+        if marks is not None:
+            self.marks = tuple(marks)
         if self.markdown:
-            set_safe_markdown(self.document(), text, self.image_text)
+            self.mark_ranges = set_safe_markdown(self.document(), text, self.image_text, self.marks,
+                                                 self.mark_colors)
         else:
             self.document().setPlainText(text)
         self._fit()
+
+    def mark_at(self, pos) -> NumberMark | None:
+        """Numero evidenziato sotto il punto ``pos`` (coordinate della vista), se c'è."""
+        layout = self.document().documentLayout()
+        p = layout.hitTest(QPointF(pos), Qt.HitTestAccuracy.ExactHit)
+        if p < 0:
+            return None
+        cursor = QTextCursor(self.document())
+        cursor.setPosition(p)
+        if pos.x() < self.cursorRect(cursor).x():
+            p -= 1  # il punto è sul carattere prima della posizione del cursore
+        return next((m for start, end, m in self.mark_ranges if start <= p < end), None)
+
+    def viewportEvent(self, event) -> bool:  # noqa: N802 - nome di Qt
+        if event.type() == QEvent.Type.ToolTip:
+            mark = self.mark_at(event.pos())
+            if mark is not None:
+                QToolTip.showText(event.globalPos(), mark.tooltip, self.viewport())
+            else:
+                QToolTip.hideText()
+            return True
+        return super().viewportEvent(event)
+
+    def mark_menu(self, pos) -> QMenu:
+        """Menu del clic destro: quello del testo in sola lettura, più la copia del valore pieno e della nota del
+        numero sotto il mouse (02 §6)."""
+        menu = self.createStandardContextMenu(pos)
+        mark = self.mark_at(pos)
+        if mark is not None:
+            first = menu.actions()[0] if menu.actions() else None
+            if mark.full_value is not None:
+                action = menu.addAction(self.copy_texts["value"])
+                action.setObjectName("copyFullValue")
+                action.triggered.connect(lambda: QGuiApplication.clipboard().setText(mark.full_value))
+                menu.insertAction(first, action)
+            note = menu.addAction(self.copy_texts["note"])
+            note.setObjectName("copyNote")
+            note.triggered.connect(lambda: QGuiApplication.clipboard().setText(mark.tooltip))
+            menu.insertAction(first, note)
+            if first is not None:
+                menu.insertSeparator(first)
+        return menu
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - nome di Qt
+        menu = self.mark_menu(event.pos())
+        menu.exec(event.globalPos())
+        menu.deleteLater()
 
     def set_dimmed(self, dimmed: bool, color: str) -> None:
         """Testo "in verifica" durante lo streaming (44 §3.4): grigio chiaro."""
@@ -674,23 +883,30 @@ def _html(text: str) -> str:
 # --------------------------------------------------------------------------
 
 
+class _TaskBridge(QObject):
+    """Esiti dei lavori di rete verso il thread principale (connessione in coda). È figlio della finestra delle
+    impostazioni: vive quanto lei (un oggetto dei segnali per ogni lavoro poteva essere già distrutto all'arrivo
+    dell'esito, e l'esito si perdeva)."""
+
+    done = Signal(object, object, object)  # funzione da chiamare, risultato, errore
+
+
 class _Task(QRunnable):
     """Lavoro di rete delle impostazioni (elenco dei modelli, "Prova il modello") fuori dal thread principale."""
 
-    class _Signals(QObject):
-        done = Signal(object, object)  # risultato, errore
-
-    def __init__(self, work: Callable[[], object]) -> None:
+    def __init__(self, work: Callable[[], object], bridge: _TaskBridge, done: Callable[[object, object], None]) -> None:
         super().__init__()
-        self.work = work
-        self.signals = _Task._Signals()
+        self.work, self.bridge, self.done = work, bridge, done
 
     def run(self) -> None:
         try:
             result, error = self.work(), None
         except Exception as exc:  # noqa: BLE001 - mostrato nella finestra
             result, error = None, exc
-        self.signals.done.emit(result, error)
+        try:
+            self.bridge.done.emit(self.done, result, error)
+        except RuntimeError:  # finestra già chiusa: l'esito non serve più
+            pass
 
 
 CUSTOM = "custom"
@@ -711,6 +927,9 @@ class AssistantSettingsDialog(QDialog):
         self.order: list[str] = list(self.profiles)
         self.current: str | None = None
         self.tasks: list[_Task] = []
+        self.task_bridge = _TaskBridge(self)
+        self.task_bridge.done.connect(lambda done, result, error: done(result, error),
+                                      Qt.ConnectionType.QueuedConnection)
         self.status_texts = {
             "documented": self.tr("tool calling declared by the provider, not tested by AstroTwo"),
             "unverified": self.tr("tool calling not declared: it may not work")}
@@ -1028,9 +1247,8 @@ class AssistantSettingsDialog(QDialog):
     # --- modelli e prova (30 §3.3, §3.4), in un thread ---------------------------------
 
     def _run(self, work: Callable[[], object], done: Callable[[object, object], None]) -> None:
-        task = _Task(work)
+        task = _Task(work, self.task_bridge, done)
         task.setAutoDelete(False)
-        task.signals.done.connect(done)
         self.tasks.append(task)
         QThreadPool.globalInstance().start(task)
 
@@ -1167,6 +1385,7 @@ class AiPanel(QWidget):
         self._bubble: _Bubble | None = None
         self._segment: MessageView | None = None
         self._segments: list[MessageView] = []
+        self._replaced_upto = 0  # blocchi della prima risposta sostituita dalla rigenerazione
         self._cards: dict[str, CommandCard] = {}
         self._confirmations: dict[str, ConfirmationCard] = {}
         self._render = QTimer(self)
@@ -1569,6 +1788,8 @@ class AiPanel(QWidget):
         view = MessageView("")
         view.setObjectName("assistantText")
         view.image_text = self.tr("image not shown: %1")
+        view.mark_colors = self._mark_colors()
+        view.copy_texts = {"value": self.tr("Copy full value"), "note": self.tr("Copy note")}
         view.set_dimmed(True, self.tokens.get("text3", "#808080"))
         self._bubble.layout_.addWidget(view)
         self._segments.append(view)
@@ -1586,6 +1807,7 @@ class AiPanel(QWidget):
             self._bubble = _Bubble("assistant")
             self._segment = None
             self._segments = []
+            self._replaced_upto = 0
             self._add(self._bubble)
         elif self._bubble is None:
             return
@@ -1613,6 +1835,7 @@ class AiPanel(QWidget):
             self._note(event.text)
         elif isinstance(event, RegenerationStarted):
             self._flush()
+            self._replaced_upto = len(self._segments)
             for view in self._segments:
                 view.set_dimmed(True, self.tokens.get("text3", "#808080"))
             self._note(self.tr("Strict mode: some numbers are not verified, the answer is being regenerated "
@@ -1662,8 +1885,11 @@ class AiPanel(QWidget):
         for view in self._segments:
             view.set_dimmed(False, "")
         if answer.regenerated:
-            for view in self._segments[:-1]:
+            for view in self._segments[:self._replaced_upto]:
                 view.set_dimmed(True, self.tokens.get("text3", "#808080"))
+            self._show_marks(self._segments[:self._replaced_upto], answer.replaced[0][1])
+        if answer.report is not None:
+            self._show_marks(self._segments[self._replaced_upto:], answer.report)
         self.answers.append(answer)
         footer = QWidget()
         footer.setObjectName("answerFooter")
@@ -1712,6 +1938,71 @@ class AiPanel(QWidget):
         self._cards = {}
         self._set_busy(False)
         self._show_availability()
+
+    # --- numeri evidenziati (44 §3.4, §3.11) ---------------------------------------------
+
+    def _show_marks(self, views: Sequence[MessageView], report) -> None:
+        """Ogni numero del rapporto del 34 nel suo blocco di testo, con lo stile e il suggerimento del suo stato.
+
+        Il testo verificato è l'unione dei blocchi; se non coincide (normalizzazione NFC al confine di due blocchi) si
+        mostra intero nel primo, così nessun numero resta senza stile (§3.11 punto 2)."""
+        if not views:
+            return
+        texts = [unicodedata.normalize("NFC", v.source_text) for v in views]
+        if "".join(texts) != report.text:
+            texts = [report.text] + [""] * (len(views) - 1)
+        offset = 0
+        for view, text in zip(views, texts, strict=True):
+            marks = []
+            for n in report.numbers:
+                start, end = max(n.number.start, offset), min(n.number.end, offset + len(text))
+                if n.state in MARK_STYLES and start < end:
+                    tooltip, full = self.number_tooltip(n)
+                    marks.append(NumberMark(start - offset, end - offset, n.state, tooltip, full))
+            view.set_text(text, marks)
+            offset += len(text)
+
+    def number_tooltip(self, n) -> tuple[str, str | None]:
+        """Suggerimento di un numero (§3.11 punto 4) e valore pieno con unità da copiare (numeri dei comandi)."""
+        full = None
+        if n.state in ("verified", "verified_other_command", "command_parameter") and n.matched_value is not None:
+            value = n.matched_value.item() if hasattr(n.matched_value, "item") else n.matched_value
+            full = _value_text(value) + (f" {n.matched_unit}" if n.matched_unit else "")
+        functions = " · ".join(self._functions_of(n.command)) if n.command is not None else ""
+        number = str(n.command) if n.command is not None else "?"
+        if n.state == "verified":
+            text = _fill(self.tr("Verified: %1 · command #%2"), full or "", number)
+        elif n.state == "verified_other_command":
+            text = _fill(self.tr("Verified with another command: %1 · command #%2"), full or "", number)
+        elif n.state == "command_parameter":
+            text = _fill(self.tr("Parameter of command #%1: %2"), number, full or "")
+        elif n.state == "user_input":
+            text = self.tr("From your message")
+        elif n.state == "external_text":
+            text = _fill(self.tr("From external text, not computed (%1)"), n.source or "?")
+        elif n.state == "ambiguous":
+            text = self.tr("Ambiguous format")
+        else:
+            text = self.tr("Does not come from a command")
+        if functions and n.state in ("verified", "verified_other_command"):  # solo i valori calcolati dal modulo
+            text += " · " + functions
+        if n.number.unit_unrecognized:
+            text += " · " + self.tr("unit not recognized")
+        for note in n.notes:
+            missing = re.fullmatch(r"comando inesistente: #(\d+)", note)  # nota del 34
+            if missing:
+                text += " · " + _fill(self.tr("command does not exist: #%1"), missing.group(1))
+        return text, full
+
+    def _functions_of(self, number: int) -> tuple[str, ...]:
+        entries = self.window_.session.history.entries
+        return self._functions(entries[number - 1].command.name) if 0 < number <= len(entries) else ()
+
+    def _mark_colors(self) -> dict[str, str]:
+        t = self.tokens
+        if not t:
+            return dict(_DEFAULT_MARK_COLORS)
+        return {"accent": t["focus"], "secondary": t["text2"], "warn": t["error"]}
 
     # --- testi sotto la risposta (traduzione del 44 dei testi del 34 e del 35) -----------
 
@@ -1791,7 +2082,9 @@ class AiPanel(QWidget):
         self._lock_icon()
         # Qt scrive il colore dei collegamenti nel documento quando converte il Markdown: si riconverte con la
         # tavolozza nuova (in modalità notte solo rossi).
+        colors = self._mark_colors()
         for view in self.messages.findChildren(MessageView):
+            view.mark_colors = colors
             if view.markdown:
                 view.set_text(view.source_text)
 

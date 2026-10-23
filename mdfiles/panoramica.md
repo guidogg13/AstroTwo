@@ -18,6 +18,30 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-23, parte 7, sprint 7b della v1 (44: numeri
+  evidenziati e prove):** ogni numero della risposta ha lo stile del suo
+  stato del 34 (sottolineatura continua = verificato, tratteggiata =
+  dato dell'utente, parametro o testo esterno, sfondo d'avviso = non
+  verificato o ambiguo) con suggerimento (valore pieno con unità, `#n`,
+  funzioni del modulo) e "Copia il valore pieno" col clic destro, anche in
+  modalità notte; sonda di latenza (T14) con risposta lenta e comando
+  lungo; test di Aggiorna e "Prova il modello" con il servizio simulato,
+  errori del provider, conversazione troppo lunga, conferma in attesa con
+  il pannello chiuso, uscita con risposta in corso. Corretto un difetto
+  dello sprint 7a: l'esito di un secondo Aggiorna o "Prova il modello" si
+  perdeva (oggetto dei segnali distrutto). **Prova reale del proprietario
+  ("Carica Gaia DR3 attorno alle Pleiadi"):** causa vera = identificativo
+  sbagliato scritto dal modello (`I/355` o `gaiadr3` non sono tabelle);
+  con `I/355/gaiadr3` il comando funziona sul servizio reale (`RA_ICRS`/
+  `DE_ICRS` da `meta.main`, ICRS epoca J2016). Ora una tabella assente da
+  `TAP_SCHEMA` dà `CATALOG_UNKNOWN` (13) e uno strumento sconosciuto torna
+  al modello con l'elenco `valid_tools` (32); `catalog__search` esiste ma
+  non cerca in VizieR. **Decisione del proprietario del 2026-10-23:** 12
+  scelte minori dello sprint 7a del 44 confermate. Aperte **D32-1** (come
+  l'IA trova l'identificativo di un catalogo) e **D13-21** (colonne ambigue
+  in una regione chiesta dall'IA). Scelte minori dello sprint 7b da
+  confermare (44 §13). Test: **808 di default**, di rete non eseguiti
+  (`--no-network`). Decisioni aperte: **16**.
 - **Stato al 2026-10-22, parte 7, sprint 7a della v1 (44: pannello
   dell'assistente):** `src/astrotwo/ui/ai_panel.py` nell'area a destra
   della finestra (400 pt, ⌃⌘A): intestazione con profilo, modello,
@@ -763,7 +787,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | **IA (livello 3)** | | | |
 | `30-ia-adattatore-provider.md` | Adattatore per provider IA (v1): profili, SDK `anthropic` e `openai` con endpoint configurabile, capacità, `list_models`, `stream_turn` con eventi normalizzati | 3 | approvato |
 | `31-ia-chiavi-portachiavi.md` | Chiavi API nel Portachiavi di macOS (v1): `keyring` col solo backend macOS, nessun ripiego | 3 | approvato |
-| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA (v1, dal 2026-10-16: elenco esplicito di comandi del `05`; **codice scritto con lo sprint 6a il 2026-10-22** (`ai/tool_registry.py`, testi esterni con due elenchi chiusi per percorso; fonte una volta in testa in `catalog.rows` dal 2026-10-22); dei candidati qui sotto entrano solo `describe_table` → `catalog.describe` e `search` → `catalog.search`, gli altri quando diventano comandi del `05`). **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10); **dal 14 (2026-10-10, D14-9 punto 16):** `cone_search` (centro, raggio con unità, catalogo; tabella con provenienza), `tap_query` (URL TAP, ADQL, `max_rows`; tabella o errore del servizio), `validate_adql` (controlli minimi), `describe_services` (elenco dei server, `ServerRegistry`), `ssa_search` / `ssa_load` (spettri con provenienza; analisi nel 21) | 3 | approvato |
+| `32-ia-registro-strumenti.md` | Registro strumenti esposti all'IA (v1, dal 2026-10-16: elenco esplicito di comandi del `05`; **codice scritto con lo sprint 6a il 2026-10-22** (`ai/tool_registry.py`, `valid_tools` nell'errore `TOOL_NOT_EXPOSED` dal 2026-10-23, testi esterni con due elenchi chiusi per percorso; fonte una volta in testa in `catalog.rows` dal 2026-10-22); dei candidati qui sotto entrano solo `describe_table` → `catalog.describe` e `search` → `catalog.search`, gli altri quando diventano comandi del `05`). **Da includere (D11-9, spostati dal §11 dell'11 il 2026-10-10):** `load_image_info` (dimensioni, unità, WCS, campo, origine e data; nessun calcolo nuovo), `get_image_statistics` (min, max, media, deviazione standard; calcolo `numpy`/`astropy.stats`), `image_operation` (H5, elenco chiuso; calcolo `numpy`/`scipy`/`astropy.convolution`), `cutout` (taglio con WCS); **dal 13 (2026-10-10):** `describe_table` (schema, unità, righe, provenienza), `search` (grammatica del 13), `get_column_statistics` (su `column_statistics`), `propagate` (calcolo modulo 10); **dal 14 (2026-10-10, D14-9 punto 16):** `cone_search` (centro, raggio con unità, catalogo; tabella con provenienza), `tap_query` (URL TAP, ADQL, `max_rows`; tabella o errore del servizio), `validate_adql` (controlli minimi), `describe_services` (elenco dei server, `ServerRegistry`), `ssa_search` / `ssa_load` (spettri con provenienza; analisi nel 21) | 3 | approvato |
 | `33-ia-query-adql.md` | Costruzione ed esecuzione di query ADQL (**rimandato** il 2026-10-16: nella v1 `catalog.search`) | 3 | non esiste |
 | `34-ia-verifica-risultati.md` | Verifica dei numeri delle risposte dell'IA (v1): ogni numero contro i risultati dei comandi, eccezioni chiuse, evidenziazione, modalità rigorosa; **codice scritto con lo sprint 6b il 2026-10-22** (`ai/result_verification.py`) | 3 | approvato |
 | `35-ia-assistente-chat.md` | Assistente conversazionale (v1): ciclo degli strumenti, regole di sistema, limiti, privacy, sicurezza contro le istruzioni nei testi esterni; **codice scritto con lo sprint 6c il 2026-10-22** (`ai/chat_assistant.py`, coda del 40) | 3 | approvato |
@@ -772,7 +796,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `41-ui-visualizzatore-cielo.md` | Visualizzatore del cielo (v1): immagine, HiPS, cataloghi, MOC, griglia, misure, puntatore Simbad; OpenGL; obiettivi di prestazione | — | approvato |
 | `42-ui-pannello-cataloghi.md` | Pannello cataloghi e tabelle (v1 minima: tabella ordinabile, selezione sincronizzata, record); **sprint 5a scritto il 2026-10-21, 5b (dialoghi delle colonne) il 2026-10-22** (`ui/catalog_panel.py`) | — | approvato |
 | `43-ui-pannello-analisi.md` | Pannello analisi | — | non esiste |
-| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso; codice dello sprint 7a (2026-10-22, `ui/ai_panel.py`) | — | approvato |
+| `44-ui-pannello-ia.md` | Pannello dell'assistente (v1): messaggi, schede dei comandi e di conferma, verifica, token, "Cosa è stato inviato", impostazioni, consenso; codice degli sprint 7a (2026-10-22, `ui/ai_panel.py`) e 7b (2026-10-23: numeri evidenziati, latenza, prove) | — | approvato |
 | `45-ui-viste-multiple.md` | Viste multiple 2/4/9/16 con sincronizzazione, blocco e miniature — origine: H2 di `03-parita-aladin.md`; dipende da `41` (un visualizzatore per vista) e `40` (finestra) | — | non esiste |
 | **Funzioni avanzate (livello 4)** | | | |
 | `50-avanzate-transienti.md` | Caccia ai transienti | 4 | non esiste |
@@ -922,6 +946,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Scelte minori dello sprint 6b (34) e scelte 4, 5, 6 del 32 | Confermate: identificativi solo per testo, numeri nelle stringhe solo per testi esterni, parametri e utente, ordine delle categorie e altre (34 §3.6bis); niente SHA-256, stringhe delle calcolatrici di AstroTwo, `ASTROTWO_MESSAGE_CODES` (32 §13) | 2026-10-22 | decisione del proprietario | sprint 6c |
 | Ultima richiesta dopo il limite di chiamate (30, 35) | Gli strumenti restano nella richiesta con `tool_choice = none` (`{"type": "none"}` per Anthropic, `"none"` per Chat Completions) invece di una richiesta senza strumenti; da provare con le chiavi dell'utente | 2026-10-22 | decisione del proprietario, `30` §3.5, `35` §3.3 | sprint 7a |
 | Scelte minori dello sprint 6c (35) | Confermate tutte e 12 (§3.11 del 35) | 2026-10-22 | decisione del proprietario, `35` §13 | sprint 7a |
+| Scelte minori dello sprint 7a (44) | Confermate tutte e 12 (§3.10 del 44) | 2026-10-23 | decisione del proprietario, `44` §13 | sprint 7b |
+| Strumento sconosciuto (32) | Il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco `valid_tools`; nulla eseguito | 2026-10-23 | richiesta del proprietario, `32` §3.5 | sprint 7b |
 | Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
 
 ## 6. Decisioni aperte
@@ -974,7 +1000,10 @@ D41-1…D41-4, rimandate D05-3 e D40-2, aperta D40-3: **14 aperte** (Gruppo
 decisa il 2026-10-17: **14 aperte** (Gruppo 1 = 0, Gruppo 2 = 3, Gruppo 3 = 11).
 Lo stesso giorno, con la parte 3b del codice della v1, aperta D40-4
 (scorciatoia della modalità notte): **15 aperte** (Gruppo 1 = 0, Gruppo 2 =
-3, Gruppo 3 = 12).
+3, Gruppo 3 = 12). Il 2026-10-23 aperte D32-1 (come l'assistente trova
+l'identificativo di un catalogo VizieR) e D13-21 (colonne di posizione ambigue
+in una regione chiesta dall'assistente): **16 aperte** (Gruppo 1 = 0, Gruppo 2 =
+2, Gruppo 3 = 14).
 Quando una decisione viene chiusa, si aggiorna prima il file di origine e
 poi `decisioni-aperte.md`.
 
@@ -988,6 +1017,7 @@ poi `decisioni-aperte.md`.
 | D41-5, D41-6 | Zoom e spostamento su una griglia di pixel; epoca del COOSYS persa da `catalog.set_columns` | `41-ui-visualizzatore-cielo.md` §13 | D41-5 **rinviata a dopo la v1** il 2026-10-21; D41-6 **da decidere** (Gruppo 3, aperta il 2026-10-21) |
 | D40-4 | Scorciatoia da tastiera della modalità notte (View → Night mode) | `40-ui-finestra-principale.md` §13 | **decisa il 2026-10-17: ⌃⌘N** |
 | AM1 | Separazione di un modulo o creazione di moduli nuovi (vedi nota sotto) | `panoramica.md` | **decisa il 2026-10-04:** accettate entrambe le proposte — `18-core-calcolatrici.md` (da H4) e `45-ui-viste-multiple.md` (da H2): file registrati in questo file e in `INDICE.md` con stato `non esiste` (si scrivono con il rispettivo gruppo). La meccanica AM1 resta valida per proposte future, che richiedono però una nuova decisione esplicita del proprietario (vedi nota sotto). **Proposta del 2026-10-08, ACCETTATA lo stesso giorno (decisione del proprietario):** riga **H21 — dati planetari** di `03-parita-aladin.md` (trovata con la lettura AP5): modulo dedicato oppure estensione di `10` (sistemi di riferimento planetari), `12` e `13`; accettata come nuovo modulo `19-core-dati-planetari.md` (livello 1), registrato in §4 e in `INDICE.md`. **Proposta del 2026-10-15, ACCETTATA lo stesso giorno:** nuovo file generale `05-comandi-sessione.md` (livello 1, registro dei comandi e sessione), scritto in `bozza` |
+| D32-1, D13-21 | Come l'assistente trova l'identificativo di un catalogo VizieR; colonne ambigue in una regione chiesta dall'assistente | `32` §13, `13` §13 | **da decidere** (Gruppo 3, aperte il 2026-10-23) |
 | D14-13 | URL dei servizi dell'ESO in http: il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata | `14-core-protocolli-vo.md` §13 | **da decidere** (aperta il 2026-10-14); oggi la demo usa https, nessuna modifica al codice del 14 |
 | AP1 | Validazione della parità con Aladin | `03-parita-aladin.md` | rimandata: **alla fine**, confrontando i risultati di AstroTwo e di Aladin sugli stessi dati |
 
@@ -1028,7 +1058,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
    2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: 4g strumenti (distanza, Simbad),
    4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
-   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori da confermare nel 44 §13); prossimo: sprint 7b (evidenziazione dei numeri per stato, T5; sonda di latenza, T14; prove con il servizio simulato di elenco dei modelli, "Prova il modello" ed errori del provider), poi le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
+   il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori confermate il 2026-10-23) **e sprint 7b scritto il 2026-10-23** (numeri evidenziati per stato, latenza, prove con il servizio simulato; scelte minori da confermare nel 44 §13); prossimo: decisioni D32-1 e D13-21, poi le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
 2. **Prima di scrivere il gruppo analisi (20–24):** **AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08**;
@@ -1137,3 +1167,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6b della v1 (34):** `src/astrotwo/ai/result_verification.py` (estrazione dei numeri, eccezioni chiuse, confronto alla precisione e con l'unità scritte, stati, riepilogo, controllo delle conferme, modalità rigorosa) e `tests/ai/test_result_verification.py` (T1–T14, T14 `perf` 20 ms; flusso con un finto provider che inventa un numero, segnalato). Decisioni del proprietario del 2026-10-22: T5 del 34 corretto (vince §3.5), fonte dei testi esterni una volta in testa in `catalog.rows` (32, codice e T7), scelte 1–3 del 32 confermate, limiti del 35 come da specifica; scelte del 42 §13 (a–g) già registrate come confermate. 32 e 34 modificati nel registro, restano `approvato`. Aperte 14. |
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6c della v1 (35):** `src/astrotwo/ai/chat_assistant.py` (assistente: regole R1–R9, ciclo degli strumenti uno alla volta nella coda del 40, conferme, limiti di 10 chiamate e 5 minuti, Stop, verifica del 34 con rigenerazione rigorosa, token e costo, disponibilità e consenso, blocco `conversations`), `AssistantQueueExecutor` nel 40; T1–T14 in `tests/ai/test_chat_assistant.py` e `tests/ui/test_assistant_queue.py`. Decisioni del proprietario sullo sprint 6b applicate (34: solo arrotondamento, scelte confermate; 32: scelte 4–6 confermate). `35`, `40`, `32`, `34` modificati nel registro, stato `approvato` invariato. Test 780 di default. |
 | 2026-10-22 | Claude Code | **Parte 7, sprint 7a della v1 (44):** `src/astrotwo/ui/ai_panel.py` (`AiPanel`, `MessageView`, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`) nell'area a destra del 40, impostazioni `assistant/…` con `prefs.set`, testo delle conversazioni nel salvataggio, uscita con risposta in corso, 8 icone Lucide, traduzione italiana; `tests/ui/test_ai_panel.py` (T1–T4, T6–T13, T15 e altri; Portachiavi simulato per tutte le finestre dei test in `tests/conftest.py`). **Decisioni del proprietario del 2026-10-22:** 12 scelte minori del 35 confermate; ultima richiesta dopo il limite con gli strumenti e `tool_choice = none` (`TurnOptions.tool_choice` del 30, T16; T4 del 35 con entrambi i formati). `30`, `35`, `40`, `44` modificati nel registro, stato `approvato` invariato. Test: 799 di default. |
+| 2026-10-23 | Claude Code | **Parte 7, sprint 7b della v1 (44):** in `ui/ai_panel.py` evidenziazione di ogni numero secondo lo stato del 34 (segni invisibili prima della conversione del Markdown, numeri negli indirizzi cercati dopo), suggerimento con valore pieno, `#n` e funzioni del modulo, copia col clic destro, colori della modalità notte; esiti di Aggiorna e "Prova il modello" su un oggetto dei segnali figlio della finestra (prima il secondo esito si perdeva); T5, T14 e test di Aggiorna, "Prova il modello", errori del provider, `AI_CONTEXT_TOO_LONG`, conferma con il pannello chiuso e uscita in `tests/ui/test_ai_panel.py`; traduzioni italiane. **Prova reale del proprietario:** causa di `NO_COORD_COLUMNS` = identificativo che non è una tabella (verificato sul servizio reale di VizieR); `load_catalog` con regione dà ora `CATALOG_UNKNOWN` (13, T33 esteso con la struttura di `TAP_SCHEMA` di Gaia DR3 senza dati di terzi); `TOOL_NOT_EXPOSED` con `valid_tools` (32, T4; anche nel 35). **Decisione del proprietario del 2026-10-23:** scelte minori dello sprint 7a confermate. Aperte D32-1 e D13-21 (16 aperte). `13`, `32`, `44` modificati nel registro, stato `approvato` invariato. Test 808 di default. |

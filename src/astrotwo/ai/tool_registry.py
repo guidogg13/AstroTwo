@@ -184,18 +184,21 @@ class ToolRegistryError(Exception):
     """Errore di §10 con codice, testo ed eventuale parametro; ``model_result`` è il JSON per il modello."""
 
     def __init__(self, code: str, message: str, *, parameter: str | None = None, tool: str | None = None,
-                 command: str | None = None) -> None:
+                 command: str | None = None, valid_tools: tuple[str, ...] | None = None) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
         self.parameter = parameter
         self.tool = tool
         self.command = command
+        self.valid_tools = valid_tools
 
     def model_result(self) -> dict:
         error = {"code": self.code, "text": self.message}
         if self.parameter is not None:
             error["parameter"] = self.parameter
+        if self.valid_tools is not None:
+            error["valid_tools"] = list(self.valid_tools)  # §3.5 punto 2: il modello si corregge senza indovinare
         return {"contains_external_text": False,
                 "command": {"number": None, "name": self.command, "tool": self.tool, "status": "not_executed"},
                 "error": error}
@@ -439,6 +442,10 @@ class ToolRegistry:
 
         return [ToolDefinition(t["name"], t["description"], t["input_schema"]) for t in self.tools()]
 
+    def valid_tools(self) -> tuple[str, ...]:
+        """Nomi degli strumenti esposti, in ordine alfabetico (risultato di ``TOOL_NOT_EXPOSED``, §3.5)."""
+        return tuple(sorted(self._by_tool))
+
     def command_name(self, tool: str) -> str | None:
         return self._by_tool.get(tool)
 
@@ -452,7 +459,8 @@ class ToolRegistry:
         """Comando validato dal 05 come quelli dell'utente; errori come ``ToolRegistryError`` per il modello."""
         name = self._by_tool.get(tool)
         if name is None:
-            raise ToolRegistryError("TOOL_NOT_EXPOSED", f"tool {tool!r} does not exist or is not exposed", tool=tool)
+            raise ToolRegistryError("TOOL_NOT_EXPOSED", f"tool {tool!r} does not exist or is not exposed: use one of "
+                                    "valid_tools (names with '__')", tool=tool, valid_tools=self.valid_tools())
         text = arguments if isinstance(arguments, str) else ""
         try:
             params = json.loads(text) if text.strip() else {}  # nessun argomento: alcuni provider mandano ""

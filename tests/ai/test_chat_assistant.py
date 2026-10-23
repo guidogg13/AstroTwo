@@ -526,6 +526,14 @@ def test_parallel_requests_and_errors(session, tools):
     answer = ask(assistant, "Prova")
     assert [c.error_code for c in answer.calls] == [None, "LAYER_UNKNOWN", "TOOL_NOT_EXPOSED"]
     assert answer.error.code == "AI_CONTEXT_TOO_LONG" and len(ai_entries(session)) == 1
+    # Strumento inesistente (32 §3.5 punto 2, 2026-10-23): errore al modello con l'elenco dei nomi validi.
+    from astrotwo.ai.provider_adapter import ToolResultMessage
+
+    results = [m for m in adapter.requests[1][0] if isinstance(m, ToolResultMessage)]
+    unknown = json.loads(results[2].content)
+    assert results[2].is_error and unknown["error"]["code"] == "TOOL_NOT_EXPOSED"
+    assert unknown["error"]["valid_tools"] == sorted(t["name"] for t in tools.tools())
+    assert unknown["command"]["number"] is None
     with pytest.raises(AssistantError):
         ChatAssistant(tools, SessionExecutor(session), adapter).send("x")  # consenso non dato in questo archivio
 

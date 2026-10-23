@@ -114,6 +114,11 @@ dalla v1. Entreranno quando diventano comandi del `05` (regola §3.1); per
 1. Il `35` riceve dal `30` una `ToolCallRequest` (nome, argomenti JSON).
 2. **Nome sconosciuto o non esposto** → risultato d'errore al modello
    (`TOOL_NOT_EXPOSED`), nessuna esecuzione.
+   Il risultato d'errore porta anche **l'elenco dei nomi validi**
+   (`"valid_tools"`, in ordine alfabetico, con il separatore `__`), così il
+   modello può correggersi senza indovinare (richiesta del proprietario del
+   2026-10-23, dopo una prova reale con un modello di OpenRouter). Il nome
+   sbagliato non entra in cronologia; nel `44` la scheda resta senza `#n`.
 3. **Argomenti:** JSON illeggibile → `TOOL_ARGUMENTS_INVALID`; altrimenti
    il comando si costruisce e si **valida con il `05`** esattamente come
    quelli dell'utente (`COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`). Un
@@ -330,7 +335,7 @@ Nomi proposti, descrizione in parole. File Python
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
-| Strumento sconosciuto o non esposto | risultato d'errore al modello, nessuna esecuzione | `TOOL_NOT_EXPOSED` |
+| Strumento sconosciuto o non esposto | risultato d'errore al modello con l'elenco `valid_tools` (2026-10-23), nessuna esecuzione | `TOOL_NOT_EXPOSED` |
 | Argomenti non JSON | risultato d'errore al modello | `TOOL_ARGUMENTS_INVALID` |
 | Parametro non valido, livello inesistente | risultato d'errore del `05` al modello | `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN` |
 | L'utente non conferma | risultato al modello, nessuna esecuzione | `TOOL_NOT_CONFIRMED` |
@@ -357,7 +362,7 @@ provider (richieste di strumenti scritte nei test).
 | T1 | Elenco chiuso | `tools()` | esattamente gli strumenti di §3.2; nessun comando di §3.3 | confronto con la tabella |
 | T2 | Nomi tradotti | per ogni strumento, nome → comando → nome | corrispondenza biunivoca; nomi validi per i due provider (regex `^[A-Za-z0-9_-]{1,64}$`) | test di unità |
 | T3 | Schema dal `05` | confronto tra `tools()` ed `export_schema()` | stessi parametri, tipi, intervalli, elenchi chiusi; unità nella descrizione; nessun parametro aggiunto | confronto diretto |
-| T4 | Validazione come l'utente | raggio senza unità; unità `m`; livello `L9` inesistente; JSON rotto | errori `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`, `TOOL_ARGUMENTS_INVALID` come risultato al modello; nessun comando in cronologia | test di unità |
+| T4 | Validazione come l'utente | raggio senza unità; unità `m`; livello `L9` inesistente; JSON rotto | errori `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`, `TOOL_ARGUMENTS_INVALID` come risultato al modello; nome sconosciuto (`catalog_search`, `catalog.search`, `image__open`) → `TOOL_NOT_EXPOSED` con `valid_tools` uguale a `tools()` (2026-10-23); nessun comando in cronologia | test di unità |
 | T5 | Stessa coda, `requested_by` | un comando dall'utente e uno dall'IA | eseguiti in ordine di arrivo; il secondo in cronologia con `requested_by = ai`, conversazione, turno, chiamata, profilo, modello | ispezione della cronologia |
 | T6 | Conferme | `catalog.load_region`, `layer.set_opacity`, `view.set_center`, `catalog.rows` | conferma chiesta per i primi due, non per gli altri; Annulla → `TOOL_NOT_CONFIRMED`, nessuna esecuzione | test di unità |
 | T7 | Testo esterno → conferma | `catalog.rows` con una colonna di testo, poi `view.set_center` nella stessa risposta | `contains_external_text` nel primo risultato; il secondo chiede conferma con il motivo, e "Conferma per questa conversazione" non vale | test di unità |
@@ -408,6 +413,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
     mentre l'identificativo principale e il bibcode di SIMBAD sono esterni;
     (6) elenco `ASTROTWO_MESSAGE_CODES` (§3.6).
 
+- **D32-1 — Come l'assistente trova l'identificativo di un catalogo VizieR: DA DECIDERE** (aperta il 2026-10-23, Gruppo 3). Nella prova reale del proprietario il modello ha scritto un identificativo che non è una tabella (`catalog.load_region` → oggi `CATALOG_UNKNOWN`, prima `NO_COORD_COLUMNS`): nessuno strumento della v1 elenca i cataloghi di VizieR. Opzioni: (a) nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13 (`collection_tree`: identificativo e titolo, ricerca nel titolo), esposto qui; (b) `CATALOG_UNKNOWN` con le tabelle che iniziano con l'identificativo scritto (es. `I/355` → `I/355/gaiadr3`, `I/355/paramp`), da `TAP_SCHEMA.tables` (solo 13); (c) nella descrizione del parametro `catalog` del `05` gli identificativi del gruppo fisso del 13 (`simbad`, `I/355/gaiadr3`, `II/246/out`). **Raccomandazione:** (c) subito, (a) con la prossima versione del 32. La decisione è del proprietario.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -418,3 +425,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-22 | Claude Code | **Codice dello sprint 6a** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/tool_registry.py` (`EXPOSED_COMMANDS` con i 22 strumenti di §3.2, `ToolRegistry` con `tools()`, `command_for`, `needs_confirmation`, `confirmation_request`, `reduce_result`, `ToolCallOutcome`, `ToolRegistryError`) e `tests/ai/test_tool_registry.py` (T1–T12; T5 copre la cronologia del `05`, la coda del `40` si prova con il `35` nello sprint 6c). **Decisione del proprietario del 2026-10-22:** testi esterni riconosciuti con due elenchi chiusi per percorso (`EXTERNAL_FIELDS` per comando, `ASTROTWO_FIELDS`), una stringa in nessuno dei due è esterna e fa fallire T12 (§3.6). Precisazioni in §3.4 (riduzione delle parole dello schema) e §3.7 (percorsi, `sha256`, forma dei tagli); scelte minori da confermare in §13. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6a** (applicate nello sprint 6b): argomenti vuoti = "nessun parametro" (scelta 1 confermata); in `catalog.rows` fonte dei testi esterni scritta una volta in testa (`external_source`, §3.6, §3.7; scelta 7 decisa; codice `SOURCE_ONCE` e test T7 aggiornati); scelte 2 e 3 confermate come solo di presentazione; restano da confermare 4, 5, 6 (§13). `external_source` reso pubblico per il `34`. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6b:** confermate le scelte minori 4 (niente SHA-256, solo il nome del file), 5 (stringhe delle calcolatrici come testo di AstroTwo) e 6 (elenco `ASTROTWO_MESSAGE_CODES`) (§13); tolto l'ultimo "da confermare" rimasto in §3.5. Nessuna modifica del codice. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | **Richiesta del proprietario del 2026-10-23** (prova reale dell'assistente con un modello gratuito di OpenRouter): il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco dei nomi validi (`valid_tools`, §3.5 punto 2, §10, T4). Verificato che un nome sconosciuto non esegue nulla e non entra in cronologia. Nota: `catalog__search` **è** uno strumento della v1 (§3.2: conta le righe di un livello già aperto); non cerca i cataloghi di VizieR. Stato `approvato` invariato. |
+| 2026-10-23 | Claude Code | Aperta **D32-1** (come l'assistente trova l'identificativo di un catalogo VizieR, Gruppo 3, §13), dalla prova reale del proprietario. Stato `approvato` invariato. |

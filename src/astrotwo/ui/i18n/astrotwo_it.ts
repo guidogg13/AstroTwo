@@ -152,6 +152,14 @@
         <translation>immagine non mostrata: %1</translation>
     </message>
     <message>
+        <source>Copy full value</source>
+        <translation>Copia il valore pieno</translation>
+    </message>
+    <message>
+        <source>Copy note</source>
+        <translation>Copia la nota</translation>
+    </message>
+    <message>
         <source>Strict mode: some numbers are not verified, the answer is being regenerated once. The text above is replaced by the one below.</source>
         <translation>Modalità rigorosa: alcuni numeri non sono verificati, la risposta viene rigenerata una volta. Il testo sopra è sostituito da quello sotto.</translation>
     </message>
@@ -162,6 +170,42 @@
     <message>
         <source>What was sent</source>
         <translation>Cosa è stato inviato</translation>
+    </message>
+    <message>
+        <source>Verified: %1 · command #%2</source>
+        <translation>Verificato: %1 · comando #%2</translation>
+    </message>
+    <message>
+        <source>Verified with another command: %1 · command #%2</source>
+        <translation>Verificato con un altro comando: %1 · comando #%2</translation>
+    </message>
+    <message>
+        <source>Parameter of command #%1: %2</source>
+        <translation>Parametro del comando #%1: %2</translation>
+    </message>
+    <message>
+        <source>From your message</source>
+        <translation>Dal tuo messaggio</translation>
+    </message>
+    <message>
+        <source>From external text, not computed (%1)</source>
+        <translation>Da testo esterno, non calcolato (%1)</translation>
+    </message>
+    <message>
+        <source>Ambiguous format</source>
+        <translation>Formato ambiguo</translation>
+    </message>
+    <message>
+        <source>Does not come from a command</source>
+        <translation>Non viene da un comando</translation>
+    </message>
+    <message>
+        <source>unit not recognized</source>
+        <translation>unità non riconosciuta</translation>
+    </message>
+    <message>
+        <source>command does not exist: #%1</source>
+        <translation>comando inesistente: #%1</translation>
     </message>
     <message>
         <source>no number to verify</source>
@@ -1315,7 +1359,7 @@
     <name>SentDataDialog</name>
     <message>
         <source>What was sent</source>
-        <extracomment>Larghezza di default del pannello (scelta minore 1 del 44: 400 pt, intervallo 380–420). Default delle impostazioni (forma testuale, come le preferenze del 40). Profili e consensi sono JSON. Dialetto GitHub (tabelle, elenchi) senza HTML: con ``MarkdownNoHTML`` i tag restano testo (verificato il 2026-10-22 con Qt 6.12, md4c).</extracomment>
+        <extracomment>Larghezza di default del pannello (scelta minore 1 del 44: 400 pt, intervallo 380–420). Default delle impostazioni (forma testuale, come le preferenze del 40). Profili e consensi sono JSON. Dialetto GitHub (tabelle, elenchi) senza HTML: con ``MarkdownNoHTML`` i tag restano testo (verificato il 2026-10-22 con Qt 6.12, md4c). Stile di ogni stato del 34 (44 §3.4, §3.11 punto 3); ``excluded`` non ha stile. Proprietà del formato con lo stato (ispezione del documento, T5).</extracomment>
         <translation>Cosa è stato inviato</translation>
     </message>
     <message>

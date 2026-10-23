@@ -2329,6 +2329,9 @@ def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]
     adql = ("SELECT column_name, ucd FROM TAP_SCHEMA.columns WHERE "
             f"table_name = '{plain}' OR table_name = '\"{plain}\"'")
     schema = vo.tap_query(server, adql, **kwargs).table.table
+    if len(schema) == 0:  # il servizio non ha la tabella: identificativo sconosciuto, non colonne mancanti
+        raise CatalogsError("CATALOG_UNKNOWN", f"catalogo {name!r} non trovato su {server}: nessuna colonna in "
+                            "TAP_SCHEMA (serve l'identificativo di una tabella, es. \"I/355/gaiadr3\")")
     found = {}
     for ucd_word in ("pos.eq.ra", "pos.eq.dec"):
         rows = [(str(r["column_name"]), _ucd_words(str(r["ucd"]))) for r in schema

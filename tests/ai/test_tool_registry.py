@@ -195,6 +195,22 @@ def test_t4_validation_as_user(tools, session):
     assert tools.command_for("layer__list", "", ai(), session.workspace.state).name == "layer.list"
 
 
+def test_t4_unknown_tool_lists_valid_tools(tools, session):
+    """2026-10-23 (prova reale del proprietario): un nome sconosciuto torna al modello come errore chiaro con l'elenco
+    dei nomi validi, senza eseguire nulla."""
+    before = len(session.history)
+    valid = sorted(t["name"] for t in tools.tools())
+    assert "catalog__search" in valid  # strumento della v1 (§3.2): conta le righe di un livello già aperto
+    for tool in ("catalog_search", "catalog.search", "vizier__search", "image__open"):
+        with pytest.raises(ToolRegistryError) as err:
+            tools.command_for(tool, "{}", ai(), session.workspace.state)
+        result = err.value.model_result()
+        assert result["error"]["code"] == "TOOL_NOT_EXPOSED" and repr(tool) in result["error"]["text"]
+        assert result["error"]["valid_tools"] == valid and result["command"]["status"] == "not_executed"
+        json.dumps(result)  # JSON per il modello
+    assert len(session.history) == before
+
+
 def test_t5_requested_by_in_history(tools, session):
     """Stessa strada dell'utente nel 05 (la coda del 40 con il 35 è nello sprint 6c)."""
     run(session, "view.set_zoom", scale={"value": 0.5, "unit": "arcsec"}, window=WINDOW)
