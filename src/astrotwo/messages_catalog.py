@@ -2383,3 +2383,248 @@ _extend("NONFINITE_PIXELS",
                 "{count} valori non finiti restituiti come tali, mai sostituiti.", "count:int"),
         samples=("{count} samples with a non-finite neighbour: NaN, never replaced.",
                  "{count} campioni con un vicino non finito: NaN, mai sostituiti.", "count:int"))
+
+# --- Modulo 18 (calcolatrici, sprint 8d) -----------------------------------------------------------------------
+_add("CALC_SYNTAX_ERROR",
+     "The expression has a syntax error.", "L'espressione ha un errore di sintassi.",
+     empty=("Empty expression (character {position}): '{expression}'.",
+            "Espressione vuota (carattere {position}): '{expression}'.", "position:int expression!"),
+     invalid=("Invalid syntax (character {position}): '{expression}'.",
+              "Sintassi non valida (carattere {position}): '{expression}'.", "position:int expression!"),
+     power=("'**' is not provided: the power is written '^' (character {position}): '{expression}'.",
+            "'**' non previsto: la potenza si scrive '^' (carattere {position}): '{expression}'.",
+            "position:int expression!"),
+     colon=("':' outside a sexagesimal angle (character {position}): '{expression}'.",
+            "':' fuori da un angolo sessagesimale (carattere {position}): '{expression}'.",
+            "position:int expression!"),
+     number_format=("Number '{segment}' is not provided: only decimal or exponential notation (character "
+                    "{position}): '{expression}'.",
+                    "Numero '{segment}' non previsto: solo notazione decimale o esponenziale (carattere "
+                    "{position}): '{expression}'.", "segment! position:int expression!"),
+     sexagesimal_name=("Sexagesimal angles are allowed only as arguments of skydist (D18-7) (character {position}): "
+                       "'{expression}'.",
+                       "Angoli sessagesimali ammessi solo come argomenti di skydist (D18-7) (carattere {position}): "
+                       "'{expression}'.", "position:int expression!"),
+     positional_only=("{function}: positional arguments only (character {position}): '{expression}'.",
+                      "{function}: solo argomenti posizionali (carattere {position}): '{expression}'.",
+                      "function position:int expression!"),
+     arity=("{function}: {expected} arguments are required, not {count} (character {position}): '{expression}'.",
+            "{function}: servono {expected} argomenti, non {count} (carattere {position}): '{expression}'.",
+            "function expected:int count:int position:int expression!"),
+     arity_min=("{function}: at least 2 arguments are required, not {count} (character {position}): "
+                "'{expression}'.",
+                "{function}: servono almeno 2 argomenti, non {count} (carattere {position}): '{expression}'.",
+                "function count:int position:int expression!"),
+     construct=("Construct {construct} is not provided (character {position}): '{expression}'.",
+                "Costrutto {construct} non previsto (carattere {position}): '{expression}'.",
+                "construct position:int expression!"))
+_add("CALC_UNKNOWN_FUNCTION",
+     "The name or function is not provided by the grammar.", "Nome o funzione non previsti dalla grammatica.",
+     sexagesimal_prefix=("Name not provided (character {position}): '{expression}'; nothing was executed.",
+                         "Nome non previsto (carattere {position}): '{expression}'; nulla è stato eseguito.",
+                         "position:int expression!"),
+     name=("Name {name} is not provided (constants: {constants}) (character {position}): '{expression}'; nothing was "
+           "executed.",
+           "Nome {name} non previsto (costanti: {constants}) (carattere {position}): '{expression}'; nulla è stato "
+           "eseguito.", "name! constants:list position:int expression!"),
+     function=("Function {name} is not provided by the grammar (character {position}): '{expression}'; nothing was "
+               "executed.",
+               "Funzione {name} non prevista dalla grammatica (carattere {position}): '{expression}'; nulla è stato "
+               "eseguito.", "name! position:int expression!"),
+     construct=("Construct {construct} is not provided (character {position}): '{expression}'; nothing was executed.",
+                "Costrutto {construct} non previsto (carattere {position}): '{expression}'; nulla è stato eseguito.",
+                "construct position:int expression!"))
+_add("CALC_OVERFLOW",
+     "{what}: result beyond the float64 limits (character {position}).",
+     "{what}: risultato oltre i limiti di float64 (carattere {position}).", "what position:int",
+     value=("Value beyond the float64 limits.", "Valore oltre i limiti di float64.", ""))
+_add("CALC_DIVISION_BY_ZERO",
+     "{what}: division by zero (character {position}).", "{what}: divisione per zero (carattere {position}).",
+     "what position:int")
+_add("CALC_DOMAIN_ERROR",
+     "{what}: argument out of domain (character {position}); no NaN returned.",
+     "{what}: argomento fuori dominio (carattere {position}); nessun NaN restituito.", "what position:int",
+     not_finite=("Value {value} is not finite.", "Valore {value} non finito.", "value"),
+     result_not_finite=("{value} {source} → {target}: result not finite ({result}).",
+                        "{value} {source} → {target}: risultato non finito ({result}).",
+                        "value source target result"))
+_add("CALC_TOO_COMPLEX",
+     "The expression is too complex.", "L'espressione è troppo complessa.",
+     length=("Expression of {length} characters, above the limit of {limit} (D18-5).",
+             "Espressione di {length} caratteri, oltre il limite di {limit} (D18-5).", "length:int limit:int"),
+     depth=("Nesting of {depth} parentheses, above the limit of {limit} (D18-5).",
+            "Annidamento di {depth} parentesi, oltre il limite di {limit} (D18-5).", "depth:int limit:int"),
+     parser=("Expression too complex for the parser.", "Espressione troppo complessa per l'analizzatore.", ""),
+     chain=("Expression too complex (chain of operations too long).",
+            "Espressione troppo complessa (catena di operazioni troppo lunga).", ""))
+_add("UNIT_SEXAGESIMAL_UNIT_REQUIRED",
+     "The unit of the sexagesimal angle must be declared.", "Va dichiarata l'unità dell'angolo sessagesimale.",
+     colon_units_value=("colon_units {colon_units}: 'hours', 'degrees' or a sequence with one entry for each value "
+                        "with colons is required.",
+                        "colon_units {colon_units}: serve 'hours', 'degrees' o una sequenza con una voce per ogni "
+                        "valore con i due punti.", "colon_units"),
+     colon_ambiguous=("'{text}' (character {position}): with colons the unit is ambiguous (D18-7); write it in the "
+                      "text (h/m/s for hours, d/m/s or °′″ for degrees) or declare it with colon_units='hours' or "
+                      "'degrees'.",
+                      "'{text}' (carattere {position}): con i due punti l'unità è ambigua (D18-7); scriverla nel "
+                      "testo (h/m/s per le ore, d/m/s o °′″ per i gradi) o dichiararla con colon_units='hours' o "
+                      "'degrees'.", "text position:int"),
+     colon_units_count=("colon_units {colon_units}: 'hours' or 'degrees' is required for each of the {count} values "
+                        "with colons ('{expression}').",
+                        "colon_units {colon_units}: serve 'hours' o 'degrees' per ognuno dei {count} valori con i "
+                        "due punti ('{expression}').", "colon_units count:int expression!"),
+     angle_text=("Sexagesimal angle '{text}': declare sexagesimal='degrees' (d:m:s) or 'hours' (h:m:s).",
+                 "Angolo sessagesimale '{text}': dichiarare sexagesimal='degrees' (d:m:s) o 'hours' (h:m:s).",
+                 "text"),
+     longitude=("Longitude {longitude}: declare lon_sexagesimal='hours' (h:m:s) or 'degrees' (d:m:s).",
+                "Longitudine {longitude}: dichiarare lon_sexagesimal='hours' (h:m:s) o 'degrees' (d:m:s).",
+                "longitude"))
+_add("TIME_SCALE_REQUIRED",
+     "The time scale must be given.", "Va indicata la scala di tempo.",
+     missing=("{what} is missing: the time scale is never assumed (DC1); allowed scales: {scales}.",
+              "{what} mancante: la scala di tempo non si assume mai (DC1); scale ammesse: {scales}.",
+              "what scales:list"),
+     unknown=("{what} {scale} not recognised; allowed scales: {scales}.",
+              "{what} {scale} non riconosciuta; scale ammesse: {scales}.", "what scale scales:list"))
+_add("TIME_INVALID",
+     "The date or time is not valid.", "La data o il tempo non sono validi.",
+     iso_type=("Date {value}: an ISO 8601 text is required (YYYY-MM-DDThh:mm:ss[.s], also with a space or date only).",
+               "Data {value}: serve un testo ISO 8601 (AAAA-MM-GGThh:mm:ss[.s], anche con spazio o solo data).",
+               "value"),
+     iso_invalid=("Date {value} not valid in ISO 8601 (YYYY-MM-DDThh:mm:ss[.s]): {detail}",
+                  "Data {value} non valida in ISO 8601 (AAAA-MM-GGThh:mm:ss[.s]): {detail}", "value detail!"),
+     number=("Value {value}: a finite number is required for the format {format}.",
+             "Valore {value}: per il formato {format} serve un numero finito.", "value format"),
+     format_value=("Value {value} not valid for {format}: {detail}", "Valore {value} non valido per {format}: "
+                   "{detail}", "value format detail!"),
+     format=("Format {format} is not provided; formats: {formats}.", "Formato {format} non previsto; formati: "
+             "{formats}.", "format formats:list"),
+     conversion=("Conversion {source} → {target} cannot be performed: {detail}",
+                 "Conversione {source} → {target} non eseguibile: {detail}", "source target detail!"),
+     to_unit=("Date '{text}': to_unit {to_unit} is not a representation of time ({targets}).",
+              "Data '{text}': to_unit {to_unit} non è una rappresentazione del tempo ({targets}).",
+              "text to_unit targets:list"))
+_add("IERS_TABLE_MISSING",
+     "No updated IERS table in the cache: update it with update_iers_table (explicit request, network of module 14) "
+     "or use iers_table='bundled'.",
+     "Nessuna tabella IERS aggiornata nella cache: aggiornarla con update_iers_table (richiesta esplicita, rete del "
+     "modulo 14) o usare iers_table='bundled'.")
+_add("IERS_TABLE_INVALID",
+     "{url}: content not readable as an IERS-A table ({detail}).",
+     "{url}: contenuto non leggibile come tabella IERS-A ({detail}).", "url detail!")
+_add("IERS_RANGE",
+     "The date is outside the IERS tables.", "La data è fuori dalle tabelle IERS.",
+     date=("Date MJD {mjd} outside the coverage of the IERS tables ({covered}): UT1 cannot be computed, no "
+           "extrapolation.",
+           "Data MJD {mjd} fuori dalla copertura delle tabelle IERS ({covered}): UT1 non calcolabile, nessuna "
+           "estrapolazione.", "mjd:num covered:list"),
+     limit=("Conversion {source} → {target}: {table}, date at the limit of the coverage ({detail}); no "
+            "extrapolation.",
+            "Conversione {source} → {target}: {table}, data al limite della copertura ({detail}); nessuna "
+            "estrapolazione.", "source target table detail!"))
+_extend("NET_TIMEOUT",
+        iers_no_new=("IERS table update: {url} is not reachable, no new table.",
+                     "Aggiornamento della tabella IERS: {url} non raggiungibile, nessuna tabella nuova.", "url"))
+_extend("UNIT_UNKNOWN",
+        not_text=("{what} {value}: a FITS or VOUnit unit string is required.",
+                  "{what} {value}: serve una stringa di unità FITS o VOUnit.", "what value"),
+        unknown=("{what} '{text}' is not valid in the FITS and VOUnit formats.",
+                 "{what} '{text}' non valida nei formati FITS e VOUnit.", "what text!"),
+        unknown_similar=("{what} '{text}' is not valid in the FITS and VOUnit formats; similar units known to "
+                         "astropy.units: {similar}.",
+                         "{what} '{text}' non valida nei formati FITS e VOUnit; unità simili note ad "
+                         "astropy.units: {similar}.", "what text! similar:list"))
+_add("UNIT_EQUIVALENCY_UNKNOWN",
+     "Equivalency {name} is not offered; equivalencies: {equivalencies} (D18-3).",
+     "Equivalenza {name} non offerta; equivalenze: {equivalencies} (D18-3).", "name equivalencies:list")
+_add("UNIT_REFERENCE_REQUIRED",
+     "Equivalency '{name}': reference is required, {parameter}, with a unit (mandatory, D18-3).",
+     "Equivalenza '{name}': serve reference, {parameter}, con unità (obbligatoria, D18-3).", "name parameter")
+_extend("UNIT_INCOMPATIBLE",
+        reference=("reference {reference}: {detail}", "reference {reference}: {detail}", "reference detail!"),
+        skydist=("'{text}' gives degrees (skydist): from_unit {from_unit} is not an angle.",
+                 "'{text}' dà gradi (skydist): from_unit {from_unit} non è un angolo.", "text from_unit"),
+        types=("{source} ({source_type}) and {target} ({target_type}) cannot be converted.",
+               "{source} ({source_type}) e {target} ({target_type}) non convertibili.",
+               "source source_type target target_type"),
+        types_hint=("{source} ({source_type}) and {target} ({target_type}) cannot be converted (equivalencies only on "
+                    "explicit request, D18-3).",
+                    "{source} ({source_type}) e {target} ({target_type}) non convertibili (equivalenze solo su "
+                    "richiesta esplicita, D18-3).", "source source_type target target_type"))
+_add("UNIT_ZERO_POINT_REQUIRED",
+     "{source} → {target}: magnitude (logarithmic unit) ↔ flux requires a zero point and a photometric system: "
+     "conversion of module 20 (D18-4).",
+     "{source} → {target}: magnitudine (unità logaritmica) ↔ flusso richiede punto zero e sistema fotometrico: "
+     "conversione del modulo 20 (D18-4).", "source target")
+_add("PIXEL_BLANK",
+     "Raw value {raw} equal to BLANK ({blank}): pixel without a value, no physical value.",
+     "Valore grezzo {raw} uguale a BLANK ({blank}): pixel senza valore, nessun valore fisico.", "raw:num blank:int")
+_add("PIXEL_BSCALE_ZERO",
+     "BSCALE = 0: the raw value cannot be derived from the physical one.",
+     "BSCALE = 0: il valore grezzo non si ricava dal fisico.")
+_extend("OPERATION_UNSUPPORTED",
+        histeq=("stretch histeq: the index depends on the whole image; a click on a whole image in memory is "
+                "required.",
+                "stretch histeq: l'indice dipende da tutta l'immagine; serve il clic su un'immagine intera in "
+                "memoria.", ""))
+_extend("EPOCH_REQUIRED",
+        propagation_motion=("Propagation: the proper motion (ProperMotion) is required; a null proper motion is "
+                            "never assumed.",
+                            "Propagazione: serve il moto proprio (ProperMotion); nessun moto proprio nullo "
+                            "assunto.", ""))
+_add("CALC_COMMAND_INVALID",
+     "The calculator command is not valid.", "Il comando della calcolatrice non è valido.",
+     params_not_object=("{where}: the parameters are a JSON object.", "{where}: i parametri sono un oggetto JSON.",
+                        "where"),
+     unknown_params=("{where}: parameters not provided {unknown}.", "{where}: parametri non previsti {unknown}.",
+                     "where unknown:list"),
+     expect_number=("{where}: a number is required, not {value}.", "{where}: serve un numero, non {value}.",
+                    "where value"),
+     expect_integer=("{where}: an integer is required, not {value}.", "{where}: serve un intero, non {value}.",
+                     "where value"),
+     expect_text=("{where}: a text is required, not {value}.", "{where}: serve un testo, non {value}.",
+                  "where value"),
+     expect_boolean=("{where}: true or false is required, not {value}.", "{where}: serve true o false, non {value}.",
+                     "where value"),
+     expect_record=("{where}: a JSON object (record) is required, not {value}.",
+                    "{where}: serve un oggetto JSON (record), non {value}.", "where value"),
+     expect_quantity=("{where}: {{\"value\": number, \"unit\": \"unit\"}} is required, not {value}.",
+                      "{where}: serve {{\"value\": numero, \"unit\": \"unità\"}}, non {value}.", "where value"),
+     expect_unit=("{where}: a valid FITS or VOUnit unit is required (D18-2), not {value}.",
+                  "{where}: serve un'unità valida in FITS o VOUnit (D18-2), non {value}.", "where value"),
+     expect_time=("{where}: a time of command 05 (§3.1) is required: 'J…'/'B…' or {{value, format, scale}}, not "
+                  "{value}.",
+                  "{where}: serve un tempo del 05 (§3.1): 'J…'/'B…' o {{value, format, scale}}, non {value}.",
+                  "where value"),
+     expect_time_unreadable=("{where}: a readable time is required ({detail}), not {value}.",
+                             "{where}: serve un tempo leggibile ({detail}), non {value}.", "where value detail!"),
+     layer_unresolved=("{where}: layer {value} not resolved (command 05 passes the objects in layers).",
+                       "{where}: livello {value} non risolto (il 05 passa gli oggetti in layers).", "where value"),
+     point_fields=("{where}: lon, lat and frame are required.", "{where}: lon, lat e frame obbligatori.", "where"),
+     epoch_reason=("{where}: epoch null without epoch_reason (the epoch is never assumed, D10-2).",
+                   "{where}: epoch null senza epoch_reason (epoca mai assunta, D10-2).", "where"),
+     command_shape=("Command of 05: an object with name, version and parameters.",
+                    "Comando del 05: oggetto con name, version e parameters.", ""),
+     not_calculator=("Command {name} is not a calculator ({allowed}).",
+                     "Comando {name} non è una calcolatrice ({allowed}).", "name allowed:list"),
+     version=("{name}: version {version} is not supported (1).", "{name}: versione {version} non supportata (1).",
+              "name version"),
+     colon_units_each=("{name}.colon_units_each: a list of 'hours'/'degrees'.",
+                       "{name}.colon_units_each: lista di 'hours'/'degrees'.", "name"),
+     colon_units_both=("{name}: colon_units or colon_units_each, not both.",
+                       "{name}: colon_units oppure colon_units_each, non entrambi.", "name"),
+     value_both=("{name}: value or value_text (only one).", "{name}: value oppure value_text (uno solo).", "name"),
+     image_position=("{name}: with image, position or position_sky (only one) is required.",
+                     "{name}: con image serve position oppure position_sky (uno solo).", "name"),
+     position_convention=("{name}.position: in the recorded command the convention is numpy (DC7).",
+                          "{name}.position: nel comando registrato la convenzione è numpy (DC7).", "name"),
+     position_both=("{name}: position or catalog_row (only one).", "{name}: position oppure catalog_row (uno solo).",
+                    "name"),
+     position_fields=("{name}.position: lon (or lon_text), lat (or lat_text) and frame are required.",
+                      "{name}.position: lon (o lon_text), lat (o lat_text) e frame obbligatori.", "name"),
+     targets_list=("{name}.targets: a list of records (frame, equinox, obstime).",
+                   "{name}.targets: lista di record (frame, equinox, obstime).", "name"),
+     target_frame=("{name}.targets[{index}]: a record with frame is required.",
+                   "{name}.targets[{index}]: record con frame obbligatorio.", "name index:int"),
+     time_both=("{name}: time_value or time_text (only one).", "{name}: time_value oppure time_text (uno solo).",
+                "name"))

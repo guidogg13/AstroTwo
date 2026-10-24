@@ -227,9 +227,7 @@ esterno. **Verso l'IA** (`32` §3.7): il messaggio annidato è reso in inglese
 col resto del testo; i suoi parametri `external` viaggiano marcati come testo
 esterno (`{"external_text": ...}`) e nel testo restano `<nome>`; un annidato
 ripiegato su `text` (senza voce) è testo esterno e nel testo resta `<nome del
-parametro>`. Finché il modulo che produce l'errore annidato non è convertito
-(14, 16, 19: sprint 8d) la sua risposta resta un parametro `external`; al
-momento della conversione diventa `message`.
+parametro>`. Gli errori di 14, 16 e 19 incorporati da 12 e 13 sono messaggi annidati (sprint 8d, fatto).
 
 **Posizione del catalogo (D40-5, decisa il 2026-10-24).** L'IA (livello 3)
 non può importare l'interfaccia (dipendenze solo verso il basso, regola d'oro
@@ -243,7 +241,8 @@ suoi codici non sono nel catalogo e si mostrano come in §3.7.2 (testo
 originale con la nota "(nessuna traduzione)"). Il test T18 controlla i codici
 dei **moduli convertiti** (elenco nel test, aggiornato a ogni sprint) e
 fallisce per un modulo convertito con un codice senza voce; a fine 8d
-l'elenco comprende tutti i moduli di T18.
+l'elenco comprende tutti i moduli 10–19 di T18 (fatto il 2026-10-24); restano da convertire il `05` e i moduli
+dell'interfaccia e dell'IA (sprint 8e).
 
 #### 3.7.2 Codice senza voce nel catalogo
 
@@ -646,3 +645,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-24 | Claude Code | **Sprint 8c (codice):** modulo 12 convertito a codice + `params` (voci del catalogo e test T18 aggiornati, `12` §10); aperta D40-7 (messaggi annidati, Gruppo 3). Nessun comportamento cambia. |
 | 2026-10-24 | Claude Code | **Sprint 8c-bis:** D40-7 decisa dal proprietario (opzione (b)): tipo di parametro `message` ricorsivo con profondità massima 3, testo di terzi sempre `external` (§3.7.1). Nessun comportamento visibile cambia. |
 | 2026-10-24 | Claude Code | **Sprint 8c-bis (13):** §3.7.1 — tipo di parametro `messages` (elenco di messaggi annidati), graffe raddoppiate nel testo, elenco vuoto mostrato come "—" (necessari ai messaggi del 13). |
+| 2026-10-24 | Claude Code | **Sprint 8d (codice):** moduli 14, 16, 19, 15, 17 e 18 convertiti a codice + `params`; T18 comprende tutti i moduli 10–19 e gli errori di 14, 16 e 19 incorporati da 12 e 13 sono messaggi annidati (§3.7.1 aggiornata). Restano il `05` e i moduli dell'interfaccia e dell'IA (sprint 8e). Nessun comportamento visibile cambia. |

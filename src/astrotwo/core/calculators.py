@@ -108,18 +108,30 @@ MAX_NESTING_DEPTH = 50
 
 
 class CalculatorError(Exception):
-    """Errore del modulo 18 con identificatore della specifica (§10)."""
+    """Errore del modulo 18 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore di un
+    altro modulo rilanciato con il suo codice, il suo testo e i suoi ``params`` (§10, "Parametri dei messaggi")."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 relayed: bool = False, **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _relay(exc, text: str) -> CalculatorError:
+    """Errore di un altro modulo rilanciato: codice e ``params`` restano suoi, il testo del 18 ha il prefisso."""
+    return CalculatorError(exc.code, text, params=getattr(exc, "params", None), relayed=True,
+                           **getattr(exc, "details", {}))
 
 
 def _forwarded(exc: CoordinatesWcsError | MeasuresError, what: str) -> CalculatorError:
     """Errore dei moduli 10/13/17 inoltrato con lo stesso identificatore (§10)."""
-    return CalculatorError(exc.code, f"{what}: {exc.message}")
+    return _relay(exc, f"{what}: {exc.message}")
 
 
 @dataclass(frozen=True)
@@ -200,9 +212,11 @@ _ANGLE_FUNCTIONS = ("asin", "acos", "atan", "atan2", "asind", "acosd", "atand", 
                     "skydist")
 
 
-def _syntax(message: str, position: int, expression: str) -> CalculatorError:
+def _syntax(reason: str, message: str, position: int, expression: str, **params: object) -> CalculatorError:
+    """``CALC_SYNTAX_ERROR``: ``reason`` è l'identificatore della sotto-voce, ``message`` il motivo in italiano."""
     return CalculatorError("CALC_SYNTAX_ERROR", f"{message} (carattere {position}): {expression!r}",
-                           position=position)
+                           position=position,
+                           params={"reason": reason, **params, "position": position, "expression": expression})
 
 
 #: Angoli sessagesimali in ``skydist`` (D18-7, decisa il 2026-10-13): unità scritta nel testo — ore ``h``/``m``/``s``,
@@ -242,7 +256,9 @@ def _prepare(expression: str) -> tuple[str, str, list[int], dict[str, _Sexagesim
     if _SEXAGESIMAL_PREFIX in text:
         position = start + text.index(_SEXAGESIMAL_PREFIX)
         raise CalculatorError("CALC_UNKNOWN_FUNCTION", f"nome non previsto (carattere {position}): {expression!r}; "
-                              "nulla è stato eseguito", position=position)
+                              "nulla è stato eseguito", position=position,
+                              params={"reason": "sexagesimal_prefix", "position": position,
+                                      "expression": expression})
     tokens = {m.start(): m for m in _SEXAGESIMAL_TOKEN.finditer(text)}
     out, origin, sexagesimal = [], [], {}
     i = 0
@@ -258,9 +274,9 @@ def _prepare(expression: str) -> tuple[str, str, list[int], dict[str, _Sexagesim
             i = match.end()
             continue
         if text.startswith("**", i):
-            raise _syntax("'**' non previsto: la potenza si scrive '^'", position, expression)
+            raise _syntax("power", "'**' non previsto: la potenza si scrive '^'", position, expression)
         if char == ":":
-            raise _syntax("':' fuori da un angolo sessagesimale", position, expression)
+            raise _syntax("colon", "':' fuori da un angolo sessagesimale", position, expression)
         if char == "^":
             out.append("**")
             origin.extend([position, position])
@@ -283,16 +299,20 @@ def _sexagesimal_degrees(sexagesimal: dict[str, _Sexagesimal], colon_units, expr
         declared = list(colon_units)
     else:
         raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"colon_units {colon_units!r}: serve 'hours', "
-                              "'degrees' o una sequenza con una voce per ogni valore con i due punti")
+                              "'degrees' o una sequenza con una voce per ogni valore con i due punti",
+                              params={"reason": "colon_units_value", "colon_units": repr(colon_units)})
     if colons and colon_units is None:
         first = sexagesimal[colons[0]]
         raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"{first.text!r} (carattere {first.position}): "
                               "con i due punti l'unità è ambigua (D18-7); scriverla nel testo (h/m/s per le ore, "
                               "d/m/s o °′″ per i gradi) o dichiararla con colon_units='hours' o 'degrees'",
-                              position=first.position)
+                              position=first.position,
+                              params={"reason": "colon_ambiguous", "text": first.text, "position": first.position})
     if len(declared) != len(colons) or any(d not in SEXAGESIMAL_UNITS for d in declared):
         raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"colon_units {colon_units!r}: serve 'hours' o "
-                              f"'degrees' per ognuno dei {len(colons)} valori con i due punti ({expression!r})")
+                              f"'degrees' per ognuno dei {len(colons)} valori con i due punti ({expression!r})",
+                              params={"reason": "colon_units_count", "colon_units": repr(colon_units),
+                                      "count": len(colons), "expression": expression})
     units = dict(zip(colons, declared))
     values, notes = {}, []
     for name, item in sexagesimal.items():
@@ -331,9 +351,11 @@ class _Evaluator:
         offset = getattr(node, "col_offset", 0)
         return self.origin[offset] if offset < len(self.origin) else len(self.expression)
 
-    def unknown(self, message: str, node) -> CalculatorError:
+    def unknown(self, reason: str, message: str, node, **params: object) -> CalculatorError:
         return CalculatorError("CALC_UNKNOWN_FUNCTION", f"{message} (carattere {self.position(node)}): "
-                               f"{self.expression!r}; nulla è stato eseguito", position=self.position(node))
+                               f"{self.expression!r}; nulla è stato eseguito", position=self.position(node),
+                               params={"reason": reason, **params, "position": self.position(node),
+                                       "expression": self.expression})
 
     def check(self, node) -> None:
         if isinstance(node, ast.Expression):
@@ -346,37 +368,47 @@ class _Evaluator:
         if isinstance(node, ast.Constant) and type(node.value) in (int, float):
             segment = ast.get_source_segment(self.text, node) or ""
             if not _NUMBER.fullmatch(segment):
-                raise _syntax(f"numero {segment!r} non previsto: solo notazione decimale o esponenziale",
-                              self.position(node), self.expression)
+                raise _syntax("number_format", f"numero {segment!r} non previsto: solo notazione decimale o esponenziale",
+                              self.position(node), self.expression, segment=segment)
             return None
         if isinstance(node, ast.Constant) and (node.value is None or isinstance(node.value, bool)):
-            raise self.unknown(f"nome {node.value!r} non previsto (costanti: {', '.join(CONSTANTS)})", node)
+            raise self.unknown("name", f"nome {node.value!r} non previsto (costanti: {', '.join(CONSTANTS)})", node,
+                               name=repr(node.value), constants=list(CONSTANTS))
         if isinstance(node, ast.Name):
             if node.id in CONSTANTS:
                 return None
             if node.id in self.sexagesimal:
-                raise _syntax("angoli sessagesimali ammessi solo come argomenti di skydist (D18-7)",
+                raise _syntax("sexagesimal_name", "angoli sessagesimali ammessi solo come argomenti di skydist (D18-7)",
                               self.position(node), self.expression)
-            raise self.unknown(f"nome {node.id!r} non previsto (costanti: {', '.join(CONSTANTS)})", node)
+            raise self.unknown("name", f"nome {node.id!r} non previsto (costanti: {', '.join(CONSTANTS)})", node,
+                               name=repr(node.id), constants=list(CONSTANTS))
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in FUNCTIONS:
                 name = node.func.id if isinstance(node.func, ast.Name) else ast.get_source_segment(self.text, node.func)
-                raise self.unknown(f"funzione {name!r} non prevista dalla grammatica", node)
+                raise self.unknown("function", f"funzione {name!r} non prevista dalla grammatica", node, name=repr(name))
             if node.keywords or any(isinstance(a, ast.Starred) for a in node.args):
-                raise _syntax(f"{node.func.id}: solo argomenti posizionali", self.position(node), self.expression)
+                raise _syntax("positional_only", f"{node.func.id}: solo argomenti posizionali", self.position(node),
+                              self.expression, function=node.func.id)
             arity = FUNCTIONS[node.func.id][0]
             if (arity is None and len(node.args) < 2) or (arity is not None and len(node.args) != arity):
                 expected = "almeno 2" if arity is None else str(arity)
-                raise _syntax(f"{node.func.id}: servono {expected} argomenti, non {len(node.args)}",
-                              self.position(node), self.expression)
+                if arity is None:
+                    raise _syntax("arity_min", f"{node.func.id}: servono {expected} argomenti, non {len(node.args)}",
+                                  self.position(node), self.expression, function=node.func.id,
+                                  count=len(node.args))
+                raise _syntax("arity", f"{node.func.id}: servono {expected} argomenti, non {len(node.args)}",
+                              self.position(node), self.expression, function=node.func.id, expected=int(arity),
+                              count=len(node.args))
             for arg in node.args:
                 if node.func.id == "skydist" and self._sexagesimal_argument(arg):
                     continue
                 self.check(arg)
             return None
         if isinstance(node, (ast.Attribute, ast.Subscript)):
-            raise self.unknown(f"costrutto {type(node).__name__} non previsto", node)
-        raise _syntax(f"costrutto {type(node).__name__} non previsto", self.position(node), self.expression)
+            raise self.unknown("construct", f"costrutto {type(node).__name__} non previsto", node,
+                               construct=type(node).__name__)
+        raise _syntax("construct", f"costrutto {type(node).__name__} non previsto", self.position(node),
+                      self.expression, construct=type(node).__name__)
 
     def _sexagesimal_argument(self, node) -> bool:
         """Un argomento di ``skydist`` che è un angolo sessagesimale, eventualmente con segno."""
@@ -388,12 +420,12 @@ class _Evaluator:
         position = self.position(node)
         if kind == "overflow":
             return CalculatorError("CALC_OVERFLOW", f"{what}: risultato oltre i limiti di float64 (carattere "
-                                   f"{position})", position=position)
+                                   f"{position})", position=position, params={"what": what, "position": position})
         if kind == "divide" and operator:
             return CalculatorError("CALC_DIVISION_BY_ZERO", f"{what}: divisione per zero (carattere {position})",
-                                   position=position)
+                                   position=position, params={"what": what, "position": position})
         return CalculatorError("CALC_DOMAIN_ERROR", f"{what}: argomento fuori dominio (carattere {position}); "
-                               "nessun NaN restituito", position=position)
+                               "nessun NaN restituito", position=position, params={"what": what, "position": position})
 
     def apply(self, function, args, what: str, node, *, operator: bool) -> np.float64:
         try:
@@ -471,22 +503,25 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
         raise TypeError("expression: serve una stringa")
     if len(expression) > max_length:
         raise CalculatorError("CALC_TOO_COMPLEX", f"espressione di {len(expression)} caratteri, oltre il limite "
-                              f"di {max_length} (D18-5)", length=len(expression), limit=max_length)
+                              f"di {max_length} (D18-5)", length=len(expression), limit=max_length,
+                              params={"reason": "length", "length": len(expression), "limit": max_length})
     text, translated, origin, sexagesimal = _prepare(expression)
     if not text:
-        raise _syntax("espressione vuota", 0, expression)
+        raise _syntax("empty", "espressione vuota", 0, expression)
     depth = _nesting_depth(text)
     if depth > max_depth:
         raise CalculatorError("CALC_TOO_COMPLEX", f"annidamento di {depth} parentesi, oltre il limite di "
-                              f"{max_depth} (D18-5)", depth=depth, limit=max_depth)
+                              f"{max_depth} (D18-5)", depth=depth, limit=max_depth,
+                              params={"reason": "depth", "depth": depth, "limit": max_depth})
     try:
         tree = ast.parse(translated, mode="eval")
     except SyntaxError as exc:
         offset = (exc.offset or 0) - 1
         position = origin[offset] if exc.offset and 0 <= offset < len(origin) else len(expression)
-        raise _syntax("sintassi non valida", position, expression) from exc
+        raise _syntax("invalid", "sintassi non valida", position, expression) from exc
     except (RecursionError, MemoryError) as exc:
-        raise CalculatorError("CALC_TOO_COMPLEX", "espressione troppo complessa per l'analizzatore") from exc
+        raise CalculatorError("CALC_TOO_COMPLEX", "espressione troppo complessa per l'analizzatore",
+                              params={"reason": "parser"}) from exc
     evaluator = _Evaluator(expression, translated, origin, dict.fromkeys(sexagesimal, np.float64(0.0)))
     try:
         evaluator.check(tree)
@@ -494,7 +529,7 @@ def evaluate_expression(expression: str, *, max_length: int = MAX_EXPRESSION_LEN
         value = evaluator.evaluate(tree)
     except RecursionError as exc:
         raise CalculatorError("CALC_TOO_COMPLEX", "espressione troppo complessa (catena di operazioni troppo "
-                              "lunga)") from exc
+                              "lunga)", params={"reason": "chain"}) from exc
     single_skydist = isinstance(tree.body, ast.Call) and tree.body.func.id == "skydist"
     library = f"numpy {np.__version__} (tabella FUNCTIONS del modulo 13)"
     notes = ["analizzatore ast a elenco chiuso (D18-1), '^' = potenza; funzioni senza 'd' in radianti, con 'd' "
@@ -551,11 +586,14 @@ class TimeRepresentations:
 def _time_scale(scale: object, what: str) -> str:
     if scale is None:
         raise CalculatorError("TIME_SCALE_REQUIRED", f"{what} mancante: la scala di tempo non si assume mai (DC1); "
-                              f"scale ammesse: {', '.join(s.upper() for s in TIME_SCALES)}")
+                              f"scale ammesse: {', '.join(s.upper() for s in TIME_SCALES)}",
+                              params={"reason": "missing", "what": what, "scales": [s.upper() for s in TIME_SCALES]})
     name = scale.lower() if isinstance(scale, str) else None
     if name not in TIME_SCALES:
         raise CalculatorError("TIME_SCALE_REQUIRED", f"{what} {scale!r} non riconosciuta; scale ammesse: "
-                              f"{', '.join(s.upper() for s in TIME_SCALES)}")
+                              f"{', '.join(s.upper() for s in TIME_SCALES)}",
+                              params={"reason": "unknown", "what": what, "scale": repr(scale),
+                                      "scales": [s.upper() for s in TIME_SCALES]})
     return name
 
 
@@ -563,7 +601,8 @@ def _parse_time(time_value: object, time_format: str, scale: str) -> Time:
     if time_format == "iso":
         if not isinstance(time_value, str) or not time_value.strip():
             raise CalculatorError("TIME_INVALID", f"data {time_value!r}: serve un testo ISO 8601 "
-                                  "(AAAA-MM-GGThh:mm:ss[.s], anche con spazio o solo data)")
+                                  "(AAAA-MM-GGThh:mm:ss[.s], anche con spazio o solo data)",
+                                  params={"reason": "iso_type", "value": repr(time_value)})
         errors = []
         for fmt in ("isot", "iso"):
             try:
@@ -571,15 +610,18 @@ def _parse_time(time_value: object, time_format: str, scale: str) -> Time:
             except ValueError as exc:
                 errors.append(str(exc).splitlines()[-1])
         raise CalculatorError("TIME_INVALID", f"data {time_value!r} non valida in ISO 8601 "
-                              f"(AAAA-MM-GGThh:mm:ss[.s]): {errors[-1]}")
+                              f"(AAAA-MM-GGThh:mm:ss[.s]): {errors[-1]}",
+                              params={"reason": "iso_invalid", "value": repr(time_value), "detail": errors[-1]})
     if isinstance(time_value, bool) or not isinstance(time_value, (int, float, np.integer, np.floating)) \
             or not math.isfinite(float(time_value)):
         raise CalculatorError("TIME_INVALID", f"valore {time_value!r}: per il formato {time_format} serve un numero "
-                              "finito")
+                              "finito", params={"reason": "number", "value": repr(time_value), "format": time_format})
     try:
         return Time(float(time_value), format=time_format, scale=scale)
     except ValueError as exc:
-        raise CalculatorError("TIME_INVALID", f"valore {time_value!r} non valido per {time_format}: {exc}") from exc
+        raise CalculatorError("TIME_INVALID", f"valore {time_value!r} non valido per {time_format}: {exc}",
+                              params={"reason": "format_value", "value": repr(time_value), "format": time_format,
+                                      "detail": str(exc)}) from exc
 
 
 #: Tabelle IERS per UT1 (decisione del proprietario del 2026-10-13): ``bundled`` = quelle incluse in astropy
@@ -647,15 +689,15 @@ def update_iers_table(*, cache: SharedCache | None = None, timeouts: NetworkTime
     try:
         response = vo_protocols._http("IERS", url, cache=cache, refresh=True, timeouts=timeouts)
     except vo_protocols.VoProtocolsError as exc:
-        raise CalculatorError(exc.code, f"aggiornamento della tabella IERS: {exc.message}") from exc
+        raise _relay(exc, f"aggiornamento della tabella IERS: {exc.message}") from exc
     if response.from_cache:
         raise CalculatorError("NET_TIMEOUT", f"aggiornamento della tabella IERS: {url} non raggiungibile, nessuna "
-                              "tabella nuova")
+                              "tabella nuova", params={"reason": "iers_no_new", "url": url})
     try:
         table = _read_iers_a(response.payload)
     except Exception as exc:  # contenuto non leggibile come tabella IERS-A
-        raise CalculatorError("IERS_TABLE_INVALID", f"{url}: contenuto non leggibile come tabella IERS-A ({exc})") \
-            from exc
+        raise CalculatorError("IERS_TABLE_INVALID", f"{url}: contenuto non leggibile come tabella IERS-A ({exc})",
+                              params={"url": url, "detail": str(exc)}) from exc
     (SharedCache() if cache is None else cache).put(_IERS_CACHE_MODULE, _IERS_CACHE_KEY, response.payload,
                                                     origin=url, retrieved_at=response.retrieved_at)
     return _iers_info(table, "finals2000A.all", f"scaricato da {url} il {response.retrieved_at.isoformat()}")
@@ -670,7 +712,8 @@ def _iers_for(when: Time, iers_table: str, cache: SharedCache | None) -> tuple[o
             return table, info, _IERS_STATUS[int(status)]
     covered = "; ".join(info.text for _, info in tables)
     raise CalculatorError("IERS_RANGE", f"data MJD {float(when.mjd)!r} fuori dalla copertura delle tabelle IERS ({covered}): "
-                          "UT1 non calcolabile, nessuna estrapolazione", mjd=float(when.mjd))
+                          "UT1 non calcolabile, nessuna estrapolazione", mjd=float(when.mjd),
+                          params={"reason": "date", "mjd": float(when.mjd), "covered": [info.text for _, info in tables]})
 
 
 @_registered
@@ -684,7 +727,8 @@ def convert_time(time_value, time_format: str, scale: str | None, target_scale: 
     trovare la tabella aggiornata (non entra nel comando registrato).
     """
     if time_format not in TIME_FORMATS:
-        raise CalculatorError("TIME_INVALID", f"formato {time_format!r} non previsto; formati: {', '.join(TIME_FORMATS)}")
+        raise CalculatorError("TIME_INVALID", f"formato {time_format!r} non previsto; formati: {', '.join(TIME_FORMATS)}",
+                              params={"reason": "format", "format": repr(time_format), "formats": list(TIME_FORMATS)})
     if iers_table not in IERS_TABLES:
         raise ValueError(f"iers_table {iers_table!r}: valori ammessi {', '.join(IERS_TABLES)}")
     source_scale = _time_scale(scale, "scale")
@@ -704,10 +748,14 @@ def convert_time(time_value, time_format: str, scale: str | None, target_scale: 
                 converted = getattr(when, target)
         except iers.IERSRangeError as exc:  # al bordo della tabella (UT1 → UTC itera sulla data)
             raise CalculatorError("IERS_RANGE", f"conversione {source_scale.upper()} → {target.upper()}: {used.text}, "
-                                  f"data al limite della copertura ({exc}); nessuna estrapolazione") from exc
+                                  f"data al limite della copertura ({exc}); nessuna estrapolazione",
+                                  params={"reason": "limit", "source": source_scale.upper(),
+                                          "target": target.upper(), "table": used.text, "detail": str(exc)}) from exc
         except Exception as exc:  # conversione non definita
             raise CalculatorError("TIME_INVALID", f"conversione {source_scale.upper()} → {target.upper()} non "
-                                  f"eseguibile: {exc}") from exc
+                                  f"eseguibile: {exc}",
+                                  params={"reason": "conversion", "source": source_scale.upper(),
+                                          "target": target.upper(), "detail": str(exc)}) from exc
         converted.precision = 9
         values = TimeRepresentations(
             scale=target, iso=converted.isot, jd=np.float64(converted.jd), mjd=np.float64(converted.mjd),
@@ -771,7 +819,8 @@ def _similar_units(text: str) -> list[str]:
 def _standard_unit(text: object, what: str) -> tuple[u.UnitBase, str]:
     """Unità nel formato FITS o, se non lo è, VOUnit (D18-2): (unità, formato usato)."""
     if not isinstance(text, str) or not text.strip():
-        raise CalculatorError("UNIT_UNKNOWN", f"{what} {text!r}: serve una stringa di unità FITS o VOUnit")
+        raise CalculatorError("UNIT_UNKNOWN", f"{what} {text!r}: serve una stringa di unità FITS o VOUnit",
+                              params={"reason": "not_text", "what": what, "value": repr(text)})
     errors = []
     for fmt in ("fits", "vounit"):
         try:
@@ -781,7 +830,9 @@ def _standard_unit(text: object, what: str) -> tuple[u.UnitBase, str]:
     similar = _similar_units(text.strip())
     raise CalculatorError("UNIT_UNKNOWN", f"{what} {text!r} non valida nei formati FITS e VOUnit"
                           + (f"; unità simili note ad astropy.units: {', '.join(similar)}" if similar else ""),
-                          similar=similar, errors=errors)
+                          similar=similar, errors=errors,
+                          params=({"reason": "unknown_similar", "what": what, "text": text, "similar": list(similar)}
+                                  if similar else {"reason": "unknown", "what": what, "text": text}))
 
 
 def _is_logarithmic(unit: u.UnitBase) -> bool:
@@ -792,7 +843,8 @@ def _is_logarithmic(unit: u.UnitBase) -> bool:
 def _equivalency(name: object, reference: object) -> tuple[list, str]:
     if name not in EQUIVALENCIES:
         raise CalculatorError("UNIT_EQUIVALENCY_UNKNOWN", f"equivalenza {name!r} non offerta; equivalenze: "
-                              f"{', '.join(EQUIVALENCIES)} (D18-3)")
+                              f"{', '.join(EQUIVALENCIES)} (D18-3)",
+                              params={"name": repr(name), "equivalencies": list(EQUIVALENCIES)})
     function, parameter = EQUIVALENCIES[name]
     if parameter is None:
         if reference is not None:
@@ -800,12 +852,13 @@ def _equivalency(name: object, reference: object) -> tuple[list, str]:
         return function(), f"equivalenza {name} (astropy.units.{function.__name__}), richiesta esplicitamente"
     if not isinstance(reference, u.Quantity) or reference.size != 1:
         raise CalculatorError("UNIT_REFERENCE_REQUIRED", f"equivalenza {name!r}: serve reference, {parameter}, "
-                              "con unità (obbligatoria, D18-3)")
+                              "con unità (obbligatoria, D18-3)", params={"name": name, "parameter": parameter})
     try:
         return function(reference), (f"equivalenza {name} (astropy.units.{function.__name__}) con riferimento "
                                      f"{reference}, richiesta esplicitamente")
     except (u.UnitsError, ValueError, TypeError) as exc:
-        raise CalculatorError("UNIT_INCOMPATIBLE", f"reference {reference}: {exc}") from exc
+        raise CalculatorError("UNIT_INCOMPATIBLE", f"reference {reference}: {exc}",
+                              params={"reason": "reference", "reference": str(reference), "detail": str(exc)}) from exc
 
 
 def _units_command(**arguments) -> CalculatorCommand:
@@ -830,7 +883,9 @@ def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None
             raise ValueError("una data si converte senza from_unit, equivalenza o sexagesimal")
         if to_unit not in _TIME_TARGETS:
             raise CalculatorError("TIME_INVALID", f"data {text!r}: to_unit {to_unit!r} non è una rappresentazione "
-                                  f"del tempo ({', '.join(_TIME_TARGETS)})")
+                                  f"del tempo ({', '.join(_TIME_TARGETS)})",
+                                  params={"reason": "to_unit", "text": text, "to_unit": repr(to_unit),
+                                          "targets": list(_TIME_TARGETS)})
         timed = convert_time(text, "iso", scale, target_scale)
         return CalculatorResult(
             calculator="unità", input=f"{timed.input} → {to_unit}", value=getattr(timed.value, to_unit), unit=None,
@@ -843,7 +898,8 @@ def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None
     if text is not None and _SEXAGESIMAL.fullmatch(text):
         if sexagesimal not in ("degrees", "hours"):
             raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"angolo sessagesimale {text!r}: dichiarare "
-                                  "sexagesimal='degrees' (d:m:s) o 'hours' (h:m:s)")
+                                  "sexagesimal='degrees' (d:m:s) o 'hours' (h:m:s)",
+                                  params={"reason": "angle_text", "text": text})
         if from_unit is not None:
             raise ValueError("con un angolo sessagesimale from_unit non si passa: l'angolo è in gradi")
         try:
@@ -862,7 +918,7 @@ def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None
             number = np.float64(expression.value)
             if expression.unit == u.deg and not source.is_equivalent(u.deg):
                 raise CalculatorError("UNIT_INCOMPATIBLE", f"{text!r} dà gradi (skydist): from_unit {from_unit!r} "
-                                      "non è un angolo")
+                                      "non è un angolo", params={"reason": "skydist", "text": text, "from_unit": repr(from_unit)})
             notes.append(f"valore dall'espressione {expression.input!r} = {number!r} (calcolatrice algebrica)")
             library += f", {expression.library}"
         elif isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
@@ -871,12 +927,14 @@ def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None
             number = np.float64(value)
         notes.append(f"from_unit {from_unit!r} letta nel formato {source_format}")
     if not np.isfinite(number):
-        raise CalculatorError("CALC_DOMAIN_ERROR", f"valore {number!r} non finito")
+        raise CalculatorError("CALC_DOMAIN_ERROR", f"valore {number!r} non finito",
+                              params={"reason": "not_finite", "value": repr(number)})
     target, target_format = _standard_unit(to_unit, "to_unit")
     notes.append(f"to_unit {to_unit!r} letta nel formato {target_format}")
     if _is_logarithmic(source) != _is_logarithmic(target):
         raise CalculatorError("UNIT_ZERO_POINT_REQUIRED", f"{source} → {target}: magnitudine (unità logaritmica) ↔ "
-                              "flusso richiede punto zero e sistema fotometrico: conversione del modulo 20 (D18-4)")
+                              "flusso richiede punto zero e sistema fotometrico: conversione del modulo 20 (D18-4)",
+                              params={"source": str(source), "target": str(target)})
     equivalencies = []
     if equivalency is not None:
         equivalencies, note = _equivalency(equivalency, reference)
@@ -890,10 +948,15 @@ def convert_units(value, from_unit, to_unit, equivalency=None, *, reference=None
         hint = "" if equivalency is not None else " (equivalenze solo su richiesta esplicita, D18-3)"
         raise CalculatorError("UNIT_INCOMPATIBLE", f"{source} ({source.physical_type}) e {target} "
                               f"({target.physical_type}) non convertibili{hint}",
-                              physical_types=(str(source.physical_type), str(target.physical_type))) from exc
+                              physical_types=(str(source.physical_type), str(target.physical_type)),
+                              params={"reason": "types" if equivalency is not None else "types_hint",
+                                      "source": str(source), "source_type": str(source.physical_type),
+                                      "target": str(target), "target_type": str(target.physical_type)}) from exc
     result = np.float64(converted.value)
     if not np.isfinite(result):
-        raise CalculatorError("CALC_DOMAIN_ERROR", f"{number!r} {source} → {target}: risultato non finito ({result!r})")
+        raise CalculatorError("CALC_DOMAIN_ERROR", f"{number!r} {source} → {target}: risultato non finito ({result!r})",
+                              params={"reason": "result_not_finite", "value": repr(number), "source": str(source),
+                                      "target": str(target), "result": repr(result)})
     written = text if text is not None else repr(number)
     given = f"sessagesimale in {sexagesimal}" if source_format == "angolo sessagesimale" else str(source)
     return CalculatorResult(calculator="unità", input=f"{written} [{given}] → {target}", value=result, unit=target,
@@ -952,7 +1015,8 @@ def _color_index(value: np.float64, display: DisplaySettings, image: FitsImage |
             # L'equalizzazione dipende da tutta l'immagine: si calcola sull'immagine intera.
             if image is None or image.is_preview:
                 raise CalculatorError("OPERATION_UNSUPPORTED", "stretch histeq: l'indice dipende da tutta l'immagine; "
-                                      "serve il clic su un'immagine intera in memoria")
+                                      "serve il clic su un'immagine intera in memoria",
+                                      params={"reason": "histeq"})
             plane = set_display(image, display.vmin, display.vmax, display.gamma, display.palette, display.stretch)
             normalized = plane.values[xy[1], xy[0]]
             how = "set_display del modulo 11 sull'immagine intera (histeq)"
@@ -962,7 +1026,7 @@ def _color_index(value: np.float64, display: DisplaySettings, image: FitsImage |
             normalized = plane.values[0, 0]
             how = "set_display del modulo 11 sul valore (funzione di trasferimento punto per punto)"
     except ImagesFitsError as exc:
-        raise CalculatorError(exc.code, f"indice di colore: {exc.message}") from exc
+        raise _relay(exc, f"indice di colore: {exc.message}") from exc
     if not np.isfinite(normalized):
         return None, f"{how}: pixel non finito, trasparente (alfa 0), nessun indice"
     size = matplotlib.colormaps[display.palette].N
@@ -1005,7 +1069,7 @@ def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, bla
         try:
             raw_value = read_raw_pixel(image, x, y)
         except ImagesFitsError as exc:
-            raise CalculatorError(exc.code, exc.message) from exc
+            raise _relay(exc, exc.message) from exc
         notes.append("valore grezzo letto dal file con read_raw_pixel del modulo 11 (astropy.io.fits, do_not_scale_image_data=True, D18-6)")
         given = "raw"
     else:
@@ -1022,7 +1086,8 @@ def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, bla
     if given == "raw":
         if blank is not None and raw_value == blank:
             raise CalculatorError("PIXEL_BLANK", f"valore grezzo {raw_value!r} uguale a BLANK: pixel senza valore, "
-                                  "nessun valore fisico", raw=raw_value, blank=int(blank))
+                                  "nessun valore fisico", raw=raw_value, blank=int(blank),
+                                  params={"raw": float(raw_value), "blank": int(blank)})
         physical_value = np.float64(zero + scale * raw_value)
     else:
         physical_value = _fits_number(physical, "physical")
@@ -1035,7 +1100,7 @@ def convert_pixel_value(*, raw=None, physical=None, bzero=None, bscale=None, bla
         if blank is not None and raw_value == blank:
             notes.append("il valore grezzo coincide con BLANK: nel file indicherebbe un pixel senza valore")
     if not (np.isfinite(physical_value) and np.isfinite(raw_value)):
-        raise CalculatorError("CALC_OVERFLOW", "valore oltre i limiti di float64")
+        raise CalculatorError("CALC_OVERFLOW", "valore oltre i limiti di float64", params={"reason": "value"})
     if in_memory is not None and in_memory != physical_value:
         notes.append(f"valore tenuto dal modulo 11: {in_memory!r} (tipo prodotto da astropy.io.fits); "
                      f"regola FITS in float64: {physical_value!r}")
@@ -1135,7 +1200,8 @@ def _point_from_input(value: CoordinateInput) -> tuple[SkyFrame, str]:
 
     if isinstance(value.lon, str) and value.lon_sexagesimal not in ("hours", "degrees"):
         raise CalculatorError("UNIT_SEXAGESIMAL_UNIT_REQUIRED", f"longitudine {value.lon!r}: dichiarare "
-                              "lon_sexagesimal='hours' (h:m:s) o 'degrees' (d:m:s)")
+                              "lon_sexagesimal='hours' (h:m:s) o 'degrees' (d:m:s)",
+                              params={"reason": "longitude", "longitude": repr(value.lon)})
     lon = angle(value.lon, "lon", value.lon_sexagesimal == "hours")
     lat = angle(value.lat, "lat", False)
     point = SkyFrame.from_lonlat(lon, lat, value.frame, equinox=value.equinox, obstime=value.obstime,
@@ -1184,7 +1250,8 @@ def calculate_coordinates(position, targets, *, epoch=None, motion=None, offsets
             if epoch is not None:
                 if not isinstance(motion, ProperMotion):
                     raise CalculatorError("EPOCH_REQUIRED", "propagazione: serve il moto proprio (ProperMotion); "
-                                          "nessun moto proprio nullo assunto")
+                                          "nessun moto proprio nullo assunto",
+                                          params={"reason": "propagation_motion"})
                 moved = propagate_position(base, pm_ra_cosdec=motion.pm_ra_cosdec, pm_dec=motion.pm_dec,
                                            parallax=motion.parallax, target_epoch=epoch,
                                            radial_velocity=motion.radial_velocity,
@@ -1246,8 +1313,9 @@ _FUNCTIONS_05 = {name: function for function, name in COMMAND_NAMES_05.items()}
 _TIME_JSON_FORMATS = ("isot", "jd", "mjd", "jyear", "byear")
 
 
-def _invalid(message: str) -> CalculatorError:
-    return CalculatorError("CALC_COMMAND_INVALID", message)
+def _invalid(reason: str, message: str, **params: object) -> CalculatorError:
+    """``CALC_COMMAND_INVALID``: ``reason`` è l'identificatore della sotto-voce, ``message`` il motivo in italiano."""
+    return CalculatorError("CALC_COMMAND_INVALID", message, params={"reason": reason, **params})
 
 
 def _number_json(value: object) -> float | None:
@@ -1404,24 +1472,26 @@ class _Reader:
 
     def __init__(self, parameters: Mapping, allowed: tuple[str, ...], what: str, layers: Mapping[str, object]):
         if not isinstance(parameters, Mapping):
-            raise _invalid(f"{what}: i parametri sono un oggetto JSON")
+            raise _invalid("params_not_object", f"{what}: i parametri sono un oggetto JSON", where=what)
         unknown = sorted(set(parameters) - set(allowed))
         if unknown:
-            raise _invalid(f"{what}: parametri non previsti {', '.join(unknown)}")
+            raise _invalid("unknown_params", f"{what}: parametri non previsti {', '.join(unknown)}", where=what,
+                           unknown=list(unknown))
         self.p, self.what, self.layers = parameters, what, layers
 
     def raw(self, name: str):
         return self.p.get(name)
 
-    def _fail(self, name: str, expected: str) -> CalculatorError:
-        return _invalid(f"{self.what}.{name}: serve {expected}, non {self.p.get(name)!r}")
+    def _fail(self, name: str, expected: str, reason: str, **params: object) -> CalculatorError:
+        return _invalid(reason, f"{self.what}.{name}: serve {expected}, non {self.p.get(name)!r}",
+                        where=f"{self.what}.{name}", value=repr(self.p.get(name)), **params)
 
     def number(self, name: str) -> float | None:
         v = self.p.get(name)
         if v is None:
             return None
         if isinstance(v, bool) or not isinstance(v, (int, float)):
-            raise self._fail(name, "un numero")
+            raise self._fail(name, "un numero", "expect_number")
         return float(v)
 
     def integer(self, name: str) -> int | None:
@@ -1429,19 +1499,19 @@ class _Reader:
         if v is None:
             return None
         if isinstance(v, bool) or not isinstance(v, int):
-            raise self._fail(name, "un intero")
+            raise self._fail(name, "un intero", "expect_integer")
         return v
 
     def text(self, name: str) -> str | None:
         v = self.p.get(name)
         if v is not None and not isinstance(v, str):
-            raise self._fail(name, "un testo")
+            raise self._fail(name, "un testo", "expect_text")
         return v
 
     def boolean(self, name: str) -> bool | None:
         v = self.p.get(name)
         if v is not None and not isinstance(v, bool):
-            raise self._fail(name, "true o false")
+            raise self._fail(name, "true o false", "expect_boolean")
         return v
 
     def record(self, name: str, fields: tuple[str, ...]) -> _Reader | None:
@@ -1449,7 +1519,7 @@ class _Reader:
         if v is None:
             return None
         if not isinstance(v, Mapping):
-            raise self._fail(name, "un oggetto JSON (record)")
+            raise self._fail(name, "un oggetto JSON (record)", "expect_record")
         return _Reader(v, fields, f"{self.what}.{name}", self.layers)
 
     def quantity(self, name: str) -> u.Quantity | None:
@@ -1458,13 +1528,13 @@ class _Reader:
             return None
         if not isinstance(v, Mapping) or set(v) != {"value", "unit"} or isinstance(v["value"], bool) \
                 or not isinstance(v["value"], (int, float)) or not isinstance(v["unit"], str):
-            raise self._fail(name, '{"value": numero, "unit": "unità"}')
+            raise self._fail(name, '{"value": numero, "unit": "unità"}', "expect_quantity")
         for fmt in ("fits", "vounit"):
             try:
                 return np.float64(v["value"]) * u.Unit(v["unit"], format=fmt)
             except ValueError:
                 continue
-        raise self._fail(name, "un'unità valida in FITS o VOUnit (D18-2)")
+        raise self._fail(name, "un'unità valida in FITS o VOUnit (D18-2)", "expect_unit")
 
     def time(self, name: str):
         v = self.p.get(name)
@@ -1472,21 +1542,22 @@ class _Reader:
             return v
         if not isinstance(v, Mapping) or set(v) != {"value", "format", "scale"} \
                 or v["format"] not in _TIME_JSON_FORMATS or v["scale"] not in TIME_SCALES:
-            raise self._fail(name, "un tempo del 05 (§3.1): 'J…'/'B…' o {value, format, scale}")
+            raise self._fail(name, "un tempo del 05 (§3.1): 'J…'/'B…' o {value, format, scale}", "expect_time")
         value = v["value"]
         try:
             if v["format"] == "jd" and isinstance(value, list) and len(value) == 2:
                 return Time(float(value[0]), float(value[1]), format="jd", scale=v["scale"])
             return Time(value, format=v["format"], scale=v["scale"])
         except (ValueError, TypeError) as exc:
-            raise self._fail(name, f"un tempo leggibile ({exc})") from exc
+            raise self._fail(name, f"un tempo leggibile ({exc})", "expect_time_unreadable", detail=str(exc)) from exc
 
     def layer(self, name: str):
         v = self.p.get(name)
         if v is None:
             return None
         if not isinstance(v, str) or v not in self.layers:
-            raise _invalid(f"{self.what}.{name}: livello {v!r} non risolto (il 05 passa gli oggetti in layers)")
+            raise _invalid("layer_unresolved", f"{self.what}.{name}: livello {v!r} non risolto (il 05 passa gli oggetti in "
+                           "layers)", where=f"{self.what}.{name}", value=repr(v))
         return self.layers[v]
 
     def sky(self, name: str) -> SkyFrame | None:
@@ -1495,10 +1566,12 @@ class _Reader:
             return None
         lon, lat, frame = r.quantity("lon"), r.quantity("lat"), r.text("frame")
         if lon is None or lat is None or frame is None:
-            raise _invalid(f"{self.what}.{name}: lon, lat e frame obbligatori")
+            raise _invalid("point_fields", f"{self.what}.{name}: lon, lat e frame obbligatori",
+                           where=f"{self.what}.{name}")
         epoch = r.time("epoch")
         if epoch is None and not r.text("epoch_reason"):
-            raise _invalid(f"{self.what}.{name}: epoch null senza epoch_reason (epoca mai assunta, D10-2)")
+            raise _invalid("epoch_reason", f"{self.what}.{name}: epoch null senza epoch_reason (epoca mai assunta, D10-2)",
+                           where=f"{self.what}.{name}")
         try:
             return SkyFrame.from_lonlat(lon, lat, frame, equinox=r.time("equinox"), obstime=r.time("obstime"),
                                         epoch=epoch)
@@ -1508,21 +1581,23 @@ class _Reader:
 
 def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]:
     if not isinstance(command, Mapping) or set(command) - {"name", "version", "parameters", "requested_by"}:
-        raise _invalid("comando del 05: oggetto con name, version e parameters")
+        raise _invalid("command_shape", "comando del 05: oggetto con name, version e parameters")
     name = command.get("name")
     if name not in _FUNCTIONS_05:
-        raise _invalid(f"comando {name!r} non è una calcolatrice ({', '.join(_FUNCTIONS_05)})")
+        raise _invalid("not_calculator", f"comando {name!r} non è una calcolatrice ({', '.join(_FUNCTIONS_05)})",
+                       name=repr(name), allowed=list(_FUNCTIONS_05))
     if command.get("version") != 1:
-        raise _invalid(f"{name}: versione {command.get('version')!r} non supportata (1)")
+        raise _invalid("version", f"{name}: versione {command.get('version')!r} non supportata (1)", name=name,
+                       version=repr(command.get("version")))
     function = _FUNCTIONS_05[name]
     p = command.get("parameters")
     if function == "evaluate_expression":
         r = _Reader(p, ("expression", "max_length", "max_depth", "colon_units", "colon_units_each"), name, layers)
         each = r.raw("colon_units_each")
         if each is not None and (not isinstance(each, list) or not all(isinstance(x, str) for x in each)):
-            raise _invalid(f"{name}.colon_units_each: lista di 'hours'/'degrees'")
+            raise _invalid("colon_units_each", f"{name}.colon_units_each: lista di 'hours'/'degrees'", name=name)
         if each is not None and r.raw("colon_units") is not None:
-            raise _invalid(f"{name}: colon_units oppure colon_units_each, non entrambi")
+            raise _invalid("colon_units_both", f"{name}: colon_units oppure colon_units_each, non entrambi", name=name)
         args = {"expression": r.text("expression"),
                 "max_length": MAX_EXPRESSION_LENGTH if r.raw("max_length") is None else r.integer("max_length"),
                 "max_depth": MAX_NESTING_DEPTH if r.raw("max_depth") is None else r.integer("max_depth"),
@@ -1531,7 +1606,7 @@ def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]
         r = _Reader(p, ("value", "value_text", "from_unit", "to_unit", "equivalency", "reference", "sexagesimal",
                         "scale", "target_scale"), name, layers)
         if (r.raw("value") is None) == (r.raw("value_text") is None):
-            raise _invalid(f"{name}: value oppure value_text (uno solo)")
+            raise _invalid("value_both", f"{name}: value oppure value_text (uno solo)", name=name)
         args = {"value": r.text("value_text") if r.raw("value") is None else r.number("value"),
                 "from_unit": r.text("from_unit"), "to_unit": r.text("to_unit"), "equivalency": r.text("equivalency"),
                 "reference": r.quantity("reference"), "sexagesimal": r.text("sexagesimal"),
@@ -1545,11 +1620,13 @@ def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]
             stretch=d.text("stretch") or "linear", palette=d.text("palette") or "gray")
         if r.raw("image") is not None:
             if (r.raw("position") is None) == (r.raw("position_sky") is None):
-                raise _invalid(f"{name}: con image serve position oppure position_sky (uno solo)")
+                raise _invalid("image_position", f"{name}: con image serve position oppure position_sky (uno solo)",
+                               name=name)
             if r.raw("position") is not None:
                 q = r.record("position", ("x", "y", "convention"))
                 if q.text("convention") != "numpy":
-                    raise _invalid(f"{name}.position: nel comando registrato la convenzione è numpy (DC7)")
+                    raise _invalid("position_convention", f"{name}.position: nel comando registrato la convenzione è numpy "
+                                   "(DC7)", name=name)
                 position = PixelPosition(x=np.float64(q.number("x")), y=np.float64(q.number("y")), convention="numpy")
             else:
                 position = r.sky("position_sky")
@@ -1562,14 +1639,15 @@ def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]
         r = _Reader(p, ("position", "catalog_row", "targets", "epoch", "motion", "offsets", "direction",
                         "to_point"), name, layers)
         if (r.raw("position") is None) == (r.raw("catalog_row") is None):
-            raise _invalid(f"{name}: position oppure catalog_row (uno solo)")
+            raise _invalid("position_both", f"{name}: position oppure catalog_row (uno solo)", name=name)
         if r.raw("position") is not None:
             c = r.record("position", ("lon", "lat", "lon_text", "lat_text", "lon_sexagesimal", "frame", "equinox",
                                       "obstime", "epoch"))
             lon = c.text("lon_text") if c.raw("lon") is None else c.quantity("lon")
             lat = c.text("lat_text") if c.raw("lat") is None else c.quantity("lat")
             if lon is None or lat is None or c.text("frame") is None:
-                raise _invalid(f"{name}.position: lon (o lon_text), lat (o lat_text) e frame obbligatori")
+                raise _invalid("position_fields", f"{name}.position: lon (o lon_text), lat (o lat_text) e frame obbligatori",
+                               name=name)
             position = CoordinateInput(lon=lon, lat=lat, frame=c.text("frame"),
                                        lon_sexagesimal=c.text("lon_sexagesimal"), equinox=c.time("equinox"),
                                        obstime=c.time("obstime"), epoch=c.time("epoch"))
@@ -1582,13 +1660,13 @@ def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]
                                      source_epoch=c.time("source_epoch"))
         targets_json = r.raw("targets")
         if not isinstance(targets_json, list):
-            raise _invalid(f"{name}.targets: lista di record (frame, equinox, obstime)")
+            raise _invalid("targets_list", f"{name}.targets: lista di record (frame, equinox, obstime)", name=name)
         targets = []
         for i, item in enumerate(targets_json):
             t = _Reader(item, ("frame", "equinox", "obstime"), f"{name}.targets[{i}]", layers) \
                 if isinstance(item, Mapping) else None
             if t is None or t.text("frame") is None:
-                raise _invalid(f"{name}.targets[{i}]: record con frame obbligatorio")
+                raise _invalid("target_frame", f"{name}.targets[{i}]: record con frame obbligatorio", name=name, index=i)
             targets.append(CoordinateTarget(frame=t.text("frame"), equinox=t.time("equinox"),
                                             obstime=t.time("obstime")))
         m = r.record("motion", ("pm_ra_cosdec", "pm_dec", "parallax", "radial_velocity", "proper_motion_only"))
@@ -1604,7 +1682,7 @@ def _from_05(command: Mapping, layers: Mapping[str, object]) -> tuple[str, dict]
     else:  # convert_time
         r = _Reader(p, ("time_value", "time_text", "time_format", "scale", "target_scale", "iers_table"), name, layers)
         if (r.raw("time_value") is None) == (r.raw("time_text") is None):
-            raise _invalid(f"{name}: time_value oppure time_text (uno solo)")
+            raise _invalid("time_both", f"{name}: time_value oppure time_text (uno solo)", name=name)
         args = {"time_value": r.text("time_text") if r.raw("time_value") is None else r.number("time_value"),
                 "time_format": r.text("time_format"), "scale": r.text("scale"),
                 "target_scale": r.text("target_scale"), "iers_table": r.text("iers_table") or "bundled"}

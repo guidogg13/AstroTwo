@@ -151,3 +151,10 @@ MODULE_17_SUBVARIANTS = (
     | {("OPERATION_UNSUPPORTED", r) for r in ("shape_kind", "open_path", "text_distance")}
     | {("EPOCH_REQUIRED", r) for r in ("row_epoch", "pm_columns", "row_incomplete", "epoch_invalid")}
 )
+
+#: Sotto-voci di codici condivisi che solo il modulo 18 solleva (provate in ``test_messages_calculators.py``).
+MODULE_18_SUBVARIANTS = (
+    {("NET_TIMEOUT", "iers_no_new"), ("OPERATION_UNSUPPORTED", "histeq"), ("EPOCH_REQUIRED", "propagation_motion")}
+    | {("UNIT_UNKNOWN", r) for r in ("not_text", "unknown", "unknown_similar")}
+    | {("UNIT_INCOMPATIBLE", r) for r in ("reference", "skydist", "types", "types_hint")}
+)

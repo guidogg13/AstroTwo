@@ -521,6 +521,111 @@ VOUnit per le stringhe di unità (D18-2).
 | Indice di colore con `histeq` senza l'immagine intera | rifiuto: l'equalizzazione dipende da tutta l'immagine | `OPERATION_UNSUPPORTED` |
 | Coordinate fuori intervallo, frame sconosciuto, epoca mancante | errore del modulo 10 inoltrato senza modifiche | `COORD_OUT_OF_RANGE`, `FRAME_UNSUPPORTED`, `EPOCH_REQUIRED` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8d) ogni errore del modulo nasce come **codice + `params`**
+(`CalculatorError(code, message, params=..., **details)`; il modulo non ha avvisi con codice): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `message`); il modulo
+**non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1). Il
+parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (eccezione di una libreria,
+risposta del servizio), inserito tale e quale e senza tradurlo. Negli errori di sintassi e di grammatica
+`expression` è l'espressione scritta dall'utente e `position` l'indice del carattere (da 0); nei comandi del `05`
+`where` è il percorso del parametro (`calc.evaluate_expression.value`) e `value` il suo valore in `repr`. I `details`
+di prima (`position`, `length`, `limit`, `depth`, `similar`, `errors`, `physical_types`, `raw`, `blank`, `mjd`)
+restano.
+
+**Errori rilanciati da altri moduli (10, 11, 13, 14, 17).** Gli errori degli altri moduli che il 18 non riscrive
+(`_forwarded`, indice di colore, valore grezzo, aggiornamento IERS) passano con il loro codice, i loro `params` e
+`relayed = True`; il testo del 18 aggiunge il prefisso e resta nel campo `text`.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `CALC_SYNTAX_ERROR` | `empty` | `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `invalid` | `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `power` | `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `colon` | `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `number_format` | `segment` (string), `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `sexagesimal_name` | `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `positional_only` | `function` (string), `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `arity` | `function` (string), `expected` (integer), `count` (integer), `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `arity_min` | `function` (string), `count` (integer), `position` (integer), `expression` (string) |
+| `CALC_SYNTAX_ERROR` | `construct` | `construct` (string), `position` (integer), `expression` (string) |
+| `CALC_UNKNOWN_FUNCTION` | `sexagesimal_prefix` | `position` (integer), `expression` (string) |
+| `CALC_UNKNOWN_FUNCTION` | `name` | `name` (string), `constants` (list), `position` (integer), `expression` (string) |
+| `CALC_UNKNOWN_FUNCTION` | `function` | `name` (string), `position` (integer), `expression` (string) |
+| `CALC_UNKNOWN_FUNCTION` | `construct` | `construct` (string), `position` (integer), `expression` (string) |
+| `CALC_OVERFLOW` | (generale) | `what` (string), `position` (integer) |
+| `CALC_OVERFLOW` | `value` | — |
+| `CALC_DIVISION_BY_ZERO` | (generale) | `what` (string), `position` (integer) |
+| `CALC_DOMAIN_ERROR` | (generale) | `what` (string), `position` (integer) |
+| `CALC_DOMAIN_ERROR` | `not_finite` | `value` (string) |
+| `CALC_DOMAIN_ERROR` | `result_not_finite` | `value` (string), `source` (string), `target` (string), `result` (string) |
+| `CALC_TOO_COMPLEX` | `length` | `length` (integer), `limit` (integer) |
+| `CALC_TOO_COMPLEX` | `depth` | `depth` (integer), `limit` (integer) |
+| `CALC_TOO_COMPLEX` | `parser` | — |
+| `CALC_TOO_COMPLEX` | `chain` | — |
+| `UNIT_SEXAGESIMAL_UNIT_REQUIRED` | `colon_units_value` | `colon_units` (string) |
+| `UNIT_SEXAGESIMAL_UNIT_REQUIRED` | `colon_ambiguous` | `text` (string), `position` (integer) |
+| `UNIT_SEXAGESIMAL_UNIT_REQUIRED` | `colon_units_count` | `colon_units` (string), `count` (integer), `expression` (string) |
+| `UNIT_SEXAGESIMAL_UNIT_REQUIRED` | `angle_text` | `text` (string) |
+| `UNIT_SEXAGESIMAL_UNIT_REQUIRED` | `longitude` | `longitude` (string) |
+| `TIME_SCALE_REQUIRED` | `missing` | `what` (string), `scales` (list) |
+| `TIME_SCALE_REQUIRED` | `unknown` | `what` (string), `scale` (string), `scales` (list) |
+| `TIME_INVALID` | `iso_type` | `value` (string) |
+| `TIME_INVALID` | `iso_invalid` | `value` (string), `detail` (string, esterno) |
+| `TIME_INVALID` | `number` | `value` (string), `format` (string) |
+| `TIME_INVALID` | `format_value` | `value` (string), `format` (string), `detail` (string, esterno) |
+| `TIME_INVALID` | `format` | `format` (string), `formats` (list) |
+| `TIME_INVALID` | `conversion` | `source` (string), `target` (string), `detail` (string, esterno) |
+| `TIME_INVALID` | `to_unit` | `text` (string), `to_unit` (string), `targets` (list) |
+| `IERS_TABLE_MISSING` | (generale) | — |
+| `IERS_TABLE_INVALID` | (generale) | `url` (string), `detail` (string, esterno) |
+| `IERS_RANGE` | `date` | `mjd` (number), `covered` (list) |
+| `IERS_RANGE` | `limit` | `source` (string), `target` (string), `table` (string), `detail` (string, esterno) |
+| `NET_TIMEOUT` | `iers_no_new` | `url` (string) |
+| `UNIT_UNKNOWN` | `not_text` | `what` (string), `value` (string) |
+| `UNIT_UNKNOWN` | `unknown` | `what` (string), `text` (string) |
+| `UNIT_UNKNOWN` | `unknown_similar` | `what` (string), `text` (string), `similar` (list) |
+| `UNIT_EQUIVALENCY_UNKNOWN` | (generale) | `name` (string), `equivalencies` (list) |
+| `UNIT_REFERENCE_REQUIRED` | (generale) | `name` (string), `parameter` (string) |
+| `UNIT_INCOMPATIBLE` | `reference` | `reference` (string), `detail` (string, esterno) |
+| `UNIT_INCOMPATIBLE` | `skydist` | `text` (string), `from_unit` (string) |
+| `UNIT_INCOMPATIBLE` | `types` | `source` (string), `source_type` (string), `target` (string), `target_type` (string) |
+| `UNIT_INCOMPATIBLE` | `types_hint` | come `types`, con il suggerimento delle equivalenze |
+| `UNIT_ZERO_POINT_REQUIRED` | (generale) | `source` (string), `target` (string) |
+| `PIXEL_BLANK` | (generale) | `raw` (number), `blank` (integer) |
+| `PIXEL_BSCALE_ZERO` | (generale) | — |
+| `OPERATION_UNSUPPORTED` | `histeq` | — |
+| `EPOCH_REQUIRED` | `propagation_motion` | — |
+| `CALC_COMMAND_INVALID` | `params_not_object` | `where` (string) |
+| `CALC_COMMAND_INVALID` | `unknown_params` | `where` (string), `unknown` (list) |
+| `CALC_COMMAND_INVALID` | `expect_number` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_integer` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_text` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_boolean` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_record` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_quantity` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_unit` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_time` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `expect_time_unreadable` | `where` (string), `value` (string), `detail` (string, esterno) |
+| `CALC_COMMAND_INVALID` | `layer_unresolved` | `where` (string), `value` (string) |
+| `CALC_COMMAND_INVALID` | `point_fields` | `where` (string) |
+| `CALC_COMMAND_INVALID` | `epoch_reason` | `where` (string) |
+| `CALC_COMMAND_INVALID` | `command_shape` | — |
+| `CALC_COMMAND_INVALID` | `not_calculator` | `name` (string), `allowed` (list) |
+| `CALC_COMMAND_INVALID` | `version` | `name` (string), `version` (string) |
+| `CALC_COMMAND_INVALID` | `colon_units_each` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `colon_units_both` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `value_both` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `image_position` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `position_convention` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `position_both` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `position_fields` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `targets_list` | `name` (string) |
+| `CALC_COMMAND_INVALID` | `target_frame` | `name` (string), `index` (integer) |
+| `CALC_COMMAND_INVALID` | `time_both` | `name` (string) |
+
 ## 11. Esposizione all'IA
 
 Le calcolatrici sono lo strumento con cui l'IA ottiene numeri invece di
@@ -633,3 +738,4 @@ elementare.
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): formato dei comandi = quello di `05-comandi-sessione.md` (prima "del 24"); `run_command` diventa un adattatore del formato del `05` e accetta ancora `CalculatorCommand`; nessuna dipendenza circolare (§3, §5, §7, §12 T18). Codice da scrivere dopo l'approvazione del `05`. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | Adattatore `run_command` del formato del 05 **fermo** sulla decisione aperta D05-4 (forma JSON dei valori e parametri strutturati non definiti nel 05); nessun codice cambiato. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (autorizzazione esplicita a modificare il file approvato): §3 P1 scelta 1 con l'elenco dei parametri dei cinque `calc.*` nel formato del `05` (tipo `record` per `DisplaySettings`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, offset, direzione, riga di catalogo; `layer_ref` risolti dal `05`), `command_05` e `run_command(command, layers)`; nuovo `CALC_COMMAND_INVALID` (§10). Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

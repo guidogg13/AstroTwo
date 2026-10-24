@@ -33,6 +33,7 @@ CONVERTED = {
     "core/planetary_data.py": "PlanetaryDataError",
     "core/crossmatch.py": "CrossmatchError",
     "core/measures.py": "MeasuresError",
+    "core/calculators.py": "CalculatorError",
     "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
 }
 
@@ -48,6 +49,8 @@ HELPERS = {
     },
     "core/planetary_data.py": {"_pds_unreadable": ("PDS_UNREADABLE", 1), "_cause": ("BODY_CAUSE", 0),
                                "result": ("BODY_CAUSE", 1), "_download_item": ("PDS_DOWNLOAD", 0)},
+    "core/calculators.py": {"_syntax": ("CALC_SYNTAX_ERROR", 0), "_invalid": ("CALC_COMMAND_INVALID", 0),
+                            "_fail": ("CALC_COMMAND_INVALID", 2), "unknown": ("CALC_UNKNOWN_FUNCTION", 0)},
     "core/moc.py": {"_unreadable": ("MOC_UNREADABLE", 1), "_invalid_map": ("PROBABILITY_MAP_INVALID", 1)},
 }
 
