@@ -132,3 +132,12 @@ MODULE_19_SUBVARIANTS = (
        ("BODY_NORMALIZED", "pds_target"), ("BODY_NORMALIZED", "epntap_target")}
     | {("COORD_OUT_OF_RANGE", r) for r in ("planetary_not_finite", "planetary_latitude", "planetary_longitude")}
 )
+
+#: Sotto-voci di codici condivisi che solo il modulo 15 solleva o restituisce (provate in ``test_messages_crossmatch.py``).
+MODULE_15_SUBVARIANTS = (
+    {("TABLE_TOO_LARGE", "crossmatch_table"), ("TABLE_TOO_LARGE", "joined"), ("BODY_UNKNOWN", "crossmatch_table"),
+     ("BODY_MISMATCH", "tables"), ("BODY_FORCED", "tables"), ("NO_COORD_COLUMNS", "crossmatch_no_positions"),
+     ("NO_COORD_COLUMNS", "crossmatch_no_angular_unit"), ("NO_COORD_COLUMNS", "joined"),
+     ("FRAME_UNKNOWN", "crossmatch_columns"), ("SERVICE_ERROR", "echo_mismatch")}
+    | {("MAX_SEP_INVALID", r) for r in ("required", "not_angle", "range_local", "range_cds")}
+)

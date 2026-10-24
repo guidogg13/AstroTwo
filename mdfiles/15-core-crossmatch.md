@@ -296,6 +296,69 @@ Codice in `src/astrotwo/core/crossmatch.py`.
 | Servizio CDS: `max_sep` oltre 180″ | rifiuto prima della richiesta | `MAX_SEP_INVALID` |
 | Servizio CDS che risponde con un errore | messaggio del servizio riportato | `SERVICE_ERROR` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8d) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`CrossmatchError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la
+coppia (codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `text`/`message`); il
+modulo **non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1).
+Il parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (nomi di colonne e UCD
+letti da una tabella, servizio), inserito tale e quale e senza tradurlo. I `details` di prima (`rows`, `max_rows`,
+`row`) restano. `criterion` negli avvisi `NO_MATCH` è il testo del criterio del report (`MatchReport.criterion`),
+inserito così com'è.
+
+**Errori rilanciati da un altro modulo (10, 14).** L'errore del 10 nella conversione delle posizioni e l'errore del 14
+nella chiamata al servizio CDS XMatch passano con il loro codice, i loro `params` e `relayed = True` (il testo del 15
+aggiunge il prefisso e resta nel campo `text`). Gli **avvisi dei moduli sotto** (`answer.warnings` del 14) passano
+**tali e quali**, con il loro `params`.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `TABLE_TOO_LARGE` | `crossmatch_table` | `which` (string), `rows` (integer), `max_rows` (integer) |
+| `TABLE_TOO_LARGE` | `joined` | `rows` (integer), `max_rows` (integer) |
+| `BODY_UNKNOWN` | `crossmatch_table` | `which` (string), `origin` (string) |
+| `BODY_MISMATCH` | `tables` | `body_a` (string), `body_b` (string) |
+| `MAX_SEP_INVALID` | `required` | — |
+| `MAX_SEP_INVALID` | `not_angle` | `max_sep` (string) |
+| `MAX_SEP_INVALID` | `range_local` | `max_sep` (quantity), `limit` (quantity) |
+| `MAX_SEP_INVALID` | `range_cds` | `max_sep` (quantity), `limit` (quantity) |
+| `NO_COORD_COLUMNS` | `crossmatch_no_positions` | `which` (string), `origin` (string) |
+| `NO_COORD_COLUMNS` | `crossmatch_no_angular_unit` | `which` (string), `lon` (string, esterno), `lat` (string, esterno) |
+| `NO_COORD_COLUMNS` | `joined` (avviso) | — |
+| `FRAME_UNKNOWN` | `crossmatch_columns` | `which` (string), `lon` (string, esterno), `lat` (string, esterno) |
+| `KEY_COLUMN_INVALID` | (generale) | — |
+| `KEY_COLUMN_INVALID` | `missing_columns` | `which` (string), `missing` (list, esterno) |
+| `KEY_COLUMN_INVALID` | `name_repeated` | `name` (string, esterno) |
+| `KEY_COLUMN_INVALID` | `key_missing` | `which` (string), `key` (string, esterno) |
+| `KEY_COLUMN_INVALID` | `key_types` | `key_a` (string, esterno), `dtype_a` (string), `key_b` (string, esterno), `dtype_b` (string) |
+| `ERROR_ELLIPSE_INVALID` | (generale) | — |
+| `ERROR_ELLIPSE_INVALID` | `threshold_unit` | `threshold` (string) |
+| `ERROR_ELLIPSE_INVALID` | `threshold_required` | — |
+| `ERROR_ELLIPSE_INVALID` | `threshold_value` | `threshold` (string) |
+| `ERROR_ELLIPSE_INVALID` | `axes` | `axes` (string) |
+| `ERROR_ELLIPSE_INVALID` | `three_columns` | `which` (string) |
+| `ERROR_ELLIPSE_INVALID` | `column_missing` | `which` (string), `column` (string, esterno) |
+| `ERROR_ELLIPSE_INVALID` | `column_unit` | `which` (string), `column` (string, esterno) |
+| `ERROR_ELLIPSE_INVALID` | `axes_not_positive` | `which` (string), `row` (integer), `major` (string, esterno), `minor` (string, esterno) |
+| `ERROR_ELLIPSE_INVALID` | `minor_larger` | `which` (string), `row` (integer), `major` (string, esterno), `minor` (string, esterno) |
+| `ERROR_ELLIPSE_INVALID` | `singular` (avviso) | `count` (integer) |
+| `SERVICE_ERROR` | `echo_mismatch` | `url` (string), `row` (integer), `index` (integer) |
+| `BODY_NOT_CHECKED` (avviso) | (generale) | `tables` (list) |
+| `BODY_FORCED` (avviso) | `tables` | `body_a` (string), `body_b` (string) |
+| `EPOCH_DIFFERS` (avviso) | (generale) | `epoch_a` (string), `epoch_b` (string) |
+| `COORD_MISSING` (avviso) | (generale) | `excluded_a` (integer), `excluded_b` (integer) |
+| `NO_MATCH` (avviso) | (generale) | `criterion` (string) |
+| `BEST_TIE` (avviso) | (generale) | `count` (integer) |
+| `B_REUSED` (avviso) | (generale) | `count` (integer) |
+| `COLUMNS_RENAMED` (avviso) | (generale) | `renames` (list, esterno) |
+| `UCD_CONFLICT` (avviso) | (generale) | `ucd` (string, esterno), `table` (string) |
+| `MAIN_UCD_REMOVED` (avviso) | (generale) | `columns` (list, esterno) |
+| `KEY_MISSING` (avviso) | (generale) | `missing_a` (integer), `missing_b` (integer) |
+| `KEY_REPEATED` (avviso) | (generale) | `count` (integer) |
+| `NO_REQUEST` (avviso) | (generale) | — |
+
 ## 11. Esposizione all'IA
 
 - **`crossmatch`** — input: due tabelle (o i loro riferimenti in memoria),
@@ -416,3 +479,4 @@ coppie né le separazioni.
 | 2026-10-11 | Claude Code | **P4 scritta** (`crossmatch_ellipses`; test T11, T12, T20): verificato con astropy 8.0.1 che `spherical_offsets_to` dà le componenti verso est e verso nord (angolo di posizione 0° = nord, 90° = est); soglia e `axes` obbligatori (`ERROR_ELLIPSE_INVALID`), raggio rigoroso dei candidati, coppie con covarianza singolare escluse con avviso, distanza nella colonna `mahalanobis` e separazione in `sep`; report con formula, piano tangente in A e frazione 2D 1 − exp(−k²/2) calcolata per la soglia data; valori d'ellisse mancanti esclusi e contati. Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **P5 scritta — modulo 15 completo tranne i pezzi fermi D15-8 e D15-9** (`crossmatch_cds`, rete con `cds_xmatch` del 14; test T21 con un XMatch simulato e T4 di rete, locale contro CDS entro 1 mas in `all`, `best`, `none`): verifiche dei limiti (100 MB, 180″), controllo dell'eco di RA e Dec per ogni indice, `none` da `all`. Nuova decisione aperta **D15-9** (`best` con il servizio, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D15-8 e D15-9 decise e applicate** (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): nella correlazione per campo il corpo si controlla solo se entrambe le tabelle ne hanno uno (avviso `BODY_NOT_CHECKED`); con il servizio CDS sempre `selection=all`, `best` in locale con la nostra regola dei pari merito. T10 e T21 estesi. Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

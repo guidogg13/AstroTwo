@@ -64,7 +64,7 @@ from tests.core.test_vo_protocols import (  # noqa: F401  (fixture e servizi sim
     votable_route,
     votable_text,
 )
-from tests.message_helpers import MODULE_19_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
+from tests.message_helpers import MODULE_15_SUBVARIANTS, MODULE_19_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
 
 #: Codici che solo il modulo 14 solleva o restituisce (le sotto-voci aggiunte a voci condivise sono in ``SHARED``).
 OWN_CODES = (
@@ -369,7 +369,7 @@ def test_every_code_and_reason_of_the_module_is_provoked():
     """Tutte le coppie (codice, ragione) del modulo (14 §10) sono state provocate dai due test precedenti."""
     if not SEEN.pairs:
         pytest.skip("si esegue dopo i due test che provocano i messaggi")
-    missing = required_combinations() - SEEN.pairs - MODULE_19_SUBVARIANTS
+    missing = required_combinations() - SEEN.pairs - MODULE_15_SUBVARIANTS - MODULE_19_SUBVARIANTS
     assert not missing, f"coppie (codice, ragione) non provocate: {sorted(missing, key=str)}"
 
 

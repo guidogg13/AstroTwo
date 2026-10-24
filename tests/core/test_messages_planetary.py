@@ -39,7 +39,7 @@ from tests.core.test_planetary_data import (  # noqa: F401  (costruttori di dati
     pds4_product,
     planetary_on,
 )
-from tests.message_helpers import MODULE_14_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
+from tests.message_helpers import MODULE_14_SUBVARIANTS, MODULE_15_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
 
 #: Codici che solo il modulo 19 solleva o restituisce (sotto-voci di voci condivise in ``SHARED``).
 OWN_CODES = (
@@ -205,7 +205,7 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(tmp_path, ser
     finally:
         pd.set_planetary_data_enabled(False)
 
-    missing = required_combinations() - seen.pairs - MODULE_14_SUBVARIANTS
+    missing = required_combinations() - seen.pairs - MODULE_14_SUBVARIANTS - MODULE_15_SUBVARIANTS
     assert not missing, f"errori e avvisi del 19 mai provocati nel test: {sorted(missing, key=str)}"
 
 

@@ -61,6 +61,7 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.core.vo_protocols", "VoProtocolsError"),
     ("astrotwo.core.moc", "MocError"),
     ("astrotwo.core.planetary_data", "PlanetaryDataError"),
+    ("astrotwo.core.crossmatch", "CrossmatchError"),
 )
 
 

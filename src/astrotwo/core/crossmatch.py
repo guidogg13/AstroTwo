@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -28,7 +29,7 @@ from astropy.table import Table, join
 
 from astrotwo.core.catalogs import CatalogTable, PositionColumns
 from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts
-from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
+from astrotwo.core.coordinates_wcs import CoordinatesWcsError, ModuleWarning, SkyFrame
 
 __all__ = [
     "CROSSMATCH_MODES",
@@ -50,13 +51,25 @@ _LOCAL_METHOD = f"locale: astropy.coordinates.search_around_sky (astropy {astrop
 
 
 class CrossmatchError(Exception):
-    """Errore del modulo 15 con identificatore della specifica (§10)."""
+    """Errore del modulo 15 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore di un
+    modulo sotto (10, 14) rilanciato con il suo codice, il suo testo e i suoi ``params``."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 relayed: bool = False, **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _relay(exc, text: str) -> CrossmatchError:
+    """Errore di un modulo sotto rilanciato: codice e ``params`` restano suoi, il testo del 15 ha il prefisso."""
+    return CrossmatchError(exc.code, text, params=getattr(exc, "params", None), relayed=True,
+                           **getattr(exc, "details", {}))
 
 
 def _iso(moment: datetime) -> str:
@@ -125,7 +138,7 @@ class CrossMatchResult:
     pairs: Table
     unmatched: np.ndarray | None
     report: MatchReport
-    warnings: tuple[tuple[str, str], ...]
+    warnings: tuple[ModuleWarning, ...]
     table_a: CatalogTable
     table_b: CatalogTable
     params: dict
@@ -160,35 +173,46 @@ def _check_table(table, which: str) -> CatalogTable:
     if table.rows > table.limits.max_rows:
         raise CrossmatchError("TABLE_TOO_LARGE", f"tabella {which}: {table.rows} righe, oltre il tetto di "
                               f"{table.limits.max_rows} (D15-3): usare il servizio CDS o l'elaborazione a blocchi",
-                              rows=table.rows, max_rows=table.limits.max_rows)
+                              rows=table.rows, max_rows=table.limits.max_rows,
+                              params={"reason": "crossmatch_table", "which": which, "rows": table.rows,
+                                      "max_rows": table.limits.max_rows})
     return table
 
 
 def _check_bodies(a: CatalogTable, b: CatalogTable, force_body: bool,
-                  unknown_allowed: bool = False) -> list[tuple[str, str]]:
+                  unknown_allowed: bool = False) -> list[ModuleWarning]:
     if unknown_allowed and (a.body is None or b.body is None):  # D15-8: join senza posizioni
         unknown = " e ".join(w for w, t in (("A", a), ("B", b)) if t.body is None)
-        return [("BODY_NOT_CHECKED", f"corpo non ricavabile per la tabella {unknown}: nella correlazione per campo "
-                 "il corpo si controlla solo se entrambe le tabelle ne hanno uno (D15-8)")]
+        return [ModuleWarning("BODY_NOT_CHECKED", f"corpo non ricavabile per la tabella {unknown}: nella "
+                              "correlazione per campo il corpo si controlla solo se entrambe le tabelle ne hanno uno "
+                              "(D15-8)", {"tables": [w for w, t in (("A", a), ("B", b)) if t.body is None]})]
     for which, t in (("A", a), ("B", b)):
         if t.body is None:
-            raise CrossmatchError("BODY_UNKNOWN", f"tabella {which} ({t.origin}): corpo non ricavabile, nessun incrocio")
+            raise CrossmatchError("BODY_UNKNOWN", f"tabella {which} ({t.origin}): corpo non ricavabile, nessun incrocio",
+                                  params={"reason": "crossmatch_table", "which": which, "origin": t.origin})
     if a.body != b.body:
         if not force_body:
             raise CrossmatchError("BODY_MISMATCH", f"corpi diversi: A {a.body!r}, B {b.body!r}; forzabile solo con "
-                                  "force_body=True (citato nel report)")
-        return [("BODY_FORCED", f"incrocio tra corpi diversi forzato: A {a.body!r}, B {b.body!r}")]
+                                  "force_body=True (citato nel report)",
+                                  params={"reason": "tables", "body_a": str(a.body), "body_b": str(b.body)})
+        return [ModuleWarning("BODY_FORCED", f"incrocio tra corpi diversi forzato: A {a.body!r}, B {b.body!r}",
+                              {"reason": "tables", "body_a": str(a.body), "body_b": str(b.body)})]
     return []
 
 
 def _check_max_sep(max_sep, limit=180 * u.deg, what: str = "in locale") -> u.Quantity:
     if max_sep is None:
-        raise CrossmatchError("MAX_SEP_INVALID", "max_sep obbligatorio, senza default (angolo con unità)")
+        raise CrossmatchError("MAX_SEP_INVALID", "max_sep obbligatorio, senza default (angolo con unità)",
+                              params={"reason": "required"})
     if not isinstance(max_sep, u.Quantity) or not max_sep.unit.is_equivalent(u.deg) or not max_sep.isscalar:
-        raise CrossmatchError("MAX_SEP_INVALID", f"max_sep {max_sep!r}: serve un solo angolo con unità")
+        raise CrossmatchError("MAX_SEP_INVALID", f"max_sep {max_sep!r}: serve un solo angolo con unità",
+                              params={"reason": "not_angle", "max_sep": repr(max_sep)})
     value = max_sep.to(u.deg)
     if not (np.isfinite(value.value) and value.value > 0 and value <= limit):
-        raise CrossmatchError("MAX_SEP_INVALID", f"max_sep {max_sep}: ammesso in (0, {limit}] {what}")
+        raise CrossmatchError("MAX_SEP_INVALID", f"max_sep {max_sep}: ammesso in (0, {limit}] {what}",
+                              params={"reason": "range_local" if what == "in locale" else "range_cds",
+                                      "max_sep": {"value": float(max_sep.value), "unit": str(max_sep.unit)},
+                                      "limit": {"value": float(limit.value), "unit": str(limit.unit)}})
     return max_sep
 
 
@@ -204,14 +228,18 @@ def _coordinates(table: CatalogTable, which: str, frame: str):
     pos = table.positions
     if pos is None:
         raise CrossmatchError("NO_COORD_COLUMNS", f"tabella {which} ({table.origin}): nessuna colonna di posizione "
-                              "da UCD o confermata (modulo 13)")
+                              "da UCD o confermata (modulo 13)",
+                              params={"reason": "crossmatch_no_positions", "which": which, "origin": table.origin})
     if pos.frame is None:
         raise CrossmatchError("FRAME_UNKNOWN", f"tabella {which}: colonne {pos.lon}/{pos.lat} senza sistema "
-                              "dichiarato; confermarlo con confirm_position_columns (modulo 13)")
+                              "dichiarato; confermarlo con confirm_position_columns (modulo 13)",
+                              params={"reason": "crossmatch_columns", "which": which, "lon": pos.lon, "lat": pos.lat})
     data = table.table
     lon, lat = data[pos.lon], data[pos.lat]
     if lon.unit is None or lat.unit is None or not (lon.unit.is_equivalent(u.deg) and lat.unit.is_equivalent(u.deg)):
-        raise CrossmatchError("NO_COORD_COLUMNS", f"tabella {which}: colonne {pos.lon}/{pos.lat} senza unità angolare")
+        raise CrossmatchError("NO_COORD_COLUMNS", f"tabella {which}: colonne {pos.lon}/{pos.lat} senza unità angolare",
+                              params={"reason": "crossmatch_no_angular_unit", "which": which, "lon": pos.lon,
+                                      "lat": pos.lat})
     lon_v = np.ma.filled(np.ma.asarray(lon, dtype=float), np.nan)
     lat_v = np.ma.filled(np.ma.asarray(lat, dtype=float), np.nan)
     valid = np.isfinite(lon_v) & np.isfinite(lat_v)
@@ -224,19 +252,21 @@ def _coordinates(table: CatalogTable, which: str, frame: str):
         if coords.frame_name != frame:
             coords = coords.to(frame)
     except CoordinatesWcsError as exc:
-        raise CrossmatchError(exc.code, f"tabella {which}: {exc.message}") from exc
+        raise _relay(exc, f"tabella {which}: {exc.message}") from exc
     return index, coords, int(np.count_nonzero(~valid))
 
 
-def _common_notes(a: CatalogTable, b: CatalogTable, excluded: tuple[int, int]) -> list[tuple[str, str]]:
+def _common_notes(a: CatalogTable, b: CatalogTable, excluded: tuple[int, int]) -> list[ModuleWarning]:
     notes = []
     ea = a.positions.epoch if a.positions else None
     eb = b.positions.epoch if b.positions else None
     if ea and eb and ea != eb:
-        notes.append(("EPOCH_DIFFERS", f"epoche delle posizioni diverse: A {ea}, B {eb}; nessuna propagazione "
-                      "automatica (usare propagate del modulo 13)"))
+        notes.append(ModuleWarning("EPOCH_DIFFERS", f"epoche delle posizioni diverse: A {ea}, B {eb}; nessuna "
+                                   "propagazione automatica (usare propagate del modulo 13)",
+                                   {"epoch_a": str(ea), "epoch_b": str(eb)}))
     if any(excluded):
-        notes.append(("COORD_MISSING", f"righe con valori mancanti escluse: A {excluded[0]}, B {excluded[1]}"))
+        notes.append(ModuleWarning("COORD_MISSING", f"righe con valori mancanti escluse: A {excluded[0]}, "
+                                   f"B {excluded[1]}", {"excluded_a": excluded[0], "excluded_b": excluded[1]}))
     return notes
 
 
@@ -267,13 +297,14 @@ def _result(ia, ib, columns: dict, unmatched, report: MatchReport, notes, a, b, 
     notes = list(notes)
     count = len(pairs) if report.mode != "none" else len(unmatched)
     if report.mode != "none" and count == 0:
-        notes.append(("NO_MATCH", f"nessuna coppia entro il criterio ({report.criterion})"))
+        notes.append(ModuleWarning("NO_MATCH", f"nessuna coppia entro il criterio ({report.criterion})",
+                                   {"criterion": report.criterion}))
     if report.best_ties:
-        notes.append(("BEST_TIE", f"{report.best_ties} righe di A con più righe di B alla stessa distanza: scelto "
-                      "l'indice più basso in B"))
+        notes.append(ModuleWarning("BEST_TIE", f"{report.best_ties} righe di A con più righe di B alla stessa "
+                                   "distanza: scelto l'indice più basso in B", {"count": int(report.best_ties)}))
     if report.b_reused:
-        notes.append(("B_REUSED", f"{report.b_reused} righe di B scelte come migliori da più righe di A "
-                      "(incrocio non simmetrico)"))
+        notes.append(ModuleWarning("B_REUSED", f"{report.b_reused} righe di B scelte come migliori da più righe di A "
+                                   "(incrocio non simmetrico)", {"count": int(report.b_reused)}))
     return CrossMatchResult(pairs=pairs, unmatched=unmatched, report=report, warnings=tuple(notes), table_a=a,
                             table_b=b, params=params)
 
@@ -321,7 +352,8 @@ def _kept(table: CatalogTable, chosen, which: str) -> list[str]:
         return list(table.colnames)
     missing = [c for c in chosen if c not in table.colnames]
     if missing:
-        raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonne inesistenti {missing}")
+        raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonne inesistenti {missing}",
+                              params={"reason": "missing_columns", "which": which, "missing": list(missing)})
     return list(chosen)
 
 
@@ -341,7 +373,8 @@ def _joined(result: CrossMatchResult, keep_columns, prefixes, suffixes, main: st
         rows_b = np.asarray(result.pairs["idx_b"], dtype=np.int64)
     if len(rows_a) > a.limits.max_rows:
         raise CrossmatchError("TABLE_TOO_LARGE", f"tabella unita di {len(rows_a)} righe, oltre il tetto di "
-                              f"{a.limits.max_rows}")
+                              f"{a.limits.max_rows}",
+                              params={"reason": "joined", "rows": int(len(rows_a)), "max_rows": a.limits.max_rows})
     extras = [f"xmatch_{n}" for n in _EXTRA_COLUMNS if n in result.pairs.colnames and not none_mode]
     conflicts = (set(keep_a) & set(keep_b)) | ((set(keep_a) | set(keep_b)) & set(extras))
     renames: list[tuple[str, str]] = []
@@ -359,15 +392,17 @@ def _joined(result: CrossMatchResult, keep_columns, prefixes, suffixes, main: st
         for col in keep:
             new = name_for(col, k)
             if new in out.colnames or new in extras:
-                raise CrossmatchError("KEY_COLUMN_INVALID", f"nome {new!r} ripetuto anche dopo prefissi e suffissi")
+                raise CrossmatchError("KEY_COLUMN_INVALID", f"nome {new!r} ripetuto anche dopo prefissi e suffissi",
+                                      params={"reason": "name_repeated", "name": new})
             out[new] = table.table[col][rows]
             out[new].meta = dict(table.table[col].meta)  # copia: la tabella d'ingresso non cambia mai
             sources.append((k, col, new))
     for name in extras:
         out[name] = result.pairs[name.removeprefix("xmatch_")]
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     if renames:
-        notes.append(("COLUMNS_RENAMED", "rinomine: " + ", ".join(f"{old} → {new}" for old, new in renames)))
+        notes.append(ModuleWarning("COLUMNS_RENAMED", "rinomine: " + ", ".join(f"{old} → {new}" for old, new in renames),
+                                   {"renames": [f"{old} → {new}" for old, new in renames]}))
     # Conflitti di UCD principali: prevale la tabella principale; l'altra perde meta.main.
     main_k = 0 if main == "a" else 1
     main_ucds = {tuple(_ucd_words((a, b)[main_k].table[col].meta.get("ucd")))
@@ -377,13 +412,15 @@ def _joined(result: CrossMatchResult, keep_columns, prefixes, suffixes, main: st
         words = _ucd_words(out[new].meta.get("ucd"))
         if k != main_k and "meta.main" in words:
             if tuple(words) in main_ucds:
-                notes.append(("UCD_CONFLICT", f"UCD principale {out[new].meta['ucd']!r} in entrambe le tabelle: "
-                              f"prevale la tabella {'AB'[main_k]}"))
+                notes.append(ModuleWarning("UCD_CONFLICT", f"UCD principale {out[new].meta['ucd']!r} in entrambe le "
+                                           f"tabelle: prevale la tabella {'AB'[main_k]}",
+                                           {"ucd": str(out[new].meta["ucd"]), "table": "AB"[main_k]}))
             out[new].meta["ucd"] = ";".join(w for w in str(out[new].meta["ucd"]).split(";")
                                             if w.strip().lower() != "meta.main")
             stripped.append(new)
     if stripped:
-        notes.append(("MAIN_UCD_REMOVED", f"meta.main tolto dall'UCD delle colonne {stripped} (tabella non principale)"))
+        notes.append(ModuleWarning("MAIN_UCD_REMOVED", f"meta.main tolto dall'UCD delle colonne {stripped} "
+                                   "(tabella non principale)", {"columns": list(stripped)}))
     owner = (a, b)[main_k]
     positions = None
     pos = owner.positions
@@ -392,7 +429,8 @@ def _joined(result: CrossMatchResult, keep_columns, prefixes, suffixes, main: st
         if pos.lon in names and pos.lat in names:
             positions = dataclasses.replace(pos, lon=names[pos.lon], lat=names[pos.lat])
     if positions is None:
-        notes.append(("NO_COORD_COLUMNS", "la tabella unita non ha le colonne di posizione della tabella principale"))
+        notes.append(ModuleWarning("NO_COORD_COLUMNS", "la tabella unita non ha le colonne di posizione della "
+                                   "tabella principale", {"reason": "joined"}))
     report = result.report
     history = (f"incrocio {report.mode} di {a.origin} (A) e {b.origin} (B): {report.criterion}; {report.method}",)
     history += tuple(f"rinomina {old} → {new}" for old, new in renames)
@@ -491,12 +529,15 @@ def crossmatch_by_field(table_a: CatalogTable, table_b: CatalogTable, key_a: str
     notes = _check_bodies(a, b, force_body, unknown_allowed=True)
     for which, t, key in (("A", a, key_a), ("B", b, key_b)):
         if key not in t.colnames:
-            raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonna chiave {key!r} inesistente")
+            raise CrossmatchError("KEY_COLUMN_INVALID", f"tabella {which}: colonna chiave {key!r} inesistente",
+                                  params={"reason": "key_missing", "which": which, "key": str(key)})
     kind_a, kind_b = _key_kind(a.table[key_a]), _key_kind(b.table[key_b])
     if kind_a is None or kind_a != kind_b:
         raise CrossmatchError("KEY_COLUMN_INVALID", f"chiavi di tipo incompatibile: A {key_a!r} "
                               f"({a.table[key_a].dtype}), B {key_b!r} ({b.table[key_b].dtype}); ammessi numeri con "
-                              "numeri, testo con testo, booleani con booleani")
+                              "numeri, testo con testo, booleani con booleani",
+                              params={"reason": "key_types", "key_a": str(key_a), "dtype_a": str(a.table[key_a].dtype),
+                                      "key_b": str(key_b), "dtype_b": str(b.table[key_b].dtype)})
     values_a, valid_a = _key_values(a.table[key_a], kind_a)
     values_b, valid_b = _key_values(b.table[key_b], kind_b)
     if kind_a == "number" and (values_a.dtype.kind == "f" or values_b.dtype.kind == "f"):
@@ -513,12 +554,14 @@ def crossmatch_by_field(table_a: CatalogTable, table_b: CatalogTable, key_a: str
         keys = np.zeros(0, dtype=object)
     missing = (int(np.count_nonzero(~valid_a)), int(np.count_nonzero(~valid_b)))
     if any(missing):
-        notes.append(("KEY_MISSING", f"chiavi mancanti (mai coincidenti): A {missing[0]}, B {missing[1]}"))
+        notes.append(ModuleWarning("KEY_MISSING", f"chiavi mancanti (mai coincidenti): A {missing[0]}, B "
+                                   f"{missing[1]}", {"missing_a": missing[0], "missing_b": missing[1]}))
     _, inverse, counts = np.unique(keys.astype(str), return_inverse=True, return_counts=True) if len(keys) \
         else (None, np.zeros(0, dtype=int), np.zeros(0, dtype=int))
     repeated = int(np.count_nonzero(counts[inverse] > 1)) if len(keys) else 0
     if repeated:
-        notes.append(("KEY_REPEATED", f"{repeated} coppie da chiavi ripetute (tutte le combinazioni)"))
+        notes.append(ModuleWarning("KEY_REPEATED", f"{repeated} coppie da chiavi ripetute (tutte le combinazioni)",
+                                   {"count": repeated}))
     unmatched = np.setdiff1d(np.flatnonzero(valid_a), ia) if mode == "none" else None
     if mode == "none":
         ia, ib = ia[:0], ib[:0]
@@ -545,13 +588,15 @@ _AXES = {"semi": "semiassi a 1σ", "full": "assi interi (2 × semiasse a 1σ)"}
 def _check_threshold(threshold) -> float:
     if isinstance(threshold, u.Quantity):
         if threshold.unit != u.dimensionless_unscaled:
-            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"threshold {threshold!r}: è in sigma, senza unità")
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"threshold {threshold!r}: è in sigma, senza unità",
+                                  params={"reason": "threshold_unit", "threshold": repr(threshold)})
         threshold = threshold.value
     if threshold is None or isinstance(threshold, bool) or not isinstance(threshold, (int, float, np.floating)):
         raise CrossmatchError("ERROR_ELLIPSE_INVALID", "threshold obbligatoria, senza default (D15-6): numero di "
-                              "sigma > 0")
+                              "sigma > 0", params={"reason": "threshold_required"})
     if not (math.isfinite(float(threshold)) and float(threshold) > 0):
-        raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"threshold {threshold!r}: serve un numero di sigma > 0")
+        raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"threshold {threshold!r}: serve un numero di sigma > 0",
+                              params={"reason": "threshold_value", "threshold": repr(threshold)})
     return float(threshold)
 
 
@@ -559,27 +604,33 @@ def _ellipse(table: CatalogTable, columns, which: str, rows: np.ndarray, axes: s
     """(semiasse maggiore, minore in arcsec, angolo in radianti, righe valide) per le righe ``rows``."""
     if not isinstance(columns, (tuple, list)) or len(columns) != 3:
         raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: servono 3 colonne (asse maggiore, asse "
-                              "minore, orientamento)")
+                              "minore, orientamento)", params={"reason": "three_columns", "which": which})
     out, valid = [], np.ones(len(rows), dtype=bool)
     for name in columns:
         if name not in table.colnames:
-            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: colonna {name!r} inesistente")
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: colonna {name!r} inesistente",
+                                  params={"reason": "column_missing", "which": which, "column": str(name)})
         col = table.table[name]
         if col.unit is None or not col.unit.is_equivalent(u.deg):
-            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: colonna {name!r} senza unità angolare")
+            raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}: colonna {name!r} senza unità angolare",
+                                  params={"reason": "column_unit", "which": which, "column": str(name)})
         values = np.ma.filled(np.ma.asarray(col, dtype=float), np.nan)[rows]
         valid &= np.isfinite(values)
         out.append((values * col.unit).to_value(u.arcsec if len(out) < 2 else u.rad))
     major, minor, angle = out
     for k in np.flatnonzero(valid):
-        problem = None
+        problem = reason = None
         if major[k] <= 0 or minor[k] <= 0:
+            reason = "axes_not_positive"
             problem = "assi negativi o nulli"
         elif minor[k] > major[k]:
+            reason = "minor_larger"
             problem = "asse minore maggiore dell'asse maggiore"
         if problem:
             raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"tabella {which}, riga {int(rows[k])}, colonne "
-                                  f"{columns[0]}/{columns[1]}: {problem}", row=int(rows[k]))
+                                  f"{columns[0]}/{columns[1]}: {problem}", row=int(rows[k]),
+                                  params={"reason": reason, "which": which, "row": int(rows[k]),
+                                          "major": str(columns[0]), "minor": str(columns[1])})
     if axes == "full":
         major, minor = major / 2, minor / 2
     return major, minor, angle, valid
@@ -602,7 +653,7 @@ def crossmatch_ellipses(table_a: CatalogTable, table_b: CatalogTable, ellipse_a,
     k = _check_threshold(threshold)
     if axes not in _AXES:
         raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"axes {axes!r}: obbligatorio, 'semi' (semiassi a 1σ) o "
-                              "'full' (assi interi)")
+                              "'full' (assi interi)", params={"reason": "axes", "axes": repr(axes)})
     a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
     notes = _check_bodies(a, b, force_body)
     rows_a, coords_a, excl_a = _coordinates(a, "A", frame)
@@ -638,8 +689,8 @@ def crossmatch_ellipses(table_a: CatalogTable, table_b: CatalogTable, ellipse_a,
         keep = good & (dist <= k)
         i1, i2, sep, dist = i1[keep], i2[keep], sep[keep], dist[keep]
     if singular:
-        notes.append(("ERROR_ELLIPSE_INVALID", f"{singular} coppie candidate con covarianza combinata singolare: "
-                      "escluse"))
+        notes.append(ModuleWarning("ERROR_ELLIPSE_INVALID", f"{singular} coppie candidate con covarianza combinata "
+                                   "singolare: escluse", {"reason": "singular", "count": singular}))
     order_sep = dict(zip(zip(rows_a[i1], rows_b[i2]), sep))
     ia, ib, d, unmatched, ties, reused = _select(rows_a[i1], rows_b[i2], dist, mode, rows_a)
     fraction = 1 - math.exp(-k * k / 2)
@@ -689,7 +740,8 @@ def _check_echo(answer: Table, up_a: Table, up_b: Table, url: str) -> None:
             if pos is None or abs(float(answer[cols[1]][k]) - upload["ra"][pos]) > _ECHO_TOLERANCE_DEG \
                     or abs(float(answer[cols[2]][k]) - upload["dec"][pos]) > _ECHO_TOLERANCE_DEG:
                 raise CrossmatchError("SERVICE_ERROR", f"{url}: la riga {k} della risposta non corrisponde alle "
-                                      f"posizioni caricate per l'indice {int(i)}")
+                                      f"posizioni caricate per l'indice {int(i)}",
+                                      params={"reason": "echo_mismatch", "url": url, "row": k, "index": int(i)})
 
 
 def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "best", max_sep=None, *,
@@ -715,7 +767,7 @@ def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "be
         try:
             answer = vo.cds_xmatch(up_a, up_b, max_sep, selection, cache=cache, refresh=refresh, timeouts=timeouts)
         except vo.VoProtocolsError as exc:
-            raise CrossmatchError(exc.code, exc.message) from exc
+            raise _relay(exc, exc.message) from exc
         data = answer.table.table
         _check_echo(data, up_a, up_b, vo.XMATCH_URL)
         ia = np.asarray(data["idx"], dtype=np.int64)
@@ -726,7 +778,8 @@ def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "be
     else:
         ia = ib = np.zeros(0, dtype=np.int64)
         d = np.zeros(0)
-        request, service_notes = None, [("NO_REQUEST", "una tabella non ha righe con posizione: nessuna richiesta")]
+        request, service_notes = None, [ModuleWarning("NO_REQUEST", "una tabella non ha righe con posizione: "
+                                                      "nessuna richiesta")]
     ia, ib, d, unmatched, ties, reused = _select(ia, ib, d, mode, valid_a)
     notes += service_notes + _common_notes(a, b, (excl_a, excl_b))
     extra = ()

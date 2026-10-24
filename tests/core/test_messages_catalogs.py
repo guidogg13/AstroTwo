@@ -53,7 +53,7 @@ from astrotwo.core.catalogs import (
 )
 from astrotwo.core.coordinates_wcs import ModuleWarning, SkyFrame
 from tests.core.test_catalogs import LINKED, LINKED_ROWS, linked_payloads, mocserver_route, write_astrores  # noqa: F401
-from tests.message_helpers import MODULE_16_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
+from tests.message_helpers import MODULE_15_SUBVARIANTS, MODULE_16_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
 
 #: Codici del 13 (le sotto-voci aggiunte a voci condivise con altri moduli sono in ``SHARED``).
 OWN_CODES = (
@@ -77,7 +77,7 @@ def required_combinations() -> set[tuple[str, str | None]]:
     """Coppie (codice, ragione) del 13: ogni sotto-voce; la voce generale solo dove non ha sotto-voci."""
     out = {(c, r) for c, r in catalog_combinations(OWN_CODES) if r is not None or not mc.CATALOG[c].variants}
     module_14 = {("FORMAT_DECLARED", "recognized_differs"), ("TABLE_TOO_LARGE", "upload")}  # sotto-voci del 14
-    return (out - module_14 - MODULE_16_SUBVARIANTS) | {("FORMAT_DECLARED", None), ("TABLE_TOO_LARGE", None)} | SHARED
+    return (out - module_14 - MODULE_15_SUBVARIANTS - MODULE_16_SUBVARIANTS) | {("FORMAT_DECLARED", None), ("TABLE_TOO_LARGE", None)} | SHARED
 
 
 class Seen:

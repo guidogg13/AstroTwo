@@ -31,6 +31,7 @@ CONVERTED = {
     "core/vo_protocols.py": "VoProtocolsError",
     "core/moc.py": "MocError",
     "core/planetary_data.py": "PlanetaryDataError",
+    "core/crossmatch.py": "CrossmatchError",
     "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
 }
 

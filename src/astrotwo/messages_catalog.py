@@ -2146,3 +2146,122 @@ _add("PDS_DOWNLOAD",
      cached=("{url} (copy from the cache of {retrieved_at})", "{url} (copia in cache del {retrieved_at})",
              "url retrieved_at"),
      downloaded=("{url} (downloaded on {retrieved_at})", "{url} (scaricato il {retrieved_at})", "url retrieved_at"))
+
+# --- Modulo 15 (incrocio, sprint 8d) -----------------------------------------------------------------------------
+_extend("TABLE_TOO_LARGE",
+        crossmatch_table=("Table {which}: {rows} rows, above the limit of {max_rows} (D15-3): use the CDS service or "
+                          "block-wise processing.",
+                          "Tabella {which}: {rows} righe, oltre il tetto di {max_rows} (D15-3): usare il servizio "
+                          "CDS o l'elaborazione a blocchi.", "which rows:int max_rows:int"),
+        joined=("Joined table of {rows} rows, above the limit of {max_rows}.",
+                "Tabella unita di {rows} righe, oltre il tetto di {max_rows}.", "rows:int max_rows:int"))
+_extend("BODY_UNKNOWN",
+        crossmatch_table=("Table {which} ({origin}): the body cannot be derived, no crossmatch.",
+                          "Tabella {which} ({origin}): corpo non ricavabile, nessun incrocio.", "which origin"))
+_extend("BODY_MISMATCH",
+        tables=("Different bodies: A {body_a}, B {body_b}; it can be forced only with force_body=True (cited in the "
+                "report).",
+                "Corpi diversi: A {body_a}, B {body_b}; forzabile solo con force_body=True (citato nel report).",
+                "body_a body_b"))
+_extend("BODY_FORCED",
+        tables=("Crossmatch between different bodies forced: A {body_a}, B {body_b}.",
+                "Incrocio tra corpi diversi forzato: A {body_a}, B {body_b}.", "body_a body_b"))
+_extend("MAX_SEP_INVALID",
+        required=("max_sep is required, no default (an angle with a unit).",
+                  "max_sep obbligatorio, senza default (angolo con unità).", ""),
+        not_angle=("max_sep {max_sep}: a single angle with a unit is required.",
+                   "max_sep {max_sep}: serve un solo angolo con unità.", "max_sep"),
+        range_local=("max_sep {max_sep}: allowed in (0, {limit}] locally.",
+                     "max_sep {max_sep}: ammesso in (0, {limit}] in locale.", "max_sep:qty limit:qty"),
+        range_cds=("max_sep {max_sep}: allowed in (0, {limit}] for the CDS XMatch service.",
+                   "max_sep {max_sep}: ammesso in (0, {limit}] per il servizio CDS XMatch.", "max_sep:qty limit:qty"))
+_extend("NO_COORD_COLUMNS",
+        crossmatch_no_positions=("Table {which} ({origin}): no position column from UCD or confirmed (module 13).",
+                                 "Tabella {which} ({origin}): nessuna colonna di posizione da UCD o confermata "
+                                 "(modulo 13).", "which origin"),
+        crossmatch_no_angular_unit=("Table {which}: columns {lon}/{lat} without an angular unit.",
+                                    "Tabella {which}: colonne {lon}/{lat} senza unità angolare.", "which lon! lat!"),
+        joined=("The joined table has no position columns of the main table.",
+                "La tabella unita non ha le colonne di posizione della tabella principale.", ""))
+_extend("FRAME_UNKNOWN",
+        crossmatch_columns=("Table {which}: columns {lon}/{lat} without a declared reference system; confirm it with "
+                            "confirm_position_columns (module 13).",
+                            "Tabella {which}: colonne {lon}/{lat} senza sistema dichiarato; confermarlo con "
+                            "confirm_position_columns (modulo 13).", "which lon! lat!"))
+_add("KEY_COLUMN_INVALID",
+     "The key columns are not valid.", "Le colonne chiave non sono valide.",
+     missing_columns=("Table {which}: columns that do not exist {missing}.",
+                      "Tabella {which}: colonne inesistenti {missing}.", "which missing:list!"),
+     name_repeated=("Name '{name}' repeated even after prefixes and suffixes.",
+                    "Nome '{name}' ripetuto anche dopo prefissi e suffissi.", "name!"),
+     key_missing=("Table {which}: key column '{key}' does not exist.",
+                  "Tabella {which}: colonna chiave '{key}' inesistente.", "which key!"),
+     key_types=("Incompatible key types: A '{key_a}' ({dtype_a}), B '{key_b}' ({dtype_b}); numbers with numbers, "
+                "text with text, booleans with booleans are allowed.",
+                "Chiavi di tipo incompatibile: A '{key_a}' ({dtype_a}), B '{key_b}' ({dtype_b}); ammessi numeri con "
+                "numeri, testo con testo, booleani con booleani.", "key_a! dtype_a key_b! dtype_b"))
+_add("ERROR_ELLIPSE_INVALID",
+     "The error ellipses are not valid.", "Le ellissi d'errore non sono valide.",
+     threshold_unit=("threshold {threshold}: it is in sigma, without a unit.",
+                     "threshold {threshold}: è in sigma, senza unità.", "threshold"),
+     threshold_required=("threshold is required, no default (D15-6): a number of sigma > 0.",
+                         "threshold obbligatoria, senza default (D15-6): numero di sigma > 0.", ""),
+     threshold_value=("threshold {threshold}: a number of sigma > 0 is required.",
+                      "threshold {threshold}: serve un numero di sigma > 0.", "threshold"),
+     axes=("axes {axes}: required, 'semi' (semi-axes at 1σ) or 'full' (full axes).",
+           "axes {axes}: obbligatorio, 'semi' (semiassi a 1σ) o 'full' (assi interi).", "axes"),
+     three_columns=("Table {which}: 3 columns are required (major axis, minor axis, orientation).",
+                    "Tabella {which}: servono 3 colonne (asse maggiore, asse minore, orientamento).", "which"),
+     column_missing=("Table {which}: column '{column}' does not exist.",
+                     "Tabella {which}: colonna '{column}' inesistente.", "which column!"),
+     column_unit=("Table {which}: column '{column}' without an angular unit.",
+                  "Tabella {which}: colonna '{column}' senza unità angolare.", "which column!"),
+     axes_not_positive=("Table {which}, row {row}, columns {major}/{minor}: negative or null axes.",
+                        "Tabella {which}, riga {row}, colonne {major}/{minor}: assi negativi o nulli.",
+                        "which row:int major! minor!"),
+     minor_larger=("Table {which}, row {row}, columns {major}/{minor}: minor axis larger than the major axis.",
+                   "Tabella {which}, riga {row}, colonne {major}/{minor}: asse minore maggiore dell'asse maggiore.",
+                   "which row:int major! minor!"),
+     singular=("{count} candidate pairs with a singular combined covariance: excluded.",
+               "{count} coppie candidate con covarianza combinata singolare: escluse.", "count:int"))
+_extend("SERVICE_ERROR",
+        echo_mismatch=("{url}: row {row} of the response does not match the positions uploaded for index {index}.",
+                       "{url}: la riga {row} della risposta non corrisponde alle posizioni caricate per l'indice "
+                       "{index}.", "url row:int index:int"))
+_add("BODY_NOT_CHECKED",
+     "Body not derivable for table(s) {tables}: in the field-based match the body is checked only if both tables "
+     "have one (D15-8).",
+     "Corpo non ricavabile per la tabella {tables}: nella correlazione per campo il corpo si controlla solo se "
+     "entrambe le tabelle ne hanno uno (D15-8).", "tables:list")
+_add("EPOCH_DIFFERS",
+     "Different epochs of the positions: A {epoch_a}, B {epoch_b}; no automatic propagation (use propagate of "
+     "module 13).",
+     "Epoche delle posizioni diverse: A {epoch_a}, B {epoch_b}; nessuna propagazione automatica (usare propagate "
+     "del modulo 13).", "epoch_a epoch_b")
+_add("COORD_MISSING",
+     "Rows with missing values excluded: A {excluded_a}, B {excluded_b}.",
+     "Righe con valori mancanti escluse: A {excluded_a}, B {excluded_b}.", "excluded_a:int excluded_b:int")
+_add("NO_MATCH",
+     "No pair within the criterion ({criterion}).", "Nessuna coppia entro il criterio ({criterion}).", "criterion")
+_add("BEST_TIE",
+     "{count} rows of A with more rows of B at the same distance: the lowest index in B was chosen.",
+     "{count} righe di A con più righe di B alla stessa distanza: scelto l'indice più basso in B.", "count:int")
+_add("B_REUSED",
+     "{count} rows of B chosen as the best by more rows of A (non-symmetric crossmatch).",
+     "{count} righe di B scelte come migliori da più righe di A (incrocio non simmetrico).", "count:int")
+_add("COLUMNS_RENAMED",
+     "Renamed: {renames}", "Rinomine: {renames}", "renames:list!")
+_add("UCD_CONFLICT",
+     "Main UCD '{ucd}' in both tables: table {table} prevails.",
+     "UCD principale '{ucd}' in entrambe le tabelle: prevale la tabella {table}.", "ucd! table")
+_add("MAIN_UCD_REMOVED",
+     "meta.main removed from the UCD of the columns {columns} (non-main table).",
+     "meta.main tolto dall'UCD delle colonne {columns} (tabella non principale).", "columns:list!")
+_add("KEY_MISSING",
+     "Missing keys (never coinciding): A {missing_a}, B {missing_b}.",
+     "Chiavi mancanti (mai coincidenti): A {missing_a}, B {missing_b}.", "missing_a:int missing_b:int")
+_add("KEY_REPEATED",
+     "{count} pairs from repeated keys (all combinations).",
+     "{count} coppie da chiavi ripetute (tutte le combinazioni).", "count:int")
+_add("NO_REQUEST",
+     "A table has no rows with a position: no request.", "Una tabella non ha righe con posizione: nessuna richiesta.")
