@@ -1491,6 +1491,8 @@ class MainWindow(QMainWindow):
         for name, executor in BOUND_EXECUTORS.items():
             if name in {s.name for s in registry.specs()}:
                 registry.bind(name, executor)
+        if "view.export_png" in {s.name for s in registry.specs()}:
+            registry.bind("view.export_png", self._exec_export_png)  # legge la modalità notte della finestra (41 §3.14)
         self.registry = registry
         self.session = Session(registry)
         self.saved_count = 0
@@ -2073,6 +2075,31 @@ class MainWindow(QMainWindow):
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
 
+    def _exec_export_png(self, ctx, p: Mapping) -> Outcome:
+        """Controlli e testi di ``view.export_png`` nel thread di lavoro (41 §3.14); il file lo scrive ``_apply_effect``."""
+        from astrotwo.ui import export_view
+
+        path = export_view.validate_path(p["path"])
+        metadata = export_view.compose_metadata(ctx.state, night=self.appearance == "night")
+        credits_ = export_view.credit_entries(ctx.state)
+        window = ctx.state.view.window
+        return Outcome(values={
+            "path": str(path), "width": {"value": float(window[0]), "unit": "pixel"},
+            "height": {"value": float(window[1]), "unit": "pixel"}, "metadata": metadata,
+            "credits": [c.full for c in credits_], "credit_line": export_view.credit_line(credits_)})
+
+    def _write_export(self, values: Mapping) -> None:
+        """Disegno fuori schermo e scrittura del PNG nel thread principale; un errore è un messaggio (41 §3.14)."""
+        from astrotwo.ui import export_view
+
+        try:
+            image = self.sky.renderer.render_offscreen()
+            if image is None or image.isNull():
+                raise RuntimeError("disegno fuori schermo non disponibile")
+            export_view.write_png(image, Path(values["path"]), values["metadata"], values["credit_line"])
+        except Exception as exc:  # noqa: BLE001 - disco pieno, permessi, GPU: un messaggio, mai un file a metà
+            self.messages.add(None, ResultMessage("EXPORT_FAILED", f"{values['path']}: {exc}"), error=True)
+
     def _apply_effect(self, command: Command, result: CommandResult) -> None:
         """Effetto dei comandi dell'interfaccia (classe ``application``) e stato dei menu, nel thread principale."""
         p = result.values
@@ -2088,6 +2115,8 @@ class MainWindow(QMainWindow):
                 self.sky.set_tool_option(p["key"], p["value"])
             elif p["key"] == "cache/limit_bytes" and isinstance(self.cache, ThreadCache):
                 self.cache.limit_bytes = int(p["value"])
+        elif name == "view.export_png":
+            self._write_export(p)
         elif name == "ui.set_appearance":
             self.apply_appearance(p["mode"])
         elif name == "ui.set_fullscreen":

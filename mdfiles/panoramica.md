@@ -18,6 +18,21 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-24, parte 4, sprint 4h della v1 (41, ultimo):**
+  **PNG della vista** (`view.export_png` collegato; nuovo `ui/export_view.py`):
+  immagine in pixel fisici con riga dei crediti in basso a destra e blocchi
+  `tEXt` (versione, data, vista, livelli con sorgente e data, crediti interi
+  dei testi di `01` §6.1 o dichiarati dal survey); scrittura atomica;
+  errori `EXPORT_PATH_INVALID`, `VIEW_UNDEFINED`, `EXPORT_FAILED`. **Cambio
+  di base in un passo** (T17): la base vecchia resta disegnata finché
+  campionamento, simboli e MOC della nuova non sono pronti, poi passa tutto
+  nello stesso turno degli eventi. **Prestazioni** (`tests/ui/test_perf.py`,
+  `perf`): sul Mac minimo (iMac M1 8 GB) P2, P3, P4, P6 raggiunti; **P1
+  (46 ms contro 16,7) e P5 (4,46 s contro 3) non raggiunti**, obiettivi non
+  abbassati (41 §3.15). **D41-4: due Mac di riferimento** (minimo e MacBook
+  Air M5 32 GB dal 2 novembre). Scelte minori dello sprint 4g confermate; quelle
+  dello sprint 4h (41, 1–10) da confermare. Test: **831 di default**, di rete
+  non eseguiti (`--no-network`). Decisioni aperte: **15**.
 - **Stato al 2026-10-23, parte 4, sprint 4g della v1 (41: distanza e
   puntatore Simbad):** nuovo `ui/sky_tools.py`. **Distanza:** con lo
   strumento attivo il trascinamento (o due clic) invia `measure.distance`;
@@ -985,6 +1000,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D32-1 | (c) identificativi del gruppo fisso nella descrizione di `catalog` (05, 32); (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13); (a) comando di ricerca nell'elenco dei cataloghi dopo la v1 (D32-2) | 2026-10-23 | decisione del proprietario, `32` §13, `13` §7 | sprint 7c |
 | D13-21 | (a) nella v1 `NO_COORD_COLUMNS` con le colonne candidate per RA e Dec nel messaggio; (b) `lon`/`lat` scelti dall'utente solo se un catalogo reale lo richiede | 2026-10-23 | decisione del proprietario, `13` §13 | sprint 7c |
 | Distanza su sfondo HiPS (05, 41) | `measure.distance` ha due forme: pixel di un'immagine o posizioni celesti (`sky1`, `sky2`), così si misura anche senza immagine | 2026-10-23 | decisione del proprietario, `05` §7, `41` §3.19 | sprint 4g |
+| Mac di riferimento (D41-4, 41) | Due riferimenti: **minimo** iMac21,1 con M1 e 8 GB (obiettivi P1–P6 da rispettare anche lì), **comodo** MacBook Air M5 con 32 GB dal 2 novembre 2026 | 2026-10-24 | decisione del proprietario, `41` §3.15, §13 | sprint 4h |
 | Opzioni della distanza (41) | Barra sul cielo con unità, aggancio e finestra del centroide, ricordate con `prefs.set` (`tools/…`) | 2026-10-23 | decisione del proprietario, `41` §3.19 | sprint 4g |
 | Strumento sconosciuto (32) | Il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco `valid_tools`; nulla eseguito | 2026-10-23 | richiesta del proprietario, `32` §3.5 | sprint 7b |
 | Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
@@ -1097,8 +1113,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
    sprint 4b (tile FITS, coordinate e valore sotto il mouse) scritto il
    2026-10-18, con correzioni il 2026-10-19, sprint 4c (griglia, nord e
    barra di scala) scritto il 2026-10-20, sprint 4d (immagine FITS locale) scritto il
-   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); prossimi sprint del 41: (4g scritto il 2026-10-23) strumenti (distanza, Simbad),
-   4h PNG e prestazioni. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
+   2026-10-20, sprint 4e (cataloghi e clic) scritto il 2026-10-21, sprint 4f (MOC, pannello dei livelli, corpi diversi) scritto il 2026-10-21** (D41-6 decisa); sprint 4g scritto il 2026-10-23 (strumenti: distanza, Simbad), **sprint 4h scritto il 2026-10-24 (PNG, cambio di base in un passo, test `perf`): il 41 è completo**. **Parte 5 (42), sprint 5a (tabella, ordinamento, selezione sincronizzata, record) scritto
    il 2026-10-21, sprint 5b (dialoghi delle colonne, T7) il 2026-10-22**; scelte minori di 5b confermate il 2026-10-22. **Parte 6 (IA: 32, 34, 35), sprint 6a (32: registro degli strumenti, `ai/tool_registry.py`) sprint 6b (34: verifica dei numeri, `ai/result_verification.py`) e sprint 6c (35: assistente, `ai/chat_assistant.py`, collegato alla coda del 40) scritti il 2026-10-22**; **Parte 7 (44: pannello dell'assistente), sprint 7a scritto il 2026-10-22** (`ui/ai_panel.py`; Markdown di Qt verificato; scelte minori confermate il 2026-10-23) **e sprint 7b scritto il 2026-10-23** (numeri evidenziati per stato, latenza, prove con il servizio simulato; scelte minori confermate il 2026-10-23) **e sprint 7c scritto il 2026-10-23** (D32-1 e D13-21 decise, test instabili resi deterministici); prossimo: le prove con le chiavi dell'utente (lista di controllo manuale del 35 §12 e del 30 §12, con `tool_choice = none`). Da verificare all'inizio delle parti che li usano: sottoinsieme di JSON Schema e modelli di Anthropic
    con le chiavi dell'utente (30, 32), LM Studio.
 1. Revisione e approvazione dei file generali (`01`, `02`, `03`, questo file, `INDICE.md`).
@@ -1212,4 +1227,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-23 | Claude Code | **Parte 7, sprint 7c della v1 (decisioni e stabilità dei test).** Decisioni del proprietario: D32-1 (c) identificativi del gruppo fisso nella descrizione di `catalog` (05 §7, `commands.py`, 32 §3.4) e (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13 §7, `catalogs.py`, risposta registrata di VizieR per `I/355`, T33); D13-21 (a) colonne candidate nel messaggio di `NO_COORD_COLUMNS`; (a) di D32-1 rinviata a dopo la v1 come nuova D32-2; 5 scelte minori dello sprint 7b del 44 confermate. Test instabili (T1, T2 del 42, T30 del 41): attese su condizioni (`wait_settled`, `wait_command`) invece di `wait_idle` e `history[-1]`; causa comune descritta in §2. Aperte 15 (Gruppo 3 = 13). Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |
 | 2026-10-23 | Claude Code | **Lint con ruff** (decisione del proprietario del 2026-10-23): ruff 0.17.2 (MIT) tra le dipendenze di sviluppo, `THIRD_PARTY_LICENSES` rigenerato; configurazione in `pyproject.toml` con solo errori veri (regole E e F, senza lunghezza della riga né ordine degli import). Corretti 12 errori veri senza cambiare il comportamento (import inutilizzati, una variabile inutilizzata, una f-string vuota, `field` ridefinito da una variabile di ciclo in `hips.py`). **D32-2 resta aperta** come promemoria (comando di ricerca nell'elenco dei cataloghi, dopo la v1). |
 | 2026-10-23 | Claude Code | **Parte 4, sprint 4g della v1 (41):** `measure.distance` esteso con la forma cielo (05, 32), `ui/sky_tools.py` con `DistanceTool`, `SimbadPointerTool`, `MeasureOverlay` e barra delle opzioni, collegamento in `sky_viewer.py` e `main_window.py` (`ui.set_tool`, preferenze `tools/…`), 12 testi tradotti, T36 e T37; 05, 32, 40, 41 modificati nel registro, stato `approvato` invariato. Aperte 15 invariate. Stati invariati: approvato 24, bozza 5, non esiste 14, totale 43. |
-
+| 2026-10-24 | Claude Code | **Parte 4, sprint 4h della v1 (41, ultimo):** specifica e codice di `view.export_png` (`ui/export_view.py`, collegamento nella finestra, `render_offscreen` nel renderer, `05` §7 e §10), cambio di base in un passo (`sky_viewer.py`), `tests/ui/test_export_png.py`, `tests/ui/test_base_switch.py`, `tests/ui/test_perf.py`; D41-4 con due Mac di riferimento; scelte minori del 4g confermate; risultati `perf` sul Mac minimo nel 41 §3.15 (P1 e P5 non raggiunti). 831 test di default; test di rete non eseguiti (`--no-network`). |

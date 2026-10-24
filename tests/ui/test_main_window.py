@@ -139,8 +139,8 @@ def test_t1_menu_items_produce_commands(qtbot, window, files, offline, tmp_path,
     assert by_name["ui.set_tool"][0].command.parameters == {"tool": "distance"} and win.active_tool == "distance"
     assert by_name["ui.set_panel"][0].command.parameters == {"panel": "messages", "visible": False}
     assert not win.docks["messages"].isVisible()
-    # export_png: disegno del 41 non ancora collegato → COMMAND_UNKNOWN del 05
-    assert by_name["view.export_png"][0].result.error.code == "COMMAND_UNKNOWN"
+    # export_png collegato dallo sprint 4h: senza vista definita → VIEW_UNDEFINED (41 §3.14)
+    assert by_name["view.export_png"][0].result.error.code == "VIEW_UNDEFINED"
     assert by_name["ui.set_appearance"][0].command.parameters == {"mode": "night"} and win.appearance == "night"
     assert by_name["hips.set_survey"][0].command.parameters == {
         "survey": "CDS/P/2MASS/color", "vmin": None, "vmax": None}

@@ -477,6 +477,10 @@ class SkyRenderer:
         con la trasformazione corrente."""
         raise NotImplementedError
 
+    def render_offscreen(self):
+        """Il disegno corrente come ``QImage`` in pixel fisici, per il PNG (41 §3.14) e per i test (``gl``)."""
+        raise NotImplementedError
+
 
 def _default_renderer() -> SkyRenderer:
     from astrotwo.ui.sky_renderer_gl import GlSkyRenderer
@@ -761,6 +765,10 @@ class SkyViewer(QWidget):
         self.k, self.tx, self.ty = 1.0, 0.0, 0.0
         self._pending: dict[int, tuple[float, float, float] | None] = {}  # generazione → trasformazione inviata
         self._in_flight = 0
+        self._stage: int | None = None  # generazione della base in attesa del passaggio (41 §3.2, T17)
+        self._stage_sampling = False  # la base in attesa ha un campionamento dei tile da aspettare
+        self._stage_sampled = False
+        self._stage_geometry_changed = False
         self._reported: set[tuple[str, str]] = set()
         self._awaiting = 0  # comandi di vista del gesto ancora in coda
         self._submitted: tuple[float, float, float] | None = None
@@ -886,7 +894,8 @@ class SkyViewer(QWidget):
             if changed_image:  # nuovi colori (image.set_display) sulla stessa geometria
                 self.image_key = image_key
                 self._image_next = None if image is None or self.geometry is None else sample_image(self.geometry, image)
-                self._show_image(image.id if image is not None else None)
+                if self._stage is None:  # con una base in attesa il piano passa con le altre cose (§3.2)
+                    self._show_image(image.id if image is not None else None)
             self.update_catalogs()
             self.update_mocs()
             self.refresh_layers()
@@ -919,23 +928,58 @@ class SkyViewer(QWidget):
         gen = self.tiles.generation
         self._pending = {gen: sent}
         self.view_changed.emit()
-        if self.geometry is None or self.service is None or self.service.tile_width is None:
-            # nessun pixel da disegnare (nessun survey o HiPS catalogo) o immagine FITS come base: niente
-            # campionamento dei tile, la trasformazione residua del gesto si chiude subito e griglia e indicatore
-            # seguono la nuova geometria
-            self.sampling = None
-            if changed_geometry and self.geometry is not None:
+        # Cambio di base in un passo (41 §3.2, T17): la base vecchia resta disegnata finché per la nuova non sono
+        # pronti campionamento dei tile, simboli e MOC; poi tutto passa insieme in ``_try_commit``.
+        self._stage, self._stage_geometry_changed = gen, changed_geometry
+        self._stage_sampled = False
+        self._stage_sampling = not (self.geometry is None or self.service is None or self.service.tile_width is None)
+        if self._stage_sampling:
+            self.tiles.sample(gen, self.service, self.geometry, layer.derived.get("coverage"))
+        else:
+            self.sampling = None  # nessun pixel da disegnare (nessun survey o HiPS catalogo) o immagine FITS base
+            self._try_commit(gen)
+
+    def _base_ready(self) -> bool:
+        """Posizioni dei cataloghi e celle dei MOC visibili calcolate (o fallite) per la base in attesa."""
+        g = self.geometry
+        if not self._has_sky(g):
+            return True
+        for layer in self.catalog_layers:
+            if layer.visible and (catalog_key(layer, self.base_image), base_key(g)) in self._catalog_pending:
+                return False
+        return not any(layer.visible and (moc_key(layer), base_key(g)) in self._moc_pending
+                       for layer in self.moc_layers)
+
+    def _try_commit(self, gen: int | None = None) -> None:
+        """Passa alla base in attesa se tutto è pronto (41 §3.2): un solo blocco di chiamate al renderer, quindi nessun
+        fotogramma con livelli su basi diverse."""
+        if self._stage is None or (gen is not None and gen != self._stage):
+            return
+        if self._stage_sampling and not self._stage_sampled:
+            return
+        if not self._base_ready():
+            return
+        gen, self._stage = self._stage, None
+        image = self.base_image
+        if self.sampling is not None:
+            rows, cols = self.sampling.shape
+            self._settle_transform(gen, rows, cols)
+            self.screen_geometry = self.geometry  # tile, immagine, MOC e simboli passano alla nuova finestra insieme
+            self._upload()
+            self.renderer.set_transform(self.k, self.tx, self.ty)
+        else:
+            if self._stage_sampling and self.survey_layer is not None:
+                self.renderer.drop_texture(self.survey_layer)  # campionamento fallito: nessun sfondo sulla base nuova
+            if self._stage_geometry_changed and self.geometry is not None:
                 self._settle_transform(gen, *self.geometry.shape)
                 self.renderer.set_transform(self.k, self.tx, self.ty)
-            if not changed_geometry:
+            if not self._stage_geometry_changed:
                 self._pending.pop(gen, None)
             self.screen_geometry = self.geometry
-            self.refresh_points()
-            self.refresh_polygons()
-            self._show_image(image.id if image is not None else None)
-            self.show_overlay()
-            return
-        self.tiles.sample(gen, self.service, self.geometry, layer.derived.get("coverage"))
+        self._show_image(image.id if image is not None else None)
+        self.refresh_points()
+        self.refresh_polygons()
+        self.show_overlay()
 
     def _show_image(self, layer_id: str | None) -> None:
         """Piano dell'immagine base per la geometria dello schermo (texture con chiave = livello); immagine tolta o
@@ -984,6 +1028,8 @@ class SkyViewer(QWidget):
 
     def show_overlay(self) -> None:
         """Griglia, indicatore e barra dallo stato corrente (dati del 10) al renderer."""
+        if self._stage is not None:
+            return  # griglia, indicatore e barra della base in attesa passano con essa (§3.2)
         self.overlay = None if self.view is None else build_overlay(self.view, self.overlay_texts)
         self.renderer.set_overlay(self.overlay)
 
@@ -992,23 +1038,17 @@ class SkyViewer(QWidget):
             return
         rows, cols = sampling.shape
         self.sampling = sampling
-        self.canvas = np.zeros((rows, cols, 4), dtype=np.uint8)
-        self._settle_transform(gen, rows, cols)
-        self._upload()
-        self.renderer.set_transform(self.k, self.tx, self.ty)
-        self.screen_geometry = self.geometry  # tile, immagine, MOC e simboli passano alla nuova finestra insieme
-        self._show_image(self.base_image.id if self.base_image is not None else None)
-        self.refresh_points()
-        self.refresh_polygons()
-        self.show_overlay()
+        self.canvas = np.zeros((rows, cols, 4), dtype=np.uint8)  # si carica sulla GPU al passaggio (§3.2)
+        self._stage_sampled = True
         if "fits" in self.service.tile_formats[:1] and (self.display is None or self.display.get("vmin") is None):
             self._report("HIPS_DISPLAY_UNKNOWN", f"{self.service.hips_id}: limiti di colore del survey non noti, "
                          "i tile FITS non si disegnano; riaprire il survey indicando vmin e vmax")
-            return
-        for index in sampling.tiles:
-            self._in_flight += 1
-            self.tiles.fetch(gen, self.service, sampling, index, self.display)
-        self.tiles_changed.emit(self._in_flight)
+        else:
+            for index in sampling.tiles:
+                self._in_flight += 1
+                self.tiles.fetch(gen, self.service, sampling, index, self.display)
+            self.tiles_changed.emit(self._in_flight)
+        self._try_commit(gen)
 
     def _tile(self, gen: int, view_tile) -> None:
         if not self.tiles.current(gen) or self.canvas is None:
@@ -1018,11 +1058,17 @@ class SkyViewer(QWidget):
         values = view_tile.values
         box[view_tile.mask, :3] = values[view_tile.mask][:, :3]
         box[view_tile.mask, 3] = values[view_tile.mask][:, 3] if values.shape[-1] == 4 else 255
-        self._upload()
+        if self._stage is None:  # con una base in attesa i tile si caricano al passaggio
+            self._upload()
 
     def _failed(self, gen: int, code: str, text: str) -> None:
         if self.tiles.current(gen):
             self._report(code, text)
+            if gen == self._stage and self._stage_sampling and not self._stage_sampled:
+                # campionamento fallito: la base nuova passa senza lo sfondo (zona vuota e un messaggio)
+                self._stage_sampled = True
+                self.sampling = self.canvas = None
+                self._try_commit(gen)
 
     def _tile_done(self, gen: int) -> None:
         self._in_flight = max(0, self._in_flight - 1)
@@ -1072,11 +1118,13 @@ class SkyViewer(QWidget):
         self._catalog_pending.discard(key)
         if isinstance(result, ResultMessage):
             self._report_once((key[0][0], result.code), result)
+            self._try_commit()
             return
         self.catalog_cache[key] = result
         for message in result.warnings:  # epoche diverse: una volta per livello e immagine (41 §3.8)
             self._report_once((key[0][0], message.code, key[0][4]), message)
         self.refresh_points()
+        self._try_commit()
         self.layers_drawn.emit()
 
     def _report_once(self, key: tuple, message: ResultMessage) -> None:
@@ -1139,6 +1187,7 @@ class SkyViewer(QWidget):
         else:
             self.moc_cache[key] = result
             self.refresh_polygons()
+        self._try_commit()
         self.layers_drawn.emit()
 
     def shapes_for(self, layer) -> MocShapes | None:

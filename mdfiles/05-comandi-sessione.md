@@ -358,7 +358,7 @@ le scelte minori di §13; tutti versione 1):
 | `view.set_coordinate_display` (frame, formato) | — | session | |
 | `layer.set_visible`, `layer.set_opacity`, `layer.move`, `layer.remove` | 19 `check_overlay` (quando un livello torna visibile) | session | |
 | `measure.distance` (livello, p1, p2 **oppure** sky1, sky2; unità, aggancio al centroide, `box_size`) | 11 `star_centroid` (se aggancio), 10 `pixel_to_sky`, 17 `angular_distance` | session | |
-| `view.export_png` (file) | disegno del `41` | application | |
+| `view.export_png` (file) | disegno del `41`; testi e crediti da `41` §3.14 | application | esecutore che controlla percorso e stato, scrittura del file dalla finestra (sprint 4h, 2026-10-24); risultato `path`, `width`, `height`, `metadata`, `credits`; non cambia lo stato |
 | `cache.clear` (modulo) | 04 `clear` | application | |
 | `prefs.set` (chiave, valore) | — | application | |
 | `ui.*` (strumento attivo, pannelli, schermo intero) | — | application | |
@@ -500,6 +500,9 @@ codice del modulo sui tipi chiusi di §3.1.
 | Stato finale diverso da quello registrato | avviso con le differenze | `SESSION_STATE_DIFFERS` |
 | Dati di rete diversi da quelli registrati | avviso con comando e differenze (impronta, origine e data, righe), la riesecuzione continua (D05-2) | `SESSION_NETWORK_DATA_DIFFERS` |
 | Comando dell'interfaccia (`view.export_png`, `prefs.set`, `ui.*`) senza esecuzione collegata dal 40/41 (2026-10-17) | nessuna esecuzione | `COMMAND_UNKNOWN` |
+| `view.export_png` con percorso non assoluto, senza estensione `.png`, con cartella inesistente o non scrivibile (2026-10-24) | nessun file | `EXPORT_PATH_INVALID` |
+| `view.export_png` senza vista definita (geometria o finestra mancanti) (2026-10-24) | nessun file | `VIEW_UNDEFINED` |
+| Scrittura del PNG fallita dopo il comando `ok` (disco pieno, permessi) (2026-10-24) | messaggio nel pannello Messaggi, nessun file a metà | `EXPORT_FAILED` |
 | Lettura sotto il cursore senza vista definita (centro, scala o finestra mancanti) (2026-10-17) | nessuna lettura | `VIEW_UNDEFINED` |
 | Punto del cursore fuori dalla proiezione (2026-10-17) | avviso "fuori dal cielo", nessuna coordinata | `OUT_OF_SKY` |
 | Catalogo da file senza colonne di posizione dai metadati (2026-10-17) | livello aperto con i suggerimenti del 13; avviso: confermare con `catalog.set_columns` | `POSITION_COLUMNS_REQUIRED` |

@@ -56,8 +56,7 @@ comandi di vista del `05` (2 × `field_radius` del 10) in ° con 2 decimali da
 §3.11). **4e (scritto il 2026-10-21):** cataloghi disegnati come simboli sulla GPU, clic su una sorgente con
 scheda sul cielo, avviso di epoche diverse (§3.8). **4f (scritto il 2026-10-21):** MOC disegnati sulla GPU
 (§3.9), pannello dei livelli con visibilità, ordine, opacità e rimozione, sfondo HiPS sotto l'immagine FITS
-(§3.5, §3.7), finestra della forzatura per i corpi diversi (§3.5). **Sprint 4g scritto il 2026-10-23** (distanza e puntatore Simbad, §3.19). **Sprint successivi:** 4h PNG, cambio di base in un passo
-(T17) e prestazioni (`perf`).
+(§3.5, §3.7), finestra della forzatura per i corpi diversi (§3.5). **Sprint 4g scritto il 2026-10-23** (distanza e puntatore Simbad, §3.19). **Sprint 4h scritto il 2026-10-24** (PNG con crediti §3.14, cambio di base in un passo §3.2 con T17, test `perf` §3.15). Ultimo sprint del 41.
 
 ### 3.2 Geometria della vista: base e finestra
 
@@ -104,6 +103,17 @@ dei tile sulla vista, aggiunto al 12 il 2026-10-15).
   vecchia finché per la nuova non sono pronte posizioni dei cataloghi,
   griglia, MOC e campionamento dei tile; poi passa alla nuova tutta
   insieme. I valori dei tile arrivano poi a mano a mano.
+  **Dettagli dello sprint 4h (scritti il 2026-10-24; scelte minori 7–9 DA CONFERMARE):** «pronto» = campionamento
+  dei tile arrivato (se lo sfondo ne ha), e per ogni catalogo e MOC **visibili** la risposta del calcolo per la
+  base nuova è arrivata, riuscita o con errore (scelta minore 7: un calcolo fallito non tiene ferma la vista,
+  l'errore si riporta come oggi e il livello non si disegna). Fino ad allora il renderer non riceve né il piano
+  dello sfondo, né quello dell'immagine, né simboli, né poligoni, né la griglia, né l'indicatore e la barra della
+  base nuova, e restano disegnati quelli della base vecchia con la trasformazione del gesto. Il passaggio è un solo
+  blocco di chiamate al renderer nello stesso turno del ciclo degli eventi, quindi nessun fotogramma mescola due
+  basi. I tile della base nuova si richiedono subito (non aspettano gli altri calcoli) e si caricano sulla GPU
+  solo al passaggio (scelta minore 8). Se arriva un'altra base prima del passaggio, la precedente in attesa si
+  scarta e vale l'ultima (scelta minore 9). Un cambio di visibilità o di livelli durante l'attesa vale per la
+  base in attesa.
 
 ### 3.3 Scelta della proiezione (D10-9, decisa il 2026-10-15)
 
@@ -505,19 +515,61 @@ non sono dati scientifici. Altri formati e stampa: fuori dalla v1.
 Nel PNG si disegnano anche l'indicatore del nord e la barra di scala
 (§3.18), come sullo schermo.
 
+**Dettagli dello sprint 4h (scritti il 2026-10-24; scelte minori 1–6 DA CONFERMARE):**
+
+- **Due fasi (scelta minore 1).** L'esecutore del comando (thread di lavoro) controlla il percorso e lo stato e
+  compone i testi dallo stato dello spazio di lavoro, senza numeri nuovi: percorso assoluto con estensione `.png`
+  (`.PNG` accettata), cartella esistente e scrivibile (`EXPORT_PATH_INVALID`), vista con geometria e finestra
+  (`VIEW_UNDEFINED`). Il disegno fuori schermo e la scrittura del file li fa la finestra nel thread principale
+  quando il comando è `ok`; un errore di scrittura è un messaggio `EXPORT_FAILED` nel pannello Messaggi, non un
+  comando fallito. Il file è scritto in un file temporaneo e poi rinominato: mai un PNG a metà.
+- **Immagine.** Pixel fisici del disegno (`render_offscreen` del renderer: sfondo, immagine, MOC, simboli, griglia,
+  indicatore e barra, nella modalità normale o notte del momento). **Le misure (§3.19) e la scheda della sorgente non
+  sono nel PNG** (scelta minore 2): sono sopra il cielo come widget, non nel disegno del renderer.
+- **Crediti nell'immagine e nei metadati (scelta minore 3; requisito 6 di `01` §6.1).** Una riga di crediti
+  breve in basso a destra, su un fondo scuro semitrasparente, in carattere piccolo, tagliata a metà
+  larghezza senza andare a capo se troppo lunga (il testo intero è nei metadati). La riga elenca i servizi
+  e i dati dei livelli **visibili** (SIMBAD, VizieR, survey HiPS); nessuna riga se nessun livello ha crediti.
+  I testi di riconoscimento sono quelli di `01` §6.1 (letti il 2026-10-17): SIMBAD e VizieR (servizio) con la frase
+  richiesta e il riferimento bibliografico; per i cataloghi di VizieR il nome della tabella (l'elenco degli autori
+  è nel ReadMe del catalogo: non si inventa); per un survey HiPS **il testo dichiarato dal survey stesso** (`obs_ack`,
+  `obs_copyright`, `obs_title` del file `properties`), mai testi nostri; per DSS (identificativo che contiene `DSS`)
+  il primo paragrafo del riconoscimento di STScI di `01` §6.1 e l'indirizzo del testo integrale. Un survey senza
+  testo dichiarato: solo titolo e identificativo. Immagini e cataloghi da file: nessun credito (nessun servizio).
+- **Metadati: blocchi `tEXt` del PNG (ISO/IEC 15948, scritti con Pillow, D11-6).** Parole chiave in inglese,
+  valori in Latin-1 come richiede il formato, con i caratteri fuori Latin-1 resi in ASCII con segnaposto: `Software`
+  (`AstroTwo` e versione), `Creation Time` (data ed ora dell'esportazione, ISO 8601 UTC con `Z`), `AstroTwo:View`
+  (JSON: centro con frame, scala con unità, proiezione, base, campo di vista, finestra in pixel fisici,
+  modalità notte sì o no), `AstroTwo:Layers` (JSON: per ogni livello visibile identificativo, tipo, nome,
+  sorgente, origine e data di richiesta dove il modulo li ha), `AstroTwo:Credits` (testi interi), `Comment`
+  (frase fissa: immagine per l'occhio, non dati scientifici). Nessuna chiave API né altro dato dell'utente.
+  La data della richiesta è quella già registrata nel livello (`retrieved_at` del 11, 12, 13), non una nuova.
+- **Dimensione.** Quella reale del disegno al momento della scrittura (può differire dalla finestra dello stato se
+  la finestra è stata ridimensionata tra la richiesta e il disegno; nei metadati e nel risultato è scritta quella
+  del file).
+- **Risultato del comando:** `path`, `width` e `height` in pixel (`quantity`: la finestra dello stato), `metadata` (le
+  chiavi e i valori scritti), `credits` (testi interi), `credit_line` (la riga disegnata). Il comando registrato non
+  cambia lo stato dello spazio di lavoro.
+- **Quarto file Python del 41 (scelta minore 4):** `src/astrotwo/ui/export_view.py` (testi, crediti e scrittura del
+  PNG, senza Qt oltre a `QImage` e `QPainter`), per non allungare `sky_viewer.py`.
+- **Colori e icona:** nessuna icona nuova (la voce di menu File → Esporta vista come PNG esiste dal 40).
+
 ### 3.15 Obiettivi di prestazione (approvati il 2026-10-15)
 
 Misurati sul **Mac di riferimento** con test marcati `perf` (D41-4):
 
-| Mac di riferimento | Valore |
-|---|---|
-| Modello | **da compilare** (lo indica il proprietario) |
-| Processore | **da compilare** |
-| Memoria | **da compilare** |
-| Versione di macOS | **da compilare** |
-| Schermo (rapporto dei pixel) | **da compilare** |
+Due Mac (decisione del proprietario del 2026-10-24, D41-4): **Mac minimo** = quello di sviluppo attuale, gli obiettivi
+P1–P6 si **rispettano anche qui**; **Mac comodo** = MacBook Air M5 con 32 GB (dal 2 novembre 2026), dove si misura
+e si riporta. Ogni misura riporta il Mac su cui è stata fatta; un obiettivo non raggiunto su uno dei due si
+misura e si riporta (regola sotto), mai abbassato.
 
-
+| Mac | Minimo | Comodo |
+|---|---|---|
+| Modello | iMac21,1 | **da compilare** (MacBook Air M5, dal 2 novembre 2026) |
+| Processore | Apple M1 | **da compilare** (M5) |
+| Memoria | 8 GB | 32 GB (da confermare con `hw.memsize`) |
+| Versione di macOS | 26.6.2 (letta il 2026-10-24) | **da compilare** |
+| Schermo (rapporto dei pixel) | Retina 4.5K, rapporto 2 | **da compilare** |
 
 | # | Obiettivo | Condizioni |
 |---|---|---|
@@ -528,6 +580,41 @@ Misurati sul **Mac di riferimento** con test marcati `perf` (D41-4):
 | P5 | finestra pronta in **≤ 3 s senza rete** | avvio a freddo dell'app |
 | P6 | primi tile HiPS visibili in **≤ 2 s con la cache calda** | survey di default, tile già in cache |
 | P7 | proiezione del milione di sorgenti con `sky_to_pixel` del 10 | **valore da misurare prima di fissarlo** (nessun obiettivo scritto finché non è misurato) |
+
+**Come si misurano (dettagli dello sprint 4h, scritti il 2026-10-24; scelta minore 10 DA CONFERMARE; test in
+`tests/ui/test_perf.py`, marcatore `perf`; TP1 e TP2 usano OpenGL vero e si saltano sulla piattaforma `offscreen`: si eseguono con `QT_QPA_PLATFORM=cocoa`, e non hanno il marcatore `gl` perché un test `perf` non blocca mai il commit):** TP1 = tempo di `render_offscreen`
+con `glFinish` per 120 trasformazioni di spostamento e zoom (PySide6 su OpenGL vero, finestra 1600 × 1000 logici
+al rapporto dei pixel dello schermo), 95° percentile; il tempo include la lettura dei pixel dalla GPU, quindi è
+pessimistico. TP2 = differenza di memoria residente (`ps -o rss=`) prima e dopo aver costruito e caricato il
+catalogo sintetico di 1 milione di righe (posizioni, colori, dimensioni, forme e punti sulla GPU). TP3 = sonda
+con timer di 10 ms durante un tile di 2 s e un calcolo lento di catalogo (come T11), massimo intervallo tra due
+scatti. TP4 = tempo da un movimento del mouse al segnale `cursor_read` (immagine e HiPS), massimo su 50 movimenti.
+TP5 = avvio a freddo in un processo separato (cartella home vuota, nessuna rete) dall'inizio dello script fino
+a finestra mostrata e vista iniziale disegnata (`first_shown` e comandi finiti). TP6 = tempo dal comando che
+apre il survey alla prima texture con un tile, con i tile già nella cache e il servizio simulato locale. TP7 =
+tempo di `sky_to_pixel` del 10 su 1 milione di posizioni, solo misurato e riportato. I test `perf` scrivono i
+valori sul terminale (`-s`) e in `perf-report.json` in una cartella temporanea; il confronto con l'obiettivo è un
+`assert` solo per P1–P6, e un test `perf` non blocca il commit (D41-4).
+
+
+**Risultati misurati il 2026-10-24 sul Mac minimo** (iMac21,1, Apple M1, 8 GB, macOS 26.6.2, schermo Retina 4.5K, rapporto 2,
+finestra 3200 × 2000 pixel fisici, `QT_QPA_PLATFORM=cocoa`, 1 milione di sorgenti sintetiche):
+
+| Test | Valore | Obiettivo | Esito |
+|---|---|---|---|
+| TP1 fotogramma, 95° percentile, con lettura dei pixel | 46,0 ms (mediana 33,9) | ≤ 16,7 ms | **non raggiunto** |
+| TP2 memoria aggiuntiva | 313 MB | ≤ 1 GB | raggiunto |
+| TP3 intervallo massimo della sonda | 37 ms | < 100 ms | raggiunto |
+| TP4 coordinate sotto il mouse, massimo su 50 movimenti | 27,9 ms | ≤ 50 ms | raggiunto |
+| TP5 avvio a freddo, dal processo alla finestra pronta | 4,46 s (importazioni 1,8 s, finestra 2,3 s, prima vista 0,3 s); 2,84 s sulla piattaforma `offscreen` | ≤ 3 s | **non raggiunto** |
+| TP6 primi tile con la cache calda | 0,10 s | ≤ 2 s | raggiunto |
+| TP7 `sky_to_pixel` su 1 milione di posizioni | 0,12 s | nessun obiettivo | solo misurato |
+
+Cause note: **TP1** — il solo disegno con `glFinish` dura 37,9 ms con il milione di simboli e 4,6 ms senza: il costo è nei
+simboli sulla GPU del M1 a 3200 × 2000, non nelle texture né nella lettura dei pixel. **TP5** — il tempo comprende la
+creazione del contesto OpenGL e dei pannelli (2,3 s) più le importazioni (1,8 s); sulla piattaforma `offscreen` (senza GPU)
+è 2,84 s. Obiettivi **non abbassati**: sono aperti per una decisione del proprietario (ottimizzazione dei simboli, avvio
+più rapido) e per la misura sul Mac comodo dal 2 novembre.
 
 **Regola del proprietario (2026-10-15):** se un obiettivo non si
 raggiunge, **si misura e si riporta** (valore ottenuto, condizioni, causa
@@ -692,7 +779,8 @@ opzioni stanno in una barra sul cielo. Il resto è scelta minore (§13).
 Nomi proposti, descrizione in parole. File Python
 `src/astrotwo/ui/sky_viewer.py` (visualizzatore, livelli, strumenti) e
 `src/astrotwo/ui/sky_renderer_gl.py` (implementazione OpenGL
-dell'interfaccia di disegno; scelta minore 9); test in
+dell'interfaccia di disegno; scelta minore 9), `src/astrotwo/ui/sky_tools.py` (strumenti, sprint 4g) e
+`src/astrotwo/ui/export_view.py` (testi, crediti e scrittura del PNG, sprint 4h); test in
 `tests/ui/test_sky_viewer.py`.
 
 - **`SkyViewer`** — widget del visualizzatore: tiene la `ViewGeometry`
@@ -701,7 +789,7 @@ dell'interfaccia di disegno; scelta minore 9); test in
 - **`SkyRenderer`** (interfaccia di disegno) — `set_base`, `set_transform`
   (traslazione e scala), `upload_texture`, `upload_points`,
   `upload_polygons`, `upload_lines`, `draw_labels`, `render`,
-  `render_offscreen` (per i test e per il PNG), `drawn_positions` (posizioni
+  `render_offscreen` (per i test e per il PNG; dallo sprint 4h è nell'interfaccia di base e restituisce una `QImage` in pixel fisici), `drawn_positions` (posizioni
   sullo schermo dei simboli disegnati, per i test). **Sprint 4f:**
   `upload_texture(rgba, key)` (una texture per piano), `set_layers` (ordine dal basso e opacità dei livelli
   disegnati), `upload_polygons` (MOC: triangoli e lati del perimetro), `drawn_polygons` (vertici sullo
@@ -793,10 +881,10 @@ mai abbassare in silenzio".
 | T11 | Interfaccia reattiva | tile simulati lenti (2 s ciascuno) e catalogo lento | sonda del thread principale < 100 ms | sonda di latenza |
 | T12 | Annullamento dei tile | spostare la vista mentre i tile arrivano | richieste superate annullate, nessun tile vecchio disegnato sulla nuova finestra | ispezione |
 | T13 | Corpi diversi | aprire un MOC marziano su un'immagine celeste | `BODY_MISMATCH`; con la forzatura, livello aperto e forzatura citata | test |
-| T14 | PNG della vista | `view.export_png` | PNG con dimensioni in pixel fisici e metadati testuali attesi | lettura del file con Pillow |
+| T14 | PNG della vista (sprint 4h) | `view.export_png` su una vista con sfondo HiPS simulato, un catalogo di Simbad simulato e un'immagine; percorso non valido; vista senza geometria; modalità notte | PNG con dimensioni in pixel fisici (rapporto 1 e 2), blocchi `tEXt` di §3.14 uguali al risultato del comando e allo stato (centro, scala, proiezione, livelli con sorgente, origine e data), crediti dei soli livelli visibili con i testi di `01` §6.1 o del survey, riga dei crediti disegnata, `EXPORT_PATH_INVALID` e `VIEW_UNDEFINED`, nessun file a metà, comando registrato e riesecuzione | lettura del file con Pillow, confronto con lo stato |
 | T15 | Livelli | ordine, visibilità, opacità, rimozione | comandi registrati; ordine di disegno e opacità applicati | ispezione del renderer |
 | T16 | Clic su una sorgente | clic a 2 pixel logici da una sorgente e lontano da tutte | `catalog.select` della riga giusta; nessuna selezione lontano | test |
-| T17 | Cambio di base in un passo | spostare la vista finché il punto di tangenza esce dalla finestra | per tutto il cambio, nessun fotogramma con livelli su basi diverse | ispezione del renderer |
+| T17 | Cambio di base in un passo (sprint 4h) | catalogo e MOC visibili, sfondo simulato; spostare la vista finché il punto di tangenza esce dalla finestra, con il calcolo delle posizioni del catalogo (poi del MOC) trattenuto | finché il calcolo è trattenuto il renderer non riceve né piano, né simboli, né poligoni, né griglia della base nuova e la base disegnata resta la vecchia; al rilascio tutti arrivano nello stesso passo (stesso turno del ciclo degli eventi), con simboli e poligoni entro 1 pixel dalla base nuova; cambio con errore del calcolo (catalogo senza posizioni) non blocca il passaggio | ispezione del renderer (registro delle chiamate) |
 | T18 | Numeri scritti dal 10 | coordinate sotto il cursore, etichette della griglia, coordinate nel puntatore Simbad | testi identici a quelli di `format_coordinates` del 10 sugli stessi valori; punto decimale anche in italiano | confronto diretto |
 | T19 | Limiti iniziali | apertura di un FITS sintetico; survey FITS simulato senza `hips_pixel_cut` | limiti uguali a `suggest_display_limits` dell'11 (sull'immagine; sul tile che contiene il centro della prima vista), dichiarati e registrati nel comando; stessi limiti alla riapertura della sessione | ricalcolo con l'11 |
 | T20 | Modalità notte (`gl`) | vista con immagine, HiPS a colori, due cataloghi, griglia, in modalità notte, disegnata fuori schermo | nessun pixel con componente verde o blu sopra la soglia bassa dichiarata nel test; posizioni invariate (T1) | lettura dell'immagine fuori schermo |
@@ -821,8 +909,7 @@ mai abbassare in silenzio".
 
 ## 13. Decisioni aperte
 
-Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Resta da
-compilare il Mac di riferimento (§3.15).
+Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento deciso il 2026-10-24 (§3.15); i dati del Mac comodo si compilano dal 2 novembre.
 
 - **D10-9 — Soglia `TAN`/`AIT`: DECISA il 2026-10-15** (decisione del
   proprietario): 30°, con lo scarto di ±10 % gestito qui (§3.3).
@@ -849,8 +936,15 @@ compilare il Mac di riferimento (§3.15).
   limiti scelti sono dichiarati nel risultato. Applicata in §3.6, §3.7.
 - **D41-4 — Test `perf` e `gl`: DECISA il 2026-10-15** (decisione del
   proprietario): esclusi di default; `gl` blocca il commit quando eseguito,
-  `perf` si riporta (§12). **Dati del Mac di riferimento: da compilare**
-  (§3.15), li indica il proprietario.
+  `perf` si riporta (§12). **Mac di riferimento: DECISO il 2026-10-24** (decisione del proprietario): due
+  riferimenti, **minimo** = iMac21,1 con Apple M1 e 8 GB (dati nel §3.15, obiettivi P1–P6 da rispettare anche lì) e
+  **comodo** = MacBook Air M5 con 32 GB (dal 2 novembre 2026; dati da compilare allora).
+- **Sprint 4h (2026-10-24): scelte minori DA CONFERMARE** — PNG (§3.14): (1) due fasi, esecutore che controlla e
+  finestra che scrive, errore di scrittura = messaggio `EXPORT_FAILED`; (2) misure e scheda non nel PNG; (3) riga dei
+  crediti in basso a destra e testi interi nei metadati; (4) quarto file Python `export_view.py`; (5) chiavi `tEXt`
+  elencate in §3.14; (6) testo del survey dichiarato dal survey stesso (`obs_ack`…). Cambio di base (§3.2): (7)
+  un calcolo fallito non tiene ferma la vista; (8) tile richiesti subito e caricati al passaggio; (9) l'ultima base
+  in attesa scarta le precedenti. Prestazioni (§3.15): (10) modalità di misura di TP1–TP7.
 - **D41-5 — Zoom e spostamento su una griglia di pixel: RINVIATA a dopo la v1** (decisione del proprietario del
   2026-10-21; aperta il 2026-10-20, sprint 4d).
   Un'immagine senza WCS valido si apre come griglia di pixel (scelta del proprietario), ma i comandi
@@ -869,7 +963,7 @@ compilare il Mac di riferimento (§3.15).
   default ′; (8) 6 thread per i tile; (9) due file Python (`sky_viewer.py`,
   `sky_renderer_gl.py`) per tenere l'OpenGL separato.
 - **Sprint 4g (2026-10-23): decisioni del proprietario** — distanza anche su sfondo HiPS con `measure.distance`
-  esteso (`05`); opzioni dello strumento in una barra sul cielo (§3.19). **Scelte minori DA CONFERMARE** (§3.19):
+  esteso (`05`); opzioni dello strumento in una barra sul cielo (§3.19). **Scelte minori CONFERMATE dal proprietario il 2026-10-24** (§3.19):
   (1) 4 cifre significative nell'etichetta; (2) opzioni ricordate con `prefs.set`; (3) anche il clic fa partire il
   puntatore Simbad, senza aspettare i 500 ms; (4) il trascinamento non sposta la vista con uno strumento attivo;
   (5) il riquadro Simbad si chiude al primo movimento oltre `CLICK_SLOP`; (6) un livello `measure` per ogni misura.
@@ -930,4 +1024,5 @@ compilare il Mac di riferimento (§3.15).
 | 2026-10-21 | Claude Code | **Sprint 4f del codice (decisioni del proprietario del 2026-10-21):** MOC sulla GPU (triangoli e perimetro, ordine ridotto dichiarato, stile da `moc.open`), pannello dei livelli con visibilità, ordine, opacità e rimozione come comandi del `05`, sfondo HiPS sotto l'immagine FITS con composizione per opacità, finestra della forzatura per `BODY_MISMATCH`; D41-6 decisa (13). §3.1, §3.2, §3.5, §3.7, §3.9, §3.13, §7, §13; test T31–T35. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Sprint 4g (decisioni del proprietario del 2026-10-23):** distanza anche con sfondo HiPS (`measure.distance` esteso nel `05`) e opzioni dello strumento in una barra sul cielo; nuova §3.19 con i dettagli di distanza e puntatore Simbad, scelte minori da confermare in §13, test T36 e T37. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Codice dello sprint 4g** ("FASE: CODICE – interfaccia v1", parte 4): `src/astrotwo/ui/sky_tools.py` (`DistanceTool`, `SimbadPointerTool`, `MeasureOverlay`, `DistanceOptionsBar`; terzo file Python del 41 oltre ai due della scelta minore 9, per non gonfiare `sky_viewer.py`) e collegamento in `sky_viewer.py`; `Bridge.simbad` e `TilePool.read(..., signal)`; descrizione del livello `measure` con valore pieno e unità; test T36 e T37 in `tests/ui/test_sky_tools.py`. Scelte minori di §3.19 da confermare in §13. Stato `approvato` invariato. |
-
+| 2026-10-24 | Claude Code | **Sprint 4h, specifica (decisioni del proprietario del 2026-10-24):** scelte minori dello sprint 4g confermate (§13); D41-4: **due Mac di riferimento** (minimo = iMac21,1 M1 8 GB, comodo = MacBook Air M5 32 GB dal 2 novembre), tabella di §3.15 compilata per il minimo; §3.14 con i dettagli del PNG (due fasi, crediti nell'immagine e nei metadati, chiavi `tEXt`, errori `EXPORT_PATH_INVALID`, `VIEW_UNDEFINED`, `EXPORT_FAILED`); §3.2 con le regole del cambio di base in un passo; §3.15 con il modo di misura di TP1–TP7; T14 e T17 riscritti; scelte minori 1–10 da confermare. `05` §7 e §10 aggiornati. Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **Codice dello sprint 4h** ("FASE: CODICE – interfaccia v1", parte 4, ultimo sprint del 41): `ui/export_view.py` (testi, crediti, scrittura atomica del PNG), `view.export_png` collegato in `main_window.py`, `render_offscreen` nell'interfaccia di disegno; cambio di base in un passo in `sky_viewer.py` (`_stage`, `_try_commit`, `_base_ready`); test `tests/ui/test_export_png.py` (T14, più un test `gl`), `tests/ui/test_base_switch.py` (T17), `tests/ui/test_perf.py` (TP1–TP7, `perf`); risultati misurati nel §3.15 (P1 e P5 non raggiunti sul Mac minimo). 831 test di default. |
