@@ -635,7 +635,8 @@ def colorize(view_tile, display: Mapping | None):
     from astrotwo.core.images_fits import set_display
 
     if display is None or display.get("vmin") is None or display.get("vmax") is None:
-        raise HiPSError("HIPS_DISPLAY_UNKNOWN", "limiti di colore del survey non noti: i tile FITS non si disegnano")
+        raise HiPSError("HIPS_DISPLAY_UNKNOWN", "limiti di colore del survey non noti: i tile FITS non si disegnano",
+                        params={"reason": "no_limits"})
     plane = set_display(view_tile.values, display["vmin"], display["vmax"], display.get("gamma", 1.0),
                         display.get("palette", "gray"), display.get("stretch", "linear"))
     return dataclasses.replace(view_tile, values=plane.rgba, format="rgba")
@@ -1043,7 +1044,8 @@ class SkyViewer(QWidget):
         self._stage_sampled = True
         if "fits" in self.service.tile_formats[:1] and (self.display is None or self.display.get("vmin") is None):
             self._report("HIPS_DISPLAY_UNKNOWN", f"{self.service.hips_id}: limiti di colore del survey non noti, "
-                         "i tile FITS non si disegnano; riaprire il survey indicando vmin e vmax")
+                         "i tile FITS non si disegnano; riaprire il survey indicando vmin e vmax",
+                         {"reason": "reopen", "hips_id": self.service.hips_id})
         else:
             for index in sampling.tiles:
                 self._in_flight += 1
@@ -1075,11 +1077,11 @@ class SkyViewer(QWidget):
         self._in_flight = max(0, self._in_flight - 1)
         self.tiles_changed.emit(self._in_flight)
 
-    def _report(self, code: str, text: str) -> None:
+    def _report(self, code: str, text: str, params: dict | None = None) -> None:
         key = (self.survey_layer or "", code)
         if key not in self._reported:  # un solo messaggio per survey e codice, non uno per tile (41 §3.7)
             self._reported.add(key)
-            self.message.emit(ResultMessage(code, text))
+            self.message.emit(ResultMessage(code, text, params or {}))
 
     def _upload(self) -> None:
         # Riga 0 della finestra = sud (asse y del WCS verso nord): sullo schermo va in basso.

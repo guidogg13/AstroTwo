@@ -18,6 +18,24 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-24, sprint 8c della v1 (messaggi dei moduli, D40-3):**
+  il **modulo 12** restituisce errori e avvisi come codice + `params`
+  (`HiPSError(code, message, params=...)`, avvisi `ModuleWarning`); `12` §10 con
+  la tabella di codici, ragioni e parametri; voci del catalogo in inglese e
+  italiano con le sotto-voci per `reason` (nuove: HIPS_*, HEALPIX_*, BODY_*,
+  `REGION_INVALID`, `SERVICE_ERROR`, `MOCSERVER_UNAVAILABLE` e sotto-voci
+  aggiunte a `NET_TIMEOUT`, `WCS_MISSING`, `OPERATION_UNSUPPORTED`,
+  `PREVIEW_NOT_MEASURABLE`, `MEMORY_LIMIT_EXCEEDED`, `FROM_CACHE`). Gli errori
+  del 14 e del 16 rilanciati dal 12 conservano codice, testo e `params`
+  dell'altro modulo (finché non è convertito: nessuna traduzione, §3.7.2);
+  gli avvisi dei moduli sotto passano invariati. I messaggi che incorporano
+  un altro messaggio (causa, motivo del tile corrotto) usano un parametro
+  esterno: **aperta D40-7** (tipo di parametro "messaggio" nel catalogo,
+  Gruppo 3, raccomandazione nel 40 §13). Test `tests/core/test_messages_hips.py`
+  (ogni coppia codice/ragione del 12 provocata e controllata contro il
+  catalogo), T18 e `conftest.py` con il 12; il fake di `test_main_window`
+  dà ai suoi errori i `params` veri. Test di rete non eseguiti
+  (`--no-network`). Decisioni aperte: **17**.
 - **Stato al 2026-10-24, parte 4, sprint 4h della v1 (41, ultimo):**
   **PNG della vista** (`view.export_png` collegato; nuovo `ui/export_view.py`):
   immagine in pixel fisici con riga dei crediti in basso a destra e blocchi
@@ -1072,6 +1090,7 @@ poi `decisioni-aperte.md`.
 | D05-3, D40-2 | Adattatore del 19; avvio tramite URL (H18) | `05`, `40` §13 | **rimandate** il 2026-10-15 (Gruppo 3) |
 | D40-3 | Messaggi dei moduli in inglese e italiano: catalogo codice → testo con `params`; i moduli 10–19 e il `05` restituiscono codice + `params` (testo originale conservato); inglese verso l'IA | `40-ui-finestra-principale.md` §13, §3.7.1 | **decisa il 2026-10-24** (solo specifiche; codice negli sprint 8b–8d dopo l'approvazione dei `.md`) |
 | D40-5 | Posizione del catalogo dei messaggi (non in `ui/`, serve anche all'IA): modulo neutro `src/astrotwo/messages_catalog.py` | `40-ui-finestra-principale.md` §13 | **decisa il 2026-10-24** (proprietario, come raccomandato) |
+| D40-7 | Messaggi annidati (causa, motivo del tile corrotto, risposta del 14) nel catalogo: oggi parametro esterno, nella lingua del modulo; raccomandato (se l'inglese è un requisito della v1) un tipo di parametro `message` reso in modo ricorsivo | `40-ui-finestra-principale.md` §13 | **da decidere** (Gruppo 3, aperta il 2026-10-24, sprint 8c) |
 | D40-6 | Varianti per ragione nel catalogo: sotto-voci scelte dal parametro `reason`, nessun codice cambia | `40-ui-finestra-principale.md` §13, §3.7.1 | **decisa il 2026-10-24** (proprietario, tra tre opzioni) |
 | D41-7, D41-8 | P1 (1 milione di simboli, 46,0 ms contro 16,7) e P5 (avvio a freddo, 4,46 s contro 3) non raggiunti sull'iMac M1 8 GB; obiettivi invariati; sprint di prestazioni dopo la prova completa (annotato anche `test_t14_latency`, 170 ms una volta) | `41-ui-visualizzatore-cielo.md` §13 | **da decidere** (Gruppo 3, aperte il 2026-10-24) |
 | D41-5, D41-6 | Zoom e spostamento su una griglia di pixel; epoca del COOSYS persa da `catalog.set_columns` | `41-ui-visualizzatore-cielo.md` §13 | D41-5 **rinviata a dopo la v1** il 2026-10-21; D41-6 **da decidere** (Gruppo 3, aperta il 2026-10-21) |
@@ -1096,7 +1115,7 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
-**Prossimo (2026-10-24, dopo lo sprint 8b):** sprint 8c = modulo 12 (poi 13), 8d = 14–19, 8e = `05`, `30`–`35` e i messaggi propri di `41`/`42`/`44`; ogni sprint aggiunge il modulo all'elenco `CONVERTED` del test T18; infine lo sprint di prestazioni per D41-7 e D41-8.
+**Prossimo (2026-10-24, dopo lo sprint 8c, modulo 12 fatto):** sprint 8c = modulo 13 (il 12 è fatto), 8d = 14–19, 8e = `05`, `30`–`35` e i messaggi propri di `41`/`42`/`44`; ogni sprint aggiunge il modulo all'elenco `CONVERTED` del test T18; infine lo sprint di prestazioni per D41-7 e D41-8.
 
 0. **Subito (FASE: CODICE – interfaccia v1, 2026-10-17):** verifiche
    prima del codice fatte (licenze, `keyring`, OpenGL, Ollama, cache con
@@ -1235,3 +1254,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-24 | Claude Code | **Parte 4, sprint 4h della v1 (41, ultimo):** specifica e codice di `view.export_png` (`ui/export_view.py`, collegamento nella finestra, `render_offscreen` nel renderer, `05` §7 e §10), cambio di base in un passo (`sky_viewer.py`), `tests/ui/test_export_png.py`, `tests/ui/test_base_switch.py`, `tests/ui/test_perf.py`; D41-4 con due Mac di riferimento; scelte minori del 4g confermate; risultati `perf` sul Mac minimo nel 41 §3.15 (P1 e P5 non raggiunti). 831 test di default; test di rete non eseguiti (`--no-network`). |
 | 2026-10-24 | Claude Code | **Sprint 8 della v1, solo specifiche (D40-3 decisa):** nel `40` nuove §3.7.1 (catalogo dei messaggi codice → testo inglese/italiano con segnaposto, contratto dei moduli con `params`, inglese verso l'IA) e §3.7.2 (codice senza voce), test T5 riscritto e T18–T20; `05` (`ResultMessage` e `CommandError` con `params`) e `32` (testo inglese del catalogo nel risultato) aggiornati; verifica: i moduli 10–19 oggi restituiscono codice + testo italiano (~613 punti, ~152 con `details`), scelto dal proprietario di modificarli. Aperte D40-5 (posizione del catalogo), D41-7 e D41-8 (P1 e P5 non raggiunti, obiettivi invariati, sprint di prestazioni); scelte minori 1–10 dello sprint 4h confermate; annotato `test_t14_latency`. Aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). **Nessun codice scritto**: si ferma per l'approvazione dei `.md` (e di 10–19 `§10`). |
 | 2026-10-24 | Claude Code | **Sprint 8b (codice, FASE: CODICE – interfaccia v1):** `src/astrotwo/messages_catalog.py` (catalogo `en`/`it`, segnaposto, valori inseriti senza arrotondare, sotto-voci per `reason`, nota "(nessuna traduzione)"), `ui/message_view.py` (lingua dell'interfaccia: pannello Messaggi con dettaglio, stato, finestre, pannello IA), `ai/tool_registry.py` (verso il modello: codice, `params`, testo inglese, parametri esterni marcati); `ResultMessage`/`CommandError` con `params`; moduli **10 e 11** convertiti a codice + `params` (testo italiano invariato; `ModuleWarning` = coppia con `params`); D40-5 e D40-6 decise; test T18 (solo moduli convertiti), T19, T20, T5 riscritto; controllo automatico di ogni errore dei moduli convertiti contro il catalogo (`tests/conftest.py`). Test di rete non eseguiti (--no-network). |
+| 2026-10-24 | Claude Code | **Sprint 8c (codice, FASE: CODICE – interfaccia v1):** modulo **12** convertito a codice + `params` (`HiPSError` con `params` e `relayed`, avvisi `ModuleWarning`; testo italiano invariato; errori del 14 e del 16 rilanciati con codice, testo e `params` dell'altro modulo); `12` §10 con la tabella dei parametri; voci del catalogo del 12 (e sotto-voci aggiunte a sei voci condivise); T18 e `conftest.py` con il 12; `tests/core/test_messages_hips.py`; aperta D40-7 (messaggi annidati). Aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). Test di rete non eseguiti (`--no-network`). |

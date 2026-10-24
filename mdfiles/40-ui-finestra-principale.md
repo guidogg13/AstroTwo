@@ -517,6 +517,19 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   catalogo possono avere sotto-voci scelte dal parametro `reason`
   (identificatore stabile), per i codici sollevati per ragioni diverse;
   nessun codice cambia. Applicata in §3.7.1.
+- **D40-7 — Messaggi annidati nel catalogo: DA DECIDERE (aperta il 2026-10-24,
+  sprint 8c; Gruppo 3).** Alcuni testi dei moduli incorporano un altro
+  messaggio (es. `HIPS_COVERAGE_UNKNOWN` con la causa, `HIPS_TILE_DISCARDED`
+  e `HIPS_BAD_TILE` con il motivo della diagnosi del tile, `MOCSERVER_UNAVAILABLE`
+  con la risposta del 14). Oggi il messaggio annidato è un parametro **esterno**
+  (`cause`, `detail`, `problem`, come per il 10 e l'11): resta nella lingua del
+  modulo (italiano) anche con l'interfaccia in inglese. Opzioni:
+  (a) lasciare così, scelta minore attuale; (b) un tipo di parametro
+  `message` (`{"code", "params"}`) reso in modo ricorsivo da `message_text`
+  nella lingua dell'interfaccia, con voci proprie per le diagnosi (modifica a
+  §3.7.1 e al catalogo, un passo prima dello sprint 8d). Raccomandazione: (b)
+  se la lingua inglese dell'interfaccia è un requisito per la v1; altrimenti
+  (a). Da decidere dal proprietario.
 - **D40-2 — Avvio tramite URL (H18): RIMANDATA il 2026-10-15** (decisione
   del proprietario, come proposto): l'equivalente in AstroTwo (app `.dmg`,
   senza Java WebStart) si definisce nella versione successiva del 40.
@@ -603,3 +616,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-23 | Claude Code | **Sprint 4g del 41:** `ui.set_tool` attiva davvero lo strumento nel visualizzatore (`SkyViewer.set_tool`); tre impostazioni nuove controllate da `prefs.set` e ricordate in `QSettings` per le opzioni della distanza (`tools/distance_unit`, `tools/distance_snap`, `tools/distance_box_size`, §3.10); 12 testi nuovi tradotti nel `.ts`/`.qm`. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3 decisa (sprint 8, solo specifiche):** messaggi dei moduli nella lingua dell'interfaccia (inglese/italiano) da un catalogo codice → testo con parametri (nuove §3.7.1 e §3.7.2), verso l'IA sempre inglese; i moduli 10–19 e il `05` passano da codice + testo a codice + `params` (testo originale conservato, vedi `05`); D40-1 superata; test T5 riscritto, nuovi T18–T20; aperta D40-5 (posizione del catalogo, raccomandato un modulo neutro). Nessun codice scritto. |
 | 2026-10-24 | Claude Code | **Sprint 8b (codice):** approvati i `.md` dello sprint 8; D40-5 decisa (catalogo in `src/astrotwo/messages_catalog.py`); nuova e decisa D40-6 (varianti per `reason`); §3.7.1 aggiornata e passaggio graduale di T18 (solo moduli convertiti). |
+| 2026-10-24 | Claude Code | **Sprint 8c (codice):** modulo 12 convertito a codice + `params` (voci del catalogo e test T18 aggiornati, `12` §10); aperta D40-7 (messaggi annidati, Gruppo 3). Nessun comportamento cambia. |

@@ -26,6 +26,8 @@ SRC = ROOT / "src" / "astrotwo"
 CONVERTED = {
     "core/coordinates_wcs.py": "CoordinatesWcsError",
     "core/images_fits.py": "ImagesFitsError",
+    "core/hips.py": "HiPSError",
+    "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
 }
 
 _CODE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$")
@@ -67,6 +69,8 @@ def scan_module(path: Path, error_name: str) -> tuple[set[str], set[tuple[str, s
                     for k, v in zip(given.keys, given.values, strict=True):
                         if isinstance(k, ast.Constant) and k.value == "reason":
                             reasons.update((code, c) for c in _constants(v))
+        elif isinstance(node, ast.keyword) and node.arg == "reason":  # reason="x" passato a una funzione di appoggio
+            reasons.update((ANY, c) for c in _constants(node.value))
         elif isinstance(node, ast.keyword) and node.arg == "warnings":  # avvisi di solo codice: warnings=("X",)
             codes.update(c for c in (n.value for n in ast.walk(node.value) if isinstance(n, ast.Constant)
                                      and isinstance(n.value, str)) if _CODE.match(c))

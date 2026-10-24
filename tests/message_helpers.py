@@ -30,7 +30,12 @@ def check_message(code: str, params: Mapping[str, object] | None, text: str | No
 
 
 def check_error(exc: BaseException) -> tuple[str, str | None]:
-    """Eccezione di un modulo con ``code``, ``message`` e ``params``."""
+    """Eccezione di un modulo con ``code``, ``message`` e ``params``.
+
+    Un errore rilanciato da un modulo sotto non ancora convertito (``relayed`` e senza ``params``, es. il 14 prima
+    dello sprint 8d) non ha una voce da controllare: codice, testo e ``params`` restano dell'altro modulo."""
+    if getattr(exc, "relayed", False) and not exc.params:
+        return exc.code, None
     return check_message(exc.code, exc.params, exc.message)
 
 

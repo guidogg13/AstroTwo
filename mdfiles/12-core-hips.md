@@ -611,6 +611,152 @@ qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
 | Corpo da `hips_body` (WD HiPS 2.0) | corpo usato, dichiarato come bozza IVOA | avviso `HIPS_BODY_DRAFT` |
 | `creator_did` diverso dall'identificativo richiesto | vale quello del servizio | avviso `HIPS_ID_MISMATCH` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8c) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`HiPSError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la coppia
+(codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai
+arrotondati; le quantità sono `{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta
+invariato** (campo `text`/`message`); il modulo **non** contiene traduzioni e non importa il catalogo
+(`src/astrotwo/messages_catalog.py`, `40` §3.7.1). Il parametro riservato `reason` sceglie la sotto-voce
+(D40-6); "esterno" = testo di terzi (libreria, file, servizio) o diagnosi annidata di un altro modulo, inserito
+tale e quale e senza tradurlo (stessa regola del 10 e dell'11: `detail`, `cause`). I `details` di prima
+(`url`, `hips_id`, `order`, `index`, `outside`, `depth`, `field`, `status`, `format`, `line`) restano.
+
+**Errori rilanciati da un altro modulo (14, 16).** Quando il 12 rilancia l'errore di un modulo sotto di lui
+(`_net`: `NET_TIMEOUT`, `SERVICE_ERROR`, …; `HiPSError(exc.code, exc.message)` per il 16) **codice, testo e `params` restano
+quelli dell'altro modulo**: il 12 non li riscrive né li inserisce nel catalogo. Finché quel modulo non è
+convertito (14, 16: sprint 8d) l'errore ha `params` vuoti e si mostra come in §3.7.2 del `40` (testo originale
+con la nota "(nessuna traduzione)"); l'errore rilanciato non è controllato contro il catalogo (T18) finché i suoi
+`params` sono vuoti. Gli **avvisi dei moduli sotto** (`response.notes` del 14, `moc.warnings` del 16,
+`table.warnings` del 13, gli avvisi dei tile in `pixel_values`) passano **tali e quali**, con il loro `params`.
+**Messaggi annidati:** dove il testo del 12 incorpora il messaggio di un altro modulo (es. `HIPS_COVERAGE_UNKNOWN`
+con la causa, `MOCSERVER_UNAVAILABLE` con la risposta del 14, `HIPS_TILE_DISCARDED` e `HIPS_BAD_TILE` con il motivo
+della diagnosi del tile) il messaggio annidato è un parametro **esterno** (`cause`, `detail`, `problem`) più, se ha
+un codice, `cause_code`: scelta minore dello sprint 8c, coerente con il `cause`/`detail` del 10 e dell'11; la
+traduzione completa dei messaggi annidati richiederebbe un tipo di parametro "messaggio" nel catalogo (modifica
+del `40`: D40-7, da decidere).
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `HIPS_NOT_A_SERVICE` | (generale) | — |
+| `HIPS_NOT_A_SERVICE` | `bad_line` | `source` (string), `line` (integer), `content` (string, esterno) |
+| `HIPS_NOT_A_SERVICE` | `no_properties` | `source` (string) |
+| `HIPS_NOT_A_SERVICE` | `service_error` | `url` (string), `detail` (string, esterno) |
+| `HIPS_NOT_A_SERVICE` | `not_utf8` | `url` (string), `detail` (string, esterno) |
+| `HIPS_NOT_A_SERVICE` | `no_mandatory_keys` | `url` (string) |
+| `HIPS_NOT_A_SERVICE` | `no_service_url` | `hips_id` (string) |
+| `HIPS_METADATA_INVALID` | (generale) | — |
+| `HIPS_METADATA_INVALID` | `missing` | `source` (string), `field` (string) |
+| `HIPS_METADATA_INVALID` | `not_integer` | `source` (string), `field` (string), `value` (string, esterno) |
+| `HIPS_METADATA_INVALID` | `out_of_range` | `source` (string), `field` (string), `value` (integer), `low` (integer), `high` (integer) |
+| `HIPS_METADATA_INVALID` | `below_minimum` | `source` (string), `field` (string), `value` (integer), `low` (integer) |
+| `HIPS_METADATA_INVALID` | `not_number` | `source` (string), `field` (string), `value` (string, esterno) |
+| `HIPS_METADATA_INVALID` | `release_date` | `source` (string), `value` (string, esterno) |
+| `HIPS_METADATA_INVALID` | `product_unknown` | `source` (string), `value` (string, esterno), `allowed` (list) |
+| `HIPS_METADATA_INVALID` | `tile_format` | `source` (string), `formats` (string, esterno), `product` (string), `allowed` (list) |
+| `HIPS_METADATA_INVALID` | `tile_width_not_power_of_two` | `source` (string), `width` (integer) |
+| `HIPS_METADATA_INVALID` | `cube_depth_missing` | `source` (string) |
+| `HIPS_METADATA_INVALID` | `cube_first_frame` | `source` (string), `first` (integer), `depth` (integer) |
+| `HIPS_METADATA_INVALID` | `metadata_xml_unavailable` | `url` (string), `detail` (string, esterno) |
+| `HIPS_METADATA_INVALID` | `metadata_xml_unreadable` | `url` (string), `detail` (string, esterno) |
+| `HIPS_UNKNOWN` | (generale) | `hips_id` (string) |
+| `HIPS_UNKNOWN` | `mocserver` | `hips_id` (string) |
+| `HIPS_UNKNOWN` | `not_listed` | `hips_id` (string), `known` (list) |
+| `HIPS_UNKNOWN` | `not_listed_empty` | `hips_id` (string) |
+| `HEALPIX_ORDER_INVALID` | (generale) | `value` (string), `high` (integer) |
+| `HEALPIX_ORDER_INVALID` | `service_maximum` | `value` (string), `high` (integer) |
+| `HEALPIX_ORDER_INVALID` | `tile_width` | `value` (string), `high` (integer), `tile_width` (integer) |
+| `HEALPIX_ORDER_INVALID` | `plus_tile_bits` | `order` (integer), `width` (integer), `maximum` (integer) |
+| `HEALPIX_INDEX_INVALID` | (generale) | `index` (string), `order` (integer), `maximum` (integer) |
+| `HIPS_FRAME_UNSUPPORTED` | (generale) | `frame` (string) |
+| `HIPS_FRAME_UNSUPPORTED` | `ecliptic` | `frame` (string) |
+| `HIPS_FRAME_UNSUPPORTED` | `planetary` | `frame` (string) |
+| `HIPS_FRAME_UNSUPPORTED` | `moc_planetary` | `hips_id` (string), `body` (string) |
+| `HIPS_FRAME_UNSUPPORTED` | `coverage_planetary` | `hips_id` (string), `body` (string) |
+| `REGION_INVALID` | (generale) | — |
+| `REGION_INVALID` | `radius` | `radius` (string) |
+| `REGION_INVALID` | `center_not_single` | — |
+| `REGION_INVALID` | `conversion_center` | `detail` (string, esterno) |
+| `REGION_INVALID` | `conversion_positions` | `detail` (string, esterno) |
+| `REGION_INVALID` | `conversion_window` | `detail` (string, esterno) |
+| `HIPS_OUT_OF_COVERAGE` | (generale) | — |
+| `HIPS_OUT_OF_COVERAGE` | `field` | `outside` (integer) |
+| `HIPS_OUT_OF_COVERAGE` | `tile` | `hips_id` (string), `index` (integer), `order` (integer) |
+| `HIPS_TYPE_MISMATCH` | (generale) | — |
+| `HIPS_TYPE_MISMATCH` | `catalog_no_pixels` | `hips_id` (string) |
+| `HIPS_TYPE_MISMATCH` | `catalog_tiles` | `hips_id` (string) |
+| `HIPS_TYPE_MISMATCH` | `not_a_cube` | `hips_id` (string), `dataproduct_type` (string) |
+| `HIPS_TYPE_MISMATCH` | `not_a_catalog` | `hips_id` (string), `dataproduct_type` (string) |
+| `SERVICE_ERROR` | (generale) | — |
+| `SERVICE_ERROR` | `http_status` | `url` (string), `status` (integer), `status_text` (string, esterno) |
+| `SERVICE_ERROR` | `unreadable_response` | `url` (string), `detail` (string, esterno) |
+| `HIPS_FORMAT_UNAVAILABLE` | (generale) | `hips_id` (string), `format` (string), `offered` (list) |
+| `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10 e dell'11 |
+| `HIPS_TILE_MISSING` | (generale) | `url` (string) |
+| `HIPS_BAD_TILE` | (generale) | — |
+| `HIPS_BAD_TILE` | `tile_corrupt` | `url` (string), `problem` (string, esterno) |
+| `HIPS_BAD_TILE` | `file_corrupt` | `url` (string), `problem` (string, esterno) |
+| `HIPS_BAD_TILE` | `value_not_conformant` | `hips_id` (string), `value` (string, esterno), `column` (string, esterno), `datatype` (string, esterno), `detail` (string, esterno) |
+| `HIPS_CUBE_PLANE_INVALID` | (generale) | — |
+| `HIPS_CUBE_PLANE_INVALID` | `not_a_cube` | `hips_id` (string), `plane` (string) |
+| `HIPS_CUBE_PLANE_INVALID` | `out_of_range` | `hips_id` (string), `plane` (string), `depth` (integer), `last_plane` (integer) |
+| `HIPS_PIXEL_UNAVAILABLE` | (generale) | — |
+| `HIPS_PIXEL_UNAVAILABLE` | `not_fits` | `url` (string), `format` (string) |
+| `HIPS_PIXEL_UNAVAILABLE` | `no_fits_tiles` | `hips_id` (string), `formats` (list) |
+| `HIPS_OUT_OF_TILE` | (generale) | — |
+| `HIPS_OUT_OF_TILE` | `positions` | `count` (integer), `index` (integer), `order` (integer) |
+| `HIPS_OUT_OF_TILE` | `order_mismatch` | `tile_order` (integer), `sampling_order` (integer) |
+| `HIPS_OUT_OF_TILE` | `no_window_pixels` | `index` (integer) |
+| `MOCSERVER_UNAVAILABLE` | (generale) | — |
+| `MOCSERVER_UNAVAILABLE` | `resolve` | `hips_id` (string), `detail` (string, esterno) |
+| `MOCSERVER_UNAVAILABLE` | `index` | `detail` (string, esterno) |
+| `MOCSERVER_UNAVAILABLE` | `coverage` | `hips_id` (string), `detail` (string, esterno) |
+| `MOCSERVER_UNAVAILABLE` | `local_copy` (avviso) | `retrieved_at` (string) |
+| `OPERATION_UNSUPPORTED` | `build_method` | `method` (string), `allowed` (list) — voce già dell'11 |
+| `OPERATION_UNSUPPORTED` | `build_color_image` | `origin` (string) |
+| `HIPS_DISPLAY_REQUIRED` | (generale) | — |
+| `HIPS_DISPLAY_INVALID` | (generale) | — |
+| `HIPS_DISPLAY_INVALID` | `stretch` | `stretch` (string), `allowed` (list) |
+| `HIPS_DISPLAY_INVALID` | `limits` | — |
+| `PREVIEW_NOT_MEASURABLE` | `build_hips` | `origin` (string) — voce già dell'11 |
+| `WCS_MISSING` | `image_without_wcs` | `origin` (string) — voce già del 10 e dell'11 |
+| `MEMORY_LIMIT_EXCEEDED` | `build_hips` | `needed` (quantity, byte), `limit` (quantity, byte) — voce già dell'11 |
+| `HIPS_EMPTY` | (generale) | — |
+| `HIPS_DISPLAY_UNKNOWN` (sollevato dal 41) | (generale) | — |
+| `HIPS_DISPLAY_UNKNOWN` | `no_limits` | — |
+| `HIPS_DISPLAY_UNKNOWN` | `reopen` | `hips_id` (string) |
+| `BODY_UNKNOWN` (avviso) | (generale) | — |
+| `BODY_UNKNOWN` | `no_hips_body` | `source` (string), `frame` (string) |
+| `BODY_UNKNOWN` | `body_differs` | `source` (string), `frame` (string), `body` (string) |
+| `HIPS_BODY_DRAFT` (avviso) | (generale) | `source` (string), `body` (string) |
+| `BODY_UNSUPPORTED` (avviso) | (generale) | `source` (string), `detail` (string, esterno) |
+| `BODY_NORMALIZED` (avviso) | (generale) | `source` (string), `body` (string), `canonical` (string) |
+| `HIPS_DEFAULT_TILE_WIDTH` (avviso) | (generale) | `source` (string), `width` (integer) |
+| `HIPS_VERSION_UNKNOWN` (avviso) | (generale) | `source` (string), `version` (string), `standard` (string) |
+| `HIPS_ID_MISMATCH` (avviso) | (generale) | `requested` (string), `service_id` (string) |
+| `HIPS_ALREADY_LISTED` (avviso) | (generale) | `hips_id` (string), `origin` (string), `retrieved_at` (string) |
+| `HIPS_COVERAGE_NOT_CHECKED` (avviso) | (generale) | `frame` (string) |
+| `HIPS_RESOLUTION_LIMIT` (avviso) | (generale) | `hips_id` (string), `resolution` (quantity), `max_order` (integer) |
+| `FROM_CACHE` (avviso) | `cached_tile` | `url` (string), `retrieved_at` (string) — voce già dell'11 |
+| `HIPS_TILE_DISCARDED` (avviso) | (generale) | — |
+| `HIPS_TILE_DISCARDED` | `cache_corrupt` | `url` (string), `problem` (string, esterno) |
+| `HIPS_TILE_DISCARDED` | `tile_corrupt` | `url` (string), `problem` (string, esterno) |
+| `HIPS_TILE_DISCARDED` | `cache_invalid` | `url` (string), `problem` (string, esterno) |
+| `HIPS_TILE_DISCARDED` | `file_invalid` | `url` (string), `problem` (string, esterno) |
+| `HIPS_COVERAGE_UNKNOWN` (avviso) | (generale) | — |
+| `HIPS_COVERAGE_UNKNOWN` | `moc_missing` | `url` (string) |
+| `HIPS_COVERAGE_UNKNOWN` | `unavailable` | `hips_id` (string), `cause_code` (string), `cause` (string, esterno) |
+| `HIPS_COVERAGE_FROM_MOCSERVER` (avviso) | (generale) | `hips_id` (string), `url` (string) |
+| `HIPS_DEFAULT_SURVEY` (avviso) | (generale) | `survey` (string) |
+| `HIPS_CUBE_UNIT_UNKNOWN` (avviso) | (generale) | — |
+| `HIPS_CUBE_UNIT_UNKNOWN` | `not_fits_unit` | `source` (string), `unit` (string) |
+| `HIPS_CUBE_UNIT_UNKNOWN` | `missing` | `source` (string) |
+| `HIPS_CUBE_AXIS_INCOMPLETE` (avviso) | (generale) | `source` (string) |
+| `HIPS_UNIT_MIXED` (avviso) | (generale) | `units` (list) |
+| `HIPS_ALLSKY_NOT_WRITTEN` (avviso) | (generale) | — |
+
 ## 11. Esposizione all'IA
 
 - **`list_surveys`** — output: elenco survey con metadati (nessun calcolo).
@@ -726,3 +872,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova parte **P6, riproiezione dei tile sulla vista del `41`** — `view_sampling` e `fill_view` con campionamento al più vicino sulla griglia HEALPix (disposizione dei pixel verificata, nessuna fascia tra tile), geometria da `make_view_wcs` del 10; verifica delle funzioni HiPS pubbliche di `reproject` prima del codice (§3, §7, §12 T17–T18, §13). Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **P6 scritta** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `view_sampling` (campionamento al più vicino sulla griglia HEALPix, stessa regola di `pixel_values`, ordine di default da `order_for_resolution`, copertura facoltativa) e `fill_view` (valori nel tipo nativo o colori a 8 bit, riquadro e maschera, provenienza); verifica di `reproject` (scarica da sé: non usabile con la rete del 14 e la cache del 04) e tempi misurati in §3; test T17 (`TAN` e `AIT`, confini tra tile, bordo dell'`AIT`) e T18 (ordine di arrivo, colori PNG) in `tests/core/test_hips.py`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8c:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso, regola per gli errori rilanciati dal 14 e dal 16 (codice e `params` restano dell'altro modulo) e per i messaggi annidati (parametri esterni); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

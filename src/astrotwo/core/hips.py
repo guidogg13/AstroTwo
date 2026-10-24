@@ -16,10 +16,13 @@ del 04; HEALPix con ``astropy-healpix`` (``healpy`` escluso); MOC con il 16.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import astropy.units as u
+
+from astrotwo.core.coordinates_wcs import ModuleWarning
 
 __all__ = [
     "ViewSampling",
@@ -80,13 +83,42 @@ _CACHE_MODULE = "12"
 
 
 class HiPSError(Exception):
-    """Errore del modulo 12 con identificatore della specifica (§10)."""
+    """Errore del modulo 12 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore di un
+    modulo sotto (14, 16) rilanciato con il suo codice, il suo testo e i suoi ``params`` (§10, "Parametri dei messaggi")."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None, relayed: bool = False,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``), mai arrotondato."""
+    return {"value": float(value), "unit": unit}
+
+
+def _relay(exc) -> HiPSError:
+    """Errore di un modulo sotto rilanciato: codice, testo e ``params`` restano suoi (§10)."""
+    return HiPSError(exc.code, exc.message, params=getattr(exc, "params", None), relayed=True,
+                     **getattr(exc, "details", {}))
+
+
+def _iso(when) -> str:
+    return when.isoformat()
+
+
+def _timeout_error(url: str, timeouts, exc: BaseException) -> HiPSError:
+    """``NET_TIMEOUT`` di un file del servizio (voce ``url`` del catalogo, come per il 10 e l'11)."""
+    return HiPSError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
+                     f"{timeouts.read:g} s lettura): {exc}", url=url,
+                     params={"reason": "url", "url": url, "connect": _q(timeouts.connect, "s"),
+                             "read": _q(timeouts.read, "s"), "detail": str(exc)})
 
 
 # --------------------------------------------------------------------------
@@ -105,10 +137,12 @@ def parse_properties(text: str, *, source: str = "properties") -> dict[str, tupl
         key = key.strip()
         if not sep or not _KEY.match(key):
             raise HiPSError("HIPS_NOT_A_SERVICE", f"{source}: riga {number} non è nella forma 'chiave = valore' "
-                            f"dello standard HiPS 1.0: {raw[:120]!r}", line=number)
+                            f"dello standard HiPS 1.0: {raw[:120]!r}", line=number,
+                            params={"reason": "bad_line", "source": source, "line": number, "content": raw[:120]})
         values.setdefault(key, []).append(value.strip())
     if not values:
-        raise HiPSError("HIPS_NOT_A_SERVICE", f"{source}: nessuna proprietà HiPS")
+        raise HiPSError("HIPS_NOT_A_SERVICE", f"{source}: nessuna proprietà HiPS",
+                        params={"reason": "no_properties", "source": source})
     return {key: tuple(v) for key, v in values.items()}
 
 
@@ -165,9 +199,10 @@ class HiPSService:
         return "; ".join(parts)
 
 
-def _invalid(source: str, field_name: str, reason: str) -> HiPSError:
-    return HiPSError("HIPS_METADATA_INVALID", f"{source}: {field_name} {reason}; nessuna voce aggiunta",
-                     field=field_name)
+def _invalid(source: str, field_name: str, text: str, *, reason: str, **params: object) -> HiPSError:
+    """``HIPS_METADATA_INVALID``: ``text`` è il motivo in italiano, ``reason`` l'identificatore del catalogo."""
+    return HiPSError("HIPS_METADATA_INVALID", f"{source}: {field_name} {text}; nessuna voce aggiunta",
+                     field=field_name, params={"reason": reason, "source": source, **params})
 
 
 def _first(props: dict[str, tuple[str, ...]], key: str) -> str | None:
@@ -182,9 +217,12 @@ def _int(props, key: str, source: str, *, low: int = 0, high: int | None = None)
     try:
         value = int(text)
     except ValueError:
-        raise _invalid(source, key, f"{text!r} non è un intero") from None
+        raise _invalid(source, key, f"{text!r} non è un intero", reason="not_integer", field=key, value=text) from None
     if value < low or (high is not None and value > high):
-        raise _invalid(source, key, f"{value} fuori da [{low}, {high if high is not None else '∞'}]")
+        raise _invalid(source, key, f"{value} fuori da [{low}, {high if high is not None else '∞'}]",
+                       **({"reason": "out_of_range", "field": key, "value": value, "low": low, "high": high}
+                          if high is not None else {"reason": "below_minimum", "field": key, "value": value,
+                                                    "low": low}))
     return value
 
 
@@ -195,7 +233,7 @@ def _float(props, key: str, source: str) -> float | None:
     try:
         return float(text)
     except ValueError:
-        raise _invalid(source, key, f"{text!r} non è un numero") from None
+        raise _invalid(source, key, f"{text!r} non è un numero", reason="not_number", field=key, value=text) from None
 
 
 def _release_date(text: str, source: str) -> datetime:
@@ -205,32 +243,39 @@ def _release_date(text: str, source: str) -> datetime:
             return datetime.strptime(text, pattern).replace(tzinfo=UTC)
         except ValueError:
             continue
-    raise _invalid(source, "hips_release_date", f"{text!r} non è nella forma ISO 8601 YYYY-mm-ddTHH:MMZ")
+    raise _invalid(source, "hips_release_date", f"{text!r} non è nella forma ISO 8601 YYYY-mm-ddTHH:MMZ",
+                   reason="release_date", value=text)
 
 
-def _body(props, frame: str, source: str) -> tuple[str | None, list[tuple[str, str]]]:
+def _body(props, frame: str, source: str) -> tuple[str | None, list[ModuleWarning]]:
     """Corpo (D19-3) dal sistema dichiarato; per i HiPS planetari da ``hips_body`` (WD HiPS 2.0), normalizzato
     con la tabella dei nomi del 19 (D12-6)."""
     if frame in CELESTIAL_FRAMES:
         return "celestial", []
     body = _first(props, "hips_body")
     if body is None:
-        return None, [("BODY_UNKNOWN", f"{source}: hips_frame {frame!r} non celeste e senza hips_body: corpo non "
-                       "ricavabile, il dato si apre da solo")]
+        return None, [ModuleWarning(
+            "BODY_UNKNOWN", f"{source}: hips_frame {frame!r} non celeste e senza hips_body: corpo non "
+            "ricavabile, il dato si apre da solo", {"reason": "no_hips_body", "source": source, "frame": frame})]
     if body != frame:
-        return None, [("BODY_UNKNOWN", f"{source}: hips_frame {frame!r} e hips_body {body!r} diversi: corpo non "
-                       "ricavabile, il dato si apre da solo")]
+        return None, [ModuleWarning(
+            "BODY_UNKNOWN", f"{source}: hips_frame {frame!r} e hips_body {body!r} diversi: corpo non "
+            "ricavabile, il dato si apre da solo",
+            {"reason": "body_differs", "source": source, "frame": frame, "body": body})]
     from astrotwo.core.planetary_data import PlanetaryDataError, normalize_body_name
 
-    draft = ("HIPS_BODY_DRAFT", f"{source}: corpo {body!r} da hips_body, definito nel Working Draft HiPS 2.0 "
-             "(2026-05-01), versione non ancora raccomandazione IVOA")
+    draft = ModuleWarning("HIPS_BODY_DRAFT", f"{source}: corpo {body!r} da hips_body, definito nel Working Draft "
+                          "HiPS 2.0 (2026-05-01), versione non ancora raccomandazione IVOA",
+                          {"source": source, "body": body})
     try:
         canonical = normalize_body_name(body)
     except PlanetaryDataError as exc:
-        return None, [draft, ("BODY_UNSUPPORTED", f"{source}: {exc.message} (tabella dei nomi del 19, D12-6): il "
-                              "dato si apre da solo")]
-    return canonical, [draft, ("BODY_NORMALIZED", f"{source}: hips_body {body!r} → {canonical!r} (tabella dei nomi "
-                               "del modulo 19, D12-6)")]
+        return None, [draft, ModuleWarning(
+            "BODY_UNSUPPORTED", f"{source}: {exc.message} (tabella dei nomi del 19, D12-6): il dato si apre da solo",
+            {"source": source, "detail": exc.message})]
+    return canonical, [draft, ModuleWarning(
+        "BODY_NORMALIZED", f"{source}: hips_body {body!r} → {canonical!r} (tabella dei nomi del modulo 19, D12-6)",
+        {"source": source, "body": body, "canonical": canonical})]
 
 
 def _service_from_properties(props: dict[str, tuple[str, ...]], base_url: str, origin: str, retrieved_at: datetime,
@@ -239,34 +284,42 @@ def _service_from_properties(props: dict[str, tuple[str, ...]], base_url: str, o
     source = origin
     for key in MANDATORY_PROPERTIES:
         if _first(props, key) is None:
-            raise _invalid(source, key, "mancante (chiave obbligatoria dello standard HiPS 1.0)")
-    notes: list[tuple[str, str]] = []
+            raise _invalid(source, key, "mancante (chiave obbligatoria dello standard HiPS 1.0)", reason="missing",
+                       field=key)
+    notes: list[ModuleWarning] = []
     product = _first(props, "dataproduct_type")
     if product not in _PRODUCT_TYPES:
         raise _invalid(source, "dataproduct_type", f"{product!r} non previsto dallo standard HiPS 1.0 "
-                       f"({', '.join(_PRODUCT_TYPES)})")
+                       f"({', '.join(_PRODUCT_TYPES)})", reason="product_unknown", value=product,
+                       allowed=list(_PRODUCT_TYPES))
     formats = tuple(_first(props, "hips_tile_format").split())
     allowed = ("tsv",) if product == "catalog" else _IMAGE_FORMATS
     if not formats or any(f not in allowed for f in formats):
         raise _invalid(source, "hips_tile_format", f"{' '.join(formats)!r}: per {product} ammessi "
-                       f"{', '.join(allowed)}")
+                       f"{', '.join(allowed)}", reason="tile_format", formats=" ".join(formats), product=product,
+                       allowed=list(allowed))
     order = _int(props, "hips_order", source, high=_SPACE_MAX_ORDER)
     width = None
     if product != "catalog":
         width = _int(props, "hips_tile_width", source, low=1)
         if width is None:
             width = _DEFAULT_TILE_WIDTH
-            notes.append(("HIPS_DEFAULT_TILE_WIDTH", f"{source}: hips_tile_width assente, {width} pixel (default "
-                          "dello standard HiPS 1.0)"))
+            notes.append(ModuleWarning(
+                "HIPS_DEFAULT_TILE_WIDTH", f"{source}: hips_tile_width assente, {width} pixel (default dello "
+                "standard HiPS 1.0)", {"source": source, "width": width}))
         if width & (width - 1):
-            raise _invalid(source, "hips_tile_width", f"{width} non è una potenza di 2")
+            raise _invalid(source, "hips_tile_width", f"{width} non è una potenza di 2",
+                           reason="tile_width_not_power_of_two", width=width)
     depth = _int(props, "hips_cube_depth", source, low=1)
     if product == "cube" and depth is None:
-        raise _invalid(source, "hips_cube_depth", "mancante (obbligatoria per i cubi, standard HiPS 1.0)")
+        raise _invalid(source, "hips_cube_depth", "mancante (obbligatoria per i cubi, standard HiPS 1.0)",
+                       reason="cube_depth_missing")
     version = _first(props, "hips_version")
     if version != HIPS_STANDARD_VERSION:
-        notes.append(("HIPS_VERSION_UNKNOWN", f"{source}: hips_version {version!r}; lo standard HiPS 1.0 scrive "
-                      f"{HIPS_STANDARD_VERSION!r}: proprietà lette secondo HiPS 1.0"))
+        notes.append(ModuleWarning(
+            "HIPS_VERSION_UNKNOWN", f"{source}: hips_version {version!r}; lo standard HiPS 1.0 scrive "
+            f"{HIPS_STANDARD_VERSION!r}: proprietà lette secondo HiPS 1.0",
+            {"source": source, "version": version, "standard": HIPS_STANDARD_VERSION}))
     frame = _first(props, "hips_frame")
     body, body_notes = _body(props, frame, source)
     notes += body_notes
@@ -296,7 +349,7 @@ def _base_url(url: str) -> str:
 
 
 def _net(exc) -> HiPSError:
-    return HiPSError(exc.code, exc.message, **exc.details)
+    return _relay(exc)
 
 
 def read_service(url: str, *, cache=None, refresh: bool = False, timeouts=None) -> HiPSService:
@@ -316,17 +369,19 @@ def read_service(url: str, *, cache=None, refresh: bool = False, timeouts=None) 
     except vo.VoProtocolsError as exc:
         if exc.code == "SERVICE_ERROR":
             raise HiPSError("HIPS_NOT_A_SERVICE", f"{target}: {exc.message}; non è un servizio HiPS",
-                            url=target) from exc
+                            url=target, params={"reason": "service_error", "url": target,
+                                                "detail": exc.message}) from exc
         raise _net(exc) from exc
     try:
         text = response.payload.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise HiPSError("HIPS_NOT_A_SERVICE", f"{target}: risposta non UTF-8, non è un file properties HiPS "
-                        f"({exc})", url=target) from exc
+                        f"({exc})", url=target, params={"reason": "not_utf8", "url": target,
+                                                        "detail": str(exc)}) from exc
     props = parse_properties(text, source=target)
     if not any(key in props for key in MANDATORY_PROPERTIES):
         raise HiPSError("HIPS_NOT_A_SERVICE", f"{target}: nessuna delle chiavi obbligatorie dello standard HiPS 1.0; "
-                        "non è un servizio HiPS", url=target)
+                        "non è un servizio HiPS", url=target, params={"reason": "no_mandatory_keys", "url": target})
     service = _service_from_properties(props, base, target, response.retrieved_at, response.from_cache)
     notes = response.notes + vo._store(response, "hips", cache)
     record = vo._record("hips", "read_service", {"url": url}, response, None)
@@ -349,18 +404,21 @@ def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, t
     except vo.VoProtocolsError as exc:
         if exc.code == "NET_TIMEOUT":
             raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile per risolvere {hips_id!r}: "
-                            f"{exc.message}") from exc
+                            f"{exc.message}", params={"reason": "resolve", "hips_id": hips_id,
+                                                      "detail": exc.message}) from exc
         raise _net(exc) from exc
     records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
     match = [r for r in records if r.get("ID") == hips_id]
     if not match:
-        raise HiPSError("HIPS_UNKNOWN", f"identificativo {hips_id!r} sconosciuto al MocServer", hips_id=hips_id)
+        raise HiPSError("HIPS_UNKNOWN", f"identificativo {hips_id!r} sconosciuto al MocServer", hips_id=hips_id,
+                        params={"reason": "mocserver", "hips_id": hips_id})
     url = match[0].get("hips_service_url")
     if isinstance(url, list):  # il MocServer può dare più valori
         url = url[0] if url else None
     if not isinstance(url, str) or not url:
         raise HiPSError("HIPS_NOT_A_SERVICE", f"{hips_id!r}: la collezione non ha un servizio HiPS "
-                        "(hips_service_url assente nel MocServer)", hips_id=hips_id)
+                        "(hips_service_url assente nel MocServer)", hips_id=hips_id,
+                        params={"reason": "no_service_url", "hips_id": hips_id})
     notes = response.notes + vo._store(response, "mocserver", cache)
     return url, notes
 
@@ -382,8 +440,10 @@ def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts
     service = read_service(url, cache=cache, refresh=refresh, timeouts=timeouts)
     extra = list(notes)
     if service.hips_id != hips_id:
-        extra.append(("HIPS_ID_MISMATCH", f"identificativo richiesto {hips_id!r}, creator_did del servizio "
-                      f"{service.hips_id!r}: vale quello del servizio"))
+        extra.append(ModuleWarning(
+            "HIPS_ID_MISMATCH", f"identificativo richiesto {hips_id!r}, creator_did del servizio "
+            f"{service.hips_id!r}: vale quello del servizio",
+            {"requested": hips_id, "service_id": service.hips_id}))
     return _replace(service, warnings=service.warnings + tuple(extra))
 
 
@@ -412,7 +472,9 @@ class HiPSList:
     def get(self, hips_id: str) -> HiPSService:
         if hips_id not in self._services:
             known = ", ".join(sorted(self._services)) or "nessuno"
-            raise HiPSError("HIPS_UNKNOWN", f"survey {hips_id!r} non in elenco; noti: {known}", hips_id=hips_id)
+            raise HiPSError("HIPS_UNKNOWN", f"survey {hips_id!r} non in elenco; noti: {known}", hips_id=hips_id,
+                            params={"reason": "not_listed", "hips_id": hips_id, "known": sorted(self._services)}
+                            if self._services else {"reason": "not_listed_empty", "hips_id": hips_id})
         return self._services[hips_id]
 
     def add_hips(self, hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts=None) -> HiPSService:
@@ -421,9 +483,11 @@ class HiPSList:
         service = add_hips(hips_id_or_url, cache=cache, refresh=refresh, timeouts=timeouts)
         if service.hips_id in self._services and not refresh:
             existing = self._services[service.hips_id]
-            return _replace(existing, warnings=existing.warnings + (
-                ("HIPS_ALREADY_LISTED", f"{service.hips_id} già in elenco (letto da {existing.origin} il "
-                 f"{existing.retrieved_at.isoformat()}); refresh=True per rileggerlo"),))
+            return _replace(existing, warnings=existing.warnings + (ModuleWarning(
+                "HIPS_ALREADY_LISTED", f"{service.hips_id} già in elenco (letto da {existing.origin} il "
+                f"{existing.retrieved_at.isoformat()}); refresh=True per rileggerlo",
+                {"hips_id": service.hips_id, "origin": existing.origin,
+                 "retrieved_at": existing.retrieved_at.isoformat()}),))
         self._services[service.hips_id] = service
         return service
 
@@ -437,9 +501,12 @@ DEFAULT_TILE_MEMORY_BYTES = 512_000_000
 _EXTENSIONS = {"fits": "fits", "jpeg": "jpg", "png": "png", "tsv": "tsv"}
 
 
-def _check_space_order(order: object, high: int = _SPACE_MAX_ORDER, what: str = "ordine HEALPix") -> int:
+def _check_space_order(order: object, high: int = _SPACE_MAX_ORDER, what: str = "ordine HEALPix", *,
+                       reason: str | None = None, **extra: object) -> int:
+    """``what``: etichetta italiana del testo; ``reason`` e ``extra``: sotto-voce e parametri del catalogo."""
     if isinstance(order, bool) or not isinstance(order, int) or not 0 <= order <= high:
-        raise HiPSError("HEALPIX_ORDER_INVALID", f"{what} {order!r}: serve un intero in [0, {high}]")
+        raise HiPSError("HEALPIX_ORDER_INVALID", f"{what} {order!r}: serve un intero in [0, {high}]",
+                        params={**({"reason": reason} if reason else {}), "value": repr(order), "high": high, **extra})
     return order
 
 
@@ -449,7 +516,7 @@ def _check_index(order: int, index: object) -> int:
     npix = 12 * 4 ** order
     if isinstance(index, bool) or not isinstance(index, (int, np.integer)) or not 0 <= int(index) < npix:
         raise HiPSError("HEALPIX_INDEX_INVALID", f"indice {index!r} all'ordine {order}: serve un intero in "
-                        f"[0, {npix - 1}]")
+                        f"[0, {npix - 1}]", params={"index": repr(index), "order": order, "maximum": npix - 1})
     return int(index)
 
 
@@ -467,11 +534,12 @@ def _astropy_frame(frame: str) -> str:
     if name is None:
         why = ("lo standard HiPS 1.0 non precisa quale eclittica (D12-7: non supportato finché non è verificato "
                "su un HiPS reale)" if frame == "ecliptic" else "frame planetario: le posizioni planetarie arrivano con il modulo 19")
-        raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"hips_frame {frame!r}: {why}", frame=frame)
+        raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"hips_frame {frame!r}: {why}", frame=frame,
+                        params={"reason": "ecliptic" if frame == "ecliptic" else "planetary", "frame": frame})
     return name
 
 
-def _to_frame(coords, frame: str, what: str):
+def _to_frame(coords, frame: str, what: str, *, reason: str):
     """Coordinate (``SkyFrame``/``SkyCoord``) nel frame del HiPS con il modulo 10: (lon, lat) in gradi e nota."""
     import numpy as np
     from astropy.coordinates import SkyCoord
@@ -486,7 +554,8 @@ def _to_frame(coords, frame: str, what: str):
     try:
         converted = coords if coords.frame_name == target else coords.to(target)
     except CoordinatesWcsError as exc:
-        raise HiPSError("REGION_INVALID", f"{what}: {exc.message}") from exc
+        raise HiPSError("REGION_INVALID", f"{what}: {exc.message}",
+                        params={"reason": reason, "detail": exc.message}) from exc
     lon = np.atleast_1d(converted.lon.to_value(u.deg))
     lat = np.atleast_1d(converted.lat.to_value(u.deg))
     note = "" if coords.frame_name == target else f" (convertite da {coords.frame_name} in {target} con il modulo 10)"
@@ -541,18 +610,21 @@ def tiles_for_fov(center, radius, order: int, *, frame: str = "equatorial", cove
     order = _check_space_order(order)
     if not isinstance(radius, u.Quantity) or not radius.isscalar or not radius.unit.is_equivalent(u.deg) \
             or not 0 < float(radius.to_value(u.deg)) <= 180:
-        raise HiPSError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità in (0°, 180°]")
-    lon, lat, note = _to_frame(center, frame, "centro del campo")
+        raise HiPSError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità in (0°, 180°]",
+                        params={"reason": "radius", "radius": repr(radius)})
+    lon, lat, note = _to_frame(center, frame, "centro del campo", reason="conversion_center")
     if lon.size != 1:
-        raise HiPSError("REGION_INVALID", "il centro del campo è una sola posizione")
+        raise HiPSError("REGION_INVALID", "il centro del campo è una sola posizione",
+                        params={"reason": "center_not_single"})
     hp = HEALPix(nside=2 ** order, order="nested")
     found = np.sort(np.asarray(hp.cone_search_lonlat(lon[0] * u.deg, lat[0] * u.deg, radius), dtype=np.int64))
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     outside = 0
     if coverage is not None:
         if frame != "equatorial":
-            notes.append(("HIPS_COVERAGE_NOT_CHECKED", f"hips_frame {frame!r}: il MOC del servizio è in ICRS, filtro "
-                          "di copertura non applicato"))
+            notes.append(ModuleWarning(
+                "HIPS_COVERAGE_NOT_CHECKED", f"hips_frame {frame!r}: il MOC del servizio è in ICRS, filtro di "
+                "copertura non applicato", {"frame": frame}))
         else:
             if getattr(coverage, "kind", None) != "space":
                 raise TypeError("coverage: serve il MOC spaziale del servizio (modulo 16)")
@@ -561,7 +633,8 @@ def tiles_for_fov(center, radius, order: int, *, frame: str = "equatorial", cove
             found = found[inside]
             if not found.size:
                 raise HiPSError("HIPS_OUT_OF_COVERAGE", f"campo fuori dalla copertura del servizio ({outside} tile "
-                                "fuori): nessun tile", outside=outside)
+                                "fuori): nessun tile", outside=outside,
+                                params={"reason": "field", "outside": outside})
     description = (f"{found.size} tile all'ordine {order} per il cerchio ({lon[0]!r}°, {lat[0]!r}°) di raggio "
                    f"{float(radius.to_value(u.deg))!r}° nel frame {frame}{note} (calcolo: astropy-healpix "
                    "cone_search_lonlat, celle che toccano il cerchio)"
@@ -576,15 +649,19 @@ def order_for_resolution(service: HiPSService, resolution) -> tuple[int, tuple[t
     from astropy_healpix import nside_to_pixel_resolution
 
     if service.tile_width is None:
-        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: i cataloghi non hanno pixel")
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: i cataloghi non hanno pixel",
+                        params={"reason": "catalog_no_pixels", "hips_id": service.hips_id})
     if not isinstance(resolution, u.Quantity) or not resolution.unit.is_equivalent(u.deg) or resolution.value <= 0:
         raise ValueError("resolution: angolo positivo con unità")
     shift = service.tile_width.bit_length() - 1
     for order in range(service.order + 1):
         if nside_to_pixel_resolution(2 ** (order + shift)) <= resolution:
             return order, ()
-    return service.order, (("HIPS_RESOLUTION_LIMIT", f"{service.hips_id}: risoluzione richiesta {resolution} "
-                            f"oltre quella del servizio; ordine massimo {service.order}"),)
+    return service.order, (ModuleWarning(
+        "HIPS_RESOLUTION_LIMIT", f"{service.hips_id}: risoluzione richiesta {resolution} oltre quella del servizio; "
+        f"ordine massimo {service.order}",
+        {"hips_id": service.hips_id, "resolution": _q(resolution.value, str(resolution.unit)),
+         "max_order": service.order}),)
 
 
 @dataclass(frozen=True, eq=False)
@@ -696,7 +773,9 @@ def _download_tile(url: str, timeouts):
             return None
         if not response.ok:
             raise HiPSError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
-                            url=url, status=response.status_code)
+                            url=url, status=response.status_code,
+                            params={"reason": "http_status", "url": url, "status": response.status_code,
+                                    "status_text": str(response.reason)})
         return b"".join(response.iter_content(chunk_size=1 << 16))
 
 
@@ -715,18 +794,22 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
     if not isinstance(service, HiPSService):
         raise TypeError("fetch_tile: serve un HiPSService")
     if service.dataproduct_type == "catalog":
-        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: HiPS catalogo, i tile si leggono come tabelle")
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: HiPS catalogo, i tile si leggono come tabelle",
+                        params={"reason": "catalog_tiles", "hips_id": service.hips_id})
     timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
-    order = _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    order = _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})",
+                       reason="service_maximum")
     index = _check_index(order, index)
     fmt = service.tile_formats[0] if format is None else format
     if fmt not in service.tile_formats:
         raise HiPSError("HIPS_FORMAT_UNAVAILABLE", f"{service.hips_id}: formato {fmt!r} non offerto; formati "
-                        f"{', '.join(service.tile_formats)}", format=fmt)
+                        f"{', '.join(service.tile_formats)}", format=fmt,
+                        params={"hips_id": service.hips_id, "format": str(fmt), "offered": list(service.tile_formats)})
     plane = _check_plane(service, plane)
     if coverage is not None and service.frame == "equatorial" and not _in_coverage(coverage, order, [index])[0]:
         raise HiPSError("HIPS_OUT_OF_COVERAGE", f"{service.hips_id}: tile {index} all'ordine {order} fuori dalla "
-                        "copertura del servizio; nessun tile", order=order, index=index)
+                        "copertura del servizio; nessun tile", order=order, index=index,
+                        params={"reason": "tile", "hips_id": service.hips_id, "index": index, "order": order})
     url = f"{service.base_url}/{tile_path(order, index, _EXTENSIONS[fmt], plane=plane)}"
     if memory is not None and not refresh:
         held = memory.get(url)
@@ -734,42 +817,45 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
             return held
     cache = SharedCache() if cache is None else cache
     key = f"tile:{url}"
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     cached = None if refresh else cache.get(_CACHE_MODULE, key)
     attempts = 1  # richieste ammesse dopo un tile corrotto (decisione 5)
     if cached is not None:
         decoded, problem = _decode_tile(cached.data, fmt, service.tile_width, url)
         if decoded is not None:
             tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], url, cached.retrieved_at,
-                            True, service.body, plane, (("FROM_CACHE", f"copia in cache di {url}, scaricata il "
-                                                         f"{cached.retrieved_at.isoformat()}"),))
+                            True, service.body, plane, (ModuleWarning(
+                                "FROM_CACHE", f"copia in cache di {url}, scaricata il {cached.retrieved_at.isoformat()}",
+                                {"reason": "cached_tile", "url": url, "retrieved_at": _iso(cached.retrieved_at)}),))
             if memory is not None:
                 memory.put(tile)
             return tile
-        notes.append(("HIPS_TILE_DISCARDED", f"copia in cache di {url} corrotta ({problem}): scartata, nuova "
-                      "richiesta"))
+        notes.append(ModuleWarning(
+            "HIPS_TILE_DISCARDED", f"copia in cache di {url} corrotta ({problem}): scartata, nuova richiesta",
+            {"reason": "cache_corrupt", "url": url, "problem": problem}))
         attempts = 0
     problem = None
     for _ in range(attempts + 1):
         try:
             payload = _download_tile(url, timeouts)
         except requests.exceptions.RequestException as exc:
-            raise HiPSError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
-                            f"{timeouts.read:g} s lettura): {exc}", url=url) from exc
+            raise _timeout_error(url, timeouts, exc) from exc
         if payload is None:
             raise HiPSError("HIPS_TILE_MISSING", f"{url}: tile non fornito dal servizio (HTTP 404; lo standard ammette "
-                            "alberi parziali e ordini bassi omessi)", url=url)
+                            "alberi parziali e ordini bassi omessi)", url=url, params={"url": url})
         decoded, problem = _decode_tile(payload, fmt, service.tile_width, url)
         if decoded is not None:
             break
-        notes.append(("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem}), scartato"))
+        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem}), scartato",
+                                   {"reason": "tile_corrupt", "url": url, "problem": problem}))
     else:
-        raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem})", url=url)
+        raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem})", url=url,
+                        params={"reason": "tile_corrupt", "url": url, "problem": problem})
     retrieved_at = datetime.now(UTC)
     try:
         cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
     except CacheError as exc:  # es. CACHE_FULL: il tile si usa comunque
-        notes.append((exc.code, exc.message))
+        notes.append(ModuleWarning(exc.code, exc.message, getattr(exc, "params", None)))
     tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], url, retrieved_at, False,
                     service.body, plane, tuple(notes))
     if memory is not None:
@@ -782,13 +868,16 @@ def _check_plane(service: HiPSService, plane) -> int | None:
     standard §4.2.3). Per un HiPS non cubo solo ``None``/0."""
     if service.dataproduct_type != "cube":
         if plane not in (None, 0):
-            raise HiPSError("HIPS_CUBE_PLANE_INVALID", f"{service.hips_id}: non è un cubo, nessun piano {plane!r}")
+            raise HiPSError("HIPS_CUBE_PLANE_INVALID", f"{service.hips_id}: non è un cubo, nessun piano {plane!r}",
+                            params={"reason": "not_a_cube", "hips_id": service.hips_id, "plane": repr(plane)})
         return None
     if plane is None:
         return 0
     if isinstance(plane, bool) or not isinstance(plane, int) or not 0 <= plane < service.cube_depth:
         raise HiPSError("HIPS_CUBE_PLANE_INVALID", f"{service.hips_id}: piano {plane!r} inesistente; piani "
-                        f"disponibili 0–{service.cube_depth - 1} ({service.cube_depth})", depth=service.cube_depth)
+                        f"disponibili 0–{service.cube_depth - 1} ({service.cube_depth})", depth=service.cube_depth,
+                        params={"reason": "out_of_range", "hips_id": service.hips_id, "plane": repr(plane),
+                                "depth": service.cube_depth, "last_plane": service.cube_depth - 1})
     return plane
 
 
@@ -799,16 +888,18 @@ def service_coverage(service: HiPSService, *, cache=None, refresh: bool = False,
 
     if service.body != "celestial":
         raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"{service.hips_id}: corpo {service.body!r}; il MOC IVOA è ICRS, "
-                        "copertura dei HiPS planetari con il modulo 19")
+                        "copertura dei HiPS planetari con il modulo 19",
+                        params={"reason": "moc_planetary", "hips_id": service.hips_id, "body": str(service.body)})
     url = service.base_url + "/Moc.fits"
     try:
         return read_moc(url, format="fits", kind="space", cache=cache, refresh=refresh, timeouts=timeouts), ()
     except MocError as exc:
         response = getattr(exc.__cause__, "response", None)
         if exc.code == "NET_TIMEOUT" and getattr(response, "status_code", None) == 404:
-            return None, (("HIPS_COVERAGE_UNKNOWN", f"{url}: MOC del servizio assente (facoltativo per lo standard); "
-                           "copertura non nota"),)
-        raise HiPSError(exc.code, exc.message) from exc
+            return None, (ModuleWarning(
+                "HIPS_COVERAGE_UNKNOWN", f"{url}: MOC del servizio assente (facoltativo per lo standard); "
+                "copertura non nota", {"reason": "moc_missing", "url": url}),)
+        raise _relay(exc) from exc
 
 
 @dataclass(frozen=True)
@@ -834,7 +925,9 @@ def _tile_pixels(lon, lat, order: int, width: int):
 
     shift = width.bit_length() - 1
     if order + shift > _SPACE_MAX_ORDER:
-        raise HiPSError("HEALPIX_ORDER_INVALID", f"ordine {order} + log2({width}) oltre {_SPACE_MAX_ORDER}")
+        raise HiPSError("HEALPIX_ORDER_INVALID", f"ordine {order} + log2({width}) oltre {_SPACE_MAX_ORDER}",
+                        params={"reason": "plus_tile_bits", "order": order, "width": width,
+                                "maximum": _SPACE_MAX_ORDER})
     cells = np.asarray(HEALPix(nside=2 ** (order + shift), order="nested").lonlat_to_healpix(lon * u.deg, lat * u.deg),
                        dtype=np.int64)
     tiles = cells >> (2 * shift)
@@ -853,13 +946,16 @@ def tile_pixel_values(tile: HiPSTile, coords, *, frame: str = "equatorial") -> P
 
     if tile.format != "fits":
         raise HiPSError("HIPS_PIXEL_UNAVAILABLE", f"{tile.url}: il valore del pixel si legge solo dai tile FITS, non da "
-                        f"un tile {tile.format} (copia per la visualizzazione)")
-    lon, lat, note = _to_frame(coords, frame, "posizioni")
+                        f"un tile {tile.format} (copia per la visualizzazione)",
+                        params={"reason": "not_fits", "url": tile.url, "format": tile.format})
+    lon, lat, note = _to_frame(coords, frame, "posizioni", reason="conversion_positions")
     width = tile.data.shape[-1]
     tiles, x, y = _tile_pixels(lon, lat, tile.order, width)
     if np.any(tiles != tile.index):
         raise HiPSError("HIPS_OUT_OF_TILE", f"{int(np.count_nonzero(tiles != tile.index))} posizioni fuori dal tile "
-                        f"{tile.index} (ordine {tile.order})")
+                        f"{tile.index} (ordine {tile.order})",
+                        params={"reason": "positions", "count": int(np.count_nonzero(tiles != tile.index)),
+                                "index": int(tile.index), "order": int(tile.order)})
     data = tile.data if tile.data.ndim == 2 else tile.data[0]
     values = data[y, x]
     unit = tile.header.get("BUNIT") if tile.header is not None else None
@@ -876,14 +972,17 @@ def pixel_values(service: HiPSService, coords, *, order: int | None = None, plan
 
     if "fits" not in service.tile_formats:
         raise HiPSError("HIPS_PIXEL_UNAVAILABLE", f"{service.hips_id}: nessun tile FITS (formati "
-                        f"{', '.join(service.tile_formats)}); il valore del pixel non è disponibile")
+                        f"{', '.join(service.tile_formats)}); il valore del pixel non è disponibile",
+                        params={"reason": "no_fits_tiles", "hips_id": service.hips_id,
+                                "formats": list(service.tile_formats)})
     order = service.order if order is None else order
-    _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
-    lon, lat, note = _to_frame(coords, service.frame, "posizioni")
+    _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})",
+                       reason="service_maximum")
+    lon, lat, note = _to_frame(coords, service.frame, "posizioni", reason="conversion_positions")
     tiles, x, y = _tile_pixels(lon, lat, order, service.tile_width)
     values = None
     sources = []
-    notes: list[tuple[str, str]] = []
+    notes: list = []
     for index in np.unique(tiles):
         tile = fetch_tile(service, order, int(index), format="fits", plane=plane, cache=cache, refresh=refresh,
                           timeouts=timeouts, memory=memory)
@@ -959,13 +1058,15 @@ def view_sampling(service: HiPSService, view, *, order: int | None = None, plane
     if not isinstance(view, ViewGeometry):
         raise TypeError("view: serve la ViewGeometry di make_view_wcs (modulo 10)")
     if service.tile_width is None:
-        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: i cataloghi non hanno pixel")
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: i cataloghi non hanno pixel",
+                        params={"reason": "catalog_no_pixels", "hips_id": service.hips_id})
     target = _astropy_frame(service.frame)
-    notes: list[tuple[str, str]] = []
+    notes: list = []
     if order is None:
         order, more = order_for_resolution(service, view.scale)
         notes += list(more)
-    _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})",
+                       reason="service_maximum")
     plane = _check_plane(service, plane)
     rows, cols = view.shape
     yy, xx = np.mgrid[0:rows, 0:cols]
@@ -977,13 +1078,14 @@ def view_sampling(service: HiPSService, view, *, order: int | None = None, plane
     note = ""
     if np.any(finite):
         lon, lat, note = _to_frame(SkyFrame(coord=sky[finite], frame_defaults_note="frame della base della vista"),
-                                   service.frame, "pixel della finestra")
+                                   service.frame, "pixel della finestra", reason="conversion_window")
         tiles, x, y = _tile_pixels(lon, lat, order, service.tile_width)
         keep = np.ones(tiles.size, dtype=bool)
         if coverage is not None:
             if service.frame != "equatorial":
-                notes.append(("HIPS_COVERAGE_NOT_CHECKED", f"hips_frame {service.frame!r}: il MOC del servizio è in "
-                              "ICRS, filtro di copertura non applicato"))
+                notes.append(ModuleWarning(
+                    "HIPS_COVERAGE_NOT_CHECKED", f"hips_frame {service.frame!r}: il MOC del servizio è in ICRS, "
+                    "filtro di copertura non applicato", {"frame": service.frame}))
             else:
                 if getattr(coverage, "kind", None) != "space":
                     raise TypeError("coverage: serve il MOC spaziale del servizio (modulo 16)")
@@ -1009,10 +1111,13 @@ def fill_view(sampling: ViewSampling, tile: HiPSTile) -> ViewTile:
     import numpy as np
 
     if tile.order != sampling.order:
-        raise HiPSError("HIPS_OUT_OF_TILE", f"tile all'ordine {tile.order}, campionamento all'ordine {sampling.order}")
+        raise HiPSError("HIPS_OUT_OF_TILE", f"tile all'ordine {tile.order}, campionamento all'ordine {sampling.order}",
+                        params={"reason": "order_mismatch", "tile_order": int(tile.order),
+                                "sampling_order": int(sampling.order)})
     mask = sampling.tile_of_pixel == tile.index
     if not np.any(mask):
-        raise HiPSError("HIPS_OUT_OF_TILE", f"il tile {tile.index} non contiene pixel della finestra")
+        raise HiPSError("HIPS_OUT_OF_TILE", f"il tile {tile.index} non contiene pixel della finestra",
+                        params={"reason": "no_window_pixels", "index": int(tile.index)})
     rows = np.flatnonzero(mask.any(axis=1))
     cols = np.flatnonzero(mask.any(axis=0))
     y0, y1, x0, x1 = int(rows[0]), int(rows[-1]) + 1, int(cols[0]), int(cols[-1]) + 1
@@ -1057,7 +1162,8 @@ def _mocserver_records(payload: bytes, url: str) -> list[dict]:
                                                     for r in records):
             raise ValueError("attesa una lista di record con ID")
     except ValueError as exc:
-        raise HiPSError("SERVICE_ERROR", f"{url}: risposta non leggibile ({exc})", url=url) from exc
+        raise HiPSError("SERVICE_ERROR", f"{url}: risposta non leggibile ({exc})", url=url,
+                        params={"reason": "unreadable_response", "url": url, "detail": str(exc)}) from exc
     return records
 
 
@@ -1088,13 +1194,15 @@ class CollectionIndex:
         except vo.VoProtocolsError as exc:
             if exc.code == "NET_TIMEOUT":
                 raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile e nessuna copia locale delle "
-                                f"collezioni: {exc.message}") from exc
+                                f"collezioni: {exc.message}", params={"reason": "index", "detail": exc.message}) from exc
             raise _net(exc) from exc
         records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
         notes = []
         if response.from_cache:  # rete assente: copia locale con la sua data
-            notes.append(("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile: copia locale delle collezioni del "
-                          f"{response.retrieved_at.isoformat()}"))
+            notes.append(ModuleWarning(
+                "MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile: copia locale delle collezioni del "
+                f"{response.retrieved_at.isoformat()}",
+                {"reason": "local_copy", "retrieved_at": _iso(response.retrieved_at)}))
         else:
             notes += list(vo._store(response, "mocserver", self._cache))
         self.records = tuple(sorted(records, key=lambda r: r["ID"]))
@@ -1155,7 +1263,9 @@ def survey_coverage(service: HiPSService, *, cache=None, refresh: bool = False, 
 
     if service.body != "celestial":
         raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"{service.hips_id}: corpo {service.body!r}; copertura dei HiPS "
-                        "planetari con il modulo 19")
+                        "planetari con il modulo 19",
+                        params={"reason": "coverage_planetary", "hips_id": service.hips_id,
+                                "body": str(service.body)})
     moc, notes = service_coverage(service, cache=cache, refresh=refresh, timeouts=timeouts)
     if moc is not None:
         return moc, notes
@@ -1166,10 +1276,13 @@ def survey_coverage(service: HiPSService, *, cache=None, refresh: bool = False, 
         moc = read_moc(url, format="fits", kind="space", cache=cache, refresh=refresh, timeouts=timeouts)
     except MocError as exc:
         if exc.code == "NET_TIMEOUT":
-            raise HiPSError("MOCSERVER_UNAVAILABLE", f"copertura di {service.hips_id}: {exc.message}") from exc
-        raise HiPSError(exc.code, exc.message) from exc
-    return moc, tuple(notes) + (("HIPS_COVERAGE_FROM_MOCSERVER", f"{service.hips_id}: copertura dal MocServer "
-                                 f"({url}), il servizio non fornisce Moc.fits"),)
+            raise HiPSError("MOCSERVER_UNAVAILABLE", f"copertura di {service.hips_id}: {exc.message}",
+                            params={"reason": "coverage", "hips_id": service.hips_id,
+                                    "detail": exc.message}) from exc
+        raise _relay(exc) from exc
+    return moc, tuple(notes) + (ModuleWarning(
+        "HIPS_COVERAGE_FROM_MOCSERVER", f"{service.hips_id}: copertura dal MocServer ({url}), il servizio non "
+        "fornisce Moc.fits", {"hips_id": service.hips_id, "url": url}),)
 
 
 def set_survey(hips_id: str | None = None, *, hips_list: HiPSList | None = None, cache=None, refresh: bool = False,
@@ -1178,9 +1291,10 @@ def set_survey(hips_id: str | None = None, *, hips_list: HiPSList | None = None,
     (D12-3). Un survey non in ``hips_list`` si legge con ``add_hips`` (e si aggiunge all'elenco). La copertura
     mancante non impedisce l'attivazione (avviso); un survey planetario si attiva senza copertura (19)."""
     target = DEFAULT_SURVEY if hips_id is None else hips_id
-    notes: list[tuple[str, str]] = []
+    notes: list = []
     if hips_id is None:
-        notes.append(("HIPS_DEFAULT_SURVEY", f"survey di default {DEFAULT_SURVEY} (D12-3)"))
+        notes.append(ModuleWarning("HIPS_DEFAULT_SURVEY", f"survey di default {DEFAULT_SURVEY} (D12-3)",
+                                   {"survey": DEFAULT_SURVEY}))
     if hips_list is not None and target in hips_list and not refresh:
         service = hips_list.get(target)
     elif hips_list is not None:
@@ -1192,8 +1306,9 @@ def set_survey(hips_id: str | None = None, *, hips_list: HiPSList | None = None,
         coverage, cov_notes = survey_coverage(service, cache=cache, refresh=refresh, timeouts=timeouts)
         notes += cov_notes
     except HiPSError as exc:
-        notes.append(("HIPS_COVERAGE_UNKNOWN", f"{service.hips_id}: copertura non disponibile ({exc.code}: "
-                      f"{exc.message})"))
+        notes.append(ModuleWarning(
+            "HIPS_COVERAGE_UNKNOWN", f"{service.hips_id}: copertura non disponibile ({exc.code}: {exc.message})",
+            {"reason": "unavailable", "hips_id": service.hips_id, "cause_code": exc.code, "cause": exc.message}))
     return ActiveSurvey(service=service, coverage=coverage, warnings=service.warnings + tuple(notes))
 
 
@@ -1221,12 +1336,15 @@ def cube_planes(service: HiPSService) -> CubePlanes:
     from astrotwo.core.coordinates_wcs import convert_pixel_convention
 
     if service.dataproduct_type != "cube":
-        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: non è un cubo HiPS ({service.dataproduct_type})")
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: non è un cubo HiPS ({service.dataproduct_type})",
+                        params={"reason": "not_a_cube", "hips_id": service.hips_id,
+                                "dataproduct_type": service.dataproduct_type})
     props, source = service.properties, service.origin
     first = _int(props, "hips_cube_firstframe", source) or 0
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     if first >= service.cube_depth:
-        raise _invalid(source, "hips_cube_firstframe", f"{first} oltre la profondità {service.cube_depth}")
+        raise _invalid(source, "hips_cube_firstframe", f"{first} oltre la profondità {service.cube_depth}",
+                       reason="cube_first_frame", first=first, depth=service.cube_depth)
     keys = ("data_cube_crpix3", "data_cube_crval3", "data_cube_cdelt3")
     found = {k: _float(props, k, source) for k in keys}
     axis = None
@@ -1240,14 +1358,18 @@ def cube_planes(service: HiPSService) -> CubePlanes:
             try:
                 unit = u.Unit(unit_text, format="fits")
             except ValueError:
-                notes.append(("HIPS_CUBE_UNIT_UNKNOWN", f"{source}: data_cube_bunit3 {unit_text!r} non è un'unità FITS: "
-                              "asse senza unità"))
+                notes.append(ModuleWarning(
+                    "HIPS_CUBE_UNIT_UNKNOWN", f"{source}: data_cube_bunit3 {unit_text!r} non è un'unità FITS: asse "
+                    "senza unità", {"reason": "not_fits_unit", "source": source, "unit": unit_text}))
         else:
-            notes.append(("HIPS_CUBE_UNIT_UNKNOWN", f"{source}: data_cube_bunit3 assente: asse senza unità"))
+            notes.append(ModuleWarning(
+                "HIPS_CUBE_UNIT_UNKNOWN", f"{source}: data_cube_bunit3 assente: asse senza unità",
+                {"reason": "missing", "source": source}))
         axis = values * unit
     elif any(v is not None for v in found.values()):
-        notes.append(("HIPS_CUBE_AXIS_INCOMPLETE", f"{source}: chiavi data_cube_* incomplete, asse fisico non "
-                      "calcolato"))
+        notes.append(ModuleWarning(
+            "HIPS_CUBE_AXIS_INCOMPLETE", f"{source}: chiavi data_cube_* incomplete, asse fisico non calcolato",
+            {"source": source}))
     description = (f"cubo {service.hips_id}: {service.cube_depth} piani (0–{service.cube_depth - 1}), piano iniziale "
                    f"{first}" + (f", asse da {axis[0]} a {axis[-1]}" if axis is not None else ", asse fisico non "
                                  "dichiarato"))
@@ -1275,34 +1397,37 @@ def _cached_bytes(url: str, cache, refresh: bool, timeouts, check):
     from astrotwo.core.cache import CacheError
 
     key = f"tile:{url}"
-    notes: list[tuple[str, str]] = []
+    notes: list = []
     cached = None if refresh else cache.get(_CACHE_MODULE, key)
     attempts = 1
     if cached is not None:
         problem = check(cached.data)
         if problem is None:
             return cached.data, cached.retrieved_at, True, ()
-        notes.append(("HIPS_TILE_DISCARDED", f"copia in cache di {url} non valida ({problem}): nuova richiesta"))
+        notes.append(ModuleWarning(
+            "HIPS_TILE_DISCARDED", f"copia in cache di {url} non valida ({problem}): nuova richiesta",
+            {"reason": "cache_invalid", "url": url, "problem": problem}))
         attempts = 0
     for _ in range(attempts + 1):
         try:
             payload = _download_tile(url, timeouts)
         except requests.exceptions.RequestException as exc:
-            raise HiPSError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
-                            f"{timeouts.read:g} s lettura): {exc}", url=url) from exc
+            raise _timeout_error(url, timeouts, exc) from exc
         if payload is None:
             return None, None, False, tuple(notes)
         problem = check(payload)
         if problem is None:
             break
-        notes.append(("HIPS_TILE_DISCARDED", f"{url}: file non valido ({problem}), scartato"))
+        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: file non valido ({problem}), scartato",
+                                   {"reason": "file_invalid", "url": url, "problem": problem}))
     else:
-        raise HiPSError("HIPS_BAD_TILE", f"{url}: file non valido anche dopo una nuova richiesta ({problem})", url=url)
+        raise HiPSError("HIPS_BAD_TILE", f"{url}: file non valido anche dopo una nuova richiesta ({problem})", url=url,
+                        params={"reason": "file_corrupt", "url": url, "problem": problem})
     retrieved_at = datetime.now(UTC)
     try:
         cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
     except CacheError as exc:
-        notes.append((exc.code, exc.message))
+        notes.append(ModuleWarning(exc.code, exc.message, getattr(exc, "params", None)))
     return payload, retrieved_at, False, tuple(notes)
 
 
@@ -1347,10 +1472,13 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
     from astrotwo.core.catalogs import read_table
 
     if service.dataproduct_type != "catalog":
-        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: non è un catalogo HiPS ({service.dataproduct_type})")
+        raise HiPSError("HIPS_TYPE_MISMATCH", f"{service.hips_id}: non è un catalogo HiPS ({service.dataproduct_type})",
+                        params={"reason": "not_a_catalog", "hips_id": service.hips_id,
+                                "dataproduct_type": service.dataproduct_type})
     timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
     cache = SharedCache() if cache is None else cache
-    order = _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})")
+    order = _check_space_order(order, service.order, f"ordine (massimo del servizio {service.order})",
+                       reason="service_maximum")
     order_min = _int(service.properties, "hips_order_min", service.origin) or 0
     meta_url = service.base_url + "/metadata.xml"
     try:
@@ -1358,14 +1486,17 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
     except vo.VoProtocolsError as exc:
         if exc.code == "SERVICE_ERROR":
             raise HiPSError("HIPS_METADATA_INVALID", f"{meta_url}: {exc.message}; metadata.xml è richiesto per i "
-                            "cataloghi HiPS (standard §4.4.3)", field="metadata.xml") from exc
+                            "cataloghi HiPS (standard §4.4.3)", field="metadata.xml",
+                            params={"reason": "metadata_xml_unavailable", "url": meta_url,
+                                    "detail": exc.message}) from exc
         raise _net(exc) from exc
     try:
         template = votable.parse(io.BytesIO(response.payload), verify="warn")
         vtable = template.get_first_table()
     except Exception as exc:  # astropy.io.votable: errori di XML o di VOTable
         raise HiPSError("HIPS_METADATA_INVALID", f"{meta_url}: VOTable non leggibile ({exc})",
-                        field="metadata.xml") from exc
+                        field="metadata.xml",
+                        params={"reason": "metadata_xml_unreadable", "url": meta_url, "detail": str(exc)}) from exc
     notes = list(response.notes) + list(vo._store(response, "hips", cache))
     names = [f.name for f in vtable.fields]
     selection = None
@@ -1406,7 +1537,10 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
                 value, mask = vfield.converter.parse(text, config={"version": template.version})
             except Exception as exc:  # valore non conforme al tipo dichiarato
                 raise HiPSError("HIPS_BAD_TILE", f"{service.hips_id}: valore {text!r} della colonna {vfield.name} non "
-                                f"conforme al tipo {vfield.datatype} ({exc})") from exc
+                                f"conforme al tipo {vfield.datatype} ({exc})",
+                                params={"reason": "value_not_conformant", "hips_id": service.hips_id,
+                                        "value": text, "column": str(vfield.name),
+                                        "datatype": str(vfield.datatype), "detail": str(exc)}) from exc
             column[i] = value
             column.mask[i] = mask
     fd, tmp = tempfile.mkstemp(prefix="astrotwo-hipscat-", suffix=".xml")
@@ -1561,10 +1695,12 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
     if isinstance(tile_width, bool) or not isinstance(tile_width, int) or tile_width < 2 or tile_width & (tile_width - 1):
         raise ValueError(f"tile_width {tile_width!r}: potenza di 2 (default 512)")
     shift = tile_width.bit_length() - 1
-    order = _check_space_order(order, _SPACE_MAX_ORDER - shift, f"ordine (con tile da {tile_width} pixel)")
+    order = _check_space_order(order, _SPACE_MAX_ORDER - shift, f"ordine (con tile da {tile_width} pixel)",
+                               reason="tile_width", tile_width=tile_width)
     if method not in BUILD_METHODS:
         raise HiPSError("OPERATION_UNSUPPORTED", f"metodo {method!r}: ammessi {', '.join(BUILD_METHODS)} (flux non "
-                        "disponibile sulla griglia HEALPix dei tile)")
+                        "disponibile sulla griglia HEALPix dei tile)",
+                        params={"reason": "build_method", "method": str(method), "allowed": list(BUILD_METHODS)})
     if not isinstance(hips_id, str) or not re.match(r"^[A-Za-z0-9._~-]+(/[A-Za-z0-9._~+-]+)+$", hips_id):
         raise ValueError(f"hips_id {hips_id!r}: identificativo nella forma AUTORITÀ/P/nome (senza ivo://)")
     if not isinstance(title, str) or not title.strip() or "\n" in title:
@@ -1575,21 +1711,26 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
     if formats:
         if display is None or len(display) != 3:
             raise HiPSError("HIPS_DISPLAY_REQUIRED", "tile PNG/JPEG: servono (vmin, vmax, funzione di trasferimento) "
-                            "espliciti")
+                            "espliciti", params={})
         vmin, vmax, stretch = float(display[0]), float(display[1]), display[2]
         if stretch not in STRETCHES or stretch == "histeq":
             raise HiPSError("HIPS_DISPLAY_INVALID", f"funzione di trasferimento {stretch!r}: ammesse "
-                            f"{', '.join(s for s in STRETCHES if s != 'histeq')} (histeq dipende dal tile)")
+                            f"{', '.join(s for s in STRETCHES if s != 'histeq')} (histeq dipende dal tile)",
+                            params={"reason": "stretch", "stretch": str(stretch),
+                                    "allowed": [s for s in STRETCHES if s != "histeq"]})
         if not (np.isfinite(vmin) and np.isfinite(vmax) and vmin < vmax):
-            raise HiPSError("HIPS_DISPLAY_INVALID", "serve vmin < vmax, entrambi finiti")
+            raise HiPSError("HIPS_DISPLAY_INVALID", "serve vmin < vmax, entrambi finiti",
+                            params={"reason": "limits"})
     for im in images:
         if im.color:
-            raise HiPSError("OPERATION_UNSUPPORTED", f"{im.origin}: immagine a colori, solo presentazione")
+            raise HiPSError("OPERATION_UNSUPPORTED", f"{im.origin}: immagine a colori, solo presentazione",
+                            params={"reason": "build_color_image", "origin": im.origin})
         if im.is_preview:
             raise HiPSError("PREVIEW_NOT_MEASURABLE", f"{im.origin}: aperta a due livelli, in memoria c'è solo "
-                            "l'anteprima")
+                            "l'anteprima", params={"reason": "build_hips", "origin": im.origin})
         if im.wcs is None:
-            raise HiPSError("WCS_MISSING", f"{im.origin}: nessun WCS, nessuna posizione sul cielo")
+            raise HiPSError("WCS_MISSING", f"{im.origin}: nessun WCS, nessuna posizione sul cielo",
+                            params={"reason": "image_without_wcs", "origin": im.origin})
     # Memoria (A10, D11-11): copie float64 degli ingressi + lavoro di un tile (risultato e copertura per immagine,
     # somme, tile ridotto e immagine di presentazione).
     caps = [im.limits.operation_bytes for im in images if im.limits is not None]
@@ -1599,11 +1740,13 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
         _FLOAT64
     if needed > cap:
         raise HiPSError("MEMORY_LIMIT_EXCEEDED", f"build_hips: servono circa {needed} byte, oltre il limite delle "
-                        f"operazioni di {cap} byte (D11-11)", needed_bytes=needed, limit_bytes=cap)
+                        f"operazioni di {cap} byte (D11-11)", needed_bytes=needed, limit_bytes=cap,
+                        params={"reason": "build_hips", "needed": {"value": int(needed), "unit": "byte"},
+                                "limit": {"value": int(cap), "unit": "byte"}})
     root = Path(output)
     if root.exists() and (not root.is_dir() or any(root.iterdir())):
         raise FileExistsError(f"{root}: la cartella del HiPS deve essere nuova o vuota (nulla si sovrascrive)")
-    notes: list[tuple[str, str]] = []
+    notes: list = []
     # Copertura e tile dell'ordine più profondo: unione dei MOC delle immagini (16, pixel validi con il WCS).
     coverage = None
     for im in images:
@@ -1616,8 +1759,9 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
     bunits = {im.bunit for im in images}
     bunit = next(iter(bunits)) if len(bunits) == 1 else None
     if len(bunits) > 1:
-        notes.append(("HIPS_UNIT_MIXED", f"unità diverse tra le immagini ({sorted(map(str, bunits))}): BUNIT non "
-                      "scritto"))
+        notes.append(ModuleWarning(
+            "HIPS_UNIT_MIXED", f"unità diverse tra le immagini ({sorted(map(str, bunits))}): BUNIT non scritto",
+            {"units": sorted(map(str, bunits))}))
     root.mkdir(parents=True, exist_ok=True)
     written: dict[int, list[int]] = {order: []}
     for index in candidates:
@@ -1636,7 +1780,7 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
         _write_fits_tile(root / tile_path(order, int(index), "fits"), tile, bunit)
         written[order].append(int(index))
     if not written[order]:
-        raise HiPSError("HIPS_EMPTY", "nessun pixel valido ricampionato: nessun tile scritto")
+        raise HiPSError("HIPS_EMPTY", "nessun pixel valido ricampionato: nessun tile scritto", params={})
     half = tile_width // 2
     for level in range(order - 1, -1, -1):
         parents = sorted({i >> 2 for i in written[level + 1]})
@@ -1681,7 +1825,7 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
     lines += [f"{key:20} = {value}" for key, value in props.items()]
     (root / "properties").write_text("\n".join(lines) + "\n", encoding="utf-8")
     counts = {level: len(indices) for level, indices in sorted(written.items())}
-    notes.append(("HIPS_ALLSKY_NOT_WRITTEN", "file Allsky non scritto (facoltativo nello standard; D12-8)"))
+    notes.append(ModuleWarning("HIPS_ALLSKY_NOT_WRITTEN", "file Allsky non scritto (facoltativo nello standard; D12-8)"))
     description = (f"HiPS {hips_id} in {root}: {len(images)} immagini, ordine 0–{order}, tile {tile_width}×"
                    f"{tile_width} ({sum(counts.values())} tile FITS float64" + (f" + {', '.join(formats)}" if formats
                                                                                else "") +

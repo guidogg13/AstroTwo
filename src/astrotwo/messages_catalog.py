@@ -393,7 +393,9 @@ _add("WCS_MISSING",
                                "{nx}×{ny}.", "kind naxis1 naxis2 nx:int ny:int"),
      celestial_axes=("The celestial axes {celestial_axes} are not the two useful axes {useful_axes}.",
                      "Gli assi celesti {celestial_axes} non sono i due assi utili {useful_axes}.",
-                     "celestial_axes:list useful_axes:list"))
+                     "celestial_axes:list useful_axes:list"),
+     image_without_wcs=("{origin}: no WCS, no position on the sky.",
+                        "{origin}: nessuna WCS, nessuna posizione sul cielo.", "origin"))
 _add("WCS_LEGACY_UNSUPPORTED",
      "The historical {legacy} solution is not translated by the library.",
      "La soluzione storica {legacy} non è tradotta dalla libreria.", "legacy",
@@ -582,7 +584,13 @@ _add("OPERATION_UNSUPPORTED",
                               "Normalizzazione non definita: media dei pixel finiti = {mean}.", "mean:num"),
      resampling_method_unknown=("Resampling method '{method}' is not provided; methods: {allowed}.",
                                 "Metodo di ricampionamento '{method}' non previsto; metodi: {allowed}.",
-                                "method allowed:list"))
+                                "method allowed:list"),
+     build_method=("Method '{method}' is not provided; allowed: {allowed} (flux is not available on the HEALPix "
+                   "grid of the tiles).",
+                   "Metodo '{method}' non previsto; ammessi: {allowed} (flux non disponibile sulla griglia HEALPix "
+                   "dei tile).", "method allowed:list"),
+     build_color_image=("{origin}: colour image, for presentation only.",
+                        "{origin}: immagine a colori, solo presentazione.", "origin"))
 _add("DISPLAY_OPTION_UNKNOWN",
      "{option} '{value}' is not allowed; allowed: {allowed}.",
      "{option} '{value}' non ammesso; ammessi: {allowed}.", "option value allowed:list")
@@ -598,12 +606,17 @@ _add("MEMORY_LIMIT_EXCEEDED",
      "{operation}: about {needed} are needed, above the operation limit of {limit} (D11-11); use a cutout, a region "
      "or higher thresholds.",
      "{operation}: servono circa {needed}, oltre il limite delle operazioni di {limit} (D11-11); usare un taglio, "
-     "una regione o soglie più alte.", "operation needed:qty limit:qty")
+     "una regione o soglie più alte.", "operation needed:qty limit:qty",
+     build_hips=("build_hips: about {needed} are needed, above the operation limit of {limit} (D11-11).",
+                 "build_hips: servono circa {needed}, oltre il limite delle operazioni di {limit} (D11-11).",
+                 "needed:qty limit:qty"))
 _add("PREVIEW_NOT_MEASURABLE",
      "{operation}: the image is open at two levels and the data in memory are only the preview (step "
      "{preview_step}); use read_region or a cutout on the original pixels.",
      "{operation}: l'immagine è aperta a due livelli e i dati in memoria sono solo l'anteprima (passo "
-     "{preview_step}); usare read_region o un taglio sui pixel originali.", "operation preview_step:int")
+     "{preview_step}); usare read_region o un taglio sui pixel originali.", "operation preview_step:int",
+     build_hips=("{origin}: the image is open at two levels and only the preview is in memory.",
+                 "{origin}: aperta a due livelli, in memoria c'è solo l'anteprima.", "origin"))
 _add("COMPRESSION_UNSUPPORTED",
      "{path}: compression {compression} cannot be read ({detail})",
      "{path}: compressione {compression} non leggibile ({detail})", "path compression detail!")
@@ -673,10 +686,301 @@ _add("FROM_CACHE",
      network_unavailable=("Network not available ({error}): copy from the cache.",
                           "Rete non disponibile ({error}): copia in cache.", "error"),
      cached_url=("Copy of the URL from the cache, downloaded on {retrieved_at}.",
-                 "Copia in cache dell'URL, scaricata il {retrieved_at}.", "retrieved_at"))
+                 "Copia in cache dell'URL, scaricata il {retrieved_at}.", "retrieved_at"),
+     cached_tile=("Copy of {url} from the cache, downloaded on {retrieved_at}.",
+                  "Copia in cache di {url}, scaricata il {retrieved_at}.", "url retrieved_at"))
 _add("UNIT_UNKNOWN",
      "The unit of the result cannot be determined from {unit_a} and {unit_b}.",
      "Unità del risultato non determinabile da {unit_a} e {unit_b}.", "unit_a unit_b")
 _add("CUTOUT_TRIMMED",
      "Cutout trimmed to the intersection with the image: {shape} instead of {requested_shape}.",
      "Taglio ridotto all'intersezione con l'immagine: {shape} invece di {requested_shape}.", "shape requested_shape")
+
+
+# --- Modulo 12: HiPS (``core/hips.py``) ---
+# Le voci già presenti per altri moduli (NET_TIMEOUT, WCS_MISSING, OPERATION_UNSUPPORTED, PREVIEW_NOT_MEASURABLE,
+# MEMORY_LIMIT_EXCEEDED, FROM_CACHE) hanno qui le loro sotto-voci aggiunte sopra. Testi esterni (``!``): righe del
+# file properties, risposte dei servizi, diagnosi annidate di altri moduli (``mdfiles/12-core-hips.md`` §10).
+
+_add("HIPS_NOT_A_SERVICE",
+     "The address is not a HiPS service.", "L'indirizzo non è un servizio HiPS.",
+     bad_line=("{source}: line {line} is not in the form 'key = value' of the HiPS 1.0 standard: {content}",
+               "{source}: riga {line} non è nella forma 'chiave = valore' dello standard HiPS 1.0: {content}",
+               "source line:int content!"),
+     no_properties=("{source}: no HiPS property.", "{source}: nessuna proprietà HiPS.", "source"),
+     service_error=("{url}: {detail}; it is not a HiPS service.", "{url}: {detail}; non è un servizio HiPS.",
+                    "url detail!"),
+     not_utf8=("{url}: the response is not UTF-8, so it is not a HiPS properties file ({detail}).",
+               "{url}: risposta non UTF-8, non è un file properties HiPS ({detail}).", "url detail!"),
+     no_mandatory_keys=("{url}: none of the mandatory keys of the HiPS 1.0 standard; it is not a HiPS service.",
+                        "{url}: nessuna delle chiavi obbligatorie dello standard HiPS 1.0; non è un servizio HiPS.",
+                        "url"),
+     no_service_url=("{hips_id}: the collection has no HiPS service (hips_service_url missing in the MocServer).",
+                     "{hips_id}: la collezione non ha un servizio HiPS (hips_service_url assente nel MocServer).",
+                     "hips_id"))
+_add("HIPS_METADATA_INVALID",
+     "The HiPS metadata are not valid; nothing was added.",
+     "I metadati HiPS non sono validi; nessuna voce aggiunta.",
+     missing=("{source}: {field} is missing (mandatory key of the HiPS 1.0 standard); nothing was added.",
+              "{source}: {field} mancante (chiave obbligatoria dello standard HiPS 1.0); nessuna voce aggiunta.",
+              "source field"),
+     not_integer=("{source}: {field} '{value}' is not an integer; nothing was added.",
+                  "{source}: {field} '{value}' non è un intero; nessuna voce aggiunta.", "source field value!"),
+     out_of_range=("{source}: {field} {value} is outside [{low}, {high}]; nothing was added.",
+                   "{source}: {field} {value} fuori da [{low}, {high}]; nessuna voce aggiunta.",
+                   "source field value:int low:int high:int"),
+     below_minimum=("{source}: {field} {value} is below the minimum {low}; nothing was added.",
+                    "{source}: {field} {value} sotto il minimo {low}; nessuna voce aggiunta.",
+                    "source field value:int low:int"),
+     not_number=("{source}: {field} '{value}' is not a number; nothing was added.",
+                 "{source}: {field} '{value}' non è un numero; nessuna voce aggiunta.", "source field value!"),
+     release_date=("{source}: hips_release_date '{value}' is not in the ISO 8601 form YYYY-mm-ddTHH:MMZ; nothing "
+                   "was added.",
+                   "{source}: hips_release_date '{value}' non è nella forma ISO 8601 YYYY-mm-ddTHH:MMZ; nessuna "
+                   "voce aggiunta.", "source value!"),
+     product_unknown=("{source}: dataproduct_type '{value}' is not provided by the HiPS 1.0 standard ({allowed}); "
+                      "nothing was added.",
+                      "{source}: dataproduct_type '{value}' non previsto dallo standard HiPS 1.0 ({allowed}); "
+                      "nessuna voce aggiunta.", "source value! allowed:list"),
+     tile_format=("{source}: hips_tile_format '{formats}': for {product} the allowed formats are {allowed}; nothing "
+                  "was added.",
+                  "{source}: hips_tile_format '{formats}': per {product} ammessi {allowed}; nessuna voce aggiunta.",
+                  "source formats! product allowed:list"),
+     tile_width_not_power_of_two=("{source}: hips_tile_width {width} is not a power of 2; nothing was added.",
+                                  "{source}: hips_tile_width {width} non è una potenza di 2; nessuna voce aggiunta.",
+                                  "source width:int"),
+     cube_depth_missing=("{source}: hips_cube_depth is missing (mandatory for cubes, HiPS 1.0 standard); nothing "
+                         "was added.",
+                         "{source}: hips_cube_depth mancante (obbligatoria per i cubi, standard HiPS 1.0); nessuna "
+                         "voce aggiunta.", "source"),
+     cube_first_frame=("{source}: hips_cube_firstframe {first} is beyond the depth {depth}; nothing was added.",
+                       "{source}: hips_cube_firstframe {first} oltre la profondità {depth}; nessuna voce aggiunta.",
+                       "source first:int depth:int"),
+     metadata_xml_unavailable=("{url}: {detail}; metadata.xml is required for HiPS catalogues (standard §4.4.3).",
+                               "{url}: {detail}; metadata.xml è richiesto per i cataloghi HiPS (standard §4.4.3).",
+                               "url detail!"),
+     metadata_xml_unreadable=("{url}: the VOTable cannot be read ({detail}).",
+                              "{url}: VOTable non leggibile ({detail}).", "url detail!"))
+_add("HIPS_UNKNOWN",
+     "The HiPS identifier '{hips_id}' is unknown.", "L'identificativo HiPS '{hips_id}' è sconosciuto.", "hips_id",
+     mocserver=("The identifier '{hips_id}' is unknown to the MocServer.",
+                "L'identificativo '{hips_id}' è sconosciuto al MocServer.", "hips_id"),
+     not_listed=("The survey '{hips_id}' is not in the list; known: {known}.",
+                 "Il survey '{hips_id}' non è in elenco; noti: {known}.", "hips_id known:list"),
+     not_listed_empty=("The survey '{hips_id}' is not in the list; the list is empty.",
+                       "Il survey '{hips_id}' non è in elenco; l'elenco è vuoto.", "hips_id"))
+_add("HEALPIX_ORDER_INVALID",
+     "HEALPix order {value}: an integer in [0, {high}] is required.",
+     "Ordine HEALPix {value}: serve un intero in [0, {high}].", "value high:int",
+     service_maximum=("Order {value} (service maximum {high}): an integer in [0, {high}] is required.",
+                      "Ordine {value} (massimo del servizio {high}): serve un intero in [0, {high}].",
+                      "value high:int"),
+     tile_width=("Order {value} (with tiles of {tile_width} pixels): an integer in [0, {high}] is required.",
+                 "Ordine {value} (con tile da {tile_width} pixel): serve un intero in [0, {high}].",
+                 "value high:int tile_width:int"),
+     plus_tile_bits=("Order {order} + log2({width}) is beyond {maximum}.",
+                     "Ordine {order} + log2({width}) oltre {maximum}.", "order:int width:int maximum:int"))
+_add("HEALPIX_INDEX_INVALID",
+     "Index {index} at order {order}: an integer in [0, {maximum}] is required.",
+     "Indice {index} all'ordine {order}: serve un intero in [0, {maximum}].", "index order:int maximum:int")
+_add("HIPS_FRAME_UNSUPPORTED",
+     "The hips_frame '{frame}' is not supported.", "Il hips_frame '{frame}' non è supportato.", "frame",
+     ecliptic=("hips_frame '{frame}': the HiPS 1.0 standard does not say which ecliptic (D12-7: not supported until "
+               "verified on a real HiPS).",
+               "hips_frame '{frame}': lo standard HiPS 1.0 non precisa quale eclittica (D12-7: non supportato "
+               "finché non è verificato su un HiPS reale).", "frame"),
+     planetary=("hips_frame '{frame}': planetary frame; planetary positions arrive with module 19.",
+                "hips_frame '{frame}': frame planetario: le posizioni planetarie arrivano con il modulo 19.",
+                "frame"),
+     moc_planetary=("{hips_id}: body {body}; the IVOA MOC is ICRS, the coverage of planetary HiPS comes with "
+                    "module 19.",
+                    "{hips_id}: corpo {body}; il MOC IVOA è ICRS, copertura dei HiPS planetari con il modulo 19.",
+                    "hips_id body"),
+     coverage_planetary=("{hips_id}: body {body}; the coverage of planetary HiPS comes with module 19.",
+                         "{hips_id}: corpo {body}; copertura dei HiPS planetari con il modulo 19.", "hips_id body"))
+_add("REGION_INVALID",
+     "The region is not valid.", "La regione non è valida.",
+     radius=("Radius {radius}: an angle with a unit in (0°, 180°] is required.",
+             "Raggio {radius}: serve un angolo con unità in (0°, 180°].", "radius"),
+     center_not_single=("The centre of the field must be a single position.",
+                        "Il centro del campo è una sola posizione.", ""),
+     conversion_center=("Centre of the field: {detail}", "Centro del campo: {detail}", "detail!"),
+     conversion_positions=("Positions: {detail}", "Posizioni: {detail}", "detail!"),
+     conversion_window=("Pixels of the window: {detail}", "Pixel della finestra: {detail}", "detail!"))
+_add("HIPS_OUT_OF_COVERAGE",
+     "Outside the coverage of the survey: no tile.", "Fuori dalla copertura del survey: nessun tile.",
+     field=("The field is outside the coverage of the service ({outside} tiles outside): no tile.",
+            "Campo fuori dalla copertura del servizio ({outside} tile fuori): nessun tile.", "outside:int"),
+     tile=("{hips_id}: tile {index} at order {order} is outside the coverage of the service; no tile.",
+           "{hips_id}: tile {index} all'ordine {order} fuori dalla copertura del servizio; nessun tile.",
+           "hips_id index:int order:int"))
+_add("HIPS_TYPE_MISMATCH",
+     "The operation does not apply to this type of HiPS.", "L'operazione non vale per questo tipo di HiPS.",
+     catalog_no_pixels=("{hips_id}: catalogues have no pixels.", "{hips_id}: i cataloghi non hanno pixel.",
+                        "hips_id"),
+     catalog_tiles=("{hips_id}: catalogue HiPS, the tiles are read as tables.",
+                    "{hips_id}: HiPS catalogo, i tile si leggono come tabelle.", "hips_id"),
+     not_a_cube=("{hips_id}: not a HiPS cube ({dataproduct_type}).",
+                 "{hips_id}: non è un cubo HiPS ({dataproduct_type}).", "hips_id dataproduct_type"),
+     not_a_catalog=("{hips_id}: not a HiPS catalogue ({dataproduct_type}).",
+                    "{hips_id}: non è un catalogo HiPS ({dataproduct_type}).", "hips_id dataproduct_type"))
+_add("SERVICE_ERROR",
+     "The service answered with an error.", "Il servizio ha risposto con un errore.",
+     http_status=("{url}: HTTP response {status} {status_text}", "{url}: risposta HTTP {status} {status_text}",
+                  "url status:int status_text!"),
+     unreadable_response=("{url}: the response cannot be read ({detail}).", "{url}: risposta non leggibile ({detail}).",
+                          "url detail!"))
+_add("HIPS_FORMAT_UNAVAILABLE",
+     "{hips_id}: format '{format}' is not offered; formats: {offered}.",
+     "{hips_id}: formato '{format}' non offerto; formati {offered}.", "hips_id format offered:list")
+_add("HIPS_TILE_MISSING",
+     "{url}: tile not provided by the service (HTTP 404; the standard allows partial trees and omitted low orders).",
+     "{url}: tile non fornito dal servizio (HTTP 404; lo standard ammette alberi parziali e ordini bassi omessi).",
+     "url")
+_add("HIPS_BAD_TILE",
+     "The tile is corrupt.", "Il tile è corrotto.",
+     tile_corrupt=("{url}: tile corrupt even after a new request ({problem}).",
+                   "{url}: tile corrotto anche dopo una nuova richiesta ({problem}).", "url problem!"),
+     file_corrupt=("{url}: file not valid even after a new request ({problem}).",
+                   "{url}: file non valido anche dopo una nuova richiesta ({problem}).", "url problem!"),
+     value_not_conformant=("{hips_id}: value '{value}' of column {column} does not conform to type {datatype} "
+                           "({detail}).",
+                           "{hips_id}: valore '{value}' della colonna {column} non conforme al tipo {datatype} "
+                           "({detail}).", "hips_id value! column! datatype! detail!"))
+_add("HIPS_CUBE_PLANE_INVALID",
+     "The plane of the cube does not exist.", "Il piano del cubo non esiste.",
+     not_a_cube=("{hips_id}: not a cube, no plane {plane}.", "{hips_id}: non è un cubo, nessun piano {plane}.",
+                 "hips_id plane"),
+     out_of_range=("{hips_id}: plane {plane} does not exist; available planes 0–{last_plane} ({depth}).",
+                   "{hips_id}: piano {plane} inesistente; piani disponibili 0–{last_plane} ({depth}).",
+                   "hips_id plane depth:int last_plane:int"))
+_add("HIPS_PIXEL_UNAVAILABLE",
+     "The pixel value is not available.", "Il valore del pixel non è disponibile.",
+     not_fits=("{url}: the pixel value is read only from FITS tiles, not from a {format} tile (copy for display).",
+               "{url}: il valore del pixel si legge solo dai tile FITS, non da un tile {format} (copia per la "
+               "visualizzazione).", "url format"),
+     no_fits_tiles=("{hips_id}: no FITS tiles (formats {formats}); the pixel value is not available.",
+                    "{hips_id}: nessun tile FITS (formati {formats}); il valore del pixel non è disponibile.",
+                    "hips_id formats:list"))
+_add("HIPS_OUT_OF_TILE",
+     "The position is outside the given tile.", "La posizione è fuori dal tile dato.",
+     positions=("{count} positions outside tile {index} (order {order}).",
+                "{count} posizioni fuori dal tile {index} (ordine {order}).", "count:int index:int order:int"),
+     order_mismatch=("Tile at order {tile_order}, sampling at order {sampling_order}.",
+                     "Tile all'ordine {tile_order}, campionamento all'ordine {sampling_order}.",
+                     "tile_order:int sampling_order:int"),
+     no_window_pixels=("Tile {index} contains no pixel of the window.",
+                       "Il tile {index} non contiene pixel della finestra.", "index:int"))
+_add("MOCSERVER_UNAVAILABLE",
+     "The MocServer is not reachable.", "Il MocServer non è raggiungibile.",
+     resolve=("The MocServer is not reachable to resolve '{hips_id}': {detail}",
+              "MocServer non raggiungibile per risolvere '{hips_id}': {detail}", "hips_id detail!"),
+     index=("The MocServer is not reachable and there is no local copy of the collections: {detail}",
+            "MocServer non raggiungibile e nessuna copia locale delle collezioni: {detail}", "detail!"),
+     coverage=("Coverage of {hips_id}: {detail}", "Copertura di {hips_id}: {detail}", "hips_id detail!"),
+     local_copy=("The MocServer is not reachable: local copy of the collections of {retrieved_at}.",
+                 "MocServer non raggiungibile: copia locale delle collezioni del {retrieved_at}.", "retrieved_at"))
+_add("HIPS_DISPLAY_REQUIRED",
+     "PNG/JPEG tiles: (vmin, vmax, transfer function) must be given explicitly.",
+     "Tile PNG/JPEG: servono (vmin, vmax, funzione di trasferimento) espliciti.")
+_add("HIPS_DISPLAY_INVALID",
+     "The display parameters are not valid.", "I parametri di visualizzazione non sono validi.",
+     stretch=("Transfer function '{stretch}': allowed {allowed} (histeq depends on the tile).",
+              "Funzione di trasferimento '{stretch}': ammesse {allowed} (histeq dipende dal tile).",
+              "stretch allowed:list"),
+     limits=("vmin < vmax is required, both finite.", "Serve vmin < vmax, entrambi finiti.", ""))
+_add("HIPS_DISPLAY_UNKNOWN",  # sollevato dal visualizzatore del 41 (messaggi propri del 41: sprint 8e)
+     "The colour limits of the survey are not known: FITS tiles are not drawn.",
+     "Limiti di colore del survey non noti: i tile FITS non si disegnano.",
+     no_limits=("The colour limits of the survey are not known: FITS tiles are not drawn.",
+                "Limiti di colore del survey non noti: i tile FITS non si disegnano.", ""),
+     reopen=("{hips_id}: the colour limits of the survey are not known, FITS tiles are not drawn; reopen the survey "
+             "giving vmin and vmax.",
+             "{hips_id}: limiti di colore del survey non noti, i tile FITS non si disegnano; riaprire il survey "
+             "indicando vmin e vmax.", "hips_id"))
+_add("HIPS_EMPTY",
+     "No valid pixel was resampled: no tile written.", "Nessun pixel valido ricampionato: nessun tile scritto.")
+
+# Avvisi
+_add("BODY_UNKNOWN",
+     "The body cannot be derived: the data open on their own.",
+     "Corpo non ricavabile: il dato si apre da solo.",
+     no_hips_body=("{source}: hips_frame '{frame}' is not celestial and there is no hips_body: the body cannot be "
+                   "derived, the data open on their own.",
+                   "{source}: hips_frame '{frame}' non celeste e senza hips_body: corpo non ricavabile, il dato si "
+                   "apre da solo.", "source frame"),
+     body_differs=("{source}: hips_frame '{frame}' and hips_body '{body}' differ: the body cannot be derived, the "
+                   "data open on their own.",
+                   "{source}: hips_frame '{frame}' e hips_body '{body}' diversi: corpo non ricavabile, il dato si "
+                   "apre da solo.", "source frame body"))
+_add("HIPS_BODY_DRAFT",
+     "{source}: body '{body}' from hips_body, defined in the HiPS 2.0 Working Draft (2026-05-01), a version that is "
+     "not yet an IVOA recommendation.",
+     "{source}: corpo '{body}' da hips_body, definito nel Working Draft HiPS 2.0 (2026-05-01), versione non ancora "
+     "raccomandazione IVOA.", "source body")
+_add("BODY_UNSUPPORTED",
+     "{source}: {detail} (name table of module 19, D12-6): the data open on their own.",
+     "{source}: {detail} (tabella dei nomi del 19, D12-6): il dato si apre da solo.", "source detail!")
+_add("BODY_NORMALIZED",
+     "{source}: hips_body '{body}' → '{canonical}' (name table of module 19, D12-6).",
+     "{source}: hips_body '{body}' → '{canonical}' (tabella dei nomi del modulo 19, D12-6).",
+     "source body canonical")
+_add("HIPS_DEFAULT_TILE_WIDTH",
+     "{source}: hips_tile_width is missing, {width} pixels (default of the HiPS 1.0 standard).",
+     "{source}: hips_tile_width assente, {width} pixel (default dello standard HiPS 1.0).", "source width:int")
+_add("HIPS_VERSION_UNKNOWN",
+     "{source}: hips_version '{version}'; the HiPS 1.0 standard writes '{standard}': properties read according to "
+     "HiPS 1.0.",
+     "{source}: hips_version '{version}'; lo standard HiPS 1.0 scrive '{standard}': proprietà lette secondo "
+     "HiPS 1.0.", "source version standard")
+_add("HIPS_ID_MISMATCH",
+     "Requested identifier '{requested}', creator_did of the service '{service_id}': the service's one applies.",
+     "Identificativo richiesto '{requested}', creator_did del servizio '{service_id}': vale quello del servizio.",
+     "requested service_id")
+_add("HIPS_ALREADY_LISTED",
+     "{hips_id} is already in the list (read from {origin} on {retrieved_at}); refresh=True to read it again.",
+     "{hips_id} già in elenco (letto da {origin} il {retrieved_at}); refresh=True per rileggerlo.",
+     "hips_id origin retrieved_at")
+_add("HIPS_COVERAGE_NOT_CHECKED",
+     "hips_frame '{frame}': the MOC of the service is in ICRS, coverage filter not applied.",
+     "hips_frame '{frame}': il MOC del servizio è in ICRS, filtro di copertura non applicato.", "frame")
+_add("HIPS_RESOLUTION_LIMIT",
+     "{hips_id}: requested resolution {resolution} is beyond that of the service; maximum order {max_order}.",
+     "{hips_id}: risoluzione richiesta {resolution} oltre quella del servizio; ordine massimo {max_order}.",
+     "hips_id resolution:qty max_order:int")
+_add("HIPS_TILE_DISCARDED",
+     "A corrupt tile was discarded.", "Un tile corrotto è stato scartato.",
+     cache_corrupt=("The cached copy of {url} is corrupt ({problem}): discarded, new request.",
+                    "Copia in cache di {url} corrotta ({problem}): scartata, nuova richiesta.", "url problem!"),
+     tile_corrupt=("{url}: tile corrupt ({problem}), discarded.", "{url}: tile corrotto ({problem}), scartato.",
+                   "url problem!"),
+     cache_invalid=("The cached copy of {url} is not valid ({problem}): new request.",
+                    "Copia in cache di {url} non valida ({problem}): nuova richiesta.", "url problem!"),
+     file_invalid=("{url}: file not valid ({problem}), discarded.", "{url}: file non valido ({problem}), scartato.",
+                   "url problem!"))
+_add("HIPS_COVERAGE_UNKNOWN",
+     "The coverage is not known.", "Copertura non nota.",
+     moc_missing=("{url}: MOC of the service is missing (optional for the standard); coverage not known.",
+                  "{url}: MOC del servizio assente (facoltativo per lo standard); copertura non nota.", "url"),
+     unavailable=("{hips_id}: coverage not available ({cause_code}: {cause}).",
+                  "{hips_id}: copertura non disponibile ({cause_code}: {cause}).", "hips_id cause_code cause!"))
+_add("HIPS_COVERAGE_FROM_MOCSERVER",
+     "{hips_id}: coverage from the MocServer ({url}), the service does not provide Moc.fits.",
+     "{hips_id}: copertura dal MocServer ({url}), il servizio non fornisce Moc.fits.", "hips_id url")
+_add("HIPS_DEFAULT_SURVEY",
+     "Default survey {survey} (D12-3).", "Survey di default {survey} (D12-3).", "survey")
+_add("HIPS_CUBE_UNIT_UNKNOWN",
+     "The unit of the cube axis is not known: axis without unit.", "Unità dell'asse del cubo ignota: asse senza unità.",
+     not_fits_unit=("{source}: data_cube_bunit3 '{unit}' is not a FITS unit: axis without unit.",
+                    "{source}: data_cube_bunit3 '{unit}' non è un'unità FITS: asse senza unità.", "source unit"),
+     missing=("{source}: data_cube_bunit3 is missing: axis without unit.",
+              "{source}: data_cube_bunit3 assente: asse senza unità.", "source"))
+_add("HIPS_CUBE_AXIS_INCOMPLETE",
+     "{source}: incomplete data_cube_* keys, physical axis not computed.",
+     "{source}: chiavi data_cube_* incomplete, asse fisico non calcolato.", "source")
+_add("HIPS_UNIT_MIXED",
+     "Different units among the images ({units}): BUNIT not written.",
+     "Unità diverse tra le immagini ({units}): BUNIT non scritto.", "units:list")
+_add("HIPS_ALLSKY_NOT_WRITTEN",
+     "Allsky file not written (optional in the standard; D12-8).",
+     "File Allsky non scritto (facoltativo nello standard; D12-8).")

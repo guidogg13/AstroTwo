@@ -66,7 +66,9 @@ def names(win):
 def offline(monkeypatch):
     """HiPS e cataloghi di rete simulati: rispondono subito con un errore del modulo (nessuna rete)."""
     def no_hips(*a, **k):
-        raise hips.HiPSError("NET_TIMEOUT", "servizio HiPS simulato non raggiungibile")
+        raise hips.HiPSError("NET_TIMEOUT", "servizio HiPS simulato non raggiungibile",
+                             params={"reason": "url", "url": "http://simulato.invalid/", "detail": "simulato",
+                                     "connect": {"value": 5.0, "unit": "s"}, "read": {"value": 5.0, "unit": "s"}})
 
     def no_catalog(*a, **k):
         raise catalogs.CatalogsError("NET_TIMEOUT", "servizio del catalogo simulato non raggiungibile")
