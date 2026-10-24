@@ -47,7 +47,7 @@ from astrotwo.core.hips import (
     view_sampling,
 )
 from astrotwo.core.images_fits import LargeImageLimits
-from astrotwo.core.moc import CircleRegion, moc_from_region, write_moc
+from astrotwo.core.moc import CircleRegion, MocError, moc_from_region, write_moc
 from tests.core.test_hips import (
     METADATA_XML,
     fits_tile,
@@ -62,7 +62,7 @@ from tests.core.test_hips import (
     tile_service,
     tsv,
 )
-from tests.message_helpers import catalog_combinations, check_error, check_message, nested_pairs
+from tests.message_helpers import MODULE_14_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
 
 #: Codici che solo il modulo 12 solleva o restituisce (le sotto-voci aggiunte a voci condivise sono in ``SHARED``).
 OWN_CODES = (
@@ -86,7 +86,7 @@ def required_combinations() -> set[tuple[str, str | None]]:
     module_13 = {("BODY_UNKNOWN", "table_body"), ("REGION_INVALID", "radius_not_angle"),
                  ("REGION_INVALID", "radius_range")}  # sotto-voci del 13 nelle voci condivise
     out = {(c, r) for c, r in catalog_combinations(OWN_CODES)
-           if r is not None or not mc.CATALOG[c].variants} - module_13
+           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS
     return out | {("HEALPIX_ORDER_INVALID", None)} | SHARED
 
 
@@ -405,15 +405,15 @@ def test_italian_text_is_unchanged_and_params_are_json():
 
 def test_relayed_errors_keep_the_code_and_params_of_the_lower_module(cache):
     """``_net`` e il rilancio degli errori del 16 non riscrivono codice, testo e ``params`` (12 §10)."""
-    lower = vo.VoProtocolsError("NET_TIMEOUT", "testo del 14", url="http://x")
-    lower.params = {"reason": "url", "url": "http://x", "connect": {"value": 1.0, "unit": "s"},
-                    "read": {"value": 2.0, "unit": "s"}, "detail": "boom"}
+    lower = vo.VoProtocolsError("NET_TIMEOUT", "testo del 14", url="http://x",
+                                params={"reason": "url", "url": "http://x", "connect": {"value": 1.0, "unit": "s"},
+                                        "read": {"value": 2.0, "unit": "s"}, "detail": "boom"})
     relayed = hips_module._net(lower)
     assert (relayed.code, relayed.message, relayed.params, relayed.relayed) == ("NET_TIMEOUT", "testo del 14",
                                                                                  lower.params, True)
     assert check_error(relayed) == ("NET_TIMEOUT", "url")  # con i params del 14 si controlla come ogni errore
-    unconverted = vo.VoProtocolsError("SERVICE_ERROR", "testo del 14", url="http://x")
-    plain = hips_module._net(unconverted)
+    unconverted = MocError("SERVICE_ERROR", "testo del 16", url="http://x")  # il 16 si converte nello sprint 8d
+    plain = hips_module._relay(unconverted)
     assert plain.params == {} and plain.relayed and check_error(plain) == ("SERVICE_ERROR", None)
     assert mc.message_text("NET_TIMEOUT", {}, "en", text="testo del 14") == "testo del 14 (no translation)"
 

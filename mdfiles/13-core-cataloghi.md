@@ -765,9 +765,9 @@ nomi di colonne e di tabelle letti da un file), inserito tale e quale e senza tr
 `COORD_OUT_OF_RANGE`, …) con il loro codice, i loro `params` e `relayed = True`; il testo del 13 aggiunge il prefisso
 "propagazione: " e resta nel campo `text`, mentre il catalogo mostra il messaggio del 10. Gli **avvisi dei moduli
 sotto** (`result.warnings` del 14, `fetched.warnings` per l'albero delle collezioni) passano **tali e quali**, con il
-loro `params` (finché il 14 non è convertito, sprint 8d, sono coppie senza `params`). Il testo dichiarato da un
-avviso del 14 e citato in `REGION_REQUIRED` e `REGION_TOO_LARGE` (`declared`) resta un parametro **esterno** fino
-a quella conversione, poi diventa `message`.
+loro `params` (dallo sprint 8d anche quelli del 14 hanno `params`). Il testo dichiarato da un
+avviso del 14 e citato in `REGION_REQUIRED` e `REGION_TOO_LARGE` (`declared`) è un parametro `message`
+(`ROW_LIMIT_EXCEEDED` del 14, con i suoi `params`; dallo sprint 8d).
 
 **Messaggi annidati (D40-7).** Dove il testo del 13 incorpora un altro messaggio **di AstroTwo** il parametro ha tipo
 `message` o `messages` (`40` §3.7.1): l'errore del 13 che ha impedito la lettura dei dati collegati
@@ -964,8 +964,8 @@ dà le tabelle che cominciano con l'identificativo (`_candidates_limited` se l'e
 | `CATALOG_UNKNOWN` | `not_found` | `catalog_id` (string), `server` (string), `detail` (string, esterno) |
 | `CATALOG_UNKNOWN` | `not_found_candidates` | `catalog_id` (string), `server` (string), `detail` (string, esterno), `candidates` (list, esterno) |
 | `CATALOG_UNKNOWN` | `not_found_candidates_limited` | `catalog_id` (string), `server` (string), `detail` (string, esterno), `candidates` (list, esterno), `max_candidates` (integer) |
-| `REGION_REQUIRED` | (generale) | `catalog_id` (string), `max_rows` (integer), `declared` (string, esterno) |
-| `REGION_TOO_LARGE` | (generale) | `catalog_id` (string), `max_rows` (integer), `declared` (string, esterno) |
+| `REGION_REQUIRED` | (generale) | `catalog_id` (string), `max_rows` (integer), `declared` (message: `ROW_LIMIT_EXCEEDED` del 14) |
+| `REGION_TOO_LARGE` | (generale) | `catalog_id` (string), `max_rows` (integer), `declared` (message: `ROW_LIMIT_EXCEEDED` del 14) |
 | `REGION_INVALID` | `radius_not_angle` | `radius` (string) |
 | `REGION_INVALID` | `radius_range` | `radius` (quantity) |
 | `REGION` | (generale) | — |
@@ -1245,3 +1245,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-23 | Claude Code | Aperta **D13-21** (colonne di posizione ambigue in una regione chiesta dall'assistente, Gruppo 3, §13). Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Decise D32-1 (b) e D13-21 (a)** (proprietario, 2026-10-23; il 13 resta `approvato`): `CATALOG_UNKNOWN` elenca le tabelle di VizieR che cominciano con l'identificativo scritto (§7, §10, T33; seconda interrogazione `TAP_SCHEMA.tables` tramite `tap_query` del 14); `NO_COORD_COLUMNS` per colonne ambigue porta le candidate per RA e per Dec nel messaggio. |
 | 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8c-bis:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message`/`messages`, nuovo codice annidato `ASTRORES_LINK_PROBLEM`); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8d:** `declared` di `REGION_REQUIRED` e `REGION_TOO_LARGE` passa da parametro esterno a parametro `message` (avviso `ROW_LIMIT_EXCEEDED` del 14, ora con `params`); gli avvisi del 14 passano con i loro `params`. Nessun comportamento scientifico cambia. |

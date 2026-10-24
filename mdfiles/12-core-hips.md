@@ -627,10 +627,10 @@ regola del 10 e dell'11: `detail`, `cause`); un messaggio di AstroTwo incorporat
 
 **Errori rilanciati da un altro modulo (14, 16).** Quando il 12 rilancia l'errore di un modulo sotto di lui
 (`_net`: `NET_TIMEOUT`, `SERVICE_ERROR`, …; `HiPSError(exc.code, exc.message)` per il 16) **codice, testo e `params` restano
-quelli dell'altro modulo**: il 12 non li riscrive né li inserisce nel catalogo. Finché quel modulo non è
-convertito (14, 16: sprint 8d) l'errore ha `params` vuoti e si mostra come in §3.7.2 del `40` (testo originale
-con la nota "(nessuna traduzione)"); l'errore rilanciato non è controllato contro il catalogo (T18) finché i suoi
-`params` sono vuoti. Gli **avvisi dei moduli sotto** (`response.notes` del 14, `moc.warnings` del 16,
+quelli dell'altro modulo**: il 12 non li riscrive né li inserisce nel catalogo. Il 14 è
+convertito (sprint 8d): i suoi errori arrivano con i loro `params`. Finché il 16 non è convertito (sprint 8d) l'errore
+ha `params` vuoti e si mostra come in §3.7.2 del `40` (testo originale con la nota "(nessuna traduzione)"); l'errore
+rilanciato non è controllato contro il catalogo (T18) finché i suoi `params` sono vuoti. Gli **avvisi dei moduli sotto** (`response.notes` del 14, `moc.warnings` del 16,
 `table.warnings` del 13, gli avvisi dei tile in `pixel_values`) passano **tali e quali**, con il loro `params`.
 **Messaggi annidati (D40-7, decisa il 2026-10-24).** Dove il testo del 12 incorpora un altro messaggio **di AstroTwo**
 il parametro ha tipo `message` (`{"code", "params", "text"}`, `40` §3.7.1) e il catalogo lo rende in modo
@@ -649,7 +649,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `HIPS_NOT_A_SERVICE` | (generale) | — |
 | `HIPS_NOT_A_SERVICE` | `bad_line` | `source` (string), `line` (integer), `content` (string, esterno) |
 | `HIPS_NOT_A_SERVICE` | `no_properties` | `source` (string) |
-| `HIPS_NOT_A_SERVICE` | `service_error` | `url` (string), `detail` (string, esterno) |
+| `HIPS_NOT_A_SERVICE` | `service_error` | `url` (string), `cause` (message: errore del 14) |
 | `HIPS_NOT_A_SERVICE` | `not_utf8` | `url` (string), `detail` (string, esterno) |
 | `HIPS_NOT_A_SERVICE` | `no_mandatory_keys` | `url` (string) |
 | `HIPS_NOT_A_SERVICE` | `no_service_url` | `hips_id` (string) |
@@ -665,7 +665,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `HIPS_METADATA_INVALID` | `tile_width_not_power_of_two` | `source` (string), `width` (integer) |
 | `HIPS_METADATA_INVALID` | `cube_depth_missing` | `source` (string) |
 | `HIPS_METADATA_INVALID` | `cube_first_frame` | `source` (string), `first` (integer), `depth` (integer) |
-| `HIPS_METADATA_INVALID` | `metadata_xml_unavailable` | `url` (string), `detail` (string, esterno) |
+| `HIPS_METADATA_INVALID` | `metadata_xml_unavailable` | `url` (string), `cause` (message: errore del 14) |
 | `HIPS_METADATA_INVALID` | `metadata_xml_unreadable` | `url` (string), `detail` (string, esterno) |
 | `HIPS_UNKNOWN` | (generale) | `hips_id` (string) |
 | `HIPS_UNKNOWN` | `mocserver` | `hips_id` (string) |
@@ -716,8 +716,8 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `HIPS_OUT_OF_TILE` | `order_mismatch` | `tile_order` (integer), `sampling_order` (integer) |
 | `HIPS_OUT_OF_TILE` | `no_window_pixels` | `index` (integer) |
 | `MOCSERVER_UNAVAILABLE` | (generale) | — |
-| `MOCSERVER_UNAVAILABLE` | `resolve` | `hips_id` (string), `detail` (string, esterno) |
-| `MOCSERVER_UNAVAILABLE` | `index` | `detail` (string, esterno) |
+| `MOCSERVER_UNAVAILABLE` | `resolve` | `hips_id` (string), `cause` (message: errore del 14) |
+| `MOCSERVER_UNAVAILABLE` | `index` | `cause` (message: errore del 14) |
 | `MOCSERVER_UNAVAILABLE` | `coverage` | `hips_id` (string), `detail` (string, esterno) |
 | `MOCSERVER_UNAVAILABLE` | `local_copy` (avviso) | `retrieved_at` (string) |
 | `OPERATION_UNSUPPORTED` | `build_method` | `method` (string), `allowed` (list) — voce già dell'11 |
@@ -890,3 +890,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8c:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso, regola per gli errori rilanciati dal 14 e dal 16 (codice e `params` restano dell'altro modulo) e per i messaggi annidati (parametri esterni); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — messaggi annidati di tipo `message` (errore del 10 in `REGION_INVALID`, errore del 12 in `HIPS_COVERAGE_UNKNOWN`, diagnosi del tile con il nuovo codice annidato `HIPS_TILE_PROBLEM` in `HIPS_BAD_TILE` e `HIPS_TILE_DISCARDED`); il testo italiano non cambia. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 14):** gli errori del 14 incorporati dal testo del 12 (`HIPS_NOT_A_SERVICE` `service_error`, `HIPS_METADATA_INVALID` `metadata_xml_unavailable`, `MOCSERVER_UNAVAILABLE` `resolve` e `index`) passano da parametro esterno `detail` a parametro `message` `cause`. Nessun comportamento scientifico cambia. |

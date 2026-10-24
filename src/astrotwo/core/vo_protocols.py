@@ -26,6 +26,7 @@ import tempfile
 import time
 import warnings
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,7 +48,7 @@ from astropy.table import Table
 
 import astrotwo
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
-from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame, wcs_from_header
+from astrotwo.core.coordinates_wcs import CoordinatesWcsError, ModuleWarning, SkyFrame, wcs_from_header
 from astrotwo.core.catalogs import (
     CatalogsError,
     CatalogTable,
@@ -116,13 +117,27 @@ __all__ = [
 
 
 class VoProtocolsError(Exception):
-    """Errore del modulo 14 con identificatore della specifica (§10)."""
+    """Errore del modulo 14 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40 (§10, "Parametri dei messaggi")."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
         self.details = details
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``), mai arrotondato."""
+    return {"value": float(value), "unit": unit}
+
+
+def _message_of(exc) -> dict:
+    """Messaggio annidato (tipo ``message``, D40-7) di un errore di AstroTwo: codice, ``params`` e testo suoi."""
+    return {"code": exc.code, "params": dict(getattr(exc, "params", None) or {}), "text": exc.message}
 
 
 def _iso(moment: datetime) -> str:
@@ -167,17 +182,19 @@ def read_votable(path, *, table: int | None = None, limits: TableLimits | None =
     except CatalogsError as exc:
         if exc.code == "TABLE_UNREADABLE":
             raise
-        raise VoProtocolsError("VOTABLE_INVALID", f"{text}: non è un VOTable ({exc.message})", path=text) from exc
+        raise VoProtocolsError("VOTABLE_INVALID", f"{text}: non è un VOTable ({exc.message})", path=text,
+                               params={"reason": "not_votable", "path": text, "cause": _message_of(exc)}) from exc
     if fmt != "votable":
         raise VoProtocolsError("VOTABLE_INVALID", f"{text}: non è un VOTable (contenuto riconosciuto: {fmt})",
-                               path=text)
+                               path=text, params={"reason": "other_format", "path": text, "format": fmt})
     try:
         return read_table(text, table=table, limits=limits)
     except CatalogsError as exc:
         if exc.code != "TABLE_UNREADABLE":
             raise
         # Il messaggio di astropy indica riga e colonna del problema (es. "12:3: ...").
-        raise VoProtocolsError("VOTABLE_INVALID", f"{text}: VOTable malformato ({exc.message})", path=text) from exc
+        raise VoProtocolsError("VOTABLE_INVALID", f"{text}: VOTable malformato ({exc.message})", path=text,
+                               params={"reason": "malformed", "path": text, "cause": _message_of(exc)}) from exc
 
 
 def write_votable(table: CatalogTable, path, overwrite: bool = False) -> ExportResult:
@@ -290,12 +307,14 @@ def export_table(table: CatalogTable, path, format: str, overwrite: bool = False
     (per conservarle: ``ecsv``, D14-10)."""
     if format not in EXPORT_FORMATS:
         raise VoProtocolsError("EXPORT_FORMAT_UNSUPPORTED",
-                               f"formato {format!r}: ammessi {', '.join(EXPORT_FORMATS)}")
+                               f"formato {format!r}: ammessi {', '.join(EXPORT_FORMATS)}",
+                               params={"format": str(format), "allowed": list(EXPORT_FORMATS)})
     if not isinstance(table, CatalogTable):
         raise TypeError("export_table accetta una CatalogTable (nessun dato senza provenienza)")
     target = Path(os.fspath(path)).expanduser()
     if target.exists() and not overwrite:
-        raise VoProtocolsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True", path=str(target))
+        raise VoProtocolsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True", path=str(target),
+                               params={"path": str(target)})
     if target.exists():
         target.unlink()
     info = _provenance(table, format)
@@ -304,8 +323,8 @@ def export_table(table: CatalogTable, path, format: str, overwrite: bool = False
     writers[format](table, target, info)
     notes = []
     if format == "csv" and _has_units(table):
-        notes.append(("CSV_UNITS_NOT_SAVED", "il CSV semplice non salva le unità delle colonne: per conservarle "
-                      "esportare in ecsv (D14-10)"))
+        notes.append(ModuleWarning("CSV_UNITS_NOT_SAVED", "il CSV semplice non salva le unità delle colonne: per "
+                                   "conservarle esportare in ecsv (D14-10)"))
     return ExportResult(path=target, format=format, warnings=tuple(notes))
 
 
@@ -404,7 +423,28 @@ def _net_error(url: str, exc: Exception, timeouts: NetworkTimeouts, hint: str = 
         f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, {timeouts.read:g} s lettura): "
         f"{exc}{hint}",
         url=url,
+        params={"reason": "url_sync_tap" if hint else "url", "url": url, "connect": _q(timeouts.connect, "s"),
+                "read": _q(timeouts.read, "s"), "detail": str(exc)},
     )
+
+
+def _network_cached(exc: Exception, cached) -> ModuleWarning:
+    """``FROM_CACHE`` per rete non disponibile: copia in cache con la sua data."""
+    return ModuleWarning("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
+                         f"{_iso(cached.retrieved_at)}", {"reason": "network_cached", "error": type(exc).__name__,
+                                                          "retrieved_at": _iso(cached.retrieved_at)})
+
+
+def _cached_since(cached) -> ModuleWarning:
+    """``FROM_CACHE`` per una risposta già in cache (SIMBAD, XMatch)."""
+    return ModuleWarning("FROM_CACHE", f"copia in cache del {_iso(cached.retrieved_at)}",
+                         {"reason": "cached_since", "retrieved_at": _iso(cached.retrieved_at)})
+
+
+def _network_unavailable(exc: Exception) -> ModuleWarning:
+    """``FROM_CACHE`` per rete non disponibile, copia in cache senza data nel testo (SIMBAD, XMatch)."""
+    return ModuleWarning("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache",
+                         {"reason": "network_unavailable", "error": type(exc).__name__})
 
 
 def _check_http(response: requests.Response, url: str) -> None:
@@ -414,6 +454,7 @@ def _check_http(response: requests.Response, url: str) -> None:
             f"{url}: il servizio chiede autenticazione (HTTP {response.status_code}); nel livello 1 solo servizi "
             "pubblici",
             url=url,
+            params={"url": url, "status": response.status_code},
         )
 
 
@@ -432,8 +473,10 @@ def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: S
     cached = rows.get(key)
     if cached is not None and not refresh:
         return _Response(cached.data["payload"], url, method, canonical, cached.retrieved_at, True,
-                         (("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
-                           f"{_iso(cached.retrieved_at)}"),))
+                         (ModuleWarning("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
+                                        f"{_iso(cached.retrieved_at)}",
+                                        {"reason": "cached_origin", "origin": cached.origin,
+                                         "retrieved_at": _iso(cached.retrieved_at)}),))
     try:
         with _Session(timeouts) as session:
             if method == "POST":
@@ -444,8 +487,7 @@ def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: S
     except requests.exceptions.RequestException as exc:
         if cached is not None:
             return _Response(cached.data["payload"], url, method, canonical, cached.retrieved_at, True,
-                             (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
-                               f"{_iso(cached.retrieved_at)}"),))
+                             (_network_cached(exc, cached),))
         raise _net_error(url, exc, timeouts, hint) from exc
     _check_http(response, url)
     retrieved_at = datetime.now(UTC)
@@ -453,7 +495,9 @@ def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: S
         if accept_error_body and payload:
             return _Response(payload, url, method, canonical, retrieved_at, False, (("HTTP_STATUS", str(response.status_code)),))
         raise VoProtocolsError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
-                               url=url, status=response.status_code)
+                               url=url, status=response.status_code,
+                               params={"reason": "http_status", "url": url, "status": response.status_code,
+                                       "status_text": str(response.reason)})
     return _Response(payload, url, method, canonical, retrieved_at, False)
 
 
@@ -470,7 +514,7 @@ def _store(response: _Response, protocol: str, cache: SharedCache | None) -> tup
     try:
         rows.put(key, row, origin=origin, retrieved_at=response.retrieved_at)
     except CacheError as exc:  # es. CACHE_FULL: il dato si usa comunque
-        return ((exc.code, exc.message),)
+        return (ModuleWarning(exc.code, exc.message, getattr(exc, "params", None)),)
     return ()
 
 
@@ -482,8 +526,10 @@ def _link_fetcher(*, cache: SharedCache | None = None, refresh: bool = False,
         response = _http("download", url, cache=cache, refresh=refresh, timeouts=timeouts)
         _store(response, "download", cache)
         state = "copia in cache" if response.from_cache else "scaricati"
-        return response.payload, ("ASTRORES_LINK_SOURCE", f"dati collegati {url}: {state} il "
-                                  f"{_iso(response.retrieved_at)}")
+        return response.payload, ModuleWarning(
+            "ASTRORES_LINK_SOURCE", f"dati collegati {url}: {state} il {_iso(response.retrieved_at)}",
+            {"reason": "cached" if response.from_cache else "downloaded", "url": url,
+             "retrieved_at": _iso(response.retrieved_at)})
 
     return fetch
 
@@ -547,15 +593,17 @@ class AdqlCheck:
     valid: bool
     message: str
     position: int | None = None
+    reason: str | None = None  # identificatore della sotto-voce di ``ADQL_INVALID`` (D40-6); ``None`` se valida
+    quote: str | None = None  # la virgoletta non chiusa (``reason == "unclosed_quote"``)
 
 
 def validate_adql(adql: str) -> AdqlCheck:
     """Controlli minimi: non vuota, inizia con SELECT, virgolette chiuse, parentesi bilanciate."""
     if not isinstance(adql, str) or not adql.strip():
-        return AdqlCheck(False, "ADQL vuota", 0)
+        return AdqlCheck(False, "ADQL vuota", 0, "empty")
     start = len(adql) - len(adql.lstrip())
     if not re.match(r"select\b", adql[start:], re.IGNORECASE):
-        return AdqlCheck(False, "l'ADQL deve iniziare con SELECT", start)
+        return AdqlCheck(False, "l'ADQL deve iniziare con SELECT", start, "not_select")
     quote, quote_at, opened = None, None, []
     k = start
     while k < len(adql):
@@ -572,14 +620,22 @@ def validate_adql(adql: str) -> AdqlCheck:
             opened.append(k)
         elif ch == ")":
             if not opened:
-                return AdqlCheck(False, "parentesi chiusa senza apertura", k)
+                return AdqlCheck(False, "parentesi chiusa senza apertura", k, "unmatched_close")
             opened.pop()
         k += 1
     if quote is not None:
-        return AdqlCheck(False, f"virgoletta {quote} non chiusa", quote_at)
+        return AdqlCheck(False, f"virgoletta {quote} non chiusa", quote_at, "unclosed_quote", quote)
     if opened:
-        return AdqlCheck(False, "parentesi aperta non chiusa", opened[-1])
+        return AdqlCheck(False, "parentesi aperta non chiusa", opened[-1], "unclosed_paren")
     return AdqlCheck(True, "controlli minimi superati (la validazione vera è del servizio)")
+
+
+def _adql_params(check: AdqlCheck) -> dict:
+    """``params`` di ``ADQL_INVALID`` per un controllo lato client non superato (sotto-voce = ``check.reason``)."""
+    params = {"reason": check.reason, "position": check.position}
+    if check.quote is not None:
+        params["quote"] = check.quote
+    return params
 
 
 def _check_max_rows(max_rows, limits: TableLimits | None) -> TableLimits:
@@ -587,7 +643,8 @@ def _check_max_rows(max_rows, limits: TableLimits | None) -> TableLimits:
     if isinstance(max_rows, bool) or not isinstance(max_rows, int) or not 1 <= max_rows <= limits.max_rows:
         raise VoProtocolsError("MAX_ROWS_INVALID",
                                f"max_rows = {max_rows!r}: ammessi gli interi da 1 a {limits.max_rows} "
-                               "(tetto di righe del modulo 13)")
+                               "(tetto di righe del modulo 13)",
+                               params={"value": repr(max_rows), "maximum": limits.max_rows})
     return limits
 
 
@@ -598,7 +655,9 @@ def _service_url(service: str, protocol: str, servers: ServerRegistry | None = N
     entry = (ServerRegistry() if servers is None else servers).get(service)
     if entry.protocol != protocol:
         raise VoProtocolsError("SERVER_UNKNOWN", f"la voce {service!r} è un servizio {entry.protocol}, non "
-                               f"{protocol}", server=service)
+                               f"{protocol}", server=service,
+                               params={"reason": "wrong_protocol", "service": service, "found": entry.protocol,
+                                       "wanted": protocol})
     return entry.url.rstrip("/") if protocol == "tap" else entry.url
 
 
@@ -637,16 +696,28 @@ def _parse_results(response: _Response, results_class, *, hint: str = ""):
         extra = hint if hint and _DURATION_WORDS.search(message) else ""
         if http_status is not None and http_status.startswith("5"):
             raise VoProtocolsError("SERVICE_ERROR", f"{response.url}: HTTP {http_status}: {message}{extra}",
-                                   url=response.url) from exc
-        raise VoProtocolsError("ADQL_INVALID" if results_class is pyvo.dal.TAPResults else "SERVICE_ERROR",
-                               f"{response.url}: il servizio ha rifiutato la richiesta: {message}{extra}",
-                               url=response.url, service_message=message) from exc
+                                   url=response.url,
+                                   params={"reason": "http_message_async_hint" if extra else "http_message",
+                                           "url": response.url, "status": int(http_status),
+                                           "message": message}) from exc
+        text = f"{response.url}: il servizio ha rifiutato la richiesta: {message}{extra}"
+        if results_class is pyvo.dal.TAPResults:
+            raise VoProtocolsError("ADQL_INVALID", text, url=response.url, service_message=message,
+                                   params={"reason": "service_rejected_async_hint" if extra else "service_rejected",
+                                           "url": response.url, "detail": message}) from exc
+        raise VoProtocolsError("SERVICE_ERROR", text, url=response.url, service_message=message,
+                               params={"reason": "service_rejected", "url": response.url,
+                                       "detail": message}) from exc
     except Exception as exc:
         if http_status is not None:
             raise VoProtocolsError("SERVICE_ERROR", f"{response.url}: risposta HTTP {http_status} senza VOTable",
-                                   url=response.url) from exc
+                                   url=response.url,
+                                   params={"reason": "http_no_votable", "url": response.url,
+                                           "status": int(http_status)}) from exc
         raise VoProtocolsError("VOTABLE_INVALID", f"{response.url}: risposta non leggibile come VOTable ({exc})",
-                               url=response.url) from exc
+                               url=response.url,
+                               params={"reason": "unreadable_response", "url": response.url,
+                                       "detail": str(exc)}) from exc
 
 
 def _limited(result: CatalogTable, max_rows: int, service_overflow: bool) -> tuple[CatalogTable, tuple, bool]:
@@ -655,11 +726,13 @@ def _limited(result: CatalogTable, max_rows: int, service_overflow: bool) -> tup
     if received > max_rows:
         cut = dataclasses.replace(result, table=result.table[:max_rows],
                                   history=result.history + (f"prime {max_rows} righe di {received} ricevute",))
-        return cut, (("ROW_LIMIT_EXCEEDED", f"ricevute {received} righe, restituite le prime {max_rows} "
-                      f"(max_rows = {max_rows})"),), True
+        return cut, (ModuleWarning("ROW_LIMIT_EXCEEDED", f"ricevute {received} righe, restituite le prime "
+                                   f"{max_rows} (max_rows = {max_rows})",
+                                   {"reason": "cut", "received": received, "max_rows": max_rows}),), True
     if service_overflow:
-        return result, (("ROW_LIMIT_EXCEEDED", f"il servizio ha troncato il risultato a {received} righe "
-                         f"(max_rows = {max_rows}, stato OVERFLOW)"),), True
+        return result, (ModuleWarning("ROW_LIMIT_EXCEEDED", f"il servizio ha troncato il risultato a {received} "
+                                      f"righe (max_rows = {max_rows}, stato OVERFLOW)",
+                                      {"reason": "service_overflow", "received": received, "max_rows": max_rows}),), True
     return result, (), False
 
 
@@ -701,7 +774,7 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
     check = validate_adql(adql)
     if not check.valid:  # nessuna chiamata di rete inutile (T4)
         raise VoProtocolsError("ADQL_INVALID", f"{check.message} (carattere {check.position})",
-                               position=check.position)
+                               position=check.position, params=_adql_params(check))
     limits = _check_max_rows(max_rows, limits)
     if mode not in ("sync", "async"):
         raise ValueError("mode deve essere 'sync' o 'async'")
@@ -731,8 +804,10 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
     cached = rows.get(_cache_key("tap", "POST", url, canonical))
     if cached is not None and not refresh:
         return _Response(cached.data["payload"], url, "POST", canonical, cached.retrieved_at, True,
-                         (("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
-                           f"{_iso(cached.retrieved_at)}"),))
+                         (ModuleWarning("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
+                                        f"{_iso(cached.retrieved_at)}",
+                                        {"reason": "cached_origin", "origin": cached.origin,
+                                         "retrieved_at": _iso(cached.retrieved_at)}),))
     deadline = time.monotonic() + async_timeout
     session = _Session(timeouts)
     try:
@@ -745,7 +820,9 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
                 if remaining <= 0:
                     job.abort()
                     raise VoProtocolsError("NET_TIMEOUT", f"{url}: attesa massima di {async_timeout:g} s superata "
-                                           f"(fase {phase}); lavoro interrotto", url=url)
+                                           f"(fase {phase}); lavoro interrotto", url=url,
+                                           params={"reason": "async_deadline", "url": url,
+                                                   "timeout": _q(async_timeout, "s"), "phase": str(phase)})
                 time.sleep(min(interval, remaining))
                 interval = min(interval * 1.5, 10.0)
             if phase != "COMPLETED":
@@ -753,13 +830,17 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
                     job.raise_if_error()
                 except pyvo.dal.DALQueryError as exc:
                     raise VoProtocolsError("ADQL_INVALID", f"{url}: il servizio ha rifiutato la richiesta: {exc}",
-                                           url=url, service_message=str(exc)) from exc
-                raise VoProtocolsError("SERVICE_ERROR", f"{url}: lavoro terminato in fase {phase}", url=url)
+                                           url=url, service_message=str(exc),
+                                           params={"reason": "service_rejected", "url": url,
+                                                   "detail": str(exc)}) from exc
+                raise VoProtocolsError("SERVICE_ERROR", f"{url}: lavoro terminato in fase {phase}", url=url,
+                                       params={"reason": "job_phase", "url": url, "phase": str(phase)})
             response = session.get(job.result_uri)
             _check_http(response, url)
             if not response.ok:
                 raise VoProtocolsError("SERVICE_ERROR", f"{job.result_uri}: risposta HTTP {response.status_code}",
-                                       url=url)
+                                       url=url, params={"reason": "job_result_status", "uri": str(job.result_uri),
+                                                        "status": response.status_code})
             payload = response.content
         finally:
             try:
@@ -769,8 +850,7 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
     except (requests.exceptions.RequestException, pyvo.dal.DALServiceError) as exc:
         if cached is not None:
             return _Response(cached.data["payload"], url, "POST", canonical, cached.retrieved_at, True,
-                             (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
-                               f"{_iso(cached.retrieved_at)}"),))
+                             (_network_cached(exc, cached),))
         raise _net_error(url, exc, timeouts) from exc
     finally:
         session.close()
@@ -867,7 +947,9 @@ class ServerRegistry:
                 return entry
         known = ", ".join(e.id for e in self.entries())
         raise VoProtocolsError("SERVER_UNKNOWN", f"server {server_id!r} non in elenco (voci: {known})",
-                               server=server_id)
+                               server=server_id,
+                               params={"reason": "not_listed", "server": server_id,
+                                       "known": [e.id for e in self.entries()]})
 
     def find(self, protocol: str | None = None, provider: str | None = None) -> tuple[ServerEntry, ...]:
         return tuple(e for e in self.entries()
@@ -889,7 +971,8 @@ class ServerRegistry:
 
     def remove_personal(self, server_id: str) -> None:
         if server_id not in self._personal:
-            raise VoProtocolsError("SERVER_UNKNOWN", f"{server_id!r} non è un server personale", server=server_id)
+            raise VoProtocolsError("SERVER_UNKNOWN", f"{server_id!r} non è un server personale", server=server_id,
+                                   params={"reason": "not_personal", "server": server_id})
         del self._personal[server_id]
 
     def search_registry(self, keywords, servicetype: str, *, max_rows: int = DEFAULT_MAX_ROWS,
@@ -1049,7 +1132,8 @@ class DataLinks:
         for desc in self.descriptors:
             if desc.id == service_def:
                 return desc
-        raise VoProtocolsError("SERVICE_ERROR", f"descrittore {service_def!r} assente dal documento DataLink")
+        raise VoProtocolsError("SERVICE_ERROR", f"descrittore {service_def!r} assente dal documento DataLink",
+                               params={"reason": "descriptor_missing", "service_def": str(service_def)})
 
 
 @dataclass(frozen=True)
@@ -1081,7 +1165,7 @@ class DataLinkClient:
         missing = [c for c in _DATALINK_COLUMNS if c not in [f.name for f in parsed[1].get_first_table().fields]]
         if missing:
             raise VoProtocolsError("VOTABLE_INVALID", f"{url}: documento DataLink senza le colonne {missing}",
-                                   url=url)
+                                   url=url, params={"reason": "datalink_columns", "url": url, "missing": missing})
         return DataLinks(_finish("datalink", "DataLinkClient.links", {"url": url, "max_rows": max_rows}, response,
                                  parsed, max_rows=max_rows, limits=limits, cache=self.cache))
 
@@ -1125,11 +1209,11 @@ class DataLinkClient:
 # --------------------------------------------------------------------------
 
 
-def _no_result(result: VoResult, code: str, what: str) -> VoResult:
+def _no_result(result: VoResult, note: ModuleWarning) -> VoResult:
     """Esito vuoto: avviso, non errore (§10)."""
     if result.table.rows:
         return result
-    return dataclasses.replace(result, warnings=result.warnings + ((code, f"nessun{what} per i criteri dati"),))
+    return dataclasses.replace(result, warnings=result.warnings + (note,))
 
 
 def _time_interval(time) -> tuple[Time, Time]:
@@ -1190,11 +1274,12 @@ def sia_search(center, radius, *, version: int, service: str, band=None, time=No
         parsed = _parse_results(response, results_class)
     except VoProtocolsError as exc:
         if exc.code == "VOTABLE_INVALID":
-            raise VoProtocolsError("SIA_INVALID", exc.message, url=url) from exc
+            raise VoProtocolsError("SIA_INVALID", exc.message, url=url,
+                                   params={"cause": _message_of(exc)}) from exc
         raise
     result = _finish(protocol, "sia_search", arguments, response, parsed, max_rows=max_rows, limits=limits,
                      cache=cache)
-    return _no_result(result, "SIA_NO_RESULT", "a immagine")
+    return _no_result(result, ModuleWarning("SIA_NO_RESULT", "nessuna immagine per i criteri dati"))
 
 
 #: Sistemi di SIA 1.0 (VOX:STC_CoordRefFrame) tradotti in FITS WCS: assi e RADESYS; ECL e SGAL non tradotti
@@ -1310,11 +1395,14 @@ def read_idha(path) -> None:
         safe_parse(text)
     except DefusedXmlException as exc:
         raise VoProtocolsError("XML_UNSAFE", f"{text}: costrutto XML pericoloso ({type(exc).__name__}); "
-                               "nessun dato caricato", path=text) from exc
+                               "nessun dato caricato", path=text,
+                               params={"path": text, "construct": type(exc).__name__}) from exc
     except (XmlParseError, OSError) as exc:
-        raise VoProtocolsError("IDHA_UNREADABLE", f"{text}: file non leggibile come XML ({exc})", path=text) from exc
+        raise VoProtocolsError("IDHA_UNREADABLE", f"{text}: file non leggibile come XML ({exc})", path=text,
+                               params={"reason": "xml_error", "path": text, "detail": str(exc)}) from exc
     raise VoProtocolsError("IDHA_UNREADABLE", f"{text}: formato IDHA non leggibile: nessuna documentazione pubblica "
-                           "del formato (D14-9 punto 13); usare SIA o SIA2", path=text)
+                           "del formato (D14-9 punto 13); usare SIA o SIA2", path=text,
+                           params={"reason": "format_unknown", "path": text})
 
 
 def ssa_search(center, radius, *, service: str, max_rows: int = DEFAULT_MAX_ROWS,
@@ -1333,7 +1421,7 @@ def ssa_search(center, radius, *, service: str, max_rows: int = DEFAULT_MAX_ROWS
     arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"},
                  "service": service, "max_rows": max_rows}
     result = _finish("ssa", "ssa_search", arguments, response, parsed, max_rows=max_rows, limits=limits, cache=cache)
-    return _no_result(result, "SSA_NO_RESULT", "o spettro")
+    return _no_result(result, ModuleWarning("SSA_NO_RESULT", "nessuno spettro per i criteri dati"))
 
 
 @dataclass(frozen=True)
@@ -1412,10 +1500,13 @@ def _spectrum_columns(table: Table, fmt: str, origin: str) -> tuple[str, str, st
     if spectral is None or flux is None:
         how = "utype dello Spectrum DM" + (" o UCD (em.*, phot.flux*)" if fmt == "fits" else "")
         raise VoProtocolsError("SSA_INVALID", f"{origin}: asse spettrale o flusso non riconoscibili ({how}, una sola "
-                               f"colonna per asse); colonne: {', '.join(table.colnames)}", url=origin)
+                               f"colonna per asse); colonne: {', '.join(table.colnames)}", url=origin,
+                               params={"reason": "axes_dm_ucd" if fmt == "fits" else "axes_dm", "origin": origin,
+                                       "columns": list(table.colnames)})
     for name in (spectral, flux):
         if table[name].unit is None:
-            raise VoProtocolsError("SSA_INVALID", f"{origin}: colonna {name!r} senza unità valida", url=origin)
+            raise VoProtocolsError("SSA_INVALID", f"{origin}: colonna {name!r} senza unità valida", url=origin,
+                                   params={"reason": "no_unit", "origin": origin, "column": name})
     return spectral, flux, error
 
 
@@ -1431,7 +1522,8 @@ def ssa_load(candidate, index: int | None = None, *, format: str | None = None, 
         acref = _by_utype(rows, "access.reference") or next(iter(_by_ucd(rows, lambda w: w == "meta.ref.url")), None)
         if acref is None:
             raise VoProtocolsError("SSA_INVALID", "il risultato di ssa_search non ha la colonna di accesso "
-                                   "(utype ssa:Access.Reference o UCD meta.ref.url)")
+                                   "(utype ssa:Access.Reference o UCD meta.ref.url)",
+                                   params={"reason": "no_access_column"})
         url = str(rows[acref][index])
         fmt_col = _by_utype(rows, "access.format")
         declared = str(rows[fmt_col][index]) if fmt_col is not None else None
@@ -1444,10 +1536,11 @@ def ssa_load(candidate, index: int | None = None, *, format: str | None = None, 
     try:
         table = _read_payload(response)
     except CatalogsError as exc:
-        raise VoProtocolsError("SSA_INVALID", f"{url}: spettro non leggibile ({exc.message})", url=url) from exc
+        raise VoProtocolsError("SSA_INVALID", f"{url}: spettro non leggibile ({exc.message})", url=url,
+                               params={"reason": "unreadable", "url": url, "cause": _message_of(exc)}) from exc
     if table.format not in ("votable", "fits"):
         raise VoProtocolsError("SSA_INVALID", f"{url}: formato {table.format} (ammessi VOTable Spectrum DM e FITS)",
-                               url=url)
+                               url=url, params={"reason": "format", "url": url, "format": table.format})
     data = _flatten_single_row(table.table)
     spectral, flux, error = _spectrum_columns(data, table.format, url)
     out = Table()
@@ -1457,9 +1550,12 @@ def ssa_load(candidate, index: int | None = None, *, format: str | None = None, 
         out["flux_error"] = data[error]
     notes = response.notes + _store(response, "ssa-spectrum", cache)
     if body is None:
-        notes += (("BODY_UNKNOWN", "corpo non ricavabile: spettro caricato da URL senza il candidato di ssa_search"),)
+        notes += (ModuleWarning("BODY_UNKNOWN", "corpo non ricavabile: spettro caricato da URL senza il candidato "
+                                "di ssa_search", {"reason": "spectrum_without_candidate"}),)
     if declared and table.format not in declared.lower() and not (table.format == "votable" and "xml" in declared):
-        notes += (("FORMAT_DECLARED", f"formato dichiarato {declared!r}, riconosciuto dal contenuto: {table.format}"),)
+        notes += (ModuleWarning("FORMAT_DECLARED", f"formato dichiarato {declared!r}, riconosciuto dal contenuto: "
+                                f"{table.format}", {"reason": "recognized_differs", "declared": declared,
+                                                    "recognized": table.format}),)
     arguments = {"url": url, "format": declared}
     return Spectrum(table=out, spectral_kind=_spectral_kind(data, spectral),
                     columns={"spectral": spectral, "flux": flux, "flux_error": error}, format=table.format,
@@ -1550,15 +1646,17 @@ def _simbad_magnitudes(main_id: str, *, cache, refresh: bool, timeouts: NetworkT
         code = text(row, "system")
         system = SIMBAD_FLUX_SYSTEMS.get(code) if code else None
         if code and system is None:
-            notes.append(("SIMBAD_SYSTEM_UNKNOWN", f"banda {text(row, 'filter')}: codice di sistema {code!r} "
-                          "non documentato da SIMBAD, sistema non dichiarato"))
+            notes.append(ModuleWarning(
+                "SIMBAD_SYSTEM_UNKNOWN", f"banda {text(row, 'filter')}: codice di sistema {code!r} non documentato "
+                "da SIMBAD, sistema non dichiarato", {"band": text(row, "filter") or "", "code": code}))
         magnitudes.append(SimbadMagnitude(band=text(row, "filter") or "", description=text(row, "description"),
                                           value=value, error=number(row, "flux_err"), unit=text(row, "unit"),
                                           system=system, quality=text(row, "qual"), bibcode=text(row, "bibcode")))
     magnitudes.sort(key=lambda m: (m.band, m.bibcode or ""))  # ordine stabile, indipendente dal servizio
     undeclared = [m.band for m in magnitudes if m.system is None]
     if undeclared:
-        notes.append(("SIMBAD_SYSTEM_UNDECLARED", f"bande senza sistema dichiarato da SIMBAD: {', '.join(undeclared)}"))
+        notes.append(ModuleWarning("SIMBAD_SYSTEM_UNDECLARED", "bande senza sistema dichiarato da SIMBAD: "
+                                   f"{', '.join(undeclared)}", {"bands": undeclared}))
     return tuple(magnitudes), result, tuple(notes)
 
 
@@ -1602,7 +1700,7 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
     notes: tuple = ()
     if cached is not None and not refresh:
         response = _Response(cached.data["payload"], cached.data["url"], "astroquery", canonical,
-                             cached.retrieved_at, True, (("FROM_CACHE", f"copia in cache del {_iso(cached.retrieved_at)}"),))
+                             cached.retrieved_at, True, (_cached_since(cached),))
     else:
         try:
             table, url = _query_simbad_region(ra, dec, r, timeouts)
@@ -1611,14 +1709,14 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
                 raise _net_error("SIMBAD", exc, timeouts) from exc
             response = _Response(cached.data["payload"], cached.data["url"], "astroquery", canonical,
                                  cached.retrieved_at, True,
-                                 (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache"),))
+                                 (_network_unavailable(exc),))
         else:
             response = _Response(_table_bytes(table), url, "astroquery", canonical, datetime.now(UTC), False)
             try:
                 rows.put(key, {"protocol": "simbad", "url": url, "params": json.dumps(canonical),
                                "payload": response.payload}, origin=url, retrieved_at=response.retrieved_at)
             except CacheError as exc:
-                notes += ((exc.code, exc.message),)
+                notes += (ModuleWarning(exc.code, exc.message, getattr(exc, "params", None)),)
     found = _read_payload(response).table
     notes = response.notes + notes
     arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"}}
@@ -1626,10 +1724,12 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
     source = f"SIMBAD (CDS) via astroquery; {SIMBAD_COORDINATES_NOTE}"
     if len(found) == 0:
         return SimbadPointer(None, 0, source, record,
-                             notes + (("SIMBAD_NO_OBJECT", f"nessun oggetto SIMBAD entro {r * 3600:g} arcsec"),))
+                             notes + (ModuleWarning("SIMBAD_NO_OBJECT", f"nessun oggetto SIMBAD entro {r * 3600:g} arcsec",
+                                                    {"radius": _q(r, "deg")}),))
     ra_col = (found["ra"].quantity if found["ra"].unit is not None else None)
     if ra_col is None or found["dec"].unit is None:
-        raise VoProtocolsError("SERVICE_ERROR", "SIMBAD: coordinate senza unità nella risposta")
+        raise VoProtocolsError("SERVICE_ERROR", "SIMBAD: coordinate senza unità nella risposta",
+                               params={"reason": "simbad_no_units"})
     from astropy.coordinates import angular_separation
 
     sep = angular_separation(ra * u.deg, dec * u.deg, ra_col, found["dec"].quantity).to(u.arcsec)
@@ -1640,13 +1740,18 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
         tied = np.flatnonzero(valid & (np.ma.filled(nbref, -1) == best))
     else:
         tied = np.arange(len(found))
-        notes += (("SIMBAD_NBREF_MISSING", "numero di citazioni assente per tutti gli oggetti: scelto il più vicino"),)
+        notes += (ModuleWarning("SIMBAD_NBREF_MISSING", "numero di citazioni assente per tutti gli oggetti: scelto "
+                                "il più vicino"),)
     order = sorted(tied, key=lambda k: (float(sep[k].value), str(found["main_id"][k])))
     choice = order[0]
     if len(tied) > 1:
-        notes += (("SIMBAD_TIE", f"{len(tied)} oggetti con lo stesso numero di citazioni "
-                   f"({'—' if not valid.any() else int(best)}): scelto il più vicino al centro, "
-                   f"{found['main_id'][choice]} a {sep[choice].value:.3f} arcsec"),)
+        tie = {"count": len(tied), "main_id": str(found["main_id"][choice]),
+               "separation": _q(sep[choice].value, "arcsec")}
+        notes += (ModuleWarning("SIMBAD_TIE", f"{len(tied)} oggetti con lo stesso numero di citazioni "
+                                f"({'—' if not valid.any() else int(best)}): scelto il più vicino al centro, "
+                                f"{found['main_id'][choice]} a {sep[choice].value:.3f} arcsec",
+                                {"reason": "nbref_missing", **tie} if not valid.any()
+                                else {"nbref": int(best), **tie}),)
     row = found[choice]
     coords = SkyFrame.from_lonlat(float(ra_col[choice].to_value(u.deg)) * u.deg,
                                   float(found["dec"].quantity[choice].to_value(u.deg)) * u.deg, "icrs",
@@ -1656,7 +1761,8 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
                                                            timeouts=timeouts)
     notes += tuple(w for w in mag_result.warnings if w[0] == "FROM_CACHE") + mag_notes
     if not magnitudes:
-        notes += (("SIMBAD_NO_MAGNITUDE", f"nessuna magnitudine in SIMBAD per {row['main_id']}"),)
+        notes += (ModuleWarning("SIMBAD_NO_MAGNITUDE", f"nessuna magnitudine in SIMBAD per {row['main_id']}",
+                                {"main_id": str(row["main_id"])}),)
     obj = SimbadObject(main_id=str(row["main_id"]), otype=otype, coords=coords,
                        nbref=None if not valid[choice] else int(nbref[choice]), separation=sep[choice],
                        magnitudes=magnitudes)
@@ -1693,7 +1799,9 @@ def vizier_collections(*, cache: SharedCache | None = None, refresh: bool = Fals
             raise ValueError("attesa una lista di record con ID")
     except (UnicodeDecodeError, ValueError) as exc:
         raise VoProtocolsError("SERVICE_ERROR", f"{MOCSERVER_URL}: risposta non leggibile ({exc})",
-                               url=MOCSERVER_URL) from exc
+                               url=MOCSERVER_URL,
+                               params={"reason": "unreadable_response", "url": MOCSERVER_URL,
+                                       "detail": str(exc)}) from exc
     notes = response.notes + _store(response, "mocserver", cache)
     record = _record("mocserver", "vizier_collections", {}, response, len(records))
     return MocServerRecords(records=tuple(records), request=record, warnings=notes)
@@ -1729,11 +1837,15 @@ def cds_xmatch(cat1: Table, cat2: Table, max_distance, selection: str, *, cache:
     distance = max_distance.to(u.arcsec)
     if not (0 < distance.value <= XMATCH_MAX_DISTANCE.value):
         raise VoProtocolsError("MAX_SEP_INVALID", f"max_distance {distance}: il servizio XMatch ammette (0, "
-                               f"{XMATCH_MAX_DISTANCE}]")
+                               f"{XMATCH_MAX_DISTANCE}]",
+                               params={"distance": _q(distance.value, "arcsec"),
+                                       "maximum": _q(XMATCH_MAX_DISTANCE.value, "arcsec")})
     uploads = [_upload_csv(t) for t in (cat1, cat2)]
     if sum(len(b) for b in uploads) > XMATCH_MAX_UPLOAD_BYTES:
         raise VoProtocolsError("TABLE_TOO_LARGE", f"tabelle caricate di {sum(len(b) for b in uploads)} byte, oltre "
-                               f"il limite di {XMATCH_MAX_UPLOAD_BYTES} byte del servizio XMatch")
+                               f"il limite di {XMATCH_MAX_UPLOAD_BYTES} byte del servizio XMatch",
+                               params={"reason": "upload", "total": _q(sum(len(b) for b in uploads), "byte"),
+                                       "limit": _q(XMATCH_MAX_UPLOAD_BYTES, "byte")})
     params = {"request": "xmatch", "distMaxArcsec": repr(float(distance.value)), "selection": selection,
               "RESPONSEFORMAT": "votable", "colRA1": "ra", "colDec1": "dec", "colRA2": "ra", "colDec2": "dec",
               "cat1_sha256": hashlib.sha256(uploads[0]).hexdigest(),
@@ -1745,7 +1857,7 @@ def cds_xmatch(cat1: Table, cat2: Table, max_distance, selection: str, *, cache:
     cached = rows.get(key)
     if cached is not None and not refresh:
         response = _Response(cached.data["payload"], XMATCH_URL, "POST", canonical, cached.retrieved_at, True,
-                             (("FROM_CACHE", f"copia in cache del {_iso(cached.retrieved_at)}"),))
+                             (_cached_since(cached),))
     else:
         client = XMatchClass()
         client.URL = XMATCH_URL
@@ -1755,14 +1867,17 @@ def cds_xmatch(cat1: Table, cat2: Table, max_distance, selection: str, *, cache:
                                         colDec2="dec", cache=False, selection=selection)
         except InvalidQueryError as exc:
             raise VoProtocolsError("SERVICE_ERROR", f"{XMATCH_URL}: il servizio ha rifiutato la richiesta: {exc}",
-                                   url=XMATCH_URL) from exc
+                                   url=XMATCH_URL, params={"reason": "service_rejected", "url": XMATCH_URL,
+                                                           "detail": str(exc)}) from exc
         except requests.exceptions.HTTPError as exc:
-            raise VoProtocolsError("SERVICE_ERROR", f"{XMATCH_URL}: {exc}", url=XMATCH_URL) from exc
+            raise VoProtocolsError("SERVICE_ERROR", f"{XMATCH_URL}: {exc}", url=XMATCH_URL,
+                                   params={"reason": "request_failed", "url": XMATCH_URL,
+                                           "detail": str(exc)}) from exc
         except requests.exceptions.RequestException as exc:
             if cached is None:
                 raise _net_error(XMATCH_URL, exc, timeouts) from exc
             response = _Response(cached.data["payload"], XMATCH_URL, "POST", canonical, cached.retrieved_at, True,
-                                 (("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache"),))
+                                 (_network_unavailable(exc),))
         else:
             response = _Response(answer.content, XMATCH_URL, "POST", canonical, datetime.now(UTC), False)
     result = _read_payload(response)
@@ -1798,7 +1913,9 @@ def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limit
                      limits=limits, cache=cache)
     missing = [c for c in ("_sed_freq", "_sed_flux", "_tabname") if c not in result.table.colnames]
     if missing:
-        raise VoProtocolsError("VOTABLE_INVALID", f"{VIZIER_PHOTOMETRY_URL}: risposta senza le colonne {missing}")
+        raise VoProtocolsError("VOTABLE_INVALID", f"{VIZIER_PHOTOMETRY_URL}: risposta senza le colonne {missing}",
+                               params={"reason": "photometry_columns", "url": VIZIER_PHOTOMETRY_URL,
+                                       "missing": missing})
     return result
 
 
@@ -1874,7 +1991,8 @@ class SampHub:
                 client.connect()
             except Exception as exc:
                 raise VoProtocolsError("SAMP_UNAVAILABLE", f"nessun hub SAMP attivo e avvio del proprio non riuscito "
-                                       f"({exc}); le altre funzioni VO restano disponibili") from exc
+                                       f"({exc}); le altre funzioni VO restano disponibili",
+                                       params={"reason": "no_hub", "detail": str(exc)}) from exc
             self._hub, self.own_hub = hub, True
         self._client = client
         for mtype, function in (("table.load.votable", self._receive_table),
@@ -1903,7 +2021,8 @@ class SampHub:
 
     def _require(self):
         if not self.connected:
-            raise VoProtocolsError("SAMP_UNAVAILABLE", "non collegato a un hub SAMP: chiamare connect()")
+            raise VoProtocolsError("SAMP_UNAVAILABLE", "non collegato a un hub SAMP: chiamare connect()",
+                                   params={"reason": "not_connected"})
         return self._client
 
     def clients(self) -> tuple[SampClient, ...]:
@@ -1923,17 +2042,20 @@ class SampHub:
         """Invia uno dei tipi supportati; altri tipi → ``SAMP_UNSUPPORTED_TYPE``; nessun destinatario → ``SAMP_NO_PEER``."""
         if mtype not in SAMP_MTYPES:
             raise VoProtocolsError("SAMP_UNSUPPORTED_TYPE",
-                                   f"tipo {mtype!r} non supportato; supportati: {', '.join(SAMP_MTYPES)}")
+                                   f"tipo {mtype!r} non supportato; supportati: {', '.join(SAMP_MTYPES)}",
+                                   params={"reason": "type", "mtype": str(mtype), "supported": list(SAMP_MTYPES)})
         client = self._require()
         subscribed = set(client.get_subscribed_clients(mtype)) - {client.get_public_id()}
         if recipient is not None:
             if recipient not in subscribed:
-                raise VoProtocolsError("SAMP_NO_PEER", f"{recipient!r} non è collegato o non accetta {mtype}")
+                raise VoProtocolsError("SAMP_NO_PEER", f"{recipient!r} non è collegato o non accetta {mtype}",
+                                       params={"reason": "recipient", "recipient": recipient, "mtype": mtype})
             targets = [recipient]
         else:
             targets = sorted(subscribed)
         if not targets:
-            raise VoProtocolsError("SAMP_NO_PEER", f"nessun programma collegato accetta {mtype}")
+            raise VoProtocolsError("SAMP_NO_PEER", f"nessun programma collegato accetta {mtype}",
+                                   params={"reason": "none", "mtype": mtype})
         message = {"samp.mtype": mtype, "samp.params": {k: v for k, v in params.items()}}
         for target in targets:
             client.notify(target, message)
@@ -1990,7 +2112,8 @@ class SampHub:
         handler = self._handlers.get(mtype)
         try:
             if handler is None:
-                raise VoProtocolsError("SAMP_UNSUPPORTED_TYPE", f"nessuna funzione registrata per {mtype}")
+                raise VoProtocolsError("SAMP_UNSUPPORTED_TYPE", f"nessuna funzione registrata per {mtype}",
+                                       params={"reason": "no_handler", "mtype": mtype})
             handler(*build())
         except Exception as exc:  # l'errore torna al mittente, il collegamento resta attivo
             self._reply(msg_id, exc)

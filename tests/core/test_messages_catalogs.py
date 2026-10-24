@@ -76,7 +76,8 @@ SHARED = {("FORMAT_UNSUPPORTED", r) for r in ("url_via_vo", "format_not_text", "
 def required_combinations() -> set[tuple[str, str | None]]:
     """Coppie (codice, ragione) del 13: ogni sotto-voce; la voce generale solo dove non ha sotto-voci."""
     out = {(c, r) for c, r in catalog_combinations(OWN_CODES) if r is not None or not mc.CATALOG[c].variants}
-    return out | SHARED
+    module_14 = {("FORMAT_DECLARED", "recognized_differs"), ("TABLE_TOO_LARGE", "upload")}  # sotto-voci del 14
+    return (out - module_14) | {("FORMAT_DECLARED", None), ("TABLE_TOO_LARGE", None)} | SHARED
 
 
 class Seen:
@@ -414,14 +415,17 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(tmp_path, ser
         seen.error(cats._schema_columns, vo, "cds-vizier-tap", "X", {})
 
         def refused(*args, **kwargs):
-            raise vo.VoProtocolsError("ADQL_INVALID", "rifiutato", service_message="table not found")
+            raise vo.VoProtocolsError("ADQL_INVALID", "rifiutato", service_message="table not found",
+                                         params={"reason": "service_rejected", "url": "https://tap.example/tap",
+                                                 "detail": "table not found"})
 
         patch.setattr(vo, "tap_query", refused)
         for candidates in (((), False), (("X/a",), False), (("X/a",), True)):
             monkeypatch.setattr(cats, "_table_candidates", lambda *a, __c=candidates, **k: __c)
             seen.error(load_catalog, "X")
     # troncamento
-    truncated = SimpleNamespace(truncated=True, max_rows=10, warnings=(("ROW_LIMIT_EXCEEDED", "tagliato"),),
+    truncated = SimpleNamespace(truncated=True, max_rows=10, warnings=(ModuleWarning("ROW_LIMIT_EXCEEDED", "tagliato", {"reason": "service_overflow", "received": 10,
+                                                                                    "max_rows": 10}),),
                                 table=read_table(csv), request=None, descriptors=())
     with monkeypatch.context() as patch:
         patch.setattr(vo, "tap_query", lambda *a, **k: truncated)

@@ -787,8 +787,8 @@ _add("HIPS_NOT_A_SERVICE",
                "{source}: riga {line} non è nella forma 'chiave = valore' dello standard HiPS 1.0: {content}",
                "source line:int content!"),
      no_properties=("{source}: no HiPS property.", "{source}: nessuna proprietà HiPS.", "source"),
-     service_error=("{url}: {detail}; it is not a HiPS service.", "{url}: {detail}; non è un servizio HiPS.",
-                    "url detail!"),
+     service_error=("{url}: {cause}; it is not a HiPS service.", "{url}: {cause}; non è un servizio HiPS.",
+                    "url cause:msg"),
      not_utf8=("{url}: the response is not UTF-8, so it is not a HiPS properties file ({detail}).",
                "{url}: risposta non UTF-8, non è un file properties HiPS ({detail}).", "url detail!"),
      no_mandatory_keys=("{url}: none of the mandatory keys of the HiPS 1.0 standard; it is not a HiPS service.",
@@ -835,9 +835,9 @@ _add("HIPS_METADATA_INVALID",
      cube_first_frame=("{source}: hips_cube_firstframe {first} is beyond the depth {depth}; nothing was added.",
                        "{source}: hips_cube_firstframe {first} oltre la profondità {depth}; nessuna voce aggiunta.",
                        "source first:int depth:int"),
-     metadata_xml_unavailable=("{url}: {detail}; metadata.xml is required for HiPS catalogues (standard §4.4.3).",
-                               "{url}: {detail}; metadata.xml è richiesto per i cataloghi HiPS (standard §4.4.3).",
-                               "url detail!"),
+     metadata_xml_unavailable=("{url}: {cause}; metadata.xml is required for HiPS catalogues (standard §4.4.3).",
+                               "{url}: {cause}; metadata.xml è richiesto per i cataloghi HiPS (standard §4.4.3).",
+                               "url cause:msg"),
      metadata_xml_unreadable=("{url}: the VOTable cannot be read ({detail}).",
                               "{url}: VOTable non leggibile ({detail}).", "url detail!"))
 _add("HIPS_UNKNOWN",
@@ -952,10 +952,10 @@ _add("HIPS_OUT_OF_TILE",
                        "Il tile {index} non contiene pixel della finestra.", "index:int"))
 _add("MOCSERVER_UNAVAILABLE",
      "The MocServer is not reachable.", "Il MocServer non è raggiungibile.",
-     resolve=("The MocServer is not reachable to resolve '{hips_id}': {detail}",
-              "MocServer non raggiungibile per risolvere '{hips_id}': {detail}", "hips_id detail!"),
-     index=("The MocServer is not reachable and there is no local copy of the collections: {detail}",
-            "MocServer non raggiungibile e nessuna copia locale delle collezioni: {detail}", "detail!"),
+     resolve=("The MocServer is not reachable to resolve '{hips_id}': {cause}",
+              "MocServer non raggiungibile per risolvere '{hips_id}': {cause}", "hips_id cause:msg"),
+     index=("The MocServer is not reachable and there is no local copy of the collections: {cause}",
+            "MocServer non raggiungibile e nessuna copia locale delle collezioni: {cause}", "cause:msg"),
      coverage=("Coverage of {hips_id}: {detail}", "Copertura di {hips_id}: {detail}", "hips_id detail!"),
      local_copy=("The MocServer is not reachable: local copy of the collections of {retrieved_at}.",
                  "MocServer non raggiungibile: copia locale delle collezioni del {retrieved_at}.", "retrieved_at"))
@@ -1533,12 +1533,12 @@ _add("REGION_REQUIRED",
      "Catalogue '{catalog_id}': more than {max_rows} rows ({declared}); indicate a region with the "
      "region=(centre, radius) parameter, or allow_partial=True for the first rows.",
      "Catalogo '{catalog_id}': più di {max_rows} righe ({declared}); indicare una regione con il parametro "
-     "region=(centro, raggio), oppure allow_partial=True per le prime righe.", "catalog_id max_rows:int declared!")
+     "region=(centro, raggio), oppure allow_partial=True per le prime righe.", "catalog_id max_rows:int declared:msg")
 _add("REGION_TOO_LARGE",
      "Catalogue '{catalog_id}': more than {max_rows} rows in the region ({declared}); reduce the radius or use "
      "allow_partial=True.",
      "Catalogo '{catalog_id}': più di {max_rows} righe nella regione ({declared}); ridurre il raggio o usare "
-     "allow_partial=True.", "catalog_id max_rows:int declared!")
+     "allow_partial=True.", "catalog_id max_rows:int declared:msg")
 _add("REGION",
      "Region: circle of radius {radius} around ({center_lon}, {center_lat}) in the system of the columns "
      "{lon}/{lat} ({system}, epoch of the positions not declared, from the service metadata; centre converted with "
@@ -1585,3 +1585,185 @@ _add("POPULARITY_INVALID",
 _add("POPULARITY_MISSING",
      "{count} collections without vizier_popularity: after the others, in natural order.",
      "{count} collezioni senza vizier_popularity: dopo le altre, in ordine naturale.", "count:int")
+
+# --- Modulo 14 (protocolli VO, sprint 8d) ----------------------------------------------------------------------
+_ASYNC_HINT_EN = " — for long queries use tap_query(..., mode='async')"
+_ASYNC_HINT_IT = " — per le interrogazioni lunghe usare tap_query(..., mode='async')"
+_add("VOTABLE_INVALID",
+     "The VOTable is not valid.", "Il VOTable non è valido.",
+     not_votable=("{path}: not a VOTable ({cause})", "{path}: non è un VOTable ({cause})", "path cause:msg"),
+     other_format=("{path}: not a VOTable (recognised content: {format})",
+                   "{path}: non è un VOTable (contenuto riconosciuto: {format})", "path format"),
+     malformed=("{path}: malformed VOTable ({cause})", "{path}: VOTable malformato ({cause})", "path cause:msg"),
+     unreadable_response=("{url}: the response cannot be read as a VOTable ({detail})",
+                          "{url}: risposta non leggibile come VOTable ({detail})", "url detail!"),
+     datalink_columns=("{url}: DataLink document without the columns {missing}",
+                       "{url}: documento DataLink senza le colonne {missing}", "url missing:list"),
+     photometry_columns=("{url}: response without the columns {missing}", "{url}: risposta senza le colonne {missing}",
+                         "url missing:list"))
+_add("EXPORT_FORMAT_UNSUPPORTED",
+     "Format '{format}': allowed {allowed}", "Formato '{format}': ammessi {allowed}", "format allowed:list")
+_extend("NET_TIMEOUT",
+        url_sync_tap=("{url} is not reachable (timeout {connect} connection, {read} read): {detail}"
+                      + _ASYNC_HINT_EN,
+                      "{url} non raggiungibile (timeout {connect} connessione, {read} lettura): {detail}"
+                      + _ASYNC_HINT_IT, "url connect:qty read:qty detail!"),
+        async_deadline=("{url}: maximum wait of {timeout} exceeded (phase {phase}); job aborted",
+                        "{url}: attesa massima di {timeout} superata (fase {phase}); lavoro interrotto",
+                        "url timeout:qty phase"))
+_add("AUTH_REQUIRED",
+     "{url}: the service asks for authentication (HTTP {status}); at level 1 only public services.",
+     "{url}: il servizio chiede autenticazione (HTTP {status}); nel livello 1 solo servizi pubblici.",
+     "url status:int")
+_extend("SERVICE_ERROR",
+        http_message=("{url}: HTTP {status}: {message}", "{url}: HTTP {status}: {message}", "url status:int message!"),
+        http_message_async_hint=("{url}: HTTP {status}: {message}" + _ASYNC_HINT_EN,
+                                 "{url}: HTTP {status}: {message}" + _ASYNC_HINT_IT, "url status:int message!"),
+        http_no_votable=("{url}: HTTP response {status} without a VOTable",
+                         "{url}: risposta HTTP {status} senza VOTable", "url status:int"),
+        service_rejected=("{url}: the service rejected the request: {detail}",
+                          "{url}: il servizio ha rifiutato la richiesta: {detail}", "url detail!"),
+        request_failed=("{url}: {detail}", "{url}: {detail}", "url detail!"),
+        job_phase=("{url}: job ended in phase {phase}", "{url}: lavoro terminato in fase {phase}", "url phase"),
+        job_result_status=("{uri}: HTTP response {status}", "{uri}: risposta HTTP {status}", "uri status:int"),
+        descriptor_missing=("Descriptor '{service_def}' is missing from the DataLink document.",
+                            "Descrittore '{service_def}' assente dal documento DataLink.", "service_def!"),
+        simbad_no_units=("SIMBAD: coordinates without a unit in the response.",
+                         "SIMBAD: coordinate senza unità nella risposta.", ""))
+_add("ADQL_INVALID",
+     "The ADQL is not valid.", "L'ADQL non è valida.",
+     empty=("ADQL is empty (character {position})", "ADQL vuota (carattere {position})", "position:int"),
+     not_select=("The ADQL must start with SELECT (character {position})",
+                 "L'ADQL deve iniziare con SELECT (carattere {position})", "position:int"),
+     unmatched_close=("Closing parenthesis without an opening one (character {position})",
+                      "Parentesi chiusa senza apertura (carattere {position})", "position:int"),
+     unclosed_quote=("Quote {quote} not closed (character {position})",
+                     "Virgoletta {quote} non chiusa (carattere {position})", "quote position:int"),
+     unclosed_paren=("Opening parenthesis not closed (character {position})",
+                     "Parentesi aperta non chiusa (carattere {position})", "position:int"),
+     service_rejected=("{url}: the service rejected the request: {detail}",
+                       "{url}: il servizio ha rifiutato la richiesta: {detail}", "url detail!"),
+     service_rejected_async_hint=("{url}: the service rejected the request: {detail}" + _ASYNC_HINT_EN,
+                                  "{url}: il servizio ha rifiutato la richiesta: {detail}" + _ASYNC_HINT_IT,
+                                  "url detail!"))
+_add("MAX_ROWS_INVALID",
+     "max_rows = {value}: allowed integers from 1 to {maximum} (row cap of module 13).",
+     "max_rows = {value}: ammessi gli interi da 1 a {maximum} (tetto di righe del modulo 13).", "value maximum:int")
+_add("MAX_SEP_INVALID",
+     "max_distance {distance}: the XMatch service accepts (0, {maximum}].",
+     "max_distance {distance}: il servizio XMatch ammette (0, {maximum}].", "distance:qty maximum:qty")
+_add("SERVER_UNKNOWN",
+     "The server is not known.", "Il server non è noto.",
+     wrong_protocol=("The entry '{service}' is a {found} service, not {wanted}.",
+                     "La voce '{service}' è un servizio {found}, non {wanted}.", "service found wanted"),
+     not_listed=("Server '{server}' is not in the list (entries: {known}).",
+                 "Server '{server}' non in elenco (voci: {known}).", "server known:list"),
+     not_personal=("'{server}' is not a personal server.", "'{server}' non è un server personale.", "server"))
+_extend("TABLE_TOO_LARGE",
+        upload=("Uploaded tables of {total}, above the limit of {limit} of the XMatch service.",
+                "Tabelle caricate di {total}, oltre il limite di {limit} del servizio XMatch.", "total:qty limit:qty"))
+_add("SIA_INVALID",
+     "Invalid SIA response: {cause}", "Risposta SIA non valida: {cause}", "cause:msg")
+_add("SSA_INVALID",
+     "The spectrum or the SSA response is not valid.", "Lo spettro o la risposta SSA non sono validi.",
+     axes_dm=("{origin}: spectral axis or flux not recognisable (utype of the Spectrum DM, one column per axis); "
+              "columns: {columns}",
+              "{origin}: asse spettrale o flusso non riconoscibili (utype dello Spectrum DM, una sola colonna per "
+              "asse); colonne: {columns}", "origin columns:list!"),
+     axes_dm_ucd=("{origin}: spectral axis or flux not recognisable (utype of the Spectrum DM or UCD "
+                  "(em.*, phot.flux*), one column per axis); columns: {columns}",
+                  "{origin}: asse spettrale o flusso non riconoscibili (utype dello Spectrum DM o UCD (em.*, "
+                  "phot.flux*), una sola colonna per asse); colonne: {columns}", "origin columns:list!"),
+     no_unit=("{origin}: column '{column}' without a valid unit.", "{origin}: colonna '{column}' senza unità valida.",
+              "origin column!"),
+     no_access_column=("The ssa_search result has no access column (utype ssa:Access.Reference or UCD "
+                       "meta.ref.url).",
+                       "Il risultato di ssa_search non ha la colonna di accesso (utype ssa:Access.Reference o UCD "
+                       "meta.ref.url).", ""),
+     unreadable=("{url}: spectrum not readable ({cause})", "{url}: spettro non leggibile ({cause})", "url cause:msg"),
+     format=("{url}: format {format} (allowed: VOTable Spectrum DM and FITS)",
+             "{url}: formato {format} (ammessi VOTable Spectrum DM e FITS)", "url format"))
+_add("IDHA_UNREADABLE",
+     "The IDHA file cannot be read.", "Il file IDHA non è leggibile.",
+     xml_error=("{path}: file not readable as XML ({detail})", "{path}: file non leggibile come XML ({detail})",
+                "path detail!"),
+     format_unknown=("{path}: IDHA format not readable: no public documentation of the format (D14-9 point 13); "
+                     "use SIA or SIA2",
+                     "{path}: formato IDHA non leggibile: nessuna documentazione pubblica del formato (D14-9 punto "
+                     "13); usare SIA o SIA2", "path"))
+_add("SAMP_UNAVAILABLE",
+     "No SAMP hub is available.", "Nessun hub SAMP disponibile.",
+     no_hub=("No SAMP hub is active and starting one failed ({detail}); the other VO functions remain available.",
+             "Nessun hub SAMP attivo e avvio del proprio non riuscito ({detail}); le altre funzioni VO restano "
+             "disponibili.", "detail!"),
+     not_connected=("Not connected to a SAMP hub: call connect().",
+                    "Non collegato a un hub SAMP: chiamare connect().", ""))
+_add("SAMP_UNSUPPORTED_TYPE",
+     "The SAMP message type is not supported.", "Il tipo di messaggio SAMP non è supportato.",
+     type=("Type '{mtype}' is not supported; supported: {supported}.",
+           "Tipo '{mtype}' non supportato; supportati: {supported}.", "mtype supported:list"),
+     no_handler=("No function registered for {mtype}.", "Nessuna funzione registrata per {mtype}.", "mtype"))
+_add("SAMP_NO_PEER",
+     "No SAMP client is connected.", "Nessun client SAMP collegato.",
+     recipient=("'{recipient}' is not connected or does not accept {mtype}.",
+                "'{recipient}' non è collegato o non accetta {mtype}.", "recipient mtype"),
+     none=("No connected program accepts {mtype}.", "Nessun programma collegato accetta {mtype}.", "mtype"))
+_add("ROW_LIMIT_EXCEEDED",
+     "The result exceeds the row limit.", "Il risultato supera il limite di righe.",
+     cut=("Received {received} rows, the first {max_rows} returned (max_rows = {max_rows}).",
+          "Ricevute {received} righe, restituite le prime {max_rows} (max_rows = {max_rows}).",
+          "received:int max_rows:int"),
+     service_overflow=("The service truncated the result to {received} rows (max_rows = {max_rows}, status "
+                       "OVERFLOW).",
+                       "Il servizio ha troncato il risultato a {received} righe (max_rows = {max_rows}, stato "
+                       "OVERFLOW).", "received:int max_rows:int"))
+_add("CSV_UNITS_NOT_SAVED",
+     "Plain CSV does not save the column units: to keep them export to ecsv (D14-10).",
+     "Il CSV semplice non salva le unità delle colonne: per conservarle esportare in ecsv (D14-10).")
+_add("SIA_NO_RESULT", "No image for the given criteria.", "Nessuna immagine per i criteri dati.")
+_add("SSA_NO_RESULT", "No spectrum for the given criteria.", "Nessuno spettro per i criteri dati.")
+_extend("FROM_CACHE",
+        cached_origin=("Copy of {origin} from the cache, downloaded on {retrieved_at}.",
+                       "Copia in cache di {origin}, scaricata il {retrieved_at}.", "origin retrieved_at"),
+        network_cached=("Network not available ({error}): copy from the cache of {retrieved_at}.",
+                        "Rete non disponibile ({error}): copia in cache del {retrieved_at}.",
+                        "error! retrieved_at"),
+        cached_since=("Copy from the cache of {retrieved_at}.", "Copia in cache del {retrieved_at}.",
+                      "retrieved_at"))
+_extend("BODY_UNKNOWN",
+        spectrum_without_candidate=("The body cannot be derived: spectrum loaded from a URL without the ssa_search "
+                                    "candidate.",
+                                    "Corpo non ricavabile: spettro caricato da URL senza il candidato di "
+                                    "ssa_search.", ""))
+_extend("FORMAT_DECLARED",
+        recognized_differs=("Declared format '{declared}', recognised from the content: {recognized}.",
+                            "Formato dichiarato '{declared}', riconosciuto dal contenuto: {recognized}.",
+                            "declared! recognized"))
+_add("ASTRORES_LINK_SOURCE",
+     "Linked data of the ASTRORES file.", "Dati collegati del file ASTRORES.",
+     cached=("Linked data {url}: copy from the cache of {retrieved_at}.",
+             "Dati collegati {url}: copia in cache del {retrieved_at}.", "url retrieved_at"),
+     downloaded=("Linked data {url}: downloaded on {retrieved_at}.",
+                 "Dati collegati {url}: scaricati il {retrieved_at}.", "url retrieved_at"))
+_add("SIMBAD_NO_OBJECT",
+     "No SIMBAD object within {radius}.", "Nessun oggetto SIMBAD entro {radius}.", "radius:qty")
+_add("SIMBAD_SYSTEM_UNKNOWN",
+     "Band {band}: system code '{code}' is not documented by SIMBAD, system not declared.",
+     "Banda {band}: codice di sistema '{code}' non documentato da SIMBAD, sistema non dichiarato.", "band! code!")
+_add("SIMBAD_SYSTEM_UNDECLARED",
+     "Bands without a system declared by SIMBAD: {bands}", "Bande senza sistema dichiarato da SIMBAD: {bands}",
+     "bands:list!")
+_add("SIMBAD_NBREF_MISSING",
+     "Number of citations missing for all the objects: the closest one was chosen.",
+     "Numero di citazioni assente per tutti gli oggetti: scelto il più vicino.")
+_add("SIMBAD_TIE",
+     "{count} objects with the same number of citations ({nbref}): the closest to the centre chosen, {main_id} at "
+     "{separation}.",
+     "{count} oggetti con lo stesso numero di citazioni ({nbref}): scelto il più vicino al centro, {main_id} a "
+     "{separation}.", "count:int nbref:int main_id! separation:qty",
+     nbref_missing=("{count} objects without a number of citations: the closest to the centre chosen, {main_id} at "
+                    "{separation}.",
+                    "{count} oggetti senza numero di citazioni: scelto il più vicino al centro, {main_id} a "
+                    "{separation}.", "count:int main_id! separation:qty"))
+_add("SIMBAD_NO_MAGNITUDE",
+     "No magnitude in SIMBAD for {main_id}.", "Nessuna magnitudine in SIMBAD per {main_id}.", "main_id!")

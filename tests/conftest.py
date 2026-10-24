@@ -58,6 +58,7 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.core.images_fits", "ImagesFitsError"),
     ("astrotwo.core.hips", "HiPSError"),
     ("astrotwo.core.catalogs", "CatalogsError"),
+    ("astrotwo.core.vo_protocols", "VoProtocolsError"),
 )
 
 

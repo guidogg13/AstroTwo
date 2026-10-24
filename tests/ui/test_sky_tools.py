@@ -369,7 +369,10 @@ def test_t37_no_object_and_errors(qtbot, win, simbad):
     qtbot.waitUntil(lambda: win.sky.simbad_tool.card.isVisible(), timeout=10000)
     assert "No SIMBAD object within" in win.sky.simbad_tool.card.text()
     win.sky.simbad_tool.hide()
-    simbad.error = vo.VoProtocolsError("NET_TIMEOUT", "SIMBAD non raggiungibile")
+    simbad.error = vo.VoProtocolsError(
+        "NET_TIMEOUT", "SIMBAD non raggiungibile",
+        params={"reason": "url", "url": "SIMBAD", "connect": {"value": 10.0, "unit": "s"},
+                "read": {"value": 60.0, "unit": "s"}, "detail": "giù"})
     click(win, at)
     qtbot.waitUntil(lambda: win.sky.simbad_tool.card.isVisible(), timeout=10000)
     assert "⚠" in win.sky.simbad_tool.card.text() and "NET_TIMEOUT" in win.sky.simbad_tool.card.text()

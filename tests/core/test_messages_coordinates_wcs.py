@@ -20,7 +20,13 @@ from astrotwo.core import coordinates_wcs as cw
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
 from astrotwo.messages_catalog import message_text
 from tests.core.test_coordinates_wcs import SHAPE, make_header
-from tests.message_helpers import catalog_combinations, check_error, check_message, collect_errors
+from tests.message_helpers import (
+    MODULE_14_SUBVARIANTS,
+    catalog_combinations,
+    check_error,
+    check_message,
+    collect_errors,
+)
 
 MODULE_CODES = (
     "PIXEL_CONVENTION_UNKNOWN", "FRAME_UNSUPPORTED", "EPOCH_REQUIRED", "COORD_UNIT_MISSING", "COORD_OUT_OF_RANGE",
@@ -297,7 +303,7 @@ def test_every_module_10_error_matches_the_catalog(monkeypatch, cache):
 
     # ragioni di WCS_MISSING e NET_TIMEOUT sollevate dal modulo 11 (provate in test_messages_images_fits.py)
     module_13 = {("COORD_UNIT_MISSING", "column_unit_required"), ("COORD_UNIT_MISSING", "column_not_angular")}
-    module_11 = module_13 | {("NET_TIMEOUT", "url")} | {("WCS_MISSING", r) for r in CATALOG["WCS_MISSING"].variants
+    module_11 = module_13 | MODULE_14_SUBVARIANTS | {("NET_TIMEOUT", "url")} | {("WCS_MISSING", r) for r in CATALOG["WCS_MISSING"].variants
                                              if r not in ("header_required", "no_celestial_wcs", "not_celestial",
                                                            "wcs_required")}
     required = {c for c in catalog_combinations(MODULE_CODES)

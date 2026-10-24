@@ -2678,17 +2678,19 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
                                    f"{detail}", "not_found", catalog_id=catalog_id, detail=str(detail)) from exc
         raise
     if result.truncated and not allow_partial:
-        declared = dict(result.warnings).get("ROW_LIMIT_EXCEEDED", "troncamento dichiarato")
+        note = next((w for w in result.warnings if w[0] == "ROW_LIMIT_EXCEEDED"), None)  # sempre presente se troncato
+        declared = "troncamento dichiarato" if note is None else note[1]
+        nested = {"code": "ROW_LIMIT_EXCEEDED", "params": dict(getattr(note, "params", None) or {}), "text": declared}
         if area is None:
             raise CatalogsError("REGION_REQUIRED", f"catalogo {catalog_id!r}: più di {result.max_rows} righe "
                                 f"({declared}); indicare una regione con il parametro region=(centro, raggio), "
                                 "oppure allow_partial=True per le prime righe", max_rows=result.max_rows,
                                 params={"catalog_id": catalog_id, "max_rows": result.max_rows,
-                                        "declared": str(declared)})
+                                        "declared": nested})
         raise CatalogsError("REGION_TOO_LARGE", f"catalogo {catalog_id!r}: più di {result.max_rows} righe nella "
                             f"regione ({declared}); ridurre il raggio o usare allow_partial=True",
                             max_rows=result.max_rows,
-                            params={"catalog_id": catalog_id, "max_rows": result.max_rows, "declared": str(declared)})
+                            params={"catalog_id": catalog_id, "max_rows": result.max_rows, "declared": nested})
     table = _from_vo_result(result)
     history = (f"catalogo {catalog_id} da {server}",)
     notes = ()

@@ -484,6 +484,118 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Voce dell'elenco dei server inesistente o con protocollo diverso da quello richiesto | rifiuto con le voci ammesse | `SERVER_UNKNOWN` |
 | Spettro, immagine o risultato servito dalla cache | dato restituito con origine e data della copia | avviso `FROM_CACHE` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8d) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`VoProtocolsError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la
+coppia (codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `text`/`message`); il
+modulo **non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1).
+Il parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (servizio, libreria,
+cella di una tabella), inserito tale e quale senza tradurlo. I `details` di prima (`url`, `path`, `status`,
+`position`, `server`, `service_message`) restano.
+
+**Messaggi annidati (D40-7).** Dove il testo incorpora l'errore di un altro modulo di AstroTwo (il 13 che non
+legge un VOTable o uno spettro, l'errore di lettura che diventa `SIA_INVALID`) il parametro è di tipo `message`
+(`cause`): `{"code", "params", "text"}` del messaggio del 13, che il catalogo rende in modo ricorsivo. Il testo di
+terzi (messaggio di un servizio TAP, eccezione di `pyvo`, `astropy`, `requests`, `defusedxml`) resta `external`.
+Gli errori del 14 che il 12 e il 13 rilanciano o incorporano (`NET_TIMEOUT`, `SERVICE_ERROR`, …) viaggiano con i
+loro `params` e passano nel 12 da parametro esterno a parametro `message` (sprint 8d).
+
+**Suggerimento dell'asincrona.** Il testo italiano di un timeout o di un errore di durata di una query TAP
+sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalogo è una sotto-voce a parte
+(`url_sync_tap`, `service_rejected_async_hint`, `http_message_async_hint`), mai testo nel valore di un parametro.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `VOTABLE_INVALID` | (generale) | — |
+| `VOTABLE_INVALID` | `not_votable` | `path` (string), `cause` (message: errore del 13) |
+| `VOTABLE_INVALID` | `other_format` | `path` (string), `format` (string) |
+| `VOTABLE_INVALID` | `malformed` | `path` (string), `cause` (message: errore del 13) |
+| `VOTABLE_INVALID` | `unreadable_response` | `url` (string), `detail` (string, esterno) |
+| `VOTABLE_INVALID` | `datalink_columns` | `url` (string), `missing` (list) |
+| `VOTABLE_INVALID` | `photometry_columns` | `url` (string), `missing` (list) |
+| `EXPORT_FORMAT_UNSUPPORTED` | (generale) | `format` (string), `allowed` (list) |
+| `FILE_EXISTS` | (generale) | `path` (string) — voce già del 13 |
+| `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10, 11, 12 |
+| `NET_TIMEOUT` | `url_sync_tap` | come `url`, con il suggerimento dell'asincrona |
+| `NET_TIMEOUT` | `async_deadline` | `url` (string), `timeout` (quantity, s), `phase` (string) |
+| `AUTH_REQUIRED` | (generale) | `url` (string), `status` (integer) |
+| `SERVICE_ERROR` | `http_status` | `url` (string), `status` (integer), `status_text` (string, esterno) — voce già del 12 |
+| `SERVICE_ERROR` | `unreadable_response` | `url` (string), `detail` (string, esterno) — voce già del 12 |
+| `SERVICE_ERROR` | `http_message` | `url` (string), `status` (integer), `message` (string, esterno) |
+| `SERVICE_ERROR` | `http_message_async_hint` | come `http_message`, con il suggerimento dell'asincrona |
+| `SERVICE_ERROR` | `http_no_votable` | `url` (string), `status` (integer) |
+| `SERVICE_ERROR` | `service_rejected` | `url` (string), `detail` (string, esterno) |
+| `SERVICE_ERROR` | `request_failed` | `url` (string), `detail` (string, esterno) |
+| `SERVICE_ERROR` | `job_phase` | `url` (string), `phase` (string) |
+| `SERVICE_ERROR` | `job_result_status` | `uri` (string), `status` (integer) |
+| `SERVICE_ERROR` | `descriptor_missing` | `service_def` (string, esterno) |
+| `SERVICE_ERROR` | `simbad_no_units` | — |
+| `ADQL_INVALID` | (generale) | — |
+| `ADQL_INVALID` | `empty` | `position` (integer) |
+| `ADQL_INVALID` | `not_select` | `position` (integer) |
+| `ADQL_INVALID` | `unmatched_close` | `position` (integer) |
+| `ADQL_INVALID` | `unclosed_quote` | `quote` (string), `position` (integer) |
+| `ADQL_INVALID` | `unclosed_paren` | `position` (integer) |
+| `ADQL_INVALID` | `service_rejected` | `url` (string), `detail` (string, esterno) |
+| `ADQL_INVALID` | `service_rejected_async_hint` | come `service_rejected`, con il suggerimento dell'asincrona |
+| `MAX_ROWS_INVALID` | (generale) | `value` (string), `maximum` (integer) |
+| `MAX_SEP_INVALID` | (generale) | `distance` (quantity, arcsec), `maximum` (quantity, arcsec) |
+| `SERVER_UNKNOWN` | (generale) | — |
+| `SERVER_UNKNOWN` | `wrong_protocol` | `service` (string), `found` (string), `wanted` (string) |
+| `SERVER_UNKNOWN` | `not_listed` | `server` (string), `known` (list) |
+| `SERVER_UNKNOWN` | `not_personal` | `server` (string) |
+| `TABLE_TOO_LARGE` | `upload` | `total` (quantity, byte), `limit` (quantity, byte) — voce già del 13 |
+| `SIA_INVALID` | (generale) | `cause` (message: `VOTABLE_INVALID` del 14) |
+| `SSA_INVALID` | (generale) | — |
+| `SSA_INVALID` | `axes_dm` | `origin` (string), `columns` (list, esterno) |
+| `SSA_INVALID` | `axes_dm_ucd` | `origin` (string), `columns` (list, esterno) |
+| `SSA_INVALID` | `no_unit` | `origin` (string), `column` (string, esterno) |
+| `SSA_INVALID` | `no_access_column` | — |
+| `SSA_INVALID` | `unreadable` | `url` (string), `cause` (message: errore del 13) |
+| `SSA_INVALID` | `format` | `url` (string), `format` (string) |
+| `IDHA_UNREADABLE` | (generale) | — |
+| `IDHA_UNREADABLE` | `xml_error` | `path` (string), `detail` (string, esterno) |
+| `IDHA_UNREADABLE` | `format_unknown` | `path` (string) |
+| `XML_UNSAFE` | (generale) | `path` (string), `construct` (string) — voce già del 13 |
+| `SAMP_UNAVAILABLE` | (generale) | — |
+| `SAMP_UNAVAILABLE` | `no_hub` | `detail` (string, esterno) |
+| `SAMP_UNAVAILABLE` | `not_connected` | — |
+| `SAMP_UNSUPPORTED_TYPE` | (generale) | — |
+| `SAMP_UNSUPPORTED_TYPE` | `type` | `mtype` (string), `supported` (list) |
+| `SAMP_UNSUPPORTED_TYPE` | `no_handler` | `mtype` (string) |
+| `SAMP_NO_PEER` | (generale) | — |
+| `SAMP_NO_PEER` | `recipient` | `recipient` (string), `mtype` (string) |
+| `SAMP_NO_PEER` | `none` | `mtype` (string) |
+| `ROW_LIMIT_EXCEEDED` (avviso) | (generale) | — |
+| `ROW_LIMIT_EXCEEDED` | `cut` | `received` (integer), `max_rows` (integer) |
+| `ROW_LIMIT_EXCEEDED` | `service_overflow` | `received` (integer), `max_rows` (integer) |
+| `CSV_UNITS_NOT_SAVED` (avviso) | (generale) | — |
+| `SIA_NO_RESULT` (avviso) | (generale) | — |
+| `SSA_NO_RESULT` (avviso) | (generale) | — |
+| `FROM_CACHE` (avviso) | `cached_origin` | `origin` (string), `retrieved_at` (string) |
+| `FROM_CACHE` | `network_cached` | `error` (string, esterno), `retrieved_at` (string) |
+| `FROM_CACHE` | `cached_since` | `retrieved_at` (string) |
+| `FROM_CACHE` | `network_unavailable` | `error` (string, esterno) — voce già del 12 |
+| `BODY_UNKNOWN` (avviso) | `spectrum_without_candidate` | — |
+| `FORMAT_DECLARED` (avviso) | `recognized_differs` | `declared` (string, esterno), `recognized` (string) |
+| `ASTRORES_LINK_SOURCE` (avviso) | (generale) | — |
+| `ASTRORES_LINK_SOURCE` | `cached` | `url` (string), `retrieved_at` (string) |
+| `ASTRORES_LINK_SOURCE` | `downloaded` | `url` (string), `retrieved_at` (string) |
+| `SIMBAD_NO_OBJECT` (avviso) | (generale) | `radius` (quantity, deg) |
+| `SIMBAD_SYSTEM_UNKNOWN` (avviso) | (generale) | `band` (string, esterno), `code` (string, esterno) |
+| `SIMBAD_SYSTEM_UNDECLARED` (avviso) | (generale) | `bands` (list, esterno) |
+| `SIMBAD_NBREF_MISSING` (avviso) | (generale) | — |
+| `SIMBAD_TIE` (avviso) | (generale) | `count` (integer), `nbref` (integer), `main_id` (string, esterno), `separation` (quantity, arcsec) |
+| `SIMBAD_TIE` | `nbref_missing` | `count` (integer), `main_id` (string, esterno), `separation` (quantity, arcsec) |
+| `SIMBAD_NO_MAGNITUDE` (avviso) | (generale) | `main_id` (string, esterno) |
+
+`CACHE_FULL` (avviso della cache comune, `04`) passa tale e quale con il codice, il testo e i `params` che ha: il `04`
+non è tra i moduli convertiti dello sprint 8, quindi finché non lo è si mostra come in §3.7.2 del `40`.
+`HTTP_STATUS` è una nota interna tra `_http` e `_parse_results`: non esce mai dal modulo.
+
 ## 11. Esposizione all'IA
 
 Non applicabile in questo file: gli strumenti per l'IA si dichiarano in
@@ -703,3 +815,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-12 | Claude Code | §12: il paragrafo sulle ripetizioni dei test di rete sostituito da un rimando a `02-convenzioni.md` §8 (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato). Stato `approvato` invariato. |
 | 2026-10-12 | Claude Code | **Allineamento specifica–codice** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato; regola: le specifiche si aggiornano sempre insieme al codice): §3 e §7 — risposte del MocServer dichiarate ISO-8859-1 e lette secondo la codifica dichiarata (`MOCSERVER_CHARSET`, usata anche da 12 e 16), regola già applicata nel codice con il modulo 12. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **D14-13 aperta (Gruppo 3)** (indicazione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): servizi dell'ESO in http con reindirizzamento a https che codifica due volte l'URL (richiesta SIA rifiutata, immagine non scaricata); la demo usa https direttamente; nessuna modifica al codice. Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message` per gli errori del 13 incorporati; suggerimento dell'asincrona come sotto-voce); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. `AdqlCheck` ha in più `reason` e `quote` (per scegliere la sotto-voce). Nessun comportamento scientifico cambia. |

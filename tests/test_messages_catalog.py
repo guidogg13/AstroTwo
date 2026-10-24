@@ -28,6 +28,7 @@ CONVERTED = {
     "core/images_fits.py": "ImagesFitsError",
     "core/hips.py": "HiPSError",
     "core/catalogs.py": "CatalogsError",
+    "core/vo_protocols.py": "VoProtocolsError",
     "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
 }
 
@@ -74,6 +75,9 @@ def scan_module(path: Path, error_name: str, helpers: dict | None = None) -> tup
                         for k, v in zip(kw.value.keys, kw.value.values, strict=True):
                             if isinstance(k, ast.Constant) and k.value == "reason":
                                 reasons.update((code, c) for c in _constants(v))
+            elif name == "AdqlCheck" and len(node.args) >= 4 and isinstance(node.args[3], ast.Constant):
+                codes.add("ADQL_INVALID")  # controllo lato client: il quarto argomento è la ragione
+                reasons.add(("ADQL_INVALID", node.args[3].value))
             elif name == "_view_error" and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                 codes.add("VIEW_PARAMETERS_INVALID")
                 reasons.add(("VIEW_PARAMETERS_INVALID", node.args[1].value))

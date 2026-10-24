@@ -101,3 +101,14 @@ def catalog_combinations(codes: Iterable[str]) -> set[tuple[str, str | None]]:
         out.add((code, None))
         out.update((code, reason) for reason in entry.variants)
     return out
+
+
+#: Sotto-voci di codici condivisi che solo il modulo 14 solleva o restituisce (provate in ``test_messages_vo_protocols.py``).
+MODULE_14_SUBVARIANTS = {
+    ("NET_TIMEOUT", "url_sync_tap"), ("NET_TIMEOUT", "async_deadline"), ("BODY_UNKNOWN", "spectrum_without_candidate"),
+    ("FORMAT_DECLARED", "recognized_differs"), ("TABLE_TOO_LARGE", "upload"),
+    ("FROM_CACHE", "cached_origin"), ("FROM_CACHE", "network_cached"), ("FROM_CACHE", "cached_since"),
+    ("FROM_CACHE", "network_unavailable"),
+} | {("SERVICE_ERROR", r) for r in (
+    "http_message", "http_message_async_hint", "http_no_votable", "service_rejected", "request_failed", "job_phase",
+    "job_result_status", "descriptor_missing", "simbad_no_units")}

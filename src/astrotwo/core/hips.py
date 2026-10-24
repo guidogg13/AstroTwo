@@ -380,7 +380,7 @@ def read_service(url: str, *, cache=None, refresh: bool = False, timeouts=None) 
         if exc.code == "SERVICE_ERROR":
             raise HiPSError("HIPS_NOT_A_SERVICE", f"{target}: {exc.message}; non è un servizio HiPS",
                             url=target, params={"reason": "service_error", "url": target,
-                                                "detail": exc.message}) from exc
+                                                "cause": _message_of(exc)}) from exc
         raise _net(exc) from exc
     try:
         text = response.payload.decode("utf-8")
@@ -415,7 +415,7 @@ def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, t
         if exc.code == "NET_TIMEOUT":
             raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile per risolvere {hips_id!r}: "
                             f"{exc.message}", params={"reason": "resolve", "hips_id": hips_id,
-                                                      "detail": exc.message}) from exc
+                                                      "cause": _message_of(exc)}) from exc
         raise _net(exc) from exc
     records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
     match = [r for r in records if r.get("ID") == hips_id]
@@ -1207,7 +1207,7 @@ class CollectionIndex:
         except vo.VoProtocolsError as exc:
             if exc.code == "NET_TIMEOUT":
                 raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile e nessuna copia locale delle "
-                                f"collezioni: {exc.message}", params={"reason": "index", "detail": exc.message}) from exc
+                                f"collezioni: {exc.message}", params={"reason": "index", "cause": _message_of(exc)}) from exc
             raise _net(exc) from exc
         records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
         notes = []
@@ -1504,7 +1504,7 @@ def catalog_tiles(service: HiPSService, center, radius, order: int, *, cache=Non
             raise HiPSError("HIPS_METADATA_INVALID", f"{meta_url}: {exc.message}; metadata.xml è richiesto per i "
                             "cataloghi HiPS (standard §4.4.3)", field="metadata.xml",
                             params={"reason": "metadata_xml_unavailable", "url": meta_url,
-                                    "detail": exc.message}) from exc
+                                    "cause": _message_of(exc)}) from exc
         raise _net(exc) from exc
     try:
         template = votable.parse(io.BytesIO(response.payload), verify="warn")
