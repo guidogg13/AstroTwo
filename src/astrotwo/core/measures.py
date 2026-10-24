@@ -1478,8 +1478,8 @@ def _single_row(source: CatalogSource, what: str) -> CatalogTable:
 def _row_position(single: CatalogTable, lon: str, lat: str, epoch, what: str) -> SkyFrame:
     pos = single.positions
     try:
-        lon_q, lon_ok = catalogs._quantity_column(single.table, lon, u.deg, "posizione")
-        lat_q, lat_ok = catalogs._quantity_column(single.table, lat, u.deg, "posizione")
+        lon_q, lon_ok = catalogs._quantity_column(single.table, lon, u.deg, "position")
+        lat_q, lat_ok = catalogs._quantity_column(single.table, lat, u.deg, "position")
     except CatalogsError as exc:
         raise _from_13(exc, what) from exc
     if not (lon_ok[0] and lat_ok[0]):

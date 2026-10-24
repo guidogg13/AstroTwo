@@ -109,6 +109,16 @@ def _relay(exc) -> HiPSError:
                      **getattr(exc, "details", {}))
 
 
+def _message_of(exc) -> dict:
+    """Messaggio annidato (tipo ``message``, D40-7) di un errore di AstroTwo: codice, ``params`` e testo suoi."""
+    return {"code": exc.code, "params": dict(getattr(exc, "params", None) or {}), "text": exc.message}
+
+
+def _diagnosis(reason: str, text: str, **params) -> dict:
+    """Diagnosi di un tile o di un file del servizio: messaggio annidato ``HIPS_TILE_PROBLEM`` (D40-7)."""
+    return {"code": "HIPS_TILE_PROBLEM", "params": {"reason": reason, **params}, "text": text}
+
+
 def _iso(when) -> str:
     return when.isoformat()
 
@@ -555,7 +565,7 @@ def _to_frame(coords, frame: str, what: str, *, reason: str):
         converted = coords if coords.frame_name == target else coords.to(target)
     except CoordinatesWcsError as exc:
         raise HiPSError("REGION_INVALID", f"{what}: {exc.message}",
-                        params={"reason": reason, "detail": exc.message}) from exc
+                        params={"reason": reason, "detail": _message_of(exc)}) from exc
     lon = np.atleast_1d(converted.lon.to_value(u.deg))
     lat = np.atleast_1d(converted.lat.to_value(u.deg))
     note = "" if coords.frame_name == target else f" (convertite da {coords.frame_name} in {target} con il modulo 10)"
@@ -741,12 +751,13 @@ def _decode_tile(payload: bytes, fmt: str, width: int, url: str):
             with fits.open(io.BytesIO(payload), memmap=False) as hdul:
                 hdu = next((h for h in hdul if h.data is not None), None)
                 if hdu is None:
-                    return None, "nessun dato nel FITS"
+                    return None, _diagnosis("no_data", "nessun dato nel FITS")
                 data, header = np.array(hdu.data), hdu.header.copy()
         except Exception as exc:  # astropy: OSError/ValueError/TypeError per un FITS rovinato
-            return None, f"FITS non leggibile ({exc})"
+            return None, _diagnosis("fits_unreadable", f"FITS non leggibile ({exc})", detail=str(exc))
         if data.shape[-2:] != (width, width):
-            return None, f"dimensione {data.shape} invece di {width}×{width}"
+            return None, _diagnosis("size_mismatch", f"dimensione {data.shape} invece di {width}×{width}",
+                                    shape=list(data.shape), width=width)
         return (data, header), None
     from PIL import Image, UnidentifiedImageError
 
@@ -755,12 +766,14 @@ def _decode_tile(payload: bytes, fmt: str, width: int, url: str):
             image.load()
             expected = "JPEG" if fmt == "jpeg" else "PNG"
             if image.format != expected:
-                return None, f"formato {image.format} invece di {expected}"
+                return None, _diagnosis("format_mismatch", f"formato {image.format} invece di {expected}",
+                                        found=str(image.format), expected=expected)
             array = np.array(image)
     except (UnidentifiedImageError, OSError, ValueError) as exc:
-        return None, f"immagine non leggibile ({exc})"
+        return None, _diagnosis("image_unreadable", f"immagine non leggibile ({exc})", detail=str(exc))
     if array.shape[:2] != (width, width):
-        return None, f"dimensione {array.shape[:2]} invece di {width}×{width}"
+        return None, _diagnosis("size_mismatch", f"dimensione {array.shape[:2]} invece di {width}×{width}",
+                                shape=list(array.shape[:2]), width=width)
     return (np.ascontiguousarray(array[::-1]), None), None
 
 
@@ -831,7 +844,7 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
                 memory.put(tile)
             return tile
         notes.append(ModuleWarning(
-            "HIPS_TILE_DISCARDED", f"copia in cache di {url} corrotta ({problem}): scartata, nuova richiesta",
+            "HIPS_TILE_DISCARDED", f"copia in cache di {url} corrotta ({problem['text']}): scartata, nuova richiesta",
             {"reason": "cache_corrupt", "url": url, "problem": problem}))
         attempts = 0
     problem = None
@@ -846,10 +859,10 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
         decoded, problem = _decode_tile(payload, fmt, service.tile_width, url)
         if decoded is not None:
             break
-        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem}), scartato",
+        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem['text']}), scartato",
                                    {"reason": "tile_corrupt", "url": url, "problem": problem}))
     else:
-        raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem})", url=url,
+        raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem['text']})", url=url,
                         params={"reason": "tile_corrupt", "url": url, "problem": problem})
     retrieved_at = datetime.now(UTC)
     try:
@@ -1308,7 +1321,8 @@ def set_survey(hips_id: str | None = None, *, hips_list: HiPSList | None = None,
     except HiPSError as exc:
         notes.append(ModuleWarning(
             "HIPS_COVERAGE_UNKNOWN", f"{service.hips_id}: copertura non disponibile ({exc.code}: {exc.message})",
-            {"reason": "unavailable", "hips_id": service.hips_id, "cause_code": exc.code, "cause": exc.message}))
+            {"reason": "unavailable", "hips_id": service.hips_id, "cause_code": exc.code,
+             "cause": _message_of(exc)}))
     return ActiveSurvey(service=service, coverage=coverage, warnings=service.warnings + tuple(notes))
 
 
@@ -1405,7 +1419,7 @@ def _cached_bytes(url: str, cache, refresh: bool, timeouts, check):
         if problem is None:
             return cached.data, cached.retrieved_at, True, ()
         notes.append(ModuleWarning(
-            "HIPS_TILE_DISCARDED", f"copia in cache di {url} non valida ({problem}): nuova richiesta",
+            "HIPS_TILE_DISCARDED", f"copia in cache di {url} non valida ({problem['text']}): nuova richiesta",
             {"reason": "cache_invalid", "url": url, "problem": problem}))
         attempts = 0
     for _ in range(attempts + 1):
@@ -1418,10 +1432,10 @@ def _cached_bytes(url: str, cache, refresh: bool, timeouts, check):
         problem = check(payload)
         if problem is None:
             break
-        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: file non valido ({problem}), scartato",
+        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: file non valido ({problem['text']}), scartato",
                                    {"reason": "file_invalid", "url": url, "problem": problem}))
     else:
-        raise HiPSError("HIPS_BAD_TILE", f"{url}: file non valido anche dopo una nuova richiesta ({problem})", url=url,
+        raise HiPSError("HIPS_BAD_TILE", f"{url}: file non valido anche dopo una nuova richiesta ({problem['text']})", url=url,
                         params={"reason": "file_corrupt", "url": url, "problem": problem})
     retrieved_at = datetime.now(UTC)
     try:
@@ -1437,18 +1451,20 @@ def _tsv_rows(payload: bytes, names: list[str]):
     try:
         text = payload.decode("utf-8")
     except UnicodeDecodeError as exc:
-        return None, f"non UTF-8 ({exc})"
+        return None, _diagnosis("not_utf8", f"non UTF-8 ({exc})", detail=str(exc))
     lines = [line.rstrip("\r") for line in text.split("\n")]
     lines = [line for line in lines if line and not line.startswith("#")]
     if not lines:
-        return None, "nessuna riga di intestazione"
+        return None, _diagnosis("no_header", "nessuna riga di intestazione")
     header = lines[0].split("\t")
     if header != names:
-        return None, f"colonne {header} diverse da metadata.xml {names}"
+        return None, _diagnosis("columns_mismatch", f"colonne {header} diverse da metadata.xml {names}",
+                                header=str(header), expected=str(names))
     rows = [line.split("\t") for line in lines[1:]]
     bad = [i for i, row in enumerate(rows) if len(row) != len(names)]
     if bad:
-        return None, f"riga {bad[0] + 2}: {len(rows[bad[0]])} campi invece di {len(names)}"
+        return None, _diagnosis("bad_row", f"riga {bad[0] + 2}: {len(rows[bad[0]])} campi invece di {len(names)}",
+                                line=bad[0] + 2, fields=len(rows[bad[0]]), expected=len(names))
     return rows, None
 
 

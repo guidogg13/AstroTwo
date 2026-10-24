@@ -749,6 +749,236 @@ suo VOTable.
 | Operazione con `inplace=True` | tabella data modificata, citato nel report | avviso `INPLACE` |
 | Unità incompatibili nell'espressione | rifiuto con le due unità | `UNIT_INCOMPATIBLE` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8c-bis) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`CatalogsError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la
+coppia (codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `text`/`message`); il
+modulo **non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1). Il
+parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (libreria, file, servizio,
+nomi di colonne e di tabelle letti da un file), inserito tale e quale e senza tradurlo. I `details` di prima (`path`,
+`rows`, `max_rows`, `tables`, `position`, `rule`, `candidates`, `conflicts`, `needed_bytes`, `limit_bytes`) restano.
+
+**Errori rilanciati da un altro modulo.** La propagazione rilancia gli errori del 10 (`EPOCH_REQUIRED`,
+`COORD_OUT_OF_RANGE`, …) con il loro codice, i loro `params` e `relayed = True`; il testo del 13 aggiunge il prefisso
+"propagazione: " e resta nel campo `text`, mentre il catalogo mostra il messaggio del 10. Gli **avvisi dei moduli
+sotto** (`result.warnings` del 14, `fetched.warnings` per l'albero delle collezioni) passano **tali e quali**, con il
+loro `params` (finché il 14 non è convertito, sprint 8d, sono coppie senza `params`). Il testo dichiarato da un
+avviso del 14 e citato in `REGION_REQUIRED` e `REGION_TOO_LARGE` (`declared`) resta un parametro **esterno** fino
+a quella conversione, poi diventa `message`.
+
+**Messaggi annidati (D40-7).** Dove il testo del 13 incorpora un altro messaggio **di AstroTwo** il parametro ha tipo
+`message` o `messages` (`40` §3.7.1): l'errore del 13 che ha impedito la lettura dei dati collegati
+(`ASTRORES_UNREADABLE` `link_unreadable`, `cause`) e le differenze tra FIELD e dati collegati
+(`ASTRORES_UNREADABLE` `link_conflict`, `problems`), che hanno il codice proprio **`ASTRORES_LINK_PROBLEM`**, usato
+solo come messaggio annidato (sotto-voci `columns`, `unit`, `ucd`, `numeric`, `boolean`). Restano esterni i testi di
+librerie e servizi (`detail`) e i nomi che vengono da un file.
+
+Gli identificativi delle grandezze con unità in `argument` (`position`, `pm_ra`, `pm_dec`, `parallax`,
+`radial_velocity`) sono i nomi dei parametri di `propagate` e `display_positions`, non testo tradotto. Un elenco
+vuoto si mostra come "—". Le sotto-voci `*_candidates` di `CATALOG_UNKNOWN` sono scelte dal modulo quando il servizio
+dà le tabelle che cominciano con l'identificativo (`_candidates_limited` se l'elenco è limitato a
+`MAX_TABLE_CANDIDATES`).
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `TABLE_UNREADABLE` | (generale) | — |
+| `TABLE_UNREADABLE` | `file_unreadable` | `path` (string), `detail` (string, esterno) |
+| `TABLE_UNREADABLE` | `votable_unreadable` | `path` (string), `detail` (string, esterno) |
+| `TABLE_UNREADABLE` | `table_unreadable` | `path` (string), `format` (string), `detail` (string, esterno) |
+| `FORMAT_UNSUPPORTED` | `url_via_vo` | — |
+| `FORMAT_UNSUPPORTED` | `format_not_text` | `format` (string), `allowed` (list) |
+| `FORMAT_UNSUPPORTED` | `xml_root` | `path` (string), `root` (string, esterno), `formats` (list) |
+| `FORMAT_UNSUPPORTED` | `binary` | `path` (string), `formats` (list) |
+| `FORMAT_UNSUPPORTED` | `no_table` | `path` (string) |
+| `FORMAT_AMBIGUOUS` | (generale) | `path` (string), `formats` (list) |
+| `FORMAT_DECLARED` | (generale) | `format` (string) |
+| `UNIT_UNRECOGNIZED` | (generale) | `column` (string, esterno), `unit` (string, esterno) |
+| `UNIT_DECLARED` | (generale) | `column` (string, esterno), `unit` (string) |
+| `NO_COORD_COLUMNS` | (generale) | — |
+| `NO_COORD_COLUMNS` | `not_found` | — |
+| `NO_COORD_COLUMNS` | `multiple_pairs` | `lon_ucd` (string), `lat_ucd` (string) |
+| `NO_COORD_COLUMNS` | `column_missing` | `column` (string) |
+| `NO_COORD_COLUMNS` | `required` | — |
+| `NO_COORD_COLUMNS` | `schema_ambiguous` | `name` (string), `ucd` (string), `candidates_ra` (list, esterno), `candidates_dec` (list, esterno) |
+| `NO_COORD_COLUMNS` | `column_name_invalid` | `name` (string), `column` (string, esterno) |
+| `POSITIONS_FROM_MANGO` | (generale) | — |
+| `POSITIONS_FROM_MANGO` | `with_epoch` | `lon` (string, esterno), `lat` (string, esterno), `system` (string), `epoch` (string, esterno), `utype` (string, esterno) |
+| `FRAME_UNKNOWN` | (generale) | — |
+| `FRAME_UNKNOWN` | `undeclared` | `lon` (string, esterno), `lat` (string, esterno) |
+| `FRAME_UNKNOWN` | `ambiguous` | `lon` (string, esterno), `lat` (string, esterno), `system` (string, esterno) |
+| `FRAME_UNKNOWN` | `unsupported` | `frame` (string), `supported` (list) |
+| `FRAME_UNKNOWN` | `positions_undeclared` | — |
+| `FRAME_UNKNOWN` | `service_undeclared` | `name` (string), `lon` (string, esterno), `lat` (string, esterno), `system` (string, esterno) |
+| `FRAME_UNKNOWN` | `service_no_coosys` | `name` (string), `lon` (string, esterno), `lat` (string, esterno) |
+| `FRAME_UNKNOWN` | `no_equinox` | `name` (string), `system` (string, esterno) |
+| `ECSV_POSITIONS_INVALID` | (generale) | — |
+| `ECSV_POSITIONS_INVALID` | `unusable` | `meta` (string, esterno) |
+| `ECSV_POSITIONS_INVALID` | `differs` | `lon` (string, esterno), `lat` (string, esterno), `ucd_lon` (string, esterno), `ucd_lat` (string, esterno) |
+| `POSITIONS_FROM_ECSV` | (generale) | — |
+| `POSITIONS_FROM_ECSV` | `equinox` | `lon` (string, esterno), `lat` (string, esterno), `frame` (string), `equinox` (string, esterno) |
+| `POSITIONS_FROM_ECSV` | `epoch` | `lon` (string, esterno), `lat` (string, esterno), `frame` (string), `epoch` (string, esterno) |
+| `POSITIONS_FROM_ECSV` | `equinox_epoch` | `lon` (string, esterno), `lat` (string, esterno), `frame` (string), `equinox` (string, esterno), `epoch` (string, esterno) |
+| `EPOCH_FROM_METADATA` | (generale) | `lon` (string, esterno), `lat` (string, esterno), `epoch` (string, esterno), `system` (string, esterno) |
+| `BODY_UNKNOWN` | `table_body` | — |
+| `COORD_UNIT_MISSING` | `column_unit_required` | `column` (string, esterno) |
+| `COORD_UNIT_MISSING` | `column_not_angular` | `column` (string, esterno), `unit` (string, esterno) |
+| `MEMORY_LIMIT_EXCEEDED` | `read_file` | `path` (string), `needed` (quantity), `limit` (quantity) |
+| `MEMORY_LIMIT_EXCEEDED` | `loaded_table` | `path` (string), `needed` (quantity), `limit` (quantity) |
+| `MEMORY_LIMIT_EXCEEDED` | `linked_data` | `url` (string, esterno), `needed` (quantity), `limit` (quantity) |
+| `MEMORY_LIMIT_EXCEEDED` | `subset` | `needed` (quantity), `limit` (quantity) |
+| `MEMORY_LIMIT_EXCEEDED` | `calculated_column` | `name` (string), `needed` (quantity), `limit` (quantity) |
+| `TABLE_TOO_LARGE` | (generale) | `path` (string), `rows` (integer), `max_rows` (integer) |
+| `TABLE_CHOICE_REQUIRED` | (generale) | — |
+| `TABLE_CHOICE_REQUIRED` | `several` | `path` (string), `tables` (list, esterno) |
+| `TABLE_CHOICE_REQUIRED` | `missing` | `path` (string), `table` (string), `tables` (list, esterno) |
+| `COLUMN_TYPE_UNSUPPORTED` | (generale) | — |
+| `COLUMN_TYPE_UNSUPPORTED` | `position_not_numeric` | `column` (string, esterno), `dtype` (string) |
+| `COLUMN_TYPE_UNSUPPORTED` | `not_numeric` | `column` (string, esterno), `dtype` (string) |
+| `COLUMN_TYPE_UNSUPPORTED` | `column_missing` | `column` (string) |
+| `COLUMN_TYPE_UNSUPPORTED` | `bins_required` | — |
+| `COLUMN_TYPE_UNSUPPORTED` | `bins_invalid` | `bins` (string) |
+| `COLUMN_TYPE_UNSUPPORTED` | `bins_edges` | — |
+| `COLUMN_TYPE_UNSUPPORTED` | `record_out_of_range` | `index` (string), `last` (integer) |
+| `COLUMN_TYPE_UNSUPPORTED` | `selection_mask` | `rows` (integer) |
+| `COLUMN_TYPE_UNSUPPORTED` | `argument_column_missing` | `argument` (string), `column` (string) |
+| `COLUMN_TYPE_UNSUPPORTED` | `argument_not_numeric` | `argument` (string), `column` (string, esterno) |
+| `COLUMN_TYPE_UNSUPPORTED` | `number_needed` | `column` (string, esterno), `dtype` (string) |
+| `PROPER_MOTION_MISSING` | (generale) | — |
+| `PROPER_MOTION_MISSING` | `column_missing` | `argument` (string), `column` (string) |
+| `PROPER_MOTION_MISSING` | `cosdec_required` | — |
+| `UNIT_INCOMPATIBLE` | (generale) | — |
+| `UNIT_INCOMPATIBLE` | `argument_unit` | `argument` (string), `column` (string, esterno), `unit` (string, esterno), `required` (string) |
+| `UNIT_INCOMPATIBLE` | `calculated_unrecognized` | `column` (string, esterno), `unit` (string, esterno) |
+| `UNIT_INCOMPATIBLE` | `calculated_column` | `name` (string), `detail` (string, esterno) |
+| `COLUMN_NAME_EXISTS` | (generale) | — |
+| `COLUMN_NAME_EXISTS` | `propagation_columns` | `columns` (list, esterno) |
+| `COLUMN_NAME_EXISTS` | `name_exists` | `column` (string, esterno) |
+| `EPOCH_INVALID` | (generale) | — |
+| `EPOCH_INVALID` | `source_in_metadata` | — |
+| `EPOCH_INVALID` | `several_epoch_columns` | `columns` (list, esterno) |
+| `EPOCH_INVALID` | `epoch_column_unit` | `column` (string, esterno), `unit` (string, esterno) |
+| `EPOCH_INVALID` | `source_missing` | — |
+| `EPOCH_INVALID` | `target_required` | — |
+| `EPOCH_INVALID` | `scale_required` | — |
+| `EPOCH_INVALID` | `display_type` | `type` (string) |
+| `EPOCH_INVALID` | `time_objects` | — |
+| `EPOCH_INVALID` | `empty_interval` | — |
+| `EPOCH_INVALID` | `timesys_conflict` | — |
+| `EPOCH_INVALID` | `timescale_unsupported` | `scale` (string, esterno) |
+| `EPOCH_INVALID` | `timeorigin_invalid` | `origin` (string, esterno) |
+| `EPOCH_INVALID` | `timeorigin_units` | `column` (string) |
+| `EPOCH_INVALID` | `timesys_no_origin` | `column` (string) |
+| `EPOCH_INVALID` | `format_scale_required` | `column` (string) |
+| `EPOCH_INVALID` | `values_unreadable` | `column` (string), `time_format` (string), `detail` (string, esterno) |
+| `EXPRESSION_INVALID` | (generale) | — |
+| `EXPRESSION_INVALID` | `unclosed_name` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `unclosed_string` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `unexpected_symbol` | `position` (integer), `expression` (string), `symbol` (string) |
+| `EXPRESSION_INVALID` | `expected_token` | `position` (integer), `expression` (string), `expected` (string), `found` (string) |
+| `EXPRESSION_INVALID` | `expected_token_end` | `position` (integer), `expression` (string), `expected` (string) |
+| `EXPRESSION_INVALID` | `unexpected_token` | `position` (integer), `expression` (string), `found` (string) |
+| `EXPRESSION_INVALID` | `column_missing` | `position` (integer), `expression` (string), `column` (string) |
+| `EXPRESSION_INVALID` | `abs_needs_column` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `no_text_columns` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `term_expected` | `position` (integer), `expression` (string), `found` (string) |
+| `EXPRESSION_INVALID` | `term_expected_end` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `value_needed` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `number_needed` | `position` (integer), `expression` (string), `column` (string, esterno) |
+| `EXPRESSION_INVALID` | `abs_text` | `position` (integer), `expression` (string), `column` (string, esterno) |
+| `EXPRESSION_INVALID` | `text_operators` | `position` (integer), `expression` (string), `column` (string, esterno) |
+| `EXPRESSION_INVALID` | `not_comparable` | `position` (integer), `expression` (string), `column` (string, esterno), `dtype` (string) |
+| `EXPRESSION_INVALID` | `empty` | `position` (integer), `expression` (string) |
+| `EXPRESSION_INVALID` | `not_string` | `position` (integer) |
+| `EXPRESSION_INVALID` | `prefix_needs_selection` | `position` (integer), `prefix` (string) |
+| `EXPRESSION_INVALID` | `selection_shape` | `position` (integer), `rows` (integer) |
+| `COLUMN_EXPRESSION_INVALID` | (generale) | — |
+| `COLUMN_EXPRESSION_INVALID` | `name_required` | `position` (integer) |
+| `COLUMN_EXPRESSION_INVALID` | `decimals_invalid` | `position` (integer), `decimals` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `empty` | `position` (integer) |
+| `COLUMN_EXPRESSION_INVALID` | `power` | `position` (integer), `expression` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `unclosed_reference` | `position` (integer), `expression` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `column_missing` | `position` (integer), `expression` (string), `column` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `syntax` | `position` (integer), `expression` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `name_unknown` | `position` (integer), `expression` (string), `name` (string), `constants` (list) |
+| `COLUMN_EXPRESSION_INVALID` | `function_unknown` | `position` (integer), `expression` (string), `function` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `arity` | `position` (integer), `expression` (string), `function` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `starred` | `position` (integer), `expression` (string) |
+| `COLUMN_EXPRESSION_INVALID` | `construct` | `position` (integer), `expression` (string), `construct` (string) |
+| `PLOT_RULE_INVALID` | (generale) | — |
+| `PLOT_RULE_INVALID` | `not_plotrule` | `rule` (integer) |
+| `PLOT_RULE_INVALID` | `shape_unknown` | `rule` (integer), `shape` (string), `allowed` (list) |
+| `PLOT_RULE_INVALID` | `color_invalid` | `rule` (integer), `color` (string) |
+| `PLOT_RULE_INVALID` | `size_column` | `rule` (integer), `column` (string) |
+| `PLOT_RULE_INVALID` | `size_range` | `rule` (integer) |
+| `PLOT_RULE_INVALID` | `size_positive` | `rule` (integer) |
+| `PLOT_RULE_INVALID` | `size_invalid` | `rule` (integer), `size` (string) |
+| `PLOT_RULE_INVALID` | `selection_prefix` | `rule` (integer) |
+| `FILE_EXISTS` | (generale) | `path` (string) |
+| `INPLACE` | (generale) | — |
+| `INPLACE` | `subset` | `kept` (integer), `total` (integer) |
+| `INPLACE` | `calculated` | `name` (string, esterno), `expression` (string) |
+| `INPLACE` | `calculated_unit` | `name` (string, esterno), `expression` (string), `unit` (string) |
+| `PROPER_MOTION_ROW_MISSING` | (generale) | `missing` (integer) |
+| `XML_UNSAFE` | (generale) | `path` (string), `construct` (string) |
+| `ASTRORES_UNREADABLE` | (generale) | — |
+| `ASTRORES_UNREADABLE` | `xml_unreadable` | `path` (string), `detail` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `root_unexpected` | `path` (string), `root` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `no_data` | `path` (string) |
+| `ASTRORES_UNREADABLE` | `row_fields` | `path` (string), `row` (integer), `values` (integer), `fields` (integer) |
+| `ASTRORES_UNREADABLE` | `no_fields` | `path` (string), `index` (integer) |
+| `ASTRORES_UNREADABLE` | `duplicate_field` | `path` (string), `name` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `link_no_content_type` | `path` (string) |
+| `ASTRORES_UNREADABLE` | `link_type_not_read` | `path` (string), `content_type` (string, esterno), `allowed` (list) |
+| `ASTRORES_UNREADABLE` | `link_header_absent` | `path` (string), `content_type` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `link_gref` | `path` (string) |
+| `ASTRORES_UNREADABLE` | `link_action` | `path` (string) |
+| `ASTRORES_UNREADABLE` | `link_no_address` | `path` (string) |
+| `ASTRORES_UNREADABLE` | `link_href_invalid` | `path` (string), `href` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `link_needs_network` | `path` (string), `url` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `link_unreadable` | `path` (string), `url` (string, esterno), `format` (string), `cause` (message) |
+| `ASTRORES_UNREADABLE` | `link_data_error` | `path` (string), `url` (string, esterno), `format` (string), `detail` (string, esterno) |
+| `ASTRORES_UNREADABLE` | `link_conflict` | `path` (string), `url` (string, esterno), `problems` (messages) |
+| `ASTRORES_LINK_PROBLEM` | (generale) | — |
+| `ASTRORES_LINK_PROBLEM` | `columns` | `linked` (string, esterno), `fields` (string, esterno) |
+| `ASTRORES_LINK_PROBLEM` | `unit` | `name` (string, esterno), `field_unit` (string, esterno), `linked_unit` (string, esterno) |
+| `ASTRORES_LINK_PROBLEM` | `ucd` | `name` (string, esterno), `field_ucd` (string, esterno), `linked_ucd` (string, esterno) |
+| `ASTRORES_LINK_PROBLEM` | `numeric` | `name` (string, esterno), `datatype` (string), `dtype` (string) |
+| `ASTRORES_LINK_PROBLEM` | `boolean` | `name` (string, esterno), `dtype` (string) |
+| `ASTRORES_LINK` | (generale) | `url` (string, esterno), `format` (string), `content_type` (string, esterno) |
+| `ASTRORES_TYPE_MISMATCH` | (generale) | — |
+| `ASTRORES_TYPE_MISMATCH` | `sexagesimal_hours` | `field` (string, esterno), `datatype` (string), `text_column` (string, esterno) |
+| `ASTRORES_TYPE_MISMATCH` | `sexagesimal_degrees` | `field` (string, esterno), `datatype` (string), `text_column` (string, esterno) |
+| `ASTRORES_TYPE_MISMATCH` | `not_numeric` | `field` (string, esterno), `datatype` (string) |
+| `ASTRORES_TYPE_MISMATCH` | `not_boolean` | `field` (string, esterno) |
+| `UCD1_TRANSLATED` | (generale) | `field` (string, esterno), `original` (string, esterno), `translated` (string) |
+| `ASTRORES_NONCONFORMING_REF` | (generale) | `field` (string, esterno), `ref` (string, esterno), `accepted` (string, esterno) |
+| `UCD1_NOT_TRANSLATED` | (generale) | `fields` (list, esterno) |
+| `CATALOG_UNKNOWN` | (generale) | — |
+| `CATALOG_UNKNOWN` | `invalid_id` | `catalog_id` (string) |
+| `CATALOG_UNKNOWN` | `no_columns` | `name` (string), `server` (string) |
+| `CATALOG_UNKNOWN` | `no_columns_candidates` | `name` (string), `server` (string), `candidates` (list, esterno) |
+| `CATALOG_UNKNOWN` | `no_columns_candidates_limited` | `name` (string), `server` (string), `candidates` (list, esterno), `max_candidates` (integer) |
+| `CATALOG_UNKNOWN` | `not_found` | `catalog_id` (string), `server` (string), `detail` (string, esterno) |
+| `CATALOG_UNKNOWN` | `not_found_candidates` | `catalog_id` (string), `server` (string), `detail` (string, esterno), `candidates` (list, esterno) |
+| `CATALOG_UNKNOWN` | `not_found_candidates_limited` | `catalog_id` (string), `server` (string), `detail` (string, esterno), `candidates` (list, esterno), `max_candidates` (integer) |
+| `REGION_REQUIRED` | (generale) | `catalog_id` (string), `max_rows` (integer), `declared` (string, esterno) |
+| `REGION_TOO_LARGE` | (generale) | `catalog_id` (string), `max_rows` (integer), `declared` (string, esterno) |
+| `REGION_INVALID` | `radius_not_angle` | `radius` (string) |
+| `REGION_INVALID` | `radius_range` | `radius` (quantity) |
+| `REGION` | (generale) | — |
+| `REGION` | `equinox` | `lon` (string, esterno), `lat` (string, esterno), `system` (string, esterno), `equinox` (string, esterno), `center_lon` (quantity), `center_lat` (quantity), `radius` (quantity) |
+| `REGION` | `epoch` | `lon` (string, esterno), `lat` (string, esterno), `system` (string, esterno), `epoch` (string, esterno), `center_lon` (quantity), `center_lat` (quantity), `radius` (quantity) |
+| `REGION` | `equinox_epoch` | `lon` (string, esterno), `lat` (string, esterno), `system` (string, esterno), `equinox` (string, esterno), `epoch` (string, esterno), `center_lon` (quantity), `center_lat` (quantity), `radius` (quantity) |
+| `PARTIAL_CATALOG` | (generale) | — |
+| `PARTIAL_CATALOG` | `in_region` | `max_rows` (integer), `catalog_id` (string) |
+| `COLLECTION_SKIPPED` | (generale) | — |
+| `COLLECTION_SKIPPED` | `more` | `ids` (list, esterno) |
+| `POPULARITY_INVALID` | (generale) | `count` (integer) |
+| `POPULARITY_MISSING` | (generale) | `count` (integer) |
+
 ## 11. Esposizione all'IA
 
 Non applicabile in questo file: gli strumenti per l'IA si dichiarano in
@@ -1014,3 +1244,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-23 | Claude Code | **Precisazione di `load_catalog` con regione** (parte 7, sprint 7b; il proprietario ha chiesto di aggiornare prima il 13, messaggio del 2026-10-23): una tabella senza colonne in `TAP_SCHEMA` dà `CATALOG_UNKNOWN` (identificativo non trovato, regola di §7 già scritta) invece di `NO_COORD_COLUMNS`. Causa della prova reale del proprietario ("Carica Gaia DR3 attorno alle Pleiadi" dall'assistente → `NO_COORD_COLUMNS`): con `I/355/gaiadr3` il comando funziona sul servizio reale (colonne `RA_ICRS`/`DE_ICRS` da `meta.main`, ICRS epoca J2016 dal `COOSYS`); l'errore esce solo con un identificativo che non è una tabella (`I/355`, `gaiadr3`). T33 esteso con la struttura reale di `TAP_SCHEMA` di Gaia DR3 (due coppie, una `meta.main`) in dati sintetici, senza dati di terzi (decisione del 2026-10-22). Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | Aperta **D13-21** (colonne di posizione ambigue in una regione chiesta dall'assistente, Gruppo 3, §13). Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Decise D32-1 (b) e D13-21 (a)** (proprietario, 2026-10-23; il 13 resta `approvato`): `CATALOG_UNKNOWN` elenca le tabelle di VizieR che cominciano con l'identificativo scritto (§7, §10, T33; seconda interrogazione `TAP_SCHEMA.tables` tramite `tap_query` del 14); `NO_COORD_COLUMNS` per colonne ambigue porta le candidate per RA e per Dec nel messaggio. |
+| 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8c-bis:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message`/`messages`, nuovo codice annidato `ASTRORES_LINK_PROBLEM`); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

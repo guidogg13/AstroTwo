@@ -20,6 +20,7 @@ import os
 import re
 import tempfile
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +41,7 @@ from defusedxml.ElementTree import parse as safe_parse_xml
 
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
+    ModuleWarning,
     SkyFrame,
     parse_sexagesimal,
     propagate_position,
@@ -104,13 +106,29 @@ __all__ = [
 
 
 class CatalogsError(Exception):
-    """Errore del modulo 13 con identificatore della specifica (§10)."""
+    """Errore del modulo 13 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore di un modulo
+    sotto (10, 14) rilanciato con il suo codice e i suoi ``params`` (§10, "Parametri dei messaggi")."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None, relayed: bool = False,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``), mai arrotondato."""
+    return {"value": float(value), "unit": unit}
+
+
+def _message_of(exc) -> dict:
+    """Messaggio annidato (tipo ``message``, D40-7) di un errore di AstroTwo: codice, ``params`` e testo suoi."""
+    return {"code": exc.code, "params": dict(getattr(exc, "params", None) or {}), "text": exc.message}
 
 
 # --------------------------------------------------------------------------
@@ -228,7 +246,8 @@ def _read_head(path: str, size: int = 65536) -> bytes:
         with open(path, "rb") as handle:
             return handle.read(size)
     except OSError as exc:
-        raise CatalogsError("TABLE_UNREADABLE", f"file non leggibile: {path} ({exc})", path=path) from exc
+        raise CatalogsError("TABLE_UNREADABLE", f"file non leggibile: {path} ({exc})", path=path,
+                            params={"reason": "file_unreadable", "path": path, "detail": str(exc)}) from exc
 
 
 def _sniff_lines(text: str) -> list[str]:
@@ -268,7 +287,8 @@ def detect_table_format(source) -> str:
             return "votable"
         if root == "ASTRO":
             return "astrores"
-        raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: XML con radice {root!r}; formati: {', '.join(TABLE_FORMATS)}")
+        raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: XML con radice {root!r}; formati: {', '.join(TABLE_FORMATS)}",
+                            params={"reason": "xml_root", "path": path, "root": root, "formats": list(TABLE_FORMATS)})
     nonempty = [line for line in text.splitlines() if line.strip()]
     if nonempty and nonempty[0].startswith("# %ECSV"):  # prima riga dichiarata dallo standard ECSV
         return "ecsv"
@@ -277,7 +297,8 @@ def detect_table_format(source) -> str:
     if nonempty and re.match(r"^#\s+\d+\s+\S+", nonempty[0]):
         return "sextractor"
     if b"\x00" in head:
-        raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: file binario non riconosciuto; formati: {', '.join(TABLE_FORMATS)}")
+        raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: file binario non riconosciuto; formati: {', '.join(TABLE_FORMATS)}",
+                            params={"reason": "binary", "path": path, "formats": list(TABLE_FORMATS)})
     fmt = _delimited_format(_sniff_lines(text))
     if fmt is None:
         raise CatalogsError(
@@ -285,6 +306,7 @@ def detect_table_format(source) -> str:
             f"{path}: testo delimitato non classificabile (regola di §3): indicare format "
             f"({', '.join(_TEXT_FORMATS)})",
             path=path,
+            params={"path": path, "formats": list(_TEXT_FORMATS)},
         )
     return fmt
 
@@ -314,7 +336,7 @@ def _standard_unit(text: str):
     return None
 
 
-def _normalize_units(table: Table) -> list[tuple[str, str]]:
+def _normalize_units(table: Table) -> list[ModuleWarning]:
     """Unità standard alle colonne; stringhe non valide conservate con avviso, mai convertite."""
     notes = []
     for name in table.colnames:
@@ -327,7 +349,8 @@ def _normalize_units(table: Table) -> list[tuple[str, str]]:
         if unit is None:
             col.unit = None
             col.meta["unit_unrecognized"] = text
-            notes.append(("UNIT_UNRECOGNIZED", f"colonna {name!r}: unità {text!r} non valida in FITS né in VOUnit, non convertita"))
+            notes.append(ModuleWarning("UNIT_UNRECOGNIZED", f"colonna {name!r}: unità {text!r} non valida in FITS né in "
+                                       "VOUnit, non convertita", {"column": name, "unit": text}))
         else:
             col.unit = unit
     return notes
@@ -388,8 +411,8 @@ def _mango_frame(lon_utype: str | None, lat_utype: str | None) -> tuple[str, str
     return frame, _astrores_year(epoch, space) if epoch else None, f"MANGO CS.spaceSys={space}"
 
 
-def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColumns | None, list[tuple[str, str]]]:
-    notes: list[tuple[str, str]] = []
+def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColumns | None, list[ModuleWarning]]:
+    notes: list[ModuleWarning] = []
     for lon_ucd, lat_ucd, implied in _UCD_PAIRS:
         lons = [n for n in table.colnames if lon_ucd in _ucd_words(table[n].meta.get("ucd"))]
         lats = [n for n in table.colnames if lat_ucd in _ucd_words(table[n].meta.get("ucd"))]
@@ -399,7 +422,9 @@ def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColum
             lons = [n for n in lons if "meta.main" in _ucd_words(table[n].meta.get("ucd"))]
             lats = [n for n in lats if "meta.main" in _ucd_words(table[n].meta.get("ucd"))]
             if len(lons) != 1 or len(lats) != 1:
-                notes.append(("NO_COORD_COLUMNS", f"più coppie {lon_ucd}/{lat_ucd} senza un'unica meta.main: nessuna scelta"))
+                notes.append(ModuleWarning("NO_COORD_COLUMNS", f"più coppie {lon_ucd}/{lat_ucd} senza un'unica "
+                                           "meta.main: nessuna scelta",
+                                           {"reason": "multiple_pairs", "lon_ucd": lon_ucd, "lat_ucd": lat_ucd}))
                 continue
         lon, lat = lons[0], lats[0]
         ref = table[lon].meta.get("ref") or table[lat].meta.get("ref")
@@ -408,37 +433,53 @@ def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColum
             mango = _mango_frame(table[lon].meta.get("utype"), table[lat].meta.get("utype"))
             if mango is not None:
                 frame, epoch, system = mango
-                notes.append(("POSITIONS_FROM_MANGO", f"colonne {lon}/{lat}: sistema {frame.upper()}"
-                              + (f", epoca {epoch}" if epoch else "") + " dall'utype del modello IVOA MANGO "
-                              f"({table[lon].meta.get('utype')})"))
+                utype = table[lon].meta.get("utype")
+                notes.append(ModuleWarning(
+                    "POSITIONS_FROM_MANGO", f"colonne {lon}/{lat}: sistema {frame.upper()}"
+                    + (f", epoca {epoch}" if epoch else "") + f" dall'utype del modello IVOA MANGO ({utype})",
+                    {"lon": lon, "lat": lat, "system": frame.upper(), "utype": utype}
+                    | ({"reason": "with_epoch", "epoch": epoch} if epoch else {})))
         if frame is None and implied is not None:
             frame = implied
         if frame is None:
-            notes.append(("FRAME_UNKNOWN", f"colonne {lon!r}/{lat!r}: sistema di riferimento non dichiarato"
-                          + (f" o non univoco ({system})" if system else "")))
+            notes.append(ModuleWarning(
+                "FRAME_UNKNOWN", f"colonne {lon!r}/{lat!r}: sistema di riferimento non dichiarato"
+                + (f" o non univoco ({system})" if system else ""),
+                {"reason": "ambiguous", "lon": lon, "lat": lat, "system": system} if system
+                else {"reason": "undeclared", "lon": lon, "lat": lat}))
         return PositionColumns(lon=lon, lat=lat, frame=frame, equinox=equinox, epoch=epoch, source="ucd",
                                system=system), notes
     return None, notes
 
 
-def _ecsv_positions(table: Table, positions: PositionColumns | None, notes: list[tuple[str, str]]):
+def _ecsv_positions(table: Table, positions: PositionColumns | None, notes: list[ModuleWarning]):
     """Sistema delle posizioni dai metadati ``A2POSITIONS`` di un ECSV scritto da AstroTwo (il 14)."""
     meta = table.meta.get("A2POSITIONS")
     if not isinstance(meta, dict):
         return positions, notes
     lon, lat, frame = meta.get("lon"), meta.get("lat"), meta.get("frame")
     if lon not in table.colnames or lat not in table.colnames or frame not in supported_frames():
-        return positions, notes + [("ECSV_POSITIONS_INVALID", f"metadati A2POSITIONS non utilizzabili: {meta}")]
+        return positions, notes + [ModuleWarning("ECSV_POSITIONS_INVALID",
+                                                 f"metadati A2POSITIONS non utilizzabili: {meta}",
+                                                 {"reason": "unusable", "meta": str(meta)})]
     if positions is not None and (positions.lon, positions.lat) != (lon, lat):
-        return positions, notes + [("ECSV_POSITIONS_INVALID", f"A2POSITIONS ({lon}/{lat}) diverso dalle colonne "
-                                    f"degli UCD ({positions.lon}/{positions.lat}): nessuna scelta")]
+        return positions, notes + [ModuleWarning(
+            "ECSV_POSITIONS_INVALID", f"A2POSITIONS ({lon}/{lat}) diverso dalle colonne "
+            f"degli UCD ({positions.lon}/{positions.lat}): nessuna scelta",
+            {"reason": "differs", "lon": lon, "lat": lat, "ucd_lon": positions.lon, "ucd_lat": positions.lat})]
     found = PositionColumns(lon=lon, lat=lat, frame=frame, equinox=meta.get("equinox"), epoch=meta.get("epoch"),
                             source=meta.get("source") or "ucd", system=meta.get("system"))
-    kept = [n for n in notes if not (n[0] == "FRAME_UNKNOWN" and f"{lon!r}/{lat!r}" in n[1])]
-    return found, kept + [("POSITIONS_FROM_ECSV", f"colonne {lon}/{lat}, sistema {frame}"
-                           + (f" equinozio {found.equinox}" if found.equinox else "")
-                           + (f" epoca {found.epoch}" if found.epoch else "")
-                           + " dai metadati ECSV scritti da AstroTwo")]
+    kept = [n for n in notes if not (n[0] == "FRAME_UNKNOWN" and n.params.get("lon") == lon
+                                     and n.params.get("lat") == lat)]
+    extra = ({"equinox": found.equinox} if found.equinox else {}) | ({"epoch": found.epoch} if found.epoch else {})
+    reason = ("equinox_epoch" if found.equinox and found.epoch else
+              ("equinox" if found.equinox else ("epoch" if found.epoch else None)))
+    return found, kept + [ModuleWarning(
+        "POSITIONS_FROM_ECSV", f"colonne {lon}/{lat}, sistema {frame}"
+        + (f" equinozio {found.equinox}" if found.equinox else "")
+        + (f" epoca {found.epoch}" if found.epoch else "")
+        + " dai metadati ECSV scritti da AstroTwo",
+        {"lon": lon, "lat": lat, "frame": frame} | extra | ({"reason": reason} if reason else {}))]
 
 
 def _celestial_body(positions: PositionColumns | None, table: Table) -> str | None:
@@ -478,23 +519,29 @@ def confirm_position_columns(table: CatalogTable, lon: str, lat: str, frame: str
     """
     for name in (lon, lat):
         if name not in table.table.colnames:
-            raise CatalogsError("NO_COORD_COLUMNS", f"colonna {name!r} inesistente")
+            raise CatalogsError("NO_COORD_COLUMNS", f"colonna {name!r} inesistente",
+                                params={"reason": "column_missing", "column": name})
         col = table.table[name]
         if col.dtype.kind not in "iuf":
-            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {col.dtype}: servono valori numerici")
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {col.dtype}: servono valori numerici",
+                                params={"reason": "position_not_numeric", "column": name, "dtype": str(col.dtype)})
         if col.unit is None and unit is None:
-            raise CatalogsError("COORD_UNIT_MISSING", f"colonna {name!r} senza unità: indicare unit (angolare)")
+            raise CatalogsError("COORD_UNIT_MISSING", f"colonna {name!r} senza unità: indicare unit (angolare)",
+                                params={"reason": "column_unit_required", "column": name})
         used = col.unit if col.unit is not None else u.Unit(unit)
         if not used.is_equivalent(u.deg):
-            raise CatalogsError("COORD_UNIT_MISSING", f"colonna {name!r} in unità {used}, non angolare")
+            raise CatalogsError("COORD_UNIT_MISSING", f"colonna {name!r} in unità {used}, non angolare",
+                                params={"reason": "column_not_angular", "column": name, "unit": str(used)})
     if frame not in supported_frames():
-        raise CatalogsError("FRAME_UNKNOWN", f"frame {frame!r} non supportato; frame: {', '.join(supported_frames())}")
+        raise CatalogsError("FRAME_UNKNOWN", f"frame {frame!r} non supportato; frame: {', '.join(supported_frames())}",
+                            params={"reason": "unsupported", "frame": frame, "supported": list(supported_frames())})
     new = table.table.copy()
     notes = []
     for name in (lon, lat):
         if new[name].unit is None:
             new[name].unit = u.Unit(unit)
-            notes.append(("UNIT_DECLARED", f"colonna {name!r}: unità {u.Unit(unit)} dichiarata dall'utente"))
+            notes.append(ModuleWarning("UNIT_DECLARED", f"colonna {name!r}: unità {u.Unit(unit)} dichiarata dall'utente",
+                                       {"column": name, "unit": str(u.Unit(unit))}))
     # D41-6: stesse colonne e stesso sistema dei metadati (COOSYS, utype MANGO, ECSV) → epoca ed equinozio
     # dichiarati conservati; altrimenti nessuna epoca (mai assunta).
     old = table.positions
@@ -508,7 +555,8 @@ def confirm_position_columns(table: CatalogTable, lon: str, lat: str, frame: str
     if epoch is not None:
         text = (f"colonne {lon}/{lat}: epoca {epoch} dichiarata nei metadati ({old.system or frame}) conservata "
                 "dopo la conferma (stesse colonne e sistema)")
-        notes.append(("EPOCH_FROM_METADATA", text))
+        notes.append(ModuleWarning("EPOCH_FROM_METADATA", text, {"lon": lon, "lat": lat, "epoch": epoch,
+                                                                 "system": old.system or frame}))
         history += (text,)
     kept = tuple(w for w in table.warnings if w[0] not in ("NO_COORD_COLUMNS", "BODY_UNKNOWN", "FRAME_UNKNOWN"))
     return dataclasses.replace(
@@ -524,15 +572,20 @@ def confirm_position_columns(table: CatalogTable, lon: str, lat: str, frame: str
 def _check_rows(rows: int, limits: TableLimits, path: str) -> None:
     if rows > limits.max_rows:
         raise CatalogsError("TABLE_TOO_LARGE", f"{path}: {rows} righe, oltre il tetto di {limits.max_rows}",
-                            rows=rows, max_rows=limits.max_rows)
+                            rows=rows, max_rows=limits.max_rows,
+                            params={"path": path, "rows": rows, "max_rows": limits.max_rows})
 
 
-def _check_memory(what: str, needed: int, limits: TableLimits) -> None:
+def _check_memory(reason: str, what: str, needed: int, limits: TableLimits, **subject: object) -> None:
+    """``reason``: identificatore dell'operazione (sotto-voce del catalogo); ``what``: testo italiano del messaggio;
+    ``subject``: il parametro che la identifica (``path``, ``url`` o ``name``)."""
     if needed > limits.operation_bytes:
         raise CatalogsError(
             "MEMORY_LIMIT_EXCEEDED",
             f"{what}: servono circa {needed} byte, oltre il limite delle operazioni di {limits.operation_bytes} byte",
             needed_bytes=needed, limit_bytes=limits.operation_bytes,
+            params={"reason": reason, **subject, "needed": _q(needed, "byte"),
+                    "limit": _q(limits.operation_bytes, "byte")},
         )
 
 
@@ -575,18 +628,22 @@ def _fits_tables(hdul) -> list[int]:
 
 def _choose(available: list[TableInfo], table, path: str) -> TableInfo:
     listing = "; ".join(f"{t.index}: {t.name or '(senza nome)'} {t.rows}×{t.columns}" for t in available)
+    # Per i parametri: una voce per tabella, con i numeri e il nome (testo del file) come sono.
+    entries = [f"{t.index}: {t.name or '(senza nome)'} {t.rows}×{t.columns}" for t in available]
     if not available:
-        raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: nessuna tabella nel file")
+        raise CatalogsError("FORMAT_UNSUPPORTED", f"{path}: nessuna tabella nel file",
+                            params={"reason": "no_table", "path": path})
     if table is None:
         if len(available) == 1:
             return available[0]
         raise CatalogsError("TABLE_CHOICE_REQUIRED", f"{path}: più tabelle, indicare table ({listing})",
-                            tables=tuple(available))
+                            tables=tuple(available), params={"reason": "several", "path": path, "tables": entries})
     for info in available:
         if info.index == table:
             return info
     raise CatalogsError("TABLE_CHOICE_REQUIRED", f"{path}: tabella {table!r} inesistente ({listing})",
-                        tables=tuple(available))
+                        tables=tuple(available),
+                        params={"reason": "missing", "path": path, "table": str(table), "tables": entries})
 
 
 def _votable_infos(vot) -> list[TableInfo]:
@@ -602,7 +659,8 @@ def _parse_votable(path: str):
             warnings.simplefilter("ignore")
             return parse_votable(path, verify="ignore")
     except Exception as exc:
-        raise CatalogsError("TABLE_UNREADABLE", f"{path}: VOTable non leggibile ({exc})", path=path) from exc
+        raise CatalogsError("TABLE_UNREADABLE", f"{path}: VOTable non leggibile ({exc})", path=path,
+                            params={"reason": "votable_unreadable", "path": path, "detail": str(exc)}) from exc
 
 
 def list_tables(source) -> tuple[TableInfo, ...]:
@@ -622,7 +680,7 @@ def list_tables(source) -> tuple[TableInfo, ...]:
 
 
 def _read_votable(path: str, table, limits: TableLimits):
-    _check_memory(f"lettura di {path}", os.path.getsize(path), limits)  # stima prima della lettura (XML)
+    _check_memory("read_file", f"lettura di {path}", os.path.getsize(path), limits, path=path)  # stima (XML)
     vot = _parse_votable(path)
     info = _choose(_votable_infos(vot), table, path)
     _check_rows(info.rows, limits, path)
@@ -657,7 +715,7 @@ def _read_fits(path: str, table, limits: TableLimits):
         info = _choose(infos, table, path)
         header = hdul[info.index].header
         _check_rows(info.rows, limits, path)
-        _check_memory(f"lettura di {path}", int(header.get("NAXIS1", 0)) * info.rows, limits)
+        _check_memory("read_file", f"lettura di {path}", int(header.get("NAXIS1", 0)) * info.rows, limits, path=path)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = Table.read(hdul[info.index])
@@ -675,13 +733,15 @@ def _read_text(path: str, fmt: str, table, limits: TableLimits):
     info = _choose([TableInfo(index=0, name="", rows=rows, columns=columns)], table, path)
     _check_rows(rows, limits, path)
     # Prima della lettura: numeri in float64 più il testo del file (§3).
-    _check_memory(f"lettura di {path}", rows * columns * 8 + os.path.getsize(path), limits)
+    _check_memory("read_file", f"lettura di {path}", rows * columns * 8 + os.path.getsize(path), limits, path=path)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = astropy_ascii.read(path, guess=False, **_ASCII_READERS[fmt])
     except Exception as exc:
-        raise CatalogsError("TABLE_UNREADABLE", f"{path}: tabella {fmt} non leggibile ({exc})", path=path) from exc
+        raise CatalogsError("TABLE_UNREADABLE", f"{path}: tabella {fmt} non leggibile ({exc})", path=path,
+                            params={"reason": "table_unreadable", "path": path, "format": fmt,
+                                    "detail": str(exc)}) from exc
     return result, info, {}
 
 
@@ -698,12 +758,15 @@ def _read_table(source, *, table=None, format=None, limits: TableLimits | None =
     limits = TableLimits() if limits is None else limits
     text = os.fspath(source)
     if text.startswith(("http://", "https://")):
-        raise CatalogsError("FORMAT_UNSUPPORTED", "le tabelle da URL passano dal modulo 14 (P6)")
+        raise CatalogsError("FORMAT_UNSUPPORTED", "le tabelle da URL passano dal modulo 14 (P6)",
+                            params={"reason": "url_via_vo"})
     path = str(Path(text).expanduser().resolve())
     retrieved_at = datetime.now(UTC)
     if format is not None:
         if format not in _TEXT_FORMATS:
-            raise CatalogsError("FORMAT_UNSUPPORTED", f"format {format!r}: ammessi {', '.join(_TEXT_FORMATS)}")
+            raise CatalogsError("FORMAT_UNSUPPORTED", f"format {format!r}: ammessi {', '.join(_TEXT_FORMATS)}",
+                                params={"reason": "format_not_text", "format": str(format),
+                                        "allowed": list(_TEXT_FORMATS)})
         _read_head(path, 1)  # file assente → TABLE_UNREADABLE
         fmt = format
     else:
@@ -718,10 +781,11 @@ def _read_table(source, *, table=None, format=None, limits: TableLimits | None =
         result, info, coosys = _read_text(path, fmt, table, limits)
     # Dopo la lettura: righe e memoria esatte (per l'XML è il primo controllo esatto).
     _check_rows(len(result), limits, path)
-    _check_memory(f"tabella {path}", _table_bytes(result), limits)
-    notes: list[tuple[str, str]] = list(astrores_notes) if fmt == "astrores" else []
+    _check_memory("loaded_table", f"tabella {path}", _table_bytes(result), limits, path=path)
+    notes: list[ModuleWarning] = list(astrores_notes) if fmt == "astrores" else []
     if format is not None:
-        notes.append(("FORMAT_DECLARED", f"formato {format} indicato dall'utente, nessun riconoscimento"))
+        notes.append(ModuleWarning("FORMAT_DECLARED", f"formato {format} indicato dall'utente, nessun riconoscimento",
+                                   {"format": str(format)}))
     notes.extend(_normalize_units(result))
     positions, position_notes = _positions_from_ucd(result, coosys)
     if fmt == "ecsv":
@@ -729,10 +793,12 @@ def _read_table(source, *, table=None, format=None, limits: TableLimits | None =
     notes.extend(position_notes)
     body = _celestial_body(positions, result)
     if positions is None:
-        notes.append(("NO_COORD_COLUMNS", "nessuna colonna di posizione da UCD o metadati: confermare con "
-                      "confirm_position_columns (suggerimenti da suggest_position_columns)"))
+        notes.append(ModuleWarning("NO_COORD_COLUMNS", "nessuna colonna di posizione da UCD o metadati: confermare "
+                                   "con confirm_position_columns (suggerimenti da suggest_position_columns)",
+                                   {"reason": "not_found"}))
     if body is None:
-        notes.append(("BODY_UNKNOWN", "corpo non ricavabile: il dato non si sovrappone né si combina con altri"))
+        notes.append(ModuleWarning("BODY_UNKNOWN", "corpo non ricavabile: il dato non si sovrappone né si "
+                                   "combina con altri", {"reason": "table_body"}))
     return CatalogTable(
         table=result,
         source=text,
@@ -802,12 +868,14 @@ def _parse_astrores(path: str):
         tree = safe_parse_xml(path)
     except DefusedXmlException as exc:
         raise CatalogsError("XML_UNSAFE", f"{path}: costrutto XML pericoloso ({type(exc).__name__}), nulla caricato",
-                            path=path) from exc
+                            path=path, params={"path": path, "construct": type(exc).__name__}) from exc
     except Exception as exc:
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: XML non leggibile ({exc})", path=path) from exc
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: XML non leggibile ({exc})", path=path,
+                            params={"reason": "xml_unreadable", "path": path, "detail": str(exc)}) from exc
     root = tree.getroot()
     if root.tag != "ASTRO":
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: radice {root.tag!r}, attesa ASTRO")
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: radice {root.tag!r}, attesa ASTRO",
+                            params={"reason": "root_unexpected", "path": path, "root": root.tag})
     return root
 
 
@@ -825,16 +893,19 @@ def _astrores_rows(table_el, n_fields: int, path: str) -> list[list[str | None]]
     else:
         tabledata = data.find("TABLEDATA")
         if tabledata is None:
-            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: DATA senza CSV, TABLEDATA o LINK")
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: DATA senza CSV, TABLEDATA o LINK",
+                                params={"reason": "no_data", "path": path})
         headlines = int(tabledata.get("headlines") or 0)
         rows = [[(c.text or "").strip() for c in row.findall("CELL")] for row in tabledata.findall("ROW")][headlines:]
     for k, row in enumerate(rows):
         if len(row) != n_fields:
-            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: riga {k} con {len(row)} valori per {n_fields} campi")
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: riga {k} con {len(row)} valori per {n_fields} campi",
+                                params={"reason": "row_fields", "path": path, "row": k, "values": len(row),
+                                        "fields": n_fields})
     return [[cell if cell != "" else None for cell in row] for row in rows]
 
 
-def _astrores_column(name: str, values: list[str | None], field_el, notes: list[tuple[str, str]], table: Table,
+def _astrores_column(name: str, values: list[str | None], field_el, notes: list[ModuleWarning], table: Table,
                      ucd: str | None):
     datatype = (field_el.get("datatype") or "A").upper()
     unit = field_el.get("unit")
@@ -867,13 +938,17 @@ def _astrores_column(name: str, values: list[str | None], field_el, notes: list[
             if converted is not None:
                 filled = iter(converted)
                 put([next(filled) if not m else 0.0 for m in missing], np.float64)
-                notes.append(("ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato {datatype} ma i dati sono "
-                              f"sessagesimali; convertiti in gradi ({'ore' if hours else 'gradi'}) con il modulo 10, "
-                              f"testo originale in {name + '_text'!r}"))
+                notes.append(ModuleWarning(
+                    "ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato {datatype} ma i dati sono "
+                    f"sessagesimali; convertiti in gradi ({'ore' if hours else 'gradi'}) con il modulo 10, "
+                    f"testo originale in {name + '_text'!r}",
+                    {"reason": "sexagesimal_hours" if hours else "sexagesimal_degrees", "field": name,
+                     "datatype": datatype, "text_column": name + "_text"}))
             else:
                 del table[name + "_text"]
-                notes.append(("ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato {datatype} ma i dati non sono "
-                              "numerici; letto come testo"))
+                notes.append(ModuleWarning(
+                    "ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato {datatype} ma i dati non sono "
+                    "numerici; letto come testo", {"reason": "not_numeric", "field": name, "datatype": datatype}))
     elif datatype == "L":
         mapping = {"t": True, "true": True, "1": True, "f": False, "false": False, "0": False}
         if all(v.lower() in mapping for v in present):
@@ -881,7 +956,9 @@ def _astrores_column(name: str, values: list[str | None], field_el, notes: list[
             put([next(filled) if not m else False for m in missing], bool)
         else:
             put([v if v is not None else "" for v in values], str)
-            notes.append(("ASTRORES_TYPE_MISMATCH", f"campo {name!r}: dichiarato L ma i dati non sono booleani; testo"))
+            notes.append(ModuleWarning("ASTRORES_TYPE_MISMATCH",
+                                       f"campo {name!r}: dichiarato L ma i dati non sono booleani; testo",
+                                       {"reason": "not_boolean", "field": name}))
     else:
         put([v if v is not None else "" for v in values], str)
     column = table[name]
@@ -920,15 +997,19 @@ def _link_format(link, path: str) -> str:
     declared = link.get("content-type")
     if not declared or not declared.strip():
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK senza content-type: il formato dei dati "
-                            "collegati non si indovina (D13-17)")
+                            "collegati non si indovina (D13-17)",
+                            params={"reason": "link_no_content_type", "path": path})
     media, *params = [part.strip().lower() for part in declared.split(";")]
     fmt = ASTRORES_LINK_TYPES.get(media)
     if fmt is None:
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK con content-type {declared!r} non letto; "
-                            f"ammessi: {', '.join(ASTRORES_LINK_TYPES)} (D13-17)")
+                            f"ammessi: {', '.join(ASTRORES_LINK_TYPES)} (D13-17)",
+                            params={"reason": "link_type_not_read", "path": path, "content_type": declared,
+                                    "allowed": list(ASTRORES_LINK_TYPES)})
     if fmt == "csv" and "header=absent" in [p.replace(" ", "") for p in params]:
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK {declared!r}: il lettore CSV del modulo vuole "
-                            "la riga dei nomi delle colonne (header=absent, RFC 4180)")
+                            "la riga dei nomi delle colonne (header=absent, RFC 4180)",
+                            params={"reason": "link_header_absent", "path": path, "content_type": declared})
     return fmt
 
 
@@ -939,19 +1020,28 @@ def _link_url(link, path: str, base: str | None) -> str:
         kind = "gref (sistema GLU)" if link.get("gref") is not None else (
             "action" if link.get("action") is not None else "nessun indirizzo")
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK con {kind}: si leggono solo i LINK con href "
-                            "(D13-17)")
+                            "(D13-17)", params={"reason": "link_gref" if link.get("gref") is not None else (
+                                "link_action" if link.get("action") is not None else "link_no_address"),
+                                                "path": path})
     href = link.get("href").strip()
     url = urljoin(base, href) if base and base.startswith(("http://", "https://")) else href
     if not url.startswith(("http://", "https://")):
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: LINK href {href!r}: serve un URL http(s) "
-                            "(relativo solo in un documento scaricato da URL)")
+                            "(relativo solo in un documento scaricato da URL)",
+                            params={"reason": "link_href_invalid", "path": path, "href": href})
     return url
 
 
-def _link_conflicts(fields, names: list[str], linked: Table, ucds: list[str | None]) -> list[str]:
+def _problem(reason: str, text: str, **params) -> dict:
+    """Differenza tra FIELD e dati collegati: messaggio annidato ``ASTRORES_LINK_PROBLEM`` (D40-7)."""
+    return {"code": "ASTRORES_LINK_PROBLEM", "params": {"reason": reason, **params}, "text": text}
+
+
+def _link_conflicts(fields, names: list[str], linked: Table, ucds: list[str | None]) -> list[dict]:
     """Differenze tra le definizioni FIELD dell'ASTRORES e la tabella collegata (nessuna scelta tra le due)."""
     if linked.colnames != names:
-        return [f"colonne {linked.colnames} invece dei FIELD {names}"]
+        return [_problem("columns", f"colonne {linked.colnames} invece dei FIELD {names}",
+                         linked=str(linked.colnames), fields=str(names))]
     problems = []
     for field_el, name, ucd in zip(fields, names, ucds):
         col = linked[name]
@@ -961,14 +1051,18 @@ def _link_conflicts(fields, names: list[str], linked: Table, ucds: list[str | No
         if text and theirs:
             other = _standard_unit(theirs)
             if mine is None or other is None or mine != other:
-                problems.append(f"{name}: unità {text!r} nel FIELD e {theirs!r} nei dati collegati")
+                problems.append(_problem("unit", f"{name}: unità {text!r} nel FIELD e {theirs!r} nei dati collegati",
+                                         name=name, field_unit=text, linked_unit=theirs))
         if ucd and col.meta.get("ucd") and col.meta["ucd"].strip().lower() != ucd.strip().lower():
-            problems.append(f"{name}: UCD {ucd!r} nel FIELD e {col.meta['ucd']!r} nei dati collegati")
+            problems.append(_problem("ucd", f"{name}: UCD {ucd!r} nel FIELD e {col.meta['ucd']!r} nei dati collegati",
+                                     name=name, field_ucd=ucd, linked_ucd=str(col.meta["ucd"])))
         datatype = (field_el.get("datatype") or "A").upper()
         if datatype in _ASTRORES_FLOAT + ("I",) and col.dtype.kind not in "iuf":
-            problems.append(f"{name}: FIELD numerico ({datatype}) ma dati collegati di tipo {col.dtype}")
+            problems.append(_problem("numeric", f"{name}: FIELD numerico ({datatype}) ma dati collegati di tipo "
+                                     f"{col.dtype}", name=name, datatype=datatype, dtype=str(col.dtype)))
         if datatype == "L" and col.dtype.kind != "b":
-            problems.append(f"{name}: FIELD booleano ma dati collegati di tipo {col.dtype}")
+            problems.append(_problem("boolean", f"{name}: FIELD booleano ma dati collegati di tipo {col.dtype}",
+                                     name=name, dtype=str(col.dtype)))
     return problems
 
 
@@ -980,9 +1074,10 @@ def _read_link(table_el, fields, names: list[str], ucds: list[str | None], path:
     url = _link_url(link, path, base)
     if fetch_link is None:
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati in un LINK esterno ({url}): servono la rete e "
-                            "la cache del modulo 14, usare load_table (D13-17)")
+                            "la cache del modulo 14, usare load_table (D13-17)",
+                            params={"reason": "link_needs_network", "path": path, "url": url})
     payload, note = fetch_link(url)
-    _check_memory(f"dati collegati {url}", len(payload), limits)
+    _check_memory("linked_data", f"dati collegati {url}", len(payload), limits, url=url)
     fd, tmp = tempfile.mkstemp(prefix="astrotwo-link-")
     try:
         with os.fdopen(fd, "wb") as handle:
@@ -997,40 +1092,49 @@ def _read_link(table_el, fields, names: list[str], ucds: list[str | None], path:
             if exc.code in ("TABLE_TOO_LARGE", "MEMORY_LIMIT_EXCEEDED"):
                 raise
             raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati collegati {url} non leggibili come {fmt} "
-                                f"(content-type dichiarato): {exc.message}") from exc
+                                f"(content-type dichiarato): {exc.message}",
+                                params={"reason": "link_unreadable", "path": path, "url": url, "format": fmt,
+                                        "cause": _message_of(exc)}) from exc
         except (OSError, ValueError) as exc:  # es. dati che non sono del formato dichiarato
             raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: dati collegati {url} non leggibili come {fmt} "
-                                f"(content-type dichiarato): {exc}") from exc
+                                f"(content-type dichiarato): {exc}",
+                                params={"reason": "link_data_error", "path": path, "url": url, "format": fmt,
+                                        "detail": str(exc)}) from exc
     finally:
         os.unlink(tmp)
     problems = _link_conflicts(fields, names, linked, ucds)
     if problems:
         raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: FIELD e dati collegati {url} non coincidono: "
-                            + "; ".join(problems), conflicts=tuple(problems))
-    return linked, linked_coosys, [note, ("ASTRORES_LINK", f"dati letti dal LINK {url} come {fmt} "
-                                          f"(content-type dichiarato {link.get('content-type')!r})")]
+                            + "; ".join(p["text"] for p in problems), conflicts=tuple(p["text"] for p in problems),
+                            params={"reason": "link_conflict", "path": path, "url": url, "problems": problems})
+    return linked, linked_coosys, [note, ModuleWarning(
+        "ASTRORES_LINK", f"dati letti dal LINK {url} come {fmt} (content-type dichiarato "
+        f"{link.get('content-type')!r})", {"url": url, "format": fmt, "content_type": link.get("content-type")})]
 
 
 def _read_astrores(path: str, table, limits: TableLimits, fetch_link=None, base: str | None = None):
-    _check_memory(f"lettura di {path}", os.path.getsize(path), limits)  # stima prima della lettura (XML)
+    _check_memory("read_file", f"lettura di {path}", os.path.getsize(path), limits, path=path)  # stima (XML)
     root = _parse_astrores(path)
     info = _choose(_astrores_infos(root), table, path)
     _check_rows(info.rows, limits, path)
     table_el = list(root.iter("TABLE"))[info.index]
     fields = table_el.findall("FIELD")
     if not fields:
-        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: tabella {info.index} senza FIELD")
-    notes: list[tuple[str, str]] = []
+        raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: tabella {info.index} senza FIELD",
+                            params={"reason": "no_fields", "path": path, "index": info.index})
+    notes: list[ModuleWarning] = []
     names, ucds = [], []
     for k, field_el in enumerate(fields):
         name = _astrores_text(field_el, "NAME") or field_el.get("name") or field_el.get("ID") or f"col{k}"
         if name in names:
-            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: due campi con lo stesso nome {name!r}")
+            raise CatalogsError("ASTRORES_UNREADABLE", f"{path}: due campi con lo stesso nome {name!r}",
+                                params={"reason": "duplicate_field", "path": path, "name": name})
         original_ucd = field_el.get("ucd")
         ucd = UCD1_TRANSLATIONS.get((original_ucd or "").strip().upper(), original_ucd)
         if ucd != original_ucd:
-            notes.append(("UCD1_TRANSLATED", f"campo {name!r}: UCD1 {original_ucd!r} tradotto in {ucd!r} "
-                          "(raccomandazione IVOA sugli UCD, §3.1 e appendice A)"))
+            notes.append(ModuleWarning("UCD1_TRANSLATED", f"campo {name!r}: UCD1 {original_ucd!r} tradotto in {ucd!r} "
+                                       "(raccomandazione IVOA sugli UCD, §3.1 e appendice A)",
+                                       {"field": name, "original": original_ucd, "translated": ucd}))
         names.append(name)
         ucds.append(ucd)
     data_el = table_el.find("DATA")
@@ -1060,8 +1164,9 @@ def _read_astrores(path: str, table, limits: TableLimits, fetch_link=None, base:
         if ref:
             match = _REF_FORM.match(ref)
             if match:
-                notes.append(("ASTRORES_NONCONFORMING_REF", f"campo {name!r}: ref {ref!r} non è un IDREF (DTD): "
-                              f"accettato come {match.group(1)!r}"))
+                notes.append(ModuleWarning("ASTRORES_NONCONFORMING_REF", f"campo {name!r}: ref {ref!r} non è un IDREF "
+                                           f"(DTD): accettato come {match.group(1)!r}",
+                                           {"field": name, "ref": ref, "accepted": match.group(1)}))
                 ref = match.group(1)
             result[name].meta["ref"] = ref
     coosys = dict(linked_coosys)
@@ -1072,8 +1177,9 @@ def _read_astrores(path: str, table, limits: TableLimits, fetch_link=None, base:
                                            _astrores_year(el.get("epoch"), system))
     untranslated = [n for n in result.colnames if (result[n].meta.get("ucd") or "") and "." not in result[n].meta["ucd"]]
     if untranslated:
-        notes.append(("UCD1_NOT_TRANSLATED", f"UCD1 fuori dalla raccomandazione IVOA, non tradotti (D13-14b) nei "
-                      f"campi {untranslated}: colonne di posizione da confermare con confirm_position_columns"))
+        notes.append(ModuleWarning("UCD1_NOT_TRANSLATED", f"UCD1 fuori dalla raccomandazione IVOA, non tradotti "
+                                   f"(D13-14b) nei campi {untranslated}: colonne di posizione da confermare con "
+                                   "confirm_position_columns", {"fields": list(untranslated)}))
     return result, info, coosys, notes
 
 
@@ -1095,8 +1201,10 @@ class _Token:
     pos: int
 
 
-def _invalid(message: str, pos: int, expression: str) -> CatalogsError:
-    return CatalogsError("EXPRESSION_INVALID", f"{message} (carattere {pos}): {expression!r}", position=pos)
+def _invalid(reason: str, message: str, pos: int, expression: str, **params: object) -> CatalogsError:
+    """``EXPRESSION_INVALID`` di ``search``: ``reason`` sceglie la sotto-voce del catalogo (D40-6), ``params`` i valori."""
+    return CatalogsError("EXPRESSION_INVALID", f"{message} (carattere {pos}): {expression!r}", position=pos,
+                         params={"reason": reason, "position": pos, "expression": expression, **params})
 
 
 def _tokenize(text: str, offset: int, expression: str) -> list[_Token]:
@@ -1110,7 +1218,7 @@ def _tokenize(text: str, offset: int, expression: str) -> list[_Token]:
         elif text.startswith("${", i):
             end = text.find("}", i + 2)
             if end < 0:
-                raise _invalid("nome di colonna ${...} senza '}'", pos, expression)
+                raise _invalid("unclosed_name", "nome di colonna ${...} senza '}'", pos, expression)
             tokens.append(_Token("COL", text[i + 2:end], pos))
             i = end + 1
         elif text.startswith("&&", i):
@@ -1139,11 +1247,11 @@ def _tokenize(text: str, offset: int, expression: str) -> list[_Token]:
                     chars.append(text[j])
                     j += 1
             if j >= n:
-                raise _invalid("stringa senza virgolette di chiusura", pos, expression)
+                raise _invalid("unclosed_string", "stringa senza virgolette di chiusura", pos, expression)
             tokens.append(_Token("STRING", "".join(chars), pos))
             i = j + 1
         elif c in "&!":
-            raise _invalid(f"simbolo {c!r} non previsto", pos, expression)
+            raise _invalid("unexpected_symbol", f"simbolo {c!r} non previsto", pos, expression, symbol=c)
         else:
             j = i
             while j < n and text[j] not in _WORD_STOP:
@@ -1208,14 +1316,19 @@ class _Parser:
     def take(self, kind: str) -> _Token:
         tok = self.peek()
         if tok.kind != kind:
-            raise _invalid(f"atteso {kind}, trovato {tok.text or 'fine'!r}", tok.pos, self.expression)
+            if tok.text:
+                raise _invalid("expected_token", f"atteso {kind}, trovato {tok.text!r}", tok.pos, self.expression,
+                               expected=kind, found=tok.text)
+            raise _invalid("expected_token_end", f"atteso {kind}, trovato 'fine'", tok.pos, self.expression,
+                           expected=kind)
         self.i += 1
         return tok
 
     def parse(self):
         node = self.disjunction()
         if self.peek().kind != "END":
-            raise _invalid(f"simbolo inatteso {self.peek().text!r}", self.peek().pos, self.expression)
+            raise _invalid("unexpected_token", f"simbolo inatteso {self.peek().text!r}", self.peek().pos,
+                           self.expression, found=self.peek().text)
         return node
 
     def disjunction(self):
@@ -1234,7 +1347,8 @@ class _Parser:
 
     def column(self, tok: _Token) -> str:
         if tok.text not in self.table.colnames:
-            raise _invalid(f"colonna {tok.text!r} inesistente", tok.pos, self.expression)
+            raise _invalid("column_missing", f"colonna {tok.text!r} inesistente", tok.pos, self.expression,
+                           column=tok.text)
         return tok.text
 
     def term(self):
@@ -1248,7 +1362,7 @@ class _Parser:
             self.i += 1
             name_tok = self.peek()
             if name_tok.kind not in ("COL", "WORD"):
-                raise _invalid("dopo '|' serve una colonna", name_tok.pos, self.expression)
+                raise _invalid("abs_needs_column", "dopo '|' serve una colonna", name_tok.pos, self.expression)
             self.i += 1
             self.take("ABS")
             return self.comparison(self.column(name_tok), name_tok, absolute=True)
@@ -1258,29 +1372,36 @@ class _Parser:
         if tok.kind in ("WORD", "STRING"):
             self.i += 1
             if not any(_text_kind(self.table[c]) for c in self.table.colnames):
-                raise _invalid("testo da cercare, ma la tabella non ha colonne di testo", tok.pos, self.expression)
+                raise _invalid("no_text_columns", "testo da cercare, ma la tabella non ha colonne di testo", tok.pos,
+                               self.expression)
             return ("text", _pattern(tok.text, self.case_sensitive))
-        raise _invalid(f"atteso un termine, trovato {tok.text or 'fine'!r}", tok.pos, self.expression)
+        if tok.text:
+            raise _invalid("term_expected", f"atteso un termine, trovato {tok.text!r}", tok.pos, self.expression,
+                           found=tok.text)
+        raise _invalid("term_expected_end", "atteso un termine, trovato 'fine'", tok.pos, self.expression)
 
     def comparison(self, name: str, tok: _Token, absolute: bool):
         op = self.take("OP")
         value = self.peek()
         if value.kind not in ("WORD", "STRING"):
-            raise _invalid("dopo l'operatore serve un valore", value.pos, self.expression)
+            raise _invalid("value_needed", "dopo l'operatore serve un valore", value.pos, self.expression)
         self.i += 1
         column = self.table[name]
         if _numeric_kind(column):
             if value.kind != "WORD" or not _NUMBER.match(value.text):
-                raise _invalid(f"colonna numerica {name!r}: serve un numero", value.pos, self.expression)
+                raise _invalid("number_needed", f"colonna numerica {name!r}: serve un numero", value.pos,
+                               self.expression, column=name)
             return ("num", name, op.text, float(value.text), absolute)
         if _text_kind(column):
             if absolute:
-                raise _invalid(f"|{name}|: il valore assoluto vale solo per le colonne numeriche", tok.pos,
-                               self.expression)
+                raise _invalid("abs_text", f"|{name}|: il valore assoluto vale solo per le colonne numeriche",
+                               tok.pos, self.expression, column=name)
             if op.text not in ("=", "!="):
-                raise _invalid(f"colonna di testo {name!r}: ammessi solo = e !=", op.pos, self.expression)
+                raise _invalid("text_operators", f"colonna di testo {name!r}: ammessi solo = e !=", op.pos,
+                               self.expression, column=name)
             return ("str", name, op.text, _pattern(value.text, self.case_sensitive))
-        raise _invalid(f"colonna {name!r} di tipo {column.dtype} non confrontabile", tok.pos, self.expression)
+        raise _invalid("not_comparable", f"colonna {name!r} di tipo {column.dtype} non confrontabile", tok.pos,
+                       self.expression, column=name, dtype=str(column.dtype))
 
 
 def _evaluate(node, table: Table) -> np.ndarray:
@@ -1314,7 +1435,8 @@ def _evaluate(node, table: Table) -> np.ndarray:
 
 def _parse_expression(table: Table, expression: str, case_sensitive: bool):
     if not isinstance(expression, str):
-        raise CatalogsError("EXPRESSION_INVALID", "l'espressione deve essere una stringa", position=0)
+        raise CatalogsError("EXPRESSION_INVALID", "l'espressione deve essere una stringa", position=0,
+                            params={"reason": "not_string", "position": 0})
     stripped = expression.lstrip()
     offset = len(expression) - len(stripped)
     prefix = None
@@ -1322,7 +1444,7 @@ def _parse_expression(table: Table, expression: str, case_sensitive: bool):
         prefix, stripped, offset = stripped[0], stripped[1:], offset + 1
     tokens = _tokenize(stripped, offset, expression)
     if tokens[0].kind == "END":
-        raise _invalid("espressione vuota", offset, expression)
+        raise _invalid("empty", "espressione vuota", offset, expression)
     return prefix, _Parser(tokens, table, expression, case_sensitive).parse()
 
 
@@ -1332,11 +1454,13 @@ def search(table: CatalogTable, expression: str, selection=None, case_sensitive:
     if prefix is not None:
         if selection is None:
             raise CatalogsError("EXPRESSION_INVALID", f"prefisso {prefix!r}: serve la selezione corrente (selection)",
-                                position=0)
+                                position=0, params={"reason": "prefix_needs_selection", "position": 0,
+                                                    "prefix": prefix})
         selection = np.asarray(selection, dtype=bool)
         if selection.shape != (len(table.table),):
             raise CatalogsError("EXPRESSION_INVALID", f"selection: serve una maschera di {len(table.table)} valori",
-                                position=0)
+                                position=0, params={"reason": "selection_shape", "position": 0,
+                                                    "rows": len(table.table)})
     found = _evaluate(node, table.table)
     if prefix == "+":
         return selection | found
@@ -1385,8 +1509,10 @@ class PlotStyle:
     not_selected: int
 
 
-def _rule_invalid(k: int, message: str) -> CatalogsError:
-    return CatalogsError("PLOT_RULE_INVALID", f"regola {k}: {message}", rule=k)
+def _rule_invalid(reason: str, k: int, message: str, **params: object) -> CatalogsError:
+    """``PLOT_RULE_INVALID`` della regola ``k``: ``reason`` sceglie la sotto-voce del catalogo (D40-6)."""
+    return CatalogsError("PLOT_RULE_INVALID", f"regola {k}: {message}", rule=k,
+                         params={"reason": reason, "rule": k, **params})
 
 
 def _positive(value) -> bool:
@@ -1401,27 +1527,30 @@ def set_plot_rules(table: CatalogTable, rules) -> PlotStyle:
     masks = []
     for k, rule in enumerate(rules):
         if not isinstance(rule, PlotRule):
-            raise _rule_invalid(k, "serve un PlotRule")
+            raise _rule_invalid("not_plotrule", k, "serve un PlotRule")
         if rule.shape not in PLOT_SHAPES:
-            raise _rule_invalid(k, f"forma {rule.shape!r} fuori elenco ({', '.join(PLOT_SHAPES)})")
+            raise _rule_invalid("shape_unknown", k, f"forma {rule.shape!r} fuori elenco ({', '.join(PLOT_SHAPES)})",
+                                shape=str(rule.shape), allowed=list(PLOT_SHAPES))
         if not isinstance(rule.color, str) or not _COLOR.match(rule.color):
-            raise _rule_invalid(k, f"colore {rule.color!r}: serve #RRGGBB")
+            raise _rule_invalid("color_invalid", k, f"colore {rule.color!r}: serve #RRGGBB", color=str(rule.color))
         if isinstance(rule.size, SizeScale):
             scale = rule.size
             if scale.column not in table.table.colnames or not _numeric_kind(table.table[scale.column]):
-                raise _rule_invalid(k, f"dimensione: colonna numerica {scale.column!r} inesistente")
+                raise _rule_invalid("size_column", k, f"dimensione: colonna numerica {scale.column!r} inesistente",
+                                    column=str(scale.column))
             if not (np.isfinite(scale.vmin) and np.isfinite(scale.vmax) and scale.vmin < scale.vmax):
-                raise _rule_invalid(k, "dimensione: serve vmin < vmax, entrambi finiti")
+                raise _rule_invalid("size_range", k, "dimensione: serve vmin < vmax, entrambi finiti")
             if not (_positive(scale.size_min) and _positive(scale.size_max)):
-                raise _rule_invalid(k, "dimensione: size_min e size_max devono essere positivi")
+                raise _rule_invalid("size_positive", k, "dimensione: size_min e size_max devono essere positivi")
         elif not _positive(rule.size):
-            raise _rule_invalid(k, f"dimensione {rule.size!r}: serve un numero positivo o una SizeScale")
+            raise _rule_invalid("size_invalid", k, f"dimensione {rule.size!r}: serve un numero positivo o una SizeScale",
+                            size=repr(rule.size))
         if rule.selection is None:
             masks.append(np.ones(n, dtype=bool))
         else:
             prefix, node = _parse_expression(table.table, rule.selection, False)
             if prefix is not None:
-                raise _rule_invalid(k, "la selezione di una regola non ammette i prefissi + e -")
+                raise _rule_invalid("selection_prefix", k, "la selezione di una regola non ammette i prefissi + e -")
             masks.append(_evaluate(node, table.table))
     applied = np.full(n, -1, dtype=int)
     for k in range(len(rules) - 1, -1, -1):  # la prima regola che seleziona vince
@@ -1516,7 +1645,8 @@ CONSTANTS: dict[str, float] = {"pi": math.pi, "e": math.e}
 def _selection_mask(table: CatalogTable, selection) -> np.ndarray:
     mask = np.asarray(selection)
     if mask.dtype != bool or mask.shape != (len(table.table),):
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"selezione: serve una maschera booleana di {len(table.table)} valori")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"selezione: serve una maschera booleana di {len(table.table)} valori",
+                            params={"reason": "selection_mask", "rows": len(table.table)})
     return mask
 
 
@@ -1524,11 +1654,13 @@ def subset(table: CatalogTable, selection, inplace: bool = False) -> CatalogTabl
     """Sottoinsieme dei record selezionati: nuova tabella; con ``inplace=True`` modifica quella data (citato)."""
     mask = _selection_mask(table, selection)
     kept = int(np.count_nonzero(mask))
-    _check_memory("sottoinsieme", int(_table_bytes(table.table) * kept / max(len(table.table), 1)), table.limits)
+    _check_memory("subset", "sottoinsieme", int(_table_bytes(table.table) * kept / max(len(table.table), 1)),
+                  table.limits)
     step = f"sottoinsieme: {kept} record su {len(table.table)}"
     if inplace:
         table.table.remove_rows(np.flatnonzero(~mask))
-        note = ("INPLACE", f"{step}: tabella data modificata in posto (inplace=True)")
+        note = ModuleWarning("INPLACE", f"{step}: tabella data modificata in posto (inplace=True)",
+                             {"reason": "subset", "kept": kept, "total": len(table.table)})
         object.__setattr__(table, "history", table.history + (f"{step} (in posto, inplace=True)",))
         object.__setattr__(table, "warnings", table.warnings + (note,))
         return table
@@ -1571,7 +1703,7 @@ def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -
     """Salva il sottoinsieme in un VOTable scelto dall'utente, con provenienza (D13-13); mai nella cache."""
     target = Path(os.fspath(path)).expanduser()
     if target.exists() and not overwrite:
-        raise CatalogsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True")
+        raise CatalogsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True", params={"path": str(target)})
     mask = _selection_mask(table, selection)
     vot, notes = _catalog_votable(table, table.table[mask])
     resource = vot.resources[0]
@@ -1611,10 +1743,12 @@ class ColumnStatistics:
 
 def _numeric_values(table: CatalogTable, name: str) -> tuple[np.ndarray, np.ndarray]:
     if name not in table.table.colnames:
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} inesistente")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} inesistente",
+                            params={"reason": "column_missing", "column": name})
     column = table.table[name]
     if not _numeric_kind(column):
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {column.dtype}: serve una colonna numerica")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {column.dtype}: serve una colonna numerica",
+                            params={"reason": "not_numeric", "column": name, "dtype": str(column.dtype)})
     values = np.asarray(getattr(column, "data", column), dtype=np.float64)
     return values, _valid_mask(column) & np.isfinite(values)
 
@@ -1639,15 +1773,18 @@ class Histogram:
 def histogram(table: CatalogTable, column: str, bins) -> Histogram:
     """Istogramma dei valori validi con ``numpy.histogram``; ``bins`` obbligatorio (numero o bordi)."""
     if bins is None:
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", "istogramma: bins obbligatorio (numero o bordi)")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", "istogramma: bins obbligatorio (numero o bordi)",
+                            params={"reason": "bins_required"})
     values, valid = _numeric_values(table, column)
     if np.ndim(bins) == 0:
         if isinstance(bins, bool) or not isinstance(bins, (int, np.integer)) or bins <= 0:
-            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"bins {bins!r}: serve un intero positivo o bordi crescenti")
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"bins {bins!r}: serve un intero positivo o bordi crescenti",
+                                params={"reason": "bins_invalid", "bins": repr(bins)})
     else:
         edges = np.asarray(bins, dtype=np.float64)
         if edges.size < 2 or not np.all(np.diff(edges) > 0):
-            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", "bins: bordi strettamente crescenti, almeno due")
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", "bins: bordi strettamente crescenti, almeno due",
+                                params={"reason": "bins_edges"})
     counts, edges = np.histogram(values[valid], bins=bins)
     return Histogram(counts=counts, edges=edges, unit=table.table[column].unit,
                      excluded=int(values.size - np.count_nonzero(valid)))
@@ -1672,7 +1809,9 @@ def xy_plot(table: CatalogTable, x: str, y: str) -> XYData:
 def record_view(table: CatalogTable, index: int) -> list[dict[str, object]]:
     """Tutti i valori di un record con unità, UCD e stato di mancante."""
     if isinstance(index, bool) or not isinstance(index, (int, np.integer)) or not 0 <= index < len(table.table):
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"record {index!r} fuori da 0…{len(table.table) - 1}")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"record {index!r} fuori da 0…{len(table.table) - 1}",
+                            params={"reason": "record_out_of_range", "index": repr(index),
+                                    "last": len(table.table) - 1})
     out = []
     for name in table.table.colnames:
         column = table.table[name]
@@ -1718,15 +1857,27 @@ class ProperMotionArrows:
     notes: tuple[str, ...]
 
 
-def _quantity_column(table: Table, name: str, unit, what: str):
+#: Parametri delle colonne con unità (``argument`` nei ``params``) e il nome italiano nel testo originale.
+_QUANTITY_LABELS = {"position": "posizione", "pm_ra": "moto proprio", "pm_dec": "moto proprio",
+                    "parallax": "parallasse", "radial_velocity": "velocità radiale"}
+
+
+def _quantity_column(table: Table, name: str, unit, argument: str):
+    what = _QUANTITY_LABELS[argument]
     if name not in table.colnames:
-        raise CatalogsError("PROPER_MOTION_MISSING" if what.startswith("moto") else "COLUMN_TYPE_UNSUPPORTED",
-                            f"{what}: colonna {name!r} inesistente")
+        params = {"reason": "column_missing", "argument": argument, "column": name}
+        if argument in ("pm_ra", "pm_dec"):
+            raise CatalogsError("PROPER_MOTION_MISSING", f"{what}: colonna {name!r} inesistente", params=params)
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"{what}: colonna {name!r} inesistente",
+                            params=params | {"reason": "argument_column_missing"})
     column = table[name]
     if not _numeric_kind(column):
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"{what}: colonna {name!r} non numerica")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"{what}: colonna {name!r} non numerica",
+                            params={"reason": "argument_not_numeric", "argument": argument, "column": name})
     if column.unit is None or not column.unit.is_equivalent(unit):
-        raise CatalogsError("UNIT_INCOMPATIBLE", f"{what}: colonna {name!r} in unità {column.unit}, serve {unit}")
+        raise CatalogsError("UNIT_INCOMPATIBLE", f"{what}: colonna {name!r} in unità {column.unit}, serve {unit}",
+                            params={"reason": "argument_unit", "argument": argument, "column": name,
+                                    "unit": str(column.unit), "required": str(unit)})
     values = np.asarray(getattr(column, "data", column), dtype=np.float64)
     valid = _valid_mask(column) & np.isfinite(values)
     return (values * column.unit).to(unit), valid
@@ -1739,15 +1890,18 @@ def _source_epochs(table: CatalogTable, source_epoch) -> tuple[np.ndarray, str]:
     coosys_epoch = table.positions.epoch if table.positions is not None else None
     from_metadata = bool(columns) or coosys_epoch is not None
     if from_metadata and source_epoch is not None:
-        raise CatalogsError("EPOCH_INVALID", "l'epoca di origine è già nei metadati: source_epoch non si usa")
+        raise CatalogsError("EPOCH_INVALID", "l'epoca di origine è già nei metadati: source_epoch non si usa",
+                            params={"reason": "source_in_metadata"})
     if len(columns) > 1:
-        raise CatalogsError("EPOCH_INVALID", f"più colonne con UCD time.epoch {columns}: nessuna scelta")
+        raise CatalogsError("EPOCH_INVALID", f"più colonne con UCD time.epoch {columns}: nessuna scelta",
+                            params={"reason": "several_epoch_columns", "columns": list(columns)})
     if columns:
         name = columns[0]
         column = t[name]
         if column.unit is None or not column.unit.is_equivalent(u.yr):
             raise CatalogsError("EPOCH_INVALID", f"colonna d'epoca {name!r} in unità {column.unit}: servono anni "
-                                "giuliani; altrimenti source_epoch")
+                                "giuliani; altrimenti source_epoch",
+                                params={"reason": "epoch_column_unit", "column": name, "unit": str(column.unit)})
         values = np.asarray(getattr(column, "data", column), dtype=np.float64) * column.unit
         out = np.array([None if not ok else float(v) for v, ok in
                         zip(values.to_value(u.yr), _valid_mask(column) & np.isfinite(values.value), strict=True)],
@@ -1756,7 +1910,8 @@ def _source_epochs(table: CatalogTable, source_epoch) -> tuple[np.ndarray, str]:
     if coosys_epoch is not None:
         return np.full(len(t), coosys_epoch, dtype=object), f"COOSYS (epoca {coosys_epoch})"
     if source_epoch is None:
-        raise CatalogsError("EPOCH_INVALID", "epoca di origine non nei metadati: indicare source_epoch (mai assunta)")
+        raise CatalogsError("EPOCH_INVALID", "epoca di origine non nei metadati: indicare source_epoch (mai assunta)",
+                            params={"reason": "source_missing"})
     return np.full(len(t), source_epoch, dtype=object), f"parametro source_epoch ({source_epoch})"
 
 
@@ -1764,24 +1919,27 @@ def _move(table: CatalogTable, target, *, pm_ra, pm_dec, pm_ra_includes_cosdec, 
           source_epoch, years=None):
     """Calcolo comune di propagate e delle frecce: gruppi di righe con la stessa epoca e lo stesso modo."""
     if not isinstance(pm_ra_includes_cosdec, bool):
-        raise CatalogsError("PROPER_MOTION_MISSING", "pm_ra_includes_cosdec obbligatorio (True o False): mai assunto")
+        raise CatalogsError("PROPER_MOTION_MISSING", "pm_ra_includes_cosdec obbligatorio (True o False): mai assunto",
+                            params={"reason": "cosdec_required"})
     pos = table.positions
     if pos is None:
-        raise CatalogsError("NO_COORD_COLUMNS", "nessuna colonna di posizione: confermarle prima")
+        raise CatalogsError("NO_COORD_COLUMNS", "nessuna colonna di posizione: confermarle prima",
+                            params={"reason": "required"})
     if pos.frame is None:
-        raise CatalogsError("FRAME_UNKNOWN", "sistema delle colonne di posizione non dichiarato")
+        raise CatalogsError("FRAME_UNKNOWN", "sistema delle colonne di posizione non dichiarato",
+                            params={"reason": "positions_undeclared"})
     t = table.table
-    lon, lon_ok = _quantity_column(t, pos.lon, u.deg, "posizione")
-    lat, lat_ok = _quantity_column(t, pos.lat, u.deg, "posizione")
-    pmra, pmra_ok = _quantity_column(t, pm_ra, _PM_UNIT, "moto proprio")
-    pmde, pmde_ok = _quantity_column(t, pm_dec, _PM_UNIT, "moto proprio")
+    lon, lon_ok = _quantity_column(t, pos.lon, u.deg, "position")
+    lat, lat_ok = _quantity_column(t, pos.lat, u.deg, "position")
+    pmra, pmra_ok = _quantity_column(t, pm_ra, _PM_UNIT, "pm_ra")
+    pmde, pmde_ok = _quantity_column(t, pm_dec, _PM_UNIT, "pm_dec")
     plx_ok = np.zeros(len(t), dtype=bool)
     if parallax is not None:
-        plx, plx_ok = _quantity_column(t, parallax, u.mas, "parallasse")
+        plx, plx_ok = _quantity_column(t, parallax, u.mas, "parallax")
         plx_ok &= plx.value > 0
     rv_ok = np.zeros(len(t), dtype=bool)
     if radial_velocity is not None:
-        rv, rv_ok = _quantity_column(t, radial_velocity, u.km / u.s, "velocità radiale")
+        rv, rv_ok = _quantity_column(t, radial_velocity, u.km / u.s, "radial_velocity")
     epochs, epoch_source = _source_epochs(table, source_epoch)
     if not pm_ra_includes_cosdec:
         pmra = pmra * np.cos(lat)  # moto proprio in RA portato a pm_ra·cos δ, dichiarato
@@ -1808,7 +1966,7 @@ def _move(table: CatalogTable, target, *, pm_ra, pm_dec, pm_ra_includes_cosdec, 
                 kwargs.update(parallax=None, proper_motion_only=True)
             moved = propagate_position(start, **kwargs)
         except CoordinatesWcsError as exc:
-            raise CatalogsError(exc.code, f"propagazione: {exc.message}") from exc
+            raise CatalogsError(exc.code, f"propagazione: {exc.message}", params=exc.params, relayed=True) from exc
         end_lon[idx] = moved.position.lon.to_value(u.deg)
         end_lat[idx] = moved.position.lat.to_value(u.deg)
         target_time = moved.target_epoch if years is None else target_time
@@ -1825,13 +1983,15 @@ def propagate(table: CatalogTable, epoch, *, pm_ra: str, pm_dec: str, pm_ra_incl
     """Posizioni all'epoca richiesta (D9, P5) con il modulo 10; nuove colonne, originali intatte."""
     pos = table.positions
     if pos is None:
-        raise CatalogsError("NO_COORD_COLUMNS", "nessuna colonna di posizione: confermarle prima")
+        raise CatalogsError("NO_COORD_COLUMNS", "nessuna colonna di posizione: confermarle prima",
+                            params={"reason": "required"})
     names = (f"{pos.lon}_prop", f"{pos.lat}_prop", f"{pos.lon}_prop_mode")
     existing = [n for n in names if n in table.table.colnames]
     if existing:
-        raise CatalogsError("COLUMN_NAME_EXISTS", f"colonne già presenti: {existing}")
+        raise CatalogsError("COLUMN_NAME_EXISTS", f"colonne già presenti: {existing}",
+                            params={"reason": "propagation_columns", "columns": list(existing)})
     if epoch is None:
-        raise CatalogsError("EPOCH_INVALID", "epoca di arrivo obbligatoria")
+        raise CatalogsError("EPOCH_INVALID", "epoca di arrivo obbligatoria", params={"reason": "target_required"})
     lon, lat, end_lon, end_lat, mode, counts, source, target, notes = _move(
         table, epoch, pm_ra=pm_ra, pm_dec=pm_dec, pm_ra_includes_cosdec=pm_ra_includes_cosdec, parallax=parallax,
         radial_velocity=radial_velocity, source_epoch=source_epoch)
@@ -1847,8 +2007,9 @@ def propagate(table: CatalogTable, epoch, *, pm_ra: str, pm_dec: str, pm_ra_incl
     new[names[2]] = mode.astype(str)
     warnings_ = list(table.warnings)
     if counts["missing"]:
-        warnings_.append(("PROPER_MOTION_ROW_MISSING", f"{counts['missing']} righe senza moto proprio (o posizione o "
-                          "epoca): posizione propagata mancante, mai moto proprio nullo assunto"))
+        warnings_.append(ModuleWarning(
+            "PROPER_MOTION_ROW_MISSING", f"{counts['missing']} righe senza moto proprio (o posizione o "
+            "epoca): posizione propagata mancante, mai moto proprio nullo assunto", {"missing": counts["missing"]}))
     step = (f"propagazione a {target.isot} ({target.scale}) da {source}; cos δ "
             f"{'incluso' if pm_ra_includes_cosdec else 'non incluso'}; righe full {counts['full']}, "
             f"pm_only {counts['pm_only']}, missing {counts['missing']}")
@@ -1862,7 +2023,8 @@ def proper_motion_arrows(table: CatalogTable, scale, *, pm_ra: str, pm_dec: str,
     """Dati delle frecce del moto proprio (D10): ``scale`` anni obbligatorio; il disegno è della UI."""
     if not isinstance(scale, u.Quantity) or not scale.unit.is_equivalent(u.yr) or not np.isfinite(scale.value) \
             or scale.value == 0:
-        raise CatalogsError("EPOCH_INVALID", "scale obbligatoria: un intervallo di tempo non nullo (es. 1000 * u.yr)")
+        raise CatalogsError("EPOCH_INVALID", "scale obbligatoria: un intervallo di tempo non nullo (es. 1000 * u.yr)",
+                            params={"reason": "scale_required"})
     lon, lat, end_lon, end_lat, mode, counts, source, _, notes = _move(
         table, None, pm_ra=pm_ra, pm_dec=pm_dec, pm_ra_includes_cosdec=pm_ra_includes_cosdec, parallax=parallax,
         radial_velocity=radial_velocity, source_epoch=source_epoch, years=scale.to(u.yr))
@@ -1912,7 +2074,8 @@ def _display_epoch(image_or_epoch) -> tuple[object, str]:
             return Time(_J2000, scale="tt"), "J2000 (epoca dell'immagine non dichiarata, D10-2)"
         return solution.image_epoch, "epoca dell'immagine (MJD-OBS/DATE-OBS del WCS, D10-2)"
     raise CatalogsError("EPOCH_INVALID", f"display_positions: image_or_epoch di tipo {type(image_or_epoch).__name__} "
-                        "non riconosciuto (immagine con WCS, WCS del 10, epoca o None): nessuna epoca assunta")
+                        "non riconosciuto (immagine con WCS, WCS del 10, epoca o None): nessuna epoca assunta",
+                        params={"reason": "display_type", "type": type(image_or_epoch).__name__})
 
 
 def display_positions(table: CatalogTable, image_or_epoch, *, pm_ra: str, pm_dec: str, pm_ra_includes_cosdec,
@@ -1931,8 +2094,8 @@ def display_positions(table: CatalogTable, image_or_epoch, *, pm_ra: str, pm_dec
                      * t[f"{pos.lon}_prop"].unit).to_value(u.deg)
     lat[drawable] = (np.asarray(t[f"{pos.lat}_prop"].data, dtype=np.float64)[drawable]
                      * t[f"{pos.lat}_prop"].unit).to_value(u.deg)
-    lon0, _ = _quantity_column(t, pos.lon, u.deg, "posizione")
-    lat0, _ = _quantity_column(t, pos.lat, u.deg, "posizione")
+    lon0, _ = _quantity_column(t, pos.lon, u.deg, "position")
+    lat0, _ = _quantity_column(t, pos.lat, u.deg, "position")
     shift = np.full(len(t), np.nan)
     shift[drawable] = angular_separation(lon0[drawable], lat0[drawable], lon[drawable] * u.deg,
                                          lat[drawable] * u.deg).to_value(u.arcsec)
@@ -1971,9 +2134,11 @@ class _Value:
     literal: bool
 
 
-def _column_invalid(message: str, position: int, expression: str) -> CatalogsError:
+def _column_invalid(reason: str, message: str, position: int, expression: str, **params: object) -> CatalogsError:
+    """``COLUMN_EXPRESSION_INVALID``: ``reason`` sceglie la sotto-voce del catalogo (D40-6), ``params`` i valori."""
     return CatalogsError("COLUMN_EXPRESSION_INVALID", f"{message} (carattere {position}): {expression!r}",
-                         position=position)
+                         position=position,
+                         params={"reason": reason, "position": position, "expression": expression, **params})
 
 
 def _translate_expression(expression: str, table: Table) -> tuple[str, list[int], dict[str, str]]:
@@ -1984,14 +2149,14 @@ def _translate_expression(expression: str, table: Table) -> tuple[str, list[int]
     i = 0
     while i < len(expression):
         if expression.startswith("**", i):
-            raise _column_invalid("'**' non previsto: la potenza si scrive '^'", i, expression)
+            raise _column_invalid("power", "'**' non previsto: la potenza si scrive '^'", i, expression)
         if expression.startswith("${", i):
             end = expression.find("}", i + 2)
             if end < 0:
-                raise _column_invalid("riferimento ${...} senza '}'", i, expression)
+                raise _column_invalid("unclosed_reference", "riferimento ${...} senza '}'", i, expression)
             name = expression[i + 2:end]
             if name not in table.colnames:
-                raise _column_invalid(f"colonna {name!r} inesistente", i, expression)
+                raise _column_invalid("column_missing", f"colonna {name!r} inesistente", i, expression, column=name)
             key = next((k for k, v in names.items() if v == name), f"_c{len(names)}")
             names[key] = name
             out.extend(key)
@@ -2017,8 +2182,8 @@ class _ColumnEvaluator:
         offset = getattr(node, "col_offset", 0)
         return self.origin[offset] if offset < len(self.origin) else len(self.expression)
 
-    def fail(self, message: str, node) -> CatalogsError:
-        return _column_invalid(message, self.position(node), self.expression)
+    def fail(self, reason: str, message: str, node, **params: object) -> CatalogsError:
+        return _column_invalid(reason, message, self.position(node), self.expression, **params)
 
     def check(self, node) -> None:
         """Validazione completa prima del calcolo: solo i nodi dell'elenco chiuso."""
@@ -2034,30 +2199,35 @@ class _ColumnEvaluator:
         if isinstance(node, ast.Name):
             if node.id in self.names or node.id in CONSTANTS:
                 return None
-            raise self.fail(f"nome {node.id!r} non previsto (colonne come ${{nome}}; costanti {', '.join(CONSTANTS)})",
-                            node)
+            raise self.fail("name_unknown", f"nome {node.id!r} non previsto (colonne come ${{nome}}; costanti "
+                            f"{', '.join(CONSTANTS)})", node, name=node.id, constants=list(CONSTANTS))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
             if node.func.id not in FUNCTIONS:
-                raise self.fail(f"funzione {node.func.id!r} non prevista", node)
+                raise self.fail("function_unknown", f"funzione {node.func.id!r} non prevista", node,
+                                function=node.func.id)
             arity = FUNCTIONS[node.func.id][0]
             if (arity is None and len(node.args) < 2) or (arity is not None and len(node.args) != arity):
-                raise self.fail(f"{node.func.id}: numero di argomenti errato", node)
+                raise self.fail("arity", f"{node.func.id}: numero di argomenti errato", node, function=node.func.id)
             for arg in node.args:
                 if isinstance(arg, ast.Starred):
-                    raise self.fail("argomenti con '*' non previsti", arg)
+                    raise self.fail("starred", "argomenti con '*' non previsti", arg)
                 self.check(arg)
             return None
-        raise self.fail(f"costrutto {type(node).__name__} non previsto", node)
+        raise self.fail("construct", f"costrutto {type(node).__name__} non previsto", node,
+                        construct=type(node).__name__)
 
     def column(self, key: str) -> _Value:
         name = self.names[key]
         self.used.add(name)
         column = self.table[name]
         if not _numeric_kind(column):
-            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {column.dtype}: serve un numero")
+            raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {name!r} di tipo {column.dtype}: serve un numero",
+                                params={"reason": "number_needed", "column": name, "dtype": str(column.dtype)})
         if column.meta.get("unit_unrecognized"):
             raise CatalogsError("UNIT_INCOMPATIBLE", f"colonna {name!r}: unità {column.meta['unit_unrecognized']!r} "
-                                "non riconosciuta, nessun calcolo con unità ignote")
+                                "non riconosciuta, nessun calcolo con unità ignote",
+                                params={"reason": "calculated_unrecognized", "column": name,
+                                        "unit": str(column.meta["unit_unrecognized"])})
         data = np.asarray(getattr(column, "data", column), dtype=np.float64)
         return _Value(data * column.unit if column.unit is not None else data, literal=False)
 
@@ -2108,13 +2278,17 @@ def calculated_column(table: CatalogTable, name: str, expression: str, unit=None
                       decimals: int | None = None, inplace: bool = False) -> CatalogTable:
     """Nuova colonna da un'espressione con ``${colonna}`` (H8): ``float64``, unità da ``astropy.units``."""
     if not isinstance(name, str) or not name.strip():
-        raise CatalogsError("COLUMN_EXPRESSION_INVALID", "nome della colonna obbligatorio", position=0)
+        raise CatalogsError("COLUMN_EXPRESSION_INVALID", "nome della colonna obbligatorio", position=0,
+                            params={"reason": "name_required", "position": 0})
     if name in table.table.colnames:
-        raise CatalogsError("COLUMN_NAME_EXISTS", f"colonna {name!r} già presente: nessuna sovrascrittura")
+        raise CatalogsError("COLUMN_NAME_EXISTS", f"colonna {name!r} già presente: nessuna sovrascrittura",
+                            params={"reason": "name_exists", "column": name})
     if decimals is not None and (isinstance(decimals, bool) or not isinstance(decimals, int) or decimals < 0):
-        raise CatalogsError("COLUMN_EXPRESSION_INVALID", f"decimals {decimals!r}: intero ≥ 0", position=0)
+        raise CatalogsError("COLUMN_EXPRESSION_INVALID", f"decimals {decimals!r}: intero ≥ 0", position=0,
+                            params={"reason": "decimals_invalid", "position": 0, "decimals": repr(decimals)})
     if not isinstance(expression, str) or not expression.strip():
-        raise CatalogsError("COLUMN_EXPRESSION_INVALID", "espressione vuota", position=0)
+        raise CatalogsError("COLUMN_EXPRESSION_INVALID", "espressione vuota", position=0,
+                            params={"reason": "empty", "position": 0})
     text, origin, names = _translate_expression(expression, table.table)
     try:
         tree = ast.parse(text.strip(), mode="eval")
@@ -2122,17 +2296,19 @@ def calculated_column(table: CatalogTable, name: str, expression: str, unit=None
         # Il parser di Python non sempre indica dove (offset 0): allora l'errore è alla fine dell'espressione.
         offset = (exc.offset or 0) - 1 + (len(text) - len(text.lstrip()))
         position = origin[offset] if 0 <= offset < len(origin) and exc.offset else len(expression)
-        raise _column_invalid("sintassi non valida", position, expression) from exc
+        raise _column_invalid("syntax", "sintassi non valida", position, expression) from exc
     evaluator = _ColumnEvaluator(expression, text.strip(), origin[len(text) - len(text.lstrip()):], names, table.table)
     evaluator.check(tree)
-    _check_memory(f"colonna calcolata {name!r}", len(table.table) * 8 * (len(names) + 2), table.limits)
+    _check_memory("calculated_column", f"colonna calcolata {name!r}", len(table.table) * 8 * (len(names) + 2),
+                  table.limits, name=name)
     try:
         value = evaluator.evaluate(tree).data
         if unit is not None:
             target = u.Unit(unit)
             value = value.to(target) if isinstance(value, u.Quantity) else value * target
     except (u.UnitsError, u.UnitTypeError, u.UnitConversionError, TypeError, ValueError) as exc:
-        raise CatalogsError("UNIT_INCOMPATIBLE", f"colonna calcolata {name!r}: {exc}") from exc
+        raise CatalogsError("UNIT_INCOMPATIBLE", f"colonna calcolata {name!r}: {exc}",
+                            params={"reason": "calculated_column", "name": name, "detail": str(exc)}) from exc
     values = np.broadcast_to(np.asarray(getattr(value, "value", value), dtype=np.float64), (len(table.table),))
     missing = np.zeros(len(table.table), dtype=bool)
     for used in evaluator.used:
@@ -2148,7 +2324,11 @@ def calculated_column(table: CatalogTable, name: str, expression: str, unit=None
     if inplace:
         table.table[name] = column
         object.__setattr__(table, "history", table.history + (f"{step} (in posto, inplace=True)",))
-        object.__setattr__(table, "warnings", table.warnings + (("INPLACE", f"{step}: tabella data modificata"),))
+        note = ModuleWarning("INPLACE", f"{step}: tabella data modificata",
+                             {"reason": "calculated_unit", "name": name, "expression": expression,
+                              "unit": str(column.unit)} if column.unit is not None
+                             else {"reason": "calculated", "name": name, "expression": expression})
+        object.__setattr__(table, "warnings", table.warnings + (note,))
         return table
     new = table.table.copy()
     new[name] = column
@@ -2179,20 +2359,24 @@ def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, tim
                 scale: str | None = None) -> TimeSelection:
     """Selezione per epoca osservativa (H3): colonna indicata dall'utente, formato e scala dal TIMESYS o dichiarati."""
     if column not in table.table.colnames:
-        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {column!r} inesistente")
+        raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"colonna {column!r} inesistente",
+                            params={"reason": "column_missing", "column": column})
     if not isinstance(start, Time) or not isinstance(end, Time):
-        raise CatalogsError("EPOCH_INVALID", "start ed end devono essere oggetti Time con scala dichiarata")
+        raise CatalogsError("EPOCH_INVALID", "start ed end devono essere oggetti Time con scala dichiarata",
+                            params={"reason": "time_objects"})
     if start > end:
-        raise CatalogsError("EPOCH_INVALID", "intervallo vuoto: start > end")
+        raise CatalogsError("EPOCH_INVALID", "intervallo vuoto: start > end", params={"reason": "empty_interval"})
     col = table.table[column]
     valid = _valid_mask(col)
     timesys = col.meta.get("timesys")
     if timesys is not None:
         if time_format is not None or scale is not None:
-            raise CatalogsError("EPOCH_INVALID", "formato e scala sono già nel TIMESYS: non si passano")
+            raise CatalogsError("EPOCH_INVALID", "formato e scala sono già nel TIMESYS: non si passano",
+                                params={"reason": "timesys_conflict"})
         astropy_scale = _TIMESCALES.get((timesys.get("timescale") or "").upper())
         if astropy_scale is None:
-            raise CatalogsError("EPOCH_INVALID", f"scala {timesys.get('timescale')!r} del TIMESYS non supportata")
+            raise CatalogsError("EPOCH_INVALID", f"scala {timesys.get('timescale')!r} del TIMESYS non supportata",
+                                params={"reason": "timescale_unsupported", "scale": str(timesys.get("timescale"))})
         origin = timesys.get("timeorigin")
         values = np.asarray(getattr(col, "data", col), dtype=np.float64)
         if origin is not None:
@@ -2201,9 +2385,11 @@ def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, tim
                 try:
                     jd0 = float(origin)
                 except ValueError as exc:
-                    raise CatalogsError("EPOCH_INVALID", f"timeorigin {origin!r} non valido") from exc
+                    raise CatalogsError("EPOCH_INVALID", f"timeorigin {origin!r} non valido",
+                                        params={"reason": "timeorigin_invalid", "origin": str(origin)}) from exc
             if col.unit is None or not col.unit.is_equivalent(u.d):
-                raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: con timeorigin servono tempi con unità")
+                raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: con timeorigin servono tempi con unità",
+                                    params={"reason": "timeorigin_units", "column": column})
             days = (values * col.unit).to_value(u.d)
             times, fmt = Time(jd0 + np.where(valid & np.isfinite(days), days, 0.0), format="jd",
                               scale=astropy_scale), f"jd (origine {origin})"
@@ -2212,13 +2398,14 @@ def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, tim
             times, fmt = Time(np.where(valid & np.isfinite(years), years, 2000.0), format="jyear",
                               scale=astropy_scale), "jyear"
         else:
-            raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: TIMESYS senza timeorigin e valori non in anni")
+            raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: TIMESYS senza timeorigin e valori non in anni",
+                                params={"reason": "timesys_no_origin", "column": column})
         valid &= np.isfinite(values)
         source, used_scale = "TIMESYS", astropy_scale
     else:
         if time_format is None or scale is None:
             raise CatalogsError("EPOCH_INVALID", f"colonna {column!r} senza TIMESYS: time_format e scale obbligatori "
-                                "(mai assunti)")
+                                "(mai assunti)", params={"reason": "format_scale_required", "column": column})
         raw = np.asarray(getattr(col, "data", col))
         if raw.dtype.kind in "iuf":
             raw = raw.astype(np.float64)
@@ -2233,7 +2420,8 @@ def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, tim
             times = Time(np.where(valid, raw, filler), format=time_format, scale=scale)
         except (ValueError, TypeError) as exc:
             raise CatalogsError("EPOCH_INVALID", f"colonna {column!r}: valori non leggibili come {time_format} "
-                                f"({exc})") from exc
+                                f"({exc})", params={"reason": "values_unreadable", "column": column,
+                                                    "time_format": str(time_format), "detail": str(exc)}) from exc
         fmt, source, used_scale = time_format, "parametri", scale
     mask = valid & (times >= start) & (times <= end)
     return TimeSelection(mask=np.asarray(mask, dtype=bool), column=column, time_format=fmt, scale=used_scale,
@@ -2315,6 +2503,17 @@ class CatalogRegion:
     radius_deg: float
     adql: str
 
+    def describe_params(self) -> dict:
+        """``params`` dell'avviso ``REGION``: stessi valori di ``describe()``, mai arrotondati."""
+        reason = ("equinox_epoch" if self.equinox and self.epoch else
+                  ("equinox" if self.equinox else ("epoch" if self.epoch else None)))
+        return ({"lon": self.lon, "lat": self.lat, "system": self.frame.upper(),
+                 "center_lon": _q(self.center_lon_deg, "deg"), "center_lat": _q(self.center_lat_deg, "deg"),
+                 "radius": _q(self.radius_deg, "deg")}
+                | ({"equinox": self.equinox} if self.equinox else {})
+                | ({"epoch": self.epoch} if self.epoch else {})
+                | ({"reason": reason} if reason else {}))
+
     def describe(self) -> str:
         sys = self.frame.upper() + (f" equinozio {self.equinox}" if self.equinox else "") + (
             f", epoca delle posizioni {self.epoch}" if self.epoch else ", epoca delle posizioni non dichiarata")
@@ -2347,13 +2546,22 @@ def _table_candidates(vo, server: str, name: str, kwargs: dict) -> tuple[tuple[s
     return tuple(found[:MAX_TABLE_CANDIDATES]), len(found) > MAX_TABLE_CANDIDATES
 
 
-def _catalog_unknown(vo, server: str, name: str, kwargs: dict, message: str) -> CatalogsError:
-    """``CATALOG_UNKNOWN`` con le tabelle che cominciano con l'identificativo scritto, se il servizio le dà."""
+def _catalog_unknown(vo, server: str, name: str, kwargs: dict, message: str, reason: str,
+                     **params: object) -> CatalogsError:
+    """``CATALOG_UNKNOWN`` con le tabelle che cominciano con l'identificativo scritto, se il servizio le dà.
+
+    ``reason`` (``no_columns`` o ``not_found``) sceglie la sotto-voce; con le tabelle candidate si aggiunge
+    ``_candidates``, oppure ``_candidates_limited`` se l'elenco è stato limitato (D40-6)."""
     candidates, more = _table_candidates(vo, server, name, kwargs)
+    extra: dict[str, object] = {}
     if candidates:
         message += (f"; tabelle di {server} che cominciano con {name!r}: {', '.join(candidates)}"
                     + (f" (elenco limitato a {MAX_TABLE_CANDIDATES})" if more else ""))
-    return CatalogsError("CATALOG_UNKNOWN", message, candidates=candidates)
+        reason += "_candidates_limited" if more else "_candidates"
+        extra = {"candidates": list(candidates)} | ({"max_candidates": MAX_TABLE_CANDIDATES} if more else {})
+    named = {"name": name} if reason.startswith("no_columns") else {}  # ``not_found`` ha ``catalog_id``
+    return CatalogsError("CATALOG_UNKNOWN", message, candidates=candidates,
+                         params={"reason": reason, "server": server, **named, **params, **extra})
 
 
 def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]:
@@ -2364,7 +2572,8 @@ def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]
     schema = vo.tap_query(server, adql, **kwargs).table.table
     if len(schema) == 0:  # il servizio non ha la tabella: identificativo sconosciuto, non colonne mancanti
         raise _catalog_unknown(vo, server, name, kwargs, f"catalogo {name!r} non trovato su {server}: nessuna colonna "
-                               "in TAP_SCHEMA (serve l'identificativo di una tabella, es. \"I/355/gaiadr3\")")
+                               "in TAP_SCHEMA (serve l'identificativo di una tabella, es. \"I/355/gaiadr3\")",
+                               "no_columns")
     candidates, chosen = {}, {}
     for ucd_word in ("pos.eq.ra", "pos.eq.dec"):
         rows = [(str(r["column_name"]), _ucd_words(str(r["ucd"]))) for r in schema
@@ -2376,11 +2585,15 @@ def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]
         shown = "; ".join(f"{word}: " + (", ".join(candidates[word]) or "nessuna")
                           for word in candidates)
         raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nessuna colonna {unclear[0]} univoca negli UCD "
-                            f"di TAP_SCHEMA (candidate, {shown}): regione non applicabile", candidates=candidates)
+                            f"di TAP_SCHEMA (candidate, {shown}): regione non applicabile", candidates=candidates,
+                            params={"reason": "schema_ambiguous", "name": name, "ucd": unclear[0],
+                                    "candidates_ra": list(candidates["pos.eq.ra"]),
+                                    "candidates_dec": list(candidates["pos.eq.dec"])})
     found = {}
     for ucd_word, rows in chosen.items():
         if not _IDENTIFIER.match(rows[0][0]):
-            raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nome di colonna non ammesso {rows[0][0]!r}")
+            raise CatalogsError("NO_COORD_COLUMNS", f"catalogo {name!r}: nome di colonna non ammesso {rows[0][0]!r}",
+                                params={"reason": "column_name_invalid", "name": name, "column": rows[0][0]})
         found[ucd_word] = rows[0][0]
     return found["pos.eq.ra"], found["pos.eq.dec"]
 
@@ -2392,10 +2605,12 @@ def _catalog_region(vo, server: str, name: str, region, kwargs: dict) -> Catalog
         raise TypeError("region = (centro, raggio): centro SkyFrame/SkyCoord, raggio angolo con unità")
     center, radius = region
     if not isinstance(radius, u.Quantity) or not radius.unit.is_equivalent(u.deg):
-        raise CatalogsError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità")
+        raise CatalogsError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità",
+                            params={"reason": "radius_not_angle", "radius": repr(radius)})
     r = float(radius.to_value(u.deg))
     if not (math.isfinite(r) and 0.0 < r <= 180.0):
-        raise CatalogsError("REGION_INVALID", f"raggio {r!r}°: ammesso in (0°, 180°]")
+        raise CatalogsError("REGION_INVALID", f"raggio {r!r}°: ammesso in (0°, 180°]",
+                            params={"reason": "radius_range", "radius": _q(r, "deg")})
     if isinstance(center, SkyCoord):
         center = SkyFrame(center)
     if not isinstance(center, SkyFrame) or np.atleast_1d(center.lon.value).size != 1:
@@ -2407,10 +2622,14 @@ def _catalog_region(vo, server: str, name: str, region, kwargs: dict) -> Catalog
     pos = header.positions
     if pos is None or pos.frame not in _ADQL_SYSTEMS:
         raise CatalogsError("FRAME_UNKNOWN", f"catalogo {name!r}: il servizio non dichiara il sistema delle colonne "
-                            f"{lon}/{lat} con un COOSYS ({pos.system if pos else 'nessuno'}): regione non applicabile")
+                            f"{lon}/{lat} con un COOSYS ({pos.system if pos else 'nessuno'}): regione non applicabile",
+                            params={"reason": "service_undeclared", "name": name, "lon": lon, "lat": lat,
+                                    "system": str(pos.system)} if pos else
+                            {"reason": "service_no_coosys", "name": name, "lon": lon, "lat": lat})
     equinox, epoch = pos.equinox, pos.epoch  # già normalizzati dal lettore (giuliani per FK5/ICRS, besseliani FK4)
     if pos.frame in ("fk5", "fk4") and equinox is None:
-        raise CatalogsError("FRAME_UNKNOWN", f"catalogo {name!r}: sistema {pos.system} senza equinozio")
+        raise CatalogsError("FRAME_UNKNOWN", f"catalogo {name!r}: sistema {pos.system} senza equinozio",
+                            params={"reason": "no_equinox", "name": name, "system": str(pos.system)})
     if pos.frame == "fk5":
         target = center.to("fk5", equinox=equinox)
     elif pos.frame == "fk4":
@@ -2439,7 +2658,8 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
     from astrotwo.core import vo_protocols as vo
 
     if not isinstance(catalog_id, str) or not _CATALOG_ID.match(catalog_id):
-        raise CatalogsError("CATALOG_UNKNOWN", f"identificativo di catalogo non valido: {catalog_id!r}")
+        raise CatalogsError("CATALOG_UNKNOWN", f"identificativo di catalogo non valido: {catalog_id!r}",
+                            params={"reason": "invalid_id", "catalog_id": repr(catalog_id)})
     fixed = {c.id: c for c in FIXED_COLLECTIONS}
     server, name = (fixed[catalog_id].server, fixed[catalog_id].table) if catalog_id in fixed \
         else ("cds-vizier-tap", catalog_id)
@@ -2453,27 +2673,34 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
                               limits=limits, **kwargs)
     except vo.VoProtocolsError as exc:
         if exc.code == "ADQL_INVALID":  # il servizio rifiuta la tabella: catalogo sconosciuto
+            detail = exc.details.get("service_message", exc.message)
             raise _catalog_unknown(vo, server, name, kwargs, f"catalogo {catalog_id!r} non trovato su {server}: "
-                                   f"{exc.details.get('service_message', exc.message)}") from exc
+                                   f"{detail}", "not_found", catalog_id=catalog_id, detail=str(detail)) from exc
         raise
     if result.truncated and not allow_partial:
         declared = dict(result.warnings).get("ROW_LIMIT_EXCEEDED", "troncamento dichiarato")
         if area is None:
             raise CatalogsError("REGION_REQUIRED", f"catalogo {catalog_id!r}: più di {result.max_rows} righe "
                                 f"({declared}); indicare una regione con il parametro region=(centro, raggio), "
-                                "oppure allow_partial=True per le prime righe", max_rows=result.max_rows)
+                                "oppure allow_partial=True per le prime righe", max_rows=result.max_rows,
+                                params={"catalog_id": catalog_id, "max_rows": result.max_rows,
+                                        "declared": str(declared)})
         raise CatalogsError("REGION_TOO_LARGE", f"catalogo {catalog_id!r}: più di {result.max_rows} righe nella "
                             f"regione ({declared}); ridurre il raggio o usare allow_partial=True",
-                            max_rows=result.max_rows)
+                            max_rows=result.max_rows,
+                            params={"catalog_id": catalog_id, "max_rows": result.max_rows, "declared": str(declared)})
     table = _from_vo_result(result)
     history = (f"catalogo {catalog_id} da {server}",)
     notes = ()
     if area is not None:
         history += (area.describe(),)
-        notes += (("REGION", area.describe()),)
+        notes += (ModuleWarning("REGION", area.describe(), area.describe_params()),)
     if result.truncated:
-        notes += (("PARTIAL_CATALOG", f"allow_partial=True: solo le prime {result.max_rows} righe restituite dal "
-                   f"servizio, non tutto il catalogo {catalog_id}" + (" nella regione" if area else "")),)
+        notes += (ModuleWarning("PARTIAL_CATALOG", f"allow_partial=True: solo le prime {result.max_rows} righe "
+                                f"restituite dal servizio, non tutto il catalogo {catalog_id}"
+                                + (" nella regione" if area else ""),
+                                {"max_rows": result.max_rows, "catalog_id": catalog_id}
+                                | ({"reason": "in_region"} if area else {})),)
         history += (f"allow_partial=True: prime {result.max_rows} righe",)
     return dataclasses.replace(table, history=history, warnings=table.warnings + notes)
 
@@ -2578,14 +2805,16 @@ def collection_tree(*, cache=None, refresh: bool = False, timeouts=None) -> Coll
 
     roots = tuple(build(r) for r in sorted((i for i in nodes if "/" not in i), key=key))
     if skipped:
-        notes.append(("COLLECTION_SKIPPED", f"record non VizieR esclusi dall'albero: {', '.join(skipped[:10])}"
-                      + (" …" if len(skipped) > 10 else "")))
+        notes.append(ModuleWarning("COLLECTION_SKIPPED", f"record non VizieR esclusi dall'albero: "
+                                   f"{', '.join(skipped[:10])}" + (" …" if len(skipped) > 10 else ""),
+                                   {"ids": skipped[:10]} | ({"reason": "more"} if len(skipped) > 10 else {})))
     if invalid:
-        notes.append(("POPULARITY_INVALID", f"{invalid} record con vizier_popularity non intera: trattati come assenti"))
+        notes.append(ModuleWarning("POPULARITY_INVALID", f"{invalid} record con vizier_popularity non intera: "
+                                   "trattati come assenti", {"count": invalid}))
     missing = sum(1 for n in nodes.values() if n["table"] and n["popularity"] is None)
     if any_popularity and missing:
-        notes.append(("POPULARITY_MISSING", f"{missing} collezioni senza vizier_popularity: dopo le altre, in "
-                      "ordine naturale"))
+        notes.append(ModuleWarning("POPULARITY_MISSING", f"{missing} collezioni senza vizier_popularity: dopo le "
+                                   "altre, in ordine naturale", {"count": missing}))
     ordering = POPULARITY_NOTE if any_popularity else ALPHABETICAL_NOTE
     return CollectionTree(roots=roots, ordering=ordering, source=f"MocServer del CDS ({vo.MOCSERVER_URL})",
                           retrieved_at=fetched.request.retrieved_at, request=fetched.request, warnings=tuple(notes))

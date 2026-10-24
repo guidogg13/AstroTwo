@@ -620,8 +620,9 @@ dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai
 arrotondati; le quantità sono `{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta
 invariato** (campo `text`/`message`); il modulo **non** contiene traduzioni e non importa il catalogo
 (`src/astrotwo/messages_catalog.py`, `40` §3.7.1). Il parametro riservato `reason` sceglie la sotto-voce
-(D40-6); "esterno" = testo di terzi (libreria, file, servizio) o diagnosi annidata di un altro modulo, inserito
-tale e quale e senza tradurlo (stessa regola del 10 e dell'11: `detail`, `cause`). I `details` di prima
+(D40-6); "esterno" = testo di terzi (libreria, file, servizio), inserito tale e quale e senza tradurlo (stessa
+regola del 10 e dell'11: `detail`, `cause`); un messaggio di AstroTwo incorporato in un altro è di tipo `message`
+(D40-7, sotto). I `details` di prima
 (`url`, `hips_id`, `order`, `index`, `outside`, `depth`, `field`, `status`, `format`, `line`) restano.
 
 **Errori rilanciati da un altro modulo (14, 16).** Quando il 12 rilancia l'errore di un modulo sotto di lui
@@ -631,12 +632,17 @@ convertito (14, 16: sprint 8d) l'errore ha `params` vuoti e si mostra come in §
 con la nota "(nessuna traduzione)"); l'errore rilanciato non è controllato contro il catalogo (T18) finché i suoi
 `params` sono vuoti. Gli **avvisi dei moduli sotto** (`response.notes` del 14, `moc.warnings` del 16,
 `table.warnings` del 13, gli avvisi dei tile in `pixel_values`) passano **tali e quali**, con il loro `params`.
-**Messaggi annidati:** dove il testo del 12 incorpora il messaggio di un altro modulo (es. `HIPS_COVERAGE_UNKNOWN`
-con la causa, `MOCSERVER_UNAVAILABLE` con la risposta del 14, `HIPS_TILE_DISCARDED` e `HIPS_BAD_TILE` con il motivo
-della diagnosi del tile) il messaggio annidato è un parametro **esterno** (`cause`, `detail`, `problem`) più, se ha
-un codice, `cause_code`: scelta minore dello sprint 8c, coerente con il `cause`/`detail` del 10 e dell'11; la
-traduzione completa dei messaggi annidati richiederebbe un tipo di parametro "messaggio" nel catalogo (modifica
-del `40`: D40-7, da decidere).
+**Messaggi annidati (D40-7, decisa il 2026-10-24).** Dove il testo del 12 incorpora un altro messaggio **di AstroTwo**
+il parametro ha tipo `message` (`{"code", "params", "text"}`, `40` §3.7.1) e il catalogo lo rende in modo
+ricorsivo: `REGION_INVALID` con l'errore del 10 (`detail`), `HIPS_COVERAGE_UNKNOWN` con l'errore del 12 che ha
+impedito la copertura (`cause`, con `cause_code` che ne ripete il codice), `HIPS_BAD_TILE` e `HIPS_TILE_DISCARDED` con
+la diagnosi del tile (`problem`). La diagnosi ha un codice proprio, **`HIPS_TILE_PROBLEM`**, usato solo come messaggio
+annidato (sotto-voci `no_data`, `fits_unreadable`, `size_mismatch`, `format_mismatch`, `image_unreadable`, `not_utf8`,
+`no_header`, `columns_mismatch`, `bad_row`; il testo italiano è quello di prima). Restano parametri **esterni**, non
+tradotti, il testo di terzi: le eccezioni di astropy e di PIL dentro la diagnosi (`detail`), i nomi delle colonne del
+servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora convertiti (`MOCSERVER_UNAVAILABLE`
+`detail`, `HIPS_NOT_A_SERVICE` `service_error`, `HIPS_METADATA_INVALID` `metadata_xml_unavailable`,
+`BODY_UNSUPPORTED` `detail`): quando quei moduli saranno convertiti (sprint 8d) diventeranno `message`.
 
 | Codice | `reason` | Parametri (`params`) |
 |---|---|---|
@@ -678,9 +684,9 @@ del `40`: D40-7, da decidere).
 | `REGION_INVALID` | (generale) | — |
 | `REGION_INVALID` | `radius` | `radius` (string) |
 | `REGION_INVALID` | `center_not_single` | — |
-| `REGION_INVALID` | `conversion_center` | `detail` (string, esterno) |
-| `REGION_INVALID` | `conversion_positions` | `detail` (string, esterno) |
-| `REGION_INVALID` | `conversion_window` | `detail` (string, esterno) |
+| `REGION_INVALID` | `conversion_center` | `detail` (message: errore del 10) |
+| `REGION_INVALID` | `conversion_positions` | `detail` (message: errore del 10) |
+| `REGION_INVALID` | `conversion_window` | `detail` (message: errore del 10) |
 | `HIPS_OUT_OF_COVERAGE` | (generale) | — |
 | `HIPS_OUT_OF_COVERAGE` | `field` | `outside` (integer) |
 | `HIPS_OUT_OF_COVERAGE` | `tile` | `hips_id` (string), `index` (integer), `order` (integer) |
@@ -696,8 +702,8 @@ del `40`: D40-7, da decidere).
 | `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10 e dell'11 |
 | `HIPS_TILE_MISSING` | (generale) | `url` (string) |
 | `HIPS_BAD_TILE` | (generale) | — |
-| `HIPS_BAD_TILE` | `tile_corrupt` | `url` (string), `problem` (string, esterno) |
-| `HIPS_BAD_TILE` | `file_corrupt` | `url` (string), `problem` (string, esterno) |
+| `HIPS_BAD_TILE` | `tile_corrupt` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
+| `HIPS_BAD_TILE` | `file_corrupt` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
 | `HIPS_BAD_TILE` | `value_not_conformant` | `hips_id` (string), `value` (string, esterno), `column` (string, esterno), `datatype` (string, esterno), `detail` (string, esterno) |
 | `HIPS_CUBE_PLANE_INVALID` | (generale) | — |
 | `HIPS_CUBE_PLANE_INVALID` | `not_a_cube` | `hips_id` (string), `plane` (string) |
@@ -741,13 +747,13 @@ del `40`: D40-7, da decidere).
 | `HIPS_RESOLUTION_LIMIT` (avviso) | (generale) | `hips_id` (string), `resolution` (quantity), `max_order` (integer) |
 | `FROM_CACHE` (avviso) | `cached_tile` | `url` (string), `retrieved_at` (string) — voce già dell'11 |
 | `HIPS_TILE_DISCARDED` (avviso) | (generale) | — |
-| `HIPS_TILE_DISCARDED` | `cache_corrupt` | `url` (string), `problem` (string, esterno) |
-| `HIPS_TILE_DISCARDED` | `tile_corrupt` | `url` (string), `problem` (string, esterno) |
-| `HIPS_TILE_DISCARDED` | `cache_invalid` | `url` (string), `problem` (string, esterno) |
-| `HIPS_TILE_DISCARDED` | `file_invalid` | `url` (string), `problem` (string, esterno) |
+| `HIPS_TILE_DISCARDED` | `cache_corrupt` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
+| `HIPS_TILE_DISCARDED` | `tile_corrupt` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
+| `HIPS_TILE_DISCARDED` | `cache_invalid` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
+| `HIPS_TILE_DISCARDED` | `file_invalid` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
 | `HIPS_COVERAGE_UNKNOWN` (avviso) | (generale) | — |
 | `HIPS_COVERAGE_UNKNOWN` | `moc_missing` | `url` (string) |
-| `HIPS_COVERAGE_UNKNOWN` | `unavailable` | `hips_id` (string), `cause_code` (string), `cause` (string, esterno) |
+| `HIPS_COVERAGE_UNKNOWN` | `unavailable` | `hips_id` (string), `cause_code` (string), `cause` (message: errore del 12) |
 | `HIPS_COVERAGE_FROM_MOCSERVER` (avviso) | (generale) | `hips_id` (string), `url` (string) |
 | `HIPS_DEFAULT_SURVEY` (avviso) | (generale) | `survey` (string) |
 | `HIPS_CUBE_UNIT_UNKNOWN` (avviso) | (generale) | — |
@@ -756,6 +762,16 @@ del `40`: D40-7, da decidere).
 | `HIPS_CUBE_AXIS_INCOMPLETE` (avviso) | (generale) | `source` (string) |
 | `HIPS_UNIT_MIXED` (avviso) | (generale) | `units` (list) |
 | `HIPS_ALLSKY_NOT_WRITTEN` (avviso) | (generale) | — |
+| `HIPS_TILE_PROBLEM` (diagnosi, solo annidata) | (generale) | — |
+| `HIPS_TILE_PROBLEM` | `no_data` | — |
+| `HIPS_TILE_PROBLEM` | `fits_unreadable` | `detail` (string, esterno) |
+| `HIPS_TILE_PROBLEM` | `size_mismatch` | `shape` (list), `width` (integer) |
+| `HIPS_TILE_PROBLEM` | `format_mismatch` | `found` (string), `expected` (string) |
+| `HIPS_TILE_PROBLEM` | `image_unreadable` | `detail` (string, esterno) |
+| `HIPS_TILE_PROBLEM` | `not_utf8` | `detail` (string, esterno) |
+| `HIPS_TILE_PROBLEM` | `no_header` | — |
+| `HIPS_TILE_PROBLEM` | `columns_mismatch` | `header` (string, esterno), `expected` (string, esterno) |
+| `HIPS_TILE_PROBLEM` | `bad_row` | `line` (integer), `fields` (integer), `expected` (integer) |
 
 ## 11. Esposizione all'IA
 
@@ -873,3 +889,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-16 | Claude Code | **P6 scritta** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `view_sampling` (campionamento al più vicino sulla griglia HEALPix, stessa regola di `pixel_values`, ordine di default da `order_for_resolution`, copertura facoltativa) e `fill_view` (valori nel tipo nativo o colori a 8 bit, riquadro e maschera, provenienza); verifica di `reproject` (scarica da sé: non usabile con la rete del 14 e la cache del 04) e tempi misurati in §3; test T17 (`TAN` e `AIT`, confini tra tile, bordo dell'`AIT`) e T18 (ordine di arrivo, colori PNG) in `tests/core/test_hips.py`. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8c:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso, regola per gli errori rilanciati dal 14 e dal 16 (codice e `params` restano dell'altro modulo) e per i messaggi annidati (parametri esterni); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
+| 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — messaggi annidati di tipo `message` (errore del 10 in `REGION_INVALID`, errore del 12 in `HIPS_COVERAGE_UNKNOWN`, diagnosi del tile con il nuovo codice annidato `HIPS_TILE_PROBLEM` in `HIPS_BAD_TILE` e `HIPS_TILE_DISCARDED`); il testo italiano non cambia. |

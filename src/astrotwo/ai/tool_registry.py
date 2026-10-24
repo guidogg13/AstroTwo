@@ -20,7 +20,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from astrotwo.messages_catalog import external_params, message_text, uses_catalog
+from astrotwo.messages_catalog import MAX_MESSAGE_DEPTH, external_params, message_params, message_text, uses_catalog
 from astrotwo.core.commands import (
     PHYSICAL_TYPES,
     Command,
@@ -590,19 +590,38 @@ class _Marker:
             return self.text(value)
         return value
 
-    def message(self, message: Mapping) -> dict:
+    def nested(self, message: Mapping, depth: int) -> dict:
+        """Messaggio annidato (D40-7): come ``message``, ma oltre ``MAX_MESSAGE_DEPTH`` resta il solo codice."""
+        if depth > MAX_MESSAGE_DEPTH:
+            return {"code": message.get("code")}
+        return self.message(message, depth)
+
+    def message(self, message: Mapping, _depth: int = 0) -> dict:
         """Avviso o errore per il modello: codice, ``params`` e testo **inglese** del catalogo (D40-3, 40 §3.7.1).
 
         Con una voce nel catalogo e ``params`` conformi, il testo lo scrive AstroTwo: i parametri ``external``
         (testi di terzi) viaggiano marcati come testo esterno e nel testo restano ``<nome>``. Altrimenti vale il
-        testo originale del modulo, esterno salvo i codici di ``ASTROTWO_MESSAGE_CODES``.
+        testo originale del modulo, esterno salvo i codici di ``ASTROTWO_MESSAGE_CODES``. I messaggi annidati
+        (tipo ``message``, D40-7) sono resi allo stesso modo, in modo ricorsivo fino a ``MAX_MESSAGE_DEPTH``.
         """
         out = dict(message)
         code, params = out.get("code"), out.get("params") or {}
         if isinstance(code, str) and uses_catalog(code, params):
             external = external_params(code, params)
-            out["params"] = {k: (self.text(v) if k in external and isinstance(v, str) else v)
-                             for k, v in params.items()}
+            nested = message_params(code, params)
+
+            def one(key: str, value: object) -> object:
+                if key in external and isinstance(value, str):
+                    return self.text(value)
+                if key in external and isinstance(value, (list, tuple)):
+                    return [self.text(v) if isinstance(v, str) else v for v in value]
+                if key in nested and isinstance(value, Mapping):
+                    return self.nested(value, _depth + 1)
+                if key in nested and isinstance(value, (list, tuple)):
+                    return [self.nested(v, _depth + 1) if isinstance(v, Mapping) else v for v in value]
+                return value
+
+            out["params"] = {k: one(k, v) for k, v in params.items()}
             out["text"] = message_text(code, params, "en", mask_external=True)
             return out
         if code not in ASTROTWO_MESSAGE_CODES and isinstance(out.get("text"), str):

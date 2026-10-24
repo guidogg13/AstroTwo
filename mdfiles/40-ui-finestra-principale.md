@@ -173,7 +173,9 @@ com'è (`str()` della sua rappresentazione JSON, valori con unità: valore,
 spazio, unità): nessun arrotondamento, nessuna conversione, nessuna
 formattazione locale. Una voce può avere il segnaposto in qualunque
 posizione, quindi l'ordine delle parole cambia tra le lingue senza
-problemi.
+problemi. Le graffe che fanno parte del testo si scrivono raddoppiate
+(`${{nome}}` mostra `${nome}`, `'}}'` mostra `'}'`); un elenco vuoto (parametro
+di tipo `list`) si inserisce come "—".
 
 **Lingua.** `message_text(code, params, lang)` restituisce il testo nella
 lingua richiesta; il pannello Messaggi, la cronologia, le finestre modali e
@@ -198,6 +200,36 @@ di `params` (quindi dei file di sessione e dei risultati verso l'IA) ma non
 si inserisce nel testo. Il codice resta quello dei `.md` dei moduli:
 nessun identificatore cambia. Ogni sotto-voce ha le stesse regole della
 voce (segnaposto uguali nelle due lingue, parametri dichiarati, test T18).
+
+**Messaggi annidati (D40-7, decisa il 2026-10-24).** Quando il testo di un messaggio
+incorpora un altro messaggio **di AstroTwo** (la causa di una copertura non
+disponibile, la diagnosi di un tile corrotto, un errore di un altro modulo di
+AstroTwo rilanciato o citato), il parametro ha tipo `message`: un oggetto
+`{"code": <codice>, "params": {...}, "text": <testo originale del modulo>}`
+con gli stessi `code` e `params` del messaggio che descrive (e quindi, a sua
+volta, `reason` e parametri `message`). `message_text` lo rende **in modo
+ricorsivo** con la stessa lingua, la stessa voce e le stesse regole del messaggio
+di primo livello (sotto-voci per `reason`, sostituzione senza modifiche dei
+valori); `text` serve solo come ripiego (§3.7.2) quando il codice annidato non
+ha voce o non ha `params` (modulo non ancora convertito: nota "(no translation)"
+/ "(nessuna traduzione)"). **Profondità massima: 3 livelli** di annidamento
+sotto il messaggio di primo livello (`MAX_MESSAGE_DEPTH`); oltre il limite si
+mostra il solo codice. Un codice usato **solo come messaggio annidato**
+(diagnosi, es. `HIPS_TILE_PROBLEM` del 12) ha la sua voce e le sue sotto-voci
+come ogni altro, ed è dichiarato nel `.md` del suo modulo.
+Un parametro può anche essere un **elenco di messaggi annidati** (tipo `messages`,
+es. le differenze tra FIELD e dati collegati di un ASTRORES): si rende un
+messaggio dopo l'altro, separati da "; ", con le stesse regole e lo stesso
+limite di profondità. Il **testo di terzi resta parametro `external`**, non tradotto (eccezioni di
+librerie come astropy, risposte dei servizi, motivi `ASTRORES`, valori di
+file): anche dentro un messaggio annidato un suo parametro `external` resta
+esterno. **Verso l'IA** (`32` §3.7): il messaggio annidato è reso in inglese
+col resto del testo; i suoi parametri `external` viaggiano marcati come testo
+esterno (`{"external_text": ...}`) e nel testo restano `<nome>`; un annidato
+ripiegato su `text` (senza voce) è testo esterno e nel testo resta `<nome del
+parametro>`. Finché il modulo che produce l'errore annidato non è convertito
+(14, 16, 19: sprint 8d) la sua risposta resta un parametro `external`; al
+momento della conversione diventa `message`.
 
 **Posizione del catalogo (D40-5, decisa il 2026-10-24).** L'IA (livello 3)
 non può importare l'interfaccia (dipendenze solo verso il basso, regola d'oro
@@ -517,19 +549,14 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   catalogo possono avere sotto-voci scelte dal parametro `reason`
   (identificatore stabile), per i codici sollevati per ragioni diverse;
   nessun codice cambia. Applicata in §3.7.1.
-- **D40-7 — Messaggi annidati nel catalogo: DA DECIDERE (aperta il 2026-10-24,
-  sprint 8c; Gruppo 3).** Alcuni testi dei moduli incorporano un altro
-  messaggio (es. `HIPS_COVERAGE_UNKNOWN` con la causa, `HIPS_TILE_DISCARDED`
-  e `HIPS_BAD_TILE` con il motivo della diagnosi del tile, `MOCSERVER_UNAVAILABLE`
-  con la risposta del 14). Oggi il messaggio annidato è un parametro **esterno**
-  (`cause`, `detail`, `problem`, come per il 10 e l'11): resta nella lingua del
-  modulo (italiano) anche con l'interfaccia in inglese. Opzioni:
-  (a) lasciare così, scelta minore attuale; (b) un tipo di parametro
-  `message` (`{"code", "params"}`) reso in modo ricorsivo da `message_text`
-  nella lingua dell'interfaccia, con voci proprie per le diagnosi (modifica a
-  §3.7.1 e al catalogo, un passo prima dello sprint 8d). Raccomandazione: (b)
-  se la lingua inglese dell'interfaccia è un requisito per la v1; altrimenti
-  (a). Da decidere dal proprietario.
+- **D40-7 — Messaggi annidati nel catalogo: DECISA il 2026-10-24
+  (decisione del proprietario: opzione (b), sprint 8c-bis).** Tipo di
+  parametro `message` (`code`, `params`, `text` di un altro messaggio di
+  AstroTwo), reso in modo ricorsivo nella lingua dell'interfaccia e in
+  inglese verso l'IA, profondità massima 3; il testo di terzi (eccezioni di
+  librerie, risposte dei servizi, motivi `ASTRORES`) resta parametro
+  `external`, non tradotto e marcato come esterno anche verso l'IA. Applicata
+  in §3.7.1; 10, 11, 12 aggiornati; 14, 16, 19 la useranno alla conversione.
 - **D40-2 — Avvio tramite URL (H18): RIMANDATA il 2026-10-15** (decisione
   del proprietario, come proposto): l'equivalente in AstroTwo (app `.dmg`,
   senza Java WebStart) si definisce nella versione successiva del 40.
@@ -617,3 +644,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-24 | Claude Code | **D40-3 decisa (sprint 8, solo specifiche):** messaggi dei moduli nella lingua dell'interfaccia (inglese/italiano) da un catalogo codice → testo con parametri (nuove §3.7.1 e §3.7.2), verso l'IA sempre inglese; i moduli 10–19 e il `05` passano da codice + testo a codice + `params` (testo originale conservato, vedi `05`); D40-1 superata; test T5 riscritto, nuovi T18–T20; aperta D40-5 (posizione del catalogo, raccomandato un modulo neutro). Nessun codice scritto. |
 | 2026-10-24 | Claude Code | **Sprint 8b (codice):** approvati i `.md` dello sprint 8; D40-5 decisa (catalogo in `src/astrotwo/messages_catalog.py`); nuova e decisa D40-6 (varianti per `reason`); §3.7.1 aggiornata e passaggio graduale di T18 (solo moduli convertiti). |
 | 2026-10-24 | Claude Code | **Sprint 8c (codice):** modulo 12 convertito a codice + `params` (voci del catalogo e test T18 aggiornati, `12` §10); aperta D40-7 (messaggi annidati, Gruppo 3). Nessun comportamento cambia. |
+| 2026-10-24 | Claude Code | **Sprint 8c-bis:** D40-7 decisa dal proprietario (opzione (b)): tipo di parametro `message` ricorsivo con profondità massima 3, testo di terzi sempre `external` (§3.7.1). Nessun comportamento visibile cambia. |
+| 2026-10-24 | Claude Code | **Sprint 8c-bis (13):** §3.7.1 — tipo di parametro `messages` (elenco di messaggi annidati), graffe raddoppiate nel testo, elenco vuoto mostrato come "—" (necessari ai messaggi del 13). |

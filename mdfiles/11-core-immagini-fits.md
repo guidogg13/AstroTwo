@@ -582,6 +582,11 @@ solleva per ragioni diverse portano in `params` il parametro riservato
 catalogo; "esterno" = testo di terzi (libreria, file, servizio), inserito tale
 e quale e senza tradurlo. Nessun identificatore di errore cambia.
 
+Nessun messaggio di questo modulo ne incorpora un altro **di AstroTwo** (D40-7): `detail` è testo di terzi
+(eccezioni di librerie) e `cause` di `WCS_MISSING` `external_unavailable` è il motivo scritto da chi fornisce la
+calibrazione esterna (il 14 finché non è convertito), quindi resta parametro esterno; diventerà `message` quando quel
+motivo sarà un messaggio di AstroTwo con codice (sprint 8d).
+
 | Codice | `reason` | Parametri (`params`) |
 |---|---|---|
 | `FITS_UNREADABLE` | (generale) | `path` (string) |
@@ -868,3 +873,4 @@ funzioni di §7.
 | 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `suggest_display_limits` con `ZScaleInterval` (parametri di default dichiarati, pixel finiti in `float64`, intervallo comune per i colori, anteprima per i due livelli) e raggi della corona di default 1 × / 1,5 × `box_size` in `star_centroid` (D11-8); test T37–T40 in `tests/core/test_images_fits.py` (118 superati). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8b:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
+| 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — `cause` di `WCS_MISSING` resta esterno finché il 14 non è convertito; nessun codice cambia. |

@@ -62,7 +62,7 @@ from tests.core.test_hips import (
     tile_service,
     tsv,
 )
-from tests.message_helpers import catalog_combinations, check_error, check_message
+from tests.message_helpers import catalog_combinations, check_error, check_message, nested_pairs
 
 #: Codici che solo il modulo 12 solleva o restituisce (le sotto-voci aggiunte a voci condivise sono in ``SHARED``).
 OWN_CODES = (
@@ -74,7 +74,7 @@ OWN_CODES = (
     "HIPS_DEFAULT_TILE_WIDTH", "HIPS_VERSION_UNKNOWN", "HIPS_ID_MISMATCH", "HIPS_ALREADY_LISTED",
     "HIPS_COVERAGE_NOT_CHECKED", "HIPS_RESOLUTION_LIMIT", "HIPS_TILE_DISCARDED", "HIPS_COVERAGE_UNKNOWN",
     "HIPS_COVERAGE_FROM_MOCSERVER", "HIPS_DEFAULT_SURVEY", "HIPS_CUBE_UNIT_UNKNOWN", "HIPS_CUBE_AXIS_INCOMPLETE",
-    "HIPS_UNIT_MIXED", "HIPS_ALLSKY_NOT_WRITTEN",
+    "HIPS_UNIT_MIXED", "HIPS_ALLSKY_NOT_WRITTEN", "HIPS_TILE_PROBLEM",
 )
 SHARED = {("NET_TIMEOUT", "url"), ("WCS_MISSING", "image_without_wcs"), ("OPERATION_UNSUPPORTED", "build_method"),
           ("OPERATION_UNSUPPORTED", "build_color_image"), ("PREVIEW_NOT_MEASURABLE", "build_hips"),
@@ -83,7 +83,10 @@ SHARED = {("NET_TIMEOUT", "url"), ("WCS_MISSING", "image_without_wcs"), ("OPERAT
 
 def required_combinations() -> set[tuple[str, str | None]]:
     """Coppie (codice, ragione) del 12: ogni sotto-voce; la voce generale solo dove non ha sotto-voci o è usata."""
-    out = {(c, r) for c, r in catalog_combinations(OWN_CODES) if r is not None or not mc.CATALOG[c].variants}
+    module_13 = {("BODY_UNKNOWN", "table_body"), ("REGION_INVALID", "radius_not_angle"),
+                 ("REGION_INVALID", "radius_range")}  # sotto-voci del 13 nelle voci condivise
+    out = {(c, r) for c, r in catalog_combinations(OWN_CODES)
+           if r is not None or not mc.CATALOG[c].variants} - module_13
     return out | {("HEALPIX_ORDER_INVALID", None)} | SHARED
 
 
@@ -95,12 +98,14 @@ class Seen:
         with pytest.raises(HiPSError) as info:
             func(*args, **kwargs)
         self.pairs.add(check_error(info.value))
+        self.pairs |= nested_pairs(info.value.code, info.value.params)
         return info.value
 
     def notes(self, items) -> None:
         for item in items:
             if isinstance(item, ModuleWarning):
                 self.pairs.add(check_message(item[0], item.params, item[1]))
+                self.pairs |= nested_pairs(item[0], item.params)
 
 
 def test_every_error_and_warning_has_code_params_and_catalog_entry(service, cache, mocserver, tmp_path, monkeypatch):  # noqa: F811
@@ -176,7 +181,8 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(service, cach
     with monkeypatch.context() as patch:
         patch.setattr(cw.SkyFrame, "to", failing_conversion)
         conv = seen.error(tiles_for_fov, galactic_coords, 1 * u.deg, 3)
-        assert conv.params == {"reason": "conversion_center", "detail": "conversione di prova"}
+        assert conv.params == {"reason": "conversion_center", "detail": {
+            "code": "FRAME_UNSUPPORTED", "params": {"reason": "frame_required"}, "text": "conversione di prova"}}
         seen.error(tile_pixel_values, some_tile, galactic_coords)
         seen.error(view_sampling, galactic_service, view)
 
@@ -354,6 +360,31 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(service, cach
     service.close()
     seen.notes(CollectionIndex(cache=cache, timeouts=fast).sync().warnings)  # local_copy
 
+    # --- Diagnosi dei tile (messaggi annidati, D40-7): ogni motivo, con il testo italiano invariato ----------------------
+    import io
+
+    from astropy.io import fits
+    from PIL import Image
+
+    png = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(png, format="PNG")
+    empty_fits = io.BytesIO()
+    fits.HDUList([fits.PrimaryHDU()]).writeto(empty_fits)
+    diagnoses = [
+        (hips_module._decode_tile(empty_fits.getvalue(), "fits", 4, "u"), "nessun dato nel FITS"),
+        (hips_module._decode_tile(fits_tile(1), "fits", 7, "u"), "dimensione "),
+        (hips_module._decode_tile(png.getvalue(), "jpeg", 4, "u"), "formato PNG invece di JPEG"),
+        (hips_module._decode_tile(b"x", "png", 4, "u"), "immagine non leggibile ("),
+        (hips_module._decode_tile(png.getvalue(), "png", 8, "u"), "dimensione "),
+        (hips_module._tsv_rows(b"\xff\xfe", ["a"]), "non UTF-8 ("),
+        (hips_module._tsv_rows(b"# solo un commento\n", ["a"]), "nessuna riga di intestazione"),
+        (hips_module._tsv_rows(b"a\tb\n1\n", ["a", "b"]), "riga 2: 1 campi invece di 2"),
+    ]
+    for (rows, problem), expected in diagnoses:
+        assert rows is None and problem["code"] == "HIPS_TILE_PROBLEM" and problem["text"].startswith(expected)
+        seen.pairs.add(check_message(problem["code"], problem["params"], problem["text"]))
+    assert mc.message_text("HIPS_TILE_PROBLEM", diagnoses[7][0][1]["params"], "en") == "row 2: 1 fields instead of 2"
+
     missing = required_combinations() - seen.pairs
     assert not missing, f"errori e avvisi del 12 mai provocati nel test: {sorted(missing, key=str)}"
 
@@ -390,7 +421,8 @@ def test_relayed_errors_keep_the_code_and_params_of_the_lower_module(cache):
 def test_every_entry_renders_with_declared_parameters():
     """Voci generali e sotto-voci dei codici del 12: si riempiono con valori di prova senza segnaposto rimasti."""
     samples = {"string": "valore", "number": 1.5, "integer": 3, "boolean": True,
-               "quantity": {"value": 2.5, "unit": "s"}, "list": ["a", "b"], "object": {"k": 1}}
+               "quantity": {"value": 2.5, "unit": "s"}, "list": ["a", "b"], "object": {"k": 1},
+               "message": {"code": "HIPS_TILE_PROBLEM", "params": {"reason": "no_data"}, "text": "nessun dato"}}
     for code in OWN_CODES:
         entry = mc.CATALOG[code]
         for reason, params in [(None, entry.params)] + [(r, v.params) for r, v in entry.variants.items()]:
@@ -399,3 +431,35 @@ def test_every_entry_renders_with_declared_parameters():
                 values["reason"] = reason
             for lang in ("en", "it"):
                 assert "{" not in mc.message_text(code, values, lang), (code, reason, lang)
+
+
+def test_nested_messages_are_rendered_in_the_language_and_the_external_text_is_kept():
+    """Messaggi annidati (D40-7): ricorsivi nella lingua, testo di terzi tale e quale, ripiego e profondità."""
+    inner = {"code": "HIPS_TILE_PROBLEM", "params": {"reason": "fits_unreadable", "detail": "boom of astropy"},
+             "text": "FITS non leggibile (boom of astropy)"}
+    params = {"reason": "tile_corrupt", "url": "http://x/Npix1.fits", "problem": inner}
+    assert mc.message_text("HIPS_BAD_TILE", params, "en") == (
+        "http://x/Npix1.fits: tile corrupt even after a new request (FITS not readable (boom of astropy)).")
+    assert mc.message_text("HIPS_BAD_TILE", params, "it") == (
+        "http://x/Npix1.fits: tile corrotto anche dopo una nuova richiesta (FITS non leggibile (boom of astropy)).")
+    # Verso l'IA: il testo di terzi non entra nel testo, resta nei parametri.
+    masked = mc.message_text("HIPS_BAD_TILE", params, "en", mask_external=True)
+    assert "boom" not in masked and "FITS not readable (<detail>)" in masked
+    assert mc.message_params("HIPS_BAD_TILE", params) == {"problem"}
+    # Messaggio di un modulo non convertito (senza voce utile): testo originale con la nota; mascherato: <nome>.
+    unconverted = {"code": "SERVICE_ERROR", "params": {}, "text": "testo del 14"}
+    cov = {"reason": "unavailable", "hips_id": "A/B", "cause_code": "SERVICE_ERROR", "cause": unconverted}
+    assert mc.message_text("HIPS_COVERAGE_UNKNOWN", cov, "en") == (
+        "A/B: coverage not available (SERVICE_ERROR: testo del 14 (no translation)).")
+    assert "<cause>" in mc.message_text("HIPS_COVERAGE_UNKNOWN", cov, "en", mask_external=True)
+    assert mc.validate_params("HIPS_COVERAGE_UNKNOWN", cov) == []
+    assert mc.validate_params("HIPS_COVERAGE_UNKNOWN", cov | {"cause": {"code": "SERVICE_ERROR"}})  # né testo né voce
+    assert mc.validate_params("HIPS_COVERAGE_UNKNOWN", cov | {"cause": "testo"})  # non è un messaggio
+    # Profondità: oltre il limite il solo codice.
+    deep = {"code": "HIPS_TILE_PROBLEM", "params": {"reason": "no_data"}, "text": "x"}
+    for _ in range(mc.MAX_MESSAGE_DEPTH + 1):
+        deep = {"code": "HIPS_COVERAGE_UNKNOWN", "params": {"reason": "unavailable", "hips_id": "h",
+                                                             "cause_code": "C", "cause": deep}, "text": "x"}
+    rendered = mc.message_text("HIPS_COVERAGE_UNKNOWN", deep["params"], "en")
+    assert rendered.count("coverage not available") == 1 + mc.MAX_MESSAGE_DEPTH  # primo livello + annidati
+    assert mc.validate_params("HIPS_COVERAGE_UNKNOWN", deep["params"])  # troppo profondo

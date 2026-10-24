@@ -27,7 +27,20 @@ CONVERTED = {
     "core/coordinates_wcs.py": "CoordinatesWcsError",
     "core/images_fits.py": "ImagesFitsError",
     "core/hips.py": "HiPSError",
+    "core/catalogs.py": "CatalogsError",
     "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
+}
+
+#: Funzioni di appoggio che costruiscono un errore o un avviso: nome → (codice, posizione dell'argomento ``reason``).
+#: Solo per il modulo indicato (``_check_memory`` ha un'altra forma nell'11).
+HELPERS = {
+    "core/hips.py": {"_diagnosis": ("HIPS_TILE_PROBLEM", 0)},
+    "core/catalogs.py": {
+        "_invalid": ("EXPRESSION_INVALID", 0), "_rule_invalid": ("PLOT_RULE_INVALID", 0),
+        "_column_invalid": ("COLUMN_EXPRESSION_INVALID", 0), "fail": ("COLUMN_EXPRESSION_INVALID", 0),
+        "_check_memory": ("MEMORY_LIMIT_EXCEEDED", 0), "_problem": ("ASTRORES_LINK_PROBLEM", 0),
+        "_catalog_unknown": ("CATALOG_UNKNOWN", 5),  # con le varianti _candidates e _candidates_limited
+    },
 }
 
 _CODE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$")
@@ -42,11 +55,14 @@ def _constants(node: ast.AST):
         yield from _constants(node.orelse)
 
 
-def scan_module(path: Path, error_name: str) -> tuple[set[str], set[tuple[str, str]]]:
-    """Codici e coppie (codice, ragione) che il modulo solleva o restituisce, dall'albero sintattico."""
+def scan_module(path: Path, error_name: str, helpers: dict | None = None) -> tuple[set[str], set[tuple[str, str]]]:
+    """Codici e coppie (codice, ragione) che il modulo solleva o restituisce, dall'albero sintattico.
+
+    ``helpers``: funzioni di appoggio del modulo, nome → (codice, posizione dell'argomento ragione)."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     codes: set[str] = set()
     reasons: set[tuple[str, str]] = set()
+    helpers = helpers or {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             name = getattr(node.func, "id", getattr(node.func, "attr", ""))
@@ -61,6 +77,14 @@ def scan_module(path: Path, error_name: str) -> tuple[set[str], set[tuple[str, s
             elif name == "_view_error" and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                 codes.add("VIEW_PARAMETERS_INVALID")
                 reasons.add(("VIEW_PARAMETERS_INVALID", node.args[1].value))
+            elif name in helpers and len(node.args) > helpers[name][1] and isinstance(
+                    node.args[helpers[name][1]], ast.Constant):
+                code, index = helpers[name]
+                reason = node.args[index].value
+                codes.add(code)
+                reasons.add((code, reason))
+                if name == "_catalog_unknown":  # il codice aggiunge _candidates o _candidates_limited
+                    reasons.update({(code, reason + "_candidates"), (code, reason + "_candidates_limited")})
             elif name == "ModuleWarning" and node.args and isinstance(node.args[0], ast.Constant):
                 code = node.args[0].value  # avviso (codice, testo, params)
                 codes.add(code)
@@ -74,6 +98,9 @@ def scan_module(path: Path, error_name: str) -> tuple[set[str], set[tuple[str, s
         elif isinstance(node, ast.keyword) and node.arg == "warnings":  # avvisi di solo codice: warnings=("X",)
             codes.update(c for c in (n.value for n in ast.walk(node.value) if isinstance(n, ast.Constant)
                                      and isinstance(n.value, str)) if _CODE.match(c))
+    for node in ast.walk(tree):  # reason = "x" if ... else "y": assegnazioni di una variabile ``reason``
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "reason" for t in node.targets):
+            reasons.update((ANY, c) for c in _constants(node.value))
     for node in ast.walk(tree):  # ragioni costruite altrove (es. in una funzione di appoggio): {"reason": "x"}
         if isinstance(node, ast.Dict):
             for k, v in zip(node.keys, node.values, strict=True):
@@ -88,7 +115,7 @@ ANY = "*"  # ragione vista in un dizionario, senza il codice a cui appartiene
 def _used_codes_and_reasons():
     codes, reasons = set(), set()
     for relative, error_name in CONVERTED.items():
-        c, r = scan_module(SRC / relative, error_name)
+        c, r = scan_module(SRC / relative, error_name, HELPERS.get(relative))
         codes |= c
         reasons |= r
     return codes, reasons
@@ -111,6 +138,7 @@ def test_t18_every_entry_is_well_formed():
             assert all(p.type in mc.PARAM_TYPES for p in params), where
             assert "{" not in mc._PLACEHOLDER.sub("", text_en + text_it), f"{where}: graffa fuori da un segnaposto"
             assert "}" not in mc._PLACEHOLDER.sub("", text_en + text_it), f"{where}: graffa fuori da un segnaposto"
+            assert text_en.count("{{") == text_it.count("{{") and text_en.count("}}") == text_it.count("}}"), where
         for reason in entry.variants:
             assert re.fullmatch(r"[a-z][a-z0-9_]*", reason), f"{code}: ragione {reason!r} non è un identificatore"
 

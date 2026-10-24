@@ -57,6 +57,7 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.core.coordinates_wcs", "CoordinatesWcsError"),
     ("astrotwo.core.images_fits", "ImagesFitsError"),
     ("astrotwo.core.hips", "HiPSError"),
+    ("astrotwo.core.catalogs", "CatalogsError"),
 )
 
 

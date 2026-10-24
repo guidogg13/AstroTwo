@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 __all__ = [
     "LANGUAGES",
     "PARAM_TYPES",
+    "MAX_MESSAGE_DEPTH",
     "NO_TRANSLATION",
     "Param",
     "Variant",
@@ -34,6 +35,7 @@ __all__ = [
     "has_message",
     "uses_catalog",
     "external_params",
+    "message_params",
     "message_text",
     "placeholders",
     "validate_params",
@@ -44,7 +46,10 @@ LOG = logging.getLogger("astrotwo.messages")
 LANGUAGES = ("en", "it")
 
 #: Tipi dei parametri (forme JSON): ``quantity`` = ``{"value": numero, "unit": testo}``.
-PARAM_TYPES = ("string", "number", "integer", "boolean", "quantity", "list", "object")
+PARAM_TYPES = ("string", "number", "integer", "boolean", "quantity", "list", "object", "message", "messages")
+
+#: Profondità massima dei messaggi annidati (D40-7): livelli sotto il messaggio di primo livello; oltre, il solo codice.
+MAX_MESSAGE_DEPTH = 3
 
 #: Nota dei messaggi senza voce nel catalogo (§3.7.2).
 NO_TRANSLATION = {"en": "(no translation)", "it": "(nessuna traduzione)"}
@@ -52,9 +57,10 @@ NO_TRANSLATION = {"en": "(no translation)", "it": "(nessuna traduzione)"}
 #: Parametro riservato: sceglie la sotto-voce (D40-6); non si inserisce nel testo.
 REASON = "reason"
 
-_PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+#: Segnaposto ``{nome}``; ``{{`` e ``}}`` sono le graffe scritte nel testo (es. ``${{...}}`` per ``${...}``).
+_PLACEHOLDER = re.compile(r"\{\{|\}\}|\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _TYPE_ABBREVIATIONS = {"str": "string", "num": "number", "int": "integer", "bool": "boolean", "qty": "quantity",
-                       "list": "list", "obj": "object"}
+                       "list": "list", "obj": "object", "msg": "message", "msgs": "messages"}
 
 
 @dataclass(frozen=True)
@@ -94,7 +100,8 @@ CATALOG: dict[str, Entry] = {}
 
 
 def _params(spec: str) -> tuple[Param, ...]:
-    """``"nome[:tipo][!]"`` separati da spazi (``!`` = testo esterno); tipo: str, num, int, bool, qty, list, obj."""
+    """``"nome[:tipo][!]"`` separati da spazi (``!`` = testo esterno); tipo: str, num, int, bool, qty, list, obj, msg
+    (``msg`` = messaggio annidato di AstroTwo, ``msgs`` = elenco di messaggi annidati, D40-7)."""
     out = []
     for token in spec.split():
         external = token.endswith("!")
@@ -116,6 +123,15 @@ def _add(code: str, en: str, it: str, params: str = "", **variants: tuple) -> No
     CATALOG[code] = Entry(code, en, it, general, built)
 
 
+def _extend(code: str, **variants: tuple) -> None:
+    """Aggiunge sotto-voci a una voce già nel catalogo (codice condiviso tra moduli, D40-6): ``reason=(en, it[, params])``."""
+    entry = CATALOG[code]
+    for reason, item in variants.items():
+        if reason in entry.variants:
+            raise ValueError(f"{code}: ragione {reason} già presente")
+        entry.variants[reason] = Variant(item[0], item[1], _params(item[2]) if len(item) > 2 else entry.params)
+
+
 def entry_for(code: str) -> Entry | None:
     return CATALOG.get(code)
 
@@ -126,7 +142,7 @@ def has_message(code: str) -> bool:
 
 def placeholders(text: str) -> frozenset[str]:
     """Nomi dei segnaposto ``{nome}`` di un testo."""
-    return frozenset(_PLACEHOLDER.findall(text))
+    return frozenset(name for name in _PLACEHOLDER.findall(text) if name)
 
 
 def _is_quantity(value: object) -> bool:
@@ -140,8 +156,31 @@ def _render(value: object) -> str:
     if _is_quantity(value):
         return f"{_render(value['value'])} {_render(value['unit'])}"
     if isinstance(value, (list, tuple)):
-        return ", ".join(_render(v) for v in value)
+        return ", ".join(_render(v) for v in value) if value else "—"  # elenco vuoto: trattino
     return json.dumps(value, ensure_ascii=False)
+
+
+def _is_message(value: object) -> bool:
+    """Messaggio annidato (D40-7): ``{"code", "params", "text"}``, con ``params`` e ``text`` facoltativi."""
+    return (isinstance(value, Mapping) and isinstance(value.get("code"), str) and set(value) <= {"code", "params", "text"}
+            and isinstance(value.get("params") or {}, Mapping) and isinstance(value.get("text", ""), str))
+
+
+def _is_messages(value: object) -> bool:
+    """Elenco di messaggi annidati (D40-7)."""
+    return isinstance(value, (list, tuple)) and all(_is_message(v) for v in value)
+
+
+def _render_message(value: Mapping, name: str, lang: str, mask_external: bool, depth: int) -> str:
+    """Messaggio annidato reso in modo ricorsivo; oltre ``MAX_MESSAGE_DEPTH`` il solo codice; senza voce (o di un
+    modulo non convertito) il testo originale con la nota, ``<nome>`` se i parametri esterni sono mascherati."""
+    code, params, text = value["code"], value.get("params") or {}, value.get("text")
+    if depth > MAX_MESSAGE_DEPTH:
+        return code
+    entry = CATALOG.get(code)
+    if entry is None or not _from_catalog_source(entry, params):
+        return f"<{name}>" if mask_external else _fallback(code, text, lang)
+    return message_text(code, params, lang, mask_external=mask_external, _depth=depth)
 
 
 def _selected(entry: Entry, params: Mapping[str, object]) -> tuple[str, str, tuple[Param, ...]]:
@@ -152,14 +191,15 @@ def _selected(entry: Entry, params: Mapping[str, object]) -> tuple[str, str, tup
 
 
 def message_text(code: str, params: Mapping[str, object] | None, lang: str, *, text: str | None = None,
-                 mask_external: bool = False) -> str:
+                 mask_external: bool = False, _depth: int = 0) -> str:
     """Testo del messaggio ``code`` con ``params`` nella lingua ``lang`` (``en`` o ``it``).
 
     ``text``: testo originale del modulo, usato come ripiego (§3.7.2): codice senza voce, oppure messaggio senza
     ``params`` per una voce che ne richiede (sessioni scritte prima di D40-3); in tal caso si aggiunge la nota
     "(no translation)" / "(nessuna traduzione)". Un parametro atteso ma assente lascia il segnaposto ``{nome}`` e
     scrive una voce di log. ``mask_external``: i parametri ``external`` si sostituiscono con ``<nome>`` (testo
-    consegnato all'IA, dove il testo esterno viaggia solo nei parametri, marcato come tale).
+    consegnato all'IA, dove il testo esterno viaggia solo nei parametri, marcato come tale). I parametri di tipo
+    ``message`` (D40-7) si rendono in modo ricorsivo, nella stessa lingua, fino a ``MAX_MESSAGE_DEPTH`` livelli.
     """
     lang = lang if lang in LANGUAGES else "en"
     params = {} if params is None else params
@@ -170,14 +210,22 @@ def message_text(code: str, params: Mapping[str, object] | None, lang: str, *, t
     if text is not None and not _from_catalog_source(entry, params):
         return _fallback(code, text, lang)
     external = {p.name for p in declared if p.external}
+    nested = {p.name for p in declared if p.type == "message"}
+    nested_list = {p.name for p in declared if p.type == "messages"}
 
     def fill(match: re.Match) -> str:
         name = match.group(1)
+        if name is None:  # graffa scritta nel testo
+            return match.group(0)[0]
         if name not in params:
             LOG.warning("messaggio %s: parametro %r assente", code, name)
             return match.group(0)
         if mask_external and name in external:
             return f"<{name}>"
+        if name in nested and _is_message(params[name]):
+            return _render_message(params[name], name, lang, mask_external, _depth + 1)
+        if name in nested_list and _is_messages(params[name]):
+            return "; ".join(_render_message(v, name, lang, mask_external, _depth + 1) for v in params[name]) or "—"
         return _render(params[name])
 
     return _PLACEHOLDER.sub(fill, it if lang == "it" else en)
@@ -194,6 +242,15 @@ def uses_catalog(code: str, params: Mapping[str, object] | None) -> bool:
     entry = CATALOG.get(code)
     params = {} if params is None else params
     return entry is not None and _from_catalog_source(entry, params) and not validate_params(code, params)
+
+
+def message_params(code: str, params: Mapping[str, object] | None) -> frozenset[str]:
+    """Nomi dei parametri di tipo ``message`` o ``messages`` (messaggi annidati, D40-7), secondo la voce scelta."""
+    entry = CATALOG.get(code)
+    if entry is None:
+        return frozenset()
+    return frozenset(p.name for p in _selected(entry, {} if params is None else params)[2]
+                     if p.type in ("message", "messages"))
 
 
 def external_params(code: str, params: Mapping[str, object] | None) -> frozenset[str]:
@@ -217,11 +274,16 @@ _TYPE_CHECK = {
     "quantity": _is_quantity,
     "list": lambda v: isinstance(v, (list, tuple)),
     "object": lambda v: isinstance(v, Mapping),
+    "message": _is_message,
+    "messages": _is_messages,
 }
 
 
-def validate_params(code: str, params: Mapping[str, object] | None) -> list[str]:
-    """Problemi di ``params`` rispetto alla voce (mancanti, non dichiarati, di tipo sbagliato); vuoto se a posto."""
+def validate_params(code: str, params: Mapping[str, object] | None, _depth: int = 0) -> list[str]:
+    """Problemi di ``params`` rispetto alla voce (mancanti, non dichiarati, di tipo sbagliato); vuoto se a posto.
+
+    I messaggi annidati (D40-7) si controllano a loro volta, se hanno voce e ``params``; più profondi di
+    ``MAX_MESSAGE_DEPTH`` sono un problema."""
     entry = CATALOG.get(code)
     if entry is None:
         return [f"{code}: nessuna voce nel catalogo"]
@@ -237,10 +299,27 @@ def validate_params(code: str, params: Mapping[str, object] | None) -> list[str]
             problems.append(f"{code}: parametro {name} assente")
         elif not _TYPE_CHECK[param.type](params[name]):
             problems.append(f"{code}: parametro {name} non è {param.type}: {params[name]!r}")
+        elif param.type == "message":
+            problems.extend(_validate_nested(code, name, params[name], _depth + 1))
+        elif param.type == "messages":
+            for item in params[name]:
+                problems.extend(_validate_nested(code, name, item, _depth + 1))
     for name in params:
         if name not in expected and name != REASON:
             problems.append(f"{code}: parametro {name} non dichiarato")
     return problems
+
+
+def _validate_nested(code: str, name: str, value: Mapping, depth: int) -> list[str]:
+    """Problemi di un messaggio annidato: troppo profondo, o con voce e ``params`` non conformi. Senza voce, o di un
+    modulo non convertito (senza ``params``), vale il testo originale e non c'è nulla da controllare."""
+    if depth > MAX_MESSAGE_DEPTH:
+        return [f"{code}: parametro {name} annidato oltre {MAX_MESSAGE_DEPTH} livelli"]
+    entry = CATALOG.get(value["code"])
+    params = value.get("params") or {}
+    if entry is None or not _from_catalog_source(entry, params):
+        return [] if value.get("text") else [f"{code}: parametro {name} senza voce né testo originale"]
+    return [f"{code}.{name}: {p}" for p in validate_params(value["code"], params, depth)]
 
 
 # --------------------------------------------------------------------------
@@ -804,9 +883,9 @@ _add("REGION_INVALID",
              "Raggio {radius}: serve un angolo con unità in (0°, 180°].", "radius"),
      center_not_single=("The centre of the field must be a single position.",
                         "Il centro del campo è una sola posizione.", ""),
-     conversion_center=("Centre of the field: {detail}", "Centro del campo: {detail}", "detail!"),
-     conversion_positions=("Positions: {detail}", "Posizioni: {detail}", "detail!"),
-     conversion_window=("Pixels of the window: {detail}", "Pixel della finestra: {detail}", "detail!"))
+     conversion_center=("Centre of the field: {detail}", "Centro del campo: {detail}", "detail:msg"),
+     conversion_positions=("Positions: {detail}", "Posizioni: {detail}", "detail:msg"),
+     conversion_window=("Pixels of the window: {detail}", "Pixel della finestra: {detail}", "detail:msg"))
 _add("HIPS_OUT_OF_COVERAGE",
      "Outside the coverage of the survey: no tile.", "Fuori dalla copertura del survey: nessun tile.",
      field=("The field is outside the coverage of the service ({outside} tiles outside): no tile.",
@@ -840,9 +919,9 @@ _add("HIPS_TILE_MISSING",
 _add("HIPS_BAD_TILE",
      "The tile is corrupt.", "Il tile è corrotto.",
      tile_corrupt=("{url}: tile corrupt even after a new request ({problem}).",
-                   "{url}: tile corrotto anche dopo una nuova richiesta ({problem}).", "url problem!"),
+                   "{url}: tile corrotto anche dopo una nuova richiesta ({problem}).", "url problem:msg"),
      file_corrupt=("{url}: file not valid even after a new request ({problem}).",
-                   "{url}: file non valido anche dopo una nuova richiesta ({problem}).", "url problem!"),
+                   "{url}: file non valido anche dopo una nuova richiesta ({problem}).", "url problem:msg"),
      value_not_conformant=("{hips_id}: value '{value}' of column {column} does not conform to type {datatype} "
                            "({detail}).",
                            "{hips_id}: valore '{value}' della colonna {column} non conforme al tipo {datatype} "
@@ -951,19 +1030,34 @@ _add("HIPS_RESOLUTION_LIMIT",
 _add("HIPS_TILE_DISCARDED",
      "A corrupt tile was discarded.", "Un tile corrotto è stato scartato.",
      cache_corrupt=("The cached copy of {url} is corrupt ({problem}): discarded, new request.",
-                    "Copia in cache di {url} corrotta ({problem}): scartata, nuova richiesta.", "url problem!"),
+                    "Copia in cache di {url} corrotta ({problem}): scartata, nuova richiesta.", "url problem:msg"),
      tile_corrupt=("{url}: tile corrupt ({problem}), discarded.", "{url}: tile corrotto ({problem}), scartato.",
-                   "url problem!"),
+                   "url problem:msg"),
      cache_invalid=("The cached copy of {url} is not valid ({problem}): new request.",
-                    "Copia in cache di {url} non valida ({problem}): nuova richiesta.", "url problem!"),
+                    "Copia in cache di {url} non valida ({problem}): nuova richiesta.", "url problem:msg"),
      file_invalid=("{url}: file not valid ({problem}), discarded.", "{url}: file non valido ({problem}), scartato.",
-                   "url problem!"))
+                   "url problem:msg"))
+_add("HIPS_TILE_PROBLEM",  # diagnosi, solo come messaggio annidato (D40-7) di HIPS_BAD_TILE e HIPS_TILE_DISCARDED
+     "The tile or file has a problem.", "Il tile o il file ha un problema.",
+     no_data=("no data in the FITS", "nessun dato nel FITS", ""),
+     fits_unreadable=("FITS not readable ({detail})", "FITS non leggibile ({detail})", "detail!"),
+     size_mismatch=("size {shape} instead of {width}×{width}", "dimensione {shape} invece di {width}×{width}",
+                    "shape:list width:int"),
+     format_mismatch=("format {found} instead of {expected}", "formato {found} invece di {expected}",
+                      "found expected"),
+     image_unreadable=("image not readable ({detail})", "immagine non leggibile ({detail})", "detail!"),
+     not_utf8=("not UTF-8 ({detail})", "non UTF-8 ({detail})", "detail!"),
+     no_header=("no header row", "nessuna riga di intestazione", ""),
+     columns_mismatch=("columns {header} differ from metadata.xml {expected}",
+                       "colonne {header} diverse da metadata.xml {expected}", "header! expected!"),
+     bad_row=("row {line}: {fields} fields instead of {expected}", "riga {line}: {fields} campi invece di {expected}",
+              "line:int fields:int expected:int"))
 _add("HIPS_COVERAGE_UNKNOWN",
      "The coverage is not known.", "Copertura non nota.",
      moc_missing=("{url}: MOC of the service is missing (optional for the standard); coverage not known.",
                   "{url}: MOC del servizio assente (facoltativo per lo standard); copertura non nota.", "url"),
      unavailable=("{hips_id}: coverage not available ({cause_code}: {cause}).",
-                  "{hips_id}: copertura non disponibile ({cause_code}: {cause}).", "hips_id cause_code cause!"))
+                  "{hips_id}: copertura non disponibile ({cause_code}: {cause}).", "hips_id cause_code cause:msg"))
 _add("HIPS_COVERAGE_FROM_MOCSERVER",
      "{hips_id}: coverage from the MocServer ({url}), the service does not provide Moc.fits.",
      "{hips_id}: copertura dal MocServer ({url}), il servizio non fornisce Moc.fits.", "hips_id url")
@@ -984,3 +1078,510 @@ _add("HIPS_UNIT_MIXED",
 _add("HIPS_ALLSKY_NOT_WRITTEN",
      "Allsky file not written (optional in the standard; D12-8).",
      "File Allsky non scritto (facoltativo nello standard; D12-8).")
+
+
+# --- Modulo 13: cataloghi e tabelle (``core/catalogs.py``) ---
+# Codici condivisi con altri moduli: sotto-voci aggiunte alla voce esistente (``_extend``).
+
+_extend("FORMAT_UNSUPPORTED",
+        url_via_vo=("Tables from a URL go through module 14 (P6).", "Le tabelle da URL passano dal modulo 14 (P6).", ""),
+        format_not_text=("format '{format}': allowed {allowed}.", "format '{format}': ammessi {allowed}.",
+                         "format allowed:list"),
+        xml_root=("{path}: XML with root '{root}'; formats: {formats}.",
+                  "{path}: XML con radice '{root}'; formati: {formats}.", "path root! formats:list"),
+        binary=("{path}: binary file not recognised; formats: {formats}.",
+                "{path}: file binario non riconosciuto; formati: {formats}.", "path formats:list"),
+        no_table=("{path}: no table in the file.", "{path}: nessuna tabella nel file.", "path"))
+_extend("MEMORY_LIMIT_EXCEEDED",
+        read_file=("Reading {path}: about {needed} are needed, above the operation limit of {limit}.",
+                   "Lettura di {path}: servono circa {needed}, oltre il limite delle operazioni di {limit}.",
+                   "path needed:qty limit:qty"),
+        loaded_table=("Table {path}: about {needed} are needed, above the operation limit of {limit}.",
+                      "Tabella {path}: servono circa {needed}, oltre il limite delle operazioni di {limit}.",
+                      "path needed:qty limit:qty"),
+        linked_data=("Linked data {url}: about {needed} are needed, above the operation limit of {limit}.",
+                     "Dati collegati {url}: servono circa {needed}, oltre il limite delle operazioni di {limit}.",
+                     "url! needed:qty limit:qty"),
+        subset=("Subset: about {needed} are needed, above the operation limit of {limit}.",
+                "Sottoinsieme: servono circa {needed}, oltre il limite delle operazioni di {limit}.",
+                "needed:qty limit:qty"),
+        calculated_column=("Calculated column '{name}': about {needed} are needed, above the operation limit of "
+                           "{limit}.",
+                           "Colonna calcolata '{name}': servono circa {needed}, oltre il limite delle operazioni di "
+                           "{limit}.", "name needed:qty limit:qty"))
+_extend("REGION_INVALID",
+        radius_not_angle=("Radius {radius}: an angle with a unit is required.",
+                          "Raggio {radius}: serve un angolo con unità.", "radius"),
+        radius_range=("Radius {radius}: allowed in (0°, 180°].", "Raggio {radius}: ammesso in (0°, 180°].",
+                      "radius:qty"))
+_extend("BODY_UNKNOWN",
+        table_body=("The body cannot be derived: the data are not overlaid or combined with others.",
+                    "Corpo non ricavabile: il dato non si sovrappone né si combina con altri.", ""))
+_extend("COORD_UNIT_MISSING",
+        column_unit_required=("Column '{column}' has no unit: indicate unit (angular).",
+                              "Colonna '{column}' senza unità: indicare unit (angolare).", "column!"),
+        column_not_angular=("Column '{column}' is in unit {unit}, which is not angular.",
+                            "Colonna '{column}' in unità {unit}, non angolare.", "column! unit!"))
+
+_add("TABLE_UNREADABLE",
+     "The table cannot be read.", "La tabella non è leggibile.",
+     file_unreadable=("File not readable: {path} ({detail}).", "File non leggibile: {path} ({detail}).",
+                      "path detail!"),
+     votable_unreadable=("{path}: VOTable not readable ({detail}).", "{path}: VOTable non leggibile ({detail}).",
+                         "path detail!"),
+     table_unreadable=("{path}: {format} table not readable ({detail}).",
+                       "{path}: tabella {format} non leggibile ({detail}).", "path format detail!"))
+_add("FORMAT_AMBIGUOUS",
+     "{path}: delimited text cannot be classified (rule of §3): indicate format ({formats}).",
+     "{path}: testo delimitato non classificabile (regola di §3): indicare format ({formats}).", "path formats:list")
+_add("FORMAT_DECLARED",
+     "Format {format} indicated by the user, no recognition.",
+     "Formato {format} indicato dall'utente, nessun riconoscimento.", "format")
+_add("UNIT_UNRECOGNIZED",
+     "Column '{column}': unit '{unit}' is not valid in FITS nor in VOUnit, not converted.",
+     "Colonna '{column}': unità '{unit}' non valida in FITS né in VOUnit, non convertita.", "column! unit!")
+_add("UNIT_DECLARED",
+     "Column '{column}': unit {unit} declared by the user.", "Colonna '{column}': unità {unit} dichiarata dall'utente.",
+     "column! unit")
+_add("NO_COORD_COLUMNS",
+     "There are no usable position columns.", "Non ci sono colonne di posizione utilizzabili.",
+     not_found=("No position column from UCD or metadata: confirm with confirm_position_columns (suggestions from "
+                "suggest_position_columns).",
+                "Nessuna colonna di posizione da UCD o metadati: confermare con confirm_position_columns "
+                "(suggerimenti da suggest_position_columns).", ""),
+     multiple_pairs=("More pairs {lon_ucd}/{lat_ucd} without a single meta.main: no choice.",
+                     "Più coppie {lon_ucd}/{lat_ucd} senza un'unica meta.main: nessuna scelta.", "lon_ucd lat_ucd"),
+     column_missing=("Column '{column}' does not exist.", "La colonna '{column}' non esiste.", "column"),
+     required=("No position column: confirm them first.", "Nessuna colonna di posizione: confermarle prima.", ""),
+     schema_ambiguous=("Catalogue '{name}': no unique {ucd} column in the UCDs of TAP_SCHEMA (candidates, "
+                       "pos.eq.ra: {candidates_ra}; pos.eq.dec: {candidates_dec}): region not applicable.",
+                       "Catalogo '{name}': nessuna colonna {ucd} univoca negli UCD di TAP_SCHEMA (candidate, "
+                       "pos.eq.ra: {candidates_ra}; pos.eq.dec: {candidates_dec}): regione non applicabile.",
+                       "name ucd candidates_ra:list! candidates_dec:list!"),
+     column_name_invalid=("Catalogue '{name}': column name not allowed '{column}'.",
+                          "Catalogo '{name}': nome di colonna non ammesso '{column}'.", "name column!"))
+_add("POSITIONS_FROM_MANGO",
+     "Columns {lon}/{lat}: system {system} from the utype of the IVOA MANGO model ({utype}).",
+     "Colonne {lon}/{lat}: sistema {system} dall'utype del modello IVOA MANGO ({utype}).",
+     "lon! lat! system utype!",
+     with_epoch=("Columns {lon}/{lat}: system {system}, epoch {epoch} from the utype of the IVOA MANGO model "
+                 "({utype}).",
+                 "Colonne {lon}/{lat}: sistema {system}, epoca {epoch} dall'utype del modello IVOA MANGO ({utype}).",
+                 "lon! lat! system epoch! utype!"))
+_add("FRAME_UNKNOWN",
+     "The reference system is not known.", "Il sistema di riferimento non è noto.",
+     undeclared=("Columns '{lon}'/'{lat}': reference system not declared.",
+                 "Colonne '{lon}'/'{lat}': sistema di riferimento non dichiarato.", "lon! lat!"),
+     ambiguous=("Columns '{lon}'/'{lat}': reference system not declared or not unique ({system}).",
+                "Colonne '{lon}'/'{lat}': sistema di riferimento non dichiarato o non univoco ({system}).",
+                "lon! lat! system!"),
+     unsupported=("Frame '{frame}' is not supported; frames: {supported}.",
+                  "Frame '{frame}' non supportato; frame: {supported}.", "frame supported:list"),
+     positions_undeclared=("The reference system of the position columns is not declared.",
+                           "Sistema delle colonne di posizione non dichiarato.", ""),
+     service_undeclared=("Catalogue '{name}': the service does not declare the system of columns {lon}/{lat} with a "
+                         "COOSYS ({system}): region not applicable.",
+                         "Catalogo '{name}': il servizio non dichiara il sistema delle colonne {lon}/{lat} con un "
+                         "COOSYS ({system}): regione non applicabile.", "name lon! lat! system!"),
+     service_no_coosys=("Catalogue '{name}': the service does not declare the system of columns {lon}/{lat} with a "
+                        "COOSYS (none): region not applicable.",
+                        "Catalogo '{name}': il servizio non dichiara il sistema delle colonne {lon}/{lat} con un "
+                        "COOSYS (nessuno): regione non applicabile.", "name lon! lat!"),
+     no_equinox=("Catalogue '{name}': system {system} without equinox.",
+                 "Catalogo '{name}': sistema {system} senza equinozio.", "name system!"))
+_add("ECSV_POSITIONS_INVALID",
+     "The A2POSITIONS metadata are not usable.", "I metadati A2POSITIONS non sono utilizzabili.",
+     unusable=("A2POSITIONS metadata not usable: {meta}.", "Metadati A2POSITIONS non utilizzabili: {meta}.", "meta!"),
+     differs=("A2POSITIONS ({lon}/{lat}) differs from the UCD columns ({ucd_lon}/{ucd_lat}): no choice.",
+              "A2POSITIONS ({lon}/{lat}) diverso dalle colonne degli UCD ({ucd_lon}/{ucd_lat}): nessuna scelta.",
+              "lon! lat! ucd_lon! ucd_lat!"))
+_add("POSITIONS_FROM_ECSV",
+     "Columns {lon}/{lat}, system {frame} from the ECSV metadata written by AstroTwo.",
+     "Colonne {lon}/{lat}, sistema {frame} dai metadati ECSV scritti da AstroTwo.", "lon! lat! frame",
+     equinox=("Columns {lon}/{lat}, system {frame} equinox {equinox} from the ECSV metadata written by AstroTwo.",
+              "Colonne {lon}/{lat}, sistema {frame} equinozio {equinox} dai metadati ECSV scritti da AstroTwo.",
+              "lon! lat! frame equinox!"),
+     epoch=("Columns {lon}/{lat}, system {frame} epoch {epoch} from the ECSV metadata written by AstroTwo.",
+            "Colonne {lon}/{lat}, sistema {frame} epoca {epoch} dai metadati ECSV scritti da AstroTwo.",
+            "lon! lat! frame epoch!"),
+     equinox_epoch=("Columns {lon}/{lat}, system {frame} equinox {equinox} epoch {epoch} from the ECSV metadata "
+                    "written by AstroTwo.",
+                    "Colonne {lon}/{lat}, sistema {frame} equinozio {equinox} epoca {epoch} dai metadati ECSV "
+                    "scritti da AstroTwo.", "lon! lat! frame equinox! epoch!"))
+_add("EPOCH_FROM_METADATA",
+     "Columns {lon}/{lat}: epoch {epoch} declared in the metadata ({system}) kept after the confirmation (same "
+     "columns and system).",
+     "Colonne {lon}/{lat}: epoca {epoch} dichiarata nei metadati ({system}) conservata dopo la conferma (stesse "
+     "colonne e sistema).", "lon! lat! epoch! system!")
+_add("TABLE_TOO_LARGE",
+     "{path}: {rows} rows, above the limit of {max_rows}.", "{path}: {rows} righe, oltre il tetto di {max_rows}.",
+     "path rows:int max_rows:int")
+_add("TABLE_CHOICE_REQUIRED",
+     "Say which table to open.", "Indicare quale tabella aprire.",
+     several=("{path}: more tables, indicate table ({tables}).", "{path}: più tabelle, indicare table ({tables}).",
+              "path tables:list!"),
+     missing=("{path}: table '{table}' does not exist ({tables}).", "{path}: tabella '{table}' inesistente ({tables}).",
+              "path table tables:list!"))
+
+_add("COLUMN_TYPE_UNSUPPORTED",
+     "The column type is not supported for this operation.", "Il tipo di colonna non è supportato per l'operazione.",
+     position_not_numeric=("Column '{column}' of type {dtype}: numeric values are required.",
+                           "Colonna '{column}' di tipo {dtype}: servono valori numerici.", "column! dtype"),
+     not_numeric=("Column '{column}' of type {dtype}: a numeric column is required.",
+                  "Colonna '{column}' di tipo {dtype}: serve una colonna numerica.", "column! dtype"),
+     column_missing=("Column '{column}' does not exist.", "La colonna '{column}' non esiste.", "column"),
+     bins_required=("Histogram: bins is required (number or edges).", "Istogramma: bins obbligatorio (numero o bordi).",
+                    ""),
+     bins_invalid=("bins {bins}: a positive integer or increasing edges are required.",
+                   "bins {bins}: serve un intero positivo o bordi crescenti.", "bins"),
+     bins_edges=("bins: strictly increasing edges, at least two.", "bins: bordi strettamente crescenti, almeno due.",
+                 ""),
+     record_out_of_range=("Record {index} is outside 0…{last}.", "Record {index} fuori da 0…{last}.",
+                          "index last:int"),
+     selection_mask=("Selection: a boolean mask of {rows} values is required.",
+                     "Selezione: serve una maschera booleana di {rows} valori.", "rows:int"),
+     argument_column_missing=("{argument}: column '{column}' does not exist.",
+                              "{argument}: la colonna '{column}' non esiste.", "argument column"),
+     argument_not_numeric=("{argument}: column '{column}' is not numeric.",
+                           "{argument}: la colonna '{column}' non è numerica.", "argument column!"),
+     number_needed=("Column '{column}' of type {dtype}: a number is required.",
+                    "Colonna '{column}' di tipo {dtype}: serve un numero.", "column! dtype"))
+_add("PROPER_MOTION_MISSING",
+     "The proper-motion columns are missing.", "Mancano le colonne del moto proprio.",
+     column_missing=("{argument}: column '{column}' does not exist.", "{argument}: la colonna '{column}' non esiste.",
+                     "argument column"),
+     cosdec_required=("pm_ra_includes_cosdec is required (True or False): never assumed.",
+                      "pm_ra_includes_cosdec obbligatorio (True o False): mai assunto.", ""))
+_add("UNIT_INCOMPATIBLE",
+     "The units are not compatible.", "Le unità non sono compatibili.",
+     argument_unit=("{argument}: column '{column}' is in unit {unit}, {required} is required.",
+                    "{argument}: colonna '{column}' in unità {unit}, serve {required}.",
+                    "argument column! unit! required"),
+     calculated_unrecognized=("Column '{column}': unit '{unit}' not recognised, no computation with unknown units.",
+                              "Colonna '{column}': unità '{unit}' non riconosciuta, nessun calcolo con unità ignote.",
+                              "column! unit!"),
+     calculated_column=("Calculated column '{name}': {detail}", "Colonna calcolata '{name}': {detail}",
+                        "name detail!"))
+_add("COLUMN_NAME_EXISTS",
+     "The column name is already present.", "Il nome della colonna è già presente.",
+     propagation_columns=("Columns already present: {columns}.", "Colonne già presenti: {columns}.",
+                          "columns:list!"),
+     name_exists=("Column '{column}' already present: no overwriting.",
+                  "Colonna '{column}' già presente: nessuna sovrascrittura.", "column!"))
+_add("EPOCH_INVALID",
+     "The epoch is not valid.", "L'epoca non è valida.",
+     source_in_metadata=("The origin epoch is already in the metadata: source_epoch is not used.",
+                         "L'epoca di origine è già nei metadati: source_epoch non si usa.", ""),
+     several_epoch_columns=("More columns with UCD time.epoch {columns}: no choice.",
+                            "Più colonne con UCD time.epoch {columns}: nessuna scelta.", "columns:list!"),
+     epoch_column_unit=("Epoch column '{column}' is in unit {unit}: Julian years are required; otherwise "
+                        "source_epoch.",
+                        "Colonna d'epoca '{column}' in unità {unit}: servono anni giuliani; altrimenti source_epoch.",
+                        "column! unit!"),
+     source_missing=("The origin epoch is not in the metadata: indicate source_epoch (never assumed).",
+                     "Epoca di origine non nei metadati: indicare source_epoch (mai assunta).", ""),
+     target_required=("The target epoch is required.", "L'epoca di arrivo è obbligatoria.", ""),
+     scale_required=("scale is required: a non-zero time interval (e.g. 1000 * u.yr).",
+                     "scale obbligatoria: un intervallo di tempo non nullo (es. 1000 * u.yr).", ""),
+     display_type=("display_positions: image_or_epoch of type {type} is not recognised (image with WCS, WCS of "
+                   "module 10, epoch or None): no epoch assumed.",
+                   "display_positions: image_or_epoch di tipo {type} non riconosciuto (immagine con WCS, WCS del 10, "
+                   "epoca o None): nessuna epoca assunta.", "type"),
+     time_objects=("start and end must be Time objects with a declared scale.",
+                   "start ed end devono essere oggetti Time con scala dichiarata.", ""),
+     empty_interval=("Empty interval: start > end.", "Intervallo vuoto: start > end.", ""),
+     timesys_conflict=("Format and scale are already in the TIMESYS: do not pass them.",
+                       "Formato e scala sono già nel TIMESYS: non si passano.", ""),
+     timescale_unsupported=("Scale '{scale}' of the TIMESYS is not supported.",
+                            "Scala '{scale}' del TIMESYS non supportata.", "scale!"),
+     timeorigin_invalid=("timeorigin '{origin}' is not valid.", "timeorigin '{origin}' non valido.", "origin!"),
+     timeorigin_units=("Column '{column}': with timeorigin, times with units are required.",
+                       "Colonna '{column}': con timeorigin servono tempi con unità.", "column"),
+     timesys_no_origin=("Column '{column}': TIMESYS without timeorigin and values not in years.",
+                        "Colonna '{column}': TIMESYS senza timeorigin e valori non in anni.", "column"),
+     format_scale_required=("Column '{column}' has no TIMESYS: time_format and scale are required (never assumed).",
+                            "Colonna '{column}' senza TIMESYS: time_format e scale obbligatori (mai assunti).",
+                            "column"),
+     values_unreadable=("Column '{column}': values not readable as {time_format} ({detail}).",
+                        "Colonna '{column}': valori non leggibili come {time_format} ({detail}).",
+                        "column time_format detail!"))
+
+_SEARCH_AT = " (character {position}): {expression}"
+_SEARCH_AT_IT = " (carattere {position}): {expression}"
+
+
+def _at(en: str, it: str, params: str = "") -> tuple[str, str, str]:
+    """Sotto-voce di un'espressione con la posizione: ``(en, it, parametri)`` con ``position`` ed ``expression``."""
+    return en + _SEARCH_AT, it + _SEARCH_AT_IT, ("position:int expression " + params).strip()
+
+
+_add("EXPRESSION_INVALID",
+     "The expression is not valid.", "L'espressione non è valida.",
+     unclosed_name=_at("column name ${{...}} without '}}'", "nome di colonna ${{...}} senza '}}'"),
+     unclosed_string=_at("string without closing quotes", "stringa senza virgolette di chiusura"),
+     unexpected_symbol=_at("symbol '{symbol}' not provided", "simbolo '{symbol}' non previsto", "symbol"),
+     expected_token=_at("expected {expected}, found '{found}'", "atteso {expected}, trovato '{found}'",
+                        "expected found"),
+     expected_token_end=_at("expected {expected}, found the end", "atteso {expected}, trovata la fine", "expected"),
+     unexpected_token=_at("unexpected symbol '{found}'", "simbolo inatteso '{found}'", "found"),
+     column_missing=_at("column '{column}' does not exist", "colonna '{column}' inesistente", "column"),
+     abs_needs_column=_at("a column is needed after '|'", "dopo '|' serve una colonna"),
+     no_text_columns=_at("text to search, but the table has no text columns",
+                         "testo da cercare, ma la tabella non ha colonne di testo"),
+     term_expected=_at("a term was expected, found '{found}'", "atteso un termine, trovato '{found}'", "found"),
+     term_expected_end=_at("a term was expected, found the end", "atteso un termine, trovata la fine"),
+     value_needed=_at("a value is needed after the operator", "dopo l'operatore serve un valore"),
+     number_needed=_at("numeric column '{column}': a number is required", "colonna numerica '{column}': serve un numero",
+                       "column!"),
+     abs_text=_at("|{column}|: the absolute value only applies to numeric columns",
+                  "|{column}|: il valore assoluto vale solo per le colonne numeriche", "column!"),
+     text_operators=_at("text column '{column}': only = and != are allowed",
+                        "colonna di testo '{column}': ammessi solo = e !=", "column!"),
+     not_comparable=_at("column '{column}' of type {dtype} cannot be compared",
+                        "colonna '{column}' di tipo {dtype} non confrontabile", "column! dtype"),
+     empty=_at("empty expression", "espressione vuota"),
+     not_string=("The expression must be a string.", "L'espressione deve essere una stringa.", "position:int"),
+     prefix_needs_selection=("prefix '{prefix}': the current selection (selection) is required.",
+                             "prefisso '{prefix}': serve la selezione corrente (selection).",
+                             "position:int prefix"),
+     selection_shape=("selection: a mask of {rows} values is required.",
+                      "selection: serve una maschera di {rows} valori.", "position:int rows:int"))
+_add("COLUMN_EXPRESSION_INVALID",
+     "The column expression is not valid.", "L'espressione di colonna non è valida.",
+     name_required=("The name of the column is required.", "Nome della colonna obbligatorio.", "position:int"),
+     decimals_invalid=("decimals {decimals}: an integer ≥ 0 is required.", "decimals {decimals}: intero ≥ 0.",
+                       "position:int decimals"),
+     empty=("Empty expression.", "Espressione vuota.", "position:int"),
+     power=_at("'**' not provided: the power is written '^'", "'**' non previsto: la potenza si scrive '^'"),
+     unclosed_reference=_at("reference ${{...}} without '}}'", "riferimento ${{...}} senza '}}'"),
+     column_missing=_at("column '{column}' does not exist", "colonna '{column}' inesistente", "column"),
+     syntax=_at("invalid syntax", "sintassi non valida"),
+     name_unknown=_at("name '{name}' not provided (columns as ${{name}}; constants {constants})",
+                      "nome '{name}' non previsto (colonne come ${{nome}}; costanti {constants})",
+                      "name constants:list"),
+     function_unknown=_at("function '{function}' not provided", "funzione '{function}' non prevista", "function"),
+     arity=_at("{function}: wrong number of arguments", "{function}: numero di argomenti errato", "function"),
+     starred=_at("arguments with '*' not provided", "argomenti con '*' non previsti"),
+     construct=_at("construct {construct} not provided", "costrutto {construct} non previsto", "construct"))
+_add("PLOT_RULE_INVALID",
+     "The drawing rule is not valid.", "La regola di disegno non è valida.",
+     not_plotrule=("Rule {rule}: a PlotRule is required.", "Regola {rule}: serve un PlotRule.", "rule:int"),
+     shape_unknown=("Rule {rule}: shape '{shape}' is not in the list ({allowed}).",
+                    "Regola {rule}: forma '{shape}' fuori elenco ({allowed}).", "rule:int shape allowed:list"),
+     color_invalid=("Rule {rule}: colour '{color}': #RRGGBB is required.",
+                    "Regola {rule}: colore '{color}': serve #RRGGBB.", "rule:int color"),
+     size_column=("Rule {rule}: size: numeric column '{column}' does not exist.",
+                  "Regola {rule}: dimensione: colonna numerica '{column}' inesistente.", "rule:int column"),
+     size_range=("Rule {rule}: size: vmin < vmax is required, both finite.",
+                 "Regola {rule}: dimensione: serve vmin < vmax, entrambi finiti.", "rule:int"),
+     size_positive=("Rule {rule}: size: size_min and size_max must be positive.",
+                    "Regola {rule}: dimensione: size_min e size_max devono essere positivi.", "rule:int"),
+     size_invalid=("Rule {rule}: size {size}: a positive number or a SizeScale is required.",
+                   "Regola {rule}: dimensione {size}: serve un numero positivo o una SizeScale.", "rule:int size"),
+     selection_prefix=("Rule {rule}: the selection of a rule does not allow the prefixes + and -.",
+                       "Regola {rule}: la selezione di una regola non ammette i prefissi + e -.", "rule:int"))
+_add("FILE_EXISTS", "{path}: already exists; use overwrite=True.", "{path}: esiste già; usare overwrite=True.", "path")
+_add("INPLACE",
+     "The given table was modified in place.", "La tabella data è stata modificata in posto.",
+     subset=("Subset: {kept} records out of {total}: given table modified in place (inplace=True).",
+             "Sottoinsieme: {kept} record su {total}: tabella data modificata in posto (inplace=True).",
+             "kept:int total:int"),
+     calculated=("Calculated column '{name}' = {expression}: given table modified.",
+                 "Colonna calcolata '{name}' = {expression}: tabella data modificata.", "name! expression"),
+     calculated_unit=("Calculated column '{name}' = {expression} [{unit}]: given table modified.",
+                      "Colonna calcolata '{name}' = {expression} [{unit}]: tabella data modificata.",
+                      "name! expression unit"))
+_add("PROPER_MOTION_ROW_MISSING",
+     "{missing} rows without proper motion (or position or epoch): propagated position missing, a null proper "
+     "motion is never assumed.",
+     "{missing} righe senza moto proprio (o posizione o epoca): posizione propagata mancante, mai moto proprio nullo "
+     "assunto.", "missing:int")
+
+_add("XML_UNSAFE",
+     "{path}: dangerous XML construct ({construct}), nothing loaded.",
+     "{path}: costrutto XML pericoloso ({construct}), nulla caricato.", "path construct")
+_add("ASTRORES_UNREADABLE",
+     "The ASTRORES file cannot be read.", "Il file ASTRORES non è leggibile.",
+     xml_unreadable=("{path}: XML not readable ({detail}).", "{path}: XML non leggibile ({detail}).", "path detail!"),
+     root_unexpected=("{path}: root '{root}', ASTRO expected.", "{path}: radice '{root}', attesa ASTRO.",
+                      "path root!"),
+     no_data=("{path}: DATA without CSV, TABLEDATA or LINK.", "{path}: DATA senza CSV, TABLEDATA o LINK.", "path"),
+     row_fields=("{path}: row {row} with {values} values for {fields} fields.",
+                 "{path}: riga {row} con {values} valori per {fields} campi.",
+                 "path row:int values:int fields:int"),
+     no_fields=("{path}: table {index} without FIELD.", "{path}: tabella {index} senza FIELD.", "path index:int"),
+     duplicate_field=("{path}: two fields with the same name '{name}'.",
+                      "{path}: due campi con lo stesso nome '{name}'.", "path name!"),
+     link_no_content_type=("{path}: LINK without content-type: the format of the linked data cannot be guessed "
+                           "(D13-17).",
+                           "{path}: LINK senza content-type: il formato dei dati collegati non si indovina (D13-17).",
+                           "path"),
+     link_type_not_read=("{path}: LINK with content-type '{content_type}' not read; allowed: {allowed} (D13-17).",
+                         "{path}: LINK con content-type '{content_type}' non letto; ammessi: {allowed} (D13-17).",
+                         "path content_type! allowed:list"),
+     link_header_absent=("{path}: LINK '{content_type}': the CSV reader of the module needs the row of column names "
+                         "(header=absent, RFC 4180).",
+                         "{path}: LINK '{content_type}': il lettore CSV del modulo vuole la riga dei nomi delle "
+                         "colonne (header=absent, RFC 4180).", "path content_type!"),
+     link_gref=("{path}: LINK with gref (GLU system): only LINKs with href are read (D13-17).",
+                "{path}: LINK con gref (sistema GLU): si leggono solo i LINK con href (D13-17).", "path"),
+     link_action=("{path}: LINK with action: only LINKs with href are read (D13-17).",
+                  "{path}: LINK con action: si leggono solo i LINK con href (D13-17).", "path"),
+     link_no_address=("{path}: LINK with no address: only LINKs with href are read (D13-17).",
+                      "{path}: LINK con nessun indirizzo: si leggono solo i LINK con href (D13-17).", "path"),
+     link_href_invalid=("{path}: LINK href '{href}': an http(s) URL is required (relative only in a document "
+                        "downloaded from a URL).",
+                        "{path}: LINK href '{href}': serve un URL http(s) (relativo solo in un documento scaricato da "
+                        "URL).", "path href!"),
+     link_needs_network=("{path}: data in an external LINK ({url}): the network and the cache of module 14 are "
+                         "needed, use load_table (D13-17).",
+                         "{path}: dati in un LINK esterno ({url}): servono la rete e la cache del modulo 14, usare "
+                         "load_table (D13-17).", "path url!"),
+     link_unreadable=("{path}: linked data {url} not readable as {format} (declared content-type): {cause}",
+                      "{path}: dati collegati {url} non leggibili come {format} (content-type dichiarato): {cause}",
+                      "path url! format cause:msg"),
+     link_data_error=("{path}: linked data {url} not readable as {format} (declared content-type): {detail}",
+                      "{path}: dati collegati {url} non leggibili come {format} (content-type dichiarato): {detail}",
+                      "path url! format detail!"),
+     link_conflict=("{path}: FIELD and linked data {url} do not match: {problems}",
+                    "{path}: FIELD e dati collegati {url} non coincidono: {problems}",
+                    "path url! problems:msgs"))
+_add("ASTRORES_LINK_PROBLEM",  # diagnosi, solo come messaggio annidato (D40-7) di ASTRORES_UNREADABLE link_conflict
+     "A FIELD and the linked data differ.", "Un FIELD e i dati collegati differiscono.",
+     columns=("columns {linked} instead of the FIELDs {fields}", "colonne {linked} invece dei FIELD {fields}",
+              "linked! fields!"),
+     unit=("{name}: unit '{field_unit}' in the FIELD and '{linked_unit}' in the linked data",
+           "{name}: unità '{field_unit}' nel FIELD e '{linked_unit}' nei dati collegati",
+           "name! field_unit! linked_unit!"),
+     ucd=("{name}: UCD '{field_ucd}' in the FIELD and '{linked_ucd}' in the linked data",
+          "{name}: UCD '{field_ucd}' nel FIELD e '{linked_ucd}' nei dati collegati", "name! field_ucd! linked_ucd!"),
+     numeric=("{name}: numeric FIELD ({datatype}) but linked data of type {dtype}",
+              "{name}: FIELD numerico ({datatype}) ma dati collegati di tipo {dtype}", "name! datatype dtype"),
+     boolean=("{name}: boolean FIELD but linked data of type {dtype}",
+              "{name}: FIELD booleano ma dati collegati di tipo {dtype}", "name! dtype"))
+_add("ASTRORES_LINK",
+     "Data read from the LINK {url} as {format} (declared content-type '{content_type}').",
+     "Dati letti dal LINK {url} come {format} (content-type dichiarato '{content_type}').",
+     "url! format content_type!")
+_add("ASTRORES_TYPE_MISMATCH",
+     "The ASTRORES data differ from the declared type.", "I dati ASTRORES differiscono dal tipo dichiarato.",
+     sexagesimal_hours=("Field '{field}': declared {datatype} but the data are sexagesimal; converted to degrees "
+                        "(hours) with module 10, original text in '{text_column}'.",
+                        "Campo '{field}': dichiarato {datatype} ma i dati sono sessagesimali; convertiti in gradi "
+                        "(ore) con il modulo 10, testo originale in '{text_column}'.",
+                        "field! datatype text_column!"),
+     sexagesimal_degrees=("Field '{field}': declared {datatype} but the data are sexagesimal; converted to degrees "
+                          "(degrees) with module 10, original text in '{text_column}'.",
+                          "Campo '{field}': dichiarato {datatype} ma i dati sono sessagesimali; convertiti in gradi "
+                          "(gradi) con il modulo 10, testo originale in '{text_column}'.",
+                          "field! datatype text_column!"),
+     not_numeric=("Field '{field}': declared {datatype} but the data are not numeric; read as text.",
+                  "Campo '{field}': dichiarato {datatype} ma i dati non sono numerici; letto come testo.",
+                  "field! datatype"),
+     not_boolean=("Field '{field}': declared L but the data are not boolean; text.",
+                  "Campo '{field}': dichiarato L ma i dati non sono booleani; testo.", "field!"))
+_add("UCD1_TRANSLATED",
+     "Field '{field}': UCD1 '{original}' translated into '{translated}' (IVOA recommendation on UCDs, §3.1 and "
+     "appendix A).",
+     "Campo '{field}': UCD1 '{original}' tradotto in '{translated}' (raccomandazione IVOA sugli UCD, §3.1 e "
+     "appendice A).", "field! original! translated")
+_add("ASTRORES_NONCONFORMING_REF",
+     "Field '{field}': ref '{ref}' is not an IDREF (DTD): accepted as '{accepted}'.",
+     "Campo '{field}': ref '{ref}' non è un IDREF (DTD): accettato come '{accepted}'.", "field! ref! accepted!")
+_add("UCD1_NOT_TRANSLATED",
+     "UCD1 outside the IVOA recommendation, not translated (D13-14b) in the fields {fields}: position columns to be "
+     "confirmed with confirm_position_columns.",
+     "UCD1 fuori dalla raccomandazione IVOA, non tradotti (D13-14b) nei campi {fields}: colonne di posizione da "
+     "confermare con confirm_position_columns.", "fields:list!")
+
+_add("CATALOG_UNKNOWN",
+     "The catalogue is not known.", "Il catalogo non è noto.",
+     invalid_id=("Catalogue identifier not valid: {catalog_id}.", "Identificativo di catalogo non valido: {catalog_id}.",
+                 "catalog_id"),
+     no_columns=("Catalogue '{name}' not found on {server}: no column in TAP_SCHEMA (the identifier of a table is "
+                 "needed, e.g. \"I/355/gaiadr3\").",
+                 "Catalogo '{name}' non trovato su {server}: nessuna colonna in TAP_SCHEMA (serve l'identificativo di "
+                 "una tabella, es. \"I/355/gaiadr3\").", "name server"),
+     no_columns_candidates=("Catalogue '{name}' not found on {server}: no column in TAP_SCHEMA (the identifier of a "
+                            "table is needed, e.g. \"I/355/gaiadr3\"); tables of {server} that start with '{name}': "
+                            "{candidates}.",
+                            "Catalogo '{name}' non trovato su {server}: nessuna colonna in TAP_SCHEMA (serve "
+                            "l'identificativo di una tabella, es. \"I/355/gaiadr3\"); tabelle di {server} che "
+                            "cominciano con '{name}': {candidates}.", "name server candidates:list!"),
+     no_columns_candidates_limited=("Catalogue '{name}' not found on {server}: no column in TAP_SCHEMA (the "
+                                    "identifier of a table is needed, e.g. \"I/355/gaiadr3\"); tables of {server} "
+                                    "that start with '{name}': {candidates} (list limited to {max_candidates}).",
+                                    "Catalogo '{name}' non trovato su {server}: nessuna colonna in TAP_SCHEMA (serve "
+                                    "l'identificativo di una tabella, es. \"I/355/gaiadr3\"); tabelle di {server} "
+                                    "che cominciano con '{name}': {candidates} (elenco limitato a "
+                                    "{max_candidates}).", "name server candidates:list! max_candidates:int"),
+     not_found=("Catalogue '{catalog_id}' not found on {server}: {detail}",
+                "Catalogo '{catalog_id}' non trovato su {server}: {detail}", "catalog_id server detail!"),
+     not_found_candidates=("Catalogue '{catalog_id}' not found on {server}: {detail}; tables of {server} that start "
+                           "with '{catalog_id}': {candidates}.",
+                           "Catalogo '{catalog_id}' non trovato su {server}: {detail}; tabelle di {server} che "
+                           "cominciano con '{catalog_id}': {candidates}.",
+                           "catalog_id server detail! candidates:list!"),
+     not_found_candidates_limited=("Catalogue '{catalog_id}' not found on {server}: {detail}; tables of {server} "
+                                   "that start with '{catalog_id}': {candidates} (list limited to "
+                                   "{max_candidates}).",
+                                   "Catalogo '{catalog_id}' non trovato su {server}: {detail}; tabelle di {server} "
+                                   "che cominciano con '{catalog_id}': {candidates} (elenco limitato a "
+                                   "{max_candidates}).",
+                                   "catalog_id server detail! candidates:list! max_candidates:int"))
+_add("REGION_REQUIRED",
+     "Catalogue '{catalog_id}': more than {max_rows} rows ({declared}); indicate a region with the "
+     "region=(centre, radius) parameter, or allow_partial=True for the first rows.",
+     "Catalogo '{catalog_id}': più di {max_rows} righe ({declared}); indicare una regione con il parametro "
+     "region=(centro, raggio), oppure allow_partial=True per le prime righe.", "catalog_id max_rows:int declared!")
+_add("REGION_TOO_LARGE",
+     "Catalogue '{catalog_id}': more than {max_rows} rows in the region ({declared}); reduce the radius or use "
+     "allow_partial=True.",
+     "Catalogo '{catalog_id}': più di {max_rows} righe nella regione ({declared}); ridurre il raggio o usare "
+     "allow_partial=True.", "catalog_id max_rows:int declared!")
+_add("REGION",
+     "Region: circle of radius {radius} around ({center_lon}, {center_lat}) in the system of the columns "
+     "{lon}/{lat} ({system}, epoch of the positions not declared, from the service metadata; centre converted with "
+     "module 10).",
+     "Regione: cerchio di raggio {radius} attorno a ({center_lon}, {center_lat}) nel sistema delle colonne "
+     "{lon}/{lat} ({system}, epoca delle posizioni non dichiarata, dai metadati del servizio; centro convertito con il "
+     "modulo 10).", "lon! lat! system! center_lon:qty center_lat:qty radius:qty",
+     equinox=("Region: circle of radius {radius} around ({center_lon}, {center_lat}) in the system of the columns "
+              "{lon}/{lat} ({system} equinox {equinox}, epoch of the positions not declared, from the service "
+              "metadata; centre converted with module 10).",
+              "Regione: cerchio di raggio {radius} attorno a ({center_lon}, {center_lat}) nel sistema delle colonne "
+              "{lon}/{lat} ({system} equinozio {equinox}, epoca delle posizioni non dichiarata, dai metadati del "
+              "servizio; centro convertito con il modulo 10).",
+              "lon! lat! system! equinox! center_lon:qty center_lat:qty radius:qty"),
+     epoch=("Region: circle of radius {radius} around ({center_lon}, {center_lat}) in the system of the columns "
+            "{lon}/{lat} ({system}, epoch of the positions {epoch}, from the service metadata; centre converted with "
+            "module 10).",
+            "Regione: cerchio di raggio {radius} attorno a ({center_lon}, {center_lat}) nel sistema delle colonne "
+            "{lon}/{lat} ({system}, epoca delle posizioni {epoch}, dai metadati del servizio; centro convertito con il "
+            "modulo 10).", "lon! lat! system! epoch! center_lon:qty center_lat:qty radius:qty"),
+     equinox_epoch=("Region: circle of radius {radius} around ({center_lon}, {center_lat}) in the system of the "
+                    "columns {lon}/{lat} ({system} equinox {equinox}, epoch of the positions {epoch}, from the "
+                    "service metadata; centre converted with module 10).",
+                    "Regione: cerchio di raggio {radius} attorno a ({center_lon}, {center_lat}) nel sistema delle "
+                    "colonne {lon}/{lat} ({system} equinozio {equinox}, epoca delle posizioni {epoch}, dai metadati "
+                    "del servizio; centro convertito con il modulo 10).",
+                    "lon! lat! system! equinox! epoch! center_lon:qty center_lat:qty radius:qty"))
+_add("PARTIAL_CATALOG",
+     "allow_partial=True: only the first {max_rows} rows returned by the service, not the whole catalogue "
+     "{catalog_id}.",
+     "allow_partial=True: solo le prime {max_rows} righe restituite dal servizio, non tutto il catalogo "
+     "{catalog_id}.", "max_rows:int catalog_id",
+     in_region=("allow_partial=True: only the first {max_rows} rows returned by the service, not the whole "
+                "catalogue {catalog_id} in the region.",
+                "allow_partial=True: solo le prime {max_rows} righe restituite dal servizio, non tutto il catalogo "
+                "{catalog_id} nella regione.", "max_rows:int catalog_id"))
+_add("COLLECTION_SKIPPED",
+     "Non-VizieR records excluded from the tree: {ids}", "Record non VizieR esclusi dall'albero: {ids}", "ids:list!",
+     more=("Non-VizieR records excluded from the tree: {ids} …", "Record non VizieR esclusi dall'albero: {ids} …",
+           "ids:list!"))
+_add("POPULARITY_INVALID",
+     "{count} records with a non-integer vizier_popularity: treated as absent.",
+     "{count} record con vizier_popularity non intera: trattati come assenti.", "count:int")
+_add("POPULARITY_MISSING",
+     "{count} collections without vizier_popularity: after the others, in natural order.",
+     "{count} collezioni senza vizier_popularity: dopo le altre, in ordine naturale.", "count:int")

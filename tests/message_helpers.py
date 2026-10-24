@@ -8,7 +8,7 @@ import json
 import re
 from collections.abc import Callable, Iterable, Mapping
 
-from astrotwo.messages_catalog import CATALOG, REASON, message_text, validate_params
+from astrotwo.messages_catalog import CATALOG, REASON, message_params, message_text, uses_catalog, validate_params
 
 _LEFTOVER = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 
@@ -22,11 +22,52 @@ def check_message(code: str, params: Mapping[str, object] | None, text: str | No
     params = {} if params is None else params
     json.dumps(params)  # i parametri sono valori JSON
     assert validate_params(code, params) == [], (code, params)
+    # Un messaggio annidato di un modulo non ancora convertito (D40-7) si mostra col testo originale e la nota.
+    fallback = any(not uses_catalog(c, p) for c, p in _nested(code, params))
     for lang in ("en", "it"):
         rendered = message_text(code, params, lang, text=text)
-        assert not _LEFTOVER.search(rendered), (code, lang, rendered)
-        assert "(no translation)" not in rendered and "(nessuna traduzione)" not in rendered, rendered
+        scrubbed = rendered
+        for literal in ("${name}", "${nome}", "${...}"):  # graffe scritte nel testo (``{{``), non segnaposto
+            scrubbed = scrubbed.replace(literal, "")
+        for value in sorted(_strings(params), key=len, reverse=True):  # un valore può contenere graffe (${x})
+            scrubbed = scrubbed.replace(value, "")
+        assert not _LEFTOVER.search(scrubbed), (code, lang, rendered)
+        if not fallback:
+            assert "(no translation)" not in rendered and "(nessuna traduzione)" not in rendered, rendered
     return code, params.get(REASON)
+
+
+def _strings(value: object):
+    """Tutti i testi dei valori di ``params`` (anche annidati)."""
+    if isinstance(value, str):
+        if value:
+            yield value
+    elif isinstance(value, Mapping):
+        for item in value.values():
+            yield from _strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings(item)
+
+
+def _nested(code: str, params: Mapping[str, object] | None):
+    """(codice, params) dei messaggi annidati (tipo ``message``, D40-7) di un messaggio, in modo ricorsivo."""
+    for name in message_params(code, params):
+        value = (params or {}).get(name)
+        for item in (value if isinstance(value, (list, tuple)) else [value]):
+            if isinstance(item, Mapping):
+                inner = item.get("params") or {}
+                yield item["code"], inner
+                yield from _nested(item["code"], inner)
+
+
+def nested_pairs(code: str, params: Mapping[str, object] | None) -> set[tuple[str, str | None]]:
+    """Coppie (codice, reason) dei messaggi annidati con voce nel catalogo, controllate come ogni messaggio."""
+    out = set()
+    for inner_code, inner in _nested(code, params):
+        if uses_catalog(inner_code, inner):
+            out.add((inner_code, inner.get(REASON)))
+    return out
 
 
 def check_error(exc: BaseException) -> tuple[str, str | None]:

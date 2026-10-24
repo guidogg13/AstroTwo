@@ -512,6 +512,10 @@ solleva per ragioni diverse portano in `params` il parametro riservato
 catalogo; "esterno" = testo di terzi (libreria, file, servizio), inserito tale
 e quale e senza tradurlo. Nessun identificatore di errore cambia.
 
+Nessun messaggio di questo modulo ne incorpora un altro **di AstroTwo**: i `detail` sono sempre testo di terzi
+(eccezioni di astropy), quindi nessun parametro è di tipo `message` (D40-7); sono i moduli sopra (12) a incorporare
+gli errori del 10 con quel tipo.
+
 | Codice | `reason` | Parametri (`params`) |
 |---|---|---|
 | `PIXEL_CONVENTION_UNKNOWN` | (generale) | `value` (string), `allowed` (list) |
@@ -810,3 +814,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `make_view_wcs` con `ViewGeometry` (regione visibile = base con il pixel di riferimento spostato all'origine intera che contiene la finestra, anche per SIP; `WCS.slice` per le distorsioni a tabella), `format_coordinates` (verifica di `Angle.to_string`: riporto sì, ritorno a 0 no, gestito nel codice; segno ASCII), `compass_and_scale_bar`, `choose_projection` con default 30° che restituisce `ProjectionChoice` (proiezione, campo, soglia e sua fonte); test T20 aggiornato e T26–T36 in `tests/core/test_coordinates_wcs.py` (100 superati). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8b:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
+| 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — nessun messaggio annidato di AstroTwo nel modulo (tipo `message` non usato); nessun codice cambia. |

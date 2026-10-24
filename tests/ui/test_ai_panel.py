@@ -648,7 +648,8 @@ def test_t14_latency(qtbot, settings_path, cache, closing, monkeypatch):  # noqa
     def slow_catalog(*a, **k):
         running.append(time.monotonic())
         time.sleep(2.0)  # comando lungo nel thread dei comandi
-        raise catalogs.CatalogsError("CATALOG_UNKNOWN", "catalogo finto e lento")
+        raise catalogs.CatalogsError("CATALOG_UNKNOWN", "catalogo finto e lento",
+                                     params={"reason": "invalid_id", "catalog_id": "'finto'"})
 
     def slow_text(messages, tools, cancel):
         for _ in range(60):
