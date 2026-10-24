@@ -21,6 +21,7 @@ import io
 import json
 import math
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from astropy.io import fits
 from mocpy import MOC, STMOC, TimeMOC
 
 import astrotwo
+from astrotwo.core.coordinates_wcs import ModuleWarning
 
 __all__ = [
     "CircleRegion",
@@ -91,13 +93,36 @@ BODIES_KEYWORD = "A2BODIES"
 
 
 class MocError(Exception):
-    """Errore del modulo 16 con identificatore della specifica (§10)."""
+    """Errore del modulo 16 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore di un
+    modulo sotto (10, 14) rilanciato con il suo codice, il suo testo e i suoi ``params`` (§10, "Parametri dei
+    messaggi")."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 relayed: bool = False, **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``), mai arrotondato."""
+    return {"value": float(value), "unit": unit}
+
+
+def _message_of(exc) -> dict:
+    """Messaggio annidato (tipo ``message``, D40-7) di un errore di AstroTwo: codice, ``params`` e testo suoi."""
+    return {"code": exc.code, "params": dict(getattr(exc, "params", None) or {}), "text": exc.message}
+
+
+def _relay(exc, text: str) -> MocError:
+    """Errore di un modulo sotto rilanciato: codice e ``params`` restano suoi, il testo del 16 ha il prefisso."""
+    return MocError(exc.code, text, params=getattr(exc, "params", None), relayed=True,
+                    **getattr(exc, "details", {}))
 
 
 def _check_kind(kind: object) -> str:
@@ -110,7 +135,8 @@ def _check_order(order: object, limit: int, what: str) -> int:
     """Ordine obbligatorio, intero in [0, limite dello standard] (``HEALPIX_ORDER_INVALID``)."""
     if isinstance(order, bool) or not isinstance(order, (int, np.integer)) or not 0 <= int(order) <= limit:
         raise MocError("HEALPIX_ORDER_INVALID", f"{what} {order!r}: serve un intero in [0, {limit}] "
-                       "(standard IVOA MOC 2.0), senza default")
+                       "(standard IVOA MOC 2.0), senza default",
+                       params={"reason": "moc_order", "what": what, "value": repr(order), "limit": limit})
     return int(order)
 
 
@@ -138,7 +164,8 @@ class Moc:
             raise TypeError(f"MOC {self.kind}: atteso {_CLASSES[self.kind].__name__}, "
                             f"ricevuto {type(self.moc).__name__}")
         if self.kind != "time" and not (isinstance(self.body, str) and self.body):
-            raise MocError("BODY_UNKNOWN", f"MOC {self.kind} senza corpo (body): un MOC senza corpo è un errore")
+            raise MocError("BODY_UNKNOWN", f"MOC {self.kind} senza corpo (body): un MOC senza corpo è un errore",
+                           params={"reason": "moc_without_body", "kind": self.kind})
         if (self.body == MIXED_BODY) != bool(self.bodies) or (self.bodies and len(self.bodies) < 2):
             raise ValueError("bodies: elenco di almeno due corpi, solo con body='mixed'")
 
@@ -225,34 +252,41 @@ class Moc:
         return "; ".join(parts) + f" (calcolo: {self.provenance})"
 
     # -- operazioni insiemistiche (§3, §9) ---------------------------------
-    def _check_mixed(self, op: str, force_body: bool) -> list[tuple[str, str]]:
+    def _check_mixed(self, op: str, force_body: bool) -> list[ModuleWarning]:
         """Ogni operazione su un MOC misto richiede di nuovo la forzatura (scelta 5 del 2026-10-12)."""
         if self.body != MIXED_BODY:
             return []
         if not force_body:
             raise MocError("BODY_MISMATCH", f"{op} su un MOC misto {self._body_label()}: forzabile solo con "
-                           "force_body=True (citato nel risultato)")
-        return [("BODY_FORCED", f"{op} su un MOC misto forzata: corpi {', '.join(self.bodies)}")]
+                           "force_body=True (citato nel risultato)",
+                           params={"reason": "mixed_operation", "op": op, "body": self._body_label()})
+        return [ModuleWarning("BODY_FORCED", f"{op} su un MOC misto forzata: corpi {', '.join(self.bodies)}",
+                              {"reason": "mixed", "op": op, "bodies": list(self.bodies)})]
 
-    def _check_other(self, other: Moc, force_body: bool) -> tuple[list[tuple[str, str]], str | None, tuple]:
+    def _check_other(self, other: Moc, force_body: bool) -> tuple[list[ModuleWarning], str | None, tuple]:
         """Controlli di tipo e corpo; restituisce avvisi, corpo e corpi del risultato."""
         if not isinstance(other, Moc):
             raise TypeError("operazione tra MOC: serve un Moc")
         if other.kind != self.kind:
             raise MocError("MOC_TYPE_MISMATCH", f"operazione tra un MOC {self.kind} e un MOC {other.kind}: tipi "
-                           "diversi (unità diverse)")
+                           "diversi (unità diverse)",
+                           params={"reason": "operation", "kind": self.kind, "other": other.kind})
         if self.kind == "time":
             return [], None, ()
         if self.body == other.body and self.body != MIXED_BODY:
             return [], self.body, ()
         if not force_body:
             raise MocError("BODY_MISMATCH", f"corpi diversi o MOC misto: {self._body_label()} e "
-                           f"{other._body_label()}; forzabile solo con force_body=True (citato nel risultato)")
+                           f"{other._body_label()}; forzabile solo con force_body=True (citato nel risultato)",
+                           params={"reason": "different_bodies", "body": self._body_label(),
+                                   "other": other._body_label()})
         bodies = tuple(sorted(set(self.body_list) | set(other.body_list)))  # almeno due: corpi diversi o MOC misto
-        return [("BODY_FORCED", f"operazione forzata tra {self._body_label()} e {other._body_label()}; il "
-                 f"risultato ha corpo misto ({', '.join(bodies)})")], MIXED_BODY, bodies
+        return [ModuleWarning("BODY_FORCED", f"operazione forzata tra {self._body_label()} e "
+                              f"{other._body_label()}; il risultato ha corpo misto ({', '.join(bodies)})",
+                              {"reason": "forced", "body": self._body_label(), "other": other._body_label(),
+                               "bodies": list(bodies)})], MIXED_BODY, bodies
 
-    def _derived(self, result, op: str, notes: list[tuple[str, str]], others: tuple[Moc, ...] = (), *,
+    def _derived(self, result, op: str, notes: list[ModuleWarning], others: tuple[Moc, ...] = (), *,
                  body: str | None = None, bodies: tuple[str, ...] = ()) -> Moc:
         origin = f"{op}(" + ", ".join(m.origin for m in (self, *others)) + ")"
         history = tuple(dict.fromkeys(self.history + sum((m.history for m in others), ())))
@@ -269,7 +303,7 @@ class Moc:
             orders.append(f"ordine temporale {moc.time_order}")
         step = f"{op} con mocpy ({', '.join(orders)}" + (": il massimo degli operandi)" if others else ")")
         if moc.is_empty:
-            notes = notes + [("MOC_EMPTY", f"risultato di {op} vuoto")]
+            notes = notes + [ModuleWarning("MOC_EMPTY", f"risultato di {op} vuoto", {"reason": "operation", "op": op})]
         return replace(moc, history=history + (step,), warnings=tuple(notes))
 
     def _binary(self, other: Moc, op: str, method: str, force_body: bool) -> Moc:
@@ -304,7 +338,8 @@ class Moc:
         """Maschera booleana delle posizioni (``SkyFrame``, sistema dichiarato) che cadono nel MOC spaziale;
         le posizioni si convertono in ICRS con il modulo 10."""
         if self.kind != "space":
-            raise MocError("MOC_TYPE_MISMATCH", f"contains su posizioni: serve un MOC spaziale, non {self.kind}")
+            raise MocError("MOC_TYPE_MISMATCH", f"contains su posizioni: serve un MOC spaziale, non {self.kind}",
+                           params={"reason": "contains_positions", "kind": self.kind})
         self._check_mixed("contains", force_body)
         lon, lat, _ = _to_icrs(coords, "posizioni")
         return np.asarray(self.moc.contains_lonlat(lon=lon * u.deg, lat=lat * u.deg), dtype=bool)
@@ -320,13 +355,15 @@ class Moc:
         """Maschera degli istanti (``astropy.time.Time``, scala dichiarata) coperti dal MOC temporale; gli
         istanti si convertono in TCB con ``astropy.time``."""
         if self.kind != "time":
-            raise MocError("MOC_TYPE_MISMATCH", f"contains_times: serve un MOC temporale, non {self.kind}")
+            raise MocError("MOC_TYPE_MISMATCH", f"contains_times: serve un MOC temporale, non {self.kind}",
+                           params={"reason": "contains_times", "kind": self.kind})
         return np.asarray(self.moc.contains(_tcb(times, "istanti")), dtype=bool)
 
     def space_during(self, during: Moc, *, force_body: bool = False) -> Moc:
         """Copertura spaziale di un MOC spazio-temporale negli intervalli del MOC temporale ``during``."""
         if self.kind != "space-time" or not isinstance(during, Moc) or during.kind != "time":
-            raise MocError("MOC_TYPE_MISMATCH", "space_during: MOC spazio-temporale e MOC temporale")
+            raise MocError("MOC_TYPE_MISMATCH", "space_during: MOC spazio-temporale e MOC temporale",
+                           params={"reason": "space_during"})
         notes = self._check_mixed("space_during", force_body)
         result = Moc(moc=self.moc.query_by_time(during.moc), kind="space", body=self.body, bodies=self.bodies,
                      origin=f"spazio di {self.origin} durante {during.origin}", history=self.history)
@@ -336,13 +373,18 @@ class Moc:
     def time_within(self, within: Moc, *, force_body: bool = False) -> Moc:
         """Copertura temporale di un MOC spazio-temporale nelle zone del MOC spaziale ``within``."""
         if self.kind != "space-time" or not isinstance(within, Moc) or within.kind != "space":
-            raise MocError("MOC_TYPE_MISMATCH", "time_within: MOC spazio-temporale e MOC spaziale")
+            raise MocError("MOC_TYPE_MISMATCH", "time_within: MOC spazio-temporale e MOC spaziale",
+                           params={"reason": "time_within"})
         notes = []
         if within.body != self.body or self.body == MIXED_BODY:
             if not force_body:
                 raise MocError("BODY_MISMATCH", f"corpi diversi o MOC misto: {self._body_label()} e "
-                               f"{within._body_label()}; forzabile solo con force_body=True")
-            notes.append(("BODY_FORCED", f"corpi forzati: {self._body_label()} e {within._body_label()}"))
+                               f"{within._body_label()}; forzabile solo con force_body=True",
+                               params={"reason": "different_bodies", "body": self._body_label(),
+                                       "other": within._body_label()})
+            notes.append(ModuleWarning("BODY_FORCED", f"corpi forzati: {self._body_label()} e "
+                                       f"{within._body_label()}", {"reason": "within", "body": self._body_label(),
+                                                                   "other": within._body_label()}))
         result = Moc(moc=self.moc.query_by_space(within.moc), kind="time", body=None,
                      origin=f"tempo di {self.origin} in {within.origin}", history=self.history)
         return replace(result, history=result.history + ("proiezione sul tempo con mocpy.STMOC.query_by_space",),
@@ -368,11 +410,13 @@ def _detect_format(head: bytes) -> str:
     return "json" if text[:1] in (b"{", b"[") else "ascii"
 
 
-def _unreadable(path: Path, reason: object) -> MocError:
-    return MocError("MOC_UNREADABLE", f"{path}: MOC non leggibile ({reason})", path=str(path))
+def _unreadable(path: Path, reason: str, text: object, **params: object) -> MocError:
+    """``MOC_UNREADABLE``: ``reason`` è l'identificatore della sotto-voce, ``text`` il motivo in italiano."""
+    return MocError("MOC_UNREADABLE", f"{path}: MOC non leggibile ({text})", path=str(path),
+                    params={"reason": reason, "path": str(path), **params})
 
 
-def _header_body(path: Path, header, found: str) -> tuple[str | None, tuple[str, ...], list[tuple[str, str]]]:
+def _header_body(path: Path, header, found: str) -> tuple[str | None, tuple[str, ...], list[ModuleWarning]]:
     """Corpo dalla parola chiave nostra ``A2BODY`` (estensione non standard, scelta 6 del 2026-10-12); senza la
     parola chiave il MOC è celeste (``COORDSYS='C'``, D19-3)."""
     if found == "time":
@@ -385,25 +429,28 @@ def _header_body(path: Path, header, found: str) -> tuple[str | None, tuple[str,
     if body == MIXED_BODY:
         bodies = tuple(b.strip() for b in str(header.get(BODIES_KEYWORD, "")).split(",") if b.strip())
         if len(bodies) < 2:
-            raise _unreadable(path, f"{BODY_KEYWORD}='mixed' senza {BODIES_KEYWORD} con almeno due corpi")
+            raise _unreadable(path, "mixed_without_bodies",
+                              f"{BODY_KEYWORD}='mixed' senza {BODIES_KEYWORD} con almeno due corpi")
     if not body:
-        raise _unreadable(path, f"{BODY_KEYWORD} vuoto")
+        raise _unreadable(path, "body_empty", f"{BODY_KEYWORD} vuoto")
     label = f"misto ({', '.join(bodies)})" if bodies else repr(body)
-    return body, bodies, [("MOC_NONSTANDARD_EXTENSION", f"{path}: corpo {label} dalla parola chiave {BODY_KEYWORD} "
-                           "di AstroTwo, estensione non standard del formato IVOA MOC 2.0 (D19-7)")]
+    return body, bodies, [ModuleWarning(
+        "MOC_NONSTANDARD_EXTENSION", f"{path}: corpo {label} dalla parola chiave {BODY_KEYWORD} di AstroTwo, "
+        "estensione non standard del formato IVOA MOC 2.0 (D19-7)",
+        {"reason": "read", "path": str(path), "body": label, "keyword": BODY_KEYWORD})]
 
 
-def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tuple[str, str]], str | None, tuple]:
+def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[ModuleWarning], str | None, tuple]:
     try:
         with fits.open(path, memmap=False) as hdul:
             tables = [h for h in hdul if isinstance(h, fits.BinTableHDU)]
             if not tables:
-                raise _unreadable(path, "nessuna tabella binaria")
+                raise _unreadable(path, "no_binary_table", "nessuna tabella binaria")
             header = tables[0].header
     except MocError:
         raise
     except (OSError, ValueError) as exc:
-        raise _unreadable(path, exc) from exc
+        raise _unreadable(path, "read_error", exc, detail=str(exc)) from exc
     raw_version = header.get("MOCVERS")
     if raw_version is None:
         version = VERSION_ASSUMED_11
@@ -414,20 +461,27 @@ def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tup
                      "Recommendation, verifica del 2026-10-12)") \
                 if version == "2.1" else ""
             raise MocError("MOC_VERSION_UNSUPPORTED", f"{path}: versione MOC {version!r} non supportata; "
-                           f"lette: {', '.join(SUPPORTED_VERSIONS)}{extra}", version=version)
+                           f"lette: {', '.join(SUPPORTED_VERSIONS)}{extra}", version=version,
+                           params={"reason": "unsupported_2_1", "path": str(path),
+                                   "supported": list(SUPPORTED_VERSIONS)} if version == "2.1"
+                           else {"reason": "unsupported", "path": str(path), "version": version,
+                                 "supported": list(SUPPORTED_VERSIONS)})
     dim = str(header.get("MOCDIM", "SPACE")).strip()  # senza MOCDIM: SPACE (standard 2.0)
     if dim not in _DIMS:
-        raise _unreadable(path, f"MOCDIM {dim!r} non previsto dallo standard")
+        raise _unreadable(path, "mocdim", f"MOCDIM {dim!r} non previsto dallo standard", value=dim)
     found = _DIMS[dim]
     if kind is not None and kind != found:
-        raise MocError("MOC_TYPE_MISMATCH", f"{path}: MOC {found} nel file, richiesto {kind}")
+        raise MocError("MOC_TYPE_MISMATCH", f"{path}: MOC {found} nel file, richiesto {kind}",
+                       params={"reason": "file", "path": str(path), "found": found, "requested": kind})
     notes = []
     if found != "time" and str(header.get("COORDSYS", "")).strip() != "C":
-        raise _unreadable(path, f"COORDSYS {header.get('COORDSYS')!r}: lo standard prevede 'C' (ICRS)")
+        raise _unreadable(path, "coordsys", f"COORDSYS {header.get('COORDSYS')!r}: lo standard prevede 'C' (ICRS)",
+                          value=str(header.get("COORDSYS")))
     if found != "space" and str(header.get("TIMESYS", "")).strip() != "TCB":
         raise MocError("MOC_VERSION_UNSUPPORTED", f"{path}: TIMESYS {header.get('TIMESYS')!r}; lo standard 2.0 "
                        "prevede TCB (i MOC temporali precedenti, Note STMOC 2019, non sono letti)",
-                       version=str(raw_version))
+                       version=str(raw_version),
+                       params={"reason": "timesys", "path": str(path), "value": str(header.get("TIMESYS"))})
     try:
         if version == "1.0":
             # mocpy 0.20.0 accetta MOCVERS 1.1, 2.0 e 2.1, non "1.0": lo standard 1.0 non ha MOCVERS e le sue
@@ -442,9 +496,10 @@ def _read_fits(path: Path, kind: str | None) -> tuple[object, str, str, list[tup
         else:
             moc = _CLASSES[found].load(path, format="fits")
     except Exception as exc:  # mocpy: OSError/ValueError dal lettore in Rust
-        raise _unreadable(path, exc) from exc
+        raise _unreadable(path, "mocpy_error", exc, detail=str(exc)) from exc
     if raw_version is None:
-        notes.append(("MOC_VERSION_ASSUMED", f"{path}: MOCVERS assente, versione {VERSION_ASSUMED_11}"))
+        notes.append(ModuleWarning("MOC_VERSION_ASSUMED", f"{path}: MOCVERS assente, versione {VERSION_ASSUMED_11}",
+                                   {"path": str(path), "version": VERSION_ASSUMED_11}))
     body, bodies, body_notes = _header_body(path, header, found)
     return moc, found, version, notes + body_notes, body, bodies
 
@@ -453,7 +508,7 @@ def _json_cells(value: object, path: Path) -> dict:
     if not isinstance(value, dict) or not all(
             isinstance(k, str) and k.isdigit() and isinstance(v, list) and all(
                 isinstance(i, int) and not isinstance(i, bool) and i >= 0 for i in v) for k, v in value.items()):
-        raise _unreadable(path, "JSON: atteso {\"ordine\": [indici interi], ...}")
+        raise _unreadable(path, "json_cells", "JSON: atteso {\"ordine\": [indici interi], ...}")
     return value
 
 
@@ -461,11 +516,12 @@ def _read_json(path: Path, text: str, kind: str | None) -> tuple[object, str]:
     try:
         data = json.loads(text)
     except ValueError as exc:
-        raise _unreadable(path, exc) from exc
+        raise _unreadable(path, "json_syntax", exc, detail=str(exc)) from exc
     if isinstance(data, list):  # STMOC: lista di coppie {"t": …}, {"s": …} (standard 2.0, appendice F)
         found = "space-time"
         if not all(isinstance(d, dict) and len(d) == 1 and next(iter(d)) in ("t", "s") for d in data):
-            raise _unreadable(path, "JSON di un MOC spazio-temporale: attesa una lista di {\"t\": …} e {\"s\": …}")
+            raise _unreadable(path, "json_st_list",
+                              "JSON di un MOC spazio-temporale: attesa una lista di {\"t\": …} e {\"s\": …}")
         for d in data:
             _json_cells(next(iter(d.values())), path)
         payload: object = data
@@ -475,23 +531,23 @@ def _read_json(path: Path, text: str, kind: str | None) -> tuple[object, str]:
     else:
         if kind is None:
             raise MocError("MOC_TYPE_REQUIRED", f"{path}: JSON senza prefisso \"s\"/\"t\": il tipo si determina dal "
-                           "contesto d'uso (standard 2.0); indicarlo con kind='space' o kind='time'")
+                           "contesto d'uso (standard 2.0); indicarlo con kind='space' o kind='time'",
+                           params={"reason": "json", "path": str(path)})
         found = kind
         payload = _json_cells(data, path)
     if kind is not None and kind != found:
-        raise MocError("MOC_TYPE_MISMATCH", f"{path}: MOC {found} nel file, richiesto {kind}")
-    if found == "space-time" and not isinstance(payload, list):
-        raise _unreadable(path, "un MOC spazio-temporale in JSON è una lista di coppie t/s")
+        raise MocError("MOC_TYPE_MISMATCH", f"{path}: MOC {found} nel file, richiesto {kind}",
+                       params={"reason": "file", "path": str(path), "found": found, "requested": kind})
     try:
         return _CLASSES[found].from_json(payload), found
     except Exception as exc:
-        raise _unreadable(path, exc) from exc
+        raise _unreadable(path, "mocpy_error", exc, detail=str(exc)) from exc
 
 
 def _read_ascii(path: Path, text: str, kind: str | None) -> tuple[object, str]:
     tokens = text.split()
     if not tokens:
-        raise _unreadable(path, "testo vuoto")
+        raise _unreadable(path, "empty_text", "testo vuoto")
     has_t = any(t.startswith("t") for t in tokens)
     has_s = any(t.startswith("s") for t in tokens)
     if has_t and has_s:
@@ -502,14 +558,16 @@ def _read_ascii(path: Path, text: str, kind: str | None) -> tuple[object, str]:
     else:
         if kind is None:
             raise MocError("MOC_TYPE_REQUIRED", f"{path}: testo senza prefisso t/s: il tipo si determina dal "
-                           "contesto d'uso (standard 2.0); indicarlo con kind='space' o kind='time'")
+                           "contesto d'uso (standard 2.0); indicarlo con kind='space' o kind='time'",
+                           params={"reason": "ascii", "path": str(path)})
         found, value = kind, text
     if kind is not None and kind != found:
-        raise MocError("MOC_TYPE_MISMATCH", f"{path}: MOC {found} nel file, richiesto {kind}")
+        raise MocError("MOC_TYPE_MISMATCH", f"{path}: MOC {found} nel file, richiesto {kind}",
+                       params={"reason": "file", "path": str(path), "found": found, "requested": kind})
     try:
         return _CLASSES[found].from_string(value, format="ascii"), found
     except Exception as exc:
-        raise _unreadable(path, exc) from exc
+        raise _unreadable(path, "mocpy_error", exc, detail=str(exc)) from exc
 
 
 def read_moc(source, *, format: str | None = None, kind: str | None = None, cache=None, refresh: bool = False,
@@ -531,11 +589,11 @@ def _read_path(path: Path, format: str | None, kind: str | None) -> Moc:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        raise _unreadable(path, exc) from exc
+        raise _unreadable(path, "read_error", exc, detail=str(exc)) from exc
     fmt = format if format is not None else _detect_format(raw[:80])
     if fmt not in ("fits", "json", "ascii"):
         raise ValueError(f"format {format!r}: ammessi fits, json, ascii")
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     bodies: tuple[str, ...] = ()
     if fmt == "fits":
         moc, found, version, notes, body, bodies = _read_fits(path, kind)
@@ -543,14 +601,14 @@ def _read_path(path: Path, format: str | None, kind: str | None) -> Moc:
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise _unreadable(path, exc) from exc
+            raise _unreadable(path, "not_utf8", exc, detail=str(exc)) from exc
         moc, found = _read_json(path, text, kind) if fmt == "json" else _read_ascii(path, text, kind)
         version = VERSION_NOT_DECLARED
         body = None if found == "time" else "celestial"  # ICRS per lo standard (COORDSYS='C'), D19-3
     step = f"letto da {path} ({fmt}, versione {version})"
     result = Moc(moc=moc, kind=found, body=body, origin=str(path), version=version, history=(step,), bodies=bodies)
     if result.is_empty:
-        notes.append(("MOC_EMPTY", f"{path}: MOC vuoto"))
+        notes.append(ModuleWarning("MOC_EMPTY", f"{path}: MOC vuoto", {"reason": "source", "origin": str(path)}))
     return replace(result, warnings=tuple(notes))
 
 
@@ -589,21 +647,23 @@ def write_moc(moc: Moc, path, format: str = "fits", overwrite: bool = False) -> 
     planetary = moc.kind != "time" and moc.body != "celestial"
     if planetary and format != "fits":
         raise MocError("MOC_BODY_UNSUPPORTED", f"MOC del corpo {moc._body_label()}: in {format} il corpo non si può "
-                       "dichiarare; i MOC non celesti si scrivono solo in FITS con la parola chiave A2BODY")
+                       "dichiarare; i MOC non celesti si scrivono solo in FITS con la parola chiave A2BODY",
+                       params={"reason": "format", "body": moc._body_label(), "format": format})
     target = Path(path)
     if target.exists() and not overwrite:
         raise FileExistsError(f"{target} esiste già (overwrite=True per sostituirlo)")
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     if format == "fits":
         keywords = {"MOCTOOL": _TOOL}
         if planetary:
             keywords[BODY_KEYWORD] = moc.body
             if moc.bodies:
                 keywords[BODIES_KEYWORD] = ",".join(moc.bodies)
-            notes.append(("MOC_NONSTANDARD_EXTENSION", f"{target}: corpo {moc._body_label()} scritto nella parola "
-                          f"chiave {BODY_KEYWORD} di AstroTwo, estensione non standard del formato IVOA MOC 2.0 "
-                          "(D19-7); COORDSYS resta 'C' come richiesto dal formato: un lettore senza l'estensione "
-                          "vede un MOC celeste"))
+            notes.append(ModuleWarning(
+                "MOC_NONSTANDARD_EXTENSION", f"{target}: corpo {moc._body_label()} scritto nella parola chiave "
+                f"{BODY_KEYWORD} di AstroTwo, estensione non standard del formato IVOA MOC 2.0 (D19-7); COORDSYS "
+                "resta 'C' come richiesto dal formato: un lettore senza l'estensione vede un MOC celeste",
+                {"reason": "write", "path": str(target), "body": moc._body_label(), "keyword": BODY_KEYWORD}))
         moc.moc.save(target, format="fits", overwrite=True, pre_v2=moc.kind == "space", fits_keywords=keywords)
     elif format == "json":
         target.write_text(json.dumps(_json_payload(moc)), encoding="utf-8")
@@ -645,11 +705,13 @@ def _to_icrs(coords, what: str):
     try:
         icrs = coords if coords.frame_name == "icrs" else coords.to("icrs")
     except CoordinatesWcsError as exc:
-        raise MocError("REGION_INVALID", f"{what}: {exc.message}") from exc
+        raise MocError("REGION_INVALID", f"{what}: {exc.message}",
+                       params={"reason": "conversion", "what": what, "cause": _message_of(exc)}) from exc
     lon = np.atleast_1d(icrs.lon.to_value(u.deg))
     lat = np.atleast_1d(icrs.lat.to_value(u.deg))
     if not (np.all(np.isfinite(lon)) and np.all(np.isfinite(lat))):
-        raise MocError("REGION_INVALID", f"{what}: coordinate non finite")
+        raise MocError("REGION_INVALID", f"{what}: coordinate non finite",
+                       params={"reason": "not_finite", "what": what})
     note = "" if coords.frame_name == "icrs" else f" (convertite da {coords.frame_name} in ICRS con il modulo 10)"
     return lon, lat, note
 
@@ -658,7 +720,7 @@ def _created(moc, origin: str, step: str, notes=(), body: str = "celestial") -> 
     result = Moc(moc=moc, kind="space", body=body, origin=origin, history=(step,))
     notes = list(notes)
     if result.is_empty:
-        notes.append(("MOC_EMPTY", f"{origin}: MOC vuoto"))
+        notes.append(ModuleWarning("MOC_EMPTY", f"{origin}: MOC vuoto", {"reason": "source", "origin": origin}))
     return replace(result, warnings=tuple(notes))
 
 
@@ -677,13 +739,16 @@ def moc_from_region(region, order_max: int, *, complement: bool = False) -> Moc:
     if isinstance(region, CircleRegion):
         lon, lat, note = _to_icrs(region.center, "centro del cerchio")
         if lon.size != 1:
-            raise MocError("REGION_INVALID", "il centro del cerchio è una sola posizione")
+            raise MocError("REGION_INVALID", "il centro del cerchio è una sola posizione",
+                           params={"reason": "center_not_single"})
         radius = region.radius
         if not isinstance(radius, u.Quantity) or not radius.isscalar or not radius.unit.is_equivalent(u.deg):
-            raise MocError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità")
+            raise MocError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità",
+                           params={"reason": "radius_not_angle", "radius": repr(radius)})
         r = float(radius.to_value(u.deg))
         if not (math.isfinite(r) and 0.0 < r <= 180.0):
-            raise MocError("REGION_INVALID", f"raggio {r!r}°: ammesso in (0°, 180°]")
+            raise MocError("REGION_INVALID", f"raggio {r!r}°: ammesso in (0°, 180°]",
+                           params={"reason": "radius_range", "radius": _q(r, "deg")})
         if complement:
             raise ValueError("complement vale solo per i poligoni")
         moc = MOC.from_cone(lon=lon[0] * u.deg, lat=lat[0] * u.deg, radius=r * u.deg, max_depth=order,
@@ -695,11 +760,13 @@ def moc_from_region(region, order_max: int, *, complement: bool = False) -> Moc:
     if isinstance(region, PolygonRegion):
         lon, lat, note = _to_icrs(region.vertices, "vertici del poligono")
         if lon.size < 3:
-            raise MocError("REGION_INVALID", f"poligono con {lon.size} vertici: ne servono almeno 3")
+            raise MocError("REGION_INVALID", f"poligono con {lon.size} vertici: ne servono almeno 3",
+                           params={"reason": "polygon_vertices", "count": int(lon.size)})
         try:
             moc = MOC.from_polygon(lon=lon * u.deg, lat=lat * u.deg, complement=bool(complement), max_depth=order)
         except Exception as exc:  # mocpy rifiuta i poligoni non validi (es. lati che si incrociano)
-            raise MocError("REGION_INVALID", f"poligono non valido per mocpy: {exc}") from exc
+            raise MocError("REGION_INVALID", f"poligono non valido per mocpy: {exc}",
+                           params={"reason": "polygon_mocpy", "detail": str(exc)}) from exc
         side = "regione complementare (complement=True)" if complement else "regione più piccola delle due"
         origin = f"poligono di {lon.size} vertici ICRS{note}"
         step = (f"MOC da poligono con mocpy.MOC.from_polygon, {resolution}: lati su cerchi massimi, interno = "
@@ -714,13 +781,16 @@ def _catalog_positions(table, what: str):
 
     pos = table.positions
     if pos is None:
-        raise MocError("NO_COORD_COLUMNS", f"{what} ({table.origin}): nessuna colonna di posizione (modulo 13)")
+        raise MocError("NO_COORD_COLUMNS", f"{what} ({table.origin}): nessuna colonna di posizione (modulo 13)",
+                       params={"reason": "no_positions", "what": what, "origin": table.origin})
     if pos.frame is None:
-        raise MocError("FRAME_UNKNOWN", f"{what}: colonne {pos.lon}/{pos.lat} senza sistema dichiarato")
+        raise MocError("FRAME_UNKNOWN", f"{what}: colonne {pos.lon}/{pos.lat} senza sistema dichiarato",
+                       params={"reason": "columns_without_frame", "what": what, "lon": pos.lon, "lat": pos.lat})
     lon_col, lat_col = table.table[pos.lon], table.table[pos.lat]
     if lon_col.unit is None or lat_col.unit is None or not (
             lon_col.unit.is_equivalent(u.deg) and lat_col.unit.is_equivalent(u.deg)):
-        raise MocError("NO_COORD_COLUMNS", f"{what}: colonne {pos.lon}/{pos.lat} senza unità angolare")
+        raise MocError("NO_COORD_COLUMNS", f"{what}: colonne {pos.lon}/{pos.lat} senza unità angolare",
+                       params={"reason": "no_angular_unit", "what": what, "lon": pos.lon, "lat": pos.lat})
     lon_v = np.ma.filled(np.ma.asarray(lon_col, dtype=float), np.nan)
     lat_v = np.ma.filled(np.ma.asarray(lat_col, dtype=float), np.nan)
     valid = np.isfinite(lon_v) & np.isfinite(lat_v)
@@ -732,15 +802,17 @@ def _catalog_positions(table, what: str):
                                       obstime=pos.epoch if pos.frame == "fk4" else None)
         lon, lat, note = _to_icrs(coords, what)
     except CoordinatesWcsError as exc:
-        raise MocError(exc.code, f"{what}: {exc.message}") from exc
+        raise _relay(exc, f"{what}: {exc.message}") from exc
     return lon, lat, valid, note
 
 
 def _check_celestial(body: str | None, what: str) -> str:
     if body is None:
-        raise MocError("BODY_UNKNOWN", f"{what}: corpo non ricavabile, nessun MOC")
+        raise MocError("BODY_UNKNOWN", f"{what}: corpo non ricavabile, nessun MOC",
+                       params={"reason": "no_moc", "what": what})
     if body != "celestial":
-        raise MocError("MOC_BODY_UNSUPPORTED", f"{what}: corpo {body!r}; i MOC spaziali sono in ICRS (solo cielo)")
+        raise MocError("MOC_BODY_UNSUPPORTED", f"{what}: corpo {body!r}; i MOC spaziali sono in ICRS (solo cielo)",
+                       params={"reason": "not_celestial", "what": what, "body": body})
     return body
 
 
@@ -756,7 +828,8 @@ def moc_from_catalog(table, order_max: int) -> Moc:
     notes = []
     excluded = int(np.count_nonzero(~valid))
     if excluded:
-        notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione escluse"))
+        notes.append(ModuleWarning("ROWS_EXCLUDED", f"{excluded} righe senza posizione escluse",
+                                   {"count": excluded}))
     epoch = table.positions.epoch
     step = (f"MOC da catalogo con mocpy.MOC.from_lonlat, ordine {order}: una cella per sorgente, senza raggio; "
             f"{lon.size} sorgenti{note}; epoca delle posizioni {epoch if epoch else 'non dichiarata'}")
@@ -804,11 +877,13 @@ def moc_from_image(image, order_max: int, *, block_rows: int = 512) -> Moc:
     order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
     if getattr(image, "is_preview", False):
         raise MocError("PREVIEW_NOT_MEASURABLE", "MOC da immagine: l'immagine è aperta a due livelli e i dati in "
-                       "memoria sono solo l'anteprima")
+                       "memoria sono solo l'anteprima", params={"reason": "moc_from_image"})
     if getattr(image, "color", False):
-        raise MocError("OPERATION_UNSUPPORTED", "MOC da immagine: immagine a colori, solo presentazione")
+        raise MocError("OPERATION_UNSUPPORTED", "MOC da immagine: immagine a colori, solo presentazione",
+                       params={"reason": "color_image", "operation": "moc_from_image"})
     if image.wcs is None:
-        raise MocError("WCS_MISSING", f"immagine {image.origin}: nessun WCS, nessuna posizione sul cielo")
+        raise MocError("WCS_MISSING", f"immagine {image.origin}: nessun WCS, nessuna posizione sul cielo",
+                       params={"reason": "image_without_wcs", "origin": image.origin})
     valid = _valid_pixels(image)
     ny, nx = valid.shape
     pixel = float(np.max(proj_plane_pixel_scales(image.wcs.wcs.celestial)))  # gradi per pixel
@@ -871,8 +946,8 @@ def moc_from_image(image, order_max: int, *, block_rows: int = 512) -> Moc:
         sampling += ", più gli angoli dei pixel lungo il contorno della regione dei blocchi validi (D16-8)"
     notes = []
     if outside:
-        notes.append(("POINTS_OUTSIDE_PROJECTION", f"{outside} punti di campionamento senza posizione sul cielo "
-                      "(fuori dalla proiezione) esclusi"))
+        notes.append(ModuleWarning("POINTS_OUTSIDE_PROJECTION", f"{outside} punti di campionamento senza posizione "
+                                   "sul cielo (fuori dalla proiezione) esclusi", {"count": int(outside)}))
     invalid = int(valid.size - np.count_nonzero(valid))
     step = (f"MOC da immagine all'ordine {order}: {int(np.count_nonzero(valid))} pixel validi ({invalid} non validi: "
             f"NaN, mascherati o BLANK), {sampling} (pixel {pixel!r}°, cella {cell!r}°), {counted} "
@@ -918,15 +993,20 @@ def _healpix_provenance() -> str:
     return f"astropy-healpix {astropy_healpix.__version__}"
 
 
-def _check_bodies(table, moc: Moc, force_body: bool) -> list[tuple[str, str]]:
+def _check_bodies(table, moc: Moc, force_body: bool) -> list[ModuleWarning]:
     if table.body is None:
-        raise MocError("BODY_UNKNOWN", f"tabella {table.origin}: corpo non ricavabile, nessun filtro")
+        raise MocError("BODY_UNKNOWN", f"tabella {table.origin}: corpo non ricavabile, nessun filtro",
+                       params={"reason": "no_filter", "origin": table.origin})
     if table.body == moc.body:
         return []
     if not force_body:
         raise MocError("BODY_MISMATCH", f"corpi diversi: tabella {table.body!r}, MOC {moc._body_label()}; forzabile "
-                       "solo con force_body=True (citato nel risultato)")
-    return [("BODY_FORCED", f"filtro tra corpi diversi forzato: tabella {table.body!r}, MOC {moc._body_label()}")]
+                       "solo con force_body=True (citato nel risultato)",
+                       params={"reason": "table_vs_moc", "table_body": str(table.body),
+                               "moc_body": moc._body_label()})
+    return [ModuleWarning("BODY_FORCED", f"filtro tra corpi diversi forzato: tabella {table.body!r}, MOC "
+                          f"{moc._body_label()}", {"reason": "filter", "table_body": str(table.body),
+                                                   "moc_body": moc._body_label()})]
 
 
 @dataclass(frozen=True)
@@ -958,7 +1038,8 @@ def filter_by_moc(table, moc: Moc, inside: bool = True, *, force_body: bool = Fa
     if not isinstance(moc, Moc):
         raise TypeError("filter_by_moc: serve un Moc")
     if moc.kind != "space":
-        raise MocError("MOC_TYPE_MISMATCH", f"filtro di posizioni con un MOC {moc.kind}: serve un MOC spaziale")
+        raise MocError("MOC_TYPE_MISMATCH", f"filtro di posizioni con un MOC {moc.kind}: serve un MOC spaziale",
+                       params={"reason": "filter", "kind": moc.kind})
     notes = _check_bodies(table, moc, force_body)
     lon, lat, valid, note = _catalog_positions(table, f"tabella {table.origin}")
     mask = np.zeros(len(valid), dtype=bool)
@@ -967,7 +1048,8 @@ def filter_by_moc(table, moc: Moc, inside: bool = True, *, force_body: bool = Fa
                                  dtype=bool)
     excluded = int(np.count_nonzero(~valid))
     if excluded:
-        notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione: mai selezionate"))
+        notes.append(ModuleWarning("ROWS_EXCLUDED", f"{excluded} righe senza posizione: mai selezionate",
+                                   {"reason": "never_selected", "count": excluded}))
     epoch = table.positions.epoch
     description = (f"righe {'dentro il' if inside else 'fuori dal'} MOC {moc.origin}: {int(np.count_nonzero(mask))} su "
                    f"{len(mask)}{note}; epoca delle posizioni {epoch if epoch else 'non dichiarata'}, non propagata "
@@ -1004,7 +1086,8 @@ def healpix_map(table, order: int, *, column: str | None = None) -> HealpixMap:
     hp = _healpix(order)
     if hp.npix > 12 * 4 ** 12:
         raise MocError("HEALPIX_ORDER_INVALID", f"order {order}: mappa di {hp.npix} celle oltre il limite di questa "
-                       "funzione (ordine 12)")
+                       "funzione (ordine 12)",
+                       params={"reason": "map_too_large", "order": order, "cells": int(hp.npix), "maximum": 12})
     _check_celestial(table.body, f"tabella {table.origin}")
     lon, lat, valid, note = _catalog_positions(table, f"tabella {table.origin}")
     weights, unit, quantity = None, None, "count"
@@ -1018,12 +1101,14 @@ def healpix_map(table, order: int, *, column: str | None = None) -> HealpixMap:
         raw = np.ma.filled(np.ma.asarray(col, dtype=float), np.nan)[valid]
         good = np.isfinite(raw)
         if not np.all(good):
-            notes.append(("VALUES_EXCLUDED", f"{int(np.count_nonzero(~good))} righe con {column} mancante escluse"))
+            notes.append(ModuleWarning("VALUES_EXCLUDED", f"{int(np.count_nonzero(~good))} righe con {column} "
+                                       "mancante escluse", {"count": int(np.count_nonzero(~good)), "column": column}))
         lon, lat, weights = lon[good], lat[good], raw[good]
         unit, quantity = col.unit, f"sum:{column}"
     excluded = int(np.count_nonzero(~valid))
     if excluded:
-        notes.append(("ROWS_EXCLUDED", f"{excluded} righe senza posizione escluse"))
+        notes.append(ModuleWarning("ROWS_EXCLUDED", f"{excluded} righe senza posizione escluse",
+                                   {"count": excluded}))
     cells = hp.lonlat_to_healpix(lon * u.deg, lat * u.deg) if lon.size else np.zeros(0, dtype=np.int64)
     values = np.bincount(cells, weights=weights, minlength=hp.npix)
     if weights is None:
@@ -1070,19 +1155,23 @@ def healpix_grid(order: int, *, within: Moc | None = None, step: int = 1) -> Hea
     if within is None:
         if hp.npix > GRID_MAX_CELLS:
             raise MocError("GRID_TOO_LARGE", f"griglia di tutto il cielo all'ordine {order}: {hp.npix} celle, oltre "
-                           f"{GRID_MAX_CELLS}; indicare within=MOC")
+                           f"{GRID_MAX_CELLS}; indicare within=MOC",
+                           params={"reason": "full_sky", "order": order, "cells": int(hp.npix),
+                                   "maximum": GRID_MAX_CELLS})
         cells = np.arange(hp.npix, dtype=np.int64)
         where = "tutto il cielo"
     else:
         if not isinstance(within, Moc) or within.kind != "space":
-            raise MocError("MOC_TYPE_MISMATCH", "healpix_grid: within deve essere un MOC spaziale")
+            raise MocError("MOC_TYPE_MISMATCH", "healpix_grid: within deve essere un MOC spaziale",
+                           params={"reason": "grid_within"})
         _check_celestial(within.body, f"MOC {within.origin}")
         # mocpy: refine_to_order modifica il MOC sul posto (verificato), l'unione con un MOC vuoto no.
         target = within.moc.degrade_to_order(order) if within.space_order > order \
             else within.moc.union(MOC.new_empty(order))
         cells = np.asarray(target.flatten(), dtype=np.int64)
         if cells.size > GRID_MAX_CELLS:
-            raise MocError("GRID_TOO_LARGE", f"griglia di {cells.size} celle oltre {GRID_MAX_CELLS}")
+            raise MocError("GRID_TOO_LARGE", f"griglia di {cells.size} celle oltre {GRID_MAX_CELLS}",
+                           params={"reason": "within", "cells": int(cells.size), "maximum": GRID_MAX_CELLS})
         where = f"celle che toccano il MOC {within.origin}"
     lon, lat = hp.boundaries_lonlat(cells, step=step)
     with np.errstate(invalid="ignore"):  # i vicini mancanti (-1) sono solo agli angoli, mai oltre un lato
@@ -1106,9 +1195,11 @@ def _tcb(times, what: str):
         raise TypeError(f"{what}: servono istanti astropy.time.Time con la scala dichiarata")
     jd = np.atleast_1d(times.jd)
     if not np.all(np.isfinite(jd)):
-        raise MocError("TIME_RANGE_INVALID", f"{what}: istanti non finiti")
+        raise MocError("TIME_RANGE_INVALID", f"{what}: istanti non finiti",
+                       params={"reason": "not_finite", "what": what})
     if np.any(jd < 0):
-        raise MocError("TIME_RANGE_INVALID", f"{what}: istanti prima di JD 0, fuori dai MOC temporali (standard 2.0)")
+        raise MocError("TIME_RANGE_INVALID", f"{what}: istanti prima di JD 0, fuori dai MOC temporali (standard 2.0)",
+                       params={"reason": "before_jd0", "what": what})
     return Time(np.atleast_1d(times.tcb.jd1), np.atleast_1d(times.tcb.jd2), format="jd", scale="tcb")
 
 
@@ -1127,16 +1218,18 @@ def moc_from_times(start, end=None, *, order_max: int) -> Moc:
     else:
         stop = _tcb(end, "fine")
         if stop.shape != begin.shape:
-            raise MocError("TIME_RANGE_INVALID", "inizio e fine con numeri di valori diversi")
+            raise MocError("TIME_RANGE_INVALID", "inizio e fine con numeri di valori diversi",
+                           params={"reason": "different_counts"})
         if np.any(stop.jd < begin.jd):
-            raise MocError("TIME_RANGE_INVALID", "intervallo con fine prima dell'inizio")
+            raise MocError("TIME_RANGE_INVALID", "intervallo con fine prima dell'inizio",
+                           params={"reason": "end_before_start"})
         moc = TimeMOC.from_time_ranges(begin, stop, order=order)
         what = f"{begin.size} intervalli"
     resolution = TimeMOC.order_to_time_resolution(order).to(u.s)
     step = (f"MOC temporale da {what} con mocpy.TimeMOC, ordine {order} (risoluzione {resolution.value!r} s), "
             f"{_time_note(start)}")
     result = Moc(moc=moc, kind="time", body=None, origin=f"tempi ({what})", history=(step,))
-    return replace(result, warnings=(("MOC_EMPTY", "MOC vuoto"),) if result.is_empty else ())
+    return replace(result, warnings=(ModuleWarning("MOC_EMPTY", "MOC vuoto", {"reason": "plain"}),) if result.is_empty else ())
 
 
 def moc_space_time(start, end, coords, *, time_order: int, space_order: int) -> Moc:
@@ -1148,19 +1241,21 @@ def moc_space_time(start, end, coords, *, time_order: int, space_order: int) -> 
     lon, lat, note = _to_icrs(coords, "posizioni")
     if lon.size != begin.size:
         raise MocError("TIME_RANGE_INVALID", f"{begin.size} tempi e {lon.size} posizioni: serve una posizione per "
-                       "osservazione")
+                       "osservazione", params={"reason": "counts_mismatch", "times": int(begin.size),
+                                               "positions": int(lon.size)})
     if end is None:
         moc = STMOC.from_times_positions(begin, t_order, lon * u.deg, lat * u.deg, s_order)
     else:
         stop = _tcb(end, "fine")
         if stop.shape != begin.shape or np.any(stop.jd < begin.jd):
-            raise MocError("TIME_RANGE_INVALID", "intervalli non validi (numeri diversi o fine prima dell'inizio)")
+            raise MocError("TIME_RANGE_INVALID", "intervalli non validi (numeri diversi o fine prima dell'inizio)",
+                           params={"reason": "invalid_intervals"})
         moc = STMOC.from_time_ranges_positions(begin, stop, lon * u.deg, lat * u.deg, time_depth=t_order,
                                                spatial_depth=s_order)
     step = (f"MOC spazio-temporale con mocpy.STMOC, ordini tempo {t_order} e spazio {s_order}, {lon.size} "
             f"osservazioni, {_time_note(start)}{note}")
     result = Moc(moc=moc, kind="space-time", body="celestial", origin=f"osservazioni ({lon.size})", history=(step,))
-    return replace(result, warnings=(("MOC_EMPTY", "MOC vuoto"),) if result.is_empty else ())
+    return replace(result, warnings=(ModuleWarning("MOC_EMPTY", "MOC vuoto", {"reason": "plain"}),) if result.is_empty else ())
 
 
 #: Tolleranza della somma delle probabilità (decisione del proprietario del 2026-10-11): 1e-6 relativo.
@@ -1197,8 +1292,10 @@ def _uniq_area(uniq: np.ndarray) -> np.ndarray:
     return 4.0 * math.pi / (12.0 * 4.0 ** _uniq_order(uniq))
 
 
-def _invalid_map(path, reason: str) -> MocError:
-    return MocError("PROBABILITY_MAP_INVALID", f"{path}: mappa di probabilità non valida ({reason})")
+def _invalid_map(path, reason: str, text: object, **params: object) -> MocError:
+    """``PROBABILITY_MAP_INVALID``: ``reason`` è l'identificatore della sotto-voce, ``text`` il motivo in italiano."""
+    return MocError("PROBABILITY_MAP_INVALID", f"{path}: mappa di probabilità non valida ({text})",
+                    params={"reason": reason, "path": str(path), **params})
 
 
 def read_probability_map(path) -> ProbabilityMap:
@@ -1212,30 +1309,34 @@ def read_probability_map(path) -> ProbabilityMap:
         with fits.open(path, memmap=False) as hdul:
             tables = [h for h in hdul if isinstance(h, fits.BinTableHDU)]
             if not tables:
-                raise _invalid_map(path, "nessuna tabella binaria")
+                raise _invalid_map(path, "no_table", "nessuna tabella binaria")
             header = tables[0].header
             table = Table.read(tables[0], unit_parse_strict="silent")
     except MocError:
         raise
     except (OSError, ValueError) as exc:
-        raise _invalid_map(path, exc) from exc
+        raise _invalid_map(path, "read_error", exc, detail=str(exc)) from exc
     if str(header.get("COORDSYS", "")).strip() != "C":
-        raise _invalid_map(path, f"COORDSYS {header.get('COORDSYS')!r}: serve 'C' (equatoriale, ICRS)")
+        raise _invalid_map(path, "coordsys", f"COORDSYS {header.get('COORDSYS')!r}: serve 'C' (equatoriale, ICRS)",
+                           value=str(header.get("COORDSYS")))
     ordering = str(header.get("ORDERING", "")).strip().upper()
     if "UNIQ" in table.colnames and "PROBDENSITY" in table.colnames:
         col = table["PROBDENSITY"]
         if col.unit is None or not col.unit.is_equivalent(1 / u.sr):
-            raise _invalid_map(path, f"PROBDENSITY con unità {col.unit!r}: serve una densità per steradiante")
+            raise _invalid_map(path, "density_unit",
+                               f"PROBDENSITY con unità {col.unit!r}: serve una densità per steradiante",
+                               unit=str(col.unit))
         density = np.asarray(col.quantity.to_value(1 / u.sr), dtype=np.float64)
         uniq = np.asarray(table["UNIQ"], dtype=np.uint64)
         layout = "multi-order"
     elif "PROB" in table.colnames:
         if ordering not in ("RING", "NESTED"):
-            raise _invalid_map(path, f"ORDERING {ordering!r}: serve RING o NESTED")
+            raise _invalid_map(path, "ordering", f"ORDERING {ordering!r}: serve RING o NESTED", value=ordering)
         nside = int(header.get("NSIDE", 0))
         prob = np.asarray(table["PROB"], dtype=np.float64).ravel()  # anche colonne vettoriali (righe da 1024)
         if nside < 1 or nside & (nside - 1) or prob.size != 12 * nside * nside:
-            raise _invalid_map(path, f"NSIDE {nside} e {prob.size} valori non coerenti")
+            raise _invalid_map(path, "nside", f"NSIDE {nside} e {prob.size} valori non coerenti", nside=nside,
+                               values=int(prob.size))
         order = nside.bit_length() - 1
         cells = np.arange(prob.size, dtype=np.int64)
         if ordering == "RING":  # conversione nell'ordine NESTED con astropy-healpix
@@ -1244,24 +1345,29 @@ def read_probability_map(path) -> ProbabilityMap:
             reordered[nested] = prob
             prob = reordered
         if np.any(~np.isfinite(prob)) or np.any(prob < 0) or np.any(prob > 1):
-            raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: probabilità per cella fuori da [0, 1]")
+            raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: probabilità per cella fuori da [0, 1]",
+                           params={"reason": "cell_probability", "path": str(path)})
         uniq = (4 * 4 ** order + cells).astype(np.uint64)
         density = prob / (4.0 * math.pi / prob.size)
         layout = "flat"
     else:
-        raise _invalid_map(path, "attese le colonne PROB (mappa piatta) o UNIQ e PROBDENSITY (multi-ordine)")
+        raise _invalid_map(path, "no_columns",
+                           "attese le colonne PROB (mappa piatta) o UNIQ e PROBDENSITY (multi-ordine)")
     if np.any(~np.isfinite(density)) or np.any(density < 0):
-        raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: densità di probabilità negative o non finite")
+        raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: densità di probabilità negative o non finite",
+                       params={"reason": "density", "path": str(path)})
     probability = density * _uniq_area(uniq)
     if np.any(probability > 1):
-        raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: probabilità per cella oltre 1")
+        raise MocError("PROBABILITY_OUT_OF_RANGE", f"{path}: probabilità per cella oltre 1",
+                       params={"reason": "cell_over_one", "path": str(path)})
     total = float(np.sum(probability))
     if abs(total - 1.0) > PROBABILITY_SUM_TOLERANCE:
         raise MocError("PROBABILITY_SUM_INVALID", f"{path}: somma delle probabilità {total!r}, attesa 1 entro "
-                       f"{PROBABILITY_SUM_TOLERANCE:g} relativo")
+                       f"{PROBABILITY_SUM_TOLERANCE:g} relativo",
+                       params={"path": str(path), "total": total, "tolerance": PROBABILITY_SUM_TOLERANCE})
     orders = _uniq_order(uniq)
     if uniq.size == 0 or np.any(orders < 0) or np.any(uniq >= 16 * _UNIQ_STARTS[orders]):
-        raise _invalid_map(path, "celle UNIQ non valide")
+        raise _invalid_map(path, "bad_uniq", "celle UNIQ non valide")
     max_order = int(np.max(orders))
     description = (f"mappa di probabilità {layout} ({ordering}), ordine massimo {max_order}, {uniq.size} celle, "
                    f"somma delle probabilità {total!r} (= 1 entro {PROBABILITY_SUM_TOLERANCE:g} relativo), ICRS")
@@ -1279,7 +1385,8 @@ def moc_from_probability(pmap: ProbabilityMap, level: float, order_max: int) -> 
         raise TypeError("moc_from_probability: serve una ProbabilityMap (read_probability_map)")
     order = _check_order(order_max, SPACE_MAX_ORDER, "order_max")
     if isinstance(level, bool) or not isinstance(level, (int, float)) or not 0.0 < float(level) <= 1.0:
-        raise MocError("PROBABILITY_OUT_OF_RANGE", f"livello di credibilità {level!r}: ammesso in (0, 1]")
+        raise MocError("PROBABILITY_OUT_OF_RANGE", f"livello di credibilità {level!r}: ammesso in (0, 1]",
+                       params={"reason": "level", "level": repr(level)})
     depth = max(order, pmap.max_order)  # mocpy: il MOC è almeno profondo quanto la cella più piccola
     moc = MOC.from_valued_healpix_cells(pmap.uniq, pmap.density, max_depth=depth, values_are_densities=True,
                                         cumul_from=0.0, cumul_to=float(level), asc=False, strict=False,
@@ -1287,8 +1394,9 @@ def moc_from_probability(pmap: ProbabilityMap, level: float, order_max: int) -> 
     notes = []
     if depth > order:
         moc = moc.degrade_to_order(order)
-        notes.append(("ORDER_DEGRADED", f"mappa all'ordine {pmap.max_order}: regione portata all'ordine {order} per "
-                      "eccesso (celle più grandi che contengono la regione)"))
+        notes.append(ModuleWarning("ORDER_DEGRADED", f"mappa all'ordine {pmap.max_order}: regione portata all'ordine "
+                                   f"{order} per eccesso (celle più grandi che contengono la regione)",
+                                   {"map_order": int(pmap.max_order), "order": order}))
     contained = float(moc.probability_in_multiordermap(Table({"UNIQ": pmap.uniq,
                                                                "PROBDENSITY": pmap.density / u.sr})))
     step = (f"regione di credibilità {float(level)!r} da {pmap.origin} con mocpy.MOC.from_valued_healpix_cells "
@@ -1296,7 +1404,8 @@ def moc_from_probability(pmap: ProbabilityMap, level: float, order_max: int) -> 
             f"contenuta {contained!r} (mocpy.probability_in_multiordermap); {pmap.description}")
     result = Moc(moc=moc, kind="space", body="celestial", origin=f"mappa di probabilità {pmap.origin}",
                  history=(step,))
-    return replace(result, warnings=tuple(notes) + (("CREDIBLE_PROBABILITY", f"{contained!r}"),))
+    return replace(result, warnings=tuple(notes) + (ModuleWarning("CREDIBLE_PROBABILITY", f"{contained!r}",
+                                                                   {"probability": contained}),))
 
 
 # --------------------------------------------------------------------------
@@ -1357,16 +1466,20 @@ def _read_url(url: str, format: str | None, kind: str | None, cache, refresh: bo
         if cached is not None:
             cached_fmt = fmt
             break
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     if cached is None or refresh:
         try:
             payload = _download(url, timeouts)
         except requests.exceptions.RequestException as exc:
             if cached is None:
                 raise MocError("NET_TIMEOUT", f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
-                               f"{timeouts.read:g} s lettura): {exc}", url=url) from exc
-            notes.append(("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache del "
-                          f"{cached.retrieved_at.isoformat()}"))
+                               f"{timeouts.read:g} s lettura): {exc}", url=url,
+                               params={"reason": "url", "url": url, "connect": _q(timeouts.connect, "s"),
+                                       "read": _q(timeouts.read, "s"), "detail": str(exc)}) from exc
+            notes.append(ModuleWarning("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache "
+                                       f"del {cached.retrieved_at.isoformat()}",
+                                       {"reason": "network_cached", "error": type(exc).__name__,
+                                        "retrieved_at": cached.retrieved_at.isoformat()}))
         else:
             fmt = format if format is not None else _detect_format(payload[:80])
             moc = _read_bytes(payload, fmt, kind, f".{fmt}")
@@ -1375,14 +1488,19 @@ def _read_url(url: str, format: str | None, kind: str | None, cache, refresh: bo
             try:
                 cache.put(_CACHE_MODULE, keys[fmt], stored, origin=url, retrieved_at=retrieved_at)
             except CacheError as exc:  # es. CACHE_FULL: il MOC si usa comunque
-                notes.append((exc.code, exc.message))
+                notes.append(ModuleWarning(exc.code, exc.message, getattr(exc, "params", None)))
             step = f"letto da {url} ({fmt}, versione {moc.version}), scaricato il {retrieved_at.isoformat()}"
             return replace(moc, origin=url, history=(step,), warnings=tuple(notes) + moc.warnings)
     moc = _read_bytes(cached.data, "fits", kind, ".fits")
     version = moc.version if cached_fmt == "fits" else f"{VERSION_NOT_DECLARED} ({cached_fmt} originale)"
     if not notes:
-        notes.append(("FROM_CACHE", f"copia in cache di {url}, scaricata il {cached.retrieved_at.isoformat()}"
-                      + ("" if cached_fmt == "fits" else f", conservata in FITS IVOA (originale {cached_fmt})")))
+        when = cached.retrieved_at.isoformat()
+        notes.append(ModuleWarning(
+            "FROM_CACHE", f"copia in cache di {url}, scaricata il {when}"
+            + ("" if cached_fmt == "fits" else f", conservata in FITS IVOA (originale {cached_fmt})"),
+            {"reason": "cached_origin", "origin": url, "retrieved_at": when} if cached_fmt == "fits"
+            else {"reason": "cached_converted", "origin": url, "retrieved_at": when,
+                  "original_format": cached_fmt}))
     step = f"letto da {url} (copia in cache, versione {version})"
     return replace(moc, origin=url, version=version, history=(step,), warnings=tuple(notes) + moc.warnings)
 
@@ -1427,13 +1545,15 @@ def query_mocserver(region, *, properties: dict | None = None, intersect: str = 
         radius = region.radius
         if not isinstance(radius, u.Quantity) or not radius.isscalar or not radius.unit.is_equivalent(u.deg) \
                 or not 0 < float(radius.to_value(u.deg)) <= 180:
-            raise MocError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità in (0°, 180°]")
+            raise MocError("REGION_INVALID", f"raggio {radius!r}: serve un angolo con unità in (0°, 180°]",
+                           params={"reason": "radius", "radius": repr(radius)})
         params.update({"RA": repr(float(lon[0])), "DEC": repr(float(lat[0])),
                        "SR": repr(float(radius.to_value(u.deg)))})
         method, where = "GET", f"cerchio ICRS ({lon[0]!r}°, {lat[0]!r}°) raggio {float(radius.to_value(u.deg))!r}°{note}"
     elif isinstance(region, Moc):
         if region.kind != "space":
-            raise MocError("MOC_TYPE_MISMATCH", f"filtro spaziale del MocServer con un MOC {region.kind}")
+            raise MocError("MOC_TYPE_MISMATCH", f"filtro spaziale del MocServer con un MOC {region.kind}",
+                           params={"reason": "mocserver_filter", "kind": region.kind})
         _check_celestial(region.body, f"MOC {region.origin}")
         params["moc"] = region.moc.to_string("ascii")
         method, where = "POST", f"MOC {region.origin} (ordine {region.space_order})"
@@ -1455,15 +1575,17 @@ def query_mocserver(region, *, properties: dict | None = None, intersect: str = 
     except vo.VoProtocolsError as exc:
         if exc.code == "NET_TIMEOUT":
             raise MocError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile, nessun filtro spaziale: "
-                           f"{exc.message}") from exc
-        raise MocError(exc.code, exc.message) from exc
+                           f"{exc.message}", params={"reason": "filter", "cause": _message_of(exc)}) from exc
+        raise _relay(exc, exc.message) from exc
     try:
         records = json.loads(response.payload.decode(vo.MOCSERVER_CHARSET))
         if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
             raise ValueError("attesa una lista di record")
     except (UnicodeDecodeError, ValueError) as exc:
         text = response.payload[:200].decode("utf-8", "replace")
-        raise MocError("SERVICE_ERROR", f"{vo.MOCSERVER_URL}: risposta non leggibile ({exc}): {text!r}") from exc
+        raise MocError("SERVICE_ERROR", f"{vo.MOCSERVER_URL}: risposta non leggibile ({exc}): {text!r}",
+                       params={"reason": "mocserver_response", "url": vo.MOCSERVER_URL, "detail": str(exc),
+                               "body": text}) from exc
     notes = response.notes + vo._store(response, "mocserver", cache)
     arguments = {"region": where, "properties": dict(properties or {}), "intersect": intersect,
                  "fields": list(fields)}
@@ -1505,7 +1627,8 @@ def build_moc(sources, *, order_max: int, output=None, format: str = "fits", ove
             mocs.append(moc_from_image(item, order))
         elif isinstance(item, Moc):
             if item.kind != "space":
-                raise MocError("MOC_TYPE_MISMATCH", f"build_moc: MOC {item.kind}, attesi MOC spaziali")
+                raise MocError("MOC_TYPE_MISMATCH", f"build_moc: MOC {item.kind}, attesi MOC spaziali",
+                               params={"reason": "build_moc", "kind": item.kind})
             mocs.append(item)
         else:
             raise TypeError(f"build_moc: sorgente non riconosciuta {item!r}; i file vanno indicati come "

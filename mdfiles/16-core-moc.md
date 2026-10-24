@@ -518,6 +518,136 @@ di un dato sia sempre verificabile e confrontabile.
 | Operazione su un MOC misto senza `force_body=True` | rifiuto (scelta 5) | `BODY_MISMATCH` |
 | File con `MOCVERS = '2.1'` | rifiuto: nessuna 2.1 tra i documenti IVOA (D16-6, decisa il 2026-10-12) | `MOC_VERSION_UNSUPPORTED` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8d) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`MocError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la coppia
+(codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `text`/`message`); il
+modulo **non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1).
+Il parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (libreria, intestazione di
+un file, servizio, nomi di colonne), inserito tale e quale e senza tradurlo. I `details` di prima (`path`, `version`,
+`url`) restano.
+
+**Errori rilanciati da un altro modulo (10, 14).** Gli errori del 10 (conversione di coordinate di un catalogo) e del
+14 (MocServer) che il 16 non riscrive passano con il loro codice, i loro `params` e `relayed = True` (il testo del
+16 aggiunge il prefisso e resta nel campo `text`). Dove il testo del 16 incorpora l'errore di un altro modulo di
+AstroTwo (`REGION_INVALID` `conversion`, `MOCSERVER_UNAVAILABLE` `filter`) il parametro è di tipo `message`
+(`cause`, D40-7). Gli **avvisi dei moduli sotto** (`response.notes` del 14) passano **tali e quali**, con il loro
+`params`.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `HEALPIX_ORDER_INVALID` | `moc_order` | `what` (string), `value` (string), `limit` (integer) |
+| `HEALPIX_ORDER_INVALID` | `map_too_large` | `order` (integer), `cells` (integer), `maximum` (integer) |
+| `BODY_UNKNOWN` | `moc_without_body` | `kind` (string) |
+| `BODY_UNKNOWN` | `no_moc` | `what` (string) |
+| `BODY_UNKNOWN` | `no_filter` | `origin` (string) |
+| `BODY_MISMATCH` | (generale) | — |
+| `BODY_MISMATCH` | `mixed_operation` | `op` (string), `body` (string) |
+| `BODY_MISMATCH` | `different_bodies` | `body` (string), `other` (string) |
+| `BODY_MISMATCH` | `table_vs_moc` | `table_body` (string), `moc_body` (string) |
+| `MOC_TYPE_MISMATCH` | (generale) | — |
+| `MOC_TYPE_MISMATCH` | `operation` | `kind` (string), `other` (string) |
+| `MOC_TYPE_MISMATCH` | `contains_positions` | `kind` (string) |
+| `MOC_TYPE_MISMATCH` | `contains_times` | `kind` (string) |
+| `MOC_TYPE_MISMATCH` | `space_during` | — |
+| `MOC_TYPE_MISMATCH` | `time_within` | — |
+| `MOC_TYPE_MISMATCH` | `file` | `path` (string), `found` (string), `requested` (string) |
+| `MOC_TYPE_MISMATCH` | `filter` | `kind` (string) |
+| `MOC_TYPE_MISMATCH` | `grid_within` | — |
+| `MOC_TYPE_MISMATCH` | `mocserver_filter` | `kind` (string) |
+| `MOC_TYPE_MISMATCH` | `build_moc` | `kind` (string) |
+| `MOC_UNREADABLE` | (generale) | — |
+| `MOC_UNREADABLE` | `read_error` | `path` (string), `detail` (string, esterno) |
+| `MOC_UNREADABLE` | `no_binary_table` | `path` (string) |
+| `MOC_UNREADABLE` | `mixed_without_bodies` | `path` (string) |
+| `MOC_UNREADABLE` | `body_empty` | `path` (string) |
+| `MOC_UNREADABLE` | `mocdim` | `path` (string), `value` (string, esterno) |
+| `MOC_UNREADABLE` | `coordsys` | `path` (string), `value` (string, esterno) |
+| `MOC_UNREADABLE` | `mocpy_error` | `path` (string), `detail` (string, esterno) |
+| `MOC_UNREADABLE` | `json_syntax` | `path` (string), `detail` (string, esterno) |
+| `MOC_UNREADABLE` | `json_cells` | `path` (string) |
+| `MOC_UNREADABLE` | `json_st_list` | `path` (string) |
+| `MOC_UNREADABLE` | `empty_text` | `path` (string) |
+| `MOC_UNREADABLE` | `not_utf8` | `path` (string), `detail` (string, esterno) |
+| `MOC_VERSION_UNSUPPORTED` | (generale) | — |
+| `MOC_VERSION_UNSUPPORTED` | `unsupported` | `path` (string), `version` (string, esterno), `supported` (list) |
+| `MOC_VERSION_UNSUPPORTED` | `unsupported_2_1` | `path` (string), `supported` (list) |
+| `MOC_VERSION_UNSUPPORTED` | `timesys` | `path` (string), `value` (string, esterno) |
+| `MOC_TYPE_REQUIRED` | (generale) | — |
+| `MOC_TYPE_REQUIRED` | `json` | `path` (string) |
+| `MOC_TYPE_REQUIRED` | `ascii` | `path` (string) |
+| `MOC_BODY_UNSUPPORTED` | (generale) | — |
+| `MOC_BODY_UNSUPPORTED` | `format` | `body` (string), `format` (string) |
+| `MOC_BODY_UNSUPPORTED` | `not_celestial` | `what` (string), `body` (string) |
+| `REGION_INVALID` | `conversion` | `what` (string), `cause` (message: errore del 10) |
+| `REGION_INVALID` | `not_finite` | `what` (string) |
+| `REGION_INVALID` | `polygon_vertices` | `count` (integer) |
+| `REGION_INVALID` | `polygon_mocpy` | `detail` (string, esterno) |
+| `REGION_INVALID` | `radius_not_angle` | `radius` (string) — voce già del 13 |
+| `REGION_INVALID` | `radius_range` | `radius` (quantity, deg) — voce già del 13 |
+| `REGION_INVALID` | `center_not_single` | — — voce già del 12 |
+| `REGION_INVALID` | `radius` | `radius` (string) — voce già del 12 |
+| `NO_COORD_COLUMNS` | `no_positions` | `what` (string), `origin` (string) |
+| `NO_COORD_COLUMNS` | `no_angular_unit` | `what` (string), `lon` (string, esterno), `lat` (string, esterno) |
+| `FRAME_UNKNOWN` | `columns_without_frame` | `what` (string), `lon` (string, esterno), `lat` (string, esterno) |
+| `PREVIEW_NOT_MEASURABLE` | `moc_from_image` | — |
+| `OPERATION_UNSUPPORTED` | `color_image` | `operation` (string) — voce già dell'11 |
+| `WCS_MISSING` | `image_without_wcs` | `origin` (string) — voce già del 10 e dell'11 |
+| `GRID_TOO_LARGE` | (generale) | — |
+| `GRID_TOO_LARGE` | `full_sky` | `order` (integer), `cells` (integer), `maximum` (integer) |
+| `GRID_TOO_LARGE` | `within` | `cells` (integer), `maximum` (integer) |
+| `TIME_RANGE_INVALID` | (generale) | — |
+| `TIME_RANGE_INVALID` | `not_finite` | `what` (string) |
+| `TIME_RANGE_INVALID` | `before_jd0` | `what` (string) |
+| `TIME_RANGE_INVALID` | `different_counts` | — |
+| `TIME_RANGE_INVALID` | `end_before_start` | — |
+| `TIME_RANGE_INVALID` | `counts_mismatch` | `times` (integer), `positions` (integer) |
+| `TIME_RANGE_INVALID` | `invalid_intervals` | — |
+| `PROBABILITY_MAP_INVALID` | (generale) | — |
+| `PROBABILITY_MAP_INVALID` | `read_error` | `path` (string), `detail` (string, esterno) |
+| `PROBABILITY_MAP_INVALID` | `no_table` | `path` (string) |
+| `PROBABILITY_MAP_INVALID` | `coordsys` | `path` (string), `value` (string, esterno) |
+| `PROBABILITY_MAP_INVALID` | `density_unit` | `path` (string), `unit` (string, esterno) |
+| `PROBABILITY_MAP_INVALID` | `ordering` | `path` (string), `value` (string, esterno) |
+| `PROBABILITY_MAP_INVALID` | `nside` | `path` (string), `nside` (integer), `values` (integer) |
+| `PROBABILITY_MAP_INVALID` | `no_columns` | `path` (string) |
+| `PROBABILITY_MAP_INVALID` | `bad_uniq` | `path` (string) |
+| `PROBABILITY_OUT_OF_RANGE` | (generale) | — |
+| `PROBABILITY_OUT_OF_RANGE` | `cell_probability` | `path` (string) |
+| `PROBABILITY_OUT_OF_RANGE` | `density` | `path` (string) |
+| `PROBABILITY_OUT_OF_RANGE` | `cell_over_one` | `path` (string) |
+| `PROBABILITY_OUT_OF_RANGE` | `level` | `level` (string) |
+| `PROBABILITY_SUM_INVALID` | (generale) | `path` (string), `total` (number), `tolerance` (number) |
+| `MOCSERVER_UNAVAILABLE` | `filter` | `cause` (message: errore del 14) |
+| `SERVICE_ERROR` | `mocserver_response` | `url` (string), `detail` (string, esterno), `body` (string, esterno) |
+| `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10, 11, 12, 14 |
+| `BODY_FORCED` (avviso) | (generale) | — |
+| `BODY_FORCED` | `mixed` | `op` (string), `bodies` (list) |
+| `BODY_FORCED` | `forced` | `body` (string), `other` (string), `bodies` (list) |
+| `BODY_FORCED` | `within` | `body` (string), `other` (string) |
+| `BODY_FORCED` | `filter` | `table_body` (string), `moc_body` (string) |
+| `MOC_EMPTY` (avviso) | `plain` | — |
+| `MOC_EMPTY` | `operation` | `op` (string) |
+| `MOC_EMPTY` | `source` | `origin` (string) |
+| `MOC_VERSION_ASSUMED` (avviso) | (generale) | `path` (string), `version` (string) |
+| `MOC_NONSTANDARD_EXTENSION` (avviso) | (generale) | — |
+| `MOC_NONSTANDARD_EXTENSION` | `read` | `path` (string), `body` (string), `keyword` (string) |
+| `MOC_NONSTANDARD_EXTENSION` | `write` | `path` (string), `body` (string), `keyword` (string) |
+| `ROWS_EXCLUDED` (avviso) | (generale) | `count` (integer) |
+| `ROWS_EXCLUDED` | `never_selected` | `count` (integer) |
+| `VALUES_EXCLUDED` (avviso) | (generale) | `count` (integer), `column` (string, esterno) |
+| `POINTS_OUTSIDE_PROJECTION` (avviso) | (generale) | `count` (integer) |
+| `ORDER_DEGRADED` (avviso) | (generale) | `map_order` (integer), `order` (integer) |
+| `CREDIBLE_PROBABILITY` (avviso) | (generale) | `probability` (number) |
+| `FROM_CACHE` (avviso) | `cached_origin` | `origin` (string), `retrieved_at` (string) — voce già del 14 |
+| `FROM_CACHE` | `cached_converted` | `origin` (string), `retrieved_at` (string), `original_format` (string) |
+| `FROM_CACHE` | `network_cached` | `error` (string, esterno), `retrieved_at` (string) — voce già del 14 |
+
+`CACHE_FULL` (avviso della cache comune, `04`) passa con il codice, il testo e i `params` che ha, come nel 14.
+
 ## 11. Esposizione all'IA
 
 - **`moc_from_catalog`** / **`moc_from_region`** — input: tabella o regione +
@@ -647,3 +777,4 @@ L'IA non calcola né approssima mai superfici o coperture.
 | 2026-10-14 | Claude Code | **D16-8 aperta (Gruppo 3)**: la regola dei blocchi per `moc_from_image` decisa il 2026-10-14 perde celle sul bordo (misure in §13); regola e codice dei blocchi non applicati, in attesa della decisione del proprietario. §3 invariato. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **D16-8 decisa e applicata** (decisione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): §3 — MOC da immagine con pixel piccolo su blocchi di b × b pixel (regola del proprietario del 2026-10-14) più gli angoli dei pixel lungo il contorno della regione dei blocchi validi; crescita massima ai bordi b − 1 pixel (corretto "mezzo blocco"); dimensione del blocco, passo e punti dichiarati nel risultato. §12 T10 esteso (300 maschere casuali contro il MOC pixel per pixel; immagine DSS della demo con test di rete). §13 D16-8 decisa. Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Perimetro della griglia (decisione del proprietario del 2026-10-21, autorizzazione esplicita a modificare il file approvato, sprint 4f del 41):** `HealpixGrid.boundary` con i lati di perimetro (vicini di `neighbours` di `astropy-healpix`, corrispondenza lato → vicino verificata sull'ordine 4); T15. Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message` per gli errori del 10 e del 14; nuovo codice `BODY_FORCED` con sotto-voci); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

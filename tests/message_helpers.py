@@ -112,3 +112,13 @@ MODULE_14_SUBVARIANTS = {
 } | {("SERVICE_ERROR", r) for r in (
     "http_message", "http_message_async_hint", "http_no_votable", "service_rejected", "request_failed", "job_phase",
     "job_result_status", "descriptor_missing", "simbad_no_units")}
+
+#: Sotto-voci di codici condivisi che solo il modulo 16 solleva o restituisce (provate in ``test_messages_moc.py``).
+MODULE_16_SUBVARIANTS = {
+    ("HEALPIX_ORDER_INVALID", "moc_order"), ("HEALPIX_ORDER_INVALID", "map_too_large"),
+    ("BODY_UNKNOWN", "moc_without_body"), ("BODY_UNKNOWN", "no_moc"), ("BODY_UNKNOWN", "no_filter"),
+    ("REGION_INVALID", "conversion"), ("REGION_INVALID", "not_finite"), ("REGION_INVALID", "polygon_vertices"),
+    ("REGION_INVALID", "polygon_mocpy"), ("NO_COORD_COLUMNS", "no_positions"), ("NO_COORD_COLUMNS", "no_angular_unit"),
+    ("FRAME_UNKNOWN", "columns_without_frame"), ("PREVIEW_NOT_MEASURABLE", "moc_from_image"),
+    ("MOCSERVER_UNAVAILABLE", "filter"), ("SERVICE_ERROR", "mocserver_response"), ("FROM_CACHE", "cached_converted"),
+}

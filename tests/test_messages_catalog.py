@@ -29,6 +29,7 @@ CONVERTED = {
     "core/hips.py": "HiPSError",
     "core/catalogs.py": "CatalogsError",
     "core/vo_protocols.py": "VoProtocolsError",
+    "core/moc.py": "MocError",
     "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
 }
 
@@ -42,6 +43,7 @@ HELPERS = {
         "_check_memory": ("MEMORY_LIMIT_EXCEEDED", 0), "_problem": ("ASTRORES_LINK_PROBLEM", 0),
         "_catalog_unknown": ("CATALOG_UNKNOWN", 5),  # con le varianti _candidates e _candidates_limited
     },
+    "core/moc.py": {"_unreadable": ("MOC_UNREADABLE", 1), "_invalid_map": ("PROBABILITY_MAP_INVALID", 1)},
 }
 
 _CODE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$")

@@ -59,6 +59,7 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.core.hips", "HiPSError"),
     ("astrotwo.core.catalogs", "CatalogsError"),
     ("astrotwo.core.vo_protocols", "VoProtocolsError"),
+    ("astrotwo.core.moc", "MocError"),
 )
 
 

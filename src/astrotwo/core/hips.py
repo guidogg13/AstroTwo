@@ -1291,7 +1291,7 @@ def survey_coverage(service: HiPSService, *, cache=None, refresh: bool = False, 
         if exc.code == "NET_TIMEOUT":
             raise HiPSError("MOCSERVER_UNAVAILABLE", f"copertura di {service.hips_id}: {exc.message}",
                             params={"reason": "coverage", "hips_id": service.hips_id,
-                                    "detail": exc.message}) from exc
+                                    "cause": _message_of(exc)}) from exc
         raise _relay(exc) from exc
     return moc, tuple(notes) + (ModuleWarning(
         "HIPS_COVERAGE_FROM_MOCSERVER", f"{service.hips_id}: copertura dal MocServer ({url}), il servizio non "

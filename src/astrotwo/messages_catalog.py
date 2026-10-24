@@ -956,7 +956,7 @@ _add("MOCSERVER_UNAVAILABLE",
               "MocServer non raggiungibile per risolvere '{hips_id}': {cause}", "hips_id cause:msg"),
      index=("The MocServer is not reachable and there is no local copy of the collections: {cause}",
             "MocServer non raggiungibile e nessuna copia locale delle collezioni: {cause}", "cause:msg"),
-     coverage=("Coverage of {hips_id}: {detail}", "Copertura di {hips_id}: {detail}", "hips_id detail!"),
+     coverage=("Coverage of {hips_id}: {cause}", "Copertura di {hips_id}: {cause}", "hips_id cause:msg"),
      local_copy=("The MocServer is not reachable: local copy of the collections of {retrieved_at}.",
                  "MocServer non raggiungibile: copia locale delle collezioni del {retrieved_at}.", "retrieved_at"))
 _add("HIPS_DISPLAY_REQUIRED",
@@ -1767,3 +1767,245 @@ _add("SIMBAD_TIE",
                     "{separation}.", "count:int main_id! separation:qty"))
 _add("SIMBAD_NO_MAGNITUDE",
      "No magnitude in SIMBAD for {main_id}.", "Nessuna magnitudine in SIMBAD per {main_id}.", "main_id!")
+
+# --- Modulo 16 (MOC, sprint 8d) --------------------------------------------------------------------------------
+_extend("HEALPIX_ORDER_INVALID",
+        moc_order=("{what} {value}: an integer in [0, {limit}] is required (IVOA MOC 2.0 standard), no default.",
+                   "{what} {value}: serve un intero in [0, {limit}] (standard IVOA MOC 2.0), senza default.",
+                   "what value limit:int"),
+        map_too_large=("order {order}: a map of {cells} cells is above the limit of this function (order "
+                       "{maximum}).",
+                       "order {order}: mappa di {cells} celle oltre il limite di questa funzione (ordine "
+                       "{maximum}).", "order:int cells:int maximum:int"))
+_extend("BODY_UNKNOWN",
+        moc_without_body=("MOC {kind} without a body: a MOC without a body is an error.",
+                          "MOC {kind} senza corpo (body): un MOC senza corpo è un errore.", "kind"),
+        no_moc=("{what}: the body cannot be derived, no MOC.", "{what}: corpo non ricavabile, nessun MOC.", "what"),
+        no_filter=("Table {origin}: the body cannot be derived, no filter.",
+                   "Tabella {origin}: corpo non ricavabile, nessun filtro.", "origin"))
+_add("BODY_MISMATCH",
+     "The bodies differ.", "I corpi sono diversi.",
+     mixed_operation=("{op} on a mixed MOC {body}: it can be forced only with force_body=True (cited in the "
+                      "result).",
+                      "{op} su un MOC misto {body}: forzabile solo con force_body=True (citato nel risultato).",
+                      "op body"),
+     different_bodies=("Different bodies or mixed MOC: {body} and {other}; it can be forced only with "
+                       "force_body=True (cited in the result).",
+                       "Corpi diversi o MOC misto: {body} e {other}; forzabile solo con force_body=True (citato nel "
+                       "risultato).", "body other"),
+     table_vs_moc=("Different bodies: table {table_body}, MOC {moc_body}; it can be forced only with "
+                   "force_body=True (cited in the result).",
+                   "Corpi diversi: tabella {table_body}, MOC {moc_body}; forzabile solo con force_body=True (citato "
+                   "nel risultato).", "table_body moc_body"))
+_add("MOC_TYPE_MISMATCH",
+     "The MOC type does not fit the operation.", "Il tipo di MOC non va bene per l'operazione.",
+     operation=("Operation between a {kind} MOC and a {other} MOC: different types (different units).",
+                "Operazione tra un MOC {kind} e un MOC {other}: tipi diversi (unità diverse).", "kind other"),
+     contains_positions=("contains on positions: a spatial MOC is required, not {kind}.",
+                         "contains su posizioni: serve un MOC spaziale, non {kind}.", "kind"),
+     contains_times=("contains_times: a temporal MOC is required, not {kind}.",
+                     "contains_times: serve un MOC temporale, non {kind}.", "kind"),
+     space_during=("space_during: a space-time MOC and a temporal MOC are required.",
+                   "space_during: servono un MOC spazio-temporale e un MOC temporale.", ""),
+     time_within=("time_within: a space-time MOC and a spatial MOC are required.",
+                  "time_within: servono un MOC spazio-temporale e un MOC spaziale.", ""),
+     file=("{path}: {found} MOC in the file, {requested} requested.",
+           "{path}: MOC {found} nel file, richiesto {requested}.", "path found requested"),
+     filter=("Position filter with a {kind} MOC: a spatial MOC is required.",
+             "Filtro di posizioni con un MOC {kind}: serve un MOC spaziale.", "kind"),
+     grid_within=("healpix_grid: within must be a spatial MOC.", "healpix_grid: within deve essere un MOC spaziale.",
+                  ""),
+     mocserver_filter=("Spatial filter of the MocServer with a {kind} MOC.",
+                       "Filtro spaziale del MocServer con un MOC {kind}.", "kind"),
+     build_moc=("build_moc: {kind} MOC, spatial MOCs expected.", "build_moc: MOC {kind}, attesi MOC spaziali.",
+                "kind"))
+_add("MOC_UNREADABLE",
+     "The MOC cannot be read.", "Il MOC non è leggibile.",
+     read_error=("{path}: MOC not readable ({detail})", "{path}: MOC non leggibile ({detail})", "path detail!"),
+     no_binary_table=("{path}: MOC not readable (no binary table)", "{path}: MOC non leggibile (nessuna tabella "
+                      "binaria)", "path"),
+     mixed_without_bodies=("{path}: MOC not readable (A2BODY='mixed' without A2BODIES with at least two bodies)",
+                           "{path}: MOC non leggibile (A2BODY='mixed' senza A2BODIES con almeno due corpi)", "path"),
+     body_empty=("{path}: MOC not readable (A2BODY is empty)", "{path}: MOC non leggibile (A2BODY vuoto)", "path"),
+     mocdim=("{path}: MOC not readable (MOCDIM '{value}' not provided by the standard)",
+             "{path}: MOC non leggibile (MOCDIM '{value}' non previsto dallo standard)", "path value!"),
+     coordsys=("{path}: MOC not readable (COORDSYS '{value}': the standard requires 'C' (ICRS))",
+               "{path}: MOC non leggibile (COORDSYS '{value}': lo standard prevede 'C' (ICRS))", "path value!"),
+     mocpy_error=("{path}: MOC not readable ({detail})", "{path}: MOC non leggibile ({detail})", "path detail!"),
+     json_syntax=("{path}: MOC not readable ({detail})", "{path}: MOC non leggibile ({detail})", "path detail!"),
+     json_cells=("{path}: MOC not readable (JSON: {{\"order\": [integer indices], ...}} expected)",
+                 "{path}: MOC non leggibile (JSON: atteso {{\"ordine\": [indici interi], ...}})", "path"),
+     json_st_list=("{path}: MOC not readable (JSON of a space-time MOC: a list of {{\"t\": …}} and {{\"s\": …}} "
+                   "expected)",
+                   "{path}: MOC non leggibile (JSON di un MOC spazio-temporale: attesa una lista di {{\"t\": …}} e "
+                   "{{\"s\": …}})", "path"),
+     empty_text=("{path}: MOC not readable (empty text)", "{path}: MOC non leggibile (testo vuoto)", "path"),
+     not_utf8=("{path}: MOC not readable ({detail})", "{path}: MOC non leggibile ({detail})", "path detail!"))
+_add("MOC_VERSION_UNSUPPORTED",
+     "The MOC version is not supported.", "La versione del MOC non è supportata.",
+     unsupported=("{path}: MOC version '{version}' not supported; read: {supported}",
+                  "{path}: versione MOC '{version}' non supportata; lette: {supported}",
+                  "path version! supported:list"),
+     unsupported_2_1=("{path}: MOC version '2.1' not supported; read: {supported} (D16-6: no 2.1 version among the "
+                      "IVOA documents, not even as a Working Draft or Proposed Recommendation, check of "
+                      "2026-10-12)",
+                      "{path}: versione MOC '2.1' non supportata; lette: {supported} (D16-6: nessuna versione 2.1 "
+                      "tra i documenti IVOA, nemmeno come Working Draft o Proposed Recommendation, verifica del "
+                      "2026-10-12)", "path supported:list"),
+     timesys=("{path}: TIMESYS '{value}'; the 2.0 standard requires TCB (earlier temporal MOCs, STMOC Note 2019, are "
+              "not read)",
+              "{path}: TIMESYS '{value}'; lo standard 2.0 prevede TCB (i MOC temporali precedenti, Note STMOC 2019, "
+              "non sono letti)", "path value!"))
+_add("MOC_TYPE_REQUIRED",
+     "The MOC type must be given.", "Il tipo del MOC va indicato.",
+     json=("{path}: JSON without the \"s\"/\"t\" prefix: the type is determined by the context (standard 2.0); give "
+           "it with kind='space' or kind='time'.",
+           "{path}: JSON senza prefisso \"s\"/\"t\": il tipo si determina dal contesto d'uso (standard 2.0); "
+           "indicarlo con kind='space' o kind='time'.", "path"),
+     ascii=("{path}: text without the t/s prefix: the type is determined by the context (standard 2.0); give it "
+            "with kind='space' or kind='time'.",
+            "{path}: testo senza prefisso t/s: il tipo si determina dal contesto d'uso (standard 2.0); indicarlo "
+            "con kind='space' o kind='time'.", "path"))
+_add("MOC_BODY_UNSUPPORTED",
+     "The body is not supported for this MOC.", "Il corpo non è supportato per questo MOC.",
+     format=("MOC of the body {body}: the body cannot be declared in {format}; non-celestial MOCs are written only in "
+             "FITS with the A2BODY keyword.",
+             "MOC del corpo {body}: in {format} il corpo non si può dichiarare; i MOC non celesti si scrivono solo "
+             "in FITS con la parola chiave A2BODY.", "body format"),
+     not_celestial=("{what}: body '{body}'; spatial MOCs are in ICRS (sky only).",
+                    "{what}: corpo '{body}'; i MOC spaziali sono in ICRS (solo cielo).", "what body"))
+_extend("REGION_INVALID",
+        conversion=("{what}: {cause}", "{what}: {cause}", "what cause:msg"),
+        not_finite=("{what}: coordinates not finite.", "{what}: coordinate non finite.", "what"),
+        polygon_vertices=("Polygon with {count} vertices: at least 3 are required.",
+                          "Poligono con {count} vertici: ne servono almeno 3.", "count:int"),
+        polygon_mocpy=("Polygon not valid for mocpy: {detail}", "Poligono non valido per mocpy: {detail}", "detail!"))
+_extend("NO_COORD_COLUMNS",
+        no_positions=("{what} ({origin}): no position column (module 13).",
+                      "{what} ({origin}): nessuna colonna di posizione (modulo 13).", "what origin"),
+        no_angular_unit=("{what}: columns {lon}/{lat} without an angular unit.",
+                         "{what}: colonne {lon}/{lat} senza unità angolare.", "what lon! lat!"))
+_extend("FRAME_UNKNOWN",
+        columns_without_frame=("{what}: columns {lon}/{lat} without a declared reference system.",
+                               "{what}: colonne {lon}/{lat} senza sistema dichiarato.", "what lon! lat!"))
+_extend("PREVIEW_NOT_MEASURABLE",
+        moc_from_image=("MOC from an image: the image is open at two levels and the data in memory are only the "
+                        "preview.",
+                        "MOC da immagine: l'immagine è aperta a due livelli e i dati in memoria sono solo "
+                        "l'anteprima.", ""))
+_add("GRID_TOO_LARGE",
+     "The grid is too large.", "La griglia è troppo grande.",
+     full_sky=("All-sky grid at order {order}: {cells} cells, above {maximum}; give within=MOC.",
+               "Griglia di tutto il cielo all'ordine {order}: {cells} celle, oltre {maximum}; indicare within=MOC.",
+               "order:int cells:int maximum:int"),
+     within=("Grid of {cells} cells above {maximum}.", "Griglia di {cells} celle oltre {maximum}.",
+             "cells:int maximum:int"))
+_add("TIME_RANGE_INVALID",
+     "The times are not valid.", "I tempi non sono validi.",
+     not_finite=("{what}: times not finite.", "{what}: istanti non finiti.", "what"),
+     before_jd0=("{what}: times before JD 0, outside the temporal MOCs (standard 2.0).",
+                 "{what}: istanti prima di JD 0, fuori dai MOC temporali (standard 2.0).", "what"),
+     different_counts=("Start and end with different numbers of values.",
+                       "Inizio e fine con numeri di valori diversi.", ""),
+     end_before_start=("Interval with the end before the start.", "Intervallo con fine prima dell'inizio.", ""),
+     counts_mismatch=("{times} times and {positions} positions: one position per observation is required.",
+                      "{times} tempi e {positions} posizioni: serve una posizione per osservazione.",
+                      "times:int positions:int"),
+     invalid_intervals=("Intervals not valid (different numbers or end before the start).",
+                        "Intervalli non validi (numeri diversi o fine prima dell'inizio).", ""))
+_add("PROBABILITY_MAP_INVALID",
+     "The probability map is not valid.", "La mappa di probabilità non è valida.",
+     read_error=("{path}: probability map not valid ({detail})", "{path}: mappa di probabilità non valida "
+                 "({detail})", "path detail!"),
+     no_table=("{path}: probability map not valid (no binary table)",
+               "{path}: mappa di probabilità non valida (nessuna tabella binaria)", "path"),
+     coordsys=("{path}: probability map not valid (COORDSYS '{value}': 'C' (equatorial, ICRS) is required)",
+               "{path}: mappa di probabilità non valida (COORDSYS '{value}': serve 'C' (equatoriale, ICRS))",
+               "path value!"),
+     density_unit=("{path}: probability map not valid (PROBDENSITY with unit {unit}: a density per steradian is "
+                   "required)",
+                   "{path}: mappa di probabilità non valida (PROBDENSITY con unità {unit}: serve una densità per "
+                   "steradiante)", "path unit!"),
+     ordering=("{path}: probability map not valid (ORDERING '{value}': RING or NESTED is required)",
+               "{path}: mappa di probabilità non valida (ORDERING '{value}': serve RING o NESTED)", "path value!"),
+     nside=("{path}: probability map not valid (NSIDE {nside} and {values} values are not consistent)",
+            "{path}: mappa di probabilità non valida (NSIDE {nside} e {values} valori non coerenti)",
+            "path nside:int values:int"),
+     no_columns=("{path}: probability map not valid (expected the columns PROB (flat map) or UNIQ and PROBDENSITY "
+                 "(multi-order))",
+                 "{path}: mappa di probabilità non valida (attese le colonne PROB (mappa piatta) o UNIQ e "
+                 "PROBDENSITY (multi-ordine))", "path"),
+     bad_uniq=("{path}: probability map not valid (invalid UNIQ cells)",
+               "{path}: mappa di probabilità non valida (celle UNIQ non valide)", "path"))
+_add("PROBABILITY_OUT_OF_RANGE",
+     "A probability is out of range.", "Una probabilità è fuori intervallo.",
+     cell_probability=("{path}: probability per cell outside [0, 1].", "{path}: probabilità per cella fuori da "
+                       "[0, 1].", "path"),
+     density=("{path}: probability densities negative or not finite.",
+              "{path}: densità di probabilità negative o non finite.", "path"),
+     cell_over_one=("{path}: probability per cell above 1.", "{path}: probabilità per cella oltre 1.", "path"),
+     level=("Credibility level {level}: allowed in (0, 1].", "Livello di credibilità {level}: ammesso in (0, 1].",
+            "level"))
+_add("PROBABILITY_SUM_INVALID",
+     "{path}: sum of the probabilities {total}, 1 expected within {tolerance} relative.",
+     "{path}: somma delle probabilità {total}, attesa 1 entro {tolerance} relativo.",
+     "path total:num tolerance:num")
+_extend("MOCSERVER_UNAVAILABLE",
+        filter=("The MocServer is not reachable, no spatial filter: {cause}",
+                "MocServer non raggiungibile, nessun filtro spaziale: {cause}", "cause:msg"))
+_extend("SERVICE_ERROR",
+        mocserver_response=("{url}: the response cannot be read ({detail}): '{body}'",
+                            "{url}: risposta non leggibile ({detail}): '{body}'", "url detail! body!"))
+_add("BODY_FORCED",
+     "The operation between different bodies was forced.", "Operazione tra corpi diversi forzata.",
+     mixed=("{op} on a mixed MOC forced: bodies {bodies}.", "{op} su un MOC misto forzata: corpi {bodies}.",
+            "op bodies:list"),
+     forced=("Operation forced between {body} and {other}; the result has a mixed body ({bodies}).",
+             "Operazione forzata tra {body} e {other}; il risultato ha corpo misto ({bodies}).",
+             "body other bodies:list"),
+     within=("Bodies forced: {body} and {other}.", "Corpi forzati: {body} e {other}.", "body other"),
+     filter=("Filter between different bodies forced: table {table_body}, MOC {moc_body}.",
+             "Filtro tra corpi diversi forzato: tabella {table_body}, MOC {moc_body}.", "table_body moc_body"))
+_add("MOC_EMPTY",
+     "Empty MOC.", "MOC vuoto.",
+     plain=("Empty MOC.", "MOC vuoto.", ""),
+     operation=("The result of {op} is empty.", "Risultato di {op} vuoto.", "op"),
+     source=("{origin}: empty MOC.", "{origin}: MOC vuoto.", "origin"))
+_add("MOC_VERSION_ASSUMED",
+     "{path}: MOCVERS missing, version {version} assumed.", "{path}: MOCVERS assente, versione {version}.",
+     "path version")
+_add("MOC_NONSTANDARD_EXTENSION",
+     "Non-standard extension of the IVOA MOC 2.0 format (D19-7).",
+     "Estensione non standard del formato IVOA MOC 2.0 (D19-7).",
+     read=("{path}: body {body} from the AstroTwo keyword {keyword}, a non-standard extension of the IVOA MOC 2.0 "
+           "format (D19-7).",
+           "{path}: corpo {body} dalla parola chiave {keyword} di AstroTwo, estensione non standard del formato "
+           "IVOA MOC 2.0 (D19-7).", "path body keyword"),
+     write=("{path}: body {body} written in the AstroTwo keyword {keyword}, a non-standard extension of the IVOA "
+            "MOC 2.0 format (D19-7); COORDSYS stays 'C' as the format requires: a reader without the extension "
+            "sees a celestial MOC.",
+            "{path}: corpo {body} scritto nella parola chiave {keyword} di AstroTwo, estensione non standard del "
+            "formato IVOA MOC 2.0 (D19-7); COORDSYS resta 'C' come richiesto dal formato: un lettore senza "
+            "l'estensione vede un MOC celeste.", "path body keyword"))
+_add("ROWS_EXCLUDED",
+     "{count} rows without a position excluded.", "{count} righe senza posizione escluse.", "count:int",
+     never_selected=("{count} rows without a position: never selected.",
+                     "{count} righe senza posizione: mai selezionate.", "count:int"))
+_add("VALUES_EXCLUDED",
+     "{count} rows with {column} missing excluded.", "{count} righe con {column} mancante escluse.",
+     "count:int column!")
+_add("POINTS_OUTSIDE_PROJECTION",
+     "{count} sampling points without a position on the sky (outside the projection) excluded.",
+     "{count} punti di campionamento senza posizione sul cielo (fuori dalla proiezione) esclusi.", "count:int")
+_add("ORDER_DEGRADED",
+     "Map at order {map_order}: region brought to order {order} by excess (larger cells containing the region).",
+     "Mappa all'ordine {map_order}: regione portata all'ordine {order} per eccesso (celle più grandi che "
+     "contengono la regione).", "map_order:int order:int")
+_add("CREDIBLE_PROBABILITY",
+     "Probability contained in the region: {probability}.", "Probabilità contenuta nella regione: {probability}.",
+     "probability:num")
+_extend("FROM_CACHE",
+        cached_converted=("Copy of {origin} from the cache, downloaded on {retrieved_at}, stored as IVOA FITS "
+                          "(original {original_format}).",
+                          "Copia in cache di {origin}, scaricata il {retrieved_at}, conservata in FITS IVOA "
+                          "(originale {original_format}).", "origin retrieved_at original_format"))

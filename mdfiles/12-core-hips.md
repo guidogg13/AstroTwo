@@ -627,14 +627,14 @@ regola del 10 e dell'11: `detail`, `cause`); un messaggio di AstroTwo incorporat
 
 **Errori rilanciati da un altro modulo (14, 16).** Quando il 12 rilancia l'errore di un modulo sotto di lui
 (`_net`: `NET_TIMEOUT`, `SERVICE_ERROR`, …; `HiPSError(exc.code, exc.message)` per il 16) **codice, testo e `params` restano
-quelli dell'altro modulo**: il 12 non li riscrive né li inserisce nel catalogo. Il 14 è
-convertito (sprint 8d): i suoi errori arrivano con i loro `params`. Finché il 16 non è convertito (sprint 8d) l'errore
-ha `params` vuoti e si mostra come in §3.7.2 del `40` (testo originale con la nota "(nessuna traduzione)"); l'errore
-rilanciato non è controllato contro il catalogo (T18) finché i suoi `params` sono vuoti. Gli **avvisi dei moduli sotto** (`response.notes` del 14, `moc.warnings` del 16,
+quelli dell'altro modulo**: il 12 non li riscrive né li inserisce nel catalogo. Il 14 e il 16 sono
+convertiti (sprint 8d): i loro errori arrivano con i loro `params`. Gli **avvisi dei moduli sotto** (`response.notes` del 14, `moc.warnings` del 16,
 `table.warnings` del 13, gli avvisi dei tile in `pixel_values`) passano **tali e quali**, con il loro `params`.
 **Messaggi annidati (D40-7, decisa il 2026-10-24).** Dove il testo del 12 incorpora un altro messaggio **di AstroTwo**
 il parametro ha tipo `message` (`{"code", "params", "text"}`, `40` §3.7.1) e il catalogo lo rende in modo
-ricorsivo: `REGION_INVALID` con l'errore del 10 (`detail`), `HIPS_COVERAGE_UNKNOWN` con l'errore del 12 che ha
+ricorsivo: `REGION_INVALID` con l'errore del 10 (`detail`), `HIPS_NOT_A_SERVICE` (`service_error`), `HIPS_METADATA_INVALID`
+(`metadata_xml_unavailable`) e `MOCSERVER_UNAVAILABLE` (`resolve`, `index`, `coverage`) con l'errore del 14 o del 16 (`cause`),
+`HIPS_COVERAGE_UNKNOWN` con l'errore del 12 che ha
 impedito la copertura (`cause`, con `cause_code` che ne ripete il codice), `HIPS_BAD_TILE` e `HIPS_TILE_DISCARDED` con
 la diagnosi del tile (`problem`). La diagnosi ha un codice proprio, **`HIPS_TILE_PROBLEM`**, usato solo come messaggio
 annidato (sotto-voci `no_data`, `fits_unreadable`, `size_mismatch`, `format_mismatch`, `image_unreadable`, `not_utf8`,
@@ -718,7 +718,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `MOCSERVER_UNAVAILABLE` | (generale) | — |
 | `MOCSERVER_UNAVAILABLE` | `resolve` | `hips_id` (string), `cause` (message: errore del 14) |
 | `MOCSERVER_UNAVAILABLE` | `index` | `cause` (message: errore del 14) |
-| `MOCSERVER_UNAVAILABLE` | `coverage` | `hips_id` (string), `detail` (string, esterno) |
+| `MOCSERVER_UNAVAILABLE` | `coverage` | `hips_id` (string), `cause` (message: errore del 16) |
 | `MOCSERVER_UNAVAILABLE` | `local_copy` (avviso) | `retrieved_at` (string) |
 | `OPERATION_UNSUPPORTED` | `build_method` | `method` (string), `allowed` (list) — voce già dell'11 |
 | `OPERATION_UNSUPPORTED` | `build_color_image` | `origin` (string) |
@@ -891,3 +891,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-24 | Claude Code | **D40-3, sprint 8c:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso, regola per gli errori rilanciati dal 14 e dal 16 (codice e `params` restano dell'altro modulo) e per i messaggi annidati (parametri esterni); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — messaggi annidati di tipo `message` (errore del 10 in `REGION_INVALID`, errore del 12 in `HIPS_COVERAGE_UNKNOWN`, diagnosi del tile con il nuovo codice annidato `HIPS_TILE_PROBLEM` in `HIPS_BAD_TILE` e `HIPS_TILE_DISCARDED`); il testo italiano non cambia. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 14):** gli errori del 14 incorporati dal testo del 12 (`HIPS_NOT_A_SERVICE` `service_error`, `HIPS_METADATA_INVALID` `metadata_xml_unavailable`, `MOCSERVER_UNAVAILABLE` `resolve` e `index`) passano da parametro esterno `detail` a parametro `message` `cause`. Nessun comportamento scientifico cambia. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 16):** l'errore del 16 incorporato dal testo del 12 (`MOCSERVER_UNAVAILABLE` `coverage`) passa da parametro esterno `detail` a parametro `message` `cause`; gli errori del 16 rilanciati dal 12 portano i loro `params`. Nessun comportamento scientifico cambia. |

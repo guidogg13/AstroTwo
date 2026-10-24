@@ -62,7 +62,14 @@ from tests.core.test_hips import (
     tile_service,
     tsv,
 )
-from tests.message_helpers import MODULE_14_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
+from tests.message_helpers import (
+    MODULE_14_SUBVARIANTS,
+    MODULE_16_SUBVARIANTS,
+    catalog_combinations,
+    check_error,
+    check_message,
+    nested_pairs,
+)
 
 #: Codici che solo il modulo 12 solleva o restituisce (le sotto-voci aggiunte a voci condivise sono in ``SHARED``).
 OWN_CODES = (
@@ -86,7 +93,7 @@ def required_combinations() -> set[tuple[str, str | None]]:
     module_13 = {("BODY_UNKNOWN", "table_body"), ("REGION_INVALID", "radius_not_angle"),
                  ("REGION_INVALID", "radius_range")}  # sotto-voci del 13 nelle voci condivise
     out = {(c, r) for c, r in catalog_combinations(OWN_CODES)
-           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS
+           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS - MODULE_16_SUBVARIANTS
     return out | {("HEALPIX_ORDER_INVALID", None)} | SHARED
 
 
@@ -412,9 +419,11 @@ def test_relayed_errors_keep_the_code_and_params_of_the_lower_module(cache):
     assert (relayed.code, relayed.message, relayed.params, relayed.relayed) == ("NET_TIMEOUT", "testo del 14",
                                                                                  lower.params, True)
     assert check_error(relayed) == ("NET_TIMEOUT", "url")  # con i params del 14 si controlla come ogni errore
-    unconverted = MocError("SERVICE_ERROR", "testo del 16", url="http://x")  # il 16 si converte nello sprint 8d
-    plain = hips_module._relay(unconverted)
-    assert plain.params == {} and plain.relayed and check_error(plain) == ("SERVICE_ERROR", None)
+    from_16 = MocError("SERVICE_ERROR", "testo del 16", url="http://x",
+                       params={"reason": "http_status", "url": "http://x", "status": 500, "status_text": "boom"})
+    relayed_16 = hips_module._relay(from_16)
+    assert relayed_16.params == from_16.params and relayed_16.relayed
+    assert check_error(relayed_16) == ("SERVICE_ERROR", "http_status")
     assert mc.message_text("NET_TIMEOUT", {}, "en", text="testo del 14") == "testo del 14 (no translation)"
 
 
