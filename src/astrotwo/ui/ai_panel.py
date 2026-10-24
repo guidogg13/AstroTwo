@@ -91,6 +91,7 @@ from astrotwo.ai.provider_adapter import (
     make_adapter,
 )
 from astrotwo.ai.tool_registry import ToolRegistry
+from astrotwo.ui.message_view import shown_line
 
 __all__ = [
     "AiPanel",
@@ -652,7 +653,7 @@ class CommandCard(QFrame):
                 self.result.setText("→ " + _elide(brief, 240))
                 self.result.setToolTip(json.dumps(values, ensure_ascii=False, indent=1, allow_nan=True))
             elif full.error is not None:
-                self.result.setText(f"{full.error.code}: {full.error.text}")
+                self.result.setText(shown_line(full.error))
             else:
                 self.result.setText(full.status)
             origins = []

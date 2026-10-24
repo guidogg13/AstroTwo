@@ -497,6 +497,136 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 | `compass_and_scale_bar` con il più piccolo valore tondo più lungo di `max_bar_pixels` | barra del valore più piccolo, dichiarata | `SCALE_BAR_TOO_LONG` (avviso) |
 | `compass_and_scale_bar` con `max_bar_pixels` < 1 o non intero, frame sconosciuto | rifiuto | `VIEW_PARAMETERS_INVALID` / `FRAME_UNSUPPORTED` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8b) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`CoordinatesWcsError(code, message, params=...)`; gli avvisi di `compass_and_scale_bar` sono `ModuleWarning(code, text, params)`, una coppia (codice, testo) con in più `params`): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai
+arrotondati; le quantità sono `{"value": numero o elenco, "unit": testo}`. Il
+**testo italiano del modulo resta invariato** (campo `text`/`message`, usato
+come ripiego e nei file di sessione); il modulo **non** contiene traduzioni e
+non importa il catalogo: la traduzione inglese/italiana sta in
+`src/astrotwo/messages_catalog.py` (`40` §3.7.1). I codici che il modulo
+solleva per ragioni diverse portano in `params` il parametro riservato
+`reason` (identificatore stabile, D40-6) che sceglie la sotto-voce del
+catalogo; "esterno" = testo di terzi (libreria, file, servizio), inserito tale
+e quale e senza tradurlo. Nessun identificatore di errore cambia.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `PIXEL_CONVENTION_UNKNOWN` | (generale) | `value` (string), `allowed` (list) |
+| `FRAME_UNSUPPORTED` | (generale) | `frame` (string), `supported` (list) |
+| `FRAME_UNSUPPORTED` | `no_attribute` | `frame` (string), `attribute` (string) |
+| `FRAME_UNSUPPORTED` | `conversion_failed` | `from_frame` (string), `to_frame` (string), `detail` (string, esterno) |
+| `FRAME_UNSUPPORTED` | `equatorial_required` | `frame` (string) |
+| `FRAME_UNSUPPORTED` | `not_for_view` | `frame` (string), `allowed` (list) |
+| `FRAME_UNSUPPORTED` | `differs_from_coordinates` | `frame` (string), `coordinates_frame` (string) |
+| `FRAME_UNSUPPORTED` | `frame_required` | — |
+| `EPOCH_REQUIRED` | (generale) | — |
+| `EPOCH_REQUIRED` | `invalid_value` | `argument` (string), `value` (string) |
+| `EPOCH_REQUIRED` | `explicit_required` | `frame` (string), `attribute` (string) |
+| `EPOCH_REQUIRED` | `frame_default` | `frame` (string), `attribute` (string) |
+| `EPOCH_REQUIRED` | `not_time` | — |
+| `EPOCH_REQUIRED` | `origin_unknown` | — |
+| `EPOCH_REQUIRED` | `missing_for_propagation` | `argument` (string) |
+| `EPOCH_REQUIRED` | `target_missing` | — |
+| `COORD_UNIT_MISSING` | (generale) | — |
+| `COORD_UNIT_MISSING` | `no_unit` | `argument` (string) |
+| `COORD_UNIT_MISSING` | `not_angular` | `argument` (string), `unit` (string) |
+| `COORD_UNIT_MISSING` | `skycoord_required` | — |
+| `COORD_UNIT_MISSING` | `skyframe_required` | `argument` (string) |
+| `COORD_UNIT_MISSING` | `single_skyframe_required` | `argument` (string) |
+| `COORD_UNIT_MISSING` | `column_no_unit` | `column` (string) |
+| `COORD_UNIT_MISSING` | `coordinates_required` | — |
+| `COORD_UNIT_MISSING` | `coords_or_values` | — |
+| `COORD_UNIT_MISSING` | `axis_required` | — |
+| `COORD_OUT_OF_RANGE` | (generale) | — |
+| `COORD_OUT_OF_RANGE` | `not_finite` | — |
+| `COORD_OUT_OF_RANGE` | `latitude_range` | `values` (quantity) |
+| `COORD_OUT_OF_RANGE` | `longitude_range` | `values` (quantity) |
+| `COORD_OUT_OF_RANGE` | `parallax_not_positive` | — |
+| `COORD_OUT_OF_RANGE` | `fov_threshold_positive` | — |
+| `NAME_NOT_FOUND` | (generale) | `name` (string) |
+| `NAME_NOT_FOUND` | `empty_name` | — |
+| `NAME_NOT_FOUND` | `source_unsupported` | `source` (string) |
+| `NAME_NOT_FOUND` | `ambiguous` | `name` (string) |
+| `NAME_NOT_FOUND` | `no_coordinates` | `name` (string) |
+| `NET_TIMEOUT` | (generale) | `service` (string), `target` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
+| `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
+| `COORD_FORMAT_INVALID` | (generale) | `detail` (string, esterno) |
+| `PROPAGATION_MODE_CONFLICT` | (generale) | — |
+| `WCS_INVALID` | (generale) | — |
+| `WCS_INVALID` | `singular_matrix` | — |
+| `WCS_INVALID` | `not_coherent` | `tolerance` (quantity) |
+| `WCS_INVALID` | `cd_all_zero` | — |
+| `WCS_INVALID` | `not_constructible` | `detail` (string, esterno) |
+| `WCS_INVALID` | `pixel_shape_required` | — |
+| `WCS_INVALID` | `east_left_required` | — |
+| `WCS_INVALID` | `scale_not_positive` | — |
+| `WCS_INVALID` | `no_valid_pixels` | — |
+| `WCS_INVALID` | `method_unknown` | `method` (string), `allowed` (list) |
+| `WCS_MISSING` | (generale) | — |
+| `WCS_MISSING` | `header_required` | — |
+| `WCS_MISSING` | `no_celestial_wcs` | — |
+| `WCS_MISSING` | `not_celestial` | — |
+| `WCS_MISSING` | `wcs_required` | — |
+| `WCS_MISSING` | `cutout_center` | — |
+| `WCS_MISSING` | `cutout_size` | — |
+| `WCS_MISSING` | `contours_sky` | — |
+| `WCS_MISSING` | `resampling` | `operation` (string), `origin` (string) |
+| `WCS_MISSING` | `reference` | — |
+| `WCS_MISSING` | `rgb` | `origin` (string) |
+| `WCS_MISSING` | `external_unavailable` | `source` (string), `cause` (string, esterno) |
+| `WCS_MISSING` | `external_no_header` | `source` (string) |
+| `WCS_MISSING` | `hhh_unreadable` | `name` (string), `detail` (string, esterno) |
+| `WCS_MISSING` | `no_calibration` | — |
+| `WCS_MISSING` | `calibration_invalid_header` | `kind` (string) |
+| `WCS_MISSING` | `calibration_size_differs` | `kind` (string), `naxis1` (string), `naxis2` (string), `nx` (integer), `ny` (integer) |
+| `WCS_MISSING` | `celestial_axes` | `celestial_axes` (list), `useful_axes` (list) |
+| `WCS_LEGACY_UNSUPPORTED` | (generale) | `legacy` (string) |
+| `WCS_LEGACY_UNSUPPORTED` | `library_failed` | `legacy` (string), `detail` (string, esterno) |
+| `PROJECTION_UNSUPPORTED` | (generale) | `projection` (string), `supported` (list) |
+| `PROJECTION_UNSUPPORTED` | `not_for_view_ncp` | `projection` (string) |
+| `PROJECTION_UNSUPPORTED` | `not_for_view_zpn` | `projection` (string) |
+| `PROJECTION_UNSUPPORTED` | `not_for_view` | `projection` (string), `allowed` (list) |
+| `PROJECTION_PARAMETERS_MISSING` | (generale) | — |
+| `CALIB_INCONSISTENT` | (generale) | `deviation` (quantity), `factor` (number), `limit` (quantity) |
+| `CALIB_TOO_FEW_STARS` | (generale) | `n_stars` (integer), `minimum` (integer), `projection` (string) |
+| `CALIB_TOO_FEW_STARS` | `count_mismatch` | `pixel_positions` (integer), `sky_positions` (integer) |
+| `CALIB_FIT_FAILED` | (generale) | `detail` (string, esterno) |
+| `CALIB_RESIDUALS_TOO_LARGE` | (generale) | `rms` (quantity), `rms_threshold` (quantity), `maximum` (quantity), `maximum_threshold` (quantity), `worst_indices` (list), `worst_residuals` (quantity) |
+| `GRID_SPACING_INVALID` | (generale) | — |
+| `GRID_SPACING_INVALID` | `no_angular_unit` | `argument` (string) |
+| `GRID_SPACING_INVALID` | `out_of_range` | `argument` (string), `value` (quantity) |
+| `GRID_SPACING_INVALID` | `target_lines` | — |
+| `GRID_SPACING_INVALID` | `both_or_none` | — |
+| `GRID_SPACING_INVALID` | `samples` | `samples_per_line` (integer) |
+| `VIEW_PARAMETERS_INVALID` | (generale) | — |
+| `VIEW_PARAMETERS_INVALID` | `shape` | `shape` (string) |
+| `VIEW_PARAMETERS_INVALID` | `scale_unit` | — |
+| `VIEW_PARAMETERS_INVALID` | `scale_positive` | — |
+| `VIEW_PARAMETERS_INVALID` | `center_skyframe` | — |
+| `VIEW_PARAMETERS_INVALID` | `base_exclusive` | — |
+| `VIEW_PARAMETERS_INVALID` | `projection_required` | — |
+| `VIEW_PARAMETERS_INVALID` | `tangent_skyframe` | — |
+| `VIEW_PARAMETERS_INVALID` | `center_outside_projection` | — |
+| `VIEW_PARAMETERS_INVALID` | `geometry_required` | — |
+| `VIEW_PARAMETERS_INVALID` | `max_bar_pixels` | — |
+| `FORMAT_PRECISION_INVALID` | (generale) | — |
+| `FORMAT_PRECISION_INVALID` | `decimal_needs_angle` | `unit` (string) |
+| `FORMAT_PRECISION_INVALID` | `ra_unit` | `unit` (string) |
+| `FORMAT_PRECISION_INVALID` | `unit_unsuitable` | `axis` (string), `unit` (string) |
+| `FORMAT_PRECISION_INVALID` | `not_positive` | — |
+| `FORMAT_PRECISION_INVALID` | `style_unknown` | `style` (string), `allowed` (list) |
+| `FORMAT_PRECISION_INVALID` | `separators_unknown` | `separators` (string), `allowed` (list) |
+| `FORMAT_PRECISION_INVALID` | `no_unit` | — |
+| `NORTH_UNDEFINED` | (generale) | — |
+| `NORTH_UNDEFINED` | `center_outside` | — |
+| `NORTH_UNDEFINED` | `pole_near` | `frame` (string), `delta` (quantity) |
+| `NORTH_UNDEFINED` | `direction_outside` | — |
+| `SCALE_BAR_TOO_LONG` | (generale) | `step` (quantity), `max_bar_pixels` (integer) |
+| `OUT_OF_FIELD` | (generale) | — |
+
 ## 11. Esposizione all'IA
 
 Il modulo espone strumenti deterministici; **l'IA non calcola coordinate**:
@@ -679,3 +809,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-16 | Claude Code | Scelte minori di `format_coordinates` (1, 2) e di `compass_and_scale_bar` (3, 4, 5) **confermate dal proprietario il 2026-10-16**, che approva anche le modifiche del 2026-10-16. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `make_view_wcs` con `ViewGeometry` (regione visibile = base con il pixel di riferimento spostato all'origine intera che contiene la finestra, anche per SIP; `WCS.slice` per le distorsioni a tabella), `format_coordinates` (verifica di `Angle.to_string`: riporto sì, ritorno a 0 no, gestito nel codice; segno ASCII), `compass_and_scale_bar`, `choose_projection` con default 30° che restituisce `ProjectionChoice` (proiezione, campo, soglia e sua fonte); test T20 aggiornato e T26–T36 in `tests/core/test_coordinates_wcs.py` (100 superati). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8b:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

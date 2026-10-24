@@ -51,6 +51,53 @@ def _no_real_keychain(monkeypatch):
         monkeypatch.setattr(sys.modules["astrotwo.ui.main_window"], "default_keychain", FakeKeychain)
 
 
+#: Errori dei moduli già in codice + ``params`` (D40-3): ogni istanza creata in un test viene controllata contro il
+#: catalogo dei messaggi (voce, ``reason``, nomi e tipi dei parametri, JSON, testi senza segnaposto rimasti).
+CONVERTED_ERROR_CLASSES = (
+    ("astrotwo.core.coordinates_wcs", "CoordinatesWcsError"),
+    ("astrotwo.core.images_fits", "ImagesFitsError"),
+)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _module_messages_match_catalog():
+    import importlib
+
+    try:
+        from tests.message_helpers import check_error, check_message
+    except ImportError:  # copia di questo conftest in un progetto di prova (pytester): niente controllo
+        yield
+        return
+
+    restore = []
+    for module_name, class_name in CONVERTED_ERROR_CLASSES:
+        cls = getattr(importlib.import_module(module_name), class_name)
+        original = cls.__init__
+
+        def checked(self, *args, __original=original, **kwargs):
+            __original(self, *args, **kwargs)
+            check_error(self)
+
+        cls.__init__ = checked
+        restore.append((cls, "__init__", original))
+    warning_cls = importlib.import_module("astrotwo.core.coordinates_wcs").ModuleWarning
+    original_new = warning_cls.__new__
+
+    def checked_new(cls, code, text, params=None):
+        self = original_new(cls, code, text, params)
+        from astrotwo.messages_catalog import has_message
+
+        if has_message(code):  # i codici di moduli non ancora convertiti (es. CACHE_FULL) non hanno voce
+            check_message(code, self.params, text)
+        return self
+
+    warning_cls.__new__ = checked_new
+    restore.append((warning_cls, "__new__", original_new))
+    yield
+    for cls, name, original in restore:
+        setattr(cls, name, original)
+
+
 @pytest.fixture(autouse=True)
 def _temporary_home(tmp_path_factory, monkeypatch):
     home = tmp_path_factory.mktemp("home")

@@ -254,35 +254,51 @@ def test_t3_t4_responsive_and_cancel(qtbot, window, monkeypatch):
 
 
 # =============================================================================
-# T5 — messaggi invariati, finestra modale solo per un file illeggibile
+# T5 — messaggi dei moduli nella lingua dell'interfaccia (D40-3), finestra modale solo per un file illeggibile
 
 
-def test_t5_messages_unchanged(qtbot, window, files, tmp_path):  # noqa: F811
+def test_t5_messages_in_the_interface_language(qtbot, window, files, tmp_path, monkeypatch):  # noqa: F811
+    from astrotwo.messages_catalog import message_text
+    from astrotwo.ui import message_view
+
     win = window
-    win.submit("view.set_center", {"position": sky(10.0, 95.0)})
-    wait_idle(qtbot, win)
-    with pytest.raises(cw.CoordinatesWcsError) as direct:
-        cw.SkyFrame.from_lonlat(10.0 * cw.u.deg, 95.0 * cw.u.deg, "icrs")
-    assert win.messages.messages[-1] == ("#1", direct.value.code, direct.value.message, True)
-    assert win.modals == []
+    monkeypatch.setattr(message_view, "_language", "en")
+    for lang in ("en", "it"):
+        message_view.set_language(lang)
+        win.submit("view.set_center", {"position": sky(10.0, 95.0)})
+        wait_idle(qtbot, win)
+        with pytest.raises(cw.CoordinatesWcsError) as direct:
+            cw.SkyFrame.from_lonlat(10.0 * cw.u.deg, 95.0 * cw.u.deg, "icrs")
+        exc = direct.value
+        ref, code, shown, error = win.messages.messages[-1]
+        assert (code, error) == (exc.code, True)  # il codice resta quello del modulo
+        assert shown == message_text(exc.code, exc.params, lang)  # testo del catalogo nella lingua scelta
+        assert shown != exc.message and "95.0 deg" in shown  # il valore del parametro è quello del modulo
+        item = win.messages.table.item(win.messages.table.rowCount() - 1, 2)
+        assert exc.message in item.toolTip()  # il testo originale del modulo resta nel dettaglio
+        assert win.modals == []
     plain = tmp_path / "plain.xml"
     shutil.copy(files["catalog"], plain)  # catalogo senza UCD: avvisi del 13/05
     text = plain.read_text().replace('ucd="pos.eq.ra;meta.main"', "").replace('ucd="pos.eq.dec;meta.main"', "")
     plain.write_text(text.replace('name="RA"', 'name="X1"').replace('name="DE"', 'name="X2"'))
+    number = len(win.session.history.entries) + 1
     win.submit("catalog.open_file", {"file": {"path": str(plain)}})
     wait_idle(qtbot, win)
     result = win.session.history.entries[-1].result
     assert result.warnings
-    shown = [(code, text) for ref, code, text, error in win.messages.messages if ref == "#2"]
-    assert shown == [(w.code, w.text) for w in result.warnings]
+    shown = [(code, text) for ref, code, text, error in win.messages.messages if ref == f"#{number}"]
+    # i moduli non ancora convertiti (13): testo originale con la nota "(nessuna traduzione)" (40 §3.7.2)
+    assert shown == [(w.code, message_text(w.code, w.params, "it", text=w.text)) for w in result.warnings]
     assert win.modals == []
     broken = tmp_path / "broken.fits"
     broken.write_bytes(b"not a fits file")
     win.submit("image.open", {"file": {"path": str(broken)}})
     wait_idle(qtbot, win)
     error = win.session.history.entries[-1].result.error
-    assert win.messages.messages[-1] == ("#3", error.code, error.text, True)
-    assert win.modals == [("The file cannot be opened", f"{error.code}: {error.text}")]
+    assert win.messages.messages[-1][1:] == (error.code, message_text(error.code, error.params, "it", text=error.text),
+                                             True)
+    assert win.modals == [("The file cannot be opened",
+                           f"{error.code}: {message_text(error.code, error.params, 'it', text=error.text)}")]
 
 
 # =============================================================================

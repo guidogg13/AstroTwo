@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QHBox
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
+from astrotwo.ui.message_view import shown_text
 from astrotwo.ui.sky_tools import (
     DEFAULT_TOOL_TEXTS, DistanceOptionsBar, DistanceTool, MeasureOverlay, SimbadPointerTool)
 
@@ -1303,7 +1304,7 @@ class SkyViewer(QWidget):
             else:
                 lines.append(html.escape(t["not_propagated"]))
             for message in points.warnings:
-                lines.append(f"⚠ {html.escape(message.text)}")
+                lines.append(f"⚠ {html.escape(shown_text(message))}")
             if row not in set(points.rows.tolist()):
                 lines.append(html.escape(t["not_drawn"]))
         catalog = card["catalog"]

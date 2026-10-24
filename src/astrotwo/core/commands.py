@@ -105,10 +105,12 @@ REQUIRED = _Required()
 class CommandError(Exception):
     """Errore del registro o della sessione con l'identificatore della specifica (§10)."""
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3); il testo resta del modulo
         self.details = details
 
 
@@ -626,9 +628,13 @@ class ResultMessage:
 
     code: str
     text: str
+    params: Mapping[str, object] = field(default_factory=dict)  # D40-3: valori JSON, {} se assenti
 
     def to_json(self) -> dict:
-        return {"code": self.code, "text": self.text}
+        out = {"code": self.code, "text": self.text}
+        if self.params:  # facoltativo: le sessioni scritte prima di D40-3 restano identiche
+            out["params"] = copy.deepcopy(dict(self.params))
+        return out
 
 
 @dataclass(frozen=True)
@@ -852,11 +858,36 @@ class Outcome:
 
 
 def _module_error(exc: BaseException) -> ResultMessage | None:
-    """Errore di un modulo con codice e testo (``code``/``message``), invariati (§3.2)."""
+    """Errore di un modulo con codice, testo e ``params`` (``code``/``message``/``params``), invariati (§3.2)."""
     code, message = getattr(exc, "code", None), getattr(exc, "message", None)
     if isinstance(code, str) and isinstance(message, str):
-        return ResultMessage(code, message)
+        return ResultMessage(code, message, _json_params(getattr(exc, "params", None)))
     return None
+
+
+def _command_error_message(exc: CommandError) -> ResultMessage:
+    return ResultMessage(exc.code, exc.message, _json_params(exc.params))
+
+
+def _json_value(value: object) -> object:
+    """Valore di ``params`` in forma JSON, senza cambiarne il valore (numpy → tipo nativo, quantità → valore e unità)."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Mapping):
+        return {str(k): _json_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(v) for v in value]
+    if isinstance(value, u.Quantity):
+        if value.isscalar:
+            return {"value": float(value.value), "unit": value.unit.to_string()}
+        return {"value": [float(v) for v in value.value.ravel()], "unit": value.unit.to_string()}
+    if hasattr(value, "tolist"):  # numpy scalare o array
+        return _json_value(value.tolist())
+    return str(value)
+
+
+def _json_params(params: Mapping[str, object] | None) -> dict:
+    return {} if not params else {str(k): _json_value(v) for k, v in params.items()}
 
 
 class CommandRegistry:
@@ -926,7 +957,7 @@ class CommandRegistry:
         try:
             registered = self.validate(command, workspace)
         except CommandError as exc:
-            return command, CommandResult("error", error=ResultMessage(exc.code, exc.message), started_at=started,
+            return command, CommandResult("error", error=_command_error_message(exc), started_at=started,
                                           finished_at=_now())
         spec = self.spec(registered.name)
         executor = spec.executor if spec.bound_by is None else self._bound.get(spec.name)
@@ -946,7 +977,7 @@ class CommandRegistry:
         except _Cancelled:
             outcome = None
         except CommandError as exc:
-            return registered, CommandResult("error", error=ResultMessage(exc.code, exc.message), started_at=started,
+            return registered, CommandResult("error", error=_command_error_message(exc), started_at=started,
                                              finished_at=_now())
         except Exception as exc:  # noqa: BLE001 - errori dei moduli: codice e testo invariati
             message = _module_error(exc)
@@ -1076,13 +1107,22 @@ def _json_digest(data: object) -> str:
 
 
 def _module_warnings(items) -> list[ResultMessage]:
-    """Avvisi dei moduli (coppie codice, testo) invariati."""
+    """Avvisi dei moduli (codice, testo ed eventuali ``params``) invariati."""
     out = []
     for item in items or ():
-        if isinstance(item, (tuple, list)) and len(item) == 2:
-            out.append(ResultMessage(str(item[0]), str(item[1])))
+        if isinstance(item, (tuple, list)) and len(item) in (2, 3):
+            params = item[2] if len(item) == 3 else getattr(item, "params", None)  # ModuleWarning del 10
+            out.append(ResultMessage(str(item[0]), str(item[1]), _json_params(params)))
         else:
             out.append(ResultMessage("MODULE_NOTE", str(item)))
+    return out
+
+
+def _warning_json(item) -> dict:
+    out = {"code": item[0], "text": item[1]}
+    params = _json_params(getattr(item, "params", None))
+    if params:
+        out["params"] = params
     return out
 
 
@@ -1692,7 +1732,7 @@ def _view_values(view: ViewState, info: dict) -> dict:
         out["compass"] = {"frame": c.frame_name, "north": None if c.north is None else list(c.north),
                           "east": None if c.east is None else list(c.east), "bar_pixels": c.bar_pixels,
                           "bar_label": c.label, "local_only": c.local_only,
-                          "warnings": [{"code": code, "text": text} for code, text in c.warnings], "method": c.method}
+                          "warnings": [_warning_json(w) for w in c.warnings], "method": c.method}
     if view.grid is not None:
         out["grid"] = {"frame": view.grid.frame_name, "lon_spacing": quantity_json(view.grid.lon_spacing),
                        "lat_spacing": quantity_json(view.grid.lat_spacing), "lines": len(view.grid.lines)}

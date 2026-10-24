@@ -54,6 +54,7 @@ __all__ = [
     "SUPPORTED_PROJECTIONS",
     "PIXEL_CONVENTIONS",
     "CoordinatesWcsError",
+    "ModuleWarning",
     "PixelPosition",
     "SkyFrame",
     "SkyPositions",
@@ -121,11 +122,36 @@ _PROVENANCE = f"astropy {astropy.__version__}"
 class CoordinatesWcsError(Exception):
     """Errore del modulo 10 con identificatore della specifica (§10)."""
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40
         self.details = details
+
+
+class ModuleWarning(tuple):
+    """Avviso di un modulo: coppia ``(codice, testo)`` con in più ``params`` (D40-3, ``40`` §3.7.1).
+
+    Si comporta come la coppia di prima (si spacchetta, si confronta, sta in un elenco di coppie): chi non conosce
+    ``params`` non cambia; ``params`` è un dizionario nome → valore JSON, come per gli errori.
+    """
+
+    def __new__(cls, code: str, text: str, params: Mapping[str, object] | None = None):
+        self = super().__new__(cls, (code, text))
+        self.params = dict(params or {})
+        return self
+
+    def __getnewargs__(self):
+        return (self[0], self[1], self.params)
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``): numero o elenco di numeri, mai arrotondati."""
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return {"value": [float(v) for v in np.ravel(value)], "unit": unit}
+    return {"value": float(value), "unit": unit}
 
 
 # --------------------------------------------------------------------------
@@ -147,6 +173,7 @@ def _check_convention(value: object) -> PixelConvention:
         raise CoordinatesWcsError(
             "PIXEL_CONVENTION_UNKNOWN",
             f"convenzione dei pixel {value!r} non ammessa; ammesse: {', '.join(PIXEL_CONVENTIONS)}",
+            params={"value": str(value), "allowed": list(PIXEL_CONVENTIONS)},
         )
     return value  # type: ignore[return-value]
 
@@ -194,6 +221,7 @@ def _frame_class(name: object) -> type[BaseCoordinateFrame]:
         raise CoordinatesWcsError(
             "FRAME_UNSUPPORTED",
             f"frame {name!r} non supportato; frame supportati: {', '.join(supported_frames())}",
+            params={"frame": str(name), "supported": list(supported_frames())},
         )
     return frame_transform_graph.lookup_name(name)
 
@@ -214,6 +242,7 @@ def _to_epoch(value: object, what: str) -> Time:
         "EPOCH_REQUIRED",
         f"{what} {value!r} non valido: usare un oggetto Time con scala dichiarata, "
         "un anno giuliano (es. 2000.0) o un'epoca 'J2000.0'/'B1950.0'",
+        params={"reason": "invalid_value", "argument": what, "value": str(value)},
     )
 
 
@@ -227,23 +256,28 @@ def _frame_instance(name: str, equinox=None, obstime=None) -> BaseCoordinateFram
                 raise CoordinatesWcsError(
                     "EPOCH_REQUIRED",
                     f"il frame {name!r} richiede {attr} esplicito: l'epoca non si assume mai (D10-2)",
+                    params={"reason": "explicit_required", "frame": name, "attribute": attr},
                 )
             kwargs[attr] = _to_epoch(given[attr], attr)
         elif given[attr] is not None:
             raise CoordinatesWcsError(
-                "FRAME_UNSUPPORTED", f"il frame {name!r} non ha l'attributo {attr}"
+                "FRAME_UNSUPPORTED", f"il frame {name!r} non ha l'attributo {attr}",
+                params={"reason": "no_attribute", "frame": name, "attribute": attr},
             )
     return cls(**kwargs)
 
 
-def _require_angle(value, what: str) -> u.Quantity:
+def _require_angle(value, what: str, argument: str) -> u.Quantity:
+    """``what``: nome per il testo del modulo; ``argument``: identificatore dell'argomento per ``params``."""
     if not isinstance(value, u.Quantity):
         raise CoordinatesWcsError(
-            "COORD_UNIT_MISSING", f"{what} senza unità: nessun angolo senza unità"
+            "COORD_UNIT_MISSING", f"{what} senza unità: nessun angolo senza unità",
+            params={"reason": "no_unit", "argument": argument},
         )
     if not value.unit.is_equivalent(u.deg):
         raise CoordinatesWcsError(
-            "COORD_UNIT_MISSING", f"{what} in unità {value.unit}, non angolare"
+            "COORD_UNIT_MISSING", f"{what} in unità {value.unit}, non angolare",
+            params={"reason": "not_angular", "argument": argument, "unit": str(value.unit)},
         )
     return value.to(u.deg).astype(np.float64)
 
@@ -254,6 +288,7 @@ def _check_epochs_explicit(frame: BaseCoordinateFrame) -> None:
             raise CoordinatesWcsError(
                 "EPOCH_REQUIRED",
                 f"il frame {frame.name!r} ha {attr} di default di Astropy: l'epoca non si assume mai (D10-2)",
+                params={"reason": "frame_default", "frame": frame.name, "attribute": attr},
             )
 
 
@@ -274,29 +309,33 @@ class SkyFrame:
 
     def __post_init__(self) -> None:
         if not isinstance(self.coord, SkyCoord):
-            raise CoordinatesWcsError("COORD_UNIT_MISSING", "serve un SkyCoord con unità e frame")
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "serve un SkyCoord con unità e frame",
+                                      params={"reason": "skycoord_required"})
         _frame_class(self.coord.frame.name)
         if self.frame_defaults_note is None:
             _check_epochs_explicit(self.coord.frame)
         if self.epoch is not None and not isinstance(self.epoch, Time):
-            raise CoordinatesWcsError("EPOCH_REQUIRED", "epoch deve essere un oggetto Time")
+            raise CoordinatesWcsError("EPOCH_REQUIRED", "epoch deve essere un oggetto Time",
+                                      params={"reason": "not_time"})
 
     @classmethod
     def from_lonlat(cls, lon, lat, frame: str, *, equinox=None, obstime=None, epoch=None) -> SkyFrame:
         """Crea coordinate da longitudine/latitudine con unità esplicite."""
-        lon_deg = _require_angle(lon, "longitudine")
-        lat_deg = _require_angle(lat, "latitudine")
+        lon_deg = _require_angle(lon, "longitudine", "lon")
+        lat_deg = _require_angle(lat, "latitudine", "lat")
         lon_v = np.atleast_1d(lon_deg.value)
         lat_v = np.atleast_1d(lat_deg.value)
         if not (np.all(np.isfinite(lon_v)) and np.all(np.isfinite(lat_v))):
-            raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "coordinate non finite")
+            raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "coordinate non finite", params={"reason": "not_finite"})
         if np.any((lat_v < -90.0) | (lat_v > 90.0)):
             raise CoordinatesWcsError(
-                "COORD_OUT_OF_RANGE", "latitudine fuori da [-90°, +90°]", values=lat_v[(lat_v < -90) | (lat_v > 90)]
+                "COORD_OUT_OF_RANGE", "latitudine fuori da [-90°, +90°]", values=lat_v[(lat_v < -90) | (lat_v > 90)],
+                params={"reason": "latitude_range", "values": _q(lat_v[(lat_v < -90) | (lat_v > 90)], "deg")},
             )
         if np.any((lon_v < 0.0) | (lon_v >= 360.0)):
             raise CoordinatesWcsError(
-                "COORD_OUT_OF_RANGE", "longitudine fuori da [0°, 360°)", values=lon_v[(lon_v < 0) | (lon_v >= 360)]
+                "COORD_OUT_OF_RANGE", "longitudine fuori da [0°, 360°)", values=lon_v[(lon_v < 0) | (lon_v >= 360)],
+                params={"reason": "longitude_range", "values": _q(lon_v[(lon_v < 0) | (lon_v >= 360)], "deg")},
             )
         frame_obj = _frame_instance(frame, equinox=equinox, obstime=obstime)
         epoch_t = None if epoch is None else _to_epoch(epoch, "epoch")
@@ -335,7 +374,8 @@ def convert_coordinates(coords: SkyFrame, to_frame: str, *, equinox=None, obstim
     arrivo vanno date se il frame le prevede.
     """
     if not isinstance(coords, SkyFrame):
-        raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame")
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame",
+                                  params={"reason": "skyframe_required", "argument": "coords"})
     target = _frame_instance(to_frame, equinox=equinox, obstime=obstime)
     try:
         converted = coords.coord.transform_to(target)
@@ -343,6 +383,8 @@ def convert_coordinates(coords: SkyFrame, to_frame: str, *, equinox=None, obstim
         raise CoordinatesWcsError(
             "FRAME_UNSUPPORTED",
             f"conversione {coords.frame_name} → {to_frame} non eseguibile: {exc}",
+            params={"reason": "conversion_failed", "from_frame": coords.frame_name, "to_frame": str(to_frame),
+                    "detail": str(exc)},
         ) from exc
     return SkyFrame(coord=converted, epoch=coords.epoch, frame_defaults_note=coords.frame_defaults_note)
 
@@ -436,7 +478,8 @@ def _column_value(table, column: str, target_unit) -> float | None:
         return None
     unit = table[column].unit
     if unit is None:
-        raise CoordinatesWcsError("COORD_UNIT_MISSING", f"colonna SIMBAD {column!r} senza unità")
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", f"colonna SIMBAD {column!r} senza unità",
+                                  params={"reason": "column_no_unit", "column": column})
     return float((float(value) * u.Unit(unit)).to_value(target_unit))
 
 
@@ -480,9 +523,10 @@ def resolve_name(
     la copia in cache, se c'è, dichiarandolo; altrimenti ``NET_TIMEOUT``.
     """
     if not isinstance(name, str) or not name.strip():
-        raise CoordinatesWcsError("NAME_NOT_FOUND", "nome vuoto")
+        raise CoordinatesWcsError("NAME_NOT_FOUND", "nome vuoto", params={"reason": "empty_name"})
     if source != "simbad":
-        raise CoordinatesWcsError("NAME_NOT_FOUND", f"fonte {source!r} non prevista: unica fonte 'simbad'")
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"fonte {source!r} non prevista: unica fonte 'simbad'",
+                                  params={"reason": "source_unsupported", "source": str(source)})
     clean = " ".join(name.split())
     key = f"simbad:{clean}"
     cache = SharedCache() if cache is None else cache
@@ -504,17 +548,21 @@ def resolve_name(
             "NET_TIMEOUT",
             f"SIMBAD non raggiungibile per {clean!r} (timeout {timeouts.connect:g} s connessione, "
             f"{timeouts.read:g} s lettura): {exc}",
+            params={"service": "SIMBAD", "target": clean, "connect": _q(timeouts.connect, "s"),
+                    "read": _q(timeouts.read, "s"), "detail": str(exc)},
         ) from exc
 
     if result is None or len(result) == 0:
-        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} non trovato in SIMBAD")
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} non trovato in SIMBAD", params={"name": clean})
     if len({str(r["main_id"]) for r in result}) > 1:
         raise CoordinatesWcsError(
-            "NAME_NOT_FOUND", f"{clean!r} è ambiguo in SIMBAD: nessun nome risolto approssimativamente"
+            "NAME_NOT_FOUND", f"{clean!r} è ambiguo in SIMBAD: nessun nome risolto approssimativamente",
+            params={"reason": "ambiguous", "name": clean},
         )
     ra, dec = _column_value(result, "ra", u.deg), _column_value(result, "dec", u.deg)
     if ra is None or dec is None:
-        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} è in SIMBAD ma senza coordinate")
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} è in SIMBAD ma senza coordinate",
+                                  params={"reason": "no_coordinates", "name": clean})
     row = result[0]
     bibcode = None if "coo_bibcode" not in result.colnames or np.ma.is_masked(row["coo_bibcode"]) else str(row["coo_bibcode"])
     values = {
@@ -542,7 +590,8 @@ def parse_sexagesimal(values, *, hours: bool) -> u.Quantity:
     try:
         angles = Angle(texts, unit=u.hourangle if hours else u.deg)
     except (ValueError, TypeError) as exc:
-        raise CoordinatesWcsError("COORD_FORMAT_INVALID", f"angoli sessagesimali non leggibili: {exc}") from exc
+        raise CoordinatesWcsError("COORD_FORMAT_INVALID", f"angoli sessagesimali non leggibili: {exc}",
+                                  params={"detail": str(exc)}) from exc
     return u.Quantity(angles.deg, u.deg)
 
 
@@ -584,31 +633,37 @@ def propagate_position(
     """
     if position.epoch is None:
         raise CoordinatesWcsError(
-            "EPOCH_REQUIRED", "epoca di origine della posizione non nota: l'epoca non si assume mai"
+            "EPOCH_REQUIRED", "epoca di origine della posizione non nota: l'epoca non si assume mai",
+            params={"reason": "origin_unknown"},
         )
     if proper_motion_only and (parallax is not None or radial_velocity is not None):
         raise CoordinatesWcsError(
             "PROPAGATION_MODE_CONFLICT",
             "proper_motion_only=True non usa parallasse né velocità radiale: non passarle",
+            params={},
         )
     required = (("pm_ra_cosdec", pm_ra_cosdec), ("pm_dec", pm_dec))
     if not proper_motion_only:
         required += (("parallax", parallax),)
     for name, value in required:
         if value is None:
-            raise CoordinatesWcsError("EPOCH_REQUIRED", f"{name} mancante: serve per la propagazione")
+            raise CoordinatesWcsError("EPOCH_REQUIRED", f"{name} mancante: serve per la propagazione",
+                                      params={"reason": "missing_for_propagation", "argument": name})
         if not isinstance(value, u.Quantity):
-            raise CoordinatesWcsError("COORD_UNIT_MISSING", f"{name} senza unità")
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", f"{name} senza unità",
+                                      params={"reason": "no_unit", "argument": name})
     if target_epoch is None:
-        raise CoordinatesWcsError("EPOCH_REQUIRED", "epoca di arrivo mancante")
+        raise CoordinatesWcsError("EPOCH_REQUIRED", "epoca di arrivo mancante", params={"reason": "target_missing"})
     target = _to_epoch(target_epoch, "target_epoch")
     if not proper_motion_only and np.any(parallax <= 0 * u.mas):
-        raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "parallasse non positiva: distanza non definita")
+        raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "parallasse non positiva: distanza non definita",
+                                  params={"reason": "parallax_not_positive"})
     frame = position.coord.frame
     if "ra" not in frame.representation_component_names:
         raise CoordinatesWcsError(
             "FRAME_UNSUPPORTED",
             f"propagazione con pm_ra_cosdec/pm_dec: serve un frame equatoriale, non {frame.name!r}",
+            params={"reason": "equatorial_required", "frame": frame.name},
         )
     kwargs = dict(
         ra=position.coord.spherical.lon,
@@ -627,7 +682,8 @@ def propagate_position(
     elif radial_velocity is not None:
         kwargs["distance"] = parallax.to(u.pc, equivalencies=u.parallax())
         if not isinstance(radial_velocity, u.Quantity):
-            raise CoordinatesWcsError("COORD_UNIT_MISSING", "radial_velocity senza unità")
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "radial_velocity senza unità",
+                                      params={"reason": "no_unit", "argument": "radial_velocity"})
         kwargs["radial_velocity"] = radial_velocity
     else:
         kwargs["distance"] = parallax.to(u.pc, equivalencies=u.parallax())
@@ -693,7 +749,8 @@ def _celestial_frame_info(w: WCS) -> tuple[str, Time | None]:
 def _check_internal_consistency(w: WCS) -> None:
     matrix = w.pixel_scale_matrix
     if not np.all(np.isfinite(matrix)) or abs(np.linalg.det(matrix)) == 0.0:
-        raise CoordinatesWcsError("WCS_INVALID", "matrice di scala dei pixel singolare o non finita")
+        raise CoordinatesWcsError("WCS_INVALID", "matrice di scala dei pixel singolare o non finita",
+                                  params={"reason": "singular_matrix"})
     if w.pixel_shape is not None:
         cx, cy = (w.pixel_shape[0] - 1) / 2.0, (w.pixel_shape[1] - 1) / 2.0
     else:
@@ -702,7 +759,8 @@ def _check_internal_consistency(w: WCS) -> None:
     bx, by = w.world_to_pixel(world)
     if not (np.isfinite(bx) and np.isfinite(by)) or math.hypot(bx - cx, by - cy) > 1e-6:
         raise CoordinatesWcsError(
-            "WCS_INVALID", "la WCS non è coerente: andata e ritorno al centro oltre 1e-6 pixel"
+            "WCS_INVALID", "la WCS non è coerente: andata e ritorno al centro oltre 1e-6 pixel",
+            params={"reason": "not_coherent", "tolerance": _q(1e-6, "pix")},
         )
 
 
@@ -732,26 +790,31 @@ def wcs_from_header(header) -> WcsSolution:
         if isinstance(header, Mapping):
             header = fits.Header(header)
         else:
-            raise CoordinatesWcsError("WCS_MISSING", "serve un header FITS")
+            raise CoordinatesWcsError("WCS_MISSING", "serve un header FITS", params={"reason": "header_required"})
     legacy = "DSS" if any(k in header for k in _DSS_KEYS) else None
     cd_values = [header[k] for k in header if isinstance(k, str) and _is_cd_key(k)]
     if cd_values and all(float(v) == 0.0 for v in cd_values):
         # WCSLIB sostituirebbe in silenzio una CD tutta nulla con l'identità.
-        raise CoordinatesWcsError("WCS_INVALID", "matrice CD tutta nulla: soluzione non definita")
+        raise CoordinatesWcsError("WCS_INVALID", "matrice CD tutta nulla: soluzione non definita",
+                                  params={"reason": "cd_all_zero"})
     try:
         w, fixes = _build_wcs(header)
     except Exception as exc:
         if legacy:
             raise CoordinatesWcsError(
-                "WCS_LEGACY_UNSUPPORTED", f"soluzione storica {legacy} non supportata dalla libreria: {exc}"
+                "WCS_LEGACY_UNSUPPORTED", f"soluzione storica {legacy} non supportata dalla libreria: {exc}",
+                params={"reason": "library_failed", "legacy": legacy, "detail": str(exc)},
             ) from exc
-        raise CoordinatesWcsError("WCS_INVALID", f"WCS non costruibile: {exc}") from exc
+        raise CoordinatesWcsError("WCS_INVALID", f"WCS non costruibile: {exc}",
+                                  params={"reason": "not_constructible", "detail": str(exc)}) from exc
     if not w.has_celestial:
         if legacy:
             raise CoordinatesWcsError(
-                "WCS_LEGACY_UNSUPPORTED", f"soluzione storica {legacy} non tradotta dalla libreria"
+                "WCS_LEGACY_UNSUPPORTED", f"soluzione storica {legacy} non tradotta dalla libreria",
+                params={"legacy": legacy},
             )
-        raise CoordinatesWcsError("WCS_MISSING", "l'header non contiene una WCS celeste")
+        raise CoordinatesWcsError("WCS_MISSING", "l'header non contiene una WCS celeste",
+                                  params={"reason": "no_celestial_wcs"})
     cel = w.celestial
     _check_internal_consistency(cel)
     frame_name, equinox = _celestial_frame_info(cel)
@@ -782,9 +845,10 @@ def _as_wcs(wcs) -> WCS:
         return wcs.wcs
     if isinstance(wcs, WCS):
         if not wcs.has_celestial:
-            raise CoordinatesWcsError("WCS_MISSING", "la WCS non è celeste")
+            raise CoordinatesWcsError("WCS_MISSING", "la WCS non è celeste", params={"reason": "not_celestial"})
         return wcs.celestial if wcs.naxis != 2 else wcs
-    raise CoordinatesWcsError("WCS_MISSING", "serve una WCS (astropy.wcs.WCS o WcsSolution)")
+    raise CoordinatesWcsError("WCS_MISSING", "serve una WCS (astropy.wcs.WCS o WcsSolution)",
+                              params={"reason": "wcs_required"})
 
 
 def _out_of_field(w: WCS, x: np.ndarray, y: np.ndarray) -> np.ndarray | None:
@@ -855,7 +919,8 @@ def sky_to_pixel(wcs, coords: SkyFrame, *, convention) -> PixelPositions:
     """Cielo → pixel con ``astropy.wcs``; restituisce la convenzione richiesta."""
     target = _check_convention(convention)
     if not isinstance(coords, SkyFrame):
-        raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame")
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame",
+                                  params={"reason": "skyframe_required", "argument": "coords"})
     w = _as_wcs(wcs)
     xn, yn = w.world_to_pixel(coords.coord)
     xn = np.asarray(xn, dtype=np.float64)
@@ -923,12 +988,14 @@ def _check_projection(projection: object, projection_parameters) -> dict[int, fl
         raise CoordinatesWcsError(
             "PROJECTION_UNSUPPORTED",
             f"proiezione {projection!r} non supportata; supportate: {', '.join(SUPPORTED_PROJECTIONS)}",
+            params={"projection": str(projection), "supported": list(SUPPORTED_PROJECTIONS)},
         )
     params = {} if projection_parameters is None else {int(k): float(v) for k, v in projection_parameters.items()}
     if projection == "ZPN" and not params:
         raise CoordinatesWcsError(
             "PROJECTION_PARAMETERS_MISSING",
             "ZPN richiede i coefficienti PV2_m espliciti: non si adattano e non si assumono",
+            params={},
         )
     return params
 
@@ -954,7 +1021,8 @@ def _template_header(projection: str, crval_deg, crpix_fits, pixel_shape, params
 
 def _check_pixel_shape(pixel_shape) -> tuple[int, int]:
     if pixel_shape is None or len(pixel_shape) != 2 or min(pixel_shape) < 1:
-        raise CoordinatesWcsError("WCS_INVALID", "pixel_shape (nx, ny) obbligatorio e positivo")
+        raise CoordinatesWcsError("WCS_INVALID", "pixel_shape (nx, ny) obbligatorio e positivo",
+                                  params={"reason": "pixel_shape_required"})
     return int(pixel_shape[0]), int(pixel_shape[1])
 
 
@@ -965,13 +1033,15 @@ def _calibrate_parameters(
     params = _check_projection(projection, projection_parameters)
     shape = _check_pixel_shape(pixel_shape)
     if not isinstance(reference, SkyFrame) or reference.coord.size != 1:
-        raise CoordinatesWcsError("COORD_UNIT_MISSING", "reference deve essere uno SkyFrame con un solo punto")
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", "reference deve essere uno SkyFrame con un solo punto",
+                                  params={"reason": "single_skyframe_required", "argument": "reference"})
     if not isinstance(east_left, bool):
-        raise CoordinatesWcsError("WCS_INVALID", "east_left (verso dell'ascensione retta) va dichiarato: True o False")
-    scale_deg = _require_angle(scale, "scala (per pixel)")
-    rot_deg = _require_angle(rotation, "rotazione")
+        raise CoordinatesWcsError("WCS_INVALID", "east_left (verso dell'ascensione retta) va dichiarato: True o False",
+                                  params={"reason": "east_left_required"})
+    scale_deg = _require_angle(scale, "scala (per pixel)", "scale")
+    rot_deg = _require_angle(rotation, "rotazione", "rotation")
     if not scale_deg.value > 0:
-        raise CoordinatesWcsError("WCS_INVALID", "scala non positiva")
+        raise CoordinatesWcsError("WCS_INVALID", "scala non positiva", params={"reason": "scale_not_positive"})
     ref_icrs = reference.coord.icrs
     crpix = convert_pixel_convention(reference_pixel[0], reference_pixel[1], convention, "fits")
     header = _template_header(
@@ -1022,6 +1092,7 @@ def _check_coherence(
             f"(limite {factor:g} × RMS TAN = {limit:.3g} pixel)",
             center_deviation_px=deviation_px,
             limit_px=limit,
+            params={"deviation": _q(deviation_px, "pix"), "factor": float(factor), "limit": _q(limit, "pix")},
         )
     return deviation_px
 
@@ -1034,13 +1105,16 @@ def _calibrate_stars(
     if not isinstance(thresholds, CalibrationThresholds):
         raise TypeError("thresholds deve essere CalibrationThresholds")
     if not isinstance(sky, SkyFrame):
-        raise CoordinatesWcsError("COORD_UNIT_MISSING", "sky deve essere uno SkyFrame")
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", "sky deve essere uno SkyFrame",
+                                  params={"reason": "skyframe_required", "argument": "sky"})
     x, y = _to_numpy_pixels(pixel_x, pixel_y, convention)
     x, y = np.atleast_1d(x), np.atleast_1d(y)
     sky_icrs = sky.coord.icrs
     n = int(x.size)
     if y.size != n or sky_icrs.size != n:
-        raise CoordinatesWcsError("CALIB_TOO_FEW_STARS", "numero diverso di posizioni pixel e celesti")
+        raise CoordinatesWcsError("CALIB_TOO_FEW_STARS", "numero diverso di posizioni pixel e celesti",
+                                  params={"reason": "count_mismatch", "pixel_positions": int(y.size),
+                                          "sky_positions": int(sky_icrs.size)})
     minimum = thresholds.min_stars(projection)
     if n < minimum:
         raise CoordinatesWcsError(
@@ -1048,6 +1122,7 @@ def _calibrate_stars(
             f"{n} stelle date, minimo {minimum} per la proiezione {projection}",
             n_stars=n,
             minimum=minimum,
+            params={"n_stars": n, "minimum": int(minimum), "projection": projection},
         )
     try:
         with warnings.catch_warnings():
@@ -1078,7 +1153,8 @@ def _calibrate_stars(
     except CoordinatesWcsError:
         raise
     except Exception as exc:
-        raise CoordinatesWcsError("CALIB_FIT_FAILED", f"adattamento non riuscito: {exc}") from exc
+        raise CoordinatesWcsError("CALIB_FIT_FAILED", f"adattamento non riuscito: {exc}",
+                                  params={"detail": str(exc)}) from exc
     r_px, r_arcsec = _residuals(final, sky_icrs, x, y)
     rms_px = _rms(r_px)
     max_px = float(np.max(r_px))
@@ -1091,6 +1167,9 @@ def _calibrate_stars(
             rms_px=rms_px,
             max_residual_px=max_px,
             worst_stars=worst,
+            params={"rms": _q(rms_px, "pix"), "rms_threshold": _q(thresholds.max_rms_px, "pix"),
+                    "maximum": _q(max_px, "pix"), "maximum_threshold": _q(thresholds.max_residual_px, "pix"),
+                    "worst_indices": [i for i, _ in worst], "worst_residuals": _q([r for _, r in worst], "pix")},
         )
     deviation = _check_coherence(tan, final, shape, tan_rms, thresholds.coherence_factor)
     return CalibrationSolution(
@@ -1161,7 +1240,8 @@ def astrometric_calibration(
         )
     else:
         raise CoordinatesWcsError(
-            "WCS_INVALID", f"metodo {method!r} non previsto; metodi: parameters, stars, header"
+            "WCS_INVALID", f"metodo {method!r} non previsto; metodi: parameters, stars, header",
+            params={"reason": "method_unknown", "method": str(method), "allowed": ["parameters", "stars", "header"]},
         )
     return [*previous_solutions, solution]
 
@@ -1194,12 +1274,14 @@ class GridLines:
     provenance: str = _PROVENANCE
 
 
-def _check_spacing(value, what: str) -> float:
+def _check_spacing(value, what: str, argument: str) -> float:
     if not isinstance(value, u.Quantity) or not value.unit.is_equivalent(u.deg):
-        raise CoordinatesWcsError("GRID_SPACING_INVALID", f"{what} senza unità angolare")
+        raise CoordinatesWcsError("GRID_SPACING_INVALID", f"{what} senza unità angolare",
+                                  params={"reason": "no_angular_unit", "argument": argument})
     deg = float(value.to_value(u.deg))
     if not (math.isfinite(deg) and 0 < deg <= 360):
-        raise CoordinatesWcsError("GRID_SPACING_INVALID", f"{what} deve essere in (0°, 360°]")
+        raise CoordinatesWcsError("GRID_SPACING_INVALID", f"{what} deve essere in (0°, 360°]",
+                                  params={"reason": "out_of_range", "argument": argument, "value": _q(deg, "deg")})
     return deg
 
 
@@ -1248,7 +1330,8 @@ def _field_extent(w: WCS, nx: int, ny: int, target: BaseCoordinateFrame) -> _Fie
     lat = sky.spherical.lat.deg
     ok = np.isfinite(lon) & np.isfinite(lat)
     if not np.any(ok):
-        raise CoordinatesWcsError("WCS_INVALID", "nessun pixel dell'immagine ha coordinate celesti valide")
+        raise CoordinatesWcsError("WCS_INVALID", "nessun pixel dell'immagine ha coordinate celesti valide",
+                                  params={"reason": "no_valid_pixels"})
     lon, lat = lon[ok], lat[ok]
     poles = SkyCoord([0.0, 0.0] * u.deg, [90.0, -90.0] * u.deg, frame=target)
     px, py = w.world_to_pixel(poles)
@@ -1323,7 +1406,8 @@ def choose_grid_spacing(
     equatoriali, :data:`GRID_STEPS_ARC` per tutto il resto).
     """
     if isinstance(target_lines, bool) or not isinstance(target_lines, int) or target_lines < 1:
-        raise CoordinatesWcsError("GRID_SPACING_INVALID", "target_lines deve essere un intero ≥ 1")
+        raise CoordinatesWcsError("GRID_SPACING_INVALID", "target_lines deve essere un intero ≥ 1",
+                                  params={"reason": "target_lines"})
     w = _as_wcs(wcs)
     shape = pixel_shape if pixel_shape is not None else w.pixel_shape
     nx, ny = _check_pixel_shape(shape)
@@ -1367,12 +1451,14 @@ def compute_grid_lines(
         lon_spacing, lat_spacing = auto.lon_spacing, auto.lat_spacing
     elif lon_spacing is None or lat_spacing is None:
         raise CoordinatesWcsError(
-            "GRID_SPACING_INVALID", "dare entrambi i passi oppure nessuno (scelta automatica)"
+            "GRID_SPACING_INVALID", "dare entrambi i passi oppure nessuno (scelta automatica)",
+            params={"reason": "both_or_none"},
         )
-    dlon = _check_spacing(lon_spacing, "passo in longitudine")
-    dlat = _check_spacing(lat_spacing, "passo in latitudine")
+    dlon = _check_spacing(lon_spacing, "passo in longitudine", "lon_spacing")
+    dlat = _check_spacing(lat_spacing, "passo in latitudine", "lat_spacing")
     if samples_per_line < 2:
-        raise CoordinatesWcsError("GRID_SPACING_INVALID", "servono almeno 2 campioni per linea")
+        raise CoordinatesWcsError("GRID_SPACING_INVALID", "servono almeno 2 campioni per linea",
+                                  params={"reason": "samples", "samples_per_line": int(samples_per_line)})
     target = _frame_instance(frame, equinox=equinox, obstime=obstime)
 
     extent = _field_extent(w, nx, ny, target)
@@ -1439,11 +1525,12 @@ def choose_projection(field_of_view, *, threshold=None) -> ProjectionChoice:
     Soglia di default 30° (D10-9); il modulo 41 passa una soglia esplicita (33° o 27°) per lo scarto
     di ±10 %. Campo di vista = diametro del cerchio che contiene la vista.
     """
-    fov = _require_angle(field_of_view, "campo di vista")
+    fov = _require_angle(field_of_view, "campo di vista", "field_of_view")
     explicit = threshold is not None
-    limit = _require_angle(threshold, "soglia") if explicit else DEFAULT_PROJECTION_THRESHOLD
+    limit = _require_angle(threshold, "soglia", "threshold") if explicit else DEFAULT_PROJECTION_THRESHOLD
     if not (np.isfinite(fov.value) and fov.value > 0 and np.isfinite(limit.value) and limit.value > 0):
-        raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "campo di vista e soglia devono essere positivi")
+        raise CoordinatesWcsError("COORD_OUT_OF_RANGE", "campo di vista e soglia devono essere positivi",
+                                  params={"reason": "fov_threshold_positive"})
     return ProjectionChoice(
         projection="TAN" if fov < limit else "AIT",
         field_of_view=fov.to(u.deg),
@@ -1462,8 +1549,10 @@ _VIEW_FRAMES = {"icrs": ("RA---", "DEC--"), "galactic": ("GLON-", "GLAT-")}
 _BORDER_SAMPLES = 64
 
 
-def _view_error(message: str, **details) -> CoordinatesWcsError:
-    return CoordinatesWcsError("VIEW_PARAMETERS_INVALID", message, **details)
+def _view_error(message: str, reason: str, params: Mapping[str, object] | None = None,
+                **details) -> CoordinatesWcsError:
+    return CoordinatesWcsError("VIEW_PARAMETERS_INVALID", message, params={"reason": reason, **(params or {})},
+                               **details)
 
 
 @dataclass(frozen=True, eq=False)
@@ -1514,7 +1603,8 @@ class ViewGeometry:
     def sky_to_window(self, coords) -> tuple[np.ndarray, np.ndarray]:
         coord = coords.coord if isinstance(coords, SkyFrame) else coords
         if not isinstance(coord, SkyCoord):
-            raise CoordinatesWcsError("COORD_UNIT_MISSING", "servono coordinate SkyFrame o SkyCoord")
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "servono coordinate SkyFrame o SkyCoord",
+                                      params={"reason": "coordinates_required"})
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             bx, by = self.base.world_to_pixel(coord)
@@ -1524,15 +1614,15 @@ class ViewGeometry:
 def _check_view_shape(shape) -> tuple[int, int]:
     if (not isinstance(shape, Sequence) or len(shape) != 2
             or any(isinstance(n, bool) or not isinstance(n, (int, np.integer)) or n < 1 for n in shape)):
-        raise _view_error("shape deve essere (righe, colonne), interi >= 1", shape=shape)
+        raise _view_error("shape deve essere (righe, colonne), interi >= 1", "shape", {"shape": str(shape)}, shape=shape)
     return int(shape[0]), int(shape[1])
 
 
 def _check_view_scale(scale) -> u.Quantity:
     if not isinstance(scale, u.Quantity) or not scale.unit.is_equivalent(u.deg) or not np.isscalar(scale.value):
-        raise _view_error("scale deve essere un angolo per pixel con unità (es. 1 * u.arcsec)")
+        raise _view_error("scale deve essere un angolo per pixel con unità (es. 1 * u.arcsec)", "scale_unit")
     if not (np.isfinite(scale.value) and scale.value > 0):
-        raise _view_error("scale deve essere positiva e finita")
+        raise _view_error("scale deve essere positiva e finita", "scale_positive")
     return scale.to(u.deg)
 
 
@@ -1564,13 +1654,13 @@ def make_view_wcs(center, scale, shape, *, projection=None, frame=None, tangent_
     si danno. Nessun disegno.
     """
     if not isinstance(center, SkyFrame):
-        raise _view_error("center deve essere uno SkyFrame (coordinate con frame e unità)")
+        raise _view_error("center deve essere uno SkyFrame (coordinate con frame e unità)", "center_skyframe")
     scale_deg = _check_view_scale(scale)
     rows, cols = _check_view_shape(shape)
     notes: list[str] = []
     if base is not None:
         if projection is not None or frame is not None or tangent_point is not None:
-            raise _view_error("con base non si danno projection, frame né tangent_point")
+            raise _view_error("con base non si danno projection, frame né tangent_point", "base_exclusive")
         w = _as_wcs(base)
         created = False
         scales = proj_plane_pixel_scales(w)
@@ -1581,17 +1671,23 @@ def make_view_wcs(center, scale, shape, *, projection=None, frame=None, tangent_
         tangent = None
     else:
         if projection is None:
-            raise _view_error("senza base serve projection")
+            raise _view_error("senza base serve projection", "projection_required")
         if projection in ("NCP", "ZPN"):
             reason = "forma storica di SIN" if projection == "NCP" else "richiede i coefficienti PV2_m"
-            raise CoordinatesWcsError("PROJECTION_UNSUPPORTED", f"{projection} non ammessa per una vista: {reason}")
+            raise CoordinatesWcsError("PROJECTION_UNSUPPORTED", f"{projection} non ammessa per una vista: {reason}",
+                                      params={"reason": "not_for_view_ncp" if projection == "NCP" else "not_for_view_zpn",
+                                              "projection": projection})
         if projection not in VIEW_PROJECTIONS:
-            raise CoordinatesWcsError("PROJECTION_UNSUPPORTED", f"proiezione {projection!r} non ammessa per una vista")
+            raise CoordinatesWcsError("PROJECTION_UNSUPPORTED", f"proiezione {projection!r} non ammessa per una vista",
+                                      params={"reason": "not_for_view", "projection": str(projection),
+                                              "allowed": list(VIEW_PROJECTIONS)})
         frame_name = "icrs" if frame is None else frame
         if frame_name not in _VIEW_FRAMES:
-            raise CoordinatesWcsError("FRAME_UNSUPPORTED", f"frame {frame_name!r} non ammesso per una vista (icrs, galactic)")
+            raise CoordinatesWcsError("FRAME_UNSUPPORTED", f"frame {frame_name!r} non ammesso per una vista (icrs, galactic)",
+                                      params={"reason": "not_for_view", "frame": str(frame_name),
+                                              "allowed": list(_VIEW_FRAMES)})
         if tangent_point is not None and not isinstance(tangent_point, SkyFrame):
-            raise _view_error("tangent_point deve essere uno SkyFrame")
+            raise _view_error("tangent_point deve essere uno SkyFrame", "tangent_skyframe")
         tangent_coord = (center if tangent_point is None else tangent_point).coord.transform_to(frame_name)
         w = _created_base(projection, frame_name, tangent_coord, float(scale_deg.value))
         created = True
@@ -1604,7 +1700,7 @@ def make_view_wcs(center, scale, shape, *, projection=None, frame=None, tangent_
         warnings.simplefilter("ignore", RuntimeWarning)
         cx, cy = (float(v) for v in w.world_to_pixel(center.coord))
     if not (math.isfinite(cx) and math.isfinite(cy)):
-        raise _view_error("il centro cade fuori dalla proiezione della base")
+        raise _view_error("il centro cade fuori dalla proiezione della base", "center_outside_projection")
     factor = float((base_scale / scale_deg).decompose().value)
     origin = (cx - (cols - 1) / 2 / factor, cy - (rows - 1) / 2 / factor)
     # Regione visibile: la base tagliata dall'origine intera che contiene la finestra (stesso cielo per
@@ -1704,7 +1800,8 @@ def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators:
             decimals, used = _DECIMAL_DIGITS, 10.0 ** -_DECIMAL_DIGITS * u.deg
         else:
             if not precision.unit.is_equivalent(u.deg):
-                raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "nello stile decimal la precisione è un angolo")
+                raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "nello stile decimal la precisione è un angolo",
+                                          params={"reason": "decimal_needs_angle", "unit": str(precision.unit)})
             p = float(precision.to_value(u.deg))
             decimals = max(0, math.ceil(-math.log10(p) - 1e-12))
             used = precision
@@ -1726,7 +1823,8 @@ def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators:
         elif precision.unit.is_equivalent(u.deg):
             p_seconds = float(precision.to_value(u.arcsec)) / 15.0  # 1 s di tempo = 15″
         else:
-            raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "precisione dell'ascensione retta senza unità di tempo o angolare")
+            raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "precisione dell'ascensione retta senza unità di tempo o angolare",
+                                      params={"reason": "ra_unit", "unit": str(precision.unit)})
         p_value = p_seconds
     else:
         unit, sizes, symbols = u.deg, (3600.0, 60.0, 1.0), _DMS_SYMBOLS
@@ -1735,9 +1833,12 @@ def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators:
         elif precision.unit.is_equivalent(u.deg):
             p_value = float(precision.to_value(u.arcsec))
         else:
-            raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"precisione di unità non adatta a una {('latitudine' if kind == 'lat' else 'longitudine')}")
+            raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"precisione di unità non adatta a una {('latitudine' if kind == 'lat' else 'longitudine')}",
+                                      params={"reason": "unit_unsuitable", "axis": "lat" if kind == "lat" else "lon",
+                                              "unit": str(precision.unit)})
     if not (math.isfinite(p_value) and p_value > 0):
-        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve essere positiva")
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve essere positiva",
+                                  params={"reason": "not_positive"})
     fields, decimals = _fields_and_decimals(p_value, sizes)
     sep = ":" if separators == "colons" else symbols
     values = angles.wrap_at(360 * u.deg) if kind != "lat" else angles
@@ -1767,19 +1868,28 @@ def format_coordinates(coords=None, *, values=None, frame=None, axis=None, style
     Il segno è il trattino ASCII (``-``/``+``), copiabile.
     """
     if style not in ("sexagesimal", "decimal"):
-        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"stile sconosciuto: {style!r}")
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"stile sconosciuto: {style!r}",
+                                  params={"reason": "style_unknown", "style": str(style),
+                                          "allowed": ["sexagesimal", "decimal"]})
     if separators not in ("symbols", "colons"):
-        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"separatori sconosciuti: {separators!r}")
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"separatori sconosciuti: {separators!r}",
+                                  params={"reason": "separators_unknown", "separators": str(separators),
+                                          "allowed": ["symbols", "colons"]})
     if precision is not None and (not isinstance(precision, u.Quantity) or not np.isscalar(precision.value)):
-        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve avere un'unità (es. 10 * u.arcmin)")
+        raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve avere un'unità (es. 10 * u.arcmin)",
+                                  params={"reason": "no_unit"})
     if (coords is None) == (values is None):
-        raise CoordinatesWcsError("COORD_UNIT_MISSING", "dare coords oppure values (con frame e axis)")
+        raise CoordinatesWcsError("COORD_UNIT_MISSING", "dare coords oppure values (con frame e axis)",
+                                  params={"reason": "coords_or_values"})
     if coords is not None:
         if not isinstance(coords, SkyFrame):
-            raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame")
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "coords deve essere uno SkyFrame",
+                                  params={"reason": "skyframe_required", "argument": "coords"})
         frame_name = coords.frame_name
         if frame is not None and frame != frame_name:
-            raise CoordinatesWcsError("FRAME_UNSUPPORTED", f"frame {frame!r} diverso da quello delle coordinate ({frame_name}): nessuna conversione")
+            raise CoordinatesWcsError("FRAME_UNSUPPORTED", f"frame {frame!r} diverso da quello delle coordinate ({frame_name}): nessuna conversione",
+                                      params={"reason": "differs_from_coordinates", "frame": str(frame),
+                                              "coordinates_frame": frame_name})
         equatorial = frame_name in _EQUATORIAL_FRAMES
         lon_kind = "ra" if equatorial else "lon"
         lon_texts, lon_p = _format_axis(Angle(coords.lon), kind=lon_kind, style=style, precision=precision, separators=separators)
@@ -1787,11 +1897,12 @@ def format_coordinates(coords=None, *, values=None, frame=None, axis=None, style
         epoch, note = coords.epoch, ("epoca dei dati" if coords.epoch is not None else "epoca non nota: non assunta")
     else:
         if frame is None:
-            raise CoordinatesWcsError("FRAME_UNSUPPORTED", "con values serve frame")
+            raise CoordinatesWcsError("FRAME_UNSUPPORTED", "con values serve frame", params={"reason": "frame_required"})
         _frame_class(frame)
         if axis not in ("lon", "lat"):
-            raise CoordinatesWcsError("COORD_UNIT_MISSING", "con values serve axis = 'lon' o 'lat'")
-        angles = Angle(_require_angle(values, "values"))
+            raise CoordinatesWcsError("COORD_UNIT_MISSING", "con values serve axis = 'lon' o 'lat'",
+                                      params={"reason": "axis_required"})
+        angles = Angle(_require_angle(values, "values", "values"))
         equatorial = frame in _EQUATORIAL_FRAMES
         kind = "lat" if axis == "lat" else ("ra" if equatorial else "lon")
         texts, used = _format_axis(angles, kind=kind, style=style, precision=precision, separators=separators)
@@ -1824,7 +1935,7 @@ class CompassScaleBar:
     label: str
     local_only: bool
     max_bar_pixels: int
-    warnings: tuple[tuple[str, str], ...]
+    warnings: tuple[ModuleWarning, ...]
     method: str
     provenance: str = _PROVENANCE
 
@@ -1850,24 +1961,27 @@ def compass_and_scale_bar(geometry: ViewGeometry, *, frame=None, max_bar_pixels=
     from scipy.optimize import brentq
 
     if not isinstance(geometry, ViewGeometry):
-        raise _view_error("serve una ViewGeometry di make_view_wcs")
+        raise _view_error("serve una ViewGeometry di make_view_wcs", "geometry_required")
     rows, cols = geometry.shape
     if max_bar_pixels is None:
         max_bar_pixels = max(1, cols // 5)
     if isinstance(max_bar_pixels, bool) or not isinstance(max_bar_pixels, (int, np.integer)) or max_bar_pixels < 1:
-        raise _view_error("max_bar_pixels deve essere un intero >= 1")
+        raise _view_error("max_bar_pixels deve essere un intero >= 1", "max_bar_pixels")
     frame_name = geometry.frame_name if frame is None else frame
     target = _frame_instance(frame_name)
     xc, yc = (cols - 1) / 2, (rows - 1) / 2
-    warn: list[tuple[str, str]] = []
+    warn: list[ModuleWarning] = []
     center = geometry.window_to_sky(xc, yc).transform_to(target)
     delta = (_COMPASS_DELTA_PIXELS * geometry.scale).to(u.deg)
     pole = SkyCoord(0 * u.deg, 90 * u.deg, frame=target)
     north = east = east_left = None
     if not np.isfinite(center.spherical.lat.deg):
-        warn.append(("NORTH_UNDEFINED", "centro della finestra fuori dalla proiezione"))
+        warn.append(ModuleWarning("NORTH_UNDEFINED", "centro della finestra fuori dalla proiezione",
+                                  {"reason": "center_outside"}))
     elif center.separation(pole) < delta or center.separation(SkyCoord(0 * u.deg, -90 * u.deg, frame=target)) < delta:
-        warn.append(("NORTH_UNDEFINED", f"polo del frame {frame_name} a meno di δ = {delta.to(u.arcsec):.3g} dal centro"))
+        warn.append(ModuleWarning(
+            "NORTH_UNDEFINED", f"polo del frame {frame_name} a meno di δ = {delta.to(u.arcsec):.3g} dal centro",
+            {"reason": "pole_near", "frame": str(frame_name), "delta": _q(delta.to_value(u.arcsec), "arcsec")}))
     else:
         vectors = []
         for angle in (0 * u.deg, 90 * u.deg):
@@ -1875,7 +1989,8 @@ def compass_and_scale_bar(geometry: ViewGeometry, *, frame=None, max_bar_pixels=
             v = np.array([float(x) - xc, float(y) - yc])
             vectors.append(v / np.hypot(*v) if np.all(np.isfinite(v)) and np.hypot(*v) > 0 else None)
         if any(v is None for v in vectors):
-            warn.append(("NORTH_UNDEFINED", "direzione fuori dalla proiezione"))
+            warn.append(ModuleWarning("NORTH_UNDEFINED", "direzione fuori dalla proiezione",
+                                      {"reason": "direction_outside"}))
         else:
             north, east = (tuple(float(c) for c in vectors[0]), tuple(float(c) for c in vectors[1]))
             east_left = bool(north[0] * east[1] - north[1] * east[0] > 0)
@@ -1901,7 +2016,9 @@ def compass_and_scale_bar(geometry: ViewGeometry, *, frame=None, max_bar_pixels=
         bar = brentq(lambda L: separation(L) - float(step.to_value(u.deg)), 0.0, limit, xtol=1e-6)
     else:
         step = GRID_STEPS_ARC[0]
-        warn.append(("SCALE_BAR_TOO_LONG", f"anche {step.to(u.arcsec):g} supera {max_bar_pixels} pixel della finestra"))
+        warn.append(ModuleWarning(
+            "SCALE_BAR_TOO_LONG", f"anche {step.to(u.arcsec):g} supera {max_bar_pixels} pixel della finestra",
+            {"step": _q(step.to_value(u.arcsec), "arcsec"), "max_bar_pixels": int(max_bar_pixels)}))
         high = max(limit, 1.0)
         while separation(high) < float(step.to_value(u.deg)):
             high *= 2

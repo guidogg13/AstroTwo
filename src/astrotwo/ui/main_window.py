@@ -118,6 +118,7 @@ from astrotwo.core.commands import (
 )
 from astrotwo.core.coordinates_wcs import format_coordinates
 from astrotwo.ui.ai_panel import PANEL_WIDTH
+from astrotwo.ui.message_view import message_details, set_language, shown_line, shown_text
 
 __all__ = [
     "MainWindow",
@@ -1184,11 +1185,14 @@ class MessagesPanel(QWidget):
 
     def add(self, number: int | None, message: ResultMessage, *, error: bool) -> None:
         ref = "—" if number is None else f"#{number}"
-        self.messages.append((ref, message.code, message.text, error))
+        shown = shown_text(message)
+        self.messages.append((ref, message.code, shown, error))
         row = self.table.rowCount()
         self.table.insertRow(row)
-        for col, text in enumerate((ref, message.code, message.text)):
+        for col, text in enumerate((ref, message.code, shown)):
             item = QTableWidgetItem(text)
+            if col == 2:  # dettaglio: testo originale del modulo e parametri (40 §3.7)
+                item.setToolTip(message_details(message))
             if error:
                 item.setForeground(QColor(_TOKENS[_current_tokens()]["error"]))
             self.table.setItem(row, col, item)
@@ -1261,7 +1265,7 @@ class HipsSurveyDialog(QDialog):
 
     def _loaded(self, index, error) -> None:
         if error is not None:
-            self.status.setText(f"{error.code}: {error.text}")
+            self.status.setText(shown_line(error))
             return
         self.index = index
         self.status.setText(index.describe())
@@ -1483,6 +1487,7 @@ class MainWindow(QMainWindow):
         self.settings = settings if settings is not None else QSettings()
         QLocale.setDefault(QLocale.c())  # punto decimale per tutti i numeri in ogni lingua (§3.9)
         self.language, translation_warnings = load_translations(self.preference("language"))
+        set_language(self.language)
         if registry is None:
             self.cache = ThreadCache(int(self.preference("cache/limit_bytes")))
             registry = default_registry(cache=self.cache)
@@ -2057,11 +2062,11 @@ class MainWindow(QMainWindow):
         if result.error is not None and result.status == "error":
             self.messages.add(number, result.error, error=True)
             if done.registered.name == "view.go_to":  # il pannello Messaggi è in una scheda: errore anche qui
-                self.status.showMessage(f"{result.error.code}: {result.error.text}", 10000)
+                self.status.showMessage(shown_line(result.error), 10000)
             if result.error.code == "BODY_MISMATCH" and self._can_force(done.registered):
                 self._offer_force(done.registered, result.error)
             elif done.registered.name in ("image.open", "catalog.open_file", "moc.open"):
-                self.show_modal(self.tr("The file cannot be opened"), f"{result.error.code}: {result.error.text}")
+                self.show_modal(self.tr("The file cannot be opened"), shown_line(result.error))
         elif result.status == "ok":
             self._apply_effect(done.registered, result)
         self.sky.command_finished(done.registered.name, result.status, result.values,
@@ -2329,7 +2334,7 @@ class MainWindow(QMainWindow):
         self._job_done(done.job_id)
         if done.error is not None:
             self.messages.add(None, done.error, error=True)
-            self.show_modal(self.tr("The session cannot be opened"), f"{done.error.code}: {done.error.text}")
+            self.show_modal(self.tr("The session cannot be opened"), shown_line(done.error))
             return
         report = done.report
         if done.session is not None:
@@ -2344,7 +2349,7 @@ class MainWindow(QMainWindow):
             self.messages.add(None, w, error=False)
         if report.status == "stopped" and report.stop is not None:
             self.messages.add(report.stop_details.get("number"), report.stop, error=True)
-            self.show_modal(self.tr("The session was stopped"), f"{report.stop.code}: {report.stop.text}")
+            self.show_modal(self.tr("The session was stopped"), shown_line(report.stop))
         elif report.status == "cancelled":
             self.messages.add(None, report.stop or ResultMessage("COMMAND_CANCELLED", "riapertura annullata"),
                               error=False)
@@ -2398,7 +2403,7 @@ class MainWindow(QMainWindow):
     def _offer_force(self, command: Command, error) -> None:
         """Corpi diversi (41 §3.5, D19-4): la finestra offre la forzatura esplicita, che ripete lo stesso comando con
         ``force_body`` = vero (registrato e citato nel risultato e nel pannello dei livelli)."""
-        if self.ask_force_body(f"{error.code}: {error.text}"):
+        if self.ask_force_body(shown_line(error)):
             self.submit(command.name, {**command.parameters, "force_body": True}, source="mouse")
 
     def _ask_force_body(self, text: str) -> bool:

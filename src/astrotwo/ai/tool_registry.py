@@ -20,6 +20,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
+from astrotwo.messages_catalog import external_params, message_text, uses_catalog
 from astrotwo.core.commands import (
     PHYSICAL_TYPES,
     Command,
@@ -590,8 +591,21 @@ class _Marker:
         return value
 
     def message(self, message: Mapping) -> dict:
+        """Avviso o errore per il modello: codice, ``params`` e testo **inglese** del catalogo (D40-3, 40 §3.7.1).
+
+        Con una voce nel catalogo e ``params`` conformi, il testo lo scrive AstroTwo: i parametri ``external``
+        (testi di terzi) viaggiano marcati come testo esterno e nel testo restano ``<nome>``. Altrimenti vale il
+        testo originale del modulo, esterno salvo i codici di ``ASTROTWO_MESSAGE_CODES``.
+        """
         out = dict(message)
-        if out.get("code") not in ASTROTWO_MESSAGE_CODES and isinstance(out.get("text"), str):
+        code, params = out.get("code"), out.get("params") or {}
+        if isinstance(code, str) and uses_catalog(code, params):
+            external = external_params(code, params)
+            out["params"] = {k: (self.text(v) if k in external and isinstance(v, str) else v)
+                             for k, v in params.items()}
+            out["text"] = message_text(code, params, "en", mask_external=True)
+            return out
+        if code not in ASTROTWO_MESSAGE_CODES and isinstance(out.get("text"), str):
             out["text"] = self.text(out["text"])
         return out
 

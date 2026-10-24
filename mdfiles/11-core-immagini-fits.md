@@ -567,6 +567,133 @@ pixel memorizzati.
 | Calibrazione esterna assente, con dimensioni diverse o non valida | immagine senza WCS, motivo nell'avviso | `WCS_MISSING` |
 | Valore grezzo chiesto per un'immagine non FITS, a colori o derivata, fuori dall'immagine o con indici non interi | nessun valore | `PIXEL_RAW_UNAVAILABLE` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8b) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`ImagesFitsError(code, message, params=...)`; le note in `FitsImage.warnings` sono `ModuleWarning(code, text, params)`, una coppia (codice, testo) con in più `params`): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai
+arrotondati; le quantità sono `{"value": numero o elenco, "unit": testo}`. Il
+**testo italiano del modulo resta invariato** (campo `text`/`message`, usato
+come ripiego e nei file di sessione); il modulo **non** contiene traduzioni e
+non importa il catalogo: la traduzione inglese/italiana sta in
+`src/astrotwo/messages_catalog.py` (`40` §3.7.1). I codici che il modulo
+solleva per ragioni diverse portano in `params` il parametro riservato
+`reason` (identificatore stabile, D40-6) che sceglie la sotto-voce del
+catalogo; "esterno" = testo di terzi (libreria, file, servizio), inserito tale
+e quale e senza tradurlo. Nessun identificatore di errore cambia.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `FITS_UNREADABLE` | (generale) | `path` (string) |
+| `FITS_UNREADABLE` | `file_unreadable` | `path` (string), `detail` (string, esterno) |
+| `FITS_UNREADABLE` | `fits_unreadable` | `path` (string), `detail` (string, esterno) |
+| `FITS_UNREADABLE` | `file_missing` | `path` (string) |
+| `FITS_UNREADABLE` | `data_unreadable` | `path` (string), `detail` (string, esterno) |
+| `FORMAT_UNSUPPORTED` | (generale) | `supported` (list) |
+| `FORMAT_UNSUPPORTED` | `gzip_unreadable` | `detail` (string, esterno) |
+| `HDU_CHOICE_REQUIRED` | (generale) | — |
+| `HDU_CHOICE_REQUIRED` | `rgb` | `path` (string), `count` (integer) |
+| `HDU_CHOICE_REQUIRED` | `images` | `path` (string), `count` (integer), `hdus` (list) |
+| `HDU_NOT_IMAGE` | (generale) | — |
+| `HDU_NOT_IMAGE` | `no_such_hdu` | `hdu` (string) |
+| `HDU_NOT_IMAGE` | `no_image_hdu` | `path` (string) |
+| `HDU_NOT_IMAGE` | `no_such_hdu_listed` | `hdu` (string), `hdus` (list) |
+| `HDU_NOT_IMAGE` | `not_an_image` | `hdu` (string), `hdus` (list) |
+| `CUBE_NOT_SUPPORTED` | (generale) | — |
+| `CUBE_NOT_SUPPORTED` | `only_cubes` | `path` (string) |
+| `CUBE_NOT_SUPPORTED` | `hdu_is_cube` | `hdu` (string) |
+| `RGB_INPUT_INVALID` | (generale) | — |
+| `RGB_INPUT_INVALID` | `no_rgb_hdu` | `path` (string) |
+| `RGB_INPUT_INVALID` | `hdu_not_rgb` | `hdu` (string) |
+| `RGB_INPUT_INVALID` | `monochrome_required` | `operation` (string) |
+| `RGB_INPUT_INVALID` | `monochrome_images_required` | — |
+| `RGB_INPUT_INVALID` | `mode_unknown` | `mode` (string) |
+| `RGB_INPUT_INVALID` | `image_count` | `count` (integer), `mode` (string) |
+| `RGB_INPUT_INVALID` | `wavelengths` | — |
+| `RGB_INPUT_INVALID` | `display_required` | — |
+| `CUTOUT_OUT_OF_RANGE` | (generale) | — |
+| `CUTOUT_OUT_OF_RANGE` | `region` | `x0` (integer), `x1` (integer), `y0` (integer), `y1` (integer), `nx` (integer), `ny` (integer) |
+| `CUTOUT_OUT_OF_RANGE` | `outside` | `center` (string) |
+| `CUTOUT_OUT_OF_RANGE` | `invalid` | `center` (string), `detail` (string, esterno) |
+| `IMAGE_SHAPE_MISMATCH` | (generale) | — |
+| `IMAGE_SHAPE_MISMATCH` | `planes` | `shapes` (list) |
+| `IMAGE_SHAPE_MISMATCH` | `sizes` | `shape_a` (string), `shape_b` (string) |
+| `IMAGE_SHAPE_MISMATCH` | `grids` | — |
+| `UNIT_MISMATCH` | (generale) | — |
+| `UNIT_MISMATCH` | `operands` | `unit_a` (string), `unit_b` (string) |
+| `UNIT_MISMATCH` | `rgb_diff` | `unit_a` (string), `unit_b` (string) |
+| `UNIT_MISMATCH` | `mosaic` | `units` (list) |
+| `OPERATION_UNSUPPORTED` | (generale) | — |
+| `OPERATION_UNSUPPORTED` | `color_image` | `operation` (string) |
+| `OPERATION_UNSUPPORTED` | `flip_distortion` | — |
+| `OPERATION_UNSUPPORTED` | `operation_unknown` | `operation` (string), `allowed` (list) |
+| `OPERATION_UNSUPPORTED` | `operand_required` | `operation` (string) |
+| `OPERATION_UNSUPPORTED` | `kernel_required` | — |
+| `OPERATION_UNSUPPORTED` | `no_operands` | `operation` (string) |
+| `OPERATION_UNSUPPORTED` | `normalization_undefined` | `mean` (number) |
+| `OPERATION_UNSUPPORTED` | `resampling_method_unknown` | `method` (string), `allowed` (list) |
+| `DISPLAY_OPTION_UNKNOWN` | (generale) | `option` (string), `value` (string), `allowed` (list) |
+| `DISPLAY_METHOD_UNKNOWN` | (generale) | `method` (string), `allowed` (list) |
+| `DISPLAY_LIMITS_UNDEFINED` | (generale) | — |
+| `DISPLAY_LIMITS_UNDEFINED` | `no_finite_pixels` | — |
+| `DISPLAY_LIMITS_UNDEFINED` | `constant` | `value` (number) |
+| `MEMORY_LIMIT_EXCEEDED` | (generale) | `operation` (string), `needed` (quantity), `limit` (quantity) |
+| `PREVIEW_NOT_MEASURABLE` | (generale) | `operation` (string), `preview_step` (integer) |
+| `COMPRESSION_UNSUPPORTED` | (generale) | `path` (string), `compression` (string), `detail` (string, esterno) |
+| `IMAGE_UNREADABLE` | (generale) | `path` (string), `detail` (string, esterno) |
+| `PIXEL_RAW_UNAVAILABLE` | (generale) | — |
+| `PIXEL_RAW_UNAVAILABLE` | `not_fits` | `format` (string) |
+| `PIXEL_RAW_UNAVAILABLE` | `color_image` | — |
+| `PIXEL_RAW_UNAVAILABLE` | `derived` | `history` (list) |
+| `PIXEL_RAW_UNAVAILABLE` | `position` | `x` (string), `y` (string), `nx` (integer), `ny` (integer) |
+| `PIXEL_RAW_UNAVAILABLE` | `unreadable` | `origin` (string), `detail` (string, esterno) |
+| `CENTROID_OUT_OF_IMAGE` | (generale) | `nx` (integer), `ny` (integer) |
+| `CENTROID_OUT_OF_IMAGE` | `window_and_annulus` | `x0` (integer), `x1` (integer), `y0` (integer), `y1` (integer), `radius` (quantity), `nx` (integer), `ny` (integer) |
+| `CENTROID_UNDEFINED` | (generale) | — |
+| `CENTROID_UNDEFINED` | `non_finite_window` | — |
+| `CENTROID_UNDEFINED` | `no_background_pixels` | — |
+| `CENTROID_UNDEFINED` | `no_flux` | — |
+| `EXTERNAL_CALIBRATION_IGNORED` | (generale) | `source` (string) |
+| `EXTERNAL_CALIBRATION_USED` | (generale) | `source` (string) |
+| `STRATEGY` | (generale) | `strategy` (string) |
+| `STRATEGY` | `compressed` | `strategy` (string), `size` (quantity), `limit` (quantity) |
+| `STRATEGY` | `scaled_keywords` | `strategy` (string), `size` (quantity), `keywords` (list) |
+| `STRATEGY` | `over_memory` | `strategy` (string), `size` (quantity), `limit` (quantity) |
+| `STRATEGY` | `over_two_level` | `strategy` (string), `size` (quantity), `limit` (quantity) |
+| `AXES_DROPPED` | (generale) | `axes` (list) |
+| `NONFINITE_PIXELS` | (generale) | — |
+| `NONFINITE_PIXELS` | `excluded` | — |
+| `NONFINITE_PIXELS` | `operation_result` | `operation` (string) |
+| `ALPHA_DROPPED` | (generale) | `mode` (string) |
+| `FRAMES` | (generale) | `frames` (integer) |
+| `HHH_IGNORED` | (generale) | `name` (string) |
+| `HHH_WCS_DIFFERS` | (generale) | `name` (string), `differences` (string) |
+| `FROM_CACHE` | (generale) | — |
+| `FROM_CACHE` | `network_unavailable` | `error` (string) |
+| `FROM_CACHE` | `cached_url` | `retrieved_at` (string) |
+| `UNIT_UNKNOWN` | (generale) | `unit_a` (string), `unit_b` (string) |
+| `CUTOUT_TRIMMED` | (generale) | `shape` (string), `requested_shape` (string) |
+| `WCS_MISSING` | (generale) | — |
+| `WCS_MISSING` | `header_required` | — |
+| `WCS_MISSING` | `no_celestial_wcs` | — |
+| `WCS_MISSING` | `not_celestial` | — |
+| `WCS_MISSING` | `wcs_required` | — |
+| `WCS_MISSING` | `cutout_center` | — |
+| `WCS_MISSING` | `cutout_size` | — |
+| `WCS_MISSING` | `contours_sky` | — |
+| `WCS_MISSING` | `resampling` | `operation` (string), `origin` (string) |
+| `WCS_MISSING` | `reference` | — |
+| `WCS_MISSING` | `rgb` | `origin` (string) |
+| `WCS_MISSING` | `external_unavailable` | `source` (string), `cause` (string, esterno) |
+| `WCS_MISSING` | `external_no_header` | `source` (string) |
+| `WCS_MISSING` | `hhh_unreadable` | `name` (string), `detail` (string, esterno) |
+| `WCS_MISSING` | `no_calibration` | — |
+| `WCS_MISSING` | `calibration_invalid_header` | `kind` (string) |
+| `WCS_MISSING` | `calibration_size_differs` | `kind` (string), `naxis1` (string), `naxis2` (string), `nx` (integer), `ny` (integer) |
+| `WCS_MISSING` | `celestial_axes` | `celestial_axes` (list), `useful_axes` (list) |
+| `NET_TIMEOUT` | (generale) | `service` (string), `target` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
+| `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
+
 ## 11. Esposizione all'IA
 
 Non applicabile in questo file: gli strumenti per l'IA del modulo sono
@@ -740,3 +867,4 @@ funzioni di §7.
 | 2026-10-15 | Claude Code | **D41-3 decisa dal proprietario il 2026-10-15** (autorizzazione esplicita a modificare il file approvato; solo specifica, nessun codice): nuova **`suggest_display_limits`** con `ZScaleInterval` di astropy, limiti e parametri dichiarati nel risultato, pixel finiti in `float64`, intervallo comune per i colori, anteprima per le immagini a due livelli (§3, §6, §7, §8); errori `DISPLAY_LIMITS_UNDEFINED`, `DISPLAY_METHOD_UNKNOWN` (§10); test T38–T40 (§12); §13. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Codice scritto** (FASE: CODICE – interfaccia v1, allineamento del livello 1): `suggest_display_limits` con `ZScaleInterval` (parametri di default dichiarati, pixel finiti in `float64`, intervallo comune per i colori, anteprima per i due livelli) e raggi della corona di default 1 × / 1,5 × `box_size` in `star_centroid` (D11-8); test T37–T40 in `tests/core/test_images_fits.py` (118 superati). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8b:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

@@ -21,6 +21,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetricsF, QPaint
 from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QSpinBox, QWidget
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json
+from astrotwo.ui.message_view import shown_line, shown_text
 
 __all__ = [
     "DEFAULT_TOOL_TEXTS",
@@ -423,7 +424,7 @@ class SimbadPointerTool:
         esc = html.escape
         if result.status == "error" or result.error is not None:
             error = result.error
-            return esc("⚠ " + t["simbad_error"].replace("%1", "" if error is None else f"{error.code}: {error.text}"))
+            return esc("⚠ " + t["simbad_error"].replace("%1", "" if error is None else shown_line(error)))
         values = result.values
         obj = values.get("object")
         lines: list[str] = []
@@ -456,7 +457,7 @@ class SimbadPointerTool:
             url = simbad_url(obj["main_id"])
             lines.append(f'<a href="{esc(url, quote=True)}">{esc(t["simbad_link"])}</a>')
         for message in result.warnings:
-            lines.append(f"⚠ {esc(message.text)}")
+            lines.append(f"⚠ {esc(shown_text(message))}")
         for source in result.provenance:
             if source.get("origin"):
                 lines.append(esc(t["simbad_from"].replace("%1", str(source["origin"]))))

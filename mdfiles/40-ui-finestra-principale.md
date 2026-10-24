@@ -187,13 +187,31 @@ parametri `external` restano nella lingua originale, come testo esterno).
 Il pannello dell'assistente (`44`) mostra invece ciò che mostra il resto
 dell'interfaccia, nella lingua scelta.
 
-**Posizione del catalogo (D40-5, da decidere).** L'IA (livello 3) non può
-importare l'interfaccia (dipendenze solo verso il basso, regola d'oro n.
-7): il catalogo non può stare nel pacchetto `ui/`. Raccomandazione: un
-modulo neutro `src/astrotwo/messages_catalog.py` senza dipendenze (solo
-dati e `message_text`), importato sia da `ui/` sia da `ai/`; la tabella
-resta una sola, ma non è "dentro" l'interfaccia come scritto nella
-richiesta del 2026-10-24.
+**Varianti per ragione (D40-6, decisa il 2026-10-24).** Un codice che i moduli
+sollevano per ragioni diverse (es. `COORD_UNIT_MISSING`: unità mancante,
+unità non angolare, argomento mancante) ha **una voce con testo generale e
+sotto-voci**: ogni sotto-voce ha `en`, `it` e i propri parametri, ed è scelta
+dal parametro riservato `reason`, un identificatore stabile in inglese
+minuscolo (es. `"not_angular"`), mai un testo. Senza `reason`, o con un
+`reason` che la voce non conosce, vale il testo generale. `reason` fa parte
+di `params` (quindi dei file di sessione e dei risultati verso l'IA) ma non
+si inserisce nel testo. Il codice resta quello dei `.md` dei moduli:
+nessun identificatore cambia. Ogni sotto-voce ha le stesse regole della
+voce (segnaposto uguali nelle due lingue, parametri dichiarati, test T18).
+
+**Posizione del catalogo (D40-5, decisa il 2026-10-24).** L'IA (livello 3)
+non può importare l'interfaccia (dipendenze solo verso il basso, regola d'oro
+n. 7): il catalogo sta nel modulo neutro `src/astrotwo/messages_catalog.py`,
+senza dipendenze (solo dati e `message_text`), importato sia da `ui/` sia da
+`ai/`; i moduli 10–19 e il `05` non lo importano (restituiscono solo codice e
+`params`). La tabella è una sola.
+
+**Passaggio graduale (sprint 8b–8d).** Finché un modulo non è convertito i
+suoi codici non sono nel catalogo e si mostrano come in §3.7.2 (testo
+originale con la nota "(nessuna traduzione)"). Il test T18 controlla i codici
+dei **moduli convertiti** (elenco nel test, aggiornato a ogni sprint) e
+fallisce per un modulo convertito con un codice senza voce; a fine 8d
+l'elenco comprende tutti i moduli di T18.
 
 #### 3.7.2 Codice senza voce nel catalogo
 
@@ -490,10 +508,15 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `params`** (testo originale conservato). Applicata in §3.7, §3.7.1,
   §3.7.2, §12 (T5, T18–T20); il codice si scrive dopo l'approvazione dei
   `.md` modificati, un modulo per sprint (8b–8d).
-- **D40-5 — Posizione del catalogo dei messaggi: DA DECIDERE (aperta il
-  2026-10-24, Gruppo 3).** Il catalogo serve all'interfaccia e all'IA
-  (livello 3): non può stare in `ui/`. Raccomandazione: modulo neutro
-  `src/astrotwo/messages_catalog.py` (§3.7.1).
+- **D40-5 — Posizione del catalogo dei messaggi: DECISA il 2026-10-24
+  (decisione del proprietario, come raccomandato).** Modulo neutro
+  `src/astrotwo/messages_catalog.py`, usato da `ui/` e `ai/`; i moduli
+  10–19 non lo importano. Applicata in §3.7.1.
+- **D40-6 — Varianti per ragione nel catalogo: DECISA il 2026-10-24
+  (decisione del proprietario, come raccomandato; sprint 8b).** Le voci del
+  catalogo possono avere sotto-voci scelte dal parametro `reason`
+  (identificatore stabile), per i codici sollevati per ragioni diverse;
+  nessun codice cambia. Applicata in §3.7.1.
 - **D40-2 — Avvio tramite URL (H18): RIMANDATA il 2026-10-15** (decisione
   del proprietario, come proposto): l'equivalente in AstroTwo (app `.dmg`,
   senza Java WebStart) si definisce nella versione successiva del 40.
@@ -579,3 +602,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-22 | Claude Code | **Sprint 7a del `44`:** l'area a destra ospita il pannello dell'assistente (`AiPanel`, larghezza iniziale 400 pt) al posto dello stato vuoto; preferenze Assistant come pulsante verso le impostazioni del `44` (§3.10), chiavi `assistant/…` accettate da `prefs.set`; Save session con il testo delle conversazioni del `35` quando la casella è attiva; uscita con una risposta in corso: stessa conferma dei comandi in corso, poi Stop; `HistoryPanel.select_number` per il clic sulle schede del `44`. T6 controlla anche le traduzioni di `ui/ai_panel.py`. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Sprint 4g del 41:** `ui.set_tool` attiva davvero lo strumento nel visualizzatore (`SkyViewer.set_tool`); tre impostazioni nuove controllate da `prefs.set` e ricordate in `QSettings` per le opzioni della distanza (`tools/distance_unit`, `tools/distance_snap`, `tools/distance_box_size`, §3.10); 12 testi nuovi tradotti nel `.ts`/`.qm`. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3 decisa (sprint 8, solo specifiche):** messaggi dei moduli nella lingua dell'interfaccia (inglese/italiano) da un catalogo codice → testo con parametri (nuove §3.7.1 e §3.7.2), verso l'IA sempre inglese; i moduli 10–19 e il `05` passano da codice + testo a codice + `params` (testo originale conservato, vedi `05`); D40-1 superata; test T5 riscritto, nuovi T18–T20; aperta D40-5 (posizione del catalogo, raccomandato un modulo neutro). Nessun codice scritto. |
+| 2026-10-24 | Claude Code | **Sprint 8b (codice):** approvati i `.md` dello sprint 8; D40-5 decisa (catalogo in `src/astrotwo/messages_catalog.py`); nuova e decisa D40-6 (varianti per `reason`); §3.7.1 aggiornata e passaggio graduale di T18 (solo moduli convertiti). |

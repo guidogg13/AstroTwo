@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import gzip
+from collections.abc import Mapping
 import math
 import os
 import re
@@ -63,6 +64,7 @@ from scipy import ndimage
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
+    ModuleWarning,
     PixelPosition,
     SkyFrame,
     WcsSolution,
@@ -121,11 +123,30 @@ _PROVENANCE = (
 class ImagesFitsError(Exception):
     """Errore del modulo 11 con identificatore della specifica (§10)."""
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40
         self.details = details
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``): numero o elenco di numeri, mai arrotondati."""
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return {"value": [float(v) for v in np.ravel(value)], "unit": unit}
+    return {"value": float(value), "unit": unit}
+
+
+#: Nomi di operazione per ``params`` (identificatori, non il testo italiano del messaggio).
+_OPERATION_IDS = {"visualizzazione": "display", "taglio": "cutout", "contorni": "contours",
+                  "salvataggio FITS": "save_fits", "ricampionamento": "resampling", "RGB": "rgb",
+                  "mosaico": "mosaic", "funzione di trasferimento": "stretch", "palette": "palette"}
+
+
+def _operation_id(what: str) -> str:
+    return _OPERATION_IDS.get(what, what.removeprefix("operazione "))
 
 
 # --------------------------------------------------------------------------
@@ -209,7 +230,7 @@ class FitsImage:
     hdu_name: str
     compression: str | None = None
     dropped_axes: tuple[int, ...] = ()  # assi FITS (da 1) di lunghezza 1 tolti
-    warnings: tuple[tuple[str, str], ...] = ()
+    warnings: tuple[tuple[str, str], ...] = ()  # coppie (codice, testo); le ``ModuleWarning`` portano anche ``params``
     color: bool = False  # True: data è 3 × righe × colonne (R, G, B), solo presentazione
     frames: int | None = None  # fotogrammi del file (GIF animate)
     calibration_source: str | None = None  # "comment" o "hhh" per JPEG/PNG, "external" (D14-11)
@@ -246,12 +267,15 @@ class FitsImage:
         Con i due livelli si leggono dal file con ``section`` di ``astropy.io.fits``.
         """
         if self.color:
-            raise ImagesFitsError("OPERATION_UNSUPPORTED", "read_region: immagine a colori, solo presentazione")
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", "read_region: immagine a colori, solo presentazione",
+                                  params={"reason": "color_image", "operation": "read_region"})
         ny, nx = self.shape
         bounds = [int(v) for v in (x0, x1, y0, y1)]
         if not (0 <= bounds[0] < bounds[1] <= nx and 0 <= bounds[2] < bounds[3] <= ny):
             raise ImagesFitsError(
-                "CUTOUT_OUT_OF_RANGE", f"regione x {x0}:{x1}, y {y0}:{y1} fuori dall'immagine {nx}×{ny}"
+                "CUTOUT_OUT_OF_RANGE", f"regione x {x0}:{x1}, y {y0}:{y1} fuori dall'immagine {nx}×{ny}",
+                params={"reason": "region", "x0": int(x0), "x1": int(x1), "y0": int(y0), "y1": int(y1),
+                        "nx": int(nx), "ny": int(ny)},
             )
         x0, x1, y0, y1 = bounds
         if not self.is_preview:
@@ -298,7 +322,8 @@ def _read_head(source) -> bytes:
         with open(source, "rb") as handle:
             return handle.read(2880)
     except OSError as exc:
-        raise ImagesFitsError("FITS_UNREADABLE", f"file non leggibile: {source} ({exc})", path=str(source)) from exc
+        raise ImagesFitsError("FITS_UNREADABLE", f"file non leggibile: {source} ({exc})", path=str(source),
+                              params={"reason": "file_unreadable", "path": str(source), "detail": str(exc)}) from exc
 
 
 def _has_compressed_hdu(source) -> bool:
@@ -317,7 +342,8 @@ def detect_format(source) -> str:
                 with gzip.open(source) as handle:
                     inner = handle.read(len(_FITS_SIGNATURE))
         except (OSError, EOFError, zlib.error) as exc:
-            raise ImagesFitsError("FORMAT_UNSUPPORTED", f"file gzip non leggibile: {exc}") from exc
+            raise ImagesFitsError("FORMAT_UNSUPPORTED", f"file gzip non leggibile: {exc}",
+                                  params={"reason": "gzip_unreadable", "detail": str(exc)}) from exc
         if inner.startswith(_FITS_SIGNATURE):
             return "fits-gzip"
     elif head.startswith(_FITS_SIGNATURE):
@@ -326,7 +352,9 @@ def detect_format(source) -> str:
                 if _has_compressed_hdu(source):
                     return "fits-compressed"
             except Exception as exc:
-                raise ImagesFitsError("FITS_UNREADABLE", f"FITS non leggibile: {source} ({exc})") from exc
+                raise ImagesFitsError("FITS_UNREADABLE", f"FITS non leggibile: {source} ({exc})",
+                                      params={"reason": "fits_unreadable", "path": str(source),
+                                              "detail": str(exc)}) from exc
         return "fits"
     elif head.startswith(_PNG_SIGNATURE):
         return "png"
@@ -335,7 +363,8 @@ def detect_format(source) -> str:
     elif head.startswith(_GIF_SIGNATURES):
         return "gif"
     raise ImagesFitsError(
-        "FORMAT_UNSUPPORTED", f"formato non riconosciuto; formati supportati: {', '.join(SUPPORTED_FORMATS)}"
+        "FORMAT_UNSUPPORTED", f"formato non riconosciuto; formati supportati: {', '.join(SUPPORTED_FORMATS)}",
+        params={"supported": list(SUPPORTED_FORMATS)},
     )
 
 
@@ -358,9 +387,11 @@ def _open_fits(path: str):
     try:
         return fits.open(path, memmap=False)
     except FileNotFoundError as exc:
-        raise ImagesFitsError("FITS_UNREADABLE", f"file inesistente: {path}", path=path) from exc
+        raise ImagesFitsError("FITS_UNREADABLE", f"file inesistente: {path}", path=path,
+                              params={"reason": "file_missing", "path": str(path)}) from exc
     except Exception as exc:
-        raise ImagesFitsError("FITS_UNREADABLE", f"FITS non leggibile: {path} ({exc})", path=path) from exc
+        raise ImagesFitsError("FITS_UNREADABLE", f"FITS non leggibile: {path} ({exc})", path=path,
+                              params={"reason": "fits_unreadable", "path": str(path), "detail": str(exc)}) from exc
 
 
 def _image_hdus(hdul) -> tuple[list[HduInfo], list[int]]:
@@ -400,42 +431,53 @@ def _select_rgb_hdu(hdul, hdu, path: str) -> int:
         if len(candidates) == 1:
             return candidates[0]
         if not candidates:
-            raise ImagesFitsError("RGB_INPUT_INVALID", f"{path}: nessuna HDU con 3 piani per rgb=True")
+            raise ImagesFitsError("RGB_INPUT_INVALID", f"{path}: nessuna HDU con 3 piani per rgb=True",
+                                  params={"reason": "no_rgb_hdu", "path": str(path)})
         raise ImagesFitsError(
-            "HDU_CHOICE_REQUIRED", f"{path}: {len(candidates)} HDU con 3 piani, indicare quale", hdus=candidates
+            "HDU_CHOICE_REQUIRED", f"{path}: {len(candidates)} HDU con 3 piani, indicare quale", hdus=candidates,
+            params={"reason": "rgb", "path": str(path), "count": len(candidates)},
         )
     try:
         index = hdul.index_of(hdu)
     except (KeyError, IndexError) as exc:
-        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} inesistente") from exc
+        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} inesistente",
+                              params={"reason": "no_such_hdu", "hdu": str(hdu)}) from exc
     if index not in candidates:
-        raise ImagesFitsError("RGB_INPUT_INVALID", f"HDU {hdu!r}: rgb=True richiede esattamente 3 piani")
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"HDU {hdu!r}: rgb=True richiede esattamente 3 piani",
+                              params={"reason": "hdu_not_rgb", "hdu": str(hdu)})
     return index
 
 
 def _select_hdu(hdul, hdu, path: str) -> int:
     images, cubes = _image_hdus(hdul)
     listing = [(h.index, h.name, h.shape) for h in images]
+    listed = [f"{i} {n!r} {tuple(sh)}" for i, n, sh in listing]  # per ``params``: indice, nome e forma di ogni HDU
     if hdu is None:
         if len(images) == 1:
             return images[0].index
         if not images:
             if cubes:
                 raise ImagesFitsError(
-                    "CUBE_NOT_SUPPORTED", f"{path}: solo cubi (3 o più assi utili): vanno al modulo 23", hdus=cubes
+                    "CUBE_NOT_SUPPORTED", f"{path}: solo cubi (3 o più assi utili): vanno al modulo 23", hdus=cubes,
+                    params={"reason": "only_cubes", "path": str(path)},
                 )
-            raise ImagesFitsError("HDU_NOT_IMAGE", f"{path}: nessuna HDU immagine", hdus=listing)
+            raise ImagesFitsError("HDU_NOT_IMAGE", f"{path}: nessuna HDU immagine", hdus=listing,
+                                  params={"reason": "no_image_hdu", "path": str(path)})
         raise ImagesFitsError(
-            "HDU_CHOICE_REQUIRED", f"{path}: {len(images)} HDU immagine, indicare quale aprire: {listing}", hdus=listing
+            "HDU_CHOICE_REQUIRED", f"{path}: {len(images)} HDU immagine, indicare quale aprire: {listing}", hdus=listing,
+            params={"reason": "images", "path": str(path), "count": len(images), "hdus": listed},
         )
     try:
         index = hdul.index_of(hdu)
     except (KeyError, IndexError) as exc:
-        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} inesistente; HDU immagine: {listing}", hdus=listing) from exc
+        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} inesistente; HDU immagine: {listing}", hdus=listing,
+                              params={"reason": "no_such_hdu_listed", "hdu": str(hdu), "hdus": listed}) from exc
     if index in cubes:
-        raise ImagesFitsError("CUBE_NOT_SUPPORTED", f"HDU {hdu!r}: cubo (3 o più assi utili), modulo 23")
+        raise ImagesFitsError("CUBE_NOT_SUPPORTED", f"HDU {hdu!r}: cubo (3 o più assi utili), modulo 23",
+                              params={"reason": "hdu_is_cube", "hdu": str(hdu)})
     if index not in {h.index for h in images}:
-        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} non è un'immagine; HDU immagine: {listing}", hdus=listing)
+        raise ImagesFitsError("HDU_NOT_IMAGE", f"HDU {hdu!r} non è un'immagine; HDU immagine: {listing}", hdus=listing,
+                              params={"reason": "not_an_image", "hdu": str(hdu), "hdus": listed})
     return index
 
 
@@ -443,13 +485,16 @@ def _image_wcs(header: fits.Header, kept_fits_axes: set[int]) -> tuple[WcsSoluti
     try:
         solution = wcs_from_header(header)
     except CoordinatesWcsError as exc:
-        return None, [(exc.code, exc.message)]
+        return None, [ModuleWarning(exc.code, exc.message, exc.params)]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FITSFixedWarning)
         full = WCS(header)
     celestial_axes = {full.wcs.lng + 1, full.wcs.lat + 1}
     if celestial_axes != kept_fits_axes:
-        return None, [("WCS_MISSING", f"gli assi celesti {sorted(celestial_axes)} non sono i due assi utili {sorted(kept_fits_axes)}")]
+        return None, [ModuleWarning(
+            "WCS_MISSING", f"gli assi celesti {sorted(celestial_axes)} non sono i due assi utili {sorted(kept_fits_axes)}",
+            {"reason": "celestial_axes", "celestial_axes": sorted(int(a) for a in celestial_axes),
+             "useful_axes": sorted(int(a) for a in kept_fits_axes)})]
     return solution, []
 
 
@@ -498,17 +543,23 @@ def _apply_external_calibration(image: FitsImage, calibration) -> FitsImage:
     if not source:
         raise TypeError("calibration deve avere 'header' e 'source' (da dove viene la calibrazione)")
     if image.wcs is not None:
-        note = ("EXTERNAL_CALIBRATION_IGNORED", f"calibrazione esterna ({source}) ignorata: l'immagine ha la propria")
+        note = ModuleWarning("EXTERNAL_CALIBRATION_IGNORED",
+                             f"calibrazione esterna ({source}) ignorata: l'immagine ha la propria",
+                             {"source": str(source)})
         return dataclasses.replace(image, warnings=image.warnings + (note,))
     if header is None:
-        reason = getattr(calibration, "reason", None) or "nessuna intestazione"
-        note = ("WCS_MISSING", f"calibrazione esterna ({source}) non disponibile: {reason}")
+        cause = getattr(calibration, "reason", None)
+        reason = cause or "nessuna intestazione"
+        note = ModuleWarning("WCS_MISSING", f"calibrazione esterna ({source}) non disponibile: {reason}",
+                             {"reason": "external_unavailable", "source": str(source), "cause": str(cause)}
+                             if cause else {"reason": "external_no_header", "source": str(source)})
         return dataclasses.replace(image, warnings=image.warnings + (note,))
     ny, nx = image.data.shape[-2:]
     solution, notes = _raster_calibration(header, f"esterna: {source}", nx, ny)
     if solution is None:
         return dataclasses.replace(image, warnings=image.warnings + tuple(notes))
-    note = ("EXTERNAL_CALIBRATION_USED", f"calibrazione astrometrica esterna: {source}")
+    note = ModuleWarning("EXTERNAL_CALIBRATION_USED", f"calibrazione astrometrica esterna: {source}",
+                         {"source": str(source)})
     return dataclasses.replace(image, wcs=solution, calibration_source="external", warnings=image.warnings + (note,),
                                history=image.history + (f"calibrazione esterna da {source}",))
 
@@ -523,19 +574,30 @@ def _section_key(raw_ndim: int, dropped: tuple[int, ...], rows, cols) -> tuple:
 
 def _choose_strategy(header: fits.Header, raw_shape: tuple[int, ...], compressed: bool, limits: LargeImageLimits):
     """Strategia per dimensione (§3): (strategia, motivo, byte dei dati decompressi)."""
+    return _choose_strategy_params(header, raw_shape, compressed, limits)[:3]
+
+
+def _choose_strategy_params(header: fits.Header, raw_shape: tuple[int, ...], compressed: bool,
+                            limits: LargeImageLimits):
+    """Come ``_choose_strategy``, con in più i ``params`` del motivo (``None`` se la strategia è ``memory``)."""
     nbytes = int(np.prod(raw_shape, dtype=np.int64)) * abs(int(header.get("BITPIX", 8))) // 8
+    size = _q(nbytes, "byte")
     if compressed:
         if nbytes <= limits.compressed_bytes:
-            return "memory", None, nbytes
-        return "two_level", f"file compresso di {nbytes} byte decompressi, oltre {limits.compressed_bytes}", nbytes
+            return "memory", None, nbytes, None
+        return ("two_level", f"file compresso di {nbytes} byte decompressi, oltre {limits.compressed_bytes}", nbytes,
+                {"reason": "compressed", "size": size, "limit": _q(limits.compressed_bytes, "byte")})
     if nbytes <= limits.memory_bytes:
-        return "memory", None, nbytes
+        return "memory", None, nbytes, None
     if nbytes <= limits.two_level_bytes:
         scaled = [k for k in ("BZERO", "BSCALE", "BLANK") if k in header]
         if scaled:
-            return "two_level", f"{nbytes} byte: memmap impossibile con {', '.join(scaled)} (astropy.io.fits)", nbytes
-        return "memmap", f"{nbytes} byte, oltre {limits.memory_bytes}: letti dal disco su richiesta", nbytes
-    return "two_level", f"{nbytes} byte, oltre {limits.two_level_bytes}", nbytes
+            return ("two_level", f"{nbytes} byte: memmap impossibile con {', '.join(scaled)} (astropy.io.fits)", nbytes,
+                    {"reason": "scaled_keywords", "size": size, "keywords": scaled})
+        return ("memmap", f"{nbytes} byte, oltre {limits.memory_bytes}: letti dal disco su richiesta", nbytes,
+                {"reason": "over_memory", "size": size, "limit": _q(limits.memory_bytes, "byte")})
+    return ("two_level", f"{nbytes} byte, oltre {limits.two_level_bytes}", nbytes,
+            {"reason": "over_two_level", "size": size, "limit": _q(limits.two_level_bytes, "byte")})
 
 
 def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool, limits: LargeImageLimits | None = None) -> FitsImage:
@@ -553,9 +615,10 @@ def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool, limits: La
         raw_shape = tuple(chosen.shape)
         name = chosen.name
         if rgb:
-            strategy, reason = "memory", None
+            strategy, reason, reason_params = "memory", None, None
         else:
-            strategy, reason, _ = _choose_strategy(header, raw_shape, compression is not None or fmt == "fits-gzip", limits)
+            strategy, reason, _, reason_params = _choose_strategy_params(
+                header, raw_shape, compression is not None or fmt == "fits-gzip", limits)
         dropped = tuple(len(raw_shape) - k for k, n in enumerate(raw_shape) if n == 1)
         useful = tuple(n for n in raw_shape if n > 1)
         try:
@@ -568,9 +631,11 @@ def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool, limits: La
         except Exception as exc:
             if compression is not None:
                 raise ImagesFitsError(
-                    "COMPRESSION_UNSUPPORTED", f"{path}: compressione {compression} non leggibile ({exc})"
+                    "COMPRESSION_UNSUPPORTED", f"{path}: compressione {compression} non leggibile ({exc})",
+                    params={"path": str(path), "compression": str(compression), "detail": str(exc)}
                 ) from exc
-            raise ImagesFitsError("FITS_UNREADABLE", f"{path}: dati non leggibili ({exc})", path=path) from exc
+            raise ImagesFitsError("FITS_UNREADABLE", f"{path}: dati non leggibili ({exc})", path=path,
+                                  params={"reason": "data_unreadable", "path": str(path), "detail": str(exc)}) from exc
     if strategy == "memmap":
         with fits.open(path, memmap=True) as mapped:
             data = mapped[index].data  # resta mappata dopo la chiusura del file
@@ -584,15 +649,18 @@ def _load_path(text: str, path: str, hdu, rgb: bool, allow_hhh: bool, limits: La
         data = data.astype(data.dtype.newbyteorder("="))
     notes: list[tuple[str, str]] = []
     if strategy != "memory":
-        notes.append(("STRATEGY", f"{strategy}: {reason}"))
+        notes.append(ModuleWarning("STRATEGY", f"{strategy}: {reason}", {"strategy": strategy, **reason_params}))
     if dropped:
-        notes.append(("AXES_DROPPED", f"assi FITS di lunghezza 1 tolti: {sorted(dropped)}"))
+        notes.append(ModuleWarning("AXES_DROPPED", f"assi FITS di lunghezza 1 tolti: {sorted(dropped)}",
+                                   {"axes": sorted(int(a) for a in dropped)}))
     if rgb:
         kept = {1, 2}  # i due assi spaziali; il terzo sono i piani R, G, B
     solution, wcs_notes = _image_wcs(header, kept)
     notes.extend(wcs_notes)
     if strategy != "memmap" and np.issubdtype(data.dtype, np.floating) and not np.all(np.isfinite(data)):
-        notes.append(("NONFINITE_PIXELS", "pixel non finiti (NaN/inf): esclusi da display e misure, mai sostituiti"))
+        notes.append(ModuleWarning(
+            "NONFINITE_PIXELS", "pixel non finiti (NaN/inf): esclusi da display e misure, mai sostituiti",
+            {"reason": "excluded"}))
     bunit = header.get("BUNIT")
     modified = datetime.fromtimestamp(os.path.getmtime(path), tz=UTC)
     return FitsImage(
@@ -670,7 +738,7 @@ def _raster_array(image) -> tuple[np.ndarray, bool, list[tuple[str, str]]]:
     notes: list[tuple[str, str]] = []
     mode = image.mode
     if mode in ("RGBA", "LA", "PA") or (mode == "P" and "transparency" in image.info):
-        notes.append(("ALPHA_DROPPED", f"canale alfa del modo {mode} scartato"))
+        notes.append(ModuleWarning("ALPHA_DROPPED", f"canale alfa del modo {mode} scartato", {"mode": str(mode)}))
     if mode == "1":
         return np.array(image, dtype=np.uint8), False, notes
     if mode in ("L", "I", "F") or mode.startswith("I;16"):
@@ -686,16 +754,20 @@ def _raster_array(image) -> tuple[np.ndarray, bool, list[tuple[str, str]]]:
 def _raster_calibration(header: fits.Header, source_kind: str, nx: int, ny: int) -> tuple[WcsSolution | None, list[tuple[str, str]]]:
     """WCS dal testo del commento o del ``.hhh``, o ``None`` con il motivo dello scarto."""
     if not header:
-        return None, [("WCS_MISSING", f"calibrazione ({source_kind}) scartata: non è un'intestazione FITS valida")]
+        return None, [ModuleWarning("WCS_MISSING", f"calibrazione ({source_kind}) scartata: non è un'intestazione FITS valida",
+                                    {"reason": "calibration_invalid_header", "kind": str(source_kind)})]
     if (header.get("NAXIS1"), header.get("NAXIS2")) != (nx, ny):
-        return None, [(
+        return None, [ModuleWarning(
             "WCS_MISSING",
             f"calibrazione ({source_kind}) scartata: NAXIS1/NAXIS2 = {header.get('NAXIS1')}/{header.get('NAXIS2')}, "
             f"immagine {nx}×{ny}",
+            {"reason": "calibration_size_differs", "kind": str(source_kind), "naxis1": str(header.get("NAXIS1")),
+             "naxis2": str(header.get("NAXIS2")), "nx": int(nx), "ny": int(ny)},
         )]
     solution, wcs_notes = _image_wcs(header, {1, 2})
     if solution is None:
-        return None, [(code, f"calibrazione ({source_kind}) scartata: {msg}") for code, msg in wcs_notes]
+        return None, [ModuleWarning(w[0], f"calibrazione ({source_kind}) scartata: {w[1]}",
+                                    {**w.params, "discarded_calibration": str(source_kind)}) for w in wcs_notes]
     return solution, []
 
 
@@ -727,14 +799,15 @@ def _load_raster(text: str, path: str, fmt: str, allow_hhh: bool = True) -> Fits
             raw, color, notes = _raster_array(image)
             comment = _comment_text(image, fmt)
     except (UnidentifiedImageError, OSError, ValueError) as exc:
-        raise ImagesFitsError("IMAGE_UNREADABLE", f"{path}: immagine non decodificabile ({exc})", path=path) from exc
+        raise ImagesFitsError("IMAGE_UNREADABLE", f"{path}: immagine non decodificabile ({exc})", path=path,
+                              params={"path": str(path), "detail": str(exc)}) from exc
     # Righe dal basso verso l'alto, come un FITS (convenzione dei pixel, §3).
     data = raw[::-1].copy()
     if color:
         data = np.moveaxis(data, -1, 0).copy()
     ny, nx = data.shape[-2:]
     if frames > 1:
-        notes.append(("FRAMES", f"{frames} fotogrammi: letto il primo"))
+        notes.append(ModuleWarning("FRAMES", f"{frames} fotogrammi: letto il primo", {"frames": int(frames)}))
 
     header, source_kind = fits.Header(), None
     hhh = Path(path).with_suffix(".hhh")
@@ -743,12 +816,15 @@ def _load_raster(text: str, path: str, fmt: str, allow_hhh: bool = True) -> Fits
         try:
             hhh_text = hhh.read_text("latin-1")
         except OSError as exc:
-            notes.append(("WCS_MISSING", f"{hhh.name} non leggibile: {exc}"))
+            notes.append(ModuleWarning("WCS_MISSING", f"{hhh.name} non leggibile: {exc}",
+                                       {"reason": "hhh_unreadable", "name": hhh.name, "detail": str(exc)}))
     if fmt in ("jpeg", "png"):
         if comment is not None:
             header, source_kind = (_header_from_text(comment) or fits.Header()), "comment"
             if hhh_text is not None:
-                notes.append(("HHH_IGNORED", f"{hhh.name} ignorato: vale la calibrazione nel commento del file"))
+                notes.append(ModuleWarning("HHH_IGNORED",
+                                           f"{hhh.name} ignorato: vale la calibrazione nel commento del file",
+                                           {"name": hhh.name}))
         elif hhh_text is not None:
             header, source_kind = (_header_from_text(hhh_text) or fits.Header()), "hhh"
 
@@ -759,13 +835,16 @@ def _load_raster(text: str, path: str, fmt: str, allow_hhh: bool = True) -> Fits
         if solution is None:
             source_kind = None
     else:
-        notes.append(("WCS_MISSING", "nessuna calibrazione astrometrica: immagine come griglia di pixel"))
+        notes.append(ModuleWarning("WCS_MISSING", "nessuna calibrazione astrometrica: immagine come griglia di pixel",
+                                   {"reason": "no_calibration"}))
     if comment is not None and hhh_text is not None:
         # Vale il commento; se il .hhh ignorato descrive un WCS diverso, lo si dice (decisione del 2026-10-10).
         other, _ = _raster_calibration(_header_from_text(hhh_text) or fits.Header(), "hhh", nx, ny)
         differing = _wcs_differences(solution, other)
         if differing:
-            notes.append(("HHH_WCS_DIFFERS", f"{hhh.name} descrive un WCS diverso da quello del commento (usato): {differing}"))
+            notes.append(ModuleWarning(
+                "HHH_WCS_DIFFERS", f"{hhh.name} descrive un WCS diverso da quello del commento (usato): {differing}",
+                {"name": hhh.name, "differences": differing}))
 
     return FitsImage(
         data=data,
@@ -819,17 +898,21 @@ def _load_url(url: str, hdu, rgb: bool, cache: SharedCache | None, refresh: bool
                     f"{url} non raggiungibile (timeout {timeouts.connect:g} s connessione, "
                     f"{timeouts.read:g} s lettura): {exc}",
                     url=url,
+                    params={"reason": "url", "url": url, "connect": _q(timeouts.connect, "s"),
+                            "read": _q(timeouts.read, "s"), "detail": str(exc)},
                 ) from exc
             payload, retrieved_at, from_cache = cached.data, cached.retrieved_at, True
-            notes.append(("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache"))
+            notes.append(ModuleWarning("FROM_CACHE", f"rete non disponibile ({type(exc).__name__}): copia in cache",
+                                       {"reason": "network_unavailable", "error": type(exc).__name__}))
         else:
             retrieved_at, from_cache = datetime.now(UTC), False
             try:
                 cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
             except CacheError as exc:  # es. CACHE_FULL: l'immagine si apre comunque
-                notes.append((exc.code, exc.message))
+                notes.append(ModuleWarning(exc.code, exc.message, getattr(exc, "params", None)))
     if from_cache and not notes:
-        notes.append(("FROM_CACHE", f"copia in cache dell'URL, scaricata il {retrieved_at.isoformat()}"))
+        notes.append(ModuleWarning("FROM_CACHE", f"copia in cache dell'URL, scaricata il {retrieved_at.isoformat()}",
+                                   {"reason": "cached_url", "retrieved_at": retrieved_at.isoformat()}))
     fd, tmp = tempfile.mkstemp(prefix="astrotwo-url-")
     try:
         with os.fdopen(fd, "wb") as handle:
@@ -888,7 +971,8 @@ class DisplayPlane:
 
 def _check_display_option(value: str, allowed: tuple[str, ...], what: str) -> str:
     if value not in allowed:
-        raise ImagesFitsError("DISPLAY_OPTION_UNKNOWN", f"{what} {value!r} non ammessa; ammesse: {', '.join(allowed)}")
+        raise ImagesFitsError("DISPLAY_OPTION_UNKNOWN", f"{what} {value!r} non ammessa; ammesse: {', '.join(allowed)}",
+                              params={"option": _operation_id(what), "value": str(value), "allowed": list(allowed)})
     return value
 
 
@@ -977,7 +1061,8 @@ def suggest_display_limits(image, *, method: str = "zscale") -> DisplayLimits:
     piani; immagini a due livelli: sull'anteprima (dichiarato). L'immagine non cambia.
     """
     if method not in DISPLAY_LIMIT_METHODS:
-        raise ImagesFitsError("DISPLAY_METHOD_UNKNOWN", f"metodo {method!r} sconosciuto (ammessi: {', '.join(DISPLAY_LIMIT_METHODS)})")
+        raise ImagesFitsError("DISPLAY_METHOD_UNKNOWN", f"metodo {method!r} sconosciuto (ammessi: {', '.join(DISPLAY_LIMIT_METHODS)})",
+                              params={"method": str(method), "allowed": list(DISPLAY_LIMIT_METHODS)})
     data = np.asarray(getattr(image, "data", image))
     color = bool(getattr(image, "color", False))
     if data.ndim != (3 if color else 2):
@@ -991,13 +1076,14 @@ def suggest_display_limits(image, *, method: str = "zscale") -> DisplayLimits:
     bunit = getattr(image, "bunit", None)
     unit = bunit if bunit else "non dichiarata"
     if values.size == 0:
-        raise ImagesFitsError("DISPLAY_LIMITS_UNDEFINED", "nessun pixel finito: nessun limite proposto")
+        raise ImagesFitsError("DISPLAY_LIMITS_UNDEFINED", "nessun pixel finito: nessun limite proposto",
+                              params={"reason": "no_finite_pixels"})
     interval = ZScaleInterval()
     vmin, vmax = (float(v) for v in interval.get_limits(values))
     if not vmin < vmax:
         raise ImagesFitsError("DISPLAY_LIMITS_UNDEFINED",
                               f"immagine costante (valore {values[0]!r}): nessun limite proposto, li sceglie l'utente",
-                              value=float(values[0]))
+                              value=float(values[0]), params={"reason": "constant", "value": float(values[0])})
     return DisplayLimits(vmin=vmin, vmax=vmax, unit=unit, method="zscale (astropy.visualization.ZScaleInterval)",
                          parameters=dict(vars(interval)), n_pixels=int(values.size), notes=tuple(notes))
 
@@ -1073,7 +1159,8 @@ def blend(planes, opacities) -> np.ndarray:
     shape = arrays[0].shape
     if any(a.shape != shape or a.ndim != 3 or a.shape[2] != 4 for a in arrays):
         raise ImagesFitsError(
-            "IMAGE_SHAPE_MISMATCH", f"piani di griglie diverse: {[a.shape for a in arrays]}; ricampionare prima (P7)"
+            "IMAGE_SHAPE_MISMATCH", f"piani di griglie diverse: {[a.shape for a in arrays]}; ricampionare prima (P7)",
+            params={"reason": "planes", "shapes": [str(tuple(a.shape)) for a in arrays]},
         )
     color = np.zeros(shape[:2] + (3,))  # colore premoltiplicato per l'alfa
     alpha = np.zeros(shape[:2])
@@ -1148,6 +1235,7 @@ def _refuse_preview(image: FitsImage, what: str) -> None:
             "PREVIEW_NOT_MEASURABLE",
             f"{what}: l'immagine è aperta a due livelli e i dati in memoria sono solo l'anteprima "
             f"(passo {image.preview_step}); usare read_region o un taglio sui pixel originali",
+            params={"operation": _operation_id(what), "preview_step": int(image.preview_step)},
         )
 
 
@@ -1180,6 +1268,7 @@ def _check_memory(what: str, needed: int, *images) -> None:
             "usare un taglio, una regione o soglie più alte",
             needed_bytes=needed,
             limit_bytes=cap,
+            params={"operation": _operation_id(what), "needed": _q(needed, "byte"), "limit": _q(cap, "byte")},
         )
 
 
@@ -1192,17 +1281,21 @@ def cutout(image: FitsImage, center, size) -> FitsImage:
     w = image.wcs.wcs if image.wcs is not None else None
     if isinstance(center, SkyFrame):
         if w is None:
-            raise ImagesFitsError("WCS_MISSING", "taglio con centro in coordinate celesti: l'immagine non ha WCS")
+            raise ImagesFitsError("WCS_MISSING", "taglio con centro in coordinate celesti: l'immagine non ha WCS",
+                                  params={"reason": "cutout_center"})
         position = center.coord if center.coord.isscalar else center.coord[0]
         described = f"centro {position.to_string('decimal', precision=8)} ({center.frame_name})"
+        center_text = f"{position.to_string('decimal', precision=8)} ({center.frame_name})"
     elif isinstance(center, PixelPosition):
         px = convert_pixel_convention(center.x, center.y, center.convention, "numpy")
         position = (float(px.x), float(px.y))
         described = f"centro pixel numpy ({position[0]:g}, {position[1]:g})"
+        center_text = f"({position[0]:g}, {position[1]:g}) numpy pixels"
     else:
         raise TypeError("center deve essere uno SkyFrame o una PixelPosition (convenzione dichiarata)")
     if isinstance(size, u.Quantity) and size.unit.is_equivalent(u.deg) and w is None:
-        raise ImagesFitsError("WCS_MISSING", "lato in unità angolari: l'immagine non ha WCS")
+        raise ImagesFitsError("WCS_MISSING", "lato in unità angolari: l'immagine non ha WCS",
+                              params={"reason": "cutout_size"})
     if image.is_preview:
         # Geometria su un array virtuale delle dimensioni dell'originale (nessuna memoria),
         # dati letti dal file per la sola regione del taglio.
@@ -1212,9 +1305,11 @@ def cutout(image: FitsImage, center, size) -> FitsImage:
     try:
         cut = Cutout2D(plane, position, size, wcs=w, mode="trim", copy=False)  # copia dopo il controllo della memoria
     except NoOverlapError as exc:
-        raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio del tutto fuori dall'immagine ({described})") from exc
+        raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio del tutto fuori dall'immagine ({described})",
+                              params={"reason": "outside", "center": center_text}) from exc
     except ValueError as exc:
-        raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio non valido ({described}): {exc}") from exc
+        raise ImagesFitsError("CUTOUT_OUT_OF_RANGE", f"taglio non valido ({described}): {exc}",
+                              params={"reason": "invalid", "center": center_text, "detail": str(exc)}) from exc
     planes = 3 if image.color else 1
     _check_memory("taglio", _pixels(cut.shape) * planes * image.data.dtype.itemsize, image)
     if image.is_preview:
@@ -1226,16 +1321,21 @@ def cutout(image: FitsImage, center, size) -> FitsImage:
         data = np.array(cut.data)
     notes = []
     if tuple(cut.shape) != tuple(cut.shape_input):
-        notes.append(("CUTOUT_TRIMMED", f"taglio ridotto all'intersezione con l'immagine: {cut.shape} invece di {cut.shape_input}"))
+        notes.append(ModuleWarning(
+            "CUTOUT_TRIMMED", f"taglio ridotto all'intersezione con l'immagine: {cut.shape} invece di {cut.shape_input}",
+            {"shape": str(tuple(cut.shape)), "requested_shape": str(tuple(cut.shape_input))}))
     x0, y0 = cut.origin_original
     return _derived(image, data, cut.wcs, f"cutout: {described}, origine pixel numpy ({x0}, {y0}), forma {cut.shape}", notes)
 
 
 def _same_grid(a: FitsImage, b: FitsImage) -> None:
     if a.data.shape != b.data.shape:
-        raise ImagesFitsError("IMAGE_SHAPE_MISMATCH", f"dimensioni diverse {a.data.shape} e {b.data.shape}: ricampionare prima (P7)")
+        raise ImagesFitsError("IMAGE_SHAPE_MISMATCH", f"dimensioni diverse {a.data.shape} e {b.data.shape}: ricampionare prima (P7)",
+                              params={"reason": "sizes", "shape_a": str(tuple(a.data.shape)),
+                                      "shape_b": str(tuple(b.data.shape))})
     if (a.wcs is None) != (b.wcs is None) or (a.wcs is not None and not a.wcs.wcs.wcs.compare(b.wcs.wcs.wcs, tolerance=1e-12)):
-        raise ImagesFitsError("IMAGE_SHAPE_MISMATCH", "griglie (WCS) diverse: ricampionare prima (P7)")
+        raise ImagesFitsError("IMAGE_SHAPE_MISMATCH", "griglie (WCS) diverse: ricampionare prima (P7)",
+                              params={"reason": "grids"})
 
 
 def _flip_wcs(w: WCS, axis_fits: int, n: int) -> WCS:
@@ -1249,7 +1349,8 @@ def _flip_wcs(w: WCS, axis_fits: int, n: int) -> WCS:
         keys = list(w.to_header(relax=True).keys())
     wcslib_distortion = any(k.startswith(("DP", "DQ", "CPDIS", "CQDIS")) for k in keys)
     if w.has_distortion or w.sip is not None or wcslib_distortion:
-        raise ImagesFitsError("OPERATION_UNSUPPORTED", "specchiatura di un WCS con distorsioni (SIP, TPD, tabelle) non supportata")
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", "specchiatura di un WCS con distorsioni (SIP, TPD, tabelle) non supportata",
+                              params={"reason": "flip_distortion"})
     flipped = w.deepcopy()
     k = axis_fits - 1
     crpix = flipped.wcs.crpix.copy()
@@ -1270,9 +1371,12 @@ def _flip_wcs(w: WCS, axis_fits: int, n: int) -> WCS:
 def image_operation(a: FitsImage, b, op: str) -> FitsImage:
     """Operazione H5 dall'elenco chiuso; restituisce sempre una nuova immagine (``float64``)."""
     if op not in OPERATIONS:
-        raise ImagesFitsError("OPERATION_UNSUPPORTED", f"operazione {op!r} non prevista; elenco: {', '.join(OPERATIONS)}")
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", f"operazione {op!r} non prevista; elenco: {', '.join(OPERATIONS)}",
+                              params={"reason": "operation_unknown", "operation": str(op),
+                                      "allowed": list(OPERATIONS)})
     if a.color:
-        raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione")
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione",
+                                  params={"reason": "color_image", "operation": op})
     _refuse_preview(a, f"operazione {op}")
     if isinstance(b, FitsImage):
         _refuse_preview(b, f"operazione {op}")
@@ -1290,50 +1394,60 @@ def image_operation(a: FitsImage, b, op: str) -> FitsImage:
     if op in _ARITHMETIC:
         if isinstance(b, FitsImage):
             if b.color:
-                raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione")
+                raise ImagesFitsError("OPERATION_UNSUPPORTED", "le immagini a colori sono solo di presentazione",
+                                  params={"reason": "color_image", "operation": op})
             _same_grid(a, b)
             if op in ("add", "sub") and (a.bunit or None) != (b.bunit or None):
-                raise ImagesFitsError("UNIT_MISMATCH", f"unità diverse: {a.bunit!r} e {b.bunit!r}")
+                raise ImagesFitsError("UNIT_MISMATCH", f"unità diverse: {a.bunit!r} e {b.bunit!r}",
+                                  params={"reason": "operands", "unit_a": str(a.bunit), "unit_b": str(b.bunit)})
             if op in ("mul", "div"):
                 if a.unit is not None and b.unit is not None:
                     bunit = (a.unit * b.unit if op == "mul" else a.unit / b.unit).to_string("fits") or None
                 else:
                     bunit = None
                     if a.bunit or b.bunit:
-                        notes.append(("UNIT_UNKNOWN", f"unità del risultato non determinabile da {a.bunit!r} e {b.bunit!r}"))
+                        notes.append(ModuleWarning(
+                            "UNIT_UNKNOWN", f"unità del risultato non determinabile da {a.bunit!r} e {b.bunit!r}",
+                            {"unit_a": str(a.bunit), "unit_b": str(b.bunit)}))
             other = np.asarray(b.data, dtype=np.float64)
             step = f"{op} con l'immagine {b.origin} (HDU {b.hdu_index})"
         elif isinstance(b, (int, float, np.integer, np.floating)) and not isinstance(b, bool):
             other = float(b)
             step = f"{op} con la costante {other!r}"
         else:
-            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"{op}: serve un'immagine o una costante")
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"{op}: serve un'immagine o una costante",
+                                  params={"reason": "operand_required", "operation": op})
         with np.errstate(divide="ignore", invalid="ignore"):
             result = _ARITHMETIC[op](data, other)
     elif op == "convolve":
         if not isinstance(b, Kernel2D):
-            raise ImagesFitsError("OPERATION_UNSUPPORTED", "convolve: serve un kernel di astropy.convolution (Kernel2D)")
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", "convolve: serve un kernel di astropy.convolution (Kernel2D)",
+                                  params={"reason": "kernel_required"})
         result = astropy_convolve(data, b)
         step = f"convolve con {type(b).__name__} {b.array.shape} (astropy, default: bordo 0, NaN interpolati, kernel normalizzato)"
     elif op == "normalize":
         if b is not None:
-            raise ImagesFitsError("OPERATION_UNSUPPORTED", "normalize non ha operandi")
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", "normalize non ha operandi",
+                                  params={"reason": "no_operands", "operation": "normalize"})
         mean = float(np.nanmean(data)) if np.any(np.isfinite(data)) else float("nan")
         if not math.isfinite(mean) or mean == 0.0:
-            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"normalizzazione non definita: media dei pixel finiti = {mean!r}")
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"normalizzazione non definita: media dei pixel finiti = {mean!r}",
+                                  params={"reason": "normalization_undefined", "mean": mean})
         result = data / mean
         step = f"normalize: divisione per la media dei pixel finiti {mean!r}"
         bunit = None
     else:  # specchiature
         if b is not None:
-            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"{op} non ha operandi")
+            raise ImagesFitsError("OPERATION_UNSUPPORTED", f"{op} non ha operandi",
+                                  params={"reason": "no_operands", "operation": op})
         axis = 1 if op == "flip_x" else 0
         result = np.flip(data, axis=axis).copy()
         if w is not None:
             w = _flip_wcs(w, axis_fits=1 if op == "flip_x" else 2, n=data.shape[axis])
         step = f"{op}: specchiatura {'orizzontale' if op == 'flip_x' else 'verticale'}, WCS aggiornato"
     if not np.all(np.isfinite(result)) and np.all(np.isfinite(data)):
-        notes.append(("NONFINITE_PIXELS", f"{op}: il risultato ha pixel non finiti (es. divisione per zero)"))
+        notes.append(ModuleWarning("NONFINITE_PIXELS", f"{op}: il risultato ha pixel non finiti (es. divisione per zero)",
+                                   {"reason": "operation_result", "operation": op}))
     return _derived(a, result, w, step, notes, bunit=bunit)
 
 
@@ -1350,7 +1464,8 @@ class Contours:
     def to_sky(self, image: FitsImage) -> tuple[tuple[SkyFrame, ...], ...]:
         """Le stesse curve in coordinate celesti, con il WCS dell'immagine (modulo 10)."""
         if image.wcs is None:
-            raise ImagesFitsError("WCS_MISSING", "contorni in coordinate celesti: l'immagine non ha WCS")
+            raise ImagesFitsError("WCS_MISSING", "contorni in coordinate celesti: l'immagine non ha WCS",
+                                  params={"reason": "contours_sky"})
         return tuple(
             tuple(pixel_to_sky(image.wcs, c[:, 0], c[:, 1], convention="numpy").coords for c in level)
             for level in self.curves
@@ -1360,7 +1475,8 @@ class Contours:
 def contours(image: FitsImage, levels) -> Contours:
     """Isofote (H7) con ``contourpy``; ``levels`` nelle unità dell'immagine."""
     if image.color:
-        raise ImagesFitsError("OPERATION_UNSUPPORTED", "contorni su un'immagine a colori: serve un'immagine monocroma")
+        raise ImagesFitsError("OPERATION_UNSUPPORTED", "contorni su un'immagine a colori: serve un'immagine monocroma",
+                              params={"reason": "color_image", "operation": "contours"})
     _refuse_preview(image, "contorni")
     _check_memory("contorni", _pixels(image.data.shape) * _MEMORY_BYTES_PER_PIXEL["contours"], image)
     values = tuple(float(v) for v in np.atleast_1d(levels))
@@ -1405,7 +1521,8 @@ def _reproject_function(method: str):
     if method == "flux":
         return reproject_exact, {}
     raise ImagesFitsError(
-        "OPERATION_UNSUPPORTED", f"metodo di ricampionamento {method!r} non previsto; metodi: {', '.join(RESAMPLING_METHODS)}"
+        "OPERATION_UNSUPPORTED", f"metodo di ricampionamento {method!r} non previsto; metodi: {', '.join(RESAMPLING_METHODS)}",
+        params={"reason": "resampling_method_unknown", "method": str(method), "allowed": list(RESAMPLING_METHODS)},
     )
 
 
@@ -1413,9 +1530,12 @@ def _check_resampling_input(image: FitsImage, what: str) -> None:
     if not isinstance(image, FitsImage):
         raise TypeError(f"{what}: serve un FitsImage")
     if image.color:
-        raise ImagesFitsError("RGB_INPUT_INVALID", f"{what}: serve un'immagine monocroma")
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"{what}: serve un'immagine monocroma",
+                              params={"reason": "monochrome_required", "operation": _operation_id(what)})
     if image.wcs is None:
-        raise ImagesFitsError("WCS_MISSING", f"{what}: il ricampionamento richiede la calibrazione ({image.origin})")
+        raise ImagesFitsError("WCS_MISSING", f"{what}: il ricampionamento richiede la calibrazione ({image.origin})",
+                              params={"reason": "resampling", "operation": _operation_id(what),
+                                      "origin": str(image.origin)})
     _refuse_preview(image, what)
 
 
@@ -1433,7 +1553,8 @@ def _resampling_memory(images, reference: FitsImage, what: str, extra_reference_
 
 def _reference_grid(reference: FitsImage) -> tuple[WcsSolution, tuple[int, int]]:
     if not isinstance(reference, FitsImage) or reference.wcs is None:
-        raise ImagesFitsError("WCS_MISSING", "il riferimento deve essere un'immagine con WCS")
+        raise ImagesFitsError("WCS_MISSING", "il riferimento deve essere un'immagine con WCS",
+                              params={"reason": "reference"})
     return reference.wcs, reference.shape
 
 
@@ -1518,18 +1639,23 @@ def rgb_composite(images, reference: FitsImage | None = None, mode: str = "rgb",
     """Immagine a colori da 2 o 3 immagini monocrome (``rgb``) o differenza (``rgb_diff``)."""
     images = list(images)
     if mode not in ("rgb", "rgb_diff"):
-        raise ImagesFitsError("RGB_INPUT_INVALID", f"modalità {mode!r}: ammesse 'rgb' e 'rgb_diff'")
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"modalità {mode!r}: ammesse 'rgb' e 'rgb_diff'",
+                              params={"reason": "mode_unknown", "mode": str(mode)})
     if not 2 <= len(images) <= 3 or (mode == "rgb_diff" and len(images) != 2):
-        raise ImagesFitsError("RGB_INPUT_INVALID", f"{len(images)} immagini per {mode}: servono 2 o 3 (2 per rgb_diff)")
+        raise ImagesFitsError("RGB_INPUT_INVALID", f"{len(images)} immagini per {mode}: servono 2 o 3 (2 per rgb_diff)",
+                              params={"reason": "image_count", "count": len(images), "mode": str(mode)})
     for im in images:
         if not isinstance(im, FitsImage) or im.color:
-            raise ImagesFitsError("RGB_INPUT_INVALID", "servono immagini monocrome (FitsImage)")
+            raise ImagesFitsError("RGB_INPUT_INVALID", "servono immagini monocrome (FitsImage)",
+                                  params={"reason": "monochrome_images_required"})
         if im.wcs is None:
-            raise ImagesFitsError("WCS_MISSING", f"RGB: {im.origin} non ha WCS, il ricampionamento richiede la calibrazione")
+            raise ImagesFitsError("WCS_MISSING", f"RGB: {im.origin} non ha WCS, il ricampionamento richiede la calibrazione",
+                                  params={"reason": "rgb", "origin": str(im.origin)})
     order = list(range(len(images)))
     if wavelengths is not None:
         if not isinstance(wavelengths, u.Quantity) or len(wavelengths) != len(images):
-            raise ImagesFitsError("RGB_INPUT_INVALID", "wavelengths: una lunghezza d'onda (Quantity) per immagine")
+            raise ImagesFitsError("RGB_INPUT_INVALID", "wavelengths: una lunghezza d'onda (Quantity) per immagine",
+                                  params={"reason": "wavelengths"})
         order = list(np.argsort(-wavelengths.to_value(u.m, equivalencies=u.spectral())))
         images = [images[i] for i in order]
     reference = _smallest_pixel(images) if reference is None else reference
@@ -1545,7 +1671,8 @@ def rgb_composite(images, reference: FitsImage | None = None, mode: str = "rgb",
     used_display = None
     if mode == "rgb":
         if display is None or len(display) != len(images):
-            raise ImagesFitsError("RGB_INPUT_INVALID", "rgb: servono (vmin, vmax, funzione di trasferimento) per ogni componente")
+            raise ImagesFitsError("RGB_INPUT_INVALID", "rgb: servono (vmin, vmax, funzione di trasferimento) per ogni componente",
+                                  params={"reason": "display_required"})
         if wavelengths is not None:
             display = [display[i] for i in order]
         used_display = []
@@ -1566,7 +1693,9 @@ def rgb_composite(images, reference: FitsImage | None = None, mode: str = "rgb",
     else:
         a, b = resampled[0].image, resampled[1].image
         if (images[0].bunit or None) != (images[1].bunit or None):
-            raise ImagesFitsError("UNIT_MISMATCH", f"rgb_diff: unità diverse {images[0].bunit!r} e {images[1].bunit!r}")
+            raise ImagesFitsError("UNIT_MISMATCH", f"rgb_diff: unità diverse {images[0].bunit!r} e {images[1].bunit!r}",
+                                  params={"reason": "rgb_diff", "unit_a": str(images[0].bunit),
+                                          "unit_b": str(images[1].bunit)})
         diff = a.data - b.data
         finite = np.isfinite(diff)
         peak = float(np.max(np.abs(diff[finite]))) if np.any(finite) else 0.0
@@ -1596,7 +1725,8 @@ def mosaic(images, reference: FitsImage, method: str) -> Resampled:
         raise ValueError("servono immagini per il mosaico")
     units = {im.bunit or None for im in images}
     if len(units) > 1:
-        raise ImagesFitsError("UNIT_MISMATCH", f"mosaico: unità diverse {sorted(map(str, units))}")
+        raise ImagesFitsError("UNIT_MISMATCH", f"mosaico: unità diverse {sorted(map(str, units))}",
+                              params={"reason": "mosaic", "units": sorted(map(str, units))})
     for im in images:
         _check_resampling_input(im, "mosaico")
     # Per ogni ingresso: risultato e copertura; in più somma e conteggio della media.
@@ -1641,17 +1771,21 @@ def read_raw_pixel(image: FitsImage, x: int, y: int) -> np.float64:
     fuori dall'immagine o file non leggibile → ``PIXEL_RAW_UNAVAILABLE``.
     """
     if not image.format.startswith("fits"):
-        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"immagine {image.format}: nessun valore grezzo FITS")
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"immagine {image.format}: nessun valore grezzo FITS",
+                              params={"reason": "not_fits", "format": str(image.format)})
     if image.color:
-        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", "immagine a colori: solo presentazione")
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", "immagine a colori: solo presentazione",
+                              params={"reason": "color_image"})
     if image.history:
         raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", "immagine derivata (" + "; ".join(image.history)
-                              + "): i pixel non sono più quelli del file")
+                              + "): i pixel non sono più quelli del file",
+                              params={"reason": "derived", "history": list(image.history)})
     ny, nx = image.shape
     if any(isinstance(v, bool) or not isinstance(v, (int, np.integer)) for v in (x, y)) \
             or not (0 <= x < nx and 0 <= y < ny):
         raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"posizione ({x!r}, {y!r}): servono indici interi dentro "
-                              f"l'immagine {nx}×{ny} (convenzione numpy)")
+                              f"l'immagine {nx}×{ny} (convenzione numpy)",
+                              params={"reason": "position", "x": str(x), "y": str(y), "nx": int(nx), "ny": int(ny)})
     x, y = int(x), int(y)
     try:
         with fits.open(image.origin, do_not_scale_image_data=True, memmap=False) as hdul:
@@ -1659,7 +1793,9 @@ def read_raw_pixel(image: FitsImage, x: int, y: int) -> np.float64:
             value = np.asarray(section[_section_key(image.raw_ndim, image.dropped_axes, slice(y, y + 1),
                                                     slice(x, x + 1))]).ravel()[0]
     except (OSError, IndexError, ValueError, TypeError) as exc:
-        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"{image.origin}: valore grezzo non leggibile ({exc})") from exc
+        raise ImagesFitsError("PIXEL_RAW_UNAVAILABLE", f"{image.origin}: valore grezzo non leggibile ({exc})",
+                              params={"reason": "unreadable", "origin": str(image.origin),
+                                      "detail": str(exc)}) from exc
     return np.float64(value)
 
 
@@ -1702,7 +1838,8 @@ def _star_centroid_by_region(image: FitsImage, position, box_size, annulus_inner
     ny, nx = image.shape
     if bx0 < 0 or by0 < 0 or bx1 > nx - 1 or by1 > ny - 1:
         raise ImagesFitsError(
-            "CENTROID_OUT_OF_IMAGE", f"finestra o corona fuori dall'immagine {nx}×{ny}", window=(bx0, bx1, by0, by1), shape=(nx, ny)
+            "CENTROID_OUT_OF_IMAGE", f"finestra o corona fuori dall'immagine {nx}×{ny}", window=(bx0, bx1, by0, by1), shape=(nx, ny),
+            params={"nx": int(nx), "ny": int(ny)},
         )
     region = image.read_region(bx0, bx1 + 1, by0, by1 + 1)
     local = star_centroid(region, (px - bx0, py - by0), box_size, annulus_inner, annulus_outer)
@@ -1755,24 +1892,29 @@ def star_centroid(image, position, box_size: int, annulus_inner: float | None = 
             f"finestra x {x0}..{x1}, y {y0}..{y1} o corona di raggio {r_out} fuori dall'immagine {nx}×{ny}",
             window=(x0, x1, y0, y1),
             shape=(nx, ny),
+            params={"reason": "window_and_annulus", "x0": int(x0), "x1": int(x1), "y0": int(y0), "y1": int(y1),
+                    "radius": _q(r_out, "pix"), "nx": int(nx), "ny": int(ny)},
         )
 
     window = data[y0 : y1 + 1, x0 : x1 + 1].astype(np.float64)
     if not np.all(np.isfinite(window)):
-        raise ImagesFitsError("CENTROID_UNDEFINED", "pixel non finiti nella finestra del centroide")
+        raise ImagesFitsError("CENTROID_UNDEFINED", "pixel non finiti nella finestra del centroide",
+                              params={"reason": "non_finite_window"})
 
     sub = data[ay0 : ay1 + 1, ax0 : ax1 + 1].astype(np.float64)
     yy, xx = np.mgrid[ay0 : ay1 + 1, ax0 : ax1 + 1]
     r = np.hypot(xx - px, yy - py)
     ring = sub[(r >= r_in) & (r < r_out) & np.isfinite(sub)]
     if ring.size == 0:
-        raise ImagesFitsError("CENTROID_UNDEFINED", "nessun pixel finito nella corona del fondo")
+        raise ImagesFitsError("CENTROID_UNDEFINED", "nessun pixel finito nella corona del fondo",
+                              params={"reason": "no_background_pixels"})
     _, median, std = sigma_clipped_stats(ring, sigma=_CLIP_SIGMA, maxiters=_CLIP_MAXITERS)
 
     weights = window - median
     if not np.sum(weights) > 0.0:
         raise ImagesFitsError(
-            "CENTROID_UNDEFINED", "somma dei pesi ≤ 0 dopo la sottrazione del fondo: nessuna stella nella finestra"
+            "CENTROID_UNDEFINED", "somma dei pesi ≤ 0 dopo la sottrazione del fondo: nessuna stella nella finestra",
+            params={"reason": "no_flux"},
         )
     row, col = ndimage.center_of_mass(weights)
     return StarCentroid(
