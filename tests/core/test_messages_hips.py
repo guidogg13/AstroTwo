@@ -66,6 +66,7 @@ from tests.message_helpers import (
     MODULE_14_SUBVARIANTS,
     MODULE_15_SUBVARIANTS,
     MODULE_16_SUBVARIANTS,
+    MODULE_17_SUBVARIANTS,
     MODULE_19_SUBVARIANTS,
     catalog_combinations,
     check_error,
@@ -95,7 +96,7 @@ def required_combinations() -> set[tuple[str, str | None]]:
     module_13 = {("BODY_UNKNOWN", "table_body"), ("REGION_INVALID", "radius_not_angle"),
                  ("REGION_INVALID", "radius_range")}  # sotto-voci del 13 nelle voci condivise
     out = {(c, r) for c, r in catalog_combinations(OWN_CODES)
-           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS - MODULE_15_SUBVARIANTS - MODULE_16_SUBVARIANTS - MODULE_19_SUBVARIANTS
+           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS - MODULE_15_SUBVARIANTS - MODULE_16_SUBVARIANTS - MODULE_17_SUBVARIANTS - MODULE_19_SUBVARIANTS
     return out | {("HEALPIX_ORDER_INVALID", None)} | SHARED
 
 

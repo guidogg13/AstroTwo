@@ -27,7 +27,7 @@ Regole applicate in tutto il modulo:
 from __future__ import annotations
 
 import importlib.metadata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
@@ -48,6 +48,7 @@ from spherical_geometry.polygon import SphericalPolygon
 from astrotwo.core import catalogs
 from astrotwo.core.catalogs import CatalogsError, CatalogTable, skydist
 from astrotwo.core.coordinates_wcs import (
+    ModuleWarning,
     CoordinatesWcsError,
     PixelPosition,
     SkyFrame,
@@ -109,13 +110,35 @@ DISTANCE_UNITS: dict[str, u.UnitBase] = {"arcsec": u.arcsec, "arcmin": u.arcmin,
 
 
 class MeasuresError(Exception):
-    """Errore del modulo 17 con identificatore della specifica (§10)."""
+    """Errore del modulo 17 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore di un
+    modulo sotto (10, 11, 13) rilanciato con il suo codice, il suo testo e i suoi ``params``."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 relayed: bool = False, **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _q(value, unit: str) -> dict:
+    """Valore con unità in forma JSON (``params``), mai arrotondato."""
+    return {"value": float(value), "unit": unit}
+
+
+def _message_of(exc) -> dict:
+    """Messaggio annidato (tipo ``message``, D40-7) di un errore di AstroTwo: codice, ``params`` e testo suoi."""
+    return {"code": exc.code, "params": dict(getattr(exc, "params", None) or {}), "text": exc.message}
+
+
+def _relay(exc, what: str) -> MeasuresError:
+    """Errore di un modulo sotto rilanciato: codice e ``params`` restano suoi, il testo del 17 ha il prefisso."""
+    return MeasuresError(exc.code, f"{what}: {exc.message}", params=getattr(exc, "params", None), relayed=True,
+                         **getattr(exc, "details", {}))
 
 
 @dataclass(frozen=True)
@@ -128,7 +151,7 @@ class MeasureReport:
     unit: str
     image: str | None = None
     notes: tuple[str, ...] = ()
-    warnings: tuple[tuple[str, str], ...] = ()
+    warnings: tuple[ModuleWarning, ...] = ()
     measured_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     provenance: str = _PROVENANCE
 
@@ -162,7 +185,7 @@ def _describe(point: SkyFrame) -> str:
 
 
 def _from_10(exc: CoordinatesWcsError, what: str) -> MeasuresError:
-    return MeasuresError(exc.code, f"{what}: {exc.message}")
+    return _relay(exc, what)
 
 
 def _as_point(value: object, what: str) -> SkyFrame:
@@ -174,7 +197,8 @@ def _as_point(value: object, what: str) -> SkyFrame:
             raise _from_10(exc, what) from exc
     if not isinstance(value, SkyFrame):
         raise MeasuresError("FRAME_UNKNOWN", f"{what}: serve uno SkyFrame (modulo 10) o uno SkyCoord con il frame, "
-                            f"non {type(value).__name__}: il frame non si assume")
+                            f"non {type(value).__name__}: il frame non si assume",
+                            params={"reason": "measure_point", "what": what, "type": type(value).__name__})
     if value.coord.size != 1:
         raise ValueError(f"{what}: un solo punto per misura, non {value.coord.size}")
     if not value.coord.isscalar:
@@ -305,11 +329,14 @@ def position_angle(p1, p2=None) -> PositionAngle:
     a, b, notes = _points(first, second)
     separation = _separation_deg(a, b)
     if separation == 0.0:
-        raise MeasuresError("PA_UNDEFINED", "punti coincidenti: direzione non definita")
+        raise MeasuresError("PA_UNDEFINED", "punti coincidenti: direzione non definita",
+                            params={"reason": "coincident"})
     if separation == 180.0:
-        raise MeasuresError("PA_UNDEFINED", "punti antipodali: ogni direzione porta al secondo punto")
+        raise MeasuresError("PA_UNDEFINED", "punti antipodali: ogni direzione porta al secondo punto",
+                            params={"reason": "antipodal"})
     if abs(a.lat.to_value(u.deg)) == 90.0:
-        raise MeasuresError("PA_UNDEFINED", "primo punto al polo: il nord locale non è definito")
+        raise MeasuresError("PA_UNDEFINED", "primo punto al polo: il nord locale non è definito",
+                            params={"reason": "pole"})
     value = Angle(a.coord.position_angle(b.coord)).to(u.deg).wrap_at(360 * u.deg)
     report = MeasureReport(
         operation="position_angle", points=(_describe(a), _describe(b)), frame=a.frame_name, unit="deg",
@@ -330,9 +357,11 @@ def angular_offsets(p1, p2) -> AngularOffsets:
 
 def _offset_angle(value: object, what: str) -> u.Quantity:
     if not isinstance(value, u.Quantity) or not value.unit.is_equivalent(u.deg):
-        raise MeasuresError("OFFSET_INVALID", f"{what}: serve un angolo con unità, non {value!r}")
+        raise MeasuresError("OFFSET_INVALID", f"{what}: serve un angolo con unità, non {value!r}",
+                            params={"reason": "not_angle", "what": what, "value": repr(value)})
     if value.size != 1 or not np.isfinite(value.value):
-        raise MeasuresError("OFFSET_INVALID", f"{what}: un solo valore finito, non {value!r}")
+        raise MeasuresError("OFFSET_INVALID", f"{what}: un solo valore finito, non {value!r}",
+                            params={"reason": "not_finite", "what": what, "value": repr(value)})
     return value.to(u.deg).astype(np.float64)
 
 
@@ -358,7 +387,8 @@ def offset_position(p, distance, position_angle) -> OffsetPosition:
     d = _offset_angle(distance, "distance")
     pa = _offset_angle(position_angle, "position_angle")
     if d.value < 0.0 or d.value > 180.0:
-        raise MeasuresError("OFFSET_INVALID", f"distance {d!r}: serve un valore in [0°, 180°]")
+        raise MeasuresError("OFFSET_INVALID", f"distance {d!r}: serve un valore in [0°, 180°]",
+                            params={"reason": "distance_range", "distance": _q(d.value, "deg")})
     coord = start.coord.directional_offset_by(pa, d)
     report = MeasureReport(
         operation="offset_position", points=(_describe(start),), frame=start.frame_name, unit="deg",
@@ -377,7 +407,7 @@ _SAMPLE_BYTES = 6 * 8
 
 
 def _from_11(exc: ImagesFitsError, what: str) -> MeasuresError:
-    return MeasuresError(exc.code, f"{what}: {exc.message}")
+    return _relay(exc, what)
 
 
 def _image_name(image) -> str:
@@ -400,7 +430,8 @@ def _pixel_xy(image, position, what: str) -> tuple[float, float, SkyFrame | None
             raise ValueError(f"{what}: un solo punto per misura")
         x, y = float(pos.x.ravel()[0]), float(pos.y.ravel()[0])
         if not (np.isfinite(x) and np.isfinite(y)):
-            raise MeasuresError("POINT_OUT_OF_IMAGE", f"{what}: posizione non finita")
+            raise MeasuresError("POINT_OUT_OF_IMAGE", f"{what}: posizione non finita",
+                                params={"reason": "not_finite", "what": what})
         note = f"{what}: pixel dati in convenzione {position.convention}" + (
             ", convertiti in numpy con convert_pixel_convention (modulo 10)" if position.convention != "numpy" else "")
         return x, y, None, (note,)
@@ -408,21 +439,25 @@ def _pixel_xy(image, position, what: str) -> tuple[float, float, SkyFrame | None
         point = _as_point(position, what)
         if image.wcs is None:
             raise MeasuresError("NO_WCS", f"{what}: l'immagine non ha WCS; dare la posizione in pixel "
-                                "(PixelPosition) o calibrare l'immagine")
+                                "(PixelPosition) o calibrare l'immagine", params={"what": what})
         try:
             pixels = sky_to_pixel(image.wcs, point, convention="numpy").pixels
         except CoordinatesWcsError as exc:
             raise _from_10(exc, what) from exc
         x, y = float(np.ravel(pixels.x)[0]), float(np.ravel(pixels.y)[0])
         if not (np.isfinite(x) and np.isfinite(y)):
-            raise MeasuresError("POINT_OUT_OF_IMAGE", f"{what}: posizione fuori dal dominio del WCS")
+            raise MeasuresError("POINT_OUT_OF_IMAGE", f"{what}: posizione fuori dal dominio del WCS",
+                                params={"reason": "outside_wcs", "what": what})
         return x, y, point, (f"{what}: {_describe(point)} → pixel con sky_to_pixel (modulo 10)",)
     raise TypeError(f"{what}: serve un punto celeste (SkyFrame/SkyCoord) o una PixelPosition con la convenzione")
 
 
 def _bbox_error(what: str, x: float, y: float, nx: int, ny: int, allowed: str) -> MeasuresError:
+    centers = allowed.startswith("[0")  # estremi del profilo: centri dei pixel del bordo; altrimenti bordi dei pixel
     return MeasuresError("POINT_OUT_OF_IMAGE", f"{what}: pixel ({x!r}, {y!r}) (numpy) fuori da {allowed} "
-                         f"dell'immagine {nx}×{ny}", bbox=((0, nx - 1), (0, ny - 1)), position=(x, y))
+                         f"dell'immagine {nx}×{ny}", bbox=((0, nx - 1), (0, ny - 1)), position=(x, y),
+                         params={"reason": "outside_centers" if centers else "outside_pixels", "what": what,
+                                 "x": float(x), "y": float(y), "nx": int(nx), "ny": int(ny)})
 
 
 def _region(image, x0: int, x1: int, y0: int, y1: int) -> np.ndarray:
@@ -460,13 +495,16 @@ def read_pixel(image, position, *, half_size: int = 0) -> PixelReading:
     h = int(half_size)
     if ix - h < 0 or iy - h < 0 or ix + h > nx - 1 or iy + h > ny - 1:
         raise MeasuresError("POINT_OUT_OF_IMAGE", f"finestra di {2 * h + 1}×{2 * h + 1} pixel attorno a "
-                            f"({ix}, {iy}) fuori dall'immagine {nx}×{ny}", bbox=((0, nx - 1), (0, ny - 1)))
+                            f"({ix}, {iy}) fuori dall'immagine {nx}×{ny}", bbox=((0, nx - 1), (0, ny - 1)),
+                            params={"reason": "window", "size": 2 * h + 1, "x": ix, "y": iy, "nx": int(nx),
+                                    "ny": int(ny)})
     window = _region(image, ix - h, ix + h + 1, iy - h, iy + h + 1)
     value = np.float64(window[h, h])
     warnings_ = []
     if not np.all(np.isfinite(window)):
-        warnings_.append(("NONFINITE_PIXELS", f"{int(np.count_nonzero(~np.isfinite(window)))} valori non finiti "
-                          "restituiti come tali, mai sostituiti"))
+        count = int(np.count_nonzero(~np.isfinite(window)))
+        warnings_.append(ModuleWarning("NONFINITE_PIXELS", f"{count} valori non finiti restituiti come tali, mai "
+                                       "sostituiti", {"reason": "window", "count": count}))
     report = MeasureReport(
         operation="read_pixel", points=(f"pixel ({ix}, {iy}) numpy da ({x!r}, {y!r})",),
         frame=None if sky is None else sky.frame_name, unit=_unit_label(image), image=_image_name(image),
@@ -480,14 +518,17 @@ def read_pixel(image, position, *, half_size: int = 0) -> PixelReading:
 def _step_pixels(step: object) -> float:
     if isinstance(step, u.Quantity):
         if step.unit != u.pix or step.size != 1:
-            raise MeasuresError("PROFILE_STEP_INVALID", f"passo {step!r}: serve un valore in pixel (u.pix)")
+            raise MeasuresError("PROFILE_STEP_INVALID", f"passo {step!r}: serve un valore in pixel (u.pix)",
+                                params={"reason": "not_pixels", "step": repr(step)})
         value = float(step.value)
     elif isinstance(step, (int, float, np.integer, np.floating)) and not isinstance(step, bool):
         value = float(step)
     else:
-        raise MeasuresError("PROFILE_STEP_INVALID", f"passo {step!r}: serve un numero di pixel (obbligatorio, D17-5)")
+        raise MeasuresError("PROFILE_STEP_INVALID", f"passo {step!r}: serve un numero di pixel (obbligatorio, D17-5)",
+                            params={"reason": "not_number", "step": repr(step)})
     if not np.isfinite(value) or value <= 0.0:
-        raise MeasuresError("PROFILE_STEP_INVALID", f"passo {value!r}: serve un valore finito > 0")
+        raise MeasuresError("PROFILE_STEP_INVALID", f"passo {value!r}: serve un valore finito > 0",
+                            params={"reason": "not_positive", "step": repr(value)})
     return value
 
 
@@ -537,7 +578,10 @@ def _profile(image, x1, y1, x2, y2, step, notes, frame) -> Profile:
     needed = n * _SAMPLE_BYTES + (bx1 - bx0) * (by1 - by0) * 8
     if needed > limits.operation_bytes:
         raise MeasuresError("MEMORY_LIMIT_EXCEEDED", f"profilo di {n} campioni e regione di {bx1 - bx0}×{by1 - by0} "
-                            f"pixel: {needed} byte oltre il limite delle operazioni ({limits.operation_bytes})")
+                            f"pixel: {needed} byte oltre il limite delle operazioni ({limits.operation_bytes})",
+                            params={"reason": "profile", "samples": int(n), "width": int(bx1 - bx0),
+                                    "height": int(by1 - by0), "needed": _q(needed, "byte"),
+                                    "limit": _q(limits.operation_bytes, "byte")})
     region = _region(image, bx0, bx1, by0, by1)
     offsets = np.arange(n, dtype=np.float64) * step
     fraction = offsets / length if length > 0 else np.zeros(n)
@@ -546,8 +590,9 @@ def _profile(image, x1, y1, x2, y2, step, notes, frame) -> Profile:
                              cval=np.nan, output=np.float64)
     warnings_ = []
     if not np.all(np.isfinite(values)):
-        warnings_.append(("NONFINITE_PIXELS", f"{int(np.count_nonzero(~np.isfinite(values)))} campioni con un vicino "
-                          "non finito: NaN, mai sostituiti"))
+        count = int(np.count_nonzero(~np.isfinite(values)))
+        warnings_.append(ModuleWarning("NONFINITE_PIXELS", f"{count} campioni con un vicino non finito: NaN, mai "
+                                       "sostituiti", {"reason": "samples", "count": count}))
     sky = None
     if image.wcs is not None:
         try:
@@ -647,14 +692,19 @@ class ShapeMeasure:
 
 
 def _unsupported(kind: str, what: str) -> MeasuresError:
-    return MeasuresError("OPERATION_UNSUPPORTED", f"{what} non definito per {kind} (D17-7)")
+    open_path = kind == "un tracciato aperto"
+    return MeasuresError("OPERATION_UNSUPPORTED", f"{what} non definito per {kind} (D17-7)",
+                         params={"reason": "open_path", "what": what} if open_path
+                         else {"reason": "shape_kind", "what": what, "kind": kind})
 
 
 def _shape_angle(value: object, what: str) -> u.Quantity:
     if not isinstance(value, u.Quantity) or not value.unit.is_equivalent(u.deg):
-        raise MeasuresError("SHAPE_INVALID", f"{what}: serve un angolo con unità, non {value!r}", field=what)
+        raise MeasuresError("SHAPE_INVALID", f"{what}: serve un angolo con unità, non {value!r}", field=what,
+                            params={"reason": "not_angle", "what": what, "value": repr(value)})
     if value.size != 1 or not np.isfinite(value.value):
-        raise MeasuresError("SHAPE_INVALID", f"{what}: un solo valore finito, non {value!r}", field=what)
+        raise MeasuresError("SHAPE_INVALID", f"{what}: un solo valore finito, non {value!r}", field=what,
+                            params={"reason": "not_finite", "what": what, "value": repr(value)})
     return value.to(u.deg).astype(np.float64).reshape(())
 
 
@@ -665,7 +715,8 @@ def _shape_points(points: object, what: str) -> tuple[tuple[SkyFrame, ...], tupl
     if isinstance(points, (SkyFrame, SkyCoord)) or not isinstance(points, Sequence):
         raise TypeError(f"{what}: serve una sequenza di punti (SkyFrame/SkyCoord)")
     if not points:
-        raise MeasuresError("SHAPE_INVALID", f"{what}: nessun punto", field=what)
+        raise MeasuresError("SHAPE_INVALID", f"{what}: nessun punto", field=what,
+                            params={"reason": "no_points", "what": what})
     first = _as_point(points[0], f"{what}[0]")
     result, notes = [first], []
     for i, point in enumerate(points[1:], start=1):
@@ -859,7 +910,9 @@ def _arcs_enter_ellipse(ellipse: _DistanceGeometry, other: _DistanceGeometry) ->
 def _precision_not_reached(value: float, error: float, samples: int, atol: float) -> MeasuresError:
     return MeasuresError("DISTANCE_PRECISION_NOT_REACHED", f"distanza {value!r}° con stima dell'errore {error!r}° "
                          f"dopo {samples} campioni: precisione {atol!r}° non raggiunta",
-                         value=value, error=error, samples=samples)
+                         value=value, error=error, samples=samples,
+                         params={"value": _q(value, "deg"), "error": _q(error, "deg"), "samples": int(samples),
+                                 "tolerance": _q(atol, "deg")})
 
 
 def _cyclic_minima(values: np.ndarray, threshold: float) -> list[tuple[int, ...]]:
@@ -1105,7 +1158,8 @@ class Circle(Shape):
         self.center = _as_point(center, "center")
         self.radius = _shape_angle(radius, "radius")
         if not 0.0 < self.radius.value < 180.0:
-            raise MeasuresError("SHAPE_INVALID", f"radius {self.radius!r}: serve 0° < r < 180°", field="radius")
+            raise MeasuresError("SHAPE_INVALID", f"radius {self.radius!r}: serve 0° < r < 180°", field="radius",
+                                params={"reason": "radius_range", "radius": _q(self.radius.value, "deg")})
         self.frame = self.center.frame_name
 
     def contains(self, point) -> ShapeMeasure:
@@ -1149,7 +1203,9 @@ class Ellipse(Shape):
         self.position_angle = _shape_angle(position_angle, "position_angle")
         if not 0.0 < self.b.value <= self.a.value < 90.0:
             raise MeasuresError("SHAPE_INVALID", f"semiassi a = {self.a!r}, b = {self.b!r}: serve 0° < b ≤ a < 90°",
-                                field="a" if self.a.value >= 90.0 else "b")
+                                field="a" if self.a.value >= 90.0 else "b",
+                                params={"reason": "semiaxes", "a": _q(self.a.value, "deg"),
+                                        "b": _q(self.b.value, "deg")})
         self.frame = self.center.frame_name
         # Fuochi sull'asse maggiore a distanza c dal centro, cos c = cos a / cos b (Pitagora sferico), scritta
         # senza cancellazione: sin²(c/2) = (cos b − cos a) / (2 cos b) = sin((a+b)/2)·sin((a−b)/2) / cos b.
@@ -1203,7 +1259,9 @@ class Ellipse(Shape):
             if n >= ELLIPSE_MAX_SAMPLES:
                 raise MeasuresError("AREA_PRECISION_NOT_REACHED", f"area {current!r} sr con stima dell'errore "
                                     f"{error!r} sr dopo {n} campioni: rtol {rtol!r} non raggiunta",
-                                    value=current, error=error, samples=n)
+                                    value=current, error=error, samples=n,
+                                    params={"area": _q(current, "sr"), "error": _q(error, "sr"),
+                                            "samples": int(n), "rtol": float(rtol)})
             previous = current
         return ShapeMeasure(value=np.float64(current) * u.sr, shape=self.kind, error=np.float64(error) * u.sr,
                             samples=n, report=self._report(
@@ -1257,14 +1315,15 @@ class Polygon(Shape):
         points, removed = _distinct_vertices(points)
         if len(points) < 3:
             raise MeasuresError("SHAPE_INVALID", f"vertices: {len(points)} vertici distinti, ne servono almeno 3",
-                                field="vertices")
+                                field="vertices", params={"reason": "few_vertices", "count": len(points)})
         self.vertices = points
         self.frame = points[0].frame_name
         self._notes = notes + removed
         lon, lat = np.array([_lonlat_deg(p) for p in points]).T
         x, y, z = sg_vector.lonlat_to_vector(np.r_[lon, lon[0]], np.r_[lat, lat[0]], degrees=True)
         if SphericalPolygon.self_intersect(np.dstack((x, y, z))[0]):
-            raise MeasuresError("SHAPE_INVALID", "vertices: il poligono si interseca da solo", field="vertices")
+            raise MeasuresError("SHAPE_INVALID", "vertices: il poligono si interseca da solo", field="vertices",
+                                params={"reason": "self_intersects"})
         self.inside = None
         if inside is not None:
             self.inside, inside_notes = _in_frame_of(points[0], _as_point(inside, "inside"), "inside")
@@ -1276,11 +1335,13 @@ class Polygon(Shape):
         area = float(polygon.area())
         if not np.isfinite(area) or area <= 0.0 or area >= _FULL_SKY_SR:
             raise MeasuresError("SHAPE_INVALID", f"vertices: poligono degenere (area {area!r} sr; vertici su un "
-                                "cerchio massimo?)", field="vertices")
+                                "cerchio massimo?)", field="vertices",
+                                params={"reason": "degenerate", "area": _q(area, "sr")})
         if inside is None:
             if abs(area - _FULL_SKY_SR / 2.0) <= 1e-12 * _FULL_SKY_SR:
                 raise MeasuresError("SHAPE_INVALID", "le due regioni delimitate dal bordo hanno la stessa area: "
-                                    "serve il punto inside", field="inside")
+                                    "serve il punto inside", field="inside",
+                                    params={"reason": "equal_areas"})
             if area > _FULL_SKY_SR / 2.0:
                 polygon = SphericalPolygon([next(iter(polygon.polygons)).invert_polygon()])
                 area = float(polygon.area())
@@ -1401,7 +1462,7 @@ class Text(Shape):
 
     def _distance_geometry(self, reference: SkyFrame | None) -> tuple[_DistanceGeometry, tuple[str, ...]]:
         raise MeasuresError("OPERATION_UNSUPPORTED", "distance_to non definita per un testo: un'etichetta non è "
-                            "una regione (D17-9)")
+                            "una regione (D17-9)", params={"reason": "text_distance"})
 
 
 @dataclass(frozen=True)
@@ -1452,8 +1513,10 @@ class AutoDistance:
 
 
 def _from_13(exc: CatalogsError, what: str) -> MeasuresError:
-    code = "EPOCH_REQUIRED" if exc.code == "EPOCH_INVALID" else exc.code
-    return MeasuresError(code, f"{what}: {exc.message}")
+    if exc.code == "EPOCH_INVALID":
+        return MeasuresError("EPOCH_REQUIRED", f"{what}: {exc.message}",
+                             params={"reason": "epoch_invalid", "what": what, "cause": _message_of(exc)})
+    return _relay(exc, what)
 
 
 def _single_row(source: CatalogSource, what: str) -> CatalogTable:
@@ -1464,9 +1527,11 @@ def _single_row(source: CatalogSource, what: str) -> CatalogTable:
             or not 0 <= source.row < table.rows:
         raise ValueError(f"{what}: riga {source.row!r} fuori dalla tabella di {table.rows} righe")
     if table.positions is None:
-        raise MeasuresError("NO_COORD_COLUMNS", f"{what}: tabella senza colonne di posizione (confermarle nel 13)")
+        raise MeasuresError("NO_COORD_COLUMNS", f"{what}: tabella senza colonne di posizione (confermarle nel 13)",
+                            params={"reason": "measure_no_positions", "what": what})
     if table.positions.frame is None:
-        raise MeasuresError("FRAME_UNKNOWN", f"{what}: sistema delle colonne di posizione non dichiarato")
+        raise MeasuresError("FRAME_UNKNOWN", f"{what}: sistema delle colonne di posizione non dichiarato",
+                            params={"reason": "measure_columns", "what": what})
     mask = np.zeros(table.rows, dtype=bool)
     mask[int(source.row)] = True
     try:
@@ -1483,7 +1548,8 @@ def _row_position(single: CatalogTable, lon: str, lat: str, epoch, what: str) ->
     except CatalogsError as exc:
         raise _from_13(exc, what) from exc
     if not (lon_ok[0] and lat_ok[0]):
-        raise MeasuresError("NO_COORD_COLUMNS", f"{what}: posizione mancante nella riga")
+        raise MeasuresError("NO_COORD_COLUMNS", f"{what}: posizione mancante nella riga",
+                            params={"reason": "row_position_missing", "what": what})
     try:
         return SkyFrame.from_lonlat(lon_q[0], lat_q[0], pos.frame, equinox=pos.equinox, epoch=epoch)
     except CoordinatesWcsError as exc:
@@ -1497,7 +1563,8 @@ def _source_point(source: CatalogSource, what: str) -> tuple[CatalogTable, SkyFr
     except CatalogsError as exc:
         raise _from_13(exc, what) from exc
     if epochs[0] is None:
-        raise MeasuresError("EPOCH_REQUIRED", f"{what}: epoca della riga mancante ({epoch_source}): mai assunta")
+        raise MeasuresError("EPOCH_REQUIRED", f"{what}: epoca della riga mancante ({epoch_source}): mai assunta",
+                            params={"reason": "row_epoch", "what": what, "source": str(epoch_source)})
     point = _row_position(single, single.positions.lon, single.positions.lat, epochs[0], what)
     return single, point, epoch_source
 
@@ -1510,7 +1577,8 @@ def _propagated(source: CatalogSource, single: CatalogTable, target: Time, what:
     """Posizione all'epoca ``target`` con ``propagate`` del 13 (che usa ``propagate_position`` del 10)."""
     if source.pm_ra is None or source.pm_dec is None or source.pm_ra_includes_cosdec is None:
         raise MeasuresError("EPOCH_REQUIRED", f"{what}: epoca diversa da {target.jyear_str} e colonne del moto "
-                            "proprio non indicate (pm_ra, pm_dec, pm_ra_includes_cosdec): l'epoca non si assume")
+                            "proprio non indicate (pm_ra, pm_dec, pm_ra_includes_cosdec): l'epoca non si assume",
+                            params={"reason": "pm_columns", "what": what, "epoch": target.jyear_str})
     try:
         result = catalogs.propagate(single, target, pm_ra=source.pm_ra, pm_dec=source.pm_dec,
                                     pm_ra_includes_cosdec=source.pm_ra_includes_cosdec, parallax=source.parallax,
@@ -1521,7 +1589,8 @@ def _propagated(source: CatalogSource, single: CatalogTable, target: Time, what:
     mode = str(result.table.table[f"{pos.lon}_prop_mode"][0])
     if mode == "missing":
         raise MeasuresError("EPOCH_REQUIRED", f"{what}: moto proprio, posizione o epoca mancanti nella riga: "
-                            "nessuna propagazione, mai moto proprio nullo assunto")
+                            "nessuna propagazione, mai moto proprio nullo assunto",
+                            params={"reason": "row_incomplete", "what": what})
     point = _row_position(result.table, f"{pos.lon}_prop", f"{pos.lat}_prop", target, what)
     notes = "; ".join(result.notes)
     return point, f"{what} propagata a {target.jyear_str} ({mode}) da {result.source_epoch}" + (
@@ -1536,14 +1605,16 @@ def auto_distance(selection, unit, *, epoch=None) -> AutoDistance:
     sources = tuple(selection)
     if len(sources) != 2:
         raise MeasuresError("SELECTION_NOT_TWO_SOURCES", f"selezionate {len(sources)} sorgenti: ne servono 2",
-                            selected=len(sources))
+                            selected=len(sources), params={"count": len(sources)})
     if not all(isinstance(s, CatalogSource) for s in sources):
         raise TypeError("selection: servono due CatalogSource")
     bodies = [s.table.body for s in sources]
     if any(b is None for b in bodies):
-        raise MeasuresError("BODY_UNKNOWN", "corpo non dichiarato in una delle tabelle: nessuna misura")
+        raise MeasuresError("BODY_UNKNOWN", "corpo non dichiarato in una delle tabelle: nessuna misura",
+                            params={"reason": "measure_sources"})
     if bodies[0] != bodies[1]:
-        raise MeasuresError("BODY_MISMATCH", f"sorgenti di corpi diversi ({bodies[0]!r}, {bodies[1]!r})")
+        raise MeasuresError("BODY_MISMATCH", f"sorgenti di corpi diversi ({bodies[0]!r}, {bodies[1]!r})",
+                            params={"reason": "sources", "body_a": str(bodies[0]), "body_b": str(bodies[1])})
     names = ("sorgente 1", "sorgente 2")
     rows = [_source_point(s, name) for s, name in zip(sources, names, strict=True)]
     if epoch is None:

@@ -2265,3 +2265,121 @@ _add("KEY_REPEATED",
      "{count} coppie da chiavi ripetute (tutte le combinazioni).", "count:int")
 _add("NO_REQUEST",
      "A table has no rows with a position: no request.", "Una tabella non ha righe con posizione: nessuna richiesta.")
+
+# --- Modulo 17 (misure, sprint 8d) -----------------------------------------------------------------------------
+_extend("FRAME_UNKNOWN",
+        measure_point=("{what}: an SkyFrame (module 10) or a SkyCoord with the frame is required, not {type}: the "
+                       "frame is never assumed.",
+                       "{what}: serve uno SkyFrame (modulo 10) o uno SkyCoord con il frame, non {type}: il frame "
+                       "non si assume.", "what type"),
+        measure_columns=("{what}: reference system of the position columns not declared.",
+                         "{what}: sistema delle colonne di posizione non dichiarato.", "what"))
+_add("PA_UNDEFINED",
+     "The position angle is not defined.", "L'angolo di posizione non è definito.",
+     coincident=("Coincident points: direction not defined.", "Punti coincidenti: direzione non definita.", ""),
+     antipodal=("Antipodal points: every direction leads to the second point.",
+                "Punti antipodali: ogni direzione porta al secondo punto.", ""),
+     pole=("First point at the pole: the local north is not defined.",
+           "Primo punto al polo: il nord locale non è definito.", ""))
+_add("OFFSET_INVALID",
+     "The offset is not valid.", "L'offset non è valido.",
+     not_angle=("{what}: an angle with a unit is required, not {value}.",
+                "{what}: serve un angolo con unità, non {value}.", "what value"),
+     not_finite=("{what}: a single finite value is required, not {value}.",
+                 "{what}: serve un solo valore finito, non {value}.", "what value"),
+     distance_range=("distance {distance}: a value in [0°, 180°] is required.",
+                     "distance {distance}: serve un valore in [0°, 180°].", "distance:qty"))
+_add("POINT_OUT_OF_IMAGE",
+     "The point is outside the image.", "Il punto è fuori dall'immagine.",
+     not_finite=("{what}: position not finite.", "{what}: posizione non finita.", "what"),
+     outside_wcs=("{what}: position outside the domain of the WCS.",
+                  "{what}: posizione fuori dal dominio del WCS.", "what"),
+     outside_pixels=("{what}: pixel ({x}, {y}) (numpy) outside [−0.5, n − 0.5) of the {nx}×{ny} image.",
+                     "{what}: pixel ({x}, {y}) (numpy) fuori da [−0.5, n − 0.5) dell'immagine {nx}×{ny}.",
+                     "what x:num y:num nx:int ny:int"),
+     outside_centers=("{what}: pixel ({x}, {y}) (numpy) outside [0, n − 1] (centres of the edge pixels) of the "
+                      "{nx}×{ny} image.",
+                      "{what}: pixel ({x}, {y}) (numpy) fuori da [0, n − 1] (centri dei pixel del bordo) "
+                      "dell'immagine {nx}×{ny}.", "what x:num y:num nx:int ny:int"),
+     window=("Window of {size}×{size} pixels around ({x}, {y}) outside the {nx}×{ny} image.",
+             "Finestra di {size}×{size} pixel attorno a ({x}, {y}) fuori dall'immagine {nx}×{ny}.",
+             "size:int x:int y:int nx:int ny:int"))
+_add("NO_WCS",
+     "{what}: the image has no WCS; give the position in pixels (PixelPosition) or calibrate the image.",
+     "{what}: l'immagine non ha WCS; dare la posizione in pixel (PixelPosition) o calibrare l'immagine.", "what")
+_add("PROFILE_STEP_INVALID",
+     "The profile step is not valid.", "Il passo del profilo non è valido.",
+     not_pixels=("Step {step}: a value in pixels (u.pix) is required.",
+                 "Passo {step}: serve un valore in pixel (u.pix).", "step"),
+     not_number=("Step {step}: a number of pixels is required (mandatory, D17-5).",
+                 "Passo {step}: serve un numero di pixel (obbligatorio, D17-5).", "step"),
+     not_positive=("Step {step}: a finite value > 0 is required.", "Passo {step}: serve un valore finito > 0.",
+                   "step"))
+_extend("MEMORY_LIMIT_EXCEEDED",
+        profile=("Profile of {samples} samples and region of {width}×{height} pixels: {needed} above the limit of "
+                 "the operations ({limit}).",
+                 "Profilo di {samples} campioni e regione di {width}×{height} pixel: {needed} oltre il limite delle "
+                 "operazioni ({limit}).", "samples:int width:int height:int needed:qty limit:qty"))
+_extend("OPERATION_UNSUPPORTED",
+        shape_kind=("{what} is not defined for {kind} (D17-7).", "{what} non definito per {kind} (D17-7).",
+                    "what kind"),
+        open_path=("{what} is not defined for an open path (D17-7).",
+                   "{what} non definito per un tracciato aperto (D17-7).", "what"),
+        text_distance=("distance_to is not defined for a text: a label is not a region (D17-9).",
+                       "distance_to non definita per un testo: un'etichetta non è una regione (D17-9).", ""))
+_add("SHAPE_INVALID",
+     "The shape is not valid.", "La forma non è valida.",
+     not_angle=("{what}: an angle with a unit is required, not {value}.",
+                "{what}: serve un angolo con unità, non {value}.", "what value"),
+     not_finite=("{what}: a single finite value is required, not {value}.",
+                 "{what}: serve un solo valore finito, non {value}.", "what value"),
+     no_points=("{what}: no points.", "{what}: nessun punto.", "what"),
+     radius_range=("radius {radius}: 0° < r < 180° is required.", "radius {radius}: serve 0° < r < 180°.",
+                   "radius:qty"),
+     semiaxes=("semi-axes a = {a}, b = {b}: 0° < b ≤ a < 90° is required.",
+               "semiassi a = {a}, b = {b}: serve 0° < b ≤ a < 90°.", "a:qty b:qty"),
+     few_vertices=("vertices: {count} distinct vertices, at least 3 are required.",
+                   "vertices: {count} vertici distinti, ne servono almeno 3.", "count:int"),
+     self_intersects=("vertices: the polygon intersects itself.", "vertices: il poligono si interseca da solo.", ""),
+     degenerate=("vertices: degenerate polygon (area {area}; vertices on a great circle?).",
+                 "vertices: poligono degenere (area {area}; vertici su un cerchio massimo?).", "area:qty"),
+     equal_areas=("The two regions bounded by the edge have the same area: the inside point is required.",
+                  "Le due regioni delimitate dal bordo hanno la stessa area: serve il punto inside.", ""))
+_add("DISTANCE_PRECISION_NOT_REACHED",
+     "Distance {value} with error estimate {error} after {samples} samples: precision {tolerance} not reached.",
+     "Distanza {value} con stima dell'errore {error} dopo {samples} campioni: precisione {tolerance} non "
+     "raggiunta.", "value:qty error:qty samples:int tolerance:qty")
+_add("AREA_PRECISION_NOT_REACHED",
+     "Area {area} with error estimate {error} after {samples} samples: rtol {rtol} not reached.",
+     "Area {area} con stima dell'errore {error} dopo {samples} campioni: rtol {rtol} non raggiunta.",
+     "area:qty error:qty samples:int rtol:num")
+_extend("NO_COORD_COLUMNS",
+        measure_no_positions=("{what}: table without position columns (confirm them in module 13).",
+                              "{what}: tabella senza colonne di posizione (confermarle nel 13).", "what"),
+        row_position_missing=("{what}: position missing in the row.", "{what}: posizione mancante nella riga.",
+                              "what"))
+_extend("EPOCH_REQUIRED",
+        row_epoch=("{what}: epoch of the row missing ({source}): never assumed.",
+                   "{what}: epoca della riga mancante ({source}): mai assunta.", "what source!"),
+        pm_columns=("{what}: epoch different from {epoch} and proper-motion columns not given (pm_ra, pm_dec, "
+                    "pm_ra_includes_cosdec): the epoch is never assumed.",
+                    "{what}: epoca diversa da {epoch} e colonne del moto proprio non indicate (pm_ra, pm_dec, "
+                    "pm_ra_includes_cosdec): l'epoca non si assume.", "what epoch"),
+        row_incomplete=("{what}: proper motion, position or epoch missing in the row: no propagation, a null proper "
+                        "motion is never assumed.",
+                        "{what}: moto proprio, posizione o epoca mancanti nella riga: nessuna propagazione, mai "
+                        "moto proprio nullo assunto.", "what"),
+        epoch_invalid=("{what}: {cause}", "{what}: {cause}", "what cause:msg"))
+_add("SELECTION_NOT_TWO_SOURCES",
+     "{count} sources selected: 2 are required.", "Selezionate {count} sorgenti: ne servono 2.", "count:int")
+_extend("BODY_UNKNOWN",
+        measure_sources=("Body not declared in one of the tables: no measure.",
+                         "Corpo non dichiarato in una delle tabelle: nessuna misura.", ""))
+_extend("BODY_MISMATCH",
+        sources=("Sources of different bodies ({body_a}, {body_b}).", "Sorgenti di corpi diversi ({body_a}, {body_b}).",
+                 "body_a body_b"))
+_extend("NONFINITE_PIXELS",
+        window=("{count} non-finite values returned as such, never replaced.",
+                "{count} valori non finiti restituiti come tali, mai sostituiti.", "count:int"),
+        samples=("{count} samples with a non-finite neighbour: NaN, never replaced.",
+                 "{count} campioni con un vicino non finito: NaN, mai sostituiti.", "count:int"))

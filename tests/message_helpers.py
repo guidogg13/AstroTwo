@@ -141,3 +141,13 @@ MODULE_15_SUBVARIANTS = (
      ("FRAME_UNKNOWN", "crossmatch_columns"), ("SERVICE_ERROR", "echo_mismatch")}
     | {("MAX_SEP_INVALID", r) for r in ("required", "not_angle", "range_local", "range_cds")}
 )
+
+#: Sotto-voci di codici condivisi che solo il modulo 17 solleva o restituisce (provate in ``test_messages_measures.py``).
+MODULE_17_SUBVARIANTS = (
+    {("FRAME_UNKNOWN", "measure_point"), ("FRAME_UNKNOWN", "measure_columns"), ("MEMORY_LIMIT_EXCEEDED", "profile"),
+     ("NO_COORD_COLUMNS", "measure_no_positions"), ("NO_COORD_COLUMNS", "row_position_missing"),
+     ("BODY_UNKNOWN", "measure_sources"), ("BODY_MISMATCH", "sources"), ("NONFINITE_PIXELS", "window"),
+     ("NONFINITE_PIXELS", "samples")}
+    | {("OPERATION_UNSUPPORTED", r) for r in ("shape_kind", "open_path", "text_distance")}
+    | {("EPOCH_REQUIRED", r) for r in ("row_epoch", "pm_columns", "row_incomplete", "epoch_invalid")}
+)

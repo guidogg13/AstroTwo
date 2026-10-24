@@ -517,6 +517,78 @@ Scelte minori di P3:
 | Poligono che si interseca, degenere, con meno di 3 vertici distinti o con le due regioni uguali senza `inside`; ellisse con b > a, a ≥ 90°; parametri senza unità angolare | rifiuto con il campo invalido | `SHAPE_INVALID` |
 | Area dell'ellisse oltre 2¹⁶ campioni senza la precisione richiesta | nessuna area; stima raggiunta nel messaggio | `AREA_PRECISION_NOT_REACHED` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8d) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`MeasuresError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la
+coppia (codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `text`/`message`); il
+modulo **non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1).
+Il parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (colonne e metadati
+letti da una tabella). `what` è l'etichetta del punto o del parametro a cui si riferisce il messaggio (`p1`, `p2`,
+`position`, `center`, `vertices[2]`, `sorgente 1`…): una stringa del modulo, inserita così com'è. I `details` di
+prima (`field`, `bbox`, `position`, `value`, `error`, `samples`, `selected`) restano.
+
+**Errori rilanciati da altri moduli (10, 11, 13).** Gli errori del 10 (conversioni, WCS), dell'11 (lettura di
+regioni) e del 13 (sottoinsieme, propagazione) che il 17 non riscrive passano con il loro codice, i loro `params` e
+`relayed = True` (il testo del 17 ha il prefisso `what:` e resta nel campo `text`). Fa eccezione `EPOCH_INVALID`
+del 13, che il 17 trasforma in `EPOCH_REQUIRED`: è un errore del 17 (`reason` `epoch_invalid`) con l'errore del 13
+come messaggio annidato (`cause`, D40-7). Le **note** del report (`MeasureReport.notes`, `.points`) sono testo di
+provenienza del risultato, non messaggi con codice; gli avvisi del report (`MeasureReport.warnings`) sono
+`ModuleWarning`.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `FRAME_UNKNOWN` | `measure_point` | `what` (string), `type` (string) |
+| `FRAME_UNKNOWN` | `measure_columns` | `what` (string) |
+| `PA_UNDEFINED` | (generale) | — |
+| `PA_UNDEFINED` | `coincident` | — |
+| `PA_UNDEFINED` | `antipodal` | — |
+| `PA_UNDEFINED` | `pole` | — |
+| `OFFSET_INVALID` | (generale) | — |
+| `OFFSET_INVALID` | `not_angle` | `what` (string), `value` (string) |
+| `OFFSET_INVALID` | `not_finite` | `what` (string), `value` (string) |
+| `OFFSET_INVALID` | `distance_range` | `distance` (quantity, deg) |
+| `POINT_OUT_OF_IMAGE` | (generale) | — |
+| `POINT_OUT_OF_IMAGE` | `not_finite` | `what` (string) |
+| `POINT_OUT_OF_IMAGE` | `outside_wcs` | `what` (string) |
+| `POINT_OUT_OF_IMAGE` | `outside_pixels` | `what` (string), `x` (number), `y` (number), `nx` (integer), `ny` (integer) |
+| `POINT_OUT_OF_IMAGE` | `outside_centers` | `what` (string), `x` (number), `y` (number), `nx` (integer), `ny` (integer) |
+| `POINT_OUT_OF_IMAGE` | `window` | `size` (integer), `x` (integer), `y` (integer), `nx` (integer), `ny` (integer) |
+| `NO_WCS` | (generale) | `what` (string) |
+| `PROFILE_STEP_INVALID` | (generale) | — |
+| `PROFILE_STEP_INVALID` | `not_pixels` | `step` (string) |
+| `PROFILE_STEP_INVALID` | `not_number` | `step` (string) |
+| `PROFILE_STEP_INVALID` | `not_positive` | `step` (string) |
+| `MEMORY_LIMIT_EXCEEDED` | `profile` | `samples` (integer), `width` (integer), `height` (integer), `needed` (quantity, byte), `limit` (quantity, byte) |
+| `OPERATION_UNSUPPORTED` | `shape_kind` | `what` (string), `kind` (string) |
+| `OPERATION_UNSUPPORTED` | `open_path` | `what` (string) |
+| `OPERATION_UNSUPPORTED` | `text_distance` | — |
+| `SHAPE_INVALID` | (generale) | — |
+| `SHAPE_INVALID` | `not_angle` | `what` (string), `value` (string) |
+| `SHAPE_INVALID` | `not_finite` | `what` (string), `value` (string) |
+| `SHAPE_INVALID` | `no_points` | `what` (string) |
+| `SHAPE_INVALID` | `radius_range` | `radius` (quantity, deg) |
+| `SHAPE_INVALID` | `semiaxes` | `a` (quantity, deg), `b` (quantity, deg) |
+| `SHAPE_INVALID` | `few_vertices` | `count` (integer) |
+| `SHAPE_INVALID` | `self_intersects` | — |
+| `SHAPE_INVALID` | `degenerate` | `area` (quantity, sr) |
+| `SHAPE_INVALID` | `equal_areas` | — |
+| `DISTANCE_PRECISION_NOT_REACHED` | (generale) | `value` (quantity, deg), `error` (quantity, deg), `samples` (integer), `tolerance` (quantity, deg) |
+| `AREA_PRECISION_NOT_REACHED` | (generale) | `area` (quantity, sr), `error` (quantity, sr), `samples` (integer), `rtol` (number) |
+| `NO_COORD_COLUMNS` | `measure_no_positions` | `what` (string) |
+| `NO_COORD_COLUMNS` | `row_position_missing` | `what` (string) |
+| `EPOCH_REQUIRED` | `row_epoch` | `what` (string), `source` (string, esterno) |
+| `EPOCH_REQUIRED` | `pm_columns` | `what` (string), `epoch` (string) |
+| `EPOCH_REQUIRED` | `row_incomplete` | `what` (string) |
+| `EPOCH_REQUIRED` | `epoch_invalid` | `what` (string), `cause` (message: errore del 13) |
+| `SELECTION_NOT_TWO_SOURCES` | (generale) | `count` (integer) |
+| `BODY_UNKNOWN` | `measure_sources` | — |
+| `BODY_MISMATCH` | `sources` | `body_a` (string), `body_b` (string) |
+| `NONFINITE_PIXELS` (avviso) | `window` | `count` (integer) |
+| `NONFINITE_PIXELS` | `samples` | `count` (integer) |
+
 ## 11. Esposizione all'IA
 
 - **`angular_distance`** — input: due punti (gradi, ICRS) + unità; output:
@@ -661,3 +733,4 @@ arrivano solo da questi strumenti e vengono poi verificati da
 | 2026-10-13 | Claude Code | Scelte minori di P3 **confermate dal proprietario il 2026-10-13** (§3). Stato `approvato` invariato. |
 | 2026-10-13 | Claude Code | **D17-9 decisa dal proprietario il 2026-10-13** (autorizzazione esplicita a modificare il file approvato) e scritta: freccia e tracciato aperto come archi di cerchio massimo, ellisse con minimo numerico sul bordo e precisione dichiarata (`atol` 1e-9° di default, stima dell'errore e campioni nel risultato, `DISTANCE_PRECISION_NOT_REACHED`), incroci con l'ellisse riconosciuti con la funzione liscia dei fuochi (lo zero a spigolo della distanza non raggiungeva la precisione dichiarata: trovato da T21), testo `OPERATION_UNSUPPORTED` (§3 P3 scelta 10, §7, §8, §10, T20 ridotto, nuovo T21). Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | **Decisione del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato; solo specifica): D17-3 rimanda alla sessione di `05-comandi-sessione.md` invece che al `24` (§3, §4, §7, §13); `05` in "Usato da" (§5). Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

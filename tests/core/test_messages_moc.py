@@ -56,7 +56,7 @@ from tests.core.test_moc import (  # noqa: F401  (costruttori di file e tabelle 
     write_image,
     write_multiorder,
 )
-from tests.message_helpers import MODULE_14_SUBVARIANTS, MODULE_15_SUBVARIANTS, MODULE_19_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
+from tests.message_helpers import MODULE_14_SUBVARIANTS, MODULE_15_SUBVARIANTS, MODULE_17_SUBVARIANTS, MODULE_19_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
 
 #: Codici che solo il modulo 16 solleva o restituisce.
 OWN_CODES = (
@@ -332,7 +332,7 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(tmp_path, ser
                         timeouts=NetworkTimeouts(0.5, 0.5)).warnings)  # network_cached
     seen.error(read_moc, service.url + "/c.fits", cache=cache, timeouts=NetworkTimeouts(0.5, 0.5))  # NET_TIMEOUT url
 
-    missing = required_combinations() - seen.pairs - MODULE_14_SUBVARIANTS - MODULE_15_SUBVARIANTS - MODULE_19_SUBVARIANTS
+    missing = required_combinations() - seen.pairs - MODULE_14_SUBVARIANTS - MODULE_15_SUBVARIANTS - MODULE_17_SUBVARIANTS - MODULE_19_SUBVARIANTS
     assert not missing, f"errori e avvisi del 16 mai provocati nel test: {sorted(missing, key=str)}"
 
 
