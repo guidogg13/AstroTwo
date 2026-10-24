@@ -939,12 +939,19 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
   `perf` si riporta (§12). **Mac di riferimento: DECISO il 2026-10-24** (decisione del proprietario): due
   riferimenti, **minimo** = iMac21,1 con Apple M1 e 8 GB (dati nel §3.15, obiettivi P1–P6 da rispettare anche lì) e
   **comodo** = MacBook Air M5 con 32 GB (dal 2 novembre 2026; dati da compilare allora).
-- **Sprint 4h (2026-10-24): scelte minori DA CONFERMARE** — PNG (§3.14): (1) due fasi, esecutore che controlla e
+- **Sprint 4h (2026-10-24): scelte minori CONFERMATE dal proprietario il 2026-10-24 (1–10)** — PNG (§3.14): (1) due fasi, esecutore che controlla e
   finestra che scrive, errore di scrittura = messaggio `EXPORT_FAILED`; (2) misure e scheda non nel PNG; (3) riga dei
   crediti in basso a destra e testi interi nei metadati; (4) quarto file Python `export_view.py`; (5) chiavi `tEXt`
   elencate in §3.14; (6) testo del survey dichiarato dal survey stesso (`obs_ack`…). Cambio di base (§3.2): (7)
   un calcolo fallito non tiene ferma la vista; (8) tile richiesti subito e caricati al passaggio; (9) l'ultima base
   in attesa scarta le precedenti. Prestazioni (§3.15): (10) modalità di misura di TP1–TP7.
+- **D41-7 — P1 non raggiunto (fotogramma con 1 milione di simboli): APERTA il 2026-10-24 (Gruppo 3).** Misurato
+  sull'iMac21,1 M1 8 GB (TP1): 46,0 ms al 95° percentile (mediana 33,9) contro l'obiettivo di 16,7 ms; solo il
+  disegno 37,9 ms, 4,6 ms senza simboli. Causa nota: il disegno dei simboli. Obiettivo **invariato**. Si risolve in uno
+  sprint di prestazioni dopo la prova completa.
+- **D41-8 — P5 non raggiunto (avvio a freddo): APERTA il 2026-10-24 (Gruppo 3).** Misurato sullo stesso Mac (TP5):
+  4,46 s (importazioni 1,8 s, finestra 2,3 s, prima vista 0,3 s; 2,84 s su `offscreen`) contro l'obiettivo di 3 s.
+  Cause note: importazioni e creazione della finestra. Obiettivo **invariato**; stesso sprint di prestazioni.
 - **D41-5 — Zoom e spostamento su una griglia di pixel: RINVIATA a dopo la v1** (decisione del proprietario del
   2026-10-21; aperta il 2026-10-20, sprint 4d).
   Un'immagine senza WCS valido si apre come griglia di pixel (scelta del proprietario), ma i comandi

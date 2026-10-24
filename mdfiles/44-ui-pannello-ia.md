@@ -350,7 +350,7 @@ Portachiavi simulato del `31`, in `tests/ui/`.
 | T11 | Locale | profilo `http://127.0.0.1:11434` | simbolo "locale · nulla esce dal Mac" | ispezione |
 | T12 | Collegamenti e HTML | risposta con un link e un tag HTML | link non aperto da solo; HTML mostrato come testo | ispezione |
 | T13 | Modalità notte | modalità notte rossa | colori del pannello senza componente verde o blu sopra la soglia di T13 del `40` | lettura della tavolozza |
-| T14 | Reattività | risposta lenta e comando lungo | sonda del thread principale < 100 ms | sonda di latenza |
+| T14 | Reattività | risposta lenta e comando lungo | sonda del thread principale < 100 ms (annotazione del 2026-10-24: `test_t14_latency` è fallito una volta con 170 ms; da indagare nello sprint di prestazioni, D41-7/D41-8, senza alzare la soglia) | sonda di latenza |
 | T15 | Scelta del provider (2026-10-17) | aprire il menu Provider; scegliere ogni voce | voci nell'ordine di §3.6 più "Altro endpoint…"; indirizzo riempito come nel `30` §3.1.1; contrassegno su ogni provider non `verified` con il suo stato; nessun modello preselezionato; il lucchetto segue la chiave del profilo scelto | ispezione dei widget |
 
 Note sul codice (sprint 7a, 2026-10-22): test in `tests/ui/test_ai_panel.py`

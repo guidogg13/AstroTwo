@@ -227,7 +227,9 @@ Il modello riceve un JSON con:
   convenzione dei pixel dove pertinenti;
 - `provenance`: origine e data dei dati di rete o della cache, "dalla cache
   sì/no", libreria che ha calcolato (modulo · libreria);
-- `warnings`, `error`: codice e testo del modulo, invariati;
+- `warnings`, `error`: codice, `params` e **testo inglese del catalogo dei
+  messaggi** (`40` §3.7.1, D40-3; i parametri di testo esterno restano nella
+  lingua originale); se il codice non ha voce, il testo originale del modulo;
 - `layers`: livelli prodotti (`L<n>`).
 
 **Limiti fissi** (decisi il 2026-10-16):
@@ -437,4 +439,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-23 | Claude Code | Aperta **D32-1** (come l'assistente trova l'identificativo di un catalogo VizieR, Gruppo 3, §13), dalla prova reale del proprietario. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **D32-1 decisa** (proprietario, 2026-10-23): (c) identificativi del gruppo fisso nella descrizione di `catalog` (§3.4 punto 2) e (b) `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo (13); (a) rinviata a dopo la v1 come nuova **D32-2**. Test T3 esteso. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | Sprint 4g del 41: `measure__distance` porta lo schema esteso del `05` (forma cielo con `sky1`, `sky2`); `simbad.pointer` non è esposto (classe `passive`, regola di §3.2 invariata). Nessun'altra modifica; stato `approvato` invariato. |
-
+| 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** nel risultato ridotto, `warnings` ed `error` portano codice, `params` e testo inglese del catalogo (`40` §3.7.1); testo esterno invariato. Nessun codice scritto. |

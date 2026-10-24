@@ -129,10 +129,83 @@ trovato o rete assente: messaggio del 10 nel pannello Messaggi e, per 10 s, nell
   Messaggi e riga rossa nella cronologia). **Finestra modale solo se
   l'azione non può proseguire** (file illeggibile, sessione fermata dal
   `05` per un file cambiato o mancante).
-- **Lingua dei messaggi dei moduli (D40-1, decisa il 2026-10-15):** nella
-  v1 si mostrano **codice e testo del modulo invariati**, anche con
-  l'interfaccia in inglese; la traduzione dei messaggi dei moduli in
-  inglese è la decisione aperta D40-3 (Gruppo 3).
+- **Lingua dei messaggi dei moduli (D40-3, decisa il 2026-10-24; supera
+  D40-1):** ogni messaggio mostra il **testo del catalogo dei messaggi
+  (§3.7.1) nella lingua dell'interfaccia**, inglese o italiano, con il
+  **codice sempre visibile e invariato**. Il testo originale del modulo non
+  si perde: è il campo `text` del risultato (§3.7.1) e compare nel
+  dettaglio della voce ("Copia come JSON" e dettagli del comando).
+
+#### 3.7.1 Catalogo dei messaggi (D40-3)
+
+**Contratto dei moduli (modifica trasversale ai moduli 10–19, a `05`, `30`,
+`31`, `32`, `35`: sprint 8b–8d, un modulo alla volta).** Ogni errore e ogni
+avviso nasce come **codice + parametri strutturati** (`params`: dizionario
+nome → valore JSON, vedi sotto), non solo come testo italiano già
+formattato:
+
+- le eccezioni dei moduli (`CommandError`, `CatalogsError`, …) ricevono
+  `params=` con tutti i valori che oggi finiscono nel testo; gli avvisi
+  (coppie codice/testo) diventano `ResultMessage(code, text, params)`;
+- `text` resta, **invariato**: testo di diagnostica del modulo (italiano
+  oggi), mai più mostrato come testo principale quando il catalogo ha la
+  voce; serve come ripiego (§3.7.2), nei file di sessione già scritti e
+  nei test dei moduli esistenti;
+- i **valori** in `params` sono quelli del modulo, **mai arrotondati né
+  riformattati** dal catalogo: numeri JSON con la loro unità in un
+  parametro accanto (`{"value": ..., "unit": ...}`, come nei valori dei
+  comandi), stringhe così come sono, punto decimale sempre (§3.9). Un
+  valore che arriva da un servizio esterno (messaggio d'errore di un
+  servizio, nome di un file, valore di una cella) è un parametro
+  contrassegnato **testo esterno** (`external`: true nel catalogo) e si
+  inserisce tale e quale, **senza tradurlo**; nel `32` resta classificato
+  testo esterno (dato, mai istruzione);
+- i moduli scientifici **non** contengono traduzioni né dipendono dal
+  catalogo: restituiscono codice e parametri e basta (regola d'oro n. 1:
+  nessun numero viene da un testo scritto altrove).
+
+**Catalogo.** Un'unica tabella **codice → testo inglese e testo italiano**
+con segnaposto nominati (`{name}`, `{value}`, `{unit}`), in un solo file
+(`messages_catalog`) con una voce per codice, formato fisso:
+`code`, `en`, `it`, elenco dei parametri attesi (nome, tipo, `external`
+sì/no). I segnaposto si riempiono **solo per sostituzione** del valore così
+com'è (`str()` della sua rappresentazione JSON, valori con unità: valore,
+spazio, unità): nessun arrotondamento, nessuna conversione, nessuna
+formattazione locale. Una voce può avere il segnaposto in qualunque
+posizione, quindi l'ordine delle parole cambia tra le lingue senza
+problemi.
+
+**Lingua.** `message_text(code, params, lang)` restituisce il testo nella
+lingua richiesta; il pannello Messaggi, la cronologia, le finestre modali e
+le righe di errore dei pannelli usano la lingua dell'interfaccia (§3.9,
+cambio al riavvio). **Verso l'IA la lingua è sempre l'inglese**, qualunque
+sia quella dell'interfaccia (regole R1–R9 e `SYSTEM_RULES` sono in
+inglese, `35` §3.4): il risultato di un comando consegnato al modello
+contiene il codice, i parametri e il testo **inglese** del catalogo
+(`32` §3.7: campo `text` sostituito con `message_text(..., "en")`; i
+parametri `external` restano nella lingua originale, come testo esterno).
+Il pannello dell'assistente (`44`) mostra invece ciò che mostra il resto
+dell'interfaccia, nella lingua scelta.
+
+**Posizione del catalogo (D40-5, da decidere).** L'IA (livello 3) non può
+importare l'interfaccia (dipendenze solo verso il basso, regola d'oro n.
+7): il catalogo non può stare nel pacchetto `ui/`. Raccomandazione: un
+modulo neutro `src/astrotwo/messages_catalog.py` senza dipendenze (solo
+dati e `message_text`), importato sia da `ui/` sia da `ai/`; la tabella
+resta una sola, ma non è "dentro" l'interfaccia come scritto nella
+richiesta del 2026-10-24.
+
+#### 3.7.2 Codice senza voce nel catalogo
+
+- Un codice non presente nel catalogo non deve esistere (test T18): se
+  compare comunque (errore di programmazione o sessione scritta da una
+  versione più recente), l'interfaccia mostra il codice, il testo
+  originale `text` e la nota "(no translation)" / "(nessuna traduzione)";
+  all'IA va il testo originale. Non si inventa mai una traduzione.
+- Un parametro atteso ma assente dal messaggio: segnaposto lasciato visibile
+  (`{name}`) e voce di log; il messaggio si mostra comunque.
+- Sessioni scritte prima di D40-3: i messaggi senza `params` si mostrano
+  con il testo originale (come sopra); la riesecuzione non cambia.
 
 ### 3.8 Coda dei comandi e thread
 
@@ -268,7 +341,8 @@ aperta.
   attraverso il `05` (regola d'oro n. 1, `01` §3).
 - Non disegna il cielo né gestisce i livelli (`41`), non mostra tabelle
   (`42`).
-- Non riscrive né traduce i messaggi dei moduli (D40-1).
+- Non riscrive i messaggi dei moduli: li mostra tradotti dal catalogo con i
+  parametri così come sono, senza modificarne i valori (D40-3, §3.7.1).
 - Non ha "annulla/ripeti" (A12): si riesegue la cronologia.
 - Non contiene il pannello dell'assistente (è del `44`, che il 40 ospita)
   e non chiama l'IA.
@@ -376,7 +450,10 @@ simulati, in `tests/ui/`.
 | T2 | Riesegui | rieseguire tre comandi selezionati | tre nuovi comandi in coda con nuovi numeri; stesso stato del registro | confronto dello spazio di lavoro |
 | T3 | Interfaccia reattiva | servizio simulato che risponde dopo 5 s a `catalog.load_region` | sonda di latenza del thread principale sempre < 100 ms; barra di stato con avanzamento e Annulla | sonda con timer di Qt |
 | T4 | Annulla | annullare il comando di T3 | esito `cancelled`, stato invariato, voce in cronologia | ispezione |
-| T5 | Messaggi invariati | comando che produce un errore del 10 e un avviso del 13 | codice e testo identici a quelli dei moduli nel pannello Messaggi; finestra modale solo per un file illeggibile | confronto diretto |
+| T5 | Messaggi (D40-3) | comando che produce un errore del 10 e un avviso del 13, interfaccia in inglese poi in italiano | codice invariato; testo del catalogo nella lingua dell'interfaccia; valori dei parametri identici a quelli dei moduli (stringa per stringa); testo originale nei dettagli; finestra modale solo per un file illeggibile | confronto diretto |
+| T18 | Catalogo completo (D40-3) | ogni codice usato dai moduli 10–19, da `05`, `30`–`35` (scansione del codice) | ogni codice ha voce con `en` e `it`, stessi segnaposto nelle due lingue, parametri attesi dichiarati; il test **fallisce** per un codice senza voce o con una lingua mancante; nessun codice nel catalogo senza uso (avviso) | test |
+| T19 | Valori dei parametri (D40-3) | messaggio con numero, unità, nome e testo esterno, in `en` e `it` | i valori compaiono identici al parametro (nessun arrotondamento, punto decimale); testo esterno non tradotto | test |
+| T20 | Lingua verso l'IA (D40-3) | interfaccia in italiano, comando in errore eseguito dall'assistente (provider simulato) | il modello riceve codice, parametri e testo **inglese**; il pannello (`44`) mostra l'italiano | ispezione del corpo |
 | T6 | Traduzioni complete | `pyside6-lupdate` sul codice | nessuna stringa non tradotta nel file italiano; traduzione di Qt caricata | controllo del file `.ts` |
 | T7 | Punto decimale | interfaccia in italiano con località `it_IT` | coordinate, valori e parametri mostrati con il punto decimale | lettura dei testi dei widget |
 | T8 | Preferenze | cambiare le cinque preferenze, riavviare la finestra (impostazioni in cartella temporanea) | valori ritrovati; comandi `prefs.set` in cronologia di classe `application` | test |
@@ -399,13 +476,24 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   punto decimale in ogni lingua. Applicata in §3.9.
 - **D40-1 — Lingua dei messaggi dei moduli: DECISA il 2026-10-15
   (decisione del proprietario).** Nella v1 si mostrano **codice e testo del
-  modulo invariati**. Applicata in §3.7.
-- **D40-3 — Messaggi dei moduli in inglese con traduzione (aperta il
-  2026-10-15 dal proprietario, Gruppo 3):** portare i testi degli errori e
-  degli avvisi dei moduli in inglese con traduzione italiana, coerente con
-  A9. Opzioni da valutare: tabelle codice → testo dentro i moduli, oppure
-  testi inglesi con `tr()` nei moduli. Riguarda i moduli 10–19 (approvati):
-  da decidere dopo la v1.
+  modulo invariati**. Applicata in §3.7; **superata il 2026-10-24 da D40-3**.
+- **D40-3 — Messaggi dei moduli in inglese e italiano: DECISA il
+  2026-10-24 (decisione del proprietario; sprint 8 della v1).** Tutti i
+  messaggi dei moduli (errori e avvisi con codice) si mostrano nella lingua
+  dell'interfaccia; un'unica tabella codice → testo inglese/italiano con i
+  parametri inseriti senza modificarne i valori; i moduli scientifici
+  restituiscono codice e parametri; un test fallisce per un codice senza
+  traduzione; l'IA riceve sempre l'inglese. Verifica del 2026-10-24: i
+  moduli 10–19 oggi restituiscono codice + testo italiano già formattato
+  (~613 punti, solo ~152 con `details`), non codice + parametri;
+  **scelta del proprietario: modificare i moduli perché restituiscano
+  `params`** (testo originale conservato). Applicata in §3.7, §3.7.1,
+  §3.7.2, §12 (T5, T18–T20); il codice si scrive dopo l'approvazione dei
+  `.md` modificati, un modulo per sprint (8b–8d).
+- **D40-5 — Posizione del catalogo dei messaggi: DA DECIDERE (aperta il
+  2026-10-24, Gruppo 3).** Il catalogo serve all'interfaccia e all'IA
+  (livello 3): non può stare in `ui/`. Raccomandazione: modulo neutro
+  `src/astrotwo/messages_catalog.py` (§3.7.1).
 - **D40-2 — Avvio tramite URL (H18): RIMANDATA il 2026-10-15** (decisione
   del proprietario, come proposto): l'equivalente in AstroTwo (app `.dmg`,
   senza Java WebStart) si definisce nella versione successiva del 40.
@@ -490,3 +578,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6c (35):** collegamento dell'assistente alla coda (§3.8): `assistant_executor()`, `submit_command` con il `CancelToken` della risposta, attese chiuse all'uscita; test in `tests/ui/test_assistant_queue.py`. Nessun cambiamento di comportamento per l'utente. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Sprint 7a del `44`:** l'area a destra ospita il pannello dell'assistente (`AiPanel`, larghezza iniziale 400 pt) al posto dello stato vuoto; preferenze Assistant come pulsante verso le impostazioni del `44` (§3.10), chiavi `assistant/…` accettate da `prefs.set`; Save session con il testo delle conversazioni del `35` quando la casella è attiva; uscita con una risposta in corso: stessa conferma dei comandi in corso, poi Stop; `HistoryPanel.select_number` per il clic sulle schede del `44`. T6 controlla anche le traduzioni di `ui/ai_panel.py`. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Sprint 4g del 41:** `ui.set_tool` attiva davvero lo strumento nel visualizzatore (`SkyViewer.set_tool`); tre impostazioni nuove controllate da `prefs.set` e ricordate in `QSettings` per le opzioni della distanza (`tools/distance_unit`, `tools/distance_snap`, `tools/distance_box_size`, §3.10); 12 testi nuovi tradotti nel `.ts`/`.qm`. Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3 decisa (sprint 8, solo specifiche):** messaggi dei moduli nella lingua dell'interfaccia (inglese/italiano) da un catalogo codice → testo con parametri (nuove §3.7.1 e §3.7.2), verso l'IA sempre inglese; i moduli 10–19 e il `05` passano da codice + testo a codice + `params` (testo originale conservato, vedi `05`); D40-1 superata; test T5 riscritto, nuovi T18–T20; aperta D40-5 (posizione del catalogo, raccomandato un modulo neutro). Nessun codice scritto. |

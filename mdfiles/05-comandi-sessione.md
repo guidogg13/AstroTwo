@@ -103,8 +103,9 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   esecuzione né risultato.
 - **Risultato strutturato** (`CommandResult`): esito (`ok`, `error`,
   `cancelled`); valori restituiti dal modulo, **ogni numero con unità** e,
-  dove pertinente, frame, epoca e convenzione dei pixel; avvisi (codice e
-  testo del modulo); errore (codice e testo del modulo); provenienza
+  dove pertinente, frame, epoca e convenzione dei pixel; avvisi (codice,
+  testo del modulo e `params`, D40-3); errore (codice, testo del modulo e
+  `params`); provenienza
   (origine e data dei dati di rete o della cache, "dalla cache sì/no",
   librerie e versioni quando il modulo le dichiara); livelli prodotti;
   istanti di inizio e fine (UTC, ISO 8601, DC1); per i comandi di rete
@@ -125,7 +126,7 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   esecuzione.
 - **Esecuzione:** il registro chiama solo le funzioni pubbliche dichiarate
   dei moduli 04, 10–19; le eccezioni dei moduli diventano un risultato con
-  esito `error`, codice e testo del modulo invariati.
+  esito `error`, codice, testo del modulo e `params` invariati (D40-3: `ResultMessage(code, text, params)`; `params` = dizionario nome → valore JSON, facoltativo e `{}` se assente, schema della sessione compatibile all'indietro; il `05` non traduce né riscrive, la traduzione è del catalogo dei messaggi del `40` §3.7.1).
 - **Spazio di lavoro (`Workspace`):** gli oggetti prodotti dai comandi
   (immagini dell'11, tabelle del 13, MOC del 16, survey del 12, misure del
   17) con il loro identificativo di livello, più lo stato descrittivo
@@ -489,7 +490,7 @@ codice del modulo sui tipi chiusi di §3.1.
 | Nome di comando non registrato | nessuna esecuzione | `COMMAND_UNKNOWN` |
 | Parametro di tipo sbagliato, unità non convertibile, fuori intervallo, file inesistente | nessuna esecuzione, messaggio con il parametro | `COMMAND_PARAMETER_INVALID` |
 | Riferimento a un livello inesistente o rimosso | nessuna esecuzione | `LAYER_UNKNOWN` |
-| Errore di un modulo | risultato `error` con codice e testo del modulo invariati | codice del modulo |
+| Errore di un modulo | risultato `error` con codice, testo del modulo e `params` invariati (D40-3) | codice del modulo |
 | Annullamento durante l'esecuzione | risultato scartato, stato invariato, esito `cancelled` in cronologia | `COMMAND_CANCELLED` |
 | Riapertura con file cambiato | stop dichiarato, stato fino al comando precedente | `SESSION_FILE_CHANGED` |
 | Riapertura con file mancante | stop dichiarato | `SESSION_FILE_MISSING` |
@@ -719,6 +720,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** `ResultMessage` e `CommandError` portano `params` (valori JSON dei parametri del messaggio) accanto a codice e testo del modulo; il testo originale resta invariato; la lingua si sceglie nel catalogo dei messaggi del `40` §3.7.1. Nessun codice scritto. |
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario del 2026-10-15 (AM1 accettata: modulo generale di livello 1, codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; registro senza Qt con annullamento cooperativo e avanzamento; spazio di lavoro immutabile; gesti registrati a fine gesto dopo 300 ms fermo; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore. Verifica della cache del 04 da più thread prima del codice. Nuove decisioni D05-1, D05-2, D05-3. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D05-1 decisa (tre classi `session`/`passive`/`application`); D05-2 decisa (avviso senza fermarsi; impronta dei risultati di rete di ogni comando salvata nella sessione, l'avviso dice quale comando e cosa è cambiato; §3.1, §3.4, §10, T15); D05-3 rimandata; scelte minori confermate. Nessuna decisione dei Gruppi 1 e 2 resta aperta in questo file. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): campo `requested_by` nel comando, nella cronologia e nella sessione; indicatore `confirm` con il suo elenco; nuovi comandi di sola lettura `coords.resolve_name`, `catalog.search`, `catalog.describe`, `catalog.rows` (al più 50 righe), `layer.list`; blocco facoltativo `conversations` della sessione (solo su richiesta, mai riletto per rieseguire); riesecuzione dei comandi dell'IA senza chiamare l'IA; schema con gli indicatori per il `32`; test T18–T21. |
@@ -737,4 +739,3 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-21 | Claude Code | **Sprint 4f del 41 (decisione del proprietario del 2026-10-21):** `moc.open` assegna lo stile iniziale del MOC (Okabe e Ito senza il nero in ordine inverso, contatore dello stato, `fill` 0,25) e lo scrive nel risultato e nello stato (§7). Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **D32-1 (c) decisa dal proprietario (il 05 resta `approvato`):** la descrizione del parametro `catalog` di `catalog.load_region` elenca gli identificativi del gruppo fisso del 13 e dice che serve una tabella (§7, nota "Identificativi dei cataloghi nella descrizione"). |
 | 2026-10-23 | Claude Code | **`measure.distance` esteso (sprint 4g del 41, decisione del proprietario del 2026-10-23):** `layer`, `p1`, `p2` facoltativi e nuova forma cielo con `sky1`, `sky2` (§7, nota "`measure.distance` anche tra posizioni celesti"); versione 1 invariata. Stato `approvato` invariato. |
-
