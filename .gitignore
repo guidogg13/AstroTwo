@@ -31,3 +31,6 @@ htmlcov/
 .vscode/
 .idea/
 .claude/settings.local.json
+
+# sessioni salvate dall'app
+*.astrotwo.json
