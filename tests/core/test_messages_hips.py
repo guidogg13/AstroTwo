@@ -65,6 +65,7 @@ from tests.core.test_hips import (
 from tests.message_helpers import (
     MODULE_14_SUBVARIANTS,
     MODULE_16_SUBVARIANTS,
+    MODULE_19_SUBVARIANTS,
     catalog_combinations,
     check_error,
     check_message,
@@ -93,7 +94,7 @@ def required_combinations() -> set[tuple[str, str | None]]:
     module_13 = {("BODY_UNKNOWN", "table_body"), ("REGION_INVALID", "radius_not_angle"),
                  ("REGION_INVALID", "radius_range")}  # sotto-voci del 13 nelle voci condivise
     out = {(c, r) for c, r in catalog_combinations(OWN_CODES)
-           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS - MODULE_16_SUBVARIANTS
+           if r is not None or not mc.CATALOG[c].variants} - module_13 - MODULE_14_SUBVARIANTS - MODULE_16_SUBVARIANTS - MODULE_19_SUBVARIANTS
     return out | {("HEALPIX_ORDER_INVALID", None)} | SHARED
 
 
@@ -431,7 +432,8 @@ def test_every_entry_renders_with_declared_parameters():
     """Voci generali e sotto-voci dei codici del 12: si riempiono con valori di prova senza segnaposto rimasti."""
     samples = {"string": "valore", "number": 1.5, "integer": 3, "boolean": True,
                "quantity": {"value": 2.5, "unit": "s"}, "list": ["a", "b"], "object": {"k": 1},
-               "message": {"code": "HIPS_TILE_PROBLEM", "params": {"reason": "no_data"}, "text": "nessun dato"}}
+               "message": {"code": "HIPS_TILE_PROBLEM", "params": {"reason": "no_data"}, "text": "nessun dato"},
+               "messages": [{"code": "HIPS_TILE_PROBLEM", "params": {"reason": "no_data"}, "text": "nessun dato"}]}
     for code in OWN_CODES:
         entry = mc.CATALOG[code]
         for reason, params in [(None, entry.params)] + [(r, v.params) for r, v in entry.variants.items()]:

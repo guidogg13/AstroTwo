@@ -30,6 +30,7 @@ CONVERTED = {
     "core/catalogs.py": "CatalogsError",
     "core/vo_protocols.py": "VoProtocolsError",
     "core/moc.py": "MocError",
+    "core/planetary_data.py": "PlanetaryDataError",
     "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
 }
 
@@ -43,6 +44,8 @@ HELPERS = {
         "_check_memory": ("MEMORY_LIMIT_EXCEEDED", 0), "_problem": ("ASTRORES_LINK_PROBLEM", 0),
         "_catalog_unknown": ("CATALOG_UNKNOWN", 5),  # con le varianti _candidates e _candidates_limited
     },
+    "core/planetary_data.py": {"_pds_unreadable": ("PDS_UNREADABLE", 1), "_cause": ("BODY_CAUSE", 0),
+                               "result": ("BODY_CAUSE", 1), "_download_item": ("PDS_DOWNLOAD", 0)},
     "core/moc.py": {"_unreadable": ("MOC_UNREADABLE", 1), "_invalid_map": ("PROBABILITY_MAP_INVALID", 1)},
 }
 
@@ -83,14 +86,14 @@ def scan_module(path: Path, error_name: str, helpers: dict | None = None) -> tup
             elif name == "_view_error" and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                 codes.add("VIEW_PARAMETERS_INVALID")
                 reasons.add(("VIEW_PARAMETERS_INVALID", node.args[1].value))
-            elif name in helpers and len(node.args) > helpers[name][1] and isinstance(
-                    node.args[helpers[name][1]], ast.Constant):
+            elif name in helpers and len(node.args) > helpers[name][1] and list(_constants(
+                    node.args[helpers[name][1]])):
                 code, index = helpers[name]
-                reason = node.args[index].value
                 codes.add(code)
-                reasons.add((code, reason))
-                if name == "_catalog_unknown":  # il codice aggiunge _candidates o _candidates_limited
-                    reasons.update({(code, reason + "_candidates"), (code, reason + "_candidates_limited")})
+                for reason in _constants(node.args[index]):
+                    reasons.add((code, reason))
+                    if name == "_catalog_unknown":  # il codice aggiunge _candidates o _candidates_limited
+                        reasons.update({(code, reason + "_candidates"), (code, reason + "_candidates_limited")})
             elif name == "ModuleWarning" and node.args and isinstance(node.args[0], ast.Constant):
                 code = node.args[0].value  # avviso (codice, testo, params)
                 codes.add(code)

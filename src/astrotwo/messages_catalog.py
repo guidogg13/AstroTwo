@@ -999,7 +999,7 @@ _add("HIPS_BODY_DRAFT",
      "raccomandazione IVOA.", "source body")
 _add("BODY_UNSUPPORTED",
      "{source}: {detail} (name table of module 19, D12-6): the data open on their own.",
-     "{source}: {detail} (tabella dei nomi del 19, D12-6): il dato si apre da solo.", "source detail!")
+     "{source}: {detail} (tabella dei nomi del 19, D12-6): il dato si apre da solo.", "source detail:msg")
 _add("BODY_NORMALIZED",
      "{source}: hips_body '{body}' → '{canonical}' (name table of module 19, D12-6).",
      "{source}: hips_body '{body}' → '{canonical}' (tabella dei nomi del modulo 19, D12-6).",
@@ -2009,3 +2009,140 @@ _extend("FROM_CACHE",
                           "(original {original_format}).",
                           "Copia in cache di {origin}, scaricata il {retrieved_at}, conservata in FITS IVOA "
                           "(originale {original_format}).", "origin retrieved_at original_format"))
+
+# --- Modulo 19 (dati planetari, sprint 8d) -----------------------------------------------------------------------
+_add("PLANETARY_DATA_DISABLED",
+     "{what}: planetary data are not available in this version.",
+     "{what}: i dati planetari non sono disponibili in questa versione.", "what")
+_add("PLANETARY_KERNEL_INVALID",
+     "The planetary kernel is not valid.", "Il kernel planetario non è valido.",
+     unreadable=("{path}: not readable ({detail})", "{path}: non leggibile ({detail})", "path detail!"),
+     digest=("{name}: SHA-256 {digest}, expected {expected}: kernel altered, no body constants.",
+             "{name}: SHA-256 {digest}, atteso {expected}: kernel alterato, nessuna costante dei corpi.",
+             "name digest expected"))
+_extend("BODY_UNSUPPORTED",
+        no_name=("Body {name}: a name is required; supported bodies: {supported}.",
+                 "Corpo {name}: serve un nome; corpi supportati: {supported}.", "name! supported:list"),
+        celestial=("'celestial' denotes astronomical data, not a body (D19-3).",
+                   "'celestial' indica i dati astronomici, non è un corpo (D19-3).", ""),
+        no_naif=("Body '{name}' has no NAIF code; supported bodies: {supported}.",
+                 "Corpo '{name}' senza codice NAIF; corpi supportati: {supported}.", "name! supported:list"),
+        not_in_table=("Body '{name}' (NAIF {naif_id}) is not in the body table (D19-6); supported bodies: "
+                      "{supported}.",
+                      "Corpo '{name}' (NAIF {naif_id}) non nella tabella dei corpi (D19-6); corpi supportati: "
+                      "{supported}.", "name! naif_id:int supported:list"))
+_add("BODY_CAUSE",
+     "Why the body of a layer is known or not.", "Perché il corpo di un livello è noto o no.",
+     pds_label=("{name}: body from the PDS label", "{name}: corpo dall'etichetta PDS", "name"),
+     pds_no_body=("{name}: body not declared or not normalizable in the PDS label",
+                  "{name}: corpo non dichiarato o non normalizzabile nell'etichetta PDS", "name"),
+     celestial_wcs=("{name}: celestial WCS", "{name}: WCS celeste", "name"),
+     no_wcs=("{name}: image without a celestial WCS, body not derivable",
+             "{name}: immagine senza WCS celeste, corpo non ricavabile", "name"),
+     time_moc=("{name}: temporal MOC, no body", "{name}: MOC temporale, nessun corpo", "name"),
+     no_metadata_body=("{name}: body not declared in the metadata", "{name}: corpo non dichiarato nei metadati",
+                       "name"),
+     from_metadata=("{name}: body from the metadata", "{name}: corpo dai metadati", "name"),
+     unsupported=("{name}: {cause}", "{name}: {cause}", "name cause:msg"))
+_extend("BODY_UNKNOWN",
+        layer=("{cause}: the data open on their own, they are not overlaid.",
+               "{cause}: il dato si apre da solo, non si sovrappone.", "cause:msg"),
+        overlay_unknown=("{causes}: the data are not overlaid on others (they open on their own).",
+                         "{causes}: il dato non si sovrappone ad altri (si apre da solo).", "causes:msgs"),
+        layer_alone=("{cause}: the data open on their own.", "{cause}: il dato si apre da solo.", "cause:msg"),
+        epntap_columns=("EPN-TAP columns missing from the result ({missing}): body not derivable, the table opens "
+                        "on its own.",
+                        "Colonne EPN-TAP mancanti nel risultato ({missing}): corpo non ricavabile, la tabella si "
+                        "apre da sola.", "missing:list"),
+        epntap_frames=("spatial_frame_type {frames} and target_name {targets}: a single body with "
+                       "spatial_frame_type = body is required to declare it; the table opens on its own.",
+                       "spatial_frame_type {frames} e target_name {targets}: un solo corpo con spatial_frame_type = "
+                       "body è richiesto per dichiararlo; la tabella si apre da sola.",
+                       "frames:list! targets:list!"),
+        epntap_target=("target_name '{target}': {cause}; the table opens on its own.",
+                       "target_name '{target}': {cause}; la tabella si apre da sola.", "target! cause:msg"),
+        pds_target=("Target_Identification '{target}': {cause}; the image opens on its own.",
+                    "Target_Identification '{target}': {cause}; l'immagine si apre da sola.", "target! cause:msg"),
+        pds_targets=("Target_Identification {targets}: a single body is required; the image opens on its own.",
+                     "Target_Identification {targets}: serve un solo corpo; l'immagine si apre da sola.",
+                     "targets:list!"))
+_extend("BODY_MISMATCH",
+        multiple_in_layer=("{cause}: more than one body in a single layer ({bodies})",
+                           "{cause}: più corpi in un solo livello ({bodies})", "cause:msg bodies:list"),
+        overlay=("Layers of different bodies ({involved}): overlay refused; it can be forced only with force=True, "
+                 "cited in the result.",
+                 "Livelli di corpi diversi ({involved}): sovrapposizione rifiutata; forzabile solo con force=True, "
+                 "citato nel risultato.", "involved:list"))
+_add("BODY_MISMATCH_FORCED",
+     "Overlay forced by the user between different bodies ({involved}): the consistency of the view is not "
+     "guaranteed.",
+     "Sovrapposizione forzata dall'utente tra corpi diversi ({involved}): la coerenza della vista non è garantita.",
+     "involved:list")
+_add("PLANETARY_CONVENTION_REQUIRED",
+     "{what} {value}: the convention is never assumed; values: {allowed}.",
+     "{what} {value}: la convenzione non si assume mai; valori: {allowed}.", "what value allowed:list")
+_extend("COORD_OUT_OF_RANGE",
+        planetary_not_finite=("{what} {value}: not finite.", "{what} {value}: non finita.", "what value"),
+        planetary_latitude=("Latitude {latitude} outside [−90°, +90°].", "Latitudine {latitude} fuori da [−90°, +90°].",
+                            "latitude:qty"),
+        planetary_longitude=("Longitude {longitude} outside [−180°, 360°].",
+                             "Longitudine {longitude} fuori da [−180°, 360°].", "longitude:qty"))
+_extend("ADQL_INVALID",
+        epntap_core=("EPN-TAP query: an <schema>.epn_core table is required (EPN-TAP 2.0).",
+                     "Query EPN-TAP: serve una tabella <schema>.epn_core (EPN-TAP 2.0).", ""))
+_add("PDS_UNREADABLE",
+     "The PDS product cannot be read.", "Il prodotto PDS non è leggibile.",
+     label_unreadable=("{source}: PDS4 label not readable ({detail}); no image opened.",
+                       "{source}: etichetta PDS4 non leggibile ({detail}); nessuna immagine aperta.",
+                       "source detail!"),
+     file_outside=("{source}: file '{name}' outside the folder of the label: from a URL only the files named in the "
+                   "same folder are downloaded (D19-9); no image opened.",
+                   "{source}: file '{name}' fuori dalla cartella dell'etichetta: da URL si scaricano solo i file "
+                   "nominati nella stessa cartella (D19-9); nessuna immagine aperta.", "source name!"),
+     no_files=("{source}: the label names no data files (File/file_name); no image opened.",
+               "{source}: l'etichetta non nomina file di dati (File/file_name); nessuna immagine aperta.", "source"),
+     url_form=("{source}: from a URL, http:// or https:// and the file name of the label are required (D19-9); no "
+               "image opened.",
+               "{source}: da URL servono http:// o https:// e il nome del file dell'etichetta (D19-9); nessuna "
+               "immagine aperta.", "source"),
+     pds3=("{source}: PDS3 format not yet supported (D19-8 postponed: no PDS3 library adopted); PDS4 only; no image "
+           "opened.",
+           "{source}: formato PDS3 non ancora supportato (D19-8 rimandata: nessuna libreria PDS3 adottata); solo "
+           "PDS4; nessuna immagine aperta.", "source"),
+     file_unreadable=("{source}: file not readable ({detail}); no image opened.",
+                      "{source}: file non leggibile ({detail}); nessuna immagine aperta.", "source detail!"),
+     pds4_tools_error=("{source}: PDS4 label not readable with pds4_tools ({detail}); no image opened.",
+                       "{source}: etichetta PDS4 non leggibile con pds4_tools ({detail}); nessuna immagine aperta.",
+                       "source detail!"),
+     no_image=("{source}: no Array_2D image in the product; no image opened.",
+               "{source}: nessuna immagine Array_2D nel prodotto; nessuna immagine aperta.", "source"),
+     data_unreadable=("{source}: data of '{structure}' not readable ({detail}); no image opened.",
+                      "{source}: dati di '{structure}' non leggibili ({detail}); nessuna immagine aperta.",
+                      "source structure! detail!"))
+_add("PDS_STRUCTURE_CHOICE_REQUIRED",
+     "Say which image of the product to open.", "Indicare quale immagine del prodotto aprire.",
+     several=("{source}: more images in the product ({structures}): indicate structure.",
+              "{source}: più immagini nel prodotto ({structures}): indicare structure.", "source structures:list!"),
+     absent=("{source}: structure '{structure}' is absent; images: {structures}.",
+             "{source}: struttura '{structure}' assente; immagini: {structures}.",
+             "source structure! structures:list!"))
+_extend("BODY_NORMALIZED",
+        pds_target=("Target_Identification '{target}' → '{body}' (D12-6).",
+                    "Target_Identification '{target}' → '{body}' (D12-6).", "target! body"),
+        epntap_target=("target_name '{target}' → '{canonical}' (name table, D12-6).",
+                       "target_name '{target}' → '{canonical}' (tabella dei nomi, D12-6).", "target! canonical"))
+_add("PLANETARY_CONVENTIONS",
+     "Planetocentric coordinates, longitude positive towards the east in 0–360° (EPN-TAP 2.0, spatial_frame_type = "
+     "body).",
+     "Coordinate planetocentriche, longitudine positiva verso est in 0–360° (EPN-TAP 2.0, spatial_frame_type = "
+     "body).")
+_add("PDS_SPECIAL_CONSTANTS",
+     "{count} pixels with special constants of the label → NaN.",
+     "{count} pixel con costanti speciali dell'etichetta → NaN.", "count:int")
+_add("PDS_DOWNLOADED",
+     "PDS4 product from a URL (D19-9): {sources}", "Prodotto PDS4 da URL (D19-9): {sources}", "sources:msgs")
+_add("PDS_DOWNLOAD",
+     "Downloaded file.", "File scaricato.",
+     cached=("{url} (copy from the cache of {retrieved_at})", "{url} (copia in cache del {retrieved_at})",
+             "url retrieved_at"),
+     downloaded=("{url} (downloaded on {retrieved_at})", "{url} (scaricato il {retrieved_at})", "url retrieved_at"))

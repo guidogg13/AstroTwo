@@ -26,7 +26,7 @@ import hashlib
 import importlib.metadata
 import re
 import threading
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +35,8 @@ import astropy.units as u
 import numpy as np
 import spiceypy
 from spiceypy.utils.exceptions import SpiceyError
+
+from astrotwo.core.coordinates_wcs import ModuleWarning
 
 __all__ = [
     "BODY_TABLE",
@@ -87,13 +89,30 @@ BODY_TABLE: dict[int, str] = {
 
 
 class PlanetaryDataError(Exception):
-    """Errore del modulo 19 con identificatore della specifica (§10)."""
+    """Errore del modulo 19 con identificatore della specifica (§10).
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    ``params``: valori JSON del messaggio (D40-3); la traduzione è del catalogo del 40. ``relayed``: errore del 14
+    rilanciato con il suo codice, il suo testo e i suoi ``params`` (§10, "Parametri dei messaggi")."""
+
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 relayed: bool = False, **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})
+        self.relayed = relayed
         self.details = details
+
+
+def _message_of(exc) -> dict:
+    """Messaggio annidato (tipo ``message``, D40-7) di un errore di AstroTwo: codice, ``params`` e testo suoi."""
+    return {"code": exc.code, "params": dict(getattr(exc, "params", None) or {}), "text": exc.message}
+
+
+def _relay(exc, text: str) -> PlanetaryDataError:
+    """Errore del 14 rilanciato: codice e ``params`` restano suoi, il testo del 19 ha il prefisso."""
+    return PlanetaryDataError(exc.code, text, params=getattr(exc, "params", None), relayed=True,
+                              **getattr(exc, "details", {}))
 
 
 @dataclass(frozen=True)
@@ -142,7 +161,8 @@ def _require_enabled(what: str) -> None:
     if not _ENABLED:
         # nessuna preferenza per accenderli nella v1: il testo non la cita (decisione del proprietario del 2026-10-21)
         raise PlanetaryDataError("PLANETARY_DATA_DISABLED",
-                                 f"{what}: i dati planetari non sono disponibili in questa versione")
+                                 f"{what}: i dati planetari non sono disponibili in questa versione",
+                                 params={"what": what})
 
 
 # --------------------------------------------------------------------------
@@ -167,12 +187,20 @@ def _load_kernel() -> None:
         try:
             digest = hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest()
         except OSError as exc:
-            raise PlanetaryDataError("PLANETARY_KERNEL_INVALID", f"{KERNEL_PATH}: non leggibile ({exc})") from exc
+            raise PlanetaryDataError("PLANETARY_KERNEL_INVALID", f"{KERNEL_PATH}: non leggibile ({exc})",
+                                     params={"reason": "unreadable", "path": str(KERNEL_PATH),
+                                             "detail": str(exc)}) from exc
         if digest != KERNEL_SHA256:
             raise PlanetaryDataError("PLANETARY_KERNEL_INVALID", f"{KERNEL_PATH.name}: SHA-256 {digest}, atteso "
-                                     f"{KERNEL_SHA256}: kernel alterato, nessuna costante dei corpi")
+                                     f"{KERNEL_SHA256}: kernel alterato, nessuna costante dei corpi",
+                                     params={"reason": "digest", "name": KERNEL_PATH.name, "digest": digest,
+                                             "expected": KERNEL_SHA256})
         spiceypy.furnsh(str(KERNEL_PATH))
         _KERNEL_LOADED = True
+
+
+def _supported_list() -> list[str]:
+    return [BODY_TABLE[k] for k in sorted(BODY_TABLE, key=BODY_TABLE.get)]
 
 
 def _supported() -> str:
@@ -187,18 +215,23 @@ def normalize_body_name(name: object) -> str:
     """
     if not isinstance(name, str) or not name.strip():
         raise PlanetaryDataError("BODY_UNSUPPORTED", f"corpo {name!r}: serve un nome; corpi supportati: "
-                                 f"{_supported()}")
+                                 f"{_supported()}", params={"reason": "no_name", "name": repr(name),
+                                                            "supported": _supported_list()})
     text = name.strip()
     if text.lower() == CELESTIAL:
-        raise PlanetaryDataError("BODY_UNSUPPORTED", "'celestial' indica i dati astronomici, non è un corpo (D19-3)")
+        raise PlanetaryDataError("BODY_UNSUPPORTED", "'celestial' indica i dati astronomici, non è un corpo (D19-3)",
+                                 params={"reason": "celestial"})
     try:
         code = int(spiceypy.bodn2c(text))
     except SpiceyError as exc:
         raise PlanetaryDataError("BODY_UNSUPPORTED", f"corpo {text!r} senza codice NAIF; corpi supportati: "
-                                 f"{_supported()}") from exc
+                                 f"{_supported()}", params={"reason": "no_naif", "name": text,
+                                                            "supported": _supported_list()}) from exc
     if code not in BODY_TABLE:
         raise PlanetaryDataError("BODY_UNSUPPORTED", f"corpo {text!r} (NAIF {code}) non nella tabella dei corpi "
-                                 f"(D19-6); corpi supportati: {_supported()}", naif_id=code)
+                                 f"(D19-6); corpi supportati: {_supported()}", naif_id=code,
+                                 params={"reason": "not_in_table", "name": text, "naif_id": code,
+                                         "supported": _supported_list()})
     return BODY_TABLE[code]
 
 
@@ -249,30 +282,42 @@ def _describe_layer(layer) -> str:
     return type(layer).__name__
 
 
-def _bodies_of(layer) -> tuple[tuple[str, ...] | None, str]:
-    """(corpi del livello — ``("celestial",)`` per i dati astronomici — oppure None se ignoto, motivo)."""
+def _cause(reason: str, name: str, **params: object) -> dict:
+    """Motivo del corpo di un livello: messaggio annidato ``BODY_CAUSE`` (D40-7)."""
+    return {"code": "BODY_CAUSE", "params": {"reason": reason, "name": name, **params}, "text": ""}
+
+
+def _bodies_of(layer) -> tuple[tuple[str, ...] | None, str, dict]:
+    """(corpi del livello — ``("celestial",)`` per i dati astronomici — oppure None se ignoto, motivo in testo,
+    motivo come messaggio annidato ``BODY_CAUSE``)."""
     from astrotwo.core.catalogs import CatalogTable
     from astrotwo.core.hips import HiPSService
     from astrotwo.core.images_fits import FitsImage
     from astrotwo.core.moc import MIXED_BODY, Moc
 
     name = _describe_layer(layer)
+
+    def result(bodies, reason: str, text: str, **params):
+        cause = _cause(reason, name, **params)
+        cause["text"] = text
+        return bodies, text, cause
+
     if isinstance(layer, PdsImage):
         if layer.body is None:
-            return None, f"{name}: corpo non dichiarato o non normalizzabile nell'etichetta PDS"
-        return (layer.body,), f"{name}: corpo dall'etichetta PDS"
+            return result(None, "pds_no_body", f"{name}: corpo non dichiarato o non normalizzabile nell'etichetta PDS")
+        return result((layer.body,), "pds_label", f"{name}: corpo dall'etichetta PDS")
     if isinstance(layer, FitsImage):
         if layer.wcs is not None:
-            return (CELESTIAL,), f"{name}: WCS celeste"
-        return None, f"{name}: immagine senza WCS celeste, corpo non ricavabile"
+            return result((CELESTIAL,), "celestial_wcs", f"{name}: WCS celeste")
+        return result(None, "no_wcs", f"{name}: immagine senza WCS celeste, corpo non ricavabile")
     if isinstance(layer, Moc):
         if layer.body is None:
-            return None, f"{name}: MOC temporale, nessun corpo"
+            return result(None, "time_moc", f"{name}: MOC temporale, nessun corpo")
         raw = layer.bodies if layer.body == MIXED_BODY else (layer.body,)
     elif isinstance(layer, (HiPSService, CatalogTable)):
         value = layer.body
         if value is None:
-            return None, f"{name}: corpo non dichiarato nei metadati"
+            return result(None, "no_metadata_body", f"{name}: corpo non dichiarato nei metadati")
         raw = (value,)
     else:
         raise TypeError(f"body_of: tipo {type(layer).__name__} non previsto (HiPS, tabella, MOC, immagine)")
@@ -284,18 +329,20 @@ def _bodies_of(layer) -> tuple[tuple[str, ...] | None, str]:
         try:
             bodies.append(normalize_body_name(value))
         except PlanetaryDataError as exc:
-            return None, f"{name}: {exc.message}"
-    return tuple(dict.fromkeys(bodies)), f"{name}: corpo dai metadati"
+            return result(None, "unsupported", f"{name}: {exc.message}", cause=_message_of(exc))
+    return result(tuple(dict.fromkeys(bodies)), "from_metadata", f"{name}: corpo dai metadati")
 
 
 def body_of(dataset) -> str:
     """Corpo dichiarato nei metadati: ``celestial`` o il nome canonico; ignoto → ``BODY_UNKNOWN``."""
-    bodies, reason = _bodies_of(dataset)
+    bodies, reason, cause = _bodies_of(dataset)
     if bodies is None:
-        raise PlanetaryDataError("BODY_UNKNOWN", f"{reason}: il dato si apre da solo, non si sovrappone")
+        raise PlanetaryDataError("BODY_UNKNOWN", f"{reason}: il dato si apre da solo, non si sovrappone",
+                                 params={"reason": "layer", "cause": cause})
     if len(bodies) > 1:
         raise PlanetaryDataError("BODY_MISMATCH", f"{reason}: più corpi in un solo livello ({', '.join(bodies)})",
-                                 bodies=bodies)
+                                 bodies=bodies,
+                                 params={"reason": "multiple_in_layer", "cause": cause, "bodies": list(bodies)})
     if bodies[0] != CELESTIAL:
         _require_enabled("body_of")
     return bodies[0]
@@ -309,7 +356,7 @@ class OverlayCheck:
     bodies: tuple[str, ...]
     forced: bool
     layers: tuple[str, ...]
-    warnings: tuple[tuple[str, str], ...]
+    warnings: tuple[ModuleWarning, ...]
     command: PlanetaryCommand
     checked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -329,29 +376,33 @@ def check_overlay(layers, force: bool = False) -> OverlayCheck:
     command = PlanetaryCommand("check_overlay", (("layers", names), ("force", force)))
     found = [_bodies_of(layer) for layer in layers]
     if len(layers) == 1:
-        bodies, reason = found[0]
+        bodies, reason, cause = found[0]
         if bodies is not None and any(b != CELESTIAL for b in bodies):
             _require_enabled("check_overlay")
-        notes = () if bodies is not None else (("BODY_UNKNOWN", f"{reason}: il dato si apre da solo"),)
+        notes = () if bodies is not None else (ModuleWarning(
+            "BODY_UNKNOWN", f"{reason}: il dato si apre da solo", {"reason": "layer_alone", "cause": cause}),)
         common = bodies[0] if bodies is not None and len(bodies) == 1 else None
         return OverlayCheck(common, bodies or (), False, names, notes, command)
-    unknown = [reason for bodies, reason in found if bodies is None]
+    unknown = [(reason, cause) for bodies, reason, cause in found if bodies is None]
     if unknown:
-        raise PlanetaryDataError("BODY_UNKNOWN", "; ".join(unknown) + ": il dato non si sovrappone ad altri "
-                                 "(si apre da solo)")
-    all_bodies = tuple(dict.fromkeys(b for bodies, _ in found for b in bodies))
-    involved = ", ".join(f"{n} → {'/'.join(bodies)}" for n, (bodies, _) in zip(names, found))
+        raise PlanetaryDataError("BODY_UNKNOWN", "; ".join(r for r, _ in unknown) + ": il dato non si sovrappone ad "
+                                 "altri (si apre da solo)",
+                                 params={"reason": "overlay_unknown", "causes": [c for _, c in unknown]})
+    all_bodies = tuple(dict.fromkeys(b for bodies, _, _ in found for b in bodies))
+    involved_list = [f"{n} → {'/'.join(bodies)}" for n, (bodies, _, _) in zip(names, found)]
+    involved = ", ".join(involved_list)
     # Corpi diversi senza forzatura: sempre BODY_MISMATCH, anche con l'opzione spenta (decisione del proprietario
     # del 2026-10-21); l'opzione si controlla solo se la sovrapposizione passerebbe.
     if len(all_bodies) > 1 and not force:
         raise PlanetaryDataError("BODY_MISMATCH", f"livelli di corpi diversi ({involved}): sovrapposizione "
-                                 "rifiutata; forzabile solo con force=True, citato nel risultato", bodies=all_bodies)
+                                 "rifiutata; forzabile solo con force=True, citato nel risultato", bodies=all_bodies,
+                                 params={"reason": "overlay", "involved": involved_list})
     if any(b != CELESTIAL for b in all_bodies):
         _require_enabled("check_overlay")
     if len(all_bodies) == 1:
         return OverlayCheck(all_bodies[0], all_bodies, False, names, (), command)
-    warning = ("BODY_MISMATCH_FORCED", f"sovrapposizione forzata dall'utente tra corpi diversi ({involved}): la "
-               "coerenza della vista non è garantita")
+    warning = ModuleWarning("BODY_MISMATCH_FORCED", f"sovrapposizione forzata dall'utente tra corpi diversi "
+                            f"({involved}): la coerenza della vista non è garantita", {"involved": involved_list})
     return OverlayCheck(None, all_bodies, True, names, (warning,), command)
 
 
@@ -366,7 +417,8 @@ LONGITUDE_DIRECTIONS = ("east", "west")
 def _convention(value: object, allowed: tuple[str, ...], what: str) -> str:
     if value not in allowed:
         raise PlanetaryDataError("PLANETARY_CONVENTION_REQUIRED", f"{what} {value!r}: la convenzione non si assume "
-                                 f"mai; valori: {', '.join(allowed)}")
+                                 f"mai; valori: {', '.join(allowed)}",
+                                 params={"what": what, "value": repr(value), "allowed": list(allowed)})
     return value
 
 
@@ -375,7 +427,8 @@ def _angle_deg(value: object, what: str) -> np.float64:
         raise TypeError(f"{what}: serve un angolo con unità (Quantity), non {value!r}")
     number = np.float64(value.to_value(u.deg))
     if not np.isfinite(number):
-        raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"{what} {value!r}: non finita")
+        raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"{what} {value!r}: non finita",
+                                 params={"reason": "planetary_not_finite", "what": what, "value": repr(value)})
     return number
 
 
@@ -406,9 +459,13 @@ class PlanetaryPosition:
             raise TypeError("body: serve un PlanetaryBody o il nome del corpo (il corpo non si assume)")
         lon, lat = _angle_deg(self.lon, "lon"), _angle_deg(self.lat, "lat")
         if not -90.0 <= lat <= 90.0:
-            raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"latitudine {lat!r}° fuori da [−90°, +90°]")
+            raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"latitudine {lat!r}° fuori da [−90°, +90°]",
+                                     params={"reason": "planetary_latitude",
+                                             "latitude": {"value": float(lat), "unit": "deg"}})
         if not -180.0 <= lon <= 360.0:
-            raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"longitudine {lon!r}° fuori da [−180°, 360°]")
+            raise PlanetaryDataError("COORD_OUT_OF_RANGE", f"longitudine {lon!r}° fuori da [−180°, 360°]",
+                                     params={"reason": "planetary_longitude",
+                                             "longitude": {"value": float(lon), "unit": "deg"}})
         object.__setattr__(self, "lon", np.float64(lon % 360.0) * u.deg)
         object.__setattr__(self, "lat", lat * u.deg)
 
@@ -562,29 +619,36 @@ def _distinct(column) -> set[str]:
     return values
 
 
-def _epntap_body(table) -> tuple[str | None, list[tuple[str, str]], dict]:
+def _epntap_body(table) -> tuple[str | None, list[ModuleWarning], dict]:
     """Corpo della tabella EPN-TAP (§3 scelta 8) e convenzioni da dichiarare nei metadati."""
     frames_col, targets_col = _column(table, "spatial_frame_type"), _column(table, "target_name")
     if frames_col is None or targets_col is None:
         missing = [n for n, c in (("spatial_frame_type", frames_col), ("target_name", targets_col)) if c is None]
-        return None, [("BODY_UNKNOWN", f"colonne EPN-TAP mancanti nel risultato ({', '.join(missing)}): corpo non "
-                       "ricavabile, la tabella si apre da sola")], {}
+        return None, [ModuleWarning("BODY_UNKNOWN", f"colonne EPN-TAP mancanti nel risultato ({', '.join(missing)}): "
+                                    "corpo non ricavabile, la tabella si apre da sola",
+                                    {"reason": "epntap_columns", "missing": missing})], {}
     frames = {f.lower() for f in _distinct(frames_col)}
     if frames == {"celestial"}:
         return CELESTIAL, [], {}
     targets = _distinct(targets_col)
     if frames != {"body"} or len(targets) != 1 or "" in targets or any("#" in t for t in targets):
-        return None, [("BODY_UNKNOWN", f"spatial_frame_type {sorted(frames)} e target_name {sorted(targets)[:5]}: "
-                       "un solo corpo con spatial_frame_type = body è richiesto per dichiararlo; la tabella si apre "
-                       "da sola")], {}
+        return None, [ModuleWarning("BODY_UNKNOWN", f"spatial_frame_type {sorted(frames)} e target_name "
+                                    f"{sorted(targets)[:5]}: un solo corpo con spatial_frame_type = body è richiesto "
+                                    "per dichiararlo; la tabella si apre da sola",
+                                    {"reason": "epntap_frames", "frames": sorted(frames),
+                                     "targets": sorted(targets)[:5]})], {}
     target = targets.pop()
     try:
         canonical = normalize_body_name(target)
     except PlanetaryDataError as exc:
-        return None, [("BODY_UNKNOWN", f"target_name {target!r}: {exc.message}; la tabella si apre da sola")], {}
-    return canonical, [("BODY_NORMALIZED", f"target_name {target!r} → {canonical!r} (tabella dei nomi, D12-6)"),
-                       ("PLANETARY_CONVENTIONS", "coordinate planetocentriche, longitudine positiva verso est in "
-                        "0–360° (EPN-TAP 2.0, spatial_frame_type = body)")], dict(EPNTAP_CONVENTIONS)
+        return None, [ModuleWarning("BODY_UNKNOWN", f"target_name {target!r}: {exc.message}; la tabella si apre da "
+                                    "sola", {"reason": "epntap_target", "target": target,
+                                             "cause": _message_of(exc)})], {}
+    return canonical, [ModuleWarning("BODY_NORMALIZED", f"target_name {target!r} → {canonical!r} (tabella dei nomi, "
+                                     "D12-6)", {"reason": "epntap_target", "target": target, "canonical": canonical}),
+                       ModuleWarning("PLANETARY_CONVENTIONS", "coordinate planetocentriche, longitudine positiva "
+                                     "verso est in 0–360° (EPN-TAP 2.0, spatial_frame_type = body)")
+                       ], dict(EPNTAP_CONVENTIONS)
 
 
 def query_epntap(service: str, adql: str, **tap_options):
@@ -596,11 +660,12 @@ def query_epntap(service: str, adql: str, **tap_options):
 
     _require_enabled("query_epntap")
     if not isinstance(adql, str) or not _EPN_CORE.search(adql):
-        raise PlanetaryDataError("ADQL_INVALID", "query EPN-TAP: serve una tabella <schema>.epn_core (EPN-TAP 2.0)")
+        raise PlanetaryDataError("ADQL_INVALID", "query EPN-TAP: serve una tabella <schema>.epn_core (EPN-TAP 2.0)",
+                                 params={"reason": "epntap_core"})
     try:
         result = vo.tap_query(service, adql, **tap_options)
     except vo.VoProtocolsError as exc:
-        raise PlanetaryDataError(exc.code, f"EPN-TAP {service}: {exc.message}") from exc
+        raise _relay(exc, f"EPN-TAP {service}: {exc.message}") from exc
     body, notes, conventions = _epntap_body(result.table.table)
     table = result.table
     table.table.meta.update({"body": body, **{f"planetary_{k}": v for k, v in conventions.items()}})
@@ -626,15 +691,17 @@ class PdsImage:
     targets: tuple[str, ...]
     element_array: dict
     special_pixels: int
-    warnings: tuple[tuple[str, str], ...]
+    warnings: tuple[ModuleWarning, ...]
     library: str
     command: PlanetaryCommand
     read_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     downloads: tuple[tuple[str, str, bool], ...] = ()  # da URL (D19-9): (URL, data di scaricamento ISO, da cache)
 
 
-def _pds_unreadable(source: str, reason: str) -> PlanetaryDataError:
-    return PlanetaryDataError("PDS_UNREADABLE", f"{source}: {reason}; nessuna immagine aperta")
+def _pds_unreadable(source: str, reason: str, text: str, **params: object) -> PlanetaryDataError:
+    """``PDS_UNREADABLE``: ``reason`` è l'identificatore della sotto-voce, ``text`` il motivo in italiano."""
+    return PlanetaryDataError("PDS_UNREADABLE", f"{source}: {text}; nessuna immagine aperta",
+                              params={"reason": reason, "source": source, **params})
 
 
 _URL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
@@ -649,7 +716,8 @@ def _label_file_names(label: bytes, source: str) -> tuple[str, ...]:
     try:
         root = ET.fromstring(label)
     except ET.ParseError as exc:
-        raise _pds_unreadable(source, f"etichetta PDS4 non leggibile ({exc})") from exc
+        raise _pds_unreadable(source, "label_unreadable", f"etichetta PDS4 non leggibile ({exc})",
+                              detail=str(exc)) from exc
     names = []
     for parent in root.iter():
         if parent.tag.rsplit("}", 1)[-1] != "File":
@@ -658,12 +726,13 @@ def _label_file_names(label: bytes, source: str) -> tuple[str, ...]:
             if child.tag.rsplit("}", 1)[-1] == "file_name" and child.text and child.text.strip():
                 name = child.text.strip()
                 if "/" in name or "\\" in name or name in (".", "..") or name.startswith("."):
-                    raise _pds_unreadable(source, f"file {name!r} fuori dalla cartella dell'etichetta: da URL si "
-                                          "scaricano solo i file nominati nella stessa cartella (D19-9)")
+                    raise _pds_unreadable(source, "file_outside", f"file {name!r} fuori dalla cartella dell'etichetta: da "
+                                          "URL si scaricano solo i file nominati nella stessa cartella (D19-9)",
+                                          name=name)
                 if name not in names:
                     names.append(name)
     if not names:
-        raise _pds_unreadable(source, "l'etichetta non nomina file di dati (File/file_name)")
+        raise _pds_unreadable(source, "no_files", "l'etichetta non nomina file di dati (File/file_name)")
     return tuple(names)
 
 
@@ -679,14 +748,15 @@ def _download_product(url: str, cache, refresh: bool, timeouts) -> tuple[Path, t
     parts = urllib.parse.urlsplit(url)
     label_name = urllib.parse.unquote(parts.path.rsplit("/", 1)[-1])
     if parts.scheme.lower() not in ("http", "https") or not parts.netloc or not label_name:
-        raise _pds_unreadable(url, "da URL servono http:// o https:// e il nome del file dell'etichetta (D19-9)")
+        raise _pds_unreadable(url, "url_form", "da URL servono http:// o https:// e il nome del file dell'etichetta "
+                              "(D19-9)")
     downloads, notes = [], []
 
     def fetch(file_url: str) -> bytes:
         try:
             response = vo._http("download", file_url, cache=cache, refresh=refresh, timeouts=timeouts)
         except vo.VoProtocolsError as exc:
-            raise PlanetaryDataError(exc.code, f"PDS {file_url}: {exc.message}", url=file_url) from exc
+            raise _relay(exc, f"PDS {file_url}: {exc.message}") from exc
         notes.extend(response.notes)
         notes.extend(vo._store(response, "download", cache))
         downloads.append((file_url, response.retrieved_at.isoformat(), response.from_cache))
@@ -694,7 +764,7 @@ def _download_product(url: str, cache, refresh: bool, timeouts) -> tuple[Path, t
 
     label = fetch(url)
     if b"PDS_VERSION_ID" in label[:200]:
-        raise _pds_unreadable(url, _PDS3_MESSAGE)
+        raise _pds_unreadable(url, "pds3", _PDS3_MESSAGE)
     folder = Path(tempfile.mkdtemp(prefix="astrotwo-pds-"))
     files = {label_name: label}
     for name in _label_file_names(label, url):
@@ -730,8 +800,15 @@ def load_pds_image(source: str, *, structure: str | None = None, cache=None, ref
     finally:
         shutil.rmtree(path.parent, ignore_errors=True)
     sources = "; ".join(f"{u} ({'copia in cache del' if c else 'scaricato il'} {t})" for u, t, c in downloads)
-    return dataclasses.replace(image, downloads=downloads, warnings=image.warnings + notes + (
-        ("PDS_DOWNLOADED", f"prodotto PDS4 da URL (D19-9): {sources}"),))
+    items = [_download_item("cached" if c else "downloaded", f"{u} ({'copia in cache del' if c else 'scaricato il'} {t})",
+                            u, t) for u, t, c in downloads]
+    return dataclasses.replace(image, downloads=downloads, warnings=image.warnings + tuple(notes) + (
+        ModuleWarning("PDS_DOWNLOADED", f"prodotto PDS4 da URL (D19-9): {sources}", {"sources": items}),))
+
+
+def _download_item(reason: str, text: str, url: str, retrieved_at: str) -> dict:
+    """Riga di ``PDS_DOWNLOADED``: messaggio annidato ``PDS_DOWNLOAD`` (D40-7)."""
+    return {"code": "PDS_DOWNLOAD", "text": text, "params": {"reason": reason, "url": url, "retrieved_at": retrieved_at}}
 
 
 def _read_pds_label(source: str, path: Path, structure: str | None) -> PdsImage:
@@ -740,49 +817,57 @@ def _read_pds_label(source: str, path: Path, structure: str | None) -> PdsImage:
     try:
         head = path.read_bytes()[:200]
     except OSError as exc:
-        raise _pds_unreadable(source, f"file non leggibile ({exc})") from exc
+        raise _pds_unreadable(source, "file_unreadable", f"file non leggibile ({exc})", detail=str(exc)) from exc
     if b"PDS_VERSION_ID" in head:
-        raise _pds_unreadable(source, _PDS3_MESSAGE)
+        raise _pds_unreadable(source, "pds3", _PDS3_MESSAGE)
     try:
         products = pds4_tools.read(str(path), quiet=True, lazy_load=True)
         arrays = [st for st in products.structures if st.is_array() and st.type.startswith("Array_2D")]
     except Exception as exc:  # pds4_tools segnala con eccezioni generiche
-        raise _pds_unreadable(source, f"etichetta PDS4 non leggibile con pds4_tools ({exc})") from exc
+        raise _pds_unreadable(source, "pds4_tools_error", f"etichetta PDS4 non leggibile con pds4_tools ({exc})",
+                              detail=str(exc)) from exc
     names = [st.id for st in arrays]
     if not arrays:
-        raise _pds_unreadable(source, "nessuna immagine Array_2D nel prodotto")
+        raise _pds_unreadable(source, "no_image", "nessuna immagine Array_2D nel prodotto")
     if structure is None:
         if len(arrays) > 1:
             raise PlanetaryDataError("PDS_STRUCTURE_CHOICE_REQUIRED", f"{source}: più immagini nel prodotto "
-                                     f"({', '.join(names)}): indicare structure", structures=tuple(names))
+                                     f"({', '.join(names)}): indicare structure", structures=tuple(names),
+                                     params={"reason": "several", "source": source, "structures": list(names)})
         chosen = arrays[0]
     elif structure in names:
         chosen = arrays[names.index(structure)]
     else:
         raise PlanetaryDataError("PDS_STRUCTURE_CHOICE_REQUIRED", f"{source}: struttura {structure!r} assente; "
-                                 f"immagini: {', '.join(names)}", structures=tuple(names))
+                                 f"immagini: {', '.join(names)}", structures=tuple(names),
+                                     params={"reason": "absent", "source": source, "structure": str(structure),
+                                             "structures": list(names)})
     try:
         masked = np.ma.masked_array(chosen.as_masked().data)
     except Exception as exc:
-        raise _pds_unreadable(source, f"dati di {chosen.id!r} non leggibili ({exc})") from exc
+        raise _pds_unreadable(source, "data_unreadable", f"dati di {chosen.id!r} non leggibili ({exc})",
+                              structure=str(chosen.id), detail=str(exc)) from exc
     data = np.ma.filled(masked.astype(np.float64), np.nan)
     special = int(np.ma.count_masked(masked))
     targets = tuple(e.text.strip() for e in products.label.findall(".//Target_Identification/name")
                     if e.text and e.text.strip())
-    notes: list[tuple[str, str]] = []
+    notes: list[ModuleWarning] = []
     body = None
     if len(set(targets)) == 1:
         try:
             body = normalize_body_name(targets[0])
-            notes.append(("BODY_NORMALIZED", f"Target_Identification {targets[0]!r} → {body!r} (D12-6)"))
+            notes.append(ModuleWarning("BODY_NORMALIZED", f"Target_Identification {targets[0]!r} → {body!r} (D12-6)",
+                                       {"reason": "pds_target", "target": targets[0], "body": body}))
         except PlanetaryDataError as exc:
-            notes.append(("BODY_UNKNOWN", f"Target_Identification {targets[0]!r}: {exc.message}; l'immagine si "
-                          "apre da sola"))
+            notes.append(ModuleWarning("BODY_UNKNOWN", f"Target_Identification {targets[0]!r}: {exc.message}; "
+                                       "l'immagine si apre da sola",
+                                       {"reason": "pds_target", "target": targets[0], "cause": _message_of(exc)}))
     else:
-        notes.append(("BODY_UNKNOWN", f"Target_Identification {list(targets)}: serve un solo corpo; l'immagine "
-                      "si apre da sola"))
+        notes.append(ModuleWarning("BODY_UNKNOWN", f"Target_Identification {list(targets)}: serve un solo corpo; "
+                                   "l'immagine si apre da sola", {"reason": "pds_targets", "targets": list(targets)}))
     if special:
-        notes.append(("PDS_SPECIAL_CONSTANTS", f"{special} pixel con costanti speciali dell'etichetta → NaN"))
+        notes.append(ModuleWarning("PDS_SPECIAL_CONSTANTS", f"{special} pixel con costanti speciali dell'etichetta "
+                                   "→ NaN", {"count": special}))
     element = dict(chosen.meta_data.get("Element_Array", {}))
     library = f"pds4_tools {importlib.metadata.version('pds4-tools')}"
     command = PlanetaryCommand("load_pds_image", (("source", source), ("structure", structure)))

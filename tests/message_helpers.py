@@ -122,3 +122,13 @@ MODULE_16_SUBVARIANTS = {
     ("FRAME_UNKNOWN", "columns_without_frame"), ("PREVIEW_NOT_MEASURABLE", "moc_from_image"),
     ("MOCSERVER_UNAVAILABLE", "filter"), ("SERVICE_ERROR", "mocserver_response"), ("FROM_CACHE", "cached_converted"),
 }
+
+#: Sotto-voci di codici condivisi che solo il modulo 19 solleva o restituisce (provate in ``test_messages_planetary.py``).
+MODULE_19_SUBVARIANTS = (
+    {("BODY_UNSUPPORTED", r) for r in ("no_name", "celestial", "no_naif", "not_in_table")}
+    | {("BODY_UNKNOWN", r) for r in ("layer", "overlay_unknown", "layer_alone", "epntap_columns", "epntap_frames",
+                                     "epntap_target", "pds_target", "pds_targets")}
+    | {("BODY_MISMATCH", "multiple_in_layer"), ("BODY_MISMATCH", "overlay"), ("ADQL_INVALID", "epntap_core"),
+       ("BODY_NORMALIZED", "pds_target"), ("BODY_NORMALIZED", "epntap_target")}
+    | {("COORD_OUT_OF_RANGE", r) for r in ("planetary_not_finite", "planetary_latitude", "planetary_longitude")}
+)

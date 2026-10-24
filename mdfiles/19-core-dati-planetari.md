@@ -372,6 +372,88 @@ Nomi proposti, descrizione in parole (nessun codice). File Python previsto:
 | Query EPN-TAP non rivolta a una tabella `epn_core` | rifiuto prima della rete | `ADQL_INVALID` |
 | Sovrapposizione forzata con l'opzione esplicita | eseguita; il risultato e il comando registrato citano la forzatura e i corpi coinvolti | avviso `BODY_MISMATCH_FORCED` |
 
+### Parametri dei messaggi (D40-3)
+
+Dal 2026-10-24 (sprint 8d) ogni errore e ogni avviso del modulo nasce come **codice + `params`**
+(`PlanetaryDataError(code, message, params=..., **details)`; gli avvisi sono `ModuleWarning(code, text, params)`, la
+coppia (codice, testo) del 10 con in più `params`, che si confronta e si spacchetta come prima): `params` è un
+dizionario nome → valore JSON con tutti i valori che finiscono nel testo, mai arrotondati; le quantità sono
+`{"value": numero, "unit": testo}`. Il **testo italiano del modulo resta invariato** (campo `text`/`message`); il
+modulo **non** contiene traduzioni e non importa il catalogo (`src/astrotwo/messages_catalog.py`, `40` §3.7.1).
+Il parametro riservato `reason` sceglie la sotto-voce (D40-6); "esterno" = testo di terzi (metadati di un servizio o
+di un file, etichetta PDS4, libreria), inserito tale e quale e senza tradurlo. I `details` di prima (`naif_id`,
+`bodies`, `structures`, `url`) restano.
+
+**Errori rilanciati dal 14.** Gli errori di rete del 14 (EPN-TAP e scaricamento dei file PDS4) passano con il loro
+codice, i loro `params` e `relayed = True`; il testo del 19 aggiunge il prefisso ("EPN-TAP …", "PDS …") e resta nel
+campo `text`. Gli **avvisi dei moduli sotto** (`response.notes` del 14, avvisi della tabella EPN-TAP) passano **tali e
+quali**, con il loro `params`.
+
+**Messaggi annidati (D40-7).** Il motivo per cui il corpo di un livello è ignoto o ambiguo è un messaggio annidato
+con il codice proprio **`BODY_CAUSE`** (usato solo come messaggio annidato, come `HIPS_TILE_PROBLEM` del 12; sotto-voci
+`pds_label`, `pds_no_body`, `celestial_wcs`, `no_wcs`, `time_moc`, `no_metadata_body`, `from_metadata`, `unsupported`,
+ognuna con il nome del livello `name`; `unsupported` incorpora l'errore `BODY_UNSUPPORTED` del modulo). Anche le
+righe di `PDS_DOWNLOADED` sono messaggi annidati, di codice **`PDS_DOWNLOAD`** (sotto-voci `cached` e `downloaded`).
+`BODY_UNSUPPORTED` incorporato dal 12 (`BODY_UNSUPPORTED`, `BODY_UNKNOWN`) passa da parametro esterno a `message`.
+Le note di conversione di `PlanetaryPosition.notes` e il motivo per collezione di `PlanetaryCollections.unknown` sono
+testo di provenienza del risultato, non messaggi con codice: restano testo.
+
+| Codice | `reason` | Parametri (`params`) |
+|---|---|---|
+| `PLANETARY_DATA_DISABLED` | (generale) | `what` (string) |
+| `PLANETARY_KERNEL_INVALID` | (generale) | — |
+| `PLANETARY_KERNEL_INVALID` | `unreadable` | `path` (string), `detail` (string, esterno) |
+| `PLANETARY_KERNEL_INVALID` | `digest` | `name` (string), `digest` (string), `expected` (string) |
+| `BODY_UNSUPPORTED` | (generale) | `source` (string), `detail` (message: errore del 19) — voce già del 12 |
+| `BODY_UNSUPPORTED` | `no_name` | `name` (string, esterno), `supported` (list) |
+| `BODY_UNSUPPORTED` | `celestial` | — |
+| `BODY_UNSUPPORTED` | `no_naif` | `name` (string, esterno), `supported` (list) |
+| `BODY_UNSUPPORTED` | `not_in_table` | `name` (string, esterno), `naif_id` (integer), `supported` (list) |
+| `BODY_UNKNOWN` | `layer` | `cause` (message: `BODY_CAUSE`) |
+| `BODY_UNKNOWN` | `overlay_unknown` | `causes` (messages: `BODY_CAUSE`) |
+| `BODY_UNKNOWN` | `layer_alone` (avviso) | `cause` (message: `BODY_CAUSE`) |
+| `BODY_UNKNOWN` | `epntap_columns` (avviso) | `missing` (list) |
+| `BODY_UNKNOWN` | `epntap_frames` (avviso) | `frames` (list, esterno), `targets` (list, esterno) |
+| `BODY_UNKNOWN` | `epntap_target` (avviso) | `target` (string, esterno), `cause` (message: errore del 19) |
+| `BODY_UNKNOWN` | `pds_target` (avviso) | `target` (string, esterno), `cause` (message: errore del 19) |
+| `BODY_UNKNOWN` | `pds_targets` (avviso) | `targets` (list, esterno) |
+| `BODY_CAUSE` (solo annidato) | `pds_label` | `name` (string) |
+| `BODY_CAUSE` | `pds_no_body` | `name` (string) |
+| `BODY_CAUSE` | `celestial_wcs` | `name` (string) |
+| `BODY_CAUSE` | `no_wcs` | `name` (string) |
+| `BODY_CAUSE` | `time_moc` | `name` (string) |
+| `BODY_CAUSE` | `no_metadata_body` | `name` (string) |
+| `BODY_CAUSE` | `from_metadata` | `name` (string) |
+| `BODY_CAUSE` | `unsupported` | `name` (string), `cause` (message: errore del 19) |
+| `BODY_MISMATCH` | `multiple_in_layer` | `cause` (message: `BODY_CAUSE`), `bodies` (list) |
+| `BODY_MISMATCH` | `overlay` | `involved` (list) |
+| `BODY_MISMATCH_FORCED` (avviso) | (generale) | `involved` (list) |
+| `PLANETARY_CONVENTION_REQUIRED` | (generale) | `what` (string), `value` (string), `allowed` (list) |
+| `COORD_OUT_OF_RANGE` | `planetary_not_finite` | `what` (string), `value` (string) |
+| `COORD_OUT_OF_RANGE` | `planetary_latitude` | `latitude` (quantity, deg) |
+| `COORD_OUT_OF_RANGE` | `planetary_longitude` | `longitude` (quantity, deg) |
+| `ADQL_INVALID` | `epntap_core` | — |
+| `PDS_UNREADABLE` | (generale) | — |
+| `PDS_UNREADABLE` | `label_unreadable` | `source` (string), `detail` (string, esterno) |
+| `PDS_UNREADABLE` | `file_outside` | `source` (string), `name` (string, esterno) |
+| `PDS_UNREADABLE` | `no_files` | `source` (string) |
+| `PDS_UNREADABLE` | `url_form` | `source` (string) |
+| `PDS_UNREADABLE` | `pds3` | `source` (string) |
+| `PDS_UNREADABLE` | `file_unreadable` | `source` (string), `detail` (string, esterno) |
+| `PDS_UNREADABLE` | `pds4_tools_error` | `source` (string), `detail` (string, esterno) |
+| `PDS_UNREADABLE` | `no_image` | `source` (string) |
+| `PDS_UNREADABLE` | `data_unreadable` | `source` (string), `structure` (string, esterno), `detail` (string, esterno) |
+| `PDS_STRUCTURE_CHOICE_REQUIRED` | (generale) | — |
+| `PDS_STRUCTURE_CHOICE_REQUIRED` | `several` | `source` (string), `structures` (list, esterno) |
+| `PDS_STRUCTURE_CHOICE_REQUIRED` | `absent` | `source` (string), `structure` (string, esterno), `structures` (list, esterno) |
+| `BODY_NORMALIZED` (avviso) | `pds_target` | `target` (string, esterno), `body` (string) |
+| `BODY_NORMALIZED` | `epntap_target` | `target` (string, esterno), `canonical` (string) |
+| `PLANETARY_CONVENTIONS` (avviso) | (generale) | — |
+| `PDS_SPECIAL_CONSTANTS` (avviso) | (generale) | `count` (integer) |
+| `PDS_DOWNLOADED` (avviso) | (generale) | `sources` (messages: `PDS_DOWNLOAD`) |
+| `PDS_DOWNLOAD` (solo annidato) | `cached` | `url` (string), `retrieved_at` (string) |
+| `PDS_DOWNLOAD` | `downloaded` | `url` (string), `retrieved_at` (string) |
+
 ## 11. Esposizione all'IA
 
 L'IA può cercare dati planetari e chiedere conversioni; non stabilisce mai il
@@ -488,3 +570,4 @@ corpo di un dato né calcola coordinate.
 | 2026-10-13 | Claude Code | **Decisioni del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): scelte minori 1–9 di §3 confermate; **D19-9 decisa e scritta** (PDS4 da URL: etichetta + file nominati nella stessa cartella, rete del 14, cache comune, `downloads` e `PDS_DOWNLOADED` nel risultato; T8 esteso con un server HTTP locale); **D19-8 rimandata** (bassa priorità): PDS3 → `PDS_UNREADABLE` "formato PDS3 non ancora supportato". Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Ordine dei controlli di `check_overlay` (decisione del proprietario del 2026-10-21, autorizzazione esplicita a modificare il file approvato, sprint 4f del 41):** con corpi diversi senza forzatura `BODY_MISMATCH` anche con l'opzione dei dati planetari spenta; l'opzione si controlla solo se la sovrapposizione passerebbe (scelta minore 1); T12. Stato `approvato` invariato. |
 | 2026-10-21 | Claude Code | **Testo di `PLANETARY_DATA_DISABLED` (decisione del proprietario del 2026-10-21, parte 5 della v1):** nella v1 la preferenza dei dati planetari non esiste, quindi il testo non dice più "attivarli nelle preferenze" ma "i dati planetari non sono disponibili in questa versione"; solo italiano (D40-1; inglese con D40-3). Comportamento invariato. §10 e T9 aggiornati. Stato `approvato` invariato. |
+| 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message`/`messages`: nuovi codici annidati `BODY_CAUSE` e `PDS_DOWNLOAD`); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |

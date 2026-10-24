@@ -60,6 +60,7 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.core.catalogs", "CatalogsError"),
     ("astrotwo.core.vo_protocols", "VoProtocolsError"),
     ("astrotwo.core.moc", "MocError"),
+    ("astrotwo.core.planetary_data", "PlanetaryDataError"),
 )
 
 

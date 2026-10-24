@@ -282,7 +282,7 @@ def _body(props, frame: str, source: str) -> tuple[str | None, list[ModuleWarnin
     except PlanetaryDataError as exc:
         return None, [draft, ModuleWarning(
             "BODY_UNSUPPORTED", f"{source}: {exc.message} (tabella dei nomi del 19, D12-6): il dato si apre da solo",
-            {"source": source, "detail": exc.message})]
+            {"source": source, "detail": _message_of(exc)})]
     return canonical, [draft, ModuleWarning(
         "BODY_NORMALIZED", f"{source}: hips_body {body!r} → {canonical!r} (tabella dei nomi del modulo 19, D12-6)",
         {"source": source, "body": body, "canonical": canonical})]

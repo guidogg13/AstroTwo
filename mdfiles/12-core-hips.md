@@ -737,7 +737,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `BODY_UNKNOWN` | `no_hips_body` | `source` (string), `frame` (string) |
 | `BODY_UNKNOWN` | `body_differs` | `source` (string), `frame` (string), `body` (string) |
 | `HIPS_BODY_DRAFT` (avviso) | (generale) | `source` (string), `body` (string) |
-| `BODY_UNSUPPORTED` (avviso) | (generale) | `source` (string), `detail` (string, esterno) |
+| `BODY_UNSUPPORTED` (avviso) | (generale) | `source` (string), `detail` (message: errore del 19) |
 | `BODY_NORMALIZED` (avviso) | (generale) | `source` (string), `body` (string), `canonical` (string) |
 | `HIPS_DEFAULT_TILE_WIDTH` (avviso) | (generale) | `source` (string), `width` (integer) |
 | `HIPS_VERSION_UNKNOWN` (avviso) | (generale) | `source` (string), `version` (string), `standard` (string) |
@@ -892,3 +892,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — messaggi annidati di tipo `message` (errore del 10 in `REGION_INVALID`, errore del 12 in `HIPS_COVERAGE_UNKNOWN`, diagnosi del tile con il nuovo codice annidato `HIPS_TILE_PROBLEM` in `HIPS_BAD_TILE` e `HIPS_TILE_DISCARDED`); il testo italiano non cambia. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 14):** gli errori del 14 incorporati dal testo del 12 (`HIPS_NOT_A_SERVICE` `service_error`, `HIPS_METADATA_INVALID` `metadata_xml_unavailable`, `MOCSERVER_UNAVAILABLE` `resolve` e `index`) passano da parametro esterno `detail` a parametro `message` `cause`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 16):** l'errore del 16 incorporato dal testo del 12 (`MOCSERVER_UNAVAILABLE` `coverage`) passa da parametro esterno `detail` a parametro `message` `cause`; gli errori del 16 rilanciati dal 12 portano i loro `params`. Nessun comportamento scientifico cambia. |
+| 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 19):** l'errore `BODY_UNSUPPORTED` del 19 incorporato dall'avviso omonimo del 12 passa da parametro esterno a parametro `message` (`detail`). Nessun comportamento scientifico cambia. |
