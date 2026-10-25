@@ -210,6 +210,16 @@ def minimum_macos(folder: Path) -> str:
     return ".".join(map(str, best if len(best) > 1 else (*best, 0)))
 
 
+def remove_tree(path: Path) -> None:
+    """Cancella ``path`` (solo ``build/`` e ``dist/``), riprovando: il Finder può riscrivere ``.DS_Store`` intanto."""
+    for _ in range(5):
+        shutil.rmtree(path, ignore_errors=True)  # §3.3: solo build/ e dist/
+        if not path.exists():
+            return
+        time.sleep(0.5)
+    raise BuildError("BUILD_STEP_FAILED", f"{path} non si cancella (cartella aperta nel Finder?)", 2)
+
+
 def env_python() -> Path:
     return ENV / "bin" / "python"
 
@@ -397,7 +407,7 @@ def create_env(python: Path, keep_build: bool, report: Report) -> None:
     if keep_build and ENV.exists() and marker.is_file() and json.loads(marker.read_text()) == wanted:
         report.warnings.append("--keep-build: ambiente build/env riusato (stesso uv.lock e stesso Python)")
     else:
-        shutil.rmtree(ENV, ignore_errors=True)
+        remove_tree(ENV)
     env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(ENV)}
     env.pop("VIRTUAL_ENV", None)
     result = run(["uv", "sync", "--frozen", "--python", python, "--group", "dev", "--group", "build"], env=env,
@@ -434,7 +444,7 @@ def build_icon(report: Report) -> Path | None:
         report.warnings.append(f"BUILD_ICON_MISSING: {ICON_SVG.relative_to(ROOT)} non c'è, app senza icona")
         return None
     iconset = BUILD / f"{APP_NAME}.iconset"
-    shutil.rmtree(iconset, ignore_errors=True)
+    remove_tree(iconset)
     run([env_python(), Path(__file__), "--make-iconset", ICON_SVG, iconset])
     icns = BUILD / f"{APP_NAME}.icns"
     run(["iconutil", "-c", "icns", iconset, "-o", icns])
@@ -451,7 +461,7 @@ def runtime_distributions() -> list[str]:
 
 def stage_files(info: dict) -> Path:
     stage = BUILD / "stage"
-    shutil.rmtree(stage, ignore_errors=True)
+    remove_tree(stage)
     (stage / "licenses").mkdir(parents=True)
     for name in LICENSE_NAMES[:3]:
         shutil.copy2(ROOT / name, stage / "licenses" / name)
@@ -461,11 +471,11 @@ def stage_files(info: dict) -> Path:
 
 
 def run_pyinstaller(spec: Path) -> None:
-    shutil.rmtree(APP, ignore_errors=True)
-    shutil.rmtree(DIST / APP_NAME, ignore_errors=True)
+    remove_tree(APP)
+    remove_tree(DIST / APP_NAME)
     run([env_python(), "-m", "PyInstaller", "--noconfirm", "--clean", "--log-level", "WARN",
          "--distpath", DIST, "--workpath", BUILD / "pyinstaller", spec], capture=False)
-    shutil.rmtree(DIST / APP_NAME, ignore_errors=True)  # la cartella onedir: resta solo il pacchetto .app
+    remove_tree(DIST / APP_NAME)  # la cartella onedir: resta solo il pacchetto .app
     if not APP.is_dir():
         raise BuildError("BUILD_STEP_FAILED", f"PyInstaller non ha prodotto {APP}")
 
@@ -806,7 +816,7 @@ def build(args: argparse.Namespace) -> int:
     spec = BUILD / f"{APP_NAME}.spec"
     spec.write_text(spec_text(entry=entry, stage=stage, icon=icon, version=info["version"], build=info["build"],
                               metadata=runtime_distributions()), encoding="utf-8")
-    shutil.rmtree(FAILED_APP, ignore_errors=True)
+    remove_tree(FAILED_APP)
     _step(report, "pyinstaller", run_pyinstaller, spec)
     _step(report, "firma", finish_bundle, info, icon is not None)
     report.info = info
