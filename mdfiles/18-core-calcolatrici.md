@@ -255,7 +255,13 @@ stesso identificatore).
    predizione pubblicata dall'IERS, scritta come tale). **Aggiornamento solo
    su richiesta esplicita:** `update_iers_table()` scarica `finals2000A.all`
    dall'IERS con la rete del modulo 14 (timeout e errori del 14, es.
-   `NET_TIMEOUT`), la controlla leggendola con `astropy.utils.iers`
+   `NET_TIMEOUT`); **se l'indirizzo ufficiale non risponde** (connessione,
+   timeout, HTTP di errore) ripiega sul **mirror dell'USNO** che `astropy`
+   indica (`iers.IERS_A_URL_MIRROR`; decisione del proprietario del
+   2026-10-25, perché il 2026-10-25 `datacenter.iers.org` rifiutava ogni
+   richiesta con HTTP 400): origine reale e motivo del ripiego restano nel
+   risultato (`source`) e nella cache; con `url` esplicito nessun ripiego;
+   se falliscono entrambi vale l'errore del mirror. La controlla leggendola con `astropy.utils.iers`
    (illeggibile → `IERS_TABLE_INVALID`) e la salva nella cache comune (04,
    modulo `18`, con origine e data); `convert_time(..., iers_table=
    "updated")` la usa (assente → `IERS_TABLE_MISSING`), il default
@@ -513,7 +519,7 @@ VOUnit per le stringhe di unità (D18-2).
 | UT1 per una data fuori dalla copertura delle tabelle IERS | rifiuto con l'intervallo coperto, nessuna estrapolazione | `IERS_RANGE` |
 | `iers_table="updated"` senza un aggiornamento nella cache | rifiuto con l'indicazione di `update_iers_table` | `IERS_TABLE_MISSING` |
 | Tabella IERS scaricata non leggibile | nessun aggiornamento | `IERS_TABLE_INVALID` |
-| Aggiornamento IERS senza rete | errore del 14 inoltrato, nessuna tabella nuova | `NET_TIMEOUT` |
+| Aggiornamento IERS senza rete (ufficiale e mirror) | errore del 14 inoltrato (quello del mirror), nessuna tabella nuova | `NET_TIMEOUT` |
 | Scala di tempo mancante | rifiuto: la scala non si assume mai | `TIME_SCALE_REQUIRED` |
 | `BSCALE = 0` nel calcolo inverso (fisico → grezzo) | rifiuto | `PIXEL_BSCALE_ZERO` |
 | Valore grezzo uguale a `BLANK` | nessun valore fisico; dichiarato "pixel senza valore" | `PIXEL_BLANK` |
@@ -739,3 +745,4 @@ elementare.
 | 2026-10-16 | Claude Code | Adattatore `run_command` del formato del 05 **fermo** sulla decisione aperta D05-4 (forma JSON dei valori e parametri strutturati non definiti nel 05); nessun codice cambiato. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **D05-4 decisa dal proprietario il 2026-10-17** (autorizzazione esplicita a modificare il file approvato): §3 P1 scelta 1 con l'elenco dei parametri dei cinque `calc.*` nel formato del `05` (tipo `record` per `DisplaySettings`, `CoordinateInput`, `CoordinateTarget`, `ProperMotion`, offset, direzione, riga di catalogo; `layer_ref` risolti dal `05`), `command_05` e `run_command(command, layers)`; nuovo `CALC_COMMAND_INVALID` (§10). Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
+| 2026-10-25 | Claude Code | **Sprint 8f (decisione del proprietario del 2026-10-25):** `update_iers_table` ripiega sul mirror USNO di `astropy` se l'indirizzo ufficiale non risponde, dichiarandolo nella fonte; nessun valore di UT1 assunto. Stato `approvato` invariato. |

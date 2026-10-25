@@ -680,12 +680,29 @@ def _updated_iers(cache: SharedCache | None) -> list[tuple[object, IersTable]]:
 
 
 def update_iers_table(*, cache: SharedCache | None = None, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
-                      url: str = iers.IERS_A_URL) -> IersTable:
+                      url: str | None = None) -> IersTable:
     """Scarica la tabella IERS-A (``finals2000A.all``) **solo su richiesta esplicita**, con la rete del modulo 14.
 
-    La tabella si controlla leggendola con ``astropy.utils.iers`` prima di salvarla nella cache comune (04); poi
-    ``convert_time(..., iers_table="updated")`` la usa. Rete assente → errore del 14 (``NET_TIMEOUT``).
+    Senza ``url`` si prova prima l'indirizzo ufficiale dell'IERS (``iers.IERS_A_URL``) e, se non risponde (errore del
+    14: connessione, timeout, HTTP di errore), il mirror dell'USNO che ``astropy`` indica (``iers.IERS_A_URL_MIRROR``,
+    decisione del proprietario del 2026-10-25): l'origine reale e il motivo del ripiego restano scritti nella tabella e
+    nel risultato (``source``). Con ``url`` esplicito nessun ripiego. La tabella si controlla leggendola con
+    ``astropy.utils.iers`` prima di salvarla nella cache comune (04); poi ``convert_time(..., iers_table="updated")`` la
+    usa. Rete assente → errore del 14 (``NET_TIMEOUT``); se falliscono entrambi vale l'errore del mirror.
     """
+    if url is not None:
+        return _download_iers(url, cache, timeouts, None)
+    try:
+        return _download_iers(iers.IERS_A_URL, cache, timeouts, None)
+    except CalculatorError as exc:
+        if exc.code == "IERS_TABLE_INVALID":  # raggiunto ma illeggibile: non è un problema di rete
+            raise
+        failed = f"{iers.IERS_A_URL}: {exc.code}"
+    return _download_iers(iers.IERS_A_URL_MIRROR, cache, timeouts, failed)
+
+
+def _download_iers(url: str, cache: SharedCache | None, timeouts: NetworkTimeouts, fallback_for: str | None) -> IersTable:
+    """Scarica, controlla e salva la tabella da ``url``; ``fallback_for``: indirizzo ufficiale fallito (ripiego)."""
     try:
         response = vo_protocols._http("IERS", url, cache=cache, refresh=True, timeouts=timeouts)
     except vo_protocols.VoProtocolsError as exc:
@@ -700,7 +717,10 @@ def update_iers_table(*, cache: SharedCache | None = None, timeouts: NetworkTime
                               params={"url": url, "detail": str(exc)}) from exc
     (SharedCache() if cache is None else cache).put(_IERS_CACHE_MODULE, _IERS_CACHE_KEY, response.payload,
                                                     origin=url, retrieved_at=response.retrieved_at)
-    return _iers_info(table, "finals2000A.all", f"scaricato da {url} il {response.retrieved_at.isoformat()}")
+    source = f"scaricato da {url} il {response.retrieved_at.isoformat()}"
+    if fallback_for is not None:
+        source += f" (mirror: l'indirizzo ufficiale non ha risposto, {fallback_for})"
+    return _iers_info(table, "finals2000A.all", source)
 
 
 def _iers_for(when: Time, iers_table: str, cache: SharedCache | None) -> tuple[object, IersTable, str]:

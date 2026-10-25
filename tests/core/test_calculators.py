@@ -319,6 +319,27 @@ def test_t17_ut1_updated_table_on_request(service, cache):
     assert exc.value.code == "NET_TIMEOUT"
 
 
+def test_t17_ut1_update_falls_back_to_the_mirror(service, cache, monkeypatch):
+    """Decisione del 2026-10-25: indirizzo ufficiale muto → mirror dichiarato nella fonte; esplicito → nessun ripiego."""
+    from astropy.utils import iers
+
+    payload = Path(iers.IERS_A_FILE).read_bytes()
+    service.routes["/official"] = lambda request: (400, "text/html", b"Request Rejected")
+    service.routes["/mirror"] = lambda request: (200, "text/plain", payload)
+    monkeypatch.setattr(iers, "IERS_A_URL", f"{service.url}/official")
+    monkeypatch.setattr(iers, "IERS_A_URL_MIRROR", f"{service.url}/mirror")
+    info = update_iers_table(cache=cache)
+    assert f"scaricato da {service.url}/mirror" in info.source and "indirizzo ufficiale non ha risposto" in info.source
+    assert service.hits("/official") >= 1 and service.hits("/mirror") == 1
+    with pytest.raises(CalculatorError):  # url esplicito: nessun ripiego sul mirror
+        update_iers_table(cache=cache, url=f"{service.url}/official")
+    assert service.hits("/mirror") == 1
+    service.routes["/mirror"] = lambda request: (503, "text/plain", b"")  # entrambi muti: errore del mirror
+    with pytest.raises(CalculatorError) as exc:
+        update_iers_table(cache=cache)
+    assert f"{service.url}/mirror" in str(exc.value.params)
+
+
 @pytest.mark.network
 def test_t17_ut1_update_from_iers_network(cache):
     info = update_iers_table(cache=cache)
