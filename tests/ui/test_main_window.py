@@ -149,7 +149,7 @@ def test_t1_menu_items_produce_commands(qtbot, window, files, offline, tmp_path,
     assert by_name["hips.set_survey"][0].result.error.code == "NET_TIMEOUT"
     region = by_name["catalog.load_region"][0].command.parameters
     view = win.session.workspace.state.view
-    assert region["catalog"] == "II/246/out" and region["max_rows"] == 100_000
+    assert region["catalog"] == "II/246/out" and region["max_rows"] == 5_000  # D41-10 (sprint 9b)
     assert region["center"] == cw_sky_json(view.center)
     assert region["radius"]["value"] == pytest.approx(view.geometry.field_radius.to_value(region["radius"]["unit"]))
     for e in win.session.history:
@@ -358,7 +358,7 @@ def test_t7_decimal_point_in_italian(qtbot, settings_path, cache):
             "ok", values={"sky": sky(56.75, 24.125), "pixel": {"value": 0.25, "unit": "Jy"}}))
         assert "56.75" in win.status.cursor_label.text() and "0.25 Jy" in win.status.value_label.text()
         cat = win.catalog_dialog()
-        assert cat.max_rows.text() == "100000"  # nessun separatore delle migliaia che sembri un decimale
+        assert cat.max_rows.text() == "5000"  # nessun separatore delle migliaia che sembri un decimale
         cat.reject()
         assert win.history.table.item(0, 2).text() == "Utente"
     finally:
@@ -491,6 +491,19 @@ def test_t11_go_to(qtbot, window, fake_simbad):
     with pytest.raises(cw.CoordinatesWcsError) as direct:
         cw.resolve_name("%%%", cache=win.cache._cache())
     assert (bad.result.error.code, bad.result.error.text) == (direct.value.code, direct.value.message)
+
+
+
+def test_t11_go_to_field_says_the_reading_frame(qtbot, window):
+    """D41-9 (b), sprint 9b: il testo d'aiuto del campo dice in quale frame si legge una coppia di coordinate."""
+    win = window
+    assert win.go_to_field.placeholderText() == "Go to: object name or coordinates (ICRS)"
+    win.submit("view.set_coordinate_display", {"frame": "galactic", "format": "decimal"})
+    wait_idle(qtbot, win)
+    assert win.go_to_field.placeholderText() == "Go to: object name or coordinates (Galactic)"
+    win.submit("view.set_coordinate_display", {"frame": "icrs", "format": "sexagesimal"})
+    wait_idle(qtbot, win)
+    assert win.go_to_field.placeholderText().endswith("(ICRS)")
 
 
 # =============================================================================

@@ -1706,7 +1706,16 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
     cols, rows = view.window
     shape = (rows, cols)
     if view.base_layer is not None and problem is None:
-        geometry = make_view_wcs(view.center, view.scale, shape, base=base.data.wcs)
+        try:
+            geometry = make_view_wcs(view.center, view.scale, shape, base=base.data.wcs)
+        except CoordinatesWcsError as exc:
+            if exc.params.get("reason") != "center_outside_projection":
+                raise
+            # Con un'immagine come base la base non si ricrea (D41-9): l'errore dice di quale immagine si tratta.
+            raise CommandError("VIEW_CENTER_OUTSIDE_IMAGE", f"il centro cade fuori dalla proiezione dell'immagine "
+                               f"{base.id} ({base.name}), base della vista: controllare le coordinate o togliere "
+                               "l'immagine per tornare alla base del cielo",
+                               params={"layer": base.id, "name": base.name}) from exc
         info["base"] = f"WCS dell'immagine {base.id}"
         view = dataclasses.replace(view, projection=geometry.projection, tangent_point=None, geometry=geometry)
     else:
@@ -1863,7 +1872,14 @@ def _exec_view_go_to(ctx: ExecutionContext, p: Mapping) -> Outcome:
         how = f"nome risolto con resolve_name del 10 ({resolved.source})"
     else:
         point = convert_coordinates(point, "icrs")
-    outcome = _apply_view(ctx, center=point, window=_window(p) or ctx.state.view.window)
+    try:
+        outcome = _apply_view(ctx, center=point, window=_window(p) or ctx.state.view.window)
+    except CommandError as exc:
+        if exc.code != "VIEW_CENTER_OUTSIDE_IMAGE" or extra:
+            raise
+        frame = ctx.state.view.coordinate_frame  # coppia letta nel frame delle coordinate mostrate (40 §3.4)
+        raise CommandError("VIEW_CENTER_OUTSIDE_IMAGE", f"{text!r} letto nel frame {frame} delle coordinate mostrate: "
+                           f"{exc.message}", params={**exc.params, "reason": "typed", "frame": frame}) from exc
     outcome.values.update(interpreted_as=how, **extra)
     outcome.provenance, outcome.network_fingerprint = provenance, fingerprint
     return outcome

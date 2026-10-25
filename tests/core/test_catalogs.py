@@ -1553,3 +1553,27 @@ def test_t35b_repeated_confirmation_keeps_metadata_epoch(service, cache, monkeyp
     other = confirm_position_columns(once, "e_RA_ICRS", "DE_ICRS", "icrs", unit="deg")
     back = confirm_position_columns(other, "RA_ICRS", "DE_ICRS", "icrs")
     assert other.positions.epoch is None and back.positions.epoch is None
+
+
+def test_t35c_primary_ucd_word_for_positions(service, cache, monkeypatch, tmp_path):
+    """Sprint 9b (D13-22 (a)): per le posizioni conta la prima parola dell'UCD (UCD1+). Moto proprio
+    (``pos.pm;pos.eq.ra``) ed errore (``stat.error;pos.eq.ra``) non sono posizioni, né nelle tabelle né in TAP_SCHEMA."""
+    from astropy.coordinates import SkyCoord
+
+    from tests.core.test_commands_catalog_sky import votable_text
+
+    text = votable_text((("A", 150.01, 2.005, 30.0, 2.0),))
+    text = text.replace('ucd="pos.eq.ra;meta.main"', "").replace('ucd="pos.eq.dec;meta.main"', "")
+    path = tmp_path / "pm_only.xml"
+    path.write_text(text)
+    table = load_table(str(path))
+    assert table.positions is None and "NO_COORD_COLUMNS" in dict(table.warnings)
+    # TAP_SCHEMA: posizioni senza meta.main accanto a errori e moti propri → scelte le sole posizioni
+    entries = tuple(_dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
+                    for e in vo.BUILTIN_SERVERS)
+    monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
+    service.routes["/viz/sync"] = region_tap(schema=('"RAJ2000"', "pos.eq.ra", '"DEJ2000"', "pos.eq.dec",
+                                                     '"e_RA"', "stat.error;pos.eq.ra", '"pmRA"', "pos.pm;pos.eq.ra",
+                                                     '"pmDE"', "pos.pm;pos.eq.dec"))
+    cat = load_catalog("II/246/out", region=(SkyCoord(10.0 * u.deg, 41.0 * u.deg), 30 * u.arcsec), cache=cache)
+    assert (cat.positions.lon, cat.positions.lat) == ("RAJ2000", "DEJ2000")

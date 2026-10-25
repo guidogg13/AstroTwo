@@ -403,7 +403,6 @@ def test_t28c_source_card_and_labels_in_the_interface_language(qtbot, win, tmp_p
     plain = tmp_path / "plain.xml"
     text = (tmp_path / "c.xml").read_text()
     text = text.replace('ucd="pos.eq.ra;meta.main"', "").replace('ucd="pos.eq.dec;meta.main"', "")
-    text = text.replace('ucd="pos.pm;pos.eq.ra"', "").replace('ucd="pos.pm;pos.eq.dec"', "")  # altrimenti il 13 le prende come posizioni (D13-22)
     plain.write_text(text.replace('name="RA_ICRS"', 'name="X1"').replace('name="DE_ICRS"', 'name="X2"'))
     open_file(qtbot, win, "catalog.open_file", str(plain))
     win.submit("catalog.select", {"layer": "L3", "rows": [0]})
@@ -455,3 +454,31 @@ def test_t28c_no_italian_literals_shown_by_the_interface():
                     and node.value not in allowed and words.search(node.value)):
                 found.append(f"{path.name}:{node.lineno}: {node.value[:80]!r}")
     assert found == [], "\n".join(found)
+
+
+def test_t28d_dense_field_note(qtbot, win, tmp_path, monkeypatch):
+    """Sprint 9b (D41-10): oltre ``DENSE_SYMBOLS`` simboli disegnati la nota ``CATALOG_DENSE``, una volta per livello e
+    base; alla soglia nessuna nota; nessuno stile cambia. Soglia abbassata nel test per non scrivere 2 001 righe."""
+    from astrotwo.ui import sky_viewer
+
+    assert sky_viewer.DENSE_SYMBOLS == 2_000
+    center_on(qtbot, win, *PLEIADES, 10.0)
+    monkeypatch.setattr(sky_viewer, "DENSE_SYMBOLS", len(ROWS))  # alla soglia: nessuna nota
+    open_file(qtbot, win, "catalog.open_file", write_catalog(tmp_path / "c.xml"))
+    wait_points(qtbot, win, len(ROWS))
+    assert not any(m.code == "CATALOG_DENSE" for m in win.seen)
+    monkeypatch.setattr(sky_viewer, "DENSE_SYMBOLS", len(ROWS) - 1)
+    for name in ("d.xml", "d.xml"):
+        open_file(qtbot, win, "catalog.open_file", write_catalog(tmp_path / name))
+    wait_points(qtbot, win, 3 * len(ROWS))
+    dense = [m for m in win.seen if m.code == "CATALOG_DENSE"]
+    assert [m.params["layer_context"]["id"] for m in dense] == ["L2", "L3"]  # una per livello
+    assert (dense[0].params["drawn"], dense[0].params["threshold"]) == (len(ROWS), len(ROWS) - 1)
+    assert message_text("CATALOG_DENSE", dense[0].params, "en", text=dense[0].text).endswith(
+        f"{len(ROWS)} symbols drawn (more than {len(ROWS) - 1}): the sky may be hard to read. Use a smaller field, "
+        "fewer maximum rows or smaller symbols (catalog.set_style).")
+    assert np.all(win.sky.renderer.points[1].size == 8.0)  # lo stile del livello resta quello scelto
+    count = len(dense)
+    win.submit("layer.set_opacity", {"layer": "L2", "opacity": 0.5})
+    wait_settled(qtbot, win)
+    assert len([m for m in win.seen if m.code == "CATALOG_DENSE"]) == count

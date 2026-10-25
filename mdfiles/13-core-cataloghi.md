@@ -221,6 +221,11 @@ suo VOTable.
   sempre quelle dei metadati); prima l'epoca si perdeva al secondo
   `catalog.set_columns` e la propagazione dava `EPOCH_INVALID`. Se la
   conferma precedente non l'aveva conservata, non si recupera (mai assunta).
+  **Parola principale dell'UCD (D13-22, decisione del proprietario del 2026-10-25):** una colonna è candidata come
+  posizione solo se la **prima parola** della sua UCD è `pos.eq.ra`/`pos.eq.dec` (o `pos.galactic.lon`/`lat`,
+  `pos.ecliptic.lon`/`lat`), come vuole lo standard IVOA UCD1+ (la prima parola è quella principale): `pos.pm;
+  pos.eq.ra` (moto proprio) e `stat.error;pos.eq.ra` (errore) non lo sono; la scelta tra più candidate con
+  `meta.main` resta. Vale per le tabelle lette e per le colonne di `TAP_SCHEMA` della regione (§7).
   Possibile aggiunta futura, non ora: un parametro `source_epoch` esplicito. **Senza UCD né conferma:**
   `NO_COORD_COLUMNS` (avviso al caricamento; errore per le funzioni di
   posizione) e `body` non ricavabile (`BODY_UNKNOWN`). **Corpo:** `celestial`
@@ -1038,6 +1043,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T29 | `skydist` | colonna calcolata con `skydist(${ra}, ${dec}, 10, 20)` | valori uguali ad `astropy.coordinates.angular_separation` ricalcolato nel test | ricalcolo con Astropy |
 | T34 | Posizioni all'epoca di visualizzazione (D10-2) | tabella con righe `full`, `pm_only` e `missing`; immagine con `MJD-OBS`, immagine senza epoca, nessuna immagine, epoca dell'utente, tipo non valido | con l'immagine: epoca = `MJD-OBS` (scala del WCS), fonte "immagine"; senza epoca o senza immagine: J2000 (TT) con la fonte dichiarata; posizioni uguali a `propagate` alla stessa epoca; `drawable` = righe non `missing`; conteggi per modo; spostamento uguale ad `astropy.coordinates.angular_separation` ricalcolato nel test, media e massimo sulle righe disegnabili; `coords` alle stesse posizioni con l'epoca di visualizzazione; tipo non valido → `EPOCH_INVALID` | ricalcolo con Astropy |
 | T35 | Epoca del `COOSYS` dopo la conferma delle colonne (D41-6) | risposta di TAP VizieR registrata (Gaia DR3 `I/355/gaiadr3`, 11 righe attorno ad Alcyone, `COOSYS` ICRS `epoch="2016.0"`), servita da un servizio simulato; `confirm_position_columns` con le stesse colonne `RA_ICRS`/`DE_ICRS` e `icrs`, poi con un altro sistema, poi su colonne diverse | stesse colonne e sistema: epoca `J2016` conservata, `EPOCH_FROM_METADATA`, `display_positions` uguale a `propagate` ricalcolato da J2016.0; sistema o colonne diversi: epoca non conservata e `EPOCH_INVALID` nella propagazione | test con risposta registrata, senza rete |
+| T35c | Parola principale dell'UCD (D13-22) | VOTable con posizioni senza UCD e `pmRA`/`pmDE` con `pos.pm;pos.eq.ra`/`dec`; `TAP_SCHEMA` con `pos.pm;pos.eq.ra` e `stat.error;pos.eq.ra` accanto alle posizioni senza `meta.main` | nessuna posizione dalle colonne di moto proprio (`NO_COORD_COLUMNS`); in `TAP_SCHEMA` scelte le sole colonne di posizione | test senza rete |
 | T35b | Conferma ripetuta (sprint 9) | tabella di T35 confermata due volte con le stesse colonne e `icrs`; poi su colonne diverse e di nuovo sulle prime | epoca `J2016` e `EPOCH_FROM_METADATA` anche alla seconda conferma; dopo colonne diverse l'epoca non torna | test senza rete |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
@@ -1216,7 +1222,10 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 
 - **D13-21 — Colonne di posizione ambigue in una regione chiesta dall'assistente: DECISA il 2026-10-23** dal proprietario, opzione **(a)**: nella v1 `load_catalog` con regione dà `NO_COORD_COLUMNS` con le colonne candidate per RA e per Dec scritte nel messaggio (così il modello le riferisce all'utente); nulla si sceglie al posto dell'utente. L'opzione (b) (parametri facoltativi `lon`/`lat` di `catalog.load_region`, scelti in una finestra del 44) si riapre se un catalogo reale lo richiede; caso non riprodotto su VizieR (Gaia DR3 ha una sola coppia `meta.main`, verificato il 2026-10-23).
 
-- **D13-22 — Colonne di moto proprio prese come posizioni: APERTA il 2026-10-25 (Gruppo 3, sprint 9).** Trovato
+- **D13-22 — Colonne di moto proprio prese come posizioni: DECISA il 2026-10-25** dal proprietario: **(a)** — per
+  le posizioni conta solo la **prima parola** dell'UCD (UCD1+), sia nelle tabelle lette sia in `TAP_SCHEMA`; codice
+  nello sprint 9b dopo la verifica sulle risposte registrate dei test. Testo della domanda com'era (aperta lo stesso
+  giorno, Gruppo 3, sprint 9): Trovato
   scrivendo T28c del `41`: in un VOTable in cui le colonne di posizione non hanno UCD ma `pmRA`/`pmDE` hanno
   `pos.pm;pos.eq.ra`/`pos.pm;pos.eq.dec`, la ricerca delle colonne (§3, `_positions_from_ucd`) trova la parola
   `pos.eq.ra` anche come parola secondaria e sceglie `pmRA`/`pmDE` come posizioni (`source = "ucd"`, frame non
@@ -1273,3 +1282,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-a, correzione):** conferma ripetuta delle stesse colonne e dello stesso sistema: l'epoca dei metadati conservata da D41-6 resta (§3); prima si perdeva e la propagazione dava `EPOCH_INVALID`. Test T35b. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-b):** `DisplayPositions.epoch_origin` (identificativo della fonte dell'epoca di visualizzazione) perché la scheda della sorgente del `41` mostri la fonte nella lingua dell'interfaccia (§7). Nessun valore cambia. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9:** aperta **D13-22** (colonne di moto proprio prese come posizioni quando le posizioni non hanno UCD), §13. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9b (D13-22 decisa dal proprietario, opzione (a)):** per le posizioni conta solo la prima parola dell'UCD (§3, `TAP_SCHEMA` compreso); T35c. Stato `approvato` invariato. |

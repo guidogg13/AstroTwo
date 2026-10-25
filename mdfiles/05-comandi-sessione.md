@@ -587,6 +587,7 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `POSITION_COLUMNS_REQUIRED` | — | — | |
 | `OUT_OF_SKY` | `point` | — | punto del cursore fuori dalla proiezione (la sotto-voce `distance_point` è del `41`) |
 | `VIEW_UNDEFINED` | `geometry` | — | lettura sotto il cursore senza geometria (la sotto-voce `export` è del `41`) |
+| `VIEW_CENTER_OUTSIDE_IMAGE` | — / `typed` | `layer`, `name` (ext) / `layer`, `name` (ext), `frame` | centro fuori dalla proiezione dell'immagine base (D41-9, sprint 9b) |
 | `MODULE_NOTE` | — | `note` (ext) | avviso di un modulo non convertito, solo testo |
 
 Gli errori e gli avvisi **dei moduli 10–19** non cambiano: il `05` li riporta con codice, testo e `params` invariati
@@ -788,7 +789,12 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
      `astropy-healpix`);
      **la base creata si ricrea** anche quando il nuovo centro non ha posto
      nella proiezione della base attuale (es. da una `TAN` su Sirius a M31,
-     oltre 90°): prima dava `VIEW_PARAMETERS_INVALID`; `measure.distance` misura tra due
+     oltre 90°): prima dava `VIEW_PARAMETERS_INVALID`. **Con un'immagine come base
+     (D41-9, decisione del proprietario del 2026-10-25)** la base non si ricrea: un centro fuori
+     dalla proiezione dell'immagine dà `VIEW_CENTER_OUTSIDE_IMAGE` (livello e nome dell'immagine;
+     per `view.go_to` con una coppia di coordinate la sotto-voce `typed` dice anche il frame in cui
+     la coppia è stata letta, quello delle coordinate mostrate), invece del
+     `VIEW_PARAMETERS_INVALID` del 10; `measure.distance` misura tra due
      pixel di un'immagine con WCS e crea un livello `measure`.
   8. **Firma:** `execute` restituisce il `CommandResult` (§7); `run`
      restituisce anche il comando registrato (con i valori scelti dal
@@ -824,3 +830,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-23 | Claude Code | **`measure.distance` esteso (sprint 4g del 41, decisione del proprietario del 2026-10-23):** `layer`, `p1`, `p2` facoltativi e nuova forma cielo con `sky1`, `sky2` (§7, nota "`measure.distance` anche tra posizioni celesti"); versione 1 invariata. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `CommandError` e `ResultMessage` portano `params` in tutto il `05`; nuova §10.1 con la tabella di codici, ragioni e parametri (`COMMAND_PARAMETER_INVALID` con 40 ragioni, `SESSION_*` con messaggi annidati, `WCS_INVALID`/`WCS_MISSING`/`NO_WCS` come sotto-voci condivise) scritta prima del codice; il motivo per cui mancano le coordinate (`PixelGridGeometry.problem`) diventa un `ResultMessage`. Test `tests/core/test_messages_commands.py`. Testo italiano invariato. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-b):** la scheda della sorgente di `catalog.select` porta `position_reason_code` (§7), così il motivo della posizione mancante si mostra nella lingua dell'interfaccia. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9b (D41-9 decisa dal proprietario, opzione (b)):** con un'immagine come base, un centro fuori dalla sua proiezione dà `VIEW_CENTER_OUTSIDE_IMAGE` (sotto-voce `typed` con il frame di lettura per `view.go_to`) invece di `VIEW_PARAMETERS_INVALID` (§3.6 punto 7, §10.1). Stato `approvato` invariato. |

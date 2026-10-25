@@ -83,6 +83,9 @@ DEFAULT_CARD_TEXTS = {
     "propagated": "drawn at epoch %1 (proper motion; %2)", "not_drawn": "not drawn in this view",
     "catalog": "catalog %1", "retrieved": "retrieved %1",
 }
+#: Simboli disegnati di un catalogo oltre i quali il pannello Messaggi riceve ``CATALOG_DENSE`` (41 §3.8, D41-10;
+#: scelta minore da confermare).
+DENSE_SYMBOLS = 2_000
 #: Ragioni di ``DISPLAY_EPOCH_SOURCE`` (``epoch_origin`` del 13) e di ``SOURCE_NO_POSITION`` (``position_reason_code``
 #: del 05): righe della scheda della sorgente nella lingua dell'interfaccia (41 §3.8, sprint 9).
 EPOCH_ORIGIN_REASONS = ("image", "image_undeclared", "image_no_wcs", "no_image", "user")
@@ -393,6 +396,11 @@ def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
     # vede attorno all'immagine, sprint 4f), quindi ``out_of_field`` del 10 non basta da solo.
     keep = np.isfinite(bx) & np.isfinite(by) & np.asarray(style.drawn, dtype=bool)[rows]
     rows, bx, by = rows[keep], bx[keep], by[keep]
+    if len(rows) > DENSE_SYMBOLS:  # campo denso (D41-10): nota con i suggerimenti, nessuno stile cambia da solo
+        notes += (with_layer(ResultMessage("CATALOG_DENSE", f"{len(rows)} simboli disegnati (più di {DENSE_SYMBOLS}): "
+                                           "campo più piccolo, meno righe massime o simboli più piccoli "
+                                           "(catalog.set_style)", {"drawn": len(rows), "threshold": DENSE_SYMBOLS}),
+                             layer),)
     shapes = {name: float(k) for k, name in enumerate(PLOT_SHAPES)}
     return CatalogPoints(
         key, layer.id, rows, np.column_stack([bx, by]), _hex_rgba(style.color[rows]),

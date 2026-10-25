@@ -155,6 +155,9 @@ COORDINATE_DISPLAYS: dict[str, tuple[str, str]] = {
     "icrs_decimal": ("icrs", "decimal"),
     "galactic": ("galactic", "decimal"),
 }
+#: Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25;
+#: valore scelta minore da confermare): il troncamento lo dichiara il 13; il comando resta con il default del 14.
+CATALOG_IN_VIEW_MAX_ROWS = 5_000
 LANGUAGES = ("system", "en", "it")
 APPEARANCES = ("system", "dark", "light", "night")
 PANELS = ("layers", "table", "commands", "messages", "assistant")
@@ -849,13 +852,18 @@ class GoToField(QLineEdit):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("goToField")
-        self.setPlaceholderText(self.tr("Go to: object name or coordinates"))
+        self.set_frame("icrs")
         self.setClearButtonEnabled(True)
         self.setMinimumWidth(280)
         self.setMaximumWidth(420)
         self.setFont(_tabular(self.font()))
         self.search_icon = self.addAction(QIcon(), QLineEdit.ActionPosition.LeadingPosition)
         self.returnPressed.connect(self._go)
+
+    def set_frame(self, frame: str) -> None:
+        """Testo d'aiuto con il frame in cui si legge una coppia di coordinate (quello mostrato, §3.4, D41-9)."""
+        label = self.tr("Galactic") if frame == "galactic" else frame.upper()
+        self.setPlaceholderText(self.tr("Go to: object name or coordinates (%1)").replace("%1", label))
 
     def _go(self) -> None:
         text = self.text().strip()
@@ -2175,6 +2183,7 @@ class MainWindow(QMainWindow):
                 if (frame, fmt) == (p["frame"], p["format"]):
                     self.coordinate_actions[key].setChecked(True)
             self.status.coordinate_style = p["format"]
+            self.go_to_field.set_frame(p["frame"])
 
     # --- azioni dei menu ----------------------------------------------------------------
 
@@ -2265,14 +2274,13 @@ class MainWindow(QMainWindow):
         """Catalogo nel campo: centro e raggio della vista dalla ``ViewGeometry`` del 10 (scelta minore 5)."""
         from astrotwo.core.catalogs import FIXED_COLLECTIONS
         from astrotwo.core.commands import quantity_json, sky_json
-        from astrotwo.core.vo_protocols import DEFAULT_MAX_ROWS
 
         view = self.session.workspace.state.view
         if view.geometry is None or view.center is None:
             self.show_modal(self.tr("Catalog in view"), self.tr(
                 "The view has no centre, scale or size yet: centre it first (Go to…)."))
             return None
-        dialog = CatalogInViewDialog(FIXED_COLLECTIONS, DEFAULT_MAX_ROWS, self)
+        dialog = CatalogInViewDialog(FIXED_COLLECTIONS, CATALOG_IN_VIEW_MAX_ROWS, self)
 
         def accepted() -> None:
             state = self.session.workspace.state.view

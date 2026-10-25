@@ -70,7 +70,9 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   identificativo o URL: `hips.set_survey`); Catalog in view… (finestra con
   l'identificativo del catalogo come lo accetta `load_catalog` del 13 —
   VizieR, Simbad, Gaia DR3 dall'elenco dei server del 14, D14-4 — e
-  `max_rows` con il default 100 000 di D14-5; centro e raggio sono quelli
+  `max_rows` con il default **5 000** della finestra (D41-10, decisione del proprietario del 2026-10-25, valore
+  scelta minore DA CONFERMARE; prima 100 000 di D14-5, che resta il default del comando e del 14; il troncamento si
+  dichiara con `PARTIAL_CATALOG`/`ROW_LIMIT_EXCEEDED` del 13); centro e raggio sono quelli
   della vista calcolati dal 10: `catalog.load_region`).
 - **Tools:** Distance (strumento di misura del `41`); Simbad pointer
   (puntatore del `41`). L'attivazione è `ui.set_tool`.
@@ -91,6 +93,10 @@ Accetta un nome di oggetto o una coppia di coordinate; produce
 le coordinate) e centra la vista. Il risultato mostra la fonte (SIMBAD,
 "dalla cache" con origine e data, epoca J2000 dichiarata). Nome non
 trovato o rete assente: messaggio del 10 nel pannello Messaggi e, per 10 s, nella barra di stato (2026-10-17). Dopo un "Vai a" riuscito la vista si porta a un campo di circa 1° se era maggiore di 1,25° (`41` §3.4).
+**Frame di lettura (D41-9, decisione del proprietario del 2026-10-25):** una coppia di numeri si legge nel frame
+delle coordinate mostrate (menu "Coordinates shown"); il testo d'aiuto del campo lo dice («Go to: object name or
+coordinates (ICRS)» / «(Galactic)») e si aggiorna a ogni `view.set_coordinate_display`. Un punto fuori dalla
+proiezione dell'immagine base dà `VIEW_CENTER_OUTSIDE_IMAGE` del `05` con il frame di lettura e il suggerimento.
 
 ### 3.5 Barra di stato
 
@@ -694,3 +700,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-24 | Claude Code | **Sprint 8c-bis (13):** §3.7.1 — tipo di parametro `messages` (elenco di messaggi annidati), graffe raddoppiate nel testo, elenco vuoto mostrato come "—" (necessari ai messaggi del 13). |
 | 2026-10-24 | Claude Code | **Sprint 8d (codice):** moduli 14, 16, 19, 15, 17 e 18 convertiti a codice + `params`; T18 comprende tutti i moduli 10–19 e gli errori di 14, 16 e 19 incorporati da 12 e 13 sono messaggi annidati (§3.7.1 aggiornata). Restano il `05` e i moduli dell'interfaccia e dell'IA (sprint 8e). Nessun comportamento visibile cambia. |
 | 2026-10-25 | Claude Code | **Sprint 8e, ultimo della traduzione (D40-3):** nuova §10.1 con la tabella dei messaggi scritti dalla finestra (`PREFERENCE_INVALID`, `PREFERENCE_VALUE_INVALID` con `ValueProblem`, `UI_COMMAND_FAILED`, `SESSION_SAVE_FAILED`, `UI_TRANSLATION_MISSING`) scritta prima del codice; §3.7.1 e T18 estese a tutto `src/astrotwo`; **D40-3 chiusa**. Test `tests/ui/test_messages_ui.py`. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9b (D41-9 e D41-10 decise dal proprietario):** frame di lettura nel testo d'aiuto del campo "Vai a" (§3.4); righe massime di default 5 000 nella finestra Catalog in view (§3.3, valore da confermare). Stato `approvato` invariato. |

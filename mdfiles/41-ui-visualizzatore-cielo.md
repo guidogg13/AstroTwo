@@ -344,6 +344,11 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
     il ⚠ nella scheda) con l'epoca dell'immagine e il numero di righe disegnabili su quelle della tabella: così
     dopo `catalog.set_columns` il pannello non resta con il solo `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN`
     di prima, che resta nel registro com'era (era vero quando fu scritto).
+  - **Campi densi (D41-10, decisione del proprietario del 2026-10-25, sprint 9b):** quando un catalogo visibile ha più
+    di `DENSE_SYMBOLS` = **2 000** simboli disegnati sulla base (scelta minore DA CONFERMARE), il pannello Messaggi
+    riceve la nota `CATALOG_DENSE` (una volta per livello e base) con il numero di simboli e la soglia, e i
+    suggerimenti: campo più piccolo, meno righe massime, simboli più piccoli con `catalog.set_style`. Nessuno stile
+    cambia da solo.
   - **Testi della scheda della sorgente (sprint 9, E7-b):** le righe della scheda vengono tutte dalla lingua
     dell'interfaccia: la fonte dell'epoca di visualizzazione da `epoch_origin` del 13 con la voce
     `DISPLAY_EPOCH_SOURCE`, il motivo della posizione mancante da `position_reason_code` del `05` con la voce
@@ -875,6 +880,7 @@ ai `params` di questi errori e degli avvisi di epoca. Un'eccezione senza codice 
 | `VIEW_NO_WCS` | `hips`, `catalogs`, `moc`, `distance` | — |
 | `CATALOG_EPOCH_UNKNOWN` | — | `image_epoch` (+ `layer_context`) |
 | `CATALOG_EPOCH_DIFFERS` | — | `catalog_epoch`, `image_epoch` (+ `layer_context`) |
+| `CATALOG_DENSE` | — | `drawn` (integer), `threshold` (integer) (+ `layer_context`); nota, sprint 9b |
 | `CATALOG_EPOCH_PROPAGATED` | — | `image_epoch`, `drawable` (integer), `rows` (integer) (+ `layer_context`); nota, sprint 9 |
 | `DISPLAY_EPOCH_SOURCE` | `image`, `image_undeclared`, `image_no_wcs`, `no_image`, `user` | — ; solo testo della scheda della sorgente, sprint 9 |
 | `SOURCE_NO_POSITION` | `columns_not_confirmed`, `row_invalid` | — ; solo testo della scheda della sorgente, sprint 9 |
@@ -935,6 +941,7 @@ mai abbassare in silenzio".
 | T26 | Cataloghi disegnati (sprint 4e) | catalogo sintetico su base `TAN`, poi sull'immagine FITS base; zoom e spostamento | posizioni disegnate entro 1 pixel da `sky_to_pixel` del 10 composto con `ViewGeometry`; forma, colore e dimensione dallo stile del livello (`set_plot_rules`); stile iniziale nel risultato del caricamento e nella riesecuzione | ricalcolo con il 10 e il 13 |
 | T27 | Clic e scheda (sprint 4e) | clic a 2 pixel logici da una sorgente, nel vuoto, Esc | `catalog.select` della riga giusta con `requested_by` = `mouse`; scheda con nome da UCD `meta.id;meta.main`, coordinate uguali a `format_coordinates` del 10, epoca del catalogo e sorgente; clic nel vuoto → selezione vuota; Esc chiude | test |
 | T28 | Epoche diverse (sprint 4e) | catalogo con epoca `J2016.0` su un'immagine con `MJD-OBS`; catalogo senza epoca; sfondo HiPS | `CATALOG_EPOCH_DIFFERS` con le due epoche; `CATALOG_EPOCH_UNKNOWN`; nessun avviso su HiPS | test |
+| T28d | Campo denso (sprint 9b, D41-10) | catalogo con 2 001 righe nel campo; con 2 000 | nota `CATALOG_DENSE` con 2 001 e 2 000, una volta sola; nessuna nota con 2 000 | test |
 | T28b | Epoche dopo `catalog.set_columns` (sprint 9, E7-a) | come T28, poi `catalog.set_columns` con pmRA/pmDE/Plx | nota `CATALOG_EPOCH_PROPAGATED` con l'epoca dell'immagine nel pannello Messaggi, una volta sola; nessun nuovo `CATALOG_EPOCH_DIFFERS`; scheda senza ⚠ | test |
 | T28c | Lingua della scheda e delle etichette (sprint 9, E7-b) | interfaccia in inglese: scheda di una riga propagata, di una riga senza posizione, testi del pannello dei livelli; scansione delle stringhe dei moduli dell'interfaccia | nessuna parola italiana nelle righe mostrate; in italiano le stesse righe dal catalogo; la scansione trova solo testi di ripiego dei messaggi con codice, docstring e log | test |
 | T29 | Epoca nella barra (correzione del 2026-10-21) | mouse su un'immagine con `MJD-OBS` | `epoch AAAA-MM-GGThh:mm:ss UTC` (ISO 8601 con scala), nessun "JD" nei testi dell'interfaccia | test |
@@ -1051,7 +1058,10 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
   funzioni HiPS pubbliche di `reproject` rispetto al campionamento del 12
   (12, P6); licenze di PySide6/Qt e di pytest-qt.
 
-- **D41-9 — "Vai a" fuori dalla proiezione dell'immagine base (B3): APERTA il 2026-10-25 (Gruppo 3, sprint 9).**
+- **D41-9 — "Vai a" fuori dalla proiezione dell'immagine base (B3): DECISA il 2026-10-25** dal proprietario:
+  **(b)** — `VIEW_CENTER_OUTSIDE_IMAGE` del `05` con il frame di lettura e il frame scritto nel testo d'aiuto del
+  campo "Vai a" (`40` §3.4); codice nello sprint 9b. Testo della domanda com'era (aperta lo stesso giorno, Gruppo 3,
+  sprint 9):
   Nella prova del proprietario "Go to" `85.25 -2.46` con HorseHead.fits come base ha dato `VIEW_PARAMETERS_INVALID`
   (`center_outside_projection`). **Causa riprodotta** (test `test_b3_go_to_with_image_base_and_galactic_display`):
   "Vai a" legge le coppie di numeri nel frame delle coordinate mostrate (`05`, `view.set_coordinate_display`); con il
@@ -1065,7 +1075,10 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
   vengono lette le coordinate; **(c)** passare da soli a una base creata centrata sul punto, con l'immagine che resta
   livello ma non si vede finché non si torna sul suo campo (cambia la regola «con un'immagine aperta la base è il suo
   WCS» e serve il disegno di un'immagine su una base non sua). Raccomandazione: **(b)**; (c) è una funzione nuova.
-- **D41-10 — Campi larghi con migliaia di simboli (E5): APERTA il 2026-10-25 (Gruppo 3, sprint 9).** Con un campo di
+- **D41-10 — Campi larghi con migliaia di simboli (E5): DECISA il 2026-10-25** dal proprietario: **(d)** — nota
+  `CATALOG_DENSE` (§3.8) e righe massime di default 5 000 nella finestra Catalog in view (`40` §3.3); soglia della
+  nota e valore del default sono scelte minori DA CONFERMARE; codice nello sprint 9b. Testo della domanda com'era
+  (aperta lo stesso giorno, Gruppo 3, sprint 9): Con un campo di
   circa 4.6° SIMBAD dà migliaia di oggetti e il cielo diventa illeggibile. Opzioni: **(a)** simboli più piccoli
   oltre una densità (es. più di N simboli per 100 × 100 pixel logici → dimensione 3 pixel), scritta nel pannello dei
   livelli; **(b)** nota `CATALOG_DENSE` nel pannello Messaggi con il numero di simboli disegnati e i suggerimenti
@@ -1101,3 +1114,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-25 | Claude Code | **Sprint 8f:** i messaggi di disegno di cataloghi e MOC e `CATALOG_EPOCH_*` portano `layer_context` (`40` §3.7.1); tabella di §10.1 aggiornata. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-a, E7-b):** nota `CATALOG_EPOCH_PROPAGATED` nel pannello Messaggi dopo la propagazione all'epoca dell'immagine (§3.8); scheda della sorgente tutta nella lingua dell'interfaccia (`DISPLAY_EPOCH_SOURCE`, `SOURCE_NO_POSITION`); tabella di §10.1 e test T28b, T28c. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9:** aperte **D41-9** (B3, "Vai a" fuori dalla proiezione dell'immagine base: causa riprodotta, opzioni) e **D41-10** (E5, campi larghi con migliaia di simboli: opzioni), §13. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9b:** D41-9 decisa (b) e D41-10 decisa (d) dal proprietario (§13); nota `CATALOG_DENSE` sopra 2 000 simboli (§3.8, scelta minore da confermare), tabella di §10.1, T28d. Stato `approvato` invariato. |

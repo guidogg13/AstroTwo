@@ -488,8 +488,12 @@
 <context>
     <name>GoToField</name>
     <message>
-        <source>Go to: object name or coordinates</source>
-        <translation>Vai a: nome dell&apos;oggetto o coordinate</translation>
+        <source>Galactic</source>
+        <translation>Galattico</translation>
+    </message>
+    <message>
+        <source>Go to: object name or coordinates (%1)</source>
+        <translation>Vai a: nome dell&apos;oggetto o coordinate (%1)</translation>
     </message>
 </context>
 <context>

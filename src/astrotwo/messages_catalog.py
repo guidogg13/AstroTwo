@@ -570,6 +570,17 @@ _add("VIEW_PARAMETERS_INVALID",
      geometry_required=("A ViewGeometry from make_view_wcs is required.",
                         "Serve una ViewGeometry di make_view_wcs.", ""),
      max_bar_pixels=("max_bar_pixels must be an integer ≥ 1.", "max_bar_pixels deve essere un intero ≥ 1.", ""))
+_add("VIEW_CENTER_OUTSIDE_IMAGE",
+     "The centre falls outside the projection of image {layer} «{name}», the base of the view: check the "
+     "coordinates, or remove the image to return to the sky base.",
+     "Il centro cade fuori dalla proiezione dell'immagine {layer} «{name}», base della vista: controllare le "
+     "coordinate o togliere l'immagine per tornare alla base del cielo.", "layer name!",
+     typed=("The coordinates were read in the {frame} frame of the coordinates shown: the point falls outside the "
+            "projection of image {layer} «{name}», the base of the view. Check the frame (View → Coordinates shown) "
+            "or remove the image to return to the sky base.",
+            "Coordinate lette nel frame {frame} delle coordinate mostrate: il punto cade fuori dalla proiezione "
+            "dell'immagine {layer} «{name}», base della vista. Controllare il frame (View → Coordinates shown) o "
+            "togliere l'immagine per tornare alla base del cielo.", "layer name! frame"))
 _add("FORMAT_PRECISION_INVALID",
      "The precision is not valid.", "La precisione non è valida.",
      decimal_needs_angle=("In decimal style the precision must be an angle, not {unit}.",
@@ -3144,6 +3155,11 @@ _add("CATALOG_EPOCH_DIFFERS",
      "table are not propagated (proper motion with catalog.set_columns).",
      "Catalogo all'epoca {catalog_epoch}, immagine all'epoca {image_epoch}; posizioni della tabella non "
      "propagate (moto proprio con catalog.set_columns).", "catalog_epoch image_epoch")
+_add("CATALOG_DENSE",
+     "{drawn} symbols drawn (more than {threshold}): the sky may be hard to read. Use a smaller field, fewer maximum "
+     "rows or smaller symbols (catalog.set_style).",
+     "{drawn} simboli disegnati (più di {threshold}): il cielo può essere difficile da leggere. Usare un campo più "
+     "piccolo, meno righe massime o simboli più piccoli (catalog.set_style).", "drawn:int threshold:int")
 _add("CATALOG_EPOCH_PROPAGATED",
      "Positions propagated with the proper motion to the epoch of the image, {image_epoch} ({drawable} of {rows} "
      "rows can be drawn).",

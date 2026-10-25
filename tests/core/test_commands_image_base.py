@@ -207,25 +207,37 @@ def test_hips_set_survey_warnings_once_per_source(session, service, cache, monke
 
 def test_b3_go_to_with_image_base_and_galactic_display(session, tmp_path):
     """Sprint 9, B3 (prova del proprietario: HorseHead.fits come base, "Go to" 85.25 -2.46 →
-    ``VIEW_PARAMETERS_INVALID`` «The centre falls outside the projection of the base»). Riprodotto: "Vai a" legge le
+    ``VIEW_PARAMETERS_INVALID`` «The centre falls outside the projection of the base»). Causa: "Vai a" legge le
     coordinate nel frame delle coordinate mostrate; con il galattico (l = 85.25°, b = −2.46°) il punto è a circa 119°
-    dal punto di tangenza della TAN dell'immagine e il ricentramento della base (fdce99b, 41 §3.2) vale solo senza
-    immagine. Il test fissa il comportamento attuale, in attesa della decisione del proprietario su B3."""
+    dal punto di tangenza della TAN dell'immagine, e con un'immagine come base la base non si ricrea (41 §3.2).
+    D41-9 (b), sprint 9b: ``VIEW_CENTER_OUTSIDE_IMAGE`` con l'immagine e, per una coppia scritta, il frame di lettura."""
     from astropy.coordinates import SkyCoord
+
+    from astrotwo.messages_catalog import message_text
 
     image = write(tmp_path / "hh.fits", header(crval=(85.27497, -2.458265), **{"RADESYS": "ICRS"}))
     assert run(session, "view.set_zoom", scale={"value": 1.0, "unit": "arcsec"}, window=WINDOW).status == "ok"
     assert run(session, "image.open", file={"path": image}).status == "ok"
     assert session.workspace.state.view.base_layer == "L1"
     assert run(session, "view.go_to", text="85.25 -2.46", window=WINDOW).status == "ok"  # ICRS: accanto all'immagine
+    before = session.workspace.state.view
     assert run(session, "view.set_coordinate_display", frame="galactic", format="decimal").status == "ok"
     far = run(session, "view.go_to", text="85.25 -2.46", window=WINDOW)
-    assert far.status == "error" and far.error.code == "VIEW_PARAMETERS_INVALID"
-    assert far.error.params["reason"] == "center_outside_projection"
+    assert far.status == "error" and far.error.code == "VIEW_CENTER_OUTSIDE_IMAGE"
+    assert far.error.params == {"layer": "L1", "name": "hh.fits", "reason": "typed", "frame": "galactic"}
+    assert message_text(far.error.code, far.error.params, "en").startswith(
+        "The coordinates were read in the galactic frame of the coordinates shown: the point falls outside the "
+        "projection of image L1 «hh.fits»")
+    assert session.workspace.state.view.center is before.center  # vista invariata
     typed = SkyCoord(85.25 * u.deg, -2.46 * u.deg, frame="galactic")
     assert typed.separation(SkyCoord(85.27497 * u.deg, -2.458265 * u.deg, frame="icrs")) > 90 * u.deg
-    # stesso caso in ICRS con un punto lontano dall'immagine (centro galattico, a più di 90°): la base resta
-    # l'immagine e non si ricrea
+    # in ICRS un punto lontano dall'immagine (centro galattico, a più di 90°); view.set_center: voce generale
     assert run(session, "view.set_coordinate_display", frame="icrs", format="decimal").status == "ok"
-    assert run(session, "view.go_to", text="266.4 -28.9", window=WINDOW).error.params["reason"] == \
-        "center_outside_projection"
+    assert run(session, "view.go_to", text="266.4 -28.9", window=WINDOW).error.params["frame"] == "icrs"
+    position = {"lon": {"value": 266.4, "unit": "deg"}, "lat": {"value": -28.9, "unit": "deg"}, "frame": "icrs",
+                "equinox": None, "obstime": None, "epoch": None, "epoch_reason": "prova senza epoca"}
+    center = run(session, "view.set_center", position=position, window=WINDOW)
+    assert center.error.code == "VIEW_CENTER_OUTSIDE_IMAGE" and center.error.params == {"layer": "L1", "name": "hh.fits"}
+    # senza immagine la base creata si ricrea (fdce99b): lo stesso punto va bene
+    assert run(session, "layer.remove", layer="L1").status == "ok"
+    assert run(session, "view.set_center", position=position, window=WINDOW).status == "ok"

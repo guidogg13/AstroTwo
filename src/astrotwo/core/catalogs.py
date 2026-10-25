@@ -370,6 +370,13 @@ def _ucd_words(ucd: str | None) -> list[str]:
     return [w.strip().lower() for w in (ucd or "").split(";") if w.strip()]
 
 
+def _primary_ucd(ucd: str | None) -> str | None:
+    """Parola principale di un UCD (la prima, IVOA UCD1+): ``pos.pm;pos.eq.ra`` è un moto proprio, non una posizione
+    (D13-22)."""
+    words = _ucd_words(ucd)
+    return words[0] if words else None
+
+
 def _coosys_frame(coosys) -> tuple[str | None, str | None, str | None, str | None]:
     """(frame, equinox, epoca, sistema) dal COOSYS; frame None se la corrispondenza non è univoca."""
     if coosys is None:
@@ -414,8 +421,8 @@ def _mango_frame(lon_utype: str | None, lat_utype: str | None) -> tuple[str, str
 def _positions_from_ucd(table: Table, coosys_by_id: dict) -> tuple[PositionColumns | None, list[ModuleWarning]]:
     notes: list[ModuleWarning] = []
     for lon_ucd, lat_ucd, implied in _UCD_PAIRS:
-        lons = [n for n in table.colnames if lon_ucd in _ucd_words(table[n].meta.get("ucd"))]
-        lats = [n for n in table.colnames if lat_ucd in _ucd_words(table[n].meta.get("ucd"))]
+        lons = [n for n in table.colnames if _primary_ucd(table[n].meta.get("ucd")) == lon_ucd]  # D13-22
+        lats = [n for n in table.colnames if _primary_ucd(table[n].meta.get("ucd")) == lat_ucd]
         if not lons or not lats:
             continue
         if len(lons) > 1 or len(lats) > 1:
@@ -2581,7 +2588,7 @@ def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]
     candidates, chosen = {}, {}
     for ucd_word in ("pos.eq.ra", "pos.eq.dec"):
         rows = [(str(r["column_name"]), _ucd_words(str(r["ucd"]))) for r in schema
-                if not np.ma.is_masked(r["ucd"]) and ucd_word in _ucd_words(str(r["ucd"]))]
+                if not np.ma.is_masked(r["ucd"]) and _primary_ucd(str(r["ucd"])) == ucd_word]  # D13-22
         candidates[ucd_word] = [row[0].strip('"') for row in rows if _IDENTIFIER.match(row[0])]
         chosen[ucd_word] = [row for row in rows if "meta.main" in row[1]] if len(rows) > 1 else rows
     unclear = [word for word, rows in chosen.items() if len(rows) != 1]

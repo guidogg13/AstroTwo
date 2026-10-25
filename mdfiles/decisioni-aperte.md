@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-25, con lo sprint 9: 20 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **18** (nuove `D41-9` — "Vai a" fuori dalla proiezione dell'immagine base, B3 — e `D41-10` — campi larghi con migliaia di simboli, E5 — nel 41 §13; `D13-22` — colonne di moto proprio prese come posizioni — nel 13 §13; `D32-3` — risultati più leggeri verso l'IA — nel 32 §13, **rinviata a dopo la v1**).
+**Dal 2026-10-25, con lo sprint 9b: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **15** (decise dal proprietario lo stesso giorno `D41-9` = (b) errore `VIEW_CENTER_OUTSIDE_IMAGE` con il frame di lettura e frame nel campo "Vai a", `D41-10` = (d) nota `CATALOG_DENSE` e 5 000 righe di default nella finestra, `D13-22` = (a) prima parola dell'UCD; prima nei file di origine 41 §13 e 13 §13).
+
+Prima, **Dal 2026-10-25, con lo sprint 9: 20 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **18** (nuove `D41-9` — "Vai a" fuori dalla proiezione dell'immagine base, B3 — e `D41-10` — campi larghi con migliaia di simboli, E5 — nel 41 §13; `D13-22` — colonne di moto proprio prese come posizioni — nel 13 §13; `D32-3` — risultati più leggeri verso l'IA — nel 32 §13, **rinviata a dopo la v1**).
 
 Prima, **Dal 2026-10-25, con lo sprint 8e: 16 aperte (invariate)** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **14**; **`D40-3` chiusa** (era già decisa il 2026-10-24: applicata a tutti i moduli negli sprint 8b–8e, controllata da T18 su tutto `src/astrotwo`); prima nel file di origine 40 §13.
 
@@ -298,7 +300,7 @@ gruppi successivi, A8 dopo il livello 1).
 | `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 | `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (18)
+## 5. GRUPPO 3 — rimandabili al momento del codice (15)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -315,9 +317,6 @@ gruppi successivi, A8 dopo il livello 1).
 | `D19-8` | PDS3 con `pdr`: **rimandata, bassa priorità** (decisione del proprietario del 2026-10-13): per ora niente `pdr`, un'etichetta PDS3 dà `PDS_UNREADABLE` "formato PDS3 non ancora supportato" | `19-core-dati-planetari.md` §13 |
 | `D14-13` | URL dei servizi dell'ESO in http (dal registro VO e nelle risposte SIA): il reindirizzamento a https codifica due volte l'URL e la richiesta viene rifiutata; oggi la demo usa https direttamente, nessuna modifica al codice del 14 | `14-core-protocolli-vo.md` §13 |
 | `D32-2` | Comando di ricerca nell'elenco dei cataloghi per l'assistente (nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13, poi esposto nel 32). Nata il 2026-10-23 dalla decisione su D32-1 (opzione (a)); **rinviata a dopo la v1** per decisione del proprietario | `32-ia-registro-strumenti.md` §13 |
-| `D41-9` | "Vai a" con un punto fuori dalla proiezione dell'immagine base (B3): oggi `VIEW_PARAMETERS_INVALID` `center_outside_projection`; causa riprodotta (frame galattico delle coordinate mostrate, ricentramento solo senza immagine). Opzioni (a) errore più chiaro, (b) (a) + frame scritto nel campo, (c) base creata automatica; raccomandata (b). Aperta il 2026-10-25 | `41-ui-visualizzatore-cielo.md` §13 |
-| `D41-10` | Campi larghi con migliaia di simboli (E5): (a) simboli più piccoli oltre una densità, (b) nota `CATALOG_DENSE`, (c) righe massime di default più basse nella finestra «Catalogo nel campo», (d) (b) + (c); raccomandata (d). Aperta il 2026-10-25 | `41-ui-visualizzatore-cielo.md` §13 |
-| `D13-22` | Colonne di moto proprio (`pos.pm;pos.eq.ra`) prese come posizioni quando le posizioni non hanno UCD: (a) solo la prima parola dell'UCD (UCD1+), (b) escludere `pos.pm`, (c) lasciare; raccomandata (a). Aperta il 2026-10-25 | `13-core-cataloghi.md` §13 |
 | `D32-3` | Risultati più leggeri verso l'IA (solo le colonne principali dei cataloghi) per provider con limiti bassi di token (es. Groq gratuito, circa 8 000 token al minuto): **rinviata a dopo la v1** (proprietario, 2026-10-25) | `32-ia-registro-strumenti.md` §13 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS come opzione esplicita (D13-14b): **rimandata, bassa priorità** (decisione del proprietario del 2026-10-11) | `13-core-cataloghi.md` §13 |
 
@@ -408,3 +407,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-24 | Claude Code | **`D40-7` decisa** (proprietario, 2026-10-24, opzione (b); sprint 8c-bis): tipo di parametro `message` (e `messages`) con `code`, `params`, `text`, reso in modo ricorsivo (profondità massima 3); il testo di terzi resta esterno e marcato anche verso l'IA. Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 14). |
 | 2026-10-25 | Claude Code | **`D40-3` chiusa** (sprint 8e, ultimo della traduzione dei messaggi; la decisione era del 2026-10-24): `04`, `05`, `30`–`35`, `40`, `41`, `42`, `44` convertiti, T18 su tutto `src/astrotwo`; scritta prima nel file di origine 40 §13. Nessuna decisione nuova né aperta (16 aperte). |
 | 2026-10-25 | Claude Code | **Sprint 9:** aperte `D41-9` (B3), `D41-10` (E5), `D13-22` (colonne di moto proprio prese come posizioni) e registrata `D32-3` (risultati più leggeri verso l'IA, rinviata a dopo la v1); prima nei file di origine 41, 13 e 32 §13. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 18). |
+| 2026-10-25 | Claude Code | **`D41-9`, `D41-10`, `D13-22` decise** (proprietario, 2026-10-25; prima nei file di origine 41 §13 e 13 §13): (b), (d), (a). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). |
