@@ -165,10 +165,11 @@ class AssistantErrorCode:
 class AssistantError(Exception):
     """Assistente non disponibile o richiesta non accettata (§3.7)."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3, 35 §10.1)
 
 
 # --------------------------------------------------------------------------
@@ -262,6 +263,7 @@ class Availability:
     available: bool
     code: str | None = None
     reason: str | None = None
+    params: Mapping[str, object] = field(default_factory=dict)  # D40-3: valori JSON del motivo
 
     @property
     def text(self) -> str:
@@ -429,10 +431,11 @@ class CallLogEntry:
 
 @dataclass(frozen=True)
 class Note:
-    """Nota sotto la risposta (§3.3, §3.5): codice e testo."""
+    """Nota sotto la risposta (§3.3, §3.5): codice, testo e ``params`` (D40-3)."""
 
     code: str
     text: str
+    params: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -507,14 +510,16 @@ def _report_json(report: VerificationReport | None) -> dict | None:
     return {"summary": report.summary, "interrupted": report.interrupted, "strict_retry": report.strict_retry,
             "numbers": [{"text": n.number.text, "start": n.number.start, "end": n.number.end, "state": n.state,
                          "command": n.command} for n in report.numbers],
-            "issues": [{"code": i.code, "text": i.text, "command": i.command} for i in report.issues]}
+            "issues": [{"code": i.code, "text": i.text, "command": i.command, "params": dict(i.params)}
+                       for i in report.issues]}
 
 
 def _answer_json(answer: AnswerRecord) -> dict:
     return {"number": answer.number, "text": answer.text, "verification": _report_json(answer.report),
             "replaced": [{"text": t, "verification": _report_json(r)} for t, r in answer.replaced],
-            "notes": [{"code": n.code, "text": n.text} for n in answer.notes],
-            "error": None if answer.error is None else {"code": answer.error.code, "text": answer.error.message},
+            "notes": [{"code": n.code, "text": n.text, "params": dict(n.params)} for n in answer.notes],
+            "error": None if answer.error is None else {"code": answer.error.code, "text": answer.error.message,
+                                                        "params": dict(answer.error.params)},
             "calls": [{"call_id": c.call_id, "tool": c.tool, "number": c.number, "error": c.error_code,
                        "after_external_text": c.after_external_text, "confirmation_asked": c.confirmation_asked,
                        "confirmed": c.confirmed} for c in answer.calls],
@@ -574,6 +579,8 @@ class RequestSent:
 class ProviderNoticeEvent:
     response: int
     text: str
+    code: str = "AI_RETRY"
+    params: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -617,9 +624,9 @@ class _Run:
     pending: dict[str, tuple[threading.Event, list]] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def note(self, code: str, text: str) -> None:
+    def note(self, code: str, text: str, params: Mapping[str, object] | None = None) -> None:
         if all(n.code != code for n in self.notes):
-            self.notes.append(Note(code, text))
+            self.notes.append(Note(code, text, dict(params or {})))
 
 
 class Response:
@@ -696,7 +703,8 @@ class ChatAssistant:
         """La conversazione attuale si chiude e non si invia più al modello (§3.1)."""
         with self._lock:
             if self._run is not None:
-                raise AssistantError(AssistantErrorCode.BUSY, "risposta in corso: prima Stop")
+                raise AssistantError(AssistantErrorCode.BUSY, "risposta in corso: prima Stop",
+                                     params={"reason": "stop_first"})
             self.conversation.closed = True
             self.conversation = self._new()
             return self.conversation
@@ -705,7 +713,8 @@ class ChatAssistant:
         """Profilo cambiato nel 44: la conversazione continua con il nuovo profilo dalla risposta successiva."""
         with self._lock:
             if self._run is not None:
-                raise AssistantError(AssistantErrorCode.BUSY, "risposta in corso: prima Stop")
+                raise AssistantError(AssistantErrorCode.BUSY, "risposta in corso: prima Stop",
+                                     params={"reason": "stop_first"})
             self.adapter = adapter
             if adapter is not None and not self.conversation.messages:
                 self.conversation.profile, self.conversation.model = adapter.profile.id, adapter.profile.model
@@ -719,15 +728,17 @@ class ChatAssistant:
             try:
                 present = self.adapter.keychain.has_key(profile.id)
             except KeychainError as exc:
-                return Availability(False, exc.code, f"Portachiavi non disponibile ({exc.message})")
+                return Availability(False, exc.code, f"Portachiavi non disponibile ({exc.message})", exc.params)
             if not present:
-                return Availability(False, "KEY_NOT_FOUND", f"nessuna chiave nel Portachiavi per {profile.id}")
+                return Availability(False, "KEY_NOT_FOUND", f"nessuna chiave nel Portachiavi per {profile.id}",
+                                    {"profile_id": profile.id})
         if self.adapter.capabilities().tool_calling is False:
-            return Availability(False, "AI_NO_TOOLS", f"il modello {profile.model} non chiama strumenti")
+            return Availability(False, "AI_NO_TOOLS", f"il modello {profile.model} non chiama strumenti",
+                                {"reason": "model_without_tools", "model": profile.model})
         consent = self.consents.get(profile.id)
         if consent is None or consent.version < CONSENT_TEXT_VERSION:
             return Availability(False, AssistantErrorCode.CONSENT_REQUIRED,
-                                f"consenso all'invio dei dati a {profile.host} non dato")
+                                f"consenso all'invio dei dati a {profile.host} non dato", {"host": profile.host})
         return Availability(True)
 
     def record_consent(self) -> ConsentRecord:
@@ -750,10 +761,11 @@ class ChatAssistant:
             raise ValueError("messaggio dell'utente vuoto")
         available = self.availability()
         if not available.available:
-            raise AssistantError(available.code, available.text)
+            raise AssistantError(available.code, available.text, params=available.params)
         with self._lock:
             if self._run is not None:
-                raise AssistantError(AssistantErrorCode.BUSY, "un'altra risposta è in corso")
+                raise AssistantError(AssistantErrorCode.BUSY, "un'altra risposta è in corso",
+                                     params={"reason": "another_running"})
             self._responses += 1
             run = _Run(self._responses, self.conversation, message, self.clock())
             self._run = run
@@ -820,8 +832,9 @@ class ChatAssistant:
         try:
             answer = self._respond(run)
         except Exception as exc:  # noqa: BLE001 - un errore di programmazione ferma solo questa risposta
-            answer = self._record(run, "", None, ProviderError(AssistantErrorCode.FAILED,
-                                                                f"{type(exc).__name__}: {exc}"), None, ())
+            answer = self._record(run, "", None, ProviderError(
+                AssistantErrorCode.FAILED, f"{type(exc).__name__}: {exc}",
+                params={"error_type": type(exc).__name__, "detail": str(exc)}), None, ())
         finally:
             finished.set()
             watcher.join(timeout=1.0)
@@ -862,9 +875,10 @@ class ChatAssistant:
 
     def _record(self, run: _Run, text: str, report, error, reason, replaced) -> AnswerRecord:
         if run.time_limit:
-            run.note(AssistantErrorCode.TIME_LIMIT, f"limite di {self.limits.max_seconds / 60:g} minuti raggiunto")
+            run.note(AssistantErrorCode.TIME_LIMIT, f"limite di {self.limits.max_seconds / 60:g} minuti raggiunto",
+                     {"limit": {"value": self.limits.max_seconds / 60, "unit": "min"}})
         if run.stopped or run.time_limit or reason == "cancelled":
-            run.note(AssistantErrorCode.CANCELLED, "risposta interrotta")
+            run.note(AssistantErrorCode.CANCELLED, "risposta interrotta", {"reason": "note"})
         return AnswerRecord(run.conversation.id, run.number, text, report, tuple(run.notes), tuple(run.calls),
                             tuple(run.requests), run.tokens, estimate_cost(run.tokens, self.pricing), error, reason,
                             run.stopped or run.time_limit or reason == "cancelled", replaced)
@@ -930,7 +944,7 @@ class ChatAssistant:
             elif isinstance(event, Usage):
                 usage = event
             elif isinstance(event, ProviderNotice):
-                self._emit(ProviderNoticeEvent(run.number, event.text))
+                self._emit(ProviderNoticeEvent(run.number, event.text, event.code, event.params))
             elif isinstance(event, ProviderError):
                 error = event
             elif isinstance(event, TurnEnd):
@@ -940,7 +954,8 @@ class ChatAssistant:
             run.requests.append(record)
             self._emit(RequestSent(run.number, record))
         if reason is None and error is None and not run.cancel.cancelled:
-            error = ProviderError("AI_BAD_RESPONSE", "risposta del provider finita senza motivo di fine")
+            error = ProviderError("AI_BAD_RESPONSE", "risposta del provider finita senza motivo di fine",
+                                  params={"reason": "no_stop_reason"})
         return "".join(text), calls, usage, error, reason
 
     # --- una chiamata di strumento (32 §3.5) -----------------------------------------------
@@ -958,22 +973,25 @@ class ChatAssistant:
         return ToolResultMessage(request.id, json.dumps(outcome.model_result, ensure_ascii=False, allow_nan=False),
                                  is_error=outcome.is_error)
 
-    def _not_executed(self, request: ToolCallRequest, code: str, text: str) -> ToolCallOutcome:
+    def _not_executed(self, request: ToolCallRequest, code: str, text: str,
+                      params: Mapping[str, object] | None = None) -> ToolCallOutcome:
         command = self.tools.command_name(request.name)
-        error = ToolRegistryError(code, text, tool=request.name, command=command)
+        error = ToolRegistryError(code, text, params=params, tool=request.name, command=command)
         return ToolCallOutcome(request.id, request.name, error.model_result(), error_code=code)
 
     def _call_entry(self, run: _Run, request: ToolCallRequest) -> CallLogEntry:
         after = run.after_external
         if run.cancel.cancelled:
             return CallLogEntry(self._not_executed(request, AssistantErrorCode.CANCELLED,
-                                                   "the answer was stopped: command not executed"), after, False)
+                                                   "the answer was stopped: command not executed",
+                                                   {"reason": "not_executed"}), after, False)
         if len(run.calls) >= self.limits.max_calls:
             run.tool_limit = True
-            run.note(AssistantErrorCode.TOOL_LIMIT, f"limite di {self.limits.max_calls} comandi raggiunto")
+            run.note(AssistantErrorCode.TOOL_LIMIT, f"limite di {self.limits.max_calls} comandi raggiunto",
+                     {"reason": "note", "max_calls": self.limits.max_calls})
             return CallLogEntry(self._not_executed(request, AssistantErrorCode.TOOL_LIMIT, (
-                f"limit of {self.limits.max_calls} commands for this answer reached: command not executed")),
-                after, False)
+                f"limit of {self.limits.max_calls} commands for this answer reached: command not executed"),
+                {"reason": "not_executed", "max_calls": self.limits.max_calls}), after, False)
         try:
             command = self.tools.command_for(request.name, request.arguments, self._requested_by(run, request.id),
                                              self.executor.state())

@@ -19,8 +19,8 @@ import re
 import threading
 import time
 import urllib.parse
-from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from astrotwo.ai.keychain_keys import KeychainError, _clean_text
@@ -102,10 +102,29 @@ class ProviderErrorCode:
 class ProviderAdapterError(Exception):
     """Errore fuori dallo streaming (profilo, indirizzo, chiave) con codice di §10."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3); mai la chiave
+
+
+class ProfileError(ValueError):
+    """Profilo del provider non valido (``AI_PROFILE_INVALID``, 30 §10.1): sottoclasse di ``ValueError``."""
+
+    def __init__(self, message: str, *, params: Mapping[str, object]) -> None:
+        super().__init__(message)
+        self.code = "AI_PROFILE_INVALID"
+        self.message = message
+        self.params = dict(params)
+
+
+class _StreamProblem(RuntimeError):
+    """Evento dello streaming non conforme; ``reason`` e ``fields`` diventano i ``params`` di ``AI_BAD_RESPONSE``."""
+
+    def __init__(self, reason: str, message: str, **fields: object) -> None:
+        super().__init__(message)
+        self.params = {"reason": reason, **fields}
 
 
 # --------------------------------------------------------------------------
@@ -223,19 +242,24 @@ class ProviderProfile:
 
     def __post_init__(self) -> None:
         if self.kind not in ("anthropic", "openai_compatible"):
-            raise ValueError(f"kind {self.kind!r}: anthropic oppure openai_compatible")
+            raise ProfileError(f"kind {self.kind!r}: anthropic oppure openai_compatible",
+                               params={"reason": "kind", "kind": str(self.kind)})
         parsed = urllib.parse.urlsplit(self.base_url or "")
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            raise ValueError(f"base_url {self.base_url!r}: indirizzo http(s) obbligatorio")
+            raise ProfileError(f"base_url {self.base_url!r}: indirizzo http(s) obbligatorio",
+                               params={"reason": "base_url", "base_url": str(self.base_url)})
         if not isinstance(self.model, str) or not self.model.strip():
-            raise ValueError("model: scelto dall'utente (nessun modello predefinito nel codice)")
+            raise ProfileError("model: scelto dall'utente (nessun modello predefinito nel codice)",
+                               params={"reason": "model_required"})
         if isinstance(self.max_output_tokens, bool) or not isinstance(self.max_output_tokens, int) \
                 or self.max_output_tokens <= 0:
-            raise ValueError("max_output_tokens: intero > 0")
+            raise ProfileError("max_output_tokens: intero > 0", params={"reason": "max_output_tokens"})
         if self.preset != "custom" and self.preset not in _PRESETS:
-            raise ValueError(f"preset {self.preset!r} non nell'elenco")
+            raise ProfileError(f"preset {self.preset!r} non nell'elenco",
+                               params={"reason": "preset_unknown", "preset": str(self.preset)})
         if self.max_tokens_field not in ("max_tokens", "max_completion_tokens"):
-            raise ValueError("max_tokens_field: max_tokens o max_completion_tokens")
+            raise ProfileError("max_tokens_field: max_tokens o max_completion_tokens",
+                               params={"reason": "max_tokens_field"})
 
     @property
     def host(self) -> str:
@@ -262,7 +286,8 @@ def profile_from_preset(preset: str, model: str, *, max_output_tokens: int = DEF
                         base_url: str | None = None) -> ProviderProfile:
     """Profilo da un profilo predefinito; il modello lo sceglie l'utente; indirizzo modificabile."""
     if preset not in _PRESETS:
-        raise ValueError(f"preset {preset!r} non nell'elenco ({', '.join(_PRESETS)})")
+        raise ProfileError(f"preset {preset!r} non nell'elenco ({', '.join(_PRESETS)})",
+                           params={"reason": "preset_not_in_list", "preset": preset, "presets": list(_PRESETS)})
     p = _PRESETS[preset]
     return ProviderProfile(kind=p.kind, base_url=base_url or p.base_url, model=model,
                            max_output_tokens=max_output_tokens, preset=preset, max_tokens_field=p.max_tokens_field)
@@ -349,7 +374,11 @@ class Usage:
 
 @dataclass(frozen=True)
 class ProviderNotice:
+    """Avviso di una ripetizione (``AI_RETRY``): ``text`` è il testo italiano, ``params`` i valori del messaggio."""
+
+    code: str
     text: str
+    params: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -362,6 +391,7 @@ class ProviderError:
     code: str
     message: str
     retry_after: float | None = None
+    params: Mapping[str, object] = field(default_factory=dict)  # D40-3: valori JSON del messaggio
 
 
 @dataclass(frozen=True)
@@ -449,22 +479,25 @@ def _retry_after(response) -> float | None:
 def _status_error(status: int, text: str, retry_after: float | None) -> tuple[ProviderError, bool]:
     """(errore di §10, ripetibile)."""
     if status in (401, 403):
-        return ProviderError(ProviderErrorCode.AUTH, f"chiave non valida o senza permessi (HTTP {status}): {text}"), False
+        return ProviderError(ProviderErrorCode.AUTH, f"chiave non valida o senza permessi (HTTP {status}): {text}",
+                             params={"status": status, "detail": text}), False
     if status == 404:
-        return ProviderError(ProviderErrorCode.MODEL_NOT_FOUND, f"modello o endpoint inesistente (HTTP 404): {text}"), \
-            False
+        return ProviderError(ProviderErrorCode.MODEL_NOT_FOUND, f"modello o endpoint inesistente (HTTP 404): {text}",
+                             params={"status": status, "detail": text}), False
     if status == 429:
-        return ProviderError(ProviderErrorCode.RATE_LIMIT, f"troppe richieste (HTTP 429): {text}", retry_after), True
+        return ProviderError(ProviderErrorCode.RATE_LIMIT, f"troppe richieste (HTTP 429): {text}", retry_after,
+                             params={"status": status, "detail": text}), True
     if status in RETRY_STATUSES:
         return ProviderError(ProviderErrorCode.SERVICE, f"errore del servizio (HTTP {status}): {text}",
-                             retry_after), True
+                             retry_after, params={"reason": "http_error", "status": status, "detail": text}), True
     if _CONTEXT_HINT.search(text):
         return ProviderError(ProviderErrorCode.CONTEXT_TOO_LONG, f"conversazione oltre il contesto del modello "
-                             f"(HTTP {status}): {text}"), False
+                             f"(HTTP {status}): {text}", params={"status": status, "detail": text}), False
     if _TOOLS_HINT.search(text):
-        return ProviderError(ProviderErrorCode.NO_TOOLS, f"il modello non chiama strumenti (HTTP {status}): {text}"), \
-            False
-    return ProviderError(ProviderErrorCode.SERVICE, f"richiesta rifiutata dal servizio (HTTP {status}): {text}"), False
+        return ProviderError(ProviderErrorCode.NO_TOOLS, f"il modello non chiama strumenti (HTTP {status}): {text}",
+                             params={"status": status, "detail": text}), False
+    return ProviderError(ProviderErrorCode.SERVICE, f"richiesta rifiutata dal servizio (HTTP {status}): {text}",
+                         params={"reason": "rejected", "status": status, "detail": text}), False
 
 
 def _response_text(exc) -> str:
@@ -601,15 +634,25 @@ class ProviderAdapter:
         status_types = (anthropic.APIStatusError, openai.APIStatusError)
         if isinstance(exc, timeout_types):
             return ProviderError(ProviderErrorCode.TIMEOUT, f"tempo massimo superato (connessione "
-                                 f"{options.connect_timeout:g} s, lettura {options.read_timeout:g} s)"), False
+                                 f"{options.connect_timeout:g} s, lettura {options.read_timeout:g} s)",
+                                 params={"reason": "connect_read",
+                                         "connect": {"value": options.connect_timeout, "unit": "s"},
+                                         "read": {"value": options.read_timeout, "unit": "s"}}), False
         if isinstance(exc, connection_types):
+            detail = self._clean(str(exc), key)
             return ProviderError(ProviderErrorCode.CONNECTION, f"connessione impossibile con "
-                                 f"{self.profile.host}: {self._clean(str(exc), key)}"), True
+                                 f"{self.profile.host}: {detail}",
+                                 params={"host": self.profile.host, "detail": detail}), True
         if isinstance(exc, status_types):
             return _status_error(exc.status_code, self._clean(_response_text(exc), key),
                                  _retry_after(getattr(exc, "response", None)))
+        detail = self._clean(str(exc), key)
+        if isinstance(exc, _StreamProblem):  # evento dello streaming non conforme: motivo e valori strutturati
+            return ProviderError(ProviderErrorCode.BAD_RESPONSE, f"risposta non conforme: RuntimeError: {detail}",
+                                 params=dict(exc.params)), False
         return ProviderError(ProviderErrorCode.BAD_RESPONSE, f"risposta non conforme: {type(exc).__name__}: "
-                             f"{self._clean(str(exc), key)}"), False
+                             f"{detail}", params={"reason": "other", "error_type": type(exc).__name__,
+                                                  "detail": detail}), False
 
     def stream_turn(self, messages: Sequence[object], tools: Sequence[ToolDefinition] = (),
                     options: TurnOptions | None = None, cancel=None) -> Iterator[object]:
@@ -618,7 +661,7 @@ class ProviderAdapter:
         try:
             key = self._key()
         except KeychainError as exc:
-            yield ProviderError(exc.code, exc.message)
+            yield ProviderError(exc.code, exc.message, params=exc.params)
             return
         body = self._body(list(messages), list(tools), options)
         self._last = RequestRecord(url=self._url(), sent_at=_now(), body=copy.deepcopy(body))
@@ -647,8 +690,7 @@ class ProviderAdapter:
                 wait = error.retry_after if error.retry_after is not None else RETRY_WAITS[attempt]
                 wait = min(wait, MAX_RETRY_AFTER)
                 attempt += 1
-                yield ProviderNotice(f"ripetuta dopo {error.code} ({error.message.split(':')[0]}), attesa "
-                                     f"{wait:g} s (tentativo {attempt + 1} di {MAX_RETRIES + 1})")
+                yield self._retry_notice(error, wait, attempt)
                 self._sleep(wait)
         watchdog = _Watchdog(stream, options.silence_timeout, cancel)
         try:
@@ -673,14 +715,26 @@ class ProviderAdapter:
             yield TurnEnd("cancelled")
         elif watchdog.reason == "silence":
             yield ProviderError(ProviderErrorCode.TIMEOUT, f"tempo massimo superato: {options.silence_timeout:g} s "
-                                "di silenzio nello streaming")
+                                "di silenzio nello streaming",
+                                params={"reason": "silence", "silence": {"value": options.silence_timeout,
+                                                                           "unit": "s"}})
+
+    def _retry_notice(self, error: ProviderError, wait: float, attempt: int) -> ProviderNotice:
+        """Avviso della ripetizione ``attempt`` (già incrementato) dopo ``error``."""
+        text = (f"ripetuta dopo {error.code} ({error.message.split(':')[0]}), attesa {wait:g} s (tentativo "
+                f"{attempt + 1} di {MAX_RETRIES + 1})")
+        common = {"error_code": error.code, "wait": {"value": wait, "unit": "s"}, "attempt": attempt + 1,
+                  "attempts": MAX_RETRIES + 1}
+        if error.code == ProviderErrorCode.CONNECTION:
+            return ProviderNotice("AI_RETRY", text, {"reason": "connection", "host": error.params["host"], **common})
+        return ProviderNotice("AI_RETRY", text, {"reason": "http_status", "status": error.params["status"], **common})
 
     def list_models(self) -> ModelList:
         """Elenco dei modelli dell'endpoint (§3.4); nessun elenco nel codice."""
         try:
             key = self._key()
         except KeychainError as exc:
-            raise ProviderAdapterError(exc.code, exc.message) from None
+            raise ProviderAdapterError(exc.code, exc.message, params=exc.params) from None
         client = self._client(key, TurnOptions())
         try:
             models = tuple(self._models(client))
@@ -688,9 +742,11 @@ class ProviderAdapter:
             error, _ = self._classify(exc, key, TurnOptions())
             if error.code in (ProviderErrorCode.MODEL_NOT_FOUND, ProviderErrorCode.SERVICE,
                               ProviderErrorCode.BAD_RESPONSE):
-                return ModelList((), ProviderError(ProviderErrorCode.MODELS_UNAVAILABLE, "elenco dei modelli non "
-                                                   f"disponibile ({error.message}): scrivere l'identificativo a mano"))
-            raise ProviderAdapterError(error.code, error.message) from None
+                return ModelList((), ProviderError(
+                    ProviderErrorCode.MODELS_UNAVAILABLE, "elenco dei modelli non "
+                    f"disponibile ({error.message}): scrivere l'identificativo a mano",
+                    params={"cause": {"code": error.code, "params": dict(error.params), "text": error.message}}))
+            raise ProviderAdapterError(error.code, error.message, params=error.params) from None
         finally:
             client.close()
         for m in models:
@@ -721,7 +777,8 @@ def _check_transport(profile: ProviderProfile) -> None:
     scheme = urllib.parse.urlsplit(profile.base_url).scheme
     if scheme != "https" and not profile.local:
         raise ProviderAdapterError(ProviderErrorCode.INSECURE_ENDPOINT, f"{profile.base_url}: un endpoint remoto "
-                                   "deve essere https; nessuna richiesta inviata")
+                                   "deve essere https; nessuna richiesta inviata",
+                                   params={"base_url": profile.base_url})
 
 
 # --------------------------------------------------------------------------
@@ -825,16 +882,17 @@ class AnthropicAdapter(ProviderAdapter):
             elif kind == "message_stop":
                 break
             elif kind == "error":
-                raise RuntimeError(f"errore nello streaming: {getattr(event, 'error', event)}")
+                detail = str(getattr(event, "error", event))
+                raise _StreamProblem("stream_error", f"errore nello streaming: {detail}", detail=detail)
             elif kind != "ping":
-                raise RuntimeError(f"evento sconosciuto {kind!r}")
+                raise _StreamProblem("unknown_event", f"evento sconosciuto {kind!r}", event=str(kind))
         else:
             if not watchdog.reason:
-                raise RuntimeError("streaming interrotto prima di message_stop")
+                raise _StreamProblem("stream_cut", "streaming interrotto prima di message_stop")
             return
         yield Usage(usage["input"], usage["output"], usage["cache_read"], usage["cache_creation"])
         if reason not in _ANTHROPIC_STOP:
-            raise RuntimeError(f"motivo di fine {reason!r} non previsto")
+            raise _StreamProblem("unknown_stop_reason", f"motivo di fine {reason!r} non previsto", stop_reason=str(reason))
         yield TurnEnd(_ANTHROPIC_STOP[reason])
 
     def _models(self, client) -> list[ModelInfo]:
@@ -927,7 +985,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         if watchdog.reason:
             return
         if reason is None:
-            raise RuntimeError("streaming finito senza finish_reason")
+            raise _StreamProblem("no_finish_reason", "streaming finito senza finish_reason")
         for index in sorted(calls):
             c = calls[index]
             yield ToolCallRequest(c["id"] or f"call_{index}", c["name"], c["args"] or "{}")
@@ -937,7 +995,8 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             yield TurnEnd("refusal")
             return
         if reason not in _OPENAI_STOP:
-            raise RuntimeError(f"finish_reason {reason!r} non previsto")
+            raise _StreamProblem("unknown_finish_reason", f"finish_reason {reason!r} non previsto",
+                                 finish_reason=str(reason))
         yield TurnEnd(_OPENAI_STOP[reason])
 
     def _models(self, client) -> list[ModelInfo]:

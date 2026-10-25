@@ -562,6 +562,7 @@ class VerificationIssue:
     start: int | None = None
     end: int | None = None
     command: int | None = None
+    params: Mapping[str, object] = field(default_factory=dict)  # D40-3: valori JSON del messaggio
 
 
 def _plural(n: int, one: str, many: str) -> str:
@@ -639,7 +640,8 @@ def _action_issues(call_log: Sequence, tools: ToolRegistry) -> list[Verification
             if after and not (spec.read_only and not spec.network) and outcome.confirmed != "yes":
                 issues.append(VerificationIssue(
                     "ACTION_WITHOUT_CONFIRMATION", f"#{outcome.number} {command.name}: chiesto dopo un testo esterno "
-                    "senza la conferma dell'utente (errore di programmazione)", command=outcome.number))
+                    "senza la conferma dell'utente (errore di programmazione)", command=outcome.number,
+                    params={"number": outcome.number, "command": command.name}))
         model_result = getattr(outcome, "model_result", None) or {}
         if getattr(outcome, "external_text", False) or model_result.get("contains_external_text"):
             after = True
@@ -673,10 +675,10 @@ def verify_answer(text: str, user_messages: Sequence[str], results: Sequence, ca
             checked.append(CheckedNumber(n, "excluded"))
             if n.exception == "X1" and int(n.text[1:]) not in known:
                 issues.append(VerificationIssue("VERIFY_COMMAND_UNKNOWN", f"comando inesistente: {n.text}", n.start,
-                                                n.end, int(n.text[1:])))
+                                                n.end, int(n.text[1:]), params={"reference": n.text}))
             elif n.exception == "X2" and n.text not in layers:
                 issues.append(VerificationIssue("VERIFY_LAYER_UNKNOWN", f"livello inesistente: {n.text}", n.start,
-                                                n.end))
+                                                n.end, params={"layer": n.text}))
             continue
         checked.append(_check(n, indexes, recent))
     issues += _action_issues(call_log, tools)

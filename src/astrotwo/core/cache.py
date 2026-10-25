@@ -89,19 +89,23 @@ NETWORK_TIMEOUTS = NetworkTimeouts()
 class CacheError(Exception):
     """Errore della cache con identificatore della specifica (§10)."""
 
-    def __init__(self, code: str, message: str, **details: object) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 **details: object) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3); il testo resta italiano e invariato
         self.details = details
 
 
 class CacheWarning(UserWarning):
     """Avviso della cache (es. ``CACHE_UNAVAILABLE``): il programma continua."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, params: Mapping[str, object] | None = None) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
+        self.message = message
+        self.params = dict(params or {})
 
 
 @dataclass(frozen=True)
@@ -144,11 +148,14 @@ def _check_key(key: object) -> str:
 
 def _check_provenance(origin: object, retrieved_at: object) -> str:
     if not isinstance(origin, str) or not origin.strip():
-        raise CacheError("CACHE_PROVENANCE_MISSING", "origine mancante: nessun dato senza provenienza")
+        raise CacheError("CACHE_PROVENANCE_MISSING", "origine mancante: nessun dato senza provenienza",
+                         params={"reason": "origin"})
     if not isinstance(retrieved_at, datetime):
-        raise CacheError("CACHE_PROVENANCE_MISSING", "data di scaricamento mancante")
+        raise CacheError("CACHE_PROVENANCE_MISSING", "data di scaricamento mancante",
+                         params={"reason": "retrieved_at"})
     if retrieved_at.tzinfo is None or retrieved_at.utcoffset() is None:
-        raise CacheError("CACHE_PROVENANCE_MISSING", "data di scaricamento senza fuso orario: serve UTC")
+        raise CacheError("CACHE_PROVENANCE_MISSING", "data di scaricamento senza fuso orario: serve UTC",
+                         params={"reason": "no_timezone"})
     return retrieved_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
@@ -197,12 +204,13 @@ class SharedCache:
             self._db = self._connect()
         except sqlite3.DatabaseError as exc:
             if self._is_corruption(exc):
-                self._recreate(f"database corrotto ({exc}): cache ricreata vuota")
+                self._recreate("corrupt", f"database corrotto ({exc}): cache ricreata vuota", {"detail": str(exc)})
             else:
-                self._disable(f"database non utilizzabile ({exc}): cache ignorata")
+                self._disable("unusable", f"database non utilizzabile ({exc}): cache ignorata", {"detail": str(exc)})
             return
         except OSError as exc:
-            self._disable(f"cartella {self.root} non scrivibile ({exc}): cache ignorata")
+            self._disable("folder_unwritable", f"cartella {self.root} non scrivibile ({exc}): cache ignorata",
+                          {"folder": str(self.root), "detail": str(exc)})
             return
         self.available = True
         with _CLEANED_LOCK:  # D04 (b): una sola volta per processo e per cartella
@@ -236,9 +244,10 @@ class SharedCache:
         text = str(exc).lower()
         return "not a database" in text or "malformed" in text or "quick_check" in text or "corrupt" in text
 
-    def _recreate(self, reason: str) -> None:
-        warnings.warn(CacheWarning("CACHE_UNAVAILABLE", reason), stacklevel=3)
-        log.warning("CACHE_UNAVAILABLE: %s", reason)
+    def _recreate(self, reason: str, text: str, params: Mapping[str, object]) -> None:
+        """Cache ricreata vuota (``CACHE_UNAVAILABLE`` con ``reason``, 04 §10.1)."""
+        warnings.warn(CacheWarning("CACHE_UNAVAILABLE", text, {"reason": reason, **params}), stacklevel=3)
+        log.warning("CACHE_UNAVAILABLE: %s", text)
         try:
             for suffix in ("", "-journal", "-wal", "-shm"):
                 (self.root / f"{_DB_NAME}{suffix}").unlink(missing_ok=True)
@@ -246,13 +255,15 @@ class SharedCache:
             (self.root / _FILES_DIR).mkdir(parents=True, exist_ok=True)
             self._db = self._connect()
         except (OSError, sqlite3.DatabaseError) as exc:
-            self._disable(f"ricreazione non riuscita ({exc}): cache ignorata")
+            self._disable("recreate_failed", f"ricreazione non riuscita ({exc}): cache ignorata",
+                          {"detail": str(exc)})
             return
         self.available = True
 
-    def _disable(self, reason: str) -> None:
-        warnings.warn(CacheWarning("CACHE_UNAVAILABLE", reason), stacklevel=3)
-        log.warning("CACHE_UNAVAILABLE: %s", reason)
+    def _disable(self, reason: str, text: str, params: Mapping[str, object]) -> None:
+        """Cache ignorata (``CACHE_UNAVAILABLE`` con ``reason``, 04 §10.1)."""
+        warnings.warn(CacheWarning("CACHE_UNAVAILABLE", text, {"reason": reason, **params}), stacklevel=3)
+        log.warning("CACHE_UNAVAILABLE: %s", text)
         self.available = False
         self._db = None
 
@@ -299,7 +310,8 @@ class SharedCache:
         ).fetchone()
         if row is not None and row[0] != module:
             raise CacheError(
-                "CACHE_FORBIDDEN", f"la voce {key!r} appartiene al modulo {row[0]}, non al {module}"
+                "CACHE_FORBIDDEN", f"la voce {key!r} appartiene al modulo {row[0]}, non al {module}",
+                params={"reason": "other_module", "key": key, "owner": row[0], "module": module},
             )
         return row
 
@@ -329,7 +341,8 @@ class SharedCache:
     def _check_fits(self, size: int, key: str) -> None:
         if size > self.limit_bytes:
             raise CacheError(
-                "CACHE_FULL", f"la voce {key!r} ({size} byte) supera da sola il limite di {self.limit_bytes} byte"
+                "CACHE_FULL", f"la voce {key!r} ({size} byte) supera da sola il limite di {self.limit_bytes} byte",
+                params={"key": key, "size": size, "limit": self.limit_bytes},
             )
 
     # -- dati in byte (file) ----------------------------------------------
@@ -342,7 +355,8 @@ class SharedCache:
             raise TypeError("put accetta solo byte; per le righe usare table()")
         data = bytes(data)
         if not self.available:
-            warnings.warn(CacheWarning("CACHE_UNAVAILABLE", "cache disattivata: voce non salvata"), stacklevel=2)
+            warnings.warn(CacheWarning("CACHE_UNAVAILABLE", "cache disattivata: voce non salvata",
+                                       {"reason": "entry_not_saved"}), stacklevel=2)
             return
         self._check_fits(len(data), key)
         self._owner_check(module, key)
@@ -382,7 +396,8 @@ class SharedCache:
             return None
         _, kind, location, origin, stamp, _ = row
         if kind != "file":
-            raise CacheError("CACHE_FORBIDDEN", f"la voce {key!r} è una riga della tabella {location}: usare table()")
+            raise CacheError("CACHE_FORBIDDEN", f"la voce {key!r} è una riga della tabella {location}: usare table()",
+                             params={"reason": "file_is_row", "key": key, "table": location})
         try:
             data = (self.root / _FILES_DIR / location).read_bytes()
         except OSError:
@@ -464,7 +479,8 @@ class CacheTable:
             raise ValueError(f"colonne attese {sorted(self.columns)}, ricevute {sorted(row)}")
         size = sum(_value_size(row[c]) for c in self.columns)
         if not cache.available:
-            warnings.warn(CacheWarning("CACHE_UNAVAILABLE", "cache disattivata: riga non salvata"), stacklevel=2)
+            warnings.warn(CacheWarning("CACHE_UNAVAILABLE", "cache disattivata: riga non salvata",
+                                       {"reason": "row_not_saved"}), stacklevel=2)
             return
         cache._check_fits(size, key)
         cache._owner_check(self.module, key)
@@ -498,7 +514,8 @@ class CacheTable:
             return None
         _, kind, location, origin, stamp, _ = entry
         if kind != "row" or location != self.sql_name:
-            raise CacheError("CACHE_FORBIDDEN", f"la voce {key!r} non appartiene alla tabella {self.sql_name}")
+            raise CacheError("CACHE_FORBIDDEN", f"la voce {key!r} non appartiene alla tabella {self.sql_name}",
+                             params={"reason": "wrong_table", "key": key, "table": self.sql_name})
         names = ", ".join(f'"{c}"' for c in self.columns)
         values = cache._db.execute(f'SELECT {names} FROM "{self.sql_name}" WHERE key = ?', (key,)).fetchone()
         if values is None:

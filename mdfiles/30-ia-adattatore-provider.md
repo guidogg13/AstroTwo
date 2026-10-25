@@ -335,6 +335,39 @@ gli SDK (`01` §6).
 | Il modello rifiuta di rispondere | `TurnEnd(refusal)`, mostrato come tale | — |
 | Stop dell'utente | streaming chiuso, `TurnEnd(cancelled)` | `AI_CANCELLED` |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+`ProviderError(code, message, retry_after, params)`, `ProviderAdapterError(code, message, params=...)` e
+`ProviderNotice(code, text, params)` portano `params`; il testo italiano resta invariato. `detail` = testo del
+servizio o della libreria, già ripulito della chiave (`ext`, testo esterno); `status` = codice HTTP (int); i tempi
+sono grandezze `{value, unit: "s"}`. Gli errori del `31` (`KEY_NOT_FOUND`, `KEYCHAIN_*`) si rilanciano con i loro
+`params`. **Codice nuovo `AI_PROFILE_INVALID`** (prima solo `ValueError` con testo italiano, visibile nel modulo del
+profilo del `44`): `ProfileError`, sottoclasse di `ValueError`, con `code`, `message` e `params`.
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `AI_AUTH`, `AI_MODEL_NOT_FOUND`, `AI_RATE_LIMIT`, `AI_CONTEXT_TOO_LONG`, `AI_NO_TOOLS` | — | `status` (int), `detail` (ext) |
+| `AI_SERVICE` | `http_error`, `rejected` | `status` (int), `detail` (ext) |
+| `AI_TIMEOUT` | `connect_read` | `connect` (qty), `read` (qty) |
+| | `silence` | `silence` (qty) |
+| `AI_CONNECTION` | — | `host`, `detail` (ext) |
+| `AI_BAD_RESPONSE` | `other` | `error_type`, `detail` (ext) |
+| | `stream_error` | `detail` (ext) |
+| | `unknown_event` | `event` (ext) |
+| | `unknown_stop_reason` | `stop_reason` (ext) |
+| | `unknown_finish_reason` | `finish_reason` (ext) |
+| | `stream_cut`, `no_finish_reason` | — |
+| | `no_stop_reason` (prodotto dal `35`) | — |
+| `AI_INSECURE_ENDPOINT` | — | `base_url` |
+| `AI_MODELS_UNAVAILABLE` | — | `cause` (messaggio annidato: l'errore dell'elenco) |
+| `AI_RETRY` (avviso) | `http_status` | `error_code`, `status` (int), `wait` (qty), `attempt` (int), `attempts` (int) |
+| | `connection` | `error_code`, `host`, `wait` (qty), `attempt` (int), `attempts` (int) |
+| `AI_PROFILE_INVALID` (nuovo) | `kind` | `kind` |
+| | `base_url` | `base_url` |
+| | `preset_unknown` | `preset` |
+| | `preset_not_in_list` | `preset`, `presets` (list) |
+| | `model_required`, `max_output_tokens`, `max_tokens_field` | — |
+
 ## 11. Esposizione all'IA
 
 Non applicabile: l'adattatore è il canale verso l'IA, non uno strumento
@@ -453,3 +486,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-17 | Claude Code | Prima del codice della parte 2 (precisazioni dalle fonti e dal codice degli SDK, autorizzazione del 2026-10-17): indirizzo del profilo `anthropic` dalla documentazione ufficiale; `max_completion_tokens` per il profilo `openai` (`max_tokens_field`); variabili d'ambiente lette dagli SDK anche con chiave esplicita (`ANTHROPIC_CUSTOM_HEADERS`, `OPENAI_ORG_ID`, `OPENAI_PROJECT_ID`, `OPENAI_CUSTOM_HEADERS`) neutralizzate con un elenco chiuso di intestazioni (§3.6). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 2 della v1:** `src/astrotwo/ai/provider_adapter.py` (profili e `PROVIDER_PRESETS`, messaggi ed eventi normalizzati, `AnthropicAdapter` e `OpenAICompatibleAdapter` con gli SDK ufficiali, ripetizioni solo prima del primo evento, tempi massimi con il silenzio dello streaming, annullamento, `RequestRecord`, `list_models`, `probe_tools`, `make_adapter`) e `tests/ai/test_provider_adapter.py` con servizi simulati locali (T1–T15 per entrambi gli adattatori dove previsto, 26 test). Scelte minori della parte 2 in §13, da confermare. Lista di controllo manuale con le chiavi dell'utente ancora da fare. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22** (sprint 6c del 35): nuova opzione del turno `tool_choice` (`auto` di default, nessun campo inviato; `none` → `{"type": "none"}` per Anthropic, `"none"` per Chat Completions, solo con strumenti presenti) per l'ultima richiesta del `35` dopo il limite di chiamate (§3.5, §6, T16, lista di controllo manuale). Codice in `TurnOptions.tool_choice` e test T16 in `tests/ai/test_provider_adapter.py`. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `ProviderError`, `ProviderAdapterError` e `ProviderNotice` portano `params`; nuova §10.1 con la tabella (inclusi `AI_RETRY` per l'avviso di ripetizione e il codice nuovo `AI_PROFILE_INVALID` per i profili non validi, `ProfileError` sottoclasse di `ValueError`) scritta prima del codice; gli eventi non conformi dello streaming hanno una ragione ciascuno. Test `tests/ai/test_messages_provider.py`. Testo italiano invariato. Stato `approvato` invariato. |

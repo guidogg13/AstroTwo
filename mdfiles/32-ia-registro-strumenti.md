@@ -355,6 +355,23 @@ Nomi proposti, descrizione in parole. File Python
 | Testo esterno oltre 500 caratteri | tagliato e dichiarato | — |
 | Nome di strumento non valido o duplicato all'avvio | errore di programmazione, assistente non disponibile | `TOOL_NAME_INVALID` |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+`ToolRegistryError(code, message, params=...)`: gli errori della chiamata di uno strumento vanno al modello come gli
+errori dei comandi (§3.7): `error = {code, params, text}` con il **testo inglese del catalogo**, i parametri
+`external` come testo esterno marcato e `<nome>` nel testo; il campo `contains_external_text` è vero se ce n'è uno.
+Gli errori del `05` rilanciati portano i `params` dell'errore del comando (`05` §10.1). Il nome dello strumento
+scritto dal modello (`tool`) e il messaggio dell'analizzatore JSON (`detail`) restano parametri normali.
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `TOOL_NOT_EXPOSED` | — | `tool` |
+| `TOOL_ARGUMENTS_INVALID` | `not_json` | `detail` |
+| | `not_object` | — |
+| `TOOL_NOT_CONFIRMED` | — | — |
+| `TOOL_NAME_INVALID` | `pattern`, `repeated` | `tool`, `command` |
+| | `not_registered` | `command` |
+
 ## 11. Esposizione all'IA
 
 Questo modulo **è** l'esposizione all'IA: la tabella di §3.2 è l'elenco
@@ -442,3 +459,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-23 | Claude Code | Sprint 4g del 41: `measure__distance` porta lo schema esteso del `05` (forma cielo con `sky1`, `sky2`); `simbad.pointer` non è esposto (classe `passive`, regola di §3.2 invariata). Nessun'altra modifica; stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** nel risultato ridotto, `warnings` ed `error` portano codice, `params` e testo inglese del catalogo (`40` §3.7.1); testo esterno invariato. Nessun codice scritto. |
 | 2026-10-24 | Claude Code | **D40-7 (sprint 8c-bis):** `warnings` ed `error` rendono anche i messaggi annidati (tipo `message`) in inglese, con i parametri esterni marcati come testo esterno (§3.7). Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `ToolRegistryError` porta `params`; gli errori della chiamata vanno al modello con il testo inglese del catalogo e i parametri esterni marcati; nuova §10.1 con la tabella scritta prima del codice. Test `tests/ai/test_messages_assistant.py`. Stato `approvato` invariato. |

@@ -158,3 +158,8 @@ MODULE_18_SUBVARIANTS = (
     | {("UNIT_UNKNOWN", r) for r in ("not_text", "unknown", "unknown_similar")}
     | {("UNIT_INCOMPATIBLE", r) for r in ("reference", "skydist", "types", "types_hint")}
 )
+
+#: Sotto-voci di codici condivisi che solo il 05 restituisce (provate in ``test_messages_commands.py``).
+MODULE_05_SUBVARIANTS = {("WCS_INVALID", "no_celestial_coordinates"), ("WCS_INVALID", "absent"),
+                         ("WCS_INVALID", "absent_with_reasons"), ("WCS_MISSING", "pixel_grid_overlay"),
+                         ("NO_WCS", "distance")}

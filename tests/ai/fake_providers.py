@@ -103,7 +103,7 @@ class FakeKeychain:
 
         self.reads.append(profile_id)
         if profile_id not in self.keys:
-            raise KeychainError("KEY_NOT_FOUND", f"nessuna chiave per {profile_id!r}")
+            raise KeychainError("KEY_NOT_FOUND", f"nessuna chiave per {profile_id!r}", params={"profile_id": profile_id})
         return SecretKey(self.keys[profile_id])
 
     def has_key(self, profile_id):
@@ -122,7 +122,8 @@ class UnavailableKeychain:
     def has_key(self, profile_id):
         from astrotwo.ai.keychain_keys import KeychainError
 
-        raise KeychainError("KEYCHAIN_UNAVAILABLE", "Portachiavi non disponibile (simulato)")
+        raise KeychainError("KEYCHAIN_UNAVAILABLE", "Portachiavi non disponibile (simulato)",
+                            params={"reason": "api_unavailable", "detail": "simulato"})
 
     get_key = has_key
 

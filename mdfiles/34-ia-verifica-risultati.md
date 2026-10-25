@@ -301,6 +301,19 @@ Nomi proposti, descrizione in parole. File Python
 | Risposta senza numeri | riepilogo "nessun numero da verificare" | — |
 | Comando chiesto dopo un testo esterno senza conferma | segnalato in rosso | `ACTION_WITHOUT_CONFIRMATION` |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+`VerificationIssue(code, text, start, end, command, params)`: il testo italiano `text` resta invariato; il catalogo
+dei messaggi (`40` §3.7.1) ha la voce di ogni codice e il `44` mostra il testo nella lingua dell'interfaccia. Il
+riepilogo (`summary`), gli stati dei numeri e le note dei numeri non sono messaggi di errore: il `44` li scrive con le
+sue traduzioni dai dati strutturati (stati, conteggi), come prima.
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `VERIFY_COMMAND_UNKNOWN` | — | `reference` (testo scritto, es. `#99`) |
+| `VERIFY_LAYER_UNKNOWN` | — | `layer` (testo scritto, es. `L9`) |
+| `ACTION_WITHOUT_CONFIRMATION` | — | `number` (int), `command` |
+
 ## 11. Esposizione all'IA
 
 Non applicabile: il 34 non è uno strumento per l'IA e il modello non ne
@@ -373,3 +386,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 6b** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/result_verification.py` (`extract_numbers`, `verify_answer`, `VerificationReport`, `CheckedNumber`, `VerificationIssue`, `EXCEPTIONS`, `needs_regeneration`, `regeneration_request`) e `tests/ai/test_result_verification.py` (T1–T14, T14 `perf`: 20 ms per 10 kB e 50 risultati; flusso con un finto provider che inventa un numero). **Decisione del proprietario del 2026-10-22:** contrasto tra T5 e §3.5 risolto a favore di §3.5 (un numero trovato solo in un testo di terzi è `external_text`): corretti §3.3 e T5. Interfaccia di §7 precisata, precisazioni del codice in §3.6bis, scelte minori da confermare e incongruenza "troncamento" in §13. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22 sullo sprint 6b:** contraddizione sulla tolleranza risolta: tolto "e troncamento" dalla scelta (3), vale solo l'arrotondamento (mezza unità dell'ultima cifra), come già fa il codice; confermate tutte le scelte minori dello sprint 6b (§3.6bis, §13). Nessuna modifica del codice. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `VerificationIssue` porta `params`; nuova §10.1 con la tabella (`VERIFY_COMMAND_UNKNOWN`, `VERIFY_LAYER_UNKNOWN`, `ACTION_WITHOUT_CONFIRMATION`) scritta prima del codice. Riepilogo, stati e note dei numeri restano testi del `44` dai dati strutturati. Stato `approvato` invariato. |

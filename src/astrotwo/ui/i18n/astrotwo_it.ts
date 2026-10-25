@@ -108,28 +108,8 @@
         <translation>nessuna chiave nel Portachiavi</translation>
     </message>
     <message>
-        <source>no profile configured</source>
-        <translation>nessun profilo configurato</translation>
-    </message>
-    <message>
-        <source>no key in the Keychain for %1</source>
-        <translation>nessuna chiave nel Portachiavi per %1</translation>
-    </message>
-    <message>
-        <source>Keychain not available (%1)</source>
-        <translation>Portachiavi non disponibile (%1)</translation>
-    </message>
-    <message>
-        <source>the model %1 does not call tools</source>
-        <translation>il modello %1 non chiama strumenti</translation>
-    </message>
-    <message>
-        <source>consent to send data to %1 not given</source>
-        <translation>consenso all&apos;invio dei dati a %1 non dato</translation>
-    </message>
-    <message>
-        <source>The assistant is not available: %1. The rest of AstroTwo works normally.</source>
-        <translation>L&apos;assistente non è disponibile: %1. Il resto di AstroTwo funziona normalmente.</translation>
+        <source>The assistant is not available. %1 The rest of AstroTwo works normally.</source>
+        <translation>L&apos;assistente non è disponibile. %1 Il resto di AstroTwo funziona normalmente.</translation>
     </message>
     <message>
         <source>Give consent…</source>
@@ -242,18 +222,6 @@
     <message>
         <source>%1 commands without the required confirmation</source>
         <translation>%1 comandi senza la conferma dovuta</translation>
-    </message>
-    <message>
-        <source>limit of %1 commands reached</source>
-        <translation>limite di %1 comandi raggiunto</translation>
-    </message>
-    <message>
-        <source>limit of %1 minutes reached</source>
-        <translation>limite di %1 minuti raggiunto</translation>
-    </message>
-    <message>
-        <source>answer interrupted</source>
-        <translation>risposta interrotta</translation>
     </message>
     <message>
         <source>tokens not declared by the provider</source>
@@ -907,7 +875,7 @@
     </message>
     <message>
         <source>Needs an image as the base of the view</source>
-        <translation>Serve un'immagine come base della vista</translation>
+        <translation>Serve un&apos;immagine come base della vista</translation>
     </message>
     <message>
         <source>Box (px)</source>

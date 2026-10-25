@@ -265,13 +265,13 @@ class DistanceTool:
         geometry = viewer.geometry
         if geometry is None or not viewer._has_sky(geometry):
             viewer.message.emit(ResultMessage("VIEW_NO_WCS", "immagine senza WCS valido: la distanza angolare "
-                                              "non è misurabile sulla griglia di pixel"))
+                                              "non è misurabile sulla griglia di pixel", {"reason": "distance"}))
             return
         pa, pb = viewer.window_position(a), viewer.window_position(b)
         skies = geometry.window_to_sky([pa["x"], pb["x"]], [pa["y"], pb["y"]])
         if not np.all(np.isfinite(skies.spherical.lon.deg)) or not np.all(np.isfinite(skies.spherical.lat.deg)):
             viewer.message.emit(ResultMessage("OUT_OF_SKY", "fuori dal cielo: un punto non ha coordinate "
-                                              "nella proiezione"))
+                                              "nella proiezione", {"reason": "distance_point"}))
             return
         unit = self.options["unit"]
         image = viewer.base_image
@@ -367,12 +367,13 @@ class SimbadPointerTool:
             self.waiting = at
             return
         if not viewer._has_sky(viewer.geometry):
-            viewer.message.emit(ResultMessage("WCS_INVALID", "WCS assente o non valido: nessuna coordinata celeste"))
+            viewer.message.emit(ResultMessage("WCS_INVALID", "WCS assente o non valido: nessuna coordinata celeste",
+                                              {"reason": "absent"}))
             return
         radius = self.radius(at)
         if radius is None:
             viewer.message.emit(ResultMessage("OUT_OF_SKY", "fuori dal cielo: il punto non ha coordinate "
-                                              "nella proiezione"))
+                                              "nella proiezione", {"reason": "point"}))
             return
         self.busy = True
         self.asked = at

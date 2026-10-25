@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QHBox
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
-from astrotwo.ui.message_view import shown_text
+from astrotwo.ui.message_view import exception_message, shown_text
 from astrotwo.ui.sky_tools import (
     DEFAULT_TOOL_TEXTS, DistanceOptionsBar, DistanceTool, MeasureOverlay, SimbadPointerTool)
 
@@ -312,7 +312,7 @@ def _epoch_warnings(table, image, layer_name: str) -> tuple[ResultMessage, ...]:
     if epoch is None:
         return (ResultMessage("CATALOG_EPOCH_UNKNOWN", f"{layer_name}: epoca del catalogo non dichiarata, immagine "
                               f"all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
-                              "catalog.set_columns)"),)
+                              "catalog.set_columns)", {"layer": layer_name, "image_epoch": shown}),)
     from astrotwo.core.coordinates_wcs import SkyFrame
 
     catalog_epoch = SkyFrame.from_lonlat(0 * u.deg, 0 * u.deg, "icrs", epoch=epoch).epoch  # lettura del 10
@@ -320,7 +320,8 @@ def _epoch_warnings(table, image, layer_name: str) -> tuple[ResultMessage, ...]:
         return ()
     return (ResultMessage("CATALOG_EPOCH_DIFFERS", f"{layer_name}: catalogo all'epoca {time_text(catalog_epoch)}, "
                           f"immagine all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
-                          "catalog.set_columns)"),)
+                          "catalog.set_columns)", {"layer": layer_name, "catalog_epoch": time_text(catalog_epoch),
+                                                   "image_epoch": shown}),)
 
 
 def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
@@ -514,7 +515,7 @@ class _Bridge(QObject):
 
     sampled = Signal(int, object)  # generazione, ViewSampling
     tile = Signal(int, object)  # generazione, ViewTile
-    failed = Signal(int, str, str)  # generazione, codice, testo
+    failed = Signal(int, str, str, object)  # generazione, codice, testo, params
     done = Signal(int)  # generazione (una richiesta di tile finita, riuscita o no)
     cursor = Signal(object)  # CommandResult di una lettura sotto il mouse
     simbad = Signal(object)  # CommandResult di simbad.pointer (puntatore Simbad, 41 §3.12)
@@ -555,7 +556,8 @@ class TilePool:
             try:
                 sampling = view_sampling(service, geometry, coverage=coverage)
             except Exception as exc:  # noqa: BLE001 - errori del 12/10 (es. frame dell'immagine base): un messaggio
-                self.bridge.failed.emit(generation, str(getattr(exc, "code", type(exc).__name__)), str(exc))
+                message = exception_message(exc)
+                self.bridge.failed.emit(generation, message.code, str(exc), dict(message.params))
                 return
             self.bridge.sampled.emit(generation, sampling)
 
@@ -574,8 +576,8 @@ class TilePool:
                     if self.current(generation):
                         self.bridge.tile.emit(generation, colorize(fill_view(sampling, tile), display))
                 except Exception as exc:  # noqa: BLE001 - errori del 12/04: zona vuota e un messaggio
-                    code = getattr(exc, "code", type(exc).__name__)
-                    self.bridge.failed.emit(generation, str(code), str(exc))
+                    message = exception_message(exc)
+                    self.bridge.failed.emit(generation, message.code, str(exc), dict(message.params))
             finally:
                 self.bridge.done.emit(generation)
 
@@ -590,7 +592,9 @@ class TilePool:
             try:
                 result = passive(name, params, "mouse")
             except Exception as exc:  # noqa: BLE001 - il gruppo di thread non si ferma mai
-                result = CommandResult("error", error=ResultMessage("UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}"))
+                result = CommandResult("error", error=ResultMessage(
+                    "UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}",
+                    {"error_type": type(exc).__name__, "detail": str(exc)}))
             getattr(self.bridge, signal).emit(result)
 
         self.pool.start(_Task(run))
@@ -603,8 +607,8 @@ class TilePool:
             try:
                 result = catalog_points(key, layer, geometry, image)
             except Exception as exc:  # noqa: BLE001 - errori del 10/13: catalogo non disegnato e un messaggio
-                code = getattr(exc, "code", type(exc).__name__)
-                result = ResultMessage(str(code), f"{layer.name}: {getattr(exc, 'message', None) or exc}")
+                relayed = exception_message(exc)  # codice e params del modulo; il testo originale nomina il livello
+                result = ResultMessage(relayed.code, f"{layer.name}: {relayed.text}", relayed.params)
             self.bridge.catalog.emit(key, result)
 
         self.pool.start(_Task(run))
@@ -617,8 +621,8 @@ class TilePool:
             try:
                 result = moc_shapes(key, layer, geometry)
             except Exception as exc:  # noqa: BLE001 - errori del 10/16: MOC non disegnato e un messaggio
-                code = getattr(exc, "code", type(exc).__name__)
-                result = ResultMessage(str(code), f"{layer.name}: {getattr(exc, 'message', None) or exc}")
+                relayed = exception_message(exc)  # codice e params del modulo; il testo originale nomina il livello
+                result = ResultMessage(relayed.code, f"{layer.name}: {relayed.text}", relayed.params)
             self.bridge.moc.emit(key, result)
 
         self.pool.start(_Task(run))
@@ -878,7 +882,8 @@ class SkyViewer(QWidget):
         layer = layers[-1] if layers else None
         if view.geometry is not None and not self._has_sky(view.geometry) and state.of_kind("hips"):
             self._report_once(("", "VIEW_NO_WCS", "hips"), ResultMessage(
-                "VIEW_NO_WCS", "immagine senza WCS valido: lo sfondo HiPS non si disegna sotto la griglia di pixel"))
+                "VIEW_NO_WCS", "immagine senza WCS valido: lo sfondo HiPS non si disegna sotto la griglia di pixel",
+                {"reason": "hips"}))
         self.view = view
         self.layers = state.layers
         self.catalog_layers = state.of_kind("catalog")
@@ -1064,9 +1069,9 @@ class SkyViewer(QWidget):
         if self._stage is None:  # con una base in attesa i tile si caricano al passaggio
             self._upload()
 
-    def _failed(self, gen: int, code: str, text: str) -> None:
+    def _failed(self, gen: int, code: str, text: str, params: dict | None = None) -> None:
         if self.tiles.current(gen):
-            self._report(code, text)
+            self._report(code, text, params)
             if gen == self._stage and self._stage_sampling and not self._stage_sampled:
                 # campionamento fallito: la base nuova passa senza lo sfondo (zona vuota e un messaggio)
                 self._stage_sampled = True
@@ -1102,7 +1107,8 @@ class SkyViewer(QWidget):
         if g is not None and self.pixel_grid:
             if self.catalog_layers:
                 self._report_once(("", "VIEW_NO_WCS"), ResultMessage(
-                    "VIEW_NO_WCS", "immagine senza WCS valido: i cataloghi non si sovrappongono alla griglia di pixel"))
+                    "VIEW_NO_WCS", "immagine senza WCS valido: i cataloghi non si sovrappongono alla griglia di pixel",
+                    {"reason": "catalogs"}))
         elif g is not None:
             keep = {base_key(g)} | ({base_key(self.screen_geometry)} if self._has_sky(self.screen_geometry) else set())
             self.catalog_cache = {k: v for k, v in self.catalog_cache.items() if k[1] in keep}
@@ -1171,7 +1177,8 @@ class SkyViewer(QWidget):
         if g is not None and self.pixel_grid:
             if self.moc_layers:
                 self._report_once(("", "VIEW_NO_WCS", "moc"), ResultMessage(
-                    "VIEW_NO_WCS", "immagine senza WCS valido: i MOC non si sovrappongono alla griglia di pixel"))
+                    "VIEW_NO_WCS", "immagine senza WCS valido: i MOC non si sovrappongono alla griglia di pixel",
+                    {"reason": "moc"}))
         elif g is not None:
             keep = {base_key(g)} | ({base_key(self.screen_geometry)} if self._has_sky(self.screen_geometry) else set())
             self.moc_cache = {k: v for k, v in self.moc_cache.items() if k[1] in keep}

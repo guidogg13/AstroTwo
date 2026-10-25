@@ -466,4 +466,5 @@ def test_local_profile_without_key(provider_service):
     assert headers["authorization"] == f"Bearer {pa.LOCAL_PLACEHOLDER_KEY}"
     remote = ProviderProfile("openai_compatible", "https://api.example.org/v1", "m")
     events = list(make_adapter(remote, FakeKeychain()).stream_turn(CONVERSATION, [TOOL], FAST))
-    assert events == [ProviderError("KEY_NOT_FOUND", "nessuna chiave per 'openai-compatible:api.example.org'")]
+    assert events == [ProviderError("KEY_NOT_FOUND", "nessuna chiave per 'openai-compatible:api.example.org'",
+                                    params={"profile_id": "openai-compatible:api.example.org"})]

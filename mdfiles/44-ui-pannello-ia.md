@@ -326,6 +326,18 @@ test in `tests/ui/test_ai_panel.py`.
 | Conferma in attesa e chiusura del pannello | la conferma resta in attesa; riaprendo il pannello si vede | — |
 | Uscita dall'app con una risposta in corso | come i comandi in corso del `40` (conferma, Stop) | — |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+Il pannello mostra i messaggi del `30`–`35` **dal catalogo, nella lingua dell'interfaccia** (inglese verso il modello,
+`32` §3.7). Cambiano rispetto alla prima versione: il motivo di indisponibilità (§3.8) è `CODICE: testo` del catalogo
+(`AI_NO_PROFILE`, `KEY_NOT_FOUND`, `KEYCHAIN_*`, `AI_NO_TOOLS`, `AI_CONSENT_REQUIRED`, `AI_PROFILE_INVALID`), dentro la
+frase "L'assistente non è disponibile. … Il resto di AstroTwo funziona normalmente."; le note sotto la risposta
+(`AI_TOOL_LIMIT`, `AI_TIME_LIMIT`, `AI_CANCELLED`) sono il testo del catalogo senza il codice (come prima); gli errori
+del provider, gli avvisi di ripetizione (`AI_RETRY`) e i problemi della verifica (`ACTION_WITHOUT_CONFIRMATION`) sono
+`CODICE: testo` del catalogo. I controlli delle impostazioni sono `ValueProblem` (`40` §10.1); i testi dei controlli
+della finestra delle impostazioni scritti con `tr` (modello da scegliere, prezzo, profilo ripetuto) restano testi di
+interfaccia.
+
 ## 11. Esposizione all'IA
 
 Non applicabile: è interfaccia. Gli strumenti sono del `32`.
@@ -424,3 +436,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-22 | Claude Code | **Codice dello sprint 7a** ("FASE: CODICE – interfaccia v1", parte 7): `src/astrotwo/ui/ai_panel.py` (`AiPanel` nell'area a destra al posto dello stato vuoto, `MessageView` con Markdown semplice e sicuro, `CommandCard`, `ConfirmationCard`, `SentDataDialog`, `ConsentDialog`, `AssistantSettingsDialog`), collegamento alla finestra del `40` (impostazioni `assistant/…` con `prefs.set`, pulsante nelle preferenze, testo delle conversazioni nel salvataggio della sessione, uscita con risposta in corso, clic su una scheda → riga del pannello Comandi), traduzione italiana, 8 icone Lucide. Verifica del Markdown di Qt fatta (§8, §13). Precisazioni in §3.10, scelte minori da confermare e resto per lo sprint 7b in §13, note ai test in §12. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Decisione del proprietario del 2026-10-23:** confermate le 12 scelte minori dello sprint 7a (§3.10, §13). **Codice dello sprint 7b** ("FASE: CODICE – interfaccia v1", parte 7): evidenziazione di ogni numero secondo lo stato del `34` con suggerimento (valore pieno con unità, `#n`, funzioni del modulo) e copia, sonda di latenza, test di Aggiorna, "Prova il modello", errori del provider e conversazione troppo lunga. Precisazioni in §3.11, scelte minori dello sprint 7b da confermare in §13, note ai test in §12. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Decisione del proprietario del 2026-10-23:** confermate le 5 scelte minori dello sprint 7b (§3.11, §13). Nessun codice. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1: i messaggi del `30`–`35` si mostrano dal catalogo nella lingua dell'interfaccia (motivo di indisponibilità come `CODICE: testo`, note, errori, avvisi di ripetizione, problemi della verifica); i controlli delle impostazioni sono `ValueProblem`. Traduzione italiana della frase di indisponibilità aggiornata. Stato `approvato` invariato. |

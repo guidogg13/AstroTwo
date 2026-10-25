@@ -184,23 +184,29 @@ _UNIT_EXAMPLES = {"angle": "arcmin", "angular velocity": "mas/yr", "length": "nm
 class ToolRegistryError(Exception):
     """Errore di §10 con codice, testo ed eventuale parametro; ``model_result`` è il JSON per il modello."""
 
-    def __init__(self, code: str, message: str, *, parameter: str | None = None, tool: str | None = None,
-                 command: str | None = None, valid_tools: tuple[str, ...] | None = None) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None,
+                 parameter: str | None = None, tool: str | None = None, command: str | None = None,
+                 valid_tools: tuple[str, ...] | None = None) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3, 32 §10.1)
         self.parameter = parameter
         self.tool = tool
         self.command = command
         self.valid_tools = valid_tools
 
     def model_result(self) -> dict:
-        error = {"code": self.code, "text": self.message}
+        # Stesso trattamento degli errori dei comandi (§3.7): testo inglese del catalogo, testi esterni marcati.
+        marker = _Marker(None, self.command or "", self.tool or self.command or "")
+        error = marker.message({"code": self.code, "params": dict(self.params), "text": self.message})
+        if not error.get("params"):
+            error.pop("params", None)
         if self.parameter is not None:
             error["parameter"] = self.parameter
         if self.valid_tools is not None:
             error["valid_tools"] = list(self.valid_tools)  # §3.5 punto 2: il modello si corregge senza indovinare
-        return {"contains_external_text": False,
+        return {"contains_external_text": marker.found,
                 "command": {"number": None, "name": self.command, "tool": self.tool, "status": "not_executed"},
                 "error": error}
 
@@ -409,14 +415,17 @@ class ToolRegistry:
         for command, tool in exposed:
             if not TOOL_NAME_PATTERN.fullmatch(tool) or tool != command.replace(".", "__"):
                 raise ToolRegistryError("TOOL_NAME_INVALID", f"nome dello strumento {tool!r} non valido per "
-                                        f"{command}", tool=tool, command=command)
+                                        f"{command}", params={"reason": "pattern", "tool": tool, "command": command},
+                                        tool=tool, command=command)
             if tool in self._by_tool or command in self._by_command:
                 raise ToolRegistryError("TOOL_NAME_INVALID", f"strumento o comando ripetuto: {tool} ({command})",
+                                        params={"reason": "repeated", "tool": tool, "command": command},
                                         tool=tool, command=command)
             try:
                 registry.spec(command)
             except CommandError:
                 raise ToolRegistryError("TOOL_NAME_INVALID", f"{command} non è un comando registrato del 05",
+                                        params={"reason": "not_registered", "command": command},
                                         tool=tool, command=command) from None
             self._by_tool[tool] = command
             self._by_command[command] = tool
@@ -461,22 +470,24 @@ class ToolRegistry:
         name = self._by_tool.get(tool)
         if name is None:
             raise ToolRegistryError("TOOL_NOT_EXPOSED", f"tool {tool!r} does not exist or is not exposed: use one of "
-                                    "valid_tools (names with '__')", tool=tool, valid_tools=self.valid_tools())
+                                    "valid_tools (names with '__')", params={"tool": tool}, tool=tool,
+                                    valid_tools=self.valid_tools())
         text = arguments if isinstance(arguments, str) else ""
         try:
             params = json.loads(text) if text.strip() else {}  # nessun argomento: alcuni provider mandano ""
         except ValueError as exc:
-            raise ToolRegistryError("TOOL_ARGUMENTS_INVALID", f"arguments are not valid JSON: {exc}", tool=tool,
+            raise ToolRegistryError("TOOL_ARGUMENTS_INVALID", f"arguments are not valid JSON: {exc}",
+                                    params={"reason": "not_json", "detail": str(exc)}, tool=tool,
                                     command=name) from None
         if not isinstance(params, dict):
-            raise ToolRegistryError("TOOL_ARGUMENTS_INVALID", "arguments must be a JSON object", tool=tool,
-                                    command=name)
+            raise ToolRegistryError("TOOL_ARGUMENTS_INVALID", "arguments must be a JSON object",
+                                    params={"reason": "not_object"}, tool=tool, command=name)
         spec = self.registry.spec(name)
         try:
             return self.registry.validate(Command(name, spec.version, params, requested_by), state)
         except CommandError as exc:
-            raise ToolRegistryError(exc.code, exc.message, parameter=exc.details.get("parameter"), tool=tool,
-                                    command=name) from None
+            raise ToolRegistryError(exc.code, exc.message, params=exc.params, parameter=exc.details.get("parameter"),
+                                    tool=tool, command=name) from None
 
     def needs_confirmation(self, command: Command, after_external_text: bool = False,
                            external_source: str | None = None) -> Confirmation:

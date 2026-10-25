@@ -377,6 +377,27 @@ manda eventi (eseguito in un thread proprio, non nel thread principale).
 | Errore di programmazione nel thread dell'assistente | solo quella risposta si ferma con il messaggio; i comandi già eseguiti restano | `AI_ASSISTANT_FAILED` |
 | Streaming finito senza motivo di fine | turno fermato | `AI_BAD_RESPONSE` (del `30`) |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+`AssistantError(code, message, params=...)`, `Availability(available, code, reason, params)`,
+`Note(code, text, params)` e `ProviderNoticeEvent(response, text, code, params)` portano `params`; il testo italiano
+resta invariato. Le voci con `reason = not_executed` sono quelle consegnate al modello (testo inglese, `32` §3.7),
+le altre sono per l'utente. L'indisponibilità per la chiave o per il Portachiavi riporta il codice e i `params` degli
+errori del `31`; quella per il modello senza strumenti usa `AI_NO_TOOLS` con `reason = model_without_tools`.
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `AI_TOOL_LIMIT` | `note`, `not_executed` | `max_calls` (int) |
+| `AI_TIME_LIMIT` | — | `limit` (qty, minuti) |
+| `AI_CANCELLED` | `note`, `not_executed` | — |
+| `AI_CONSENT_REQUIRED` | — | `host` |
+| `AI_NO_PROFILE` | — | — |
+| `AI_BUSY` | `stop_first`, `another_running` | — |
+| `AI_ASSISTANT_FAILED` | — | `error_type`, `detail` (ext) |
+| `AI_NO_TOOLS` (condiviso con 30) | `model_without_tools` | `model` |
+| `KEY_NOT_FOUND` (condiviso con 31) | — | `profile_id` |
+| `AI_BAD_RESPONSE` (condiviso con 30) | `no_stop_reason` | — |
+
 ## 11. Esposizione all'IA
 
 Non applicabile come strumento: il 35 è chi parla con l'IA; gli strumenti
@@ -459,3 +480,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Scelte minori **confermate dal proprietario il 2026-10-16** come raccomandate (§13). **Stato portato ad `approvato`** su decisione del proprietario del 2026-10-16. |
 | 2026-10-22 | Claude Code | **Codice dello sprint 6c** ("FASE: CODICE – interfaccia v1", parte 6): `src/astrotwo/ai/chat_assistant.py` (`ChatAssistant`, `Conversation`, `AssistantLimits`, `SYSTEM_RULES` versione 1, `CallLogEntry`, `SessionExecutor`, eventi per il `44`, `TokenCount`, `Pricing`, `estimate_cost`) e collegamento alla coda del `40` (`AssistantQueueExecutor`); test T1–T14 in `tests/ai/test_chat_assistant.py` con un provider simulato a copione (`ScriptedAdapter`, corpo JSON vero del `30`) e in `tests/ui/test_assistant_queue.py`. Precisazioni del codice in §3.11, interfaccia in §7, codici in §10, note ai test in §12, scelte minori da confermare e verifica con Anthropic in §13. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisioni del proprietario del 2026-10-22** sullo sprint 6c: le 12 scelte minori di §3.11 confermate (§13); ultima richiesta dopo il limite di chiamate con gli strumenti e `tool_choice = none` del `30` invece che senza strumenti (§3.3, §3.11 punto 5, §10, T4, lista di controllo manuale); verifica con le chiavi dell'utente nella lista di controllo manuale. Codice e T4 aggiornati (entrambi i formati di richiesta). Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `AssistantError`, `Availability`, `Note` e `ProviderNoticeEvent` portano `params`; nuova §10.1 con la tabella (le voci con `reason = not_executed` vanno al modello in inglese) scritta prima del codice. Test `tests/ai/test_messages_assistant.py`. Testo italiano invariato. Stato `approvato` invariato. |

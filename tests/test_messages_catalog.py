@@ -34,7 +34,20 @@ CONVERTED = {
     "core/crossmatch.py": "CrossmatchError",
     "core/measures.py": "MeasuresError",
     "core/calculators.py": "CalculatorError",
-    "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN; il resto dei messaggi del 41 è dello sprint 8e
+    "core/commands.py": "CommandError",
+    "core/cache.py": "CacheError",
+    "ai/keychain_keys.py": "KeychainError",
+    "ai/provider_adapter.py": ("ProviderError", "ProviderAdapterError", "ProfileError"),
+    "ai/tool_registry.py": "ToolRegistryError",
+    "ai/result_verification.py": "VerificationIssue",
+    "ai/chat_assistant.py": ("AssistantError", "ProviderError", "ToolRegistryError"),
+    "ui/sky_viewer.py": "HiPSError",  # HIPS_DISPLAY_UNKNOWN e gli avvisi del visualizzatore (41 §10.1)
+    "ui/sky_tools.py": "CommandError",
+    "ui/sky_renderer_gl.py": "CommandError",
+    "ui/export_view.py": "CommandError",
+    "ui/main_window.py": "CommandError",
+    "ui/message_view.py": "CommandError",
+    "ui/ai_panel.py": "ValueProblem",
 }
 
 #: Funzioni di appoggio che costruiscono un errore o un avviso: nome → (codice, posizione dell'argomento ``reason``).
@@ -51,6 +64,11 @@ HELPERS = {
                                "result": ("BODY_CAUSE", 1), "_download_item": ("PDS_DOWNLOAD", 0)},
     "core/calculators.py": {"_syntax": ("CALC_SYNTAX_ERROR", 0), "_invalid": ("CALC_COMMAND_INVALID", 0),
                             "_fail": ("CALC_COMMAND_INVALID", 2), "unknown": ("CALC_UNKNOWN_FUNCTION", 0)},
+    "ai/keychain_keys.py": {"_operation": ("KEYCHAIN_OPERATION", 0)},
+    "core/cache.py": {"_recreate": ("CACHE_UNAVAILABLE", 0), "_disable": ("CACHE_UNAVAILABLE", 0)},
+    "core/commands.py": {"_invalid": ("COMMAND_PARAMETER_INVALID", 1), "out": ("COMMAND_PARAMETER_INVALID", 0)},
+    "ai/provider_adapter.py": {"_StreamProblem": ("AI_BAD_RESPONSE", 0)},
+    "ui/sky_renderer_gl.py": {"_unavailable": ("GL_UNAVAILABLE", 0)},
     "core/moc.py": {"_unreadable": ("MOC_UNREADABLE", 1), "_invalid_map": ("PROBABILITY_MAP_INVALID", 1)},
 }
 
@@ -66,7 +84,45 @@ def _constants(node: ast.AST):
         yield from _constants(node.orelse)
 
 
-def scan_module(path: Path, error_name: str, helpers: dict | None = None) -> tuple[set[str], set[tuple[str, str]]]:
+#: Costruttori di avvisi (codice, testo, params) letti dalla scansione; il 05 ha anche ``ResultMessage``.
+WARNING_BUILDERS = {"core/cache.py": ("CacheWarning",), "ui/sky_viewer.py": ("ModuleWarning", "ResultMessage"),
+                    "ui/sky_tools.py": ("ResultMessage",), "ui/main_window.py": ("ResultMessage",),
+                    "ui/message_view.py": ("ResultMessage",), "ui/ai_panel.py": ("ResultMessage",),
+                    "core/commands.py": ("ModuleWarning", "ResultMessage", "stopped", "_nested"),
+                    "ai/provider_adapter.py": ("ModuleWarning", "ProviderNotice"),
+                    "ai/chat_assistant.py": ("note", "Availability", "_not_executed")}
+
+#: Costruttori il cui codice e i cui ``params`` non stanno nelle posizioni 0 e 2: nome → (codice, params).
+BUILDER_POSITIONS = {"Availability": (1, 3), "_not_executed": (1, 3)}
+
+#: Costruttori con codice fisso: la ragione sta nel dizionario ``params=`` (``ProfileError``, 30 §10.1).
+FIXED_CODE_BUILDERS = {"ProfileError": "AI_PROFILE_INVALID", "ValueProblem": "PREFERENCE_VALUE_INVALID"}
+
+
+def _code_constants() -> dict[str, str]:
+    """``Classe.NOME`` → codice, per le classi ``*ErrorCode`` dei moduli (es. ``ProviderErrorCode.AUTH``)."""
+    out = {}
+    for relative in CONVERTED:
+        for node in ast.walk(ast.parse((SRC / relative).read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ClassDef) and node.name.endswith("ErrorCode"):
+                for item in node.body:
+                    if isinstance(item, ast.Assign) and isinstance(item.value, ast.Constant):
+                        out.update({f"{node.name}.{t.id}": item.value.value for t in item.targets
+                                    if isinstance(t, ast.Name)})
+    return out
+
+
+def _resolve(node: ast.AST, constants: dict[str, str]) -> str | None:
+    """Codice dato da una costante di testo o da ``Classe.NOME`` di una classe ``*ErrorCode``."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return constants.get(f"{node.value.id}.{node.attr}")
+    return None
+
+
+def scan_module(path: Path, error_name: str | tuple[str, ...], helpers: dict | None = None,
+                builders: tuple[str, ...] = ("ModuleWarning",)) -> tuple[set[str], set[tuple[str, str]]]:
     """Codici e coppie (codice, ragione) che il modulo solleva o restituisce, dall'albero sintattico.
 
     ``helpers``: funzioni di appoggio del modulo, nome → (codice, posizione dell'argomento ragione)."""
@@ -74,11 +130,24 @@ def scan_module(path: Path, error_name: str, helpers: dict | None = None) -> tup
     codes: set[str] = set()
     reasons: set[tuple[str, str]] = set()
     helpers = helpers or {}
+    constants = _code_constants()
+    error_names = (error_name,) if isinstance(error_name, str) else tuple(error_name)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             name = getattr(node.func, "id", getattr(node.func, "attr", ""))
-            if name == error_name and node.args and isinstance(node.args[0], ast.Constant):
-                code = node.args[0].value
+            if name in FIXED_CODE_BUILDERS and name in error_names:
+                code = FIXED_CODE_BUILDERS[name]
+                for kw in node.keywords:  # ``code="…"`` per un errore già codificato di un modulo
+                    if kw.arg == "code" and isinstance(kw.value, ast.Constant):
+                        code = kw.value.value
+                codes.add(code)
+                for kw in node.keywords:
+                    if kw.arg == "params" and isinstance(kw.value, ast.Dict):
+                        for k, v in zip(kw.value.keys, kw.value.values, strict=True):
+                            if isinstance(k, ast.Constant) and k.value == "reason":
+                                reasons.update((code, c) for c in _constants(v))
+            elif name in error_names and node.args and _resolve(node.args[0], constants) is not None:
+                code = _resolve(node.args[0], constants)
                 codes.add(code)
                 for kw in node.keywords:
                     if kw.arg == "params" and isinstance(kw.value, ast.Dict):
@@ -97,12 +166,16 @@ def scan_module(path: Path, error_name: str, helpers: dict | None = None) -> tup
                 codes.add(code)
                 for reason in _constants(node.args[index]):
                     reasons.add((code, reason))
+                    if name == "out":  # l'intervallo di una grandezza aggiunge il suffisso _quantity (05 §10.1)
+                        reasons.add((code, reason + "_quantity"))
                     if name == "_catalog_unknown":  # il codice aggiunge _candidates o _candidates_limited
                         reasons.update({(code, reason + "_candidates"), (code, reason + "_candidates_limited")})
-            elif name == "ModuleWarning" and node.args and isinstance(node.args[0], ast.Constant):
-                code = node.args[0].value  # avviso (codice, testo, params)
+            elif name in builders and len(node.args) > BUILDER_POSITIONS.get(name, (0, 2))[0] \
+                    and _resolve(node.args[BUILDER_POSITIONS.get(name, (0, 2))[0]], constants) is not None:
+                code_at, params_at = BUILDER_POSITIONS.get(name, (0, 2))
+                code = _resolve(node.args[code_at], constants)  # avviso (codice, testo, params)
                 codes.add(code)
-                given = node.args[2] if len(node.args) > 2 else None
+                given = node.args[params_at] if len(node.args) > params_at else None
                 if isinstance(given, ast.Dict):
                     for k, v in zip(given.keys, given.values, strict=True):
                         if isinstance(k, ast.Constant) and k.value == "reason":
@@ -129,7 +202,8 @@ ANY = "*"  # ragione vista in un dizionario, senza il codice a cui appartiene
 def _used_codes_and_reasons():
     codes, reasons = set(), set()
     for relative, error_name in CONVERTED.items():
-        c, r = scan_module(SRC / relative, error_name, HELPERS.get(relative))
+        c, r = scan_module(SRC / relative, error_name, HELPERS.get(relative),
+                           WARNING_BUILDERS.get(relative, ("ModuleWarning",)))
         codes |= c
         reasons |= r
     return codes, reasons
@@ -171,6 +245,49 @@ def test_t18_no_unused_entry():
     assert not set(mc.CATALOG) - codes, f"voci inutilizzate: {sorted(set(mc.CATALOG) - codes)}"
     unused = {(c, r) for c, e in mc.CATALOG.items() for r in e.variants if (c, r) not in reasons and (ANY, r) not in reasons}
     assert not unused, f"sotto-voci inutilizzate: {sorted(unused)}"
+
+
+def _package_files() -> list[Path]:
+    return sorted(p for p in SRC.rglob("*.py") if p.name != "messages_catalog.py" and "__pycache__" not in p.parts)
+
+
+def _error_class_names() -> tuple[str, ...]:
+    """Classi di errore e di avviso definite nel pacchetto (nome che finisce per ``Error`` o ``Warning``)."""
+    names = set(FIXED_CODE_BUILDERS)
+    for path in _package_files():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ClassDef) and node.name.endswith(("Error", "Warning")):
+                names.add(node.name)
+    return tuple(sorted(names))
+
+
+def test_t18_every_code_used_anywhere_in_the_package_has_an_entry():
+    """Controllo finale di D40-3 (sprint 8e): scorre **tutto** ``src/astrotwo``, non solo i moduli dell'elenco
+    ``CONVERTED``. Ogni codice che un file solleva o restituisce con una classe di errore o di avviso del pacchetto,
+    con ``ResultMessage``, ``ModuleWarning``, ``ProviderNotice``, ``CacheWarning``, ``Note``, ``Availability`` o con una
+    funzione di appoggio dei moduli, ha la voce nel catalogo (testo inglese e italiano, verificati da
+    ``test_t18_every_entry_is_well_formed``): nessun "(nessuna traduzione)" nei flussi normali."""
+    names = _error_class_names()
+    builders = ("ModuleWarning", "ResultMessage", "ProviderNotice", "CacheWarning", "stopped", "_nested", "note",
+                "Availability", "_not_executed")
+    missing: dict[str, set[str]] = {}
+    scanned = 0
+    for path in _package_files():
+        relative = path.relative_to(SRC).as_posix()
+        codes, reasons = scan_module(path, names, HELPERS.get(relative), builders)
+        scanned += 1
+        for code in codes:
+            if _CODE.match(code) and code not in mc.CATALOG:
+                missing.setdefault(code, set()).add(relative)
+        for code, reason in reasons:
+            if code in mc.CATALOG and code != ANY and reason not in mc.CATALOG[code].variants:
+                missing.setdefault(f"{code}/{reason}", set()).add(relative)
+    assert scanned > 30, "la scansione del pacchetto non ha trovato i file"
+    assert not missing, "codici o ragioni usati nel codice senza voce nel catalogo: " + "; ".join(
+        f"{code} ({', '.join(sorted(files))})" for code, files in sorted(missing.items()))
+    assert set(mc.LANGUAGES) == {"en", "it"}
+    for entry in mc.CATALOG.values():  # ogni voce ha entrambe le lingue
+        assert entry.en.strip() and entry.it.strip(), entry.code
 
 
 def test_t18_scan_finds_a_missing_entry(tmp_path):

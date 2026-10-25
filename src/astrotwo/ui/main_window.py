@@ -118,7 +118,15 @@ from astrotwo.core.commands import (
 )
 from astrotwo.core.coordinates_wcs import format_coordinates
 from astrotwo.ui.ai_panel import PANEL_WIDTH
-from astrotwo.ui.message_view import message_details, set_language, shown_line, shown_text
+from astrotwo.ui.message_view import (
+    ValueProblem,
+    exception_message,
+    message_details,
+    set_language,
+    shown_exception,
+    shown_line,
+    shown_text,
+)
 
 __all__ = [
     "MainWindow",
@@ -157,7 +165,8 @@ DEFAULT_SURVEY = "CDS/P/DSS2/color"  # D12-3 (default del 12, hips.DEFAULT_SURVE
 def _choice(choices: tuple[str, ...]) -> Callable[[str], str]:
     def check(text: str) -> str:
         if text not in choices:
-            raise ValueError(f"valore {text!r} non in {choices}")
+            raise ValueProblem(f"valore {text!r} non in {choices}",
+                               params={"reason": "choice", "value": text, "allowed": list(choices)})
         return text
     return check
 
@@ -166,15 +175,17 @@ def _positive_bytes(text: str) -> str:
     try:
         number = int(text)
     except ValueError:
-        raise ValueError(f"{text!r} non è un numero intero di byte") from None
+        raise ValueProblem(f"{text!r} non è un numero intero di byte",
+                           params={"reason": "cache_not_integer", "value": text}) from None
     if number <= 0:
-        raise ValueError(f"limite della cache {number} byte: serve un intero positivo")
+        raise ValueProblem(f"limite della cache {number} byte: serve un intero positivo",
+                           params={"reason": "cache_not_positive", "value": number})
     return str(number)
 
 
 def _survey(text: str) -> str:
     if not text.strip():
-        raise ValueError("identificativo del survey vuoto")
+        raise ValueProblem("identificativo del survey vuoto", params={"reason": "survey_empty"})
     return text.strip()
 
 
@@ -208,9 +219,10 @@ def _odd_box(text: str) -> str:
     try:
         value = int(text)
     except ValueError:
-        raise ValueError(f"{text!r} non è un intero") from None
+        raise ValueProblem(f"{text!r} non è un intero", params={"reason": "box_not_integer", "value": text}) from None
     if value < 3 or value > 201 or value % 2 == 0:
-        raise ValueError(f"{value} non è un intero dispari tra 3 e 201")
+        raise ValueProblem(f"{value} non è un intero dispari tra 3 e 201",
+                           params={"reason": "box_range", "value": value, "low": 3, "high": 201})
     return str(value)
 
 
@@ -222,18 +234,27 @@ def _check_preference(key: str, value: str) -> str:
 
         if key not in ASSISTANT_DEFAULTS:
             raise CommandError("PREFERENCE_INVALID", f"impostazione {key!r} sconosciuta "
-                               f"({', '.join(ASSISTANT_DEFAULTS)})")
+                               f"({', '.join(ASSISTANT_DEFAULTS)})",
+                               params={"reason": "unknown_assistant_key", "key": key,
+                                       "allowed": list(ASSISTANT_DEFAULTS)})
         check = functools.partial(check_assistant_preference, key)
     else:
         pref = PREFERENCES.get(key) or TOOL_PREFERENCES.get(key)
         if pref is None:
             raise CommandError("PREFERENCE_INVALID", f"preferenza {key!r} sconosciuta "
-                               f"({', '.join([*PREFERENCES, *TOOL_PREFERENCES])})")
+                               f"({', '.join([*PREFERENCES, *TOOL_PREFERENCES])})",
+                               params={"reason": "unknown_key", "key": key,
+                                       "allowed": [*PREFERENCES, *TOOL_PREFERENCES]})
         check = pref.check
     try:
         return check(value)
+    except ValueProblem as exc:
+        cause = {"code": exc.code, "params": exc.params, "text": exc.message}
+        raise CommandError("PREFERENCE_INVALID", f"{key}: {exc}; resta il valore precedente",
+                           params={"reason": "invalid_value", "key": key, "cause": cause}) from None
     except ValueError as exc:
-        raise CommandError("PREFERENCE_INVALID", f"{key}: {exc}; resta il valore precedente") from None
+        raise CommandError("PREFERENCE_INVALID", f"{key}: {exc}; resta il valore precedente",
+                           params={"reason": "invalid_value_other", "key": key, "detail": str(exc)}) from None
 
 
 # --------------------------------------------------------------------------
@@ -250,7 +271,9 @@ def _exec_prefs_set(ctx, p: Mapping) -> Outcome:
 def _closed(name: str, choices: tuple[str, ...]):
     def run(ctx, p: Mapping) -> Outcome:
         if p[name] not in choices:
-            raise CommandError("COMMAND_PARAMETER_INVALID", f"{name}: {p[name]!r} non in {choices}")
+            raise CommandError("COMMAND_PARAMETER_INVALID", f"{name}: {p[name]!r} non in {choices}",
+                               params={"reason": "choice", "parameter": name, "given": json.dumps(p[name]),
+                                       "allowed": list(choices)})
         return Outcome(values=dict(p))
     return run
 
@@ -363,7 +386,7 @@ class AssistantQueueExecutor:
         done = ticket.done
         if done is None:  # finestra chiusa con il comando in coda
             return ExecutedCommand(command, CommandResult("cancelled", error=ResultMessage(
-                "COMMAND_CANCELLED", "comando annullato: finestra chiusa")), None)
+                "COMMAND_CANCELLED", "comando annullato: finestra chiusa", {"reason": "window_closed"})), None)
         return ExecutedCommand(done.registered, done.result, done.entry)
 
     def state(self):
@@ -401,7 +424,9 @@ class CommandRunner(QObject):
                                                       lambda r: self.progress.emit(job.id, r))
         except Exception as exc:  # noqa: BLE001 - il thread di lavoro non si ferma mai (§10 del 40)
             registered = job.command
-            result = CommandResult("error", error=ResultMessage("UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}"))
+            result = CommandResult("error", error=ResultMessage(
+                "UI_COMMAND_FAILED", f"{type(exc).__name__}: {exc}",
+                {"error_type": type(exc).__name__, "detail": str(exc)}))
         try:
             spec = session.registry.spec(registered.name)
         except CommandError:
@@ -417,7 +442,7 @@ class CommandRunner(QObject):
             loaded = Session.load(job.path, registry)
             report = loaded.replay(cancel=job.cancel, progress=lambda r: self.progress.emit(job.id, r))
         except CommandError as exc:
-            self.replayed.emit(ReplayDone(job.id, job.path, None, None, ResultMessage(exc.code, exc.message)))
+            self.replayed.emit(ReplayDone(job.id, job.path, None, None, exception_message(exc)))
             return
         if report.status != "cancelled":  # annullata: si scarta, resta la sessione di prima (§3.8)
             self.session = loaded
@@ -685,7 +710,7 @@ def load_translations(language: str, app: QCoreApplication | None = None) -> tup
         _TRANSLATORS.append(ours)
     else:
         warnings.append(ResultMessage("UI_TRANSLATION_MISSING", f"traduzione italiana {path} mancante o "
-                                      "illeggibile: interfaccia in inglese"))
+                                      "illeggibile: interfaccia in inglese", {"reason": "italian", "path": str(path)}))
         language = "en"
     qt = QTranslator()
     qt_dir = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
@@ -694,7 +719,8 @@ def load_translations(language: str, app: QCoreApplication | None = None) -> tup
         _TRANSLATORS.append(qt)
     else:
         warnings.append(ResultMessage("UI_TRANSLATION_MISSING", f"traduzione di Qt qtbase_it non trovata in "
-                                      f"{qt_dir}: dialoghi standard in inglese"))
+                                      f"{qt_dir}: dialoghi standard in inglese",
+                                      {"reason": "qt", "folder": str(qt_dir)}))
     return language, warnings
 
 
@@ -1226,9 +1252,8 @@ class _IndexTask(QRunnable):
     def run(self) -> None:
         try:
             index = self.loader()
-        except Exception as exc:  # noqa: BLE001 - codice e testo del modulo invariati
-            code, message = getattr(exc, "code", type(exc).__name__), getattr(exc, "message", str(exc))
-            self.signals.done.emit(None, ResultMessage(str(code), str(message)))
+        except Exception as exc:  # noqa: BLE001 - codice, testo e params del modulo invariati
+            self.signals.done.emit(None, exception_message(exc))
             return
         self.signals.done.emit(index, None)
 
@@ -1419,7 +1444,7 @@ class PreferencesDialog(QDialog):
         try:
             usage = self.window_.cache.usage()
         except Exception as exc:  # noqa: BLE001
-            self.cache_usage.setText(f"{getattr(exc, 'code', type(exc).__name__)}: {exc}")
+            self.cache_usage.setText(shown_exception(exc))
             return
         modules = ", ".join(f"{m}: {b}" for m, b in sorted(usage.by_module.items())) or self.tr("empty")
         self.cache_usage.setText(self.tr("Used: %1 bytes of %2 (%3)").replace("%1", str(usage.total_bytes))
@@ -1580,7 +1605,7 @@ class MainWindow(QMainWindow):
         self.sky.message.connect(lambda m: self.messages.add(None, m, error=m.code == "GL_UNAVAILABLE"))
         if hasattr(self.sky.renderer, "failed"):
             self.sky.renderer.failed.connect(
-                lambda code, text: self.messages.add(None, ResultMessage(code, text), error=True))
+                lambda code, text, params: self.messages.add(None, ResultMessage(code, text, params), error=True))
         self.sky.tiles_changed.connect(lambda _n: self._update_network())
         self.sky.view_changed.connect(self._show_survey)
         self.sky.first_shown.connect(self._first_view)
@@ -2103,7 +2128,8 @@ class MainWindow(QMainWindow):
                 raise RuntimeError("disegno fuori schermo non disponibile")
             export_view.write_png(image, Path(values["path"]), values["metadata"], values["credit_line"])
         except Exception as exc:  # noqa: BLE001 - disco pieno, permessi, GPU: un messaggio, mai un file a metà
-            self.messages.add(None, ResultMessage("EXPORT_FAILED", f"{values['path']}: {exc}"), error=True)
+            self.messages.add(None, ResultMessage("EXPORT_FAILED", f"{values['path']}: {exc}",
+                                                  {"path": values["path"], "detail": str(exc)}), error=True)
 
     def _apply_effect(self, command: Command, result: CommandResult) -> None:
         """Effetto dei comandi dell'interfaccia (classe ``application``) e stato dei menu, nel thread principale."""
@@ -2306,7 +2332,9 @@ class MainWindow(QMainWindow):
         try:
             self.session.save(path, app_version=astrotwo.__version__, conversations=conversations)
         except (OSError, ValueError) as exc:
-            self.show_modal(self.tr("The session cannot be saved"), f"{type(exc).__name__}: {exc}")
+            self.show_modal(self.tr("The session cannot be saved"), shown_line(ResultMessage(
+                "SESSION_SAVE_FAILED", f"{type(exc).__name__}: {exc}",
+                {"error_type": type(exc).__name__, "detail": str(exc)})))
             return False
         self.saved_count = len(self.session.history)
         self.saved_path = path
@@ -2351,8 +2379,8 @@ class MainWindow(QMainWindow):
             self.messages.add(report.stop_details.get("number"), report.stop, error=True)
             self.show_modal(self.tr("The session was stopped"), shown_line(report.stop))
         elif report.status == "cancelled":
-            self.messages.add(None, report.stop or ResultMessage("COMMAND_CANCELLED", "riapertura annullata"),
-                              error=False)
+            self.messages.add(None, report.stop or ResultMessage("COMMAND_CANCELLED", "riapertura annullata",
+                                                                 {"reason": "replay"}), error=False)
 
     # --- aspetto ------------------------------------------------------------------------
 

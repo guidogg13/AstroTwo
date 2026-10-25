@@ -86,12 +86,14 @@ from astrotwo.ai.keychain_keys import KeychainError
 from astrotwo.ai.provider_adapter import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     PROVIDER_PRESETS,
+    ProfileError,
     ProviderAdapterError,
     ProviderProfile,
     make_adapter,
 )
 from astrotwo.ai.tool_registry import ToolRegistry
-from astrotwo.ui.message_view import shown_line
+from astrotwo.core.commands import ResultMessage
+from astrotwo.ui.message_view import ValueProblem, shown_exception, shown_line, shown_text
 
 __all__ = [
     "AiPanel",
@@ -149,22 +151,33 @@ def _check_profiles(text: str) -> str:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"profili: JSON non valido ({exc})") from None
+        raise ValueProblem(f"profili: JSON non valido ({exc})",
+                           params={"reason": "profiles_json", "detail": str(exc)}) from None
     if not isinstance(data, dict):
-        raise ValueError("profili: serve un oggetto JSON {id: profilo}")
+        raise ValueProblem("profili: serve un oggetto JSON {id: profilo}", params={"reason": "profiles_object"})
     out = {}
     for key, entry in data.items():
         if not isinstance(entry, dict) or set(entry) - set(_PROFILE_FIELDS):
-            raise ValueError(f"profilo {key!r}: campi ammessi {', '.join(_PROFILE_FIELDS)}")
+            raise ValueProblem(f"profilo {key!r}: campi ammessi {', '.join(_PROFILE_FIELDS)}",
+                               params={"reason": "profile_fields", "profile": str(key),
+                                       "allowed": list(_PROFILE_FIELDS)})
         try:
             profile = _profile_from_json(entry)
             _pricing_from_json(entry)
+        except ProfileError as exc:
+            raise ValueProblem(f"profilo {key!r}: {exc}", params={
+                "reason": "profile_invalid", "profile": str(key),
+                "cause": {"code": exc.code, "params": exc.params, "text": exc.message}}) from None
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"profilo {key!r}: {exc}") from None
+            raise ValueProblem(f"profilo {key!r}: {exc}", params={
+                "reason": "profile_other", "profile": str(key), "error_type": type(exc).__name__,
+                "detail": str(exc)}) from None
         if profile.id != key:
-            raise ValueError(f"profilo {key!r}: l'indirizzo dà l'identificativo {profile.id!r}")
+            raise ValueProblem(f"profilo {key!r}: l'indirizzo dà l'identificativo {profile.id!r}",
+                               params={"reason": "profile_id", "profile": str(key), "id": profile.id})
         if urllib.parse.urlsplit(profile.base_url).scheme != "https" and not profile.local:
-            raise ValueError(f"AI_INSECURE_ENDPOINT: {profile.base_url}: un endpoint remoto deve essere https")
+            raise ValueProblem(f"AI_INSECURE_ENDPOINT: {profile.base_url}: un endpoint remoto deve essere https",
+                               code="AI_INSECURE_ENDPOINT", params={"base_url": profile.base_url})
         out[key] = {f: entry[f] for f in _PROFILE_FIELDS if f in entry}
     return json.dumps(out, ensure_ascii=False, sort_keys=True)
 
@@ -173,17 +186,18 @@ def _check_consents(text: str) -> str:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"consensi: JSON non valido ({exc})") from None
+        raise ValueProblem(f"consensi: JSON non valido ({exc})",
+                           params={"reason": "consents_json", "detail": str(exc)}) from None
     if not isinstance(data, dict) or not all(
             isinstance(v, dict) and isinstance(v.get("version"), int) and isinstance(v.get("given_at"), str)
             for v in data.values()):
-        raise ValueError("consensi: {profilo: {version, given_at}}")
+        raise ValueProblem("consensi: {profilo: {version, given_at}}", params={"reason": "consents_shape"})
     return json.dumps(data, ensure_ascii=False, sort_keys=True)
 
 
 def _check_bool(text: str) -> str:
     if text not in ("true", "false"):
-        raise ValueError(f"{text!r}: true o false")
+        raise ValueProblem(f"{text!r}: true o false", params={"reason": "true_false", "value": text})
     return text
 
 
@@ -192,9 +206,11 @@ def _check_int(low: int, high: int) -> Callable[[str], str]:
         try:
             number = int(text)
         except ValueError:
-            raise ValueError(f"{text!r} non è un intero") from None
+            raise ValueProblem(f"{text!r} non è un intero",
+                               params={"reason": "int_not_integer", "value": text}) from None
         if not low <= number <= high:
-            raise ValueError(f"{number}: serve un intero tra {low} e {high}")
+            raise ValueProblem(f"{number}: serve un intero tra {low} e {high}",
+                               params={"reason": "int_range", "value": number, "low": low, "high": high})
         return str(number)
     return check
 
@@ -1193,16 +1209,22 @@ class AssistantSettingsDialog(QDialog):
 
     # --- chiave (31) -------------------------------------------------------------------
 
+    @staticmethod
+    def _problem_text(exc: BaseException) -> str:
+        """Errore codificato (``CODICE: testo`` del catalogo) o, per un controllo del modulo con testo già tradotto da
+        Qt (``tr``), il testo dell'eccezione."""
+        return shown_exception(exc) if isinstance(getattr(exc, "code", None), str) else str(exc)
+
     def _update_key_state(self) -> None:
         try:
             profile = self._form_profile(need_model=False)
         except ValueError as exc:
-            self.key_state.setText(str(exc))
+            self.key_state.setText(self._problem_text(exc))
             return
         try:
             present = self.panel.keychain.has_key(profile.id)
         except KeychainError as exc:
-            self.key_state.setText(f"{exc.code}: {exc.message}")
+            self.key_state.setText(shown_exception(exc))
             return
         if present:
             self.key_state.setText(self.tr("A key for %1 is in the Keychain.").replace("%1", profile.id))
@@ -1223,9 +1245,9 @@ class AssistantSettingsDialog(QDialog):
             profile = self._form_profile(need_model=False)
             self.panel.keychain.store_key(profile.id, text)
         except ValueError as exc:
-            self.key_state.setText(str(exc))
+            self.key_state.setText(self._problem_text(exc))
         except KeychainError as exc:
-            self.key_state.setText(f"{exc.code}: {exc.message}")
+            self.key_state.setText(shown_exception(exc))
         else:
             self._update_key_state()
         finally:
@@ -1237,9 +1259,9 @@ class AssistantSettingsDialog(QDialog):
             profile = self._form_profile(need_model=False)
             self.panel.keychain.delete_key(profile.id)
         except ValueError as exc:
-            self.key_state.setText(str(exc))
+            self.key_state.setText(self._problem_text(exc))
         except KeychainError as exc:
-            self.key_state.setText(f"{exc.code}: {exc.message}")
+            self.key_state.setText(shown_exception(exc))
         else:
             self._update_key_state()
         self.panel.refresh()
@@ -1256,15 +1278,14 @@ class AssistantSettingsDialog(QDialog):
         try:
             adapter = self.panel.adapter_factory(self._form_profile(need_model=False), self.panel.keychain)
         except (ValueError, ProviderAdapterError) as exc:
-            self.models_note.setText(str(exc))
+            self.models_note.setText(self._problem_text(exc))
             return
         self.models_note.setText(self.tr("Asking the provider for its models…"))
         self._run(adapter.list_models, self._models_listed)
 
     def _models_listed(self, result, error) -> None:
         if error is not None:
-            self.models_note.setText(f"{getattr(error, 'code', type(error).__name__)}: "
-                                     f"{getattr(error, 'message', error)}")
+            self.models_note.setText(shown_exception(error))
             return
         typed = self.model.currentText()
         self.model.clear()
@@ -1274,7 +1295,7 @@ class AssistantSettingsDialog(QDialog):
                 self.model.setItemData(self.model.count() - 1, info.name, Qt.ItemDataRole.ToolTipRole)
         self.model.setEditText(typed)  # nessun modello preselezionato
         if result.notice is not None:
-            self.models_note.setText(f"{result.notice.code}: {result.notice.message}")
+            self.models_note.setText(shown_exception(result.notice))
         else:
             self.models_note.setText(self.tr("%1 models from the provider.").replace("%1", str(len(result.models))))
 
@@ -1282,22 +1303,21 @@ class AssistantSettingsDialog(QDialog):
         try:
             adapter = self.panel.adapter_factory(self._form_profile(need_model=True), self.panel.keychain)
         except (ValueError, ProviderAdapterError) as exc:
-            self.probe_state.setText(str(exc))
+            self.probe_state.setText(self._problem_text(exc))
             return
         self.probe_state.setText(self.tr("Testing…"))
         self._run(adapter.probe_tools, self._probed)
 
     def _probed(self, result, error) -> None:
         if error is not None:
-            self.probe_state.setText(f"{getattr(error, 'code', type(error).__name__)}: "
-                                     f"{getattr(error, 'message', error)}")
+            self.probe_state.setText(shown_exception(error))
             return
         tokens = TokenCount.of(result.usage)
         tokens_text = (self.tr("%1 input tokens, %2 output tokens").replace("%1", str(tokens.input_tokens))
                        .replace("%2", str(tokens.output_tokens)) if tokens.declared
                        else self.tr("tokens not declared by the provider"))
         if result.error is not None:
-            self.probe_state.setText(f"{result.error.code}: {result.error.message}")
+            self.probe_state.setText(shown_exception(result.error))
         elif result.tool_calling:
             self.probe_state.setText(self.tr("The model called the test tool.") + " " + tokens_text)
         else:
@@ -1340,7 +1360,7 @@ class AssistantSettingsDialog(QDialog):
         try:
             values, _ = self._collect()
         except ValueError as exc:
-            self.error.setText(str(exc))
+            self.error.setText(self._problem_text(exc))
             return
         for key, value in values.items():
             if value != self.panel.value(key):
@@ -1553,6 +1573,8 @@ class AiPanel(QWidget):
                     adapter = self.adapter_factory(_profile_from_json(entry), self.keychain)
                 except ProviderAdapterError as exc:
                     self.adapter_error = exc
+                except ProfileError as exc:
+                    self.adapter_error = ProviderAdapterError(exc.code, exc.message, params=exc.params)
                 except ValueError as exc:
                     self.adapter_error = ProviderAdapterError("AI_NO_PROFILE", str(exc))
             current = assistant.adapter
@@ -1608,25 +1630,14 @@ class AiPanel(QWidget):
         from astrotwo.ai.chat_assistant import Availability
 
         if self.adapter_error is not None:
-            return Availability(False, self.adapter_error.code, self.adapter_error.message)
+            return Availability(False, self.adapter_error.code, self.adapter_error.message,
+                                self.adapter_error.params)
         return self.assistant.availability()
 
     def _reason_text(self, availability) -> str:
-        profile = self.assistant.adapter.profile if self.assistant.adapter is not None else None
-        code = availability.code
-        if code == AssistantErrorCode.NO_PROFILE:
-            reason = self.tr("no profile configured")
-        elif code == "KEY_NOT_FOUND":
-            reason = self.tr("no key in the Keychain for %1").replace("%1", profile.id if profile else "?")
-        elif code in ("KEYCHAIN_UNAVAILABLE", "KEYCHAIN_ACCESS_DENIED"):
-            reason = self.tr("Keychain not available (%1)").replace("%1", code)
-        elif code == "AI_NO_TOOLS":
-            reason = self.tr("the model %1 does not call tools").replace("%1", profile.model if profile else "?")
-        elif code == AssistantErrorCode.CONSENT_REQUIRED:
-            reason = self.tr("consent to send data to %1 not given").replace("%1", profile.host if profile else "?")
-        else:
-            reason = f"{code}: {availability.reason}"
-        return self.tr("The assistant is not available: %1. The rest of AstroTwo works normally.").replace(
+        # Motivo dal catalogo dei messaggi (D40-3), con il codice sempre visibile.
+        reason = shown_line(ResultMessage(availability.code, availability.reason or "", availability.params))
+        return self.tr("The assistant is not available. %1 The rest of AstroTwo works normally.").replace(
             "%1", reason)
 
     def _show_availability(self, *, consent_refused: bool = False) -> None:
@@ -1729,7 +1740,7 @@ class AiPanel(QWidget):
         try:
             self.assistant.send(text)
         except AssistantError as exc:
-            self._error_line(f"{exc.code}: {exc.message}")
+            self._error_line(shown_exception(exc))
             self._show_availability()
             return False
         self._set_busy(True)
@@ -1832,7 +1843,7 @@ class AiPanel(QWidget):
             name = call.command.name if call.command is not None else None
             card.show_finished(call, self._functions(name) if name else ())
         elif isinstance(event, ProviderNoticeEvent):
-            self._note(event.text)
+            self._note(shown_line(ResultMessage(event.code, event.text, event.params)))
         elif isinstance(event, RegenerationStarted):
             self._flush()
             self._replaced_upto = len(self._segments)
@@ -1897,7 +1908,7 @@ class AiPanel(QWidget):
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(2)
         if answer.error is not None:
-            error = _small(QLabel(f"{answer.error.code}: {answer.error.message}"))
+            error = _small(QLabel(shown_exception(answer.error)))
             error.setObjectName("aiError")
             error.setWordWrap(True)
             layout.addWidget(error)
@@ -1912,7 +1923,7 @@ class AiPanel(QWidget):
             summary.setProperty("warn", answer.report.has_unverified or bool(answer.report.action_issues))
             layout.addWidget(summary)
             for issue in answer.report.action_issues:
-                line = _small(QLabel(f"{issue.code}: {issue.text}"))
+                line = _small(QLabel(shown_line(ResultMessage(issue.code, issue.text, issue.params))))
                 line.setObjectName("aiError")
                 line.setWordWrap(True)
                 layout.addWidget(line)
@@ -2032,14 +2043,8 @@ class AiPanel(QWidget):
         return text
 
     def note_text(self, note) -> str:
-        limits = self.assistant.limits
-        if note.code == AssistantErrorCode.TOOL_LIMIT:
-            return self.tr("limit of %1 commands reached").replace("%1", str(limits.max_calls))
-        if note.code == AssistantErrorCode.TIME_LIMIT:
-            return self.tr("limit of %1 minutes reached").replace("%1", f"{limits.max_seconds / 60:g}")
-        if note.code == AssistantErrorCode.CANCELLED:
-            return self.tr("answer interrupted")
-        return f"{note.code}: {note.text}"
+        """Nota sotto la risposta: testo del catalogo nella lingua dell'interfaccia (D40-3), senza il codice."""
+        return shown_text(ResultMessage(note.code, note.text, note.params))
 
     def tokens_text(self, answer) -> str:
         def count(tokens: TokenCount) -> str:

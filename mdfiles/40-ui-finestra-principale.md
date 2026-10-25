@@ -138,8 +138,8 @@ trovato o rete assente: messaggio del 10 nel pannello Messaggi e, per 10 s, nell
 
 #### 3.7.1 Catalogo dei messaggi (D40-3)
 
-**Contratto dei moduli (modifica trasversale ai moduli 10–19, a `05`, `30`,
-`31`, `32`, `35`: sprint 8b–8d, un modulo alla volta).** Ogni errore e ogni
+**Contratto dei moduli (modifica trasversale ai moduli 10–19, a `04`, `05`,
+`30`–`35` e ai messaggi di `40`–`44`: sprint 8b–8e, un modulo alla volta).** Ogni errore e ogni
 avviso nasce come **codice + parametri strutturati** (`params`: dizionario
 nome → valore JSON, vedi sotto), non solo come testo italiano già
 formattato:
@@ -236,13 +236,12 @@ senza dipendenze (solo dati e `message_text`), importato sia da `ui/` sia da
 `ai/`; i moduli 10–19 e il `05` non lo importano (restituiscono solo codice e
 `params`). La tabella è una sola.
 
-**Passaggio graduale (sprint 8b–8d).** Finché un modulo non è convertito i
-suoi codici non sono nel catalogo e si mostrano come in §3.7.2 (testo
-originale con la nota "(nessuna traduzione)"). Il test T18 controlla i codici
-dei **moduli convertiti** (elenco nel test, aggiornato a ogni sprint) e
-fallisce per un modulo convertito con un codice senza voce; a fine 8d
-l'elenco comprende tutti i moduli 10–19 di T18 (fatto il 2026-10-24); restano da convertire il `05` e i moduli
-dell'interfaccia e dell'IA (sprint 8e).
+**Passaggio graduale (sprint 8b–8e, concluso il 2026-10-25).** Finché un modulo non era convertito i suoi codici
+non erano nel catalogo e si mostravano come in §3.7.2 (testo originale con la nota "(nessuna traduzione)"). Gli
+sprint 8b–8d hanno convertito i moduli 10–19, lo sprint 8e il `04`, il `05`, i moduli IA `30`–`35` e i messaggi
+scritti direttamente da `40`, `41`, `42` e `44` (§10.1 di ognuno). Il test T18 controlla ora **tutto**
+`src/astrotwo`, non più un elenco di moduli: ogni codice che un file solleva o restituisce ha la voce con `en` e
+`it`; un modulo nuovo con un codice senza voce fa fallire il test.
 
 #### 3.7.2 Codice senza voce nel catalogo
 
@@ -483,6 +482,39 @@ Nomi proposti, descrizione in parole. File Python
 | Preferenza con valore non valido (es. limite della cache negativo) | rifiuto, valore precedente | `PREFERENCE_INVALID` |
 | Comando lungo annullato | voce "annullato" nella cronologia, stato invariato | `COMMAND_CANCELLED` |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+I messaggi scritti direttamente dalla finestra nascono come **codice + `params`** (`ResultMessage(code, text, params)`,
+`CommandError(..., params=...)`); il testo italiano resta invariato e il catalogo (§3.7.1) ha la voce di ognuno.
+Un'eccezione di un modulo (con `code`, `message`, `params`) si mostra con **il suo codice e i suoi `params`**
+(`exception_message` di `message_view`); un'eccezione senza codice diventa `UI_COMMAND_FAILED`. Le impostazioni
+controllate dalla finestra e dal pannello dell'assistente sollevano `ValueProblem` (sottoclasse di `ValueError` con
+`code`, `message` e `params`): il valore non valido è un messaggio annidato (`cause`) di `PREFERENCE_INVALID`.
+`ext` = testo esterno (nome di file o di cartella, testo di una libreria).
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `PREFERENCE_INVALID` | `unknown_assistant_key`, `unknown_key` | `key`, `allowed` (list) |
+| | `invalid_value` | `key`, `cause` (messaggio: `PREFERENCE_VALUE_INVALID`) |
+| | `invalid_value_other` | `key`, `detail` (ext) |
+| `PREFERENCE_VALUE_INVALID` | `choice` | `value`, `allowed` (list) |
+| | `cache_not_integer`, `box_not_integer`, `int_not_integer`, `true_false` | `value` |
+| | `cache_not_positive` | `value` (int) |
+| | `box_range`, `int_range` | `value` (int), `low` (int), `high` (int) |
+| | `survey_empty` | — |
+| | `profiles_json`, `consents_json` | `detail` (ext) |
+| | `profiles_object`, `consents_shape` | — |
+| | `profile_fields` | `profile`, `allowed` (list) |
+| | `profile_invalid` | `profile`, `cause` (messaggio: `AI_PROFILE_INVALID` del `30`) |
+| | `profile_other` | `profile`, `error_type`, `detail` (ext) |
+| | `profile_id` | `profile`, `id` |
+| `UI_COMMAND_FAILED` | — | `error_type`, `detail` (ext) |
+| `SESSION_SAVE_FAILED` | — | `error_type`, `detail` (ext) |
+| `UI_TRANSLATION_MISSING` | `italian` | `path` (ext) |
+| | `qt` | `folder` (ext) |
+| `COMMAND_CANCELLED` (condiviso con 05) | `window_closed`, `replay` | — |
+| `COMMAND_PARAMETER_INVALID` (condiviso con 05) | `choice` | `parameter`, `given`, `allowed` (list) |
+
 ## 11. Esposizione all'IA
 
 Non applicabile: è interfaccia. L'IA userà i comandi del `05` attraverso il
@@ -500,7 +532,7 @@ simulati, in `tests/ui/`.
 | T3 | Interfaccia reattiva | servizio simulato che risponde dopo 5 s a `catalog.load_region` | sonda di latenza del thread principale sempre < 100 ms; barra di stato con avanzamento e Annulla | sonda con timer di Qt |
 | T4 | Annulla | annullare il comando di T3 | esito `cancelled`, stato invariato, voce in cronologia | ispezione |
 | T5 | Messaggi (D40-3) | comando che produce un errore del 10 e un avviso del 13, interfaccia in inglese poi in italiano | codice invariato; testo del catalogo nella lingua dell'interfaccia; valori dei parametri identici a quelli dei moduli (stringa per stringa); testo originale nei dettagli; finestra modale solo per un file illeggibile | confronto diretto |
-| T18 | Catalogo completo (D40-3) | ogni codice usato dai moduli 10–19, da `05`, `30`–`35` (scansione del codice) | ogni codice ha voce con `en` e `it`, stessi segnaposto nelle due lingue, parametri attesi dichiarati; il test **fallisce** per un codice senza voce o con una lingua mancante; nessun codice nel catalogo senza uso (avviso) | test |
+| T18 | Catalogo completo (D40-3) | scansione del codice di **tutto** `src/astrotwo` (moduli 04, 05, 10–19, 30–35 e interfaccia 40–44) | ogni codice ha voce con `en` e `it`, stessi segnaposto nelle due lingue, parametri attesi dichiarati; il test **fallisce** per un codice o una ragione senza voce o con una lingua mancante; nessun codice nel catalogo senza uso (avviso) | test |
 | T19 | Valori dei parametri (D40-3) | messaggio con numero, unità, nome e testo esterno, in `en` e `it` | i valori compaiono identici al parametro (nessun arrotondamento, punto decimale); testo esterno non tradotto | test |
 | T20 | Lingua verso l'IA (D40-3) | interfaccia in italiano, comando in errore eseguito dall'assistente (provider simulato) | il modello riceve codice, parametri e testo **inglese**; il pannello (`44`) mostra l'italiano | ispezione del corpo |
 | T6 | Traduzioni complete | `pyside6-lupdate` sul codice | nessuna stringa non tradotta nel file italiano; traduzione di Qt caricata | controllo del file `.ts` |
@@ -539,6 +571,9 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `params`** (testo originale conservato). Applicata in §3.7, §3.7.1,
   §3.7.2, §12 (T5, T18–T20); il codice si scrive dopo l'approvazione dei
   `.md` modificati, un modulo per sprint (8b–8d).
+  **CHIUSA il 2026-10-25 (sprint 8e):** applicata a tutti i moduli — `04`,
+  `05`, 10–19 (sprint 8b–8d), `30`–`35`, `40`, `41`, `42`, `44` (sprint 8e) —
+  e controllata da T18 su tutto `src/astrotwo`.
 - **D40-5 — Posizione del catalogo dei messaggi: DECISA il 2026-10-24
   (decisione del proprietario, come raccomandato).** Modulo neutro
   `src/astrotwo/messages_catalog.py`, usato da `ui/` e `ai/`; i moduli
@@ -646,3 +681,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-24 | Claude Code | **Sprint 8c-bis:** D40-7 decisa dal proprietario (opzione (b)): tipo di parametro `message` ricorsivo con profondità massima 3, testo di terzi sempre `external` (§3.7.1). Nessun comportamento visibile cambia. |
 | 2026-10-24 | Claude Code | **Sprint 8c-bis (13):** §3.7.1 — tipo di parametro `messages` (elenco di messaggi annidati), graffe raddoppiate nel testo, elenco vuoto mostrato come "—" (necessari ai messaggi del 13). |
 | 2026-10-24 | Claude Code | **Sprint 8d (codice):** moduli 14, 16, 19, 15, 17 e 18 convertiti a codice + `params`; T18 comprende tutti i moduli 10–19 e gli errori di 14, 16 e 19 incorporati da 12 e 13 sono messaggi annidati (§3.7.1 aggiornata). Restano il `05` e i moduli dell'interfaccia e dell'IA (sprint 8e). Nessun comportamento visibile cambia. |
+| 2026-10-25 | Claude Code | **Sprint 8e, ultimo della traduzione (D40-3):** nuova §10.1 con la tabella dei messaggi scritti dalla finestra (`PREFERENCE_INVALID`, `PREFERENCE_VALUE_INVALID` con `ValueProblem`, `UI_COMMAND_FAILED`, `SESSION_SAVE_FAILED`, `UI_TRANSLATION_MISSING`) scritta prima del codice; §3.7.1 e T18 estese a tutto `src/astrotwo`; **D40-3 chiusa**. Test `tests/ui/test_messages_ui.py`. Stato `approvato` invariato. |

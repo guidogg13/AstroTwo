@@ -850,6 +850,29 @@ dell'interfaccia di disegno; scelta minore 9), `src/astrotwo/ui/sky_tools.py` (s
 | Seconda immagine FITS aperta | richiesta di sostituire la prima | — |
 | MOC troppo fine per il disegno | ordine ridotto dichiarato "per eccesso" | — |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+I messaggi del visualizzatore nascono come **codice + `params`**; il testo italiano resta invariato. Gli errori di
+12, 10, 13 e 16 incontrati mentre si disegna (tile, campionamento, posizioni dei cataloghi, celle dei MOC) si mostrano
+con **il codice e i `params` del modulo** (il catalogo ha già le loro voci); il testo originale, che per cataloghi e MOC
+nomina il livello, resta nel dettaglio della voce e in "Copia come JSON". Un'eccezione senza codice è `UI_COMMAND_FAILED`
+(`40` §10.1). `ext` = testo esterno (nome di livello o di file, testo del sistema grafico).
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `VIEW_NO_WCS` | `hips`, `catalogs`, `moc`, `distance` | — |
+| `CATALOG_EPOCH_UNKNOWN` | — | `layer` (ext), `image_epoch` |
+| `CATALOG_EPOCH_DIFFERS` | — | `layer` (ext), `catalog_epoch`, `image_epoch` |
+| `HIPS_DISPLAY_UNKNOWN` (condiviso con 12) | `no_limits`, `reopen` | — / `hips_id` |
+| `GL_UNAVAILABLE` | `version` | `found`, `required` |
+| | `program`, `points_program`, `moc_program` | `log` (ext) |
+| `EXPORT_PATH_INVALID` | `not_png`, `is_directory` | `path` (ext) |
+| | `folder_unwritable` | `folder` (ext) |
+| `EXPORT_FAILED` | — | `path` (ext), `detail` (ext) |
+| `VIEW_UNDEFINED` (condiviso con 05) | `export` | — |
+| `OUT_OF_SKY` (condiviso con 05) | `distance_point`, `point` | — |
+| `WCS_INVALID` (condiviso con 10 e 05) | `absent` | — |
+
 ## 11. Esposizione all'IA
 
 Non applicabile: è interfaccia. I comandi che usa (vista, livelli, misure)
@@ -1033,3 +1056,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-23 | Claude Code | **Codice dello sprint 4g** ("FASE: CODICE – interfaccia v1", parte 4): `src/astrotwo/ui/sky_tools.py` (`DistanceTool`, `SimbadPointerTool`, `MeasureOverlay`, `DistanceOptionsBar`; terzo file Python del 41 oltre ai due della scelta minore 9, per non gonfiare `sky_viewer.py`) e collegamento in `sky_viewer.py`; `Bridge.simbad` e `TilePool.read(..., signal)`; descrizione del livello `measure` con valore pieno e unità; test T36 e T37 in `tests/ui/test_sky_tools.py`. Scelte minori di §3.19 da confermare in §13. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **Sprint 4h, specifica (decisioni del proprietario del 2026-10-24):** scelte minori dello sprint 4g confermate (§13); D41-4: **due Mac di riferimento** (minimo = iMac21,1 M1 8 GB, comodo = MacBook Air M5 32 GB dal 2 novembre), tabella di §3.15 compilata per il minimo; §3.14 con i dettagli del PNG (due fasi, crediti nell'immagine e nei metadati, chiavi `tEXt`, errori `EXPORT_PATH_INVALID`, `VIEW_UNDEFINED`, `EXPORT_FAILED`); §3.2 con le regole del cambio di base in un passo; §3.15 con il modo di misura di TP1–TP7; T14 e T17 riscritti; scelte minori 1–10 da confermare. `05` §7 e §10 aggiornati. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **Codice dello sprint 4h** ("FASE: CODICE – interfaccia v1", parte 4, ultimo sprint del 41): `ui/export_view.py` (testi, crediti, scrittura atomica del PNG), `view.export_png` collegato in `main_window.py`, `render_offscreen` nell'interfaccia di disegno; cambio di base in un passo in `sky_viewer.py` (`_stage`, `_try_commit`, `_base_ready`); test `tests/ui/test_export_png.py` (T14, più un test `gl`), `tests/ui/test_base_switch.py` (T17), `tests/ui/test_perf.py` (TP1–TP7, `perf`); risultati misurati nel §3.15 (P1 e P5 non raggiunti sul Mac minimo). 831 test di default. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1 con la tabella dei messaggi del visualizzatore (`VIEW_NO_WCS`, `CATALOG_EPOCH_*`, `GL_UNAVAILABLE`, `EXPORT_*`, sotto-voci condivise); gli errori dei moduli incontrati mentre si disegna si mostrano con il loro codice e i loro `params`. Stato `approvato` invariato. |

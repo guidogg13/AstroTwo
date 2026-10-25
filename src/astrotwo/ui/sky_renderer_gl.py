@@ -195,7 +195,7 @@ def surface_format() -> QSurfaceFormat:
 class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
     """``SkyRenderer`` su ``QOpenGLWidget``: una texture per il piano dello sfondo, trasformazione sulla GPU."""
 
-    failed = Signal(str, str)  # codice, testo (GL_UNAVAILABLE)
+    failed = Signal(str, str, object)  # codice, testo, params (GL_UNAVAILABLE)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -283,15 +283,17 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         fmt = self.context().format() if self.context() is not None else None
         version = (fmt.majorVersion(), fmt.minorVersion()) if fmt is not None else (0, 0)
         if version < GL_VERSION or not QOpenGLContext.currentContext():
-            self._unavailable(f"OpenGL {version[0]}.{version[1]}: serve OpenGL {GL_VERSION[0]}.{GL_VERSION[1]} "
-                              "core profile; visualizzatore non disponibile")
+            self._unavailable("version", f"OpenGL {version[0]}.{version[1]}: serve OpenGL {GL_VERSION[0]}."
+                              f"{GL_VERSION[1]} core profile; visualizzatore non disponibile",
+                              {"found": f"{version[0]}.{version[1]}", "required": f"{GL_VERSION[0]}.{GL_VERSION[1]}"})
             return
         program = QOpenGLShaderProgram(self)
         ok = (program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, _VERTEX)
               and program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _FRAGMENT)
               and program.link())
         if not ok:
-            self._unavailable(f"programma di disegno non compilato: {program.log()}")
+            self._unavailable("program", f"programma di disegno non compilato: {program.log()}",
+                              {"log": program.log()})
             return
         self.program = program
         self.context().aboutToBeDestroyed.connect(self._cleanup)
@@ -314,7 +316,8 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
               and points.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _POINT_FRAGMENT)
               and points.link())
         if not ok:
-            self._unavailable(f"programma dei simboli non compilato: {points.log()}")
+            self._unavailable("points_program", f"programma dei simboli non compilato: {points.log()}",
+                              {"log": points.log()})
             return
         self.point_program = points
         self.point_vao = QOpenGLVertexArrayObject(self)
@@ -339,7 +342,8 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
               and poly.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _POLY_FRAGMENT)
               and poly.link())
         if not ok:
-            self._unavailable(f"programma dei MOC non compilato: {poly.log()}")
+            self._unavailable("moc_program", f"programma dei MOC non compilato: {poly.log()}",
+                              {"log": poly.log()})
             return
         self.poly_program = poly
         self.poly_vao = QOpenGLVertexArrayObject(self)
@@ -372,9 +376,10 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
             self._dead = []
             self.doneCurrent()
 
-    def _unavailable(self, text: str) -> None:
+    def _unavailable(self, reason: str, text: str, params: dict) -> None:
+        """Visualizzatore non disponibile (``GL_UNAVAILABLE``, 41 §10.1): ``reason`` sceglie la voce del catalogo."""
         self.available = False
-        self.failed.emit("GL_UNAVAILABLE", text)
+        self.failed.emit("GL_UNAVAILABLE", text, {"reason": reason, **params})
 
     def paintGL(self) -> None:  # noqa: N802
         f = self.context().functions()

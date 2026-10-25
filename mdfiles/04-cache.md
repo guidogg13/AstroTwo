@@ -198,6 +198,22 @@ Nomi proposti, descrizione in parole, nessun codice:
 | File orfano più giovane della soglia (scrittura in corso altrove) | non eliminato | — |
 | `orphan_min_age` non positivo | rifiuto | `ValueError` |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+`CacheError(code, message, params=...)` e `CacheWarning(code, message, params)` portano `params`; il testo italiano
+resta invariato. Il modulo non importa il catalogo dei messaggi. `detail` = testo di SQLite o del sistema, `key` =
+chiave scelta dal modulo chiamante (spesso un indirizzo): testi esterni (`ext`).
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `CACHE_UNAVAILABLE` (avviso) | `corrupt`, `unusable`, `recreate_failed` | `detail` (ext) |
+| | `folder_unwritable` | `folder` (ext), `detail` (ext) |
+| | `entry_not_saved`, `row_not_saved` | — |
+| `CACHE_FULL` | — | `key` (ext), `size` (int), `limit` (int) |
+| `CACHE_PROVENANCE_MISSING` | `origin`, `retrieved_at`, `no_timezone` | — |
+| `CACHE_FORBIDDEN` | `other_module` | `key` (ext), `owner`, `module` |
+| | `file_is_row`, `wrong_table` | `key` (ext), `table` |
+
 ## 11. Esposizione all'IA
 
 Non applicabile: la cache è un servizio interno; l'IA vede solo origine e
@@ -249,3 +265,4 @@ Nessuna decisione aperta. Decise dal proprietario il 2026-10-09:
 | 2026-10-13 | Claude Code | **Decisione del proprietario del 2026-10-13** (autorizzazione esplicita a modificare il file approvato): §5 "Usato da" con `18-core-calcolatrici.md` (tabella IERS di `update_iers_table`) e `19-core-dati-planetari.md` (PDS4 da URL, D19-9, attraverso la rete e la cache del 14). Nessun altro cambiamento. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **D04 decisa dal proprietario il 2026-10-16** (autorizzazione esplicita a modificare il file approvato): accesso da più thread e da più processi — orfani eliminati solo se più vecchi di `orphan_min_age` (600 s di default, configurabile, nel log) e una sola volta per processo alla prima apertura; motivo: la verifica del 2026-10-16 (5 errori su 1200 operazioni con un'istanza per thread, 250 con un'istanza per operazione); test T9 (è il T17 del 05), T10, T11. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Codice di D04:** `SharedCache(orphan_min_age=600)` in `src/astrotwo/core/cache.py` (orfani eliminati solo se più vecchi della soglia, nel log; pulizia una volta per processo e per cartella); test T9 (8 thread, istanza per thread e per operazione, 1200 operazioni, 0 errori), T10 (due processi, 400 operazioni ciascuno, 0 errori), T11 (soglia e una sola pulizia per processo) in `tests/core/test_cache.py`, falliti prima della correzione e superati dopo. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `CacheError` e `CacheWarning` portano `params`; nuova §10.1 con la tabella di codici, ragioni e parametri (`CACHE_UNAVAILABLE`, `CACHE_FULL`, `CACHE_PROVENANCE_MISSING`, `CACHE_FORBIDDEN`) scritta prima del codice; voci del catalogo en/it e test `tests/core/test_messages_cache.py`. Il modulo non importa il catalogo; testo italiano invariato. Stato `approvato` invariato. |

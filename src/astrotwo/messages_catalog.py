@@ -2628,3 +2628,532 @@ _add("CALC_COMMAND_INVALID",
                    "{name}.targets[{index}]: record con frame obbligatorio.", "name index:int"),
      time_both=("{name}: time_value or time_text (only one).", "{name}: time_value oppure time_text (uno solo).",
                 "name"))
+
+
+# --- Comandi e sessione (``core/commands.py``, 05; sprint 8e) --------------------------------------------------
+# ``mdfiles/05-comandi-sessione.md`` §10.1. ``parameter`` = percorso del parametro del comando; ``given`` = valore
+# ricevuto in JSON, senza riformattarlo.
+
+_RANGE = {
+    "below_minimum": ("must be ≥ {limit}", "serve ≥ {limit}"),
+    "not_above_minimum": ("must be > {limit}", "serve > {limit}"),
+    "above_maximum": ("must be ≤ {limit}", "serve ≤ {limit}"),
+}
+_range_variants: dict[str, tuple] = {}
+for _reason, (_en, _it) in _RANGE.items():
+    _range_variants[_reason] = (f"{{parameter}}: {{value}} is out of range: {_en}.",
+                                f"{{parameter}}: {{value}} fuori intervallo: {_it}.", "parameter value:num limit:num")
+    _range_variants[_reason + "_quantity"] = (f"{{parameter}}: {{value}} is out of range: {_en}.",
+                                              f"{{parameter}}: {{value}} fuori intervallo: {_it}.",
+                                              "parameter value:qty limit:qty")
+_add("COMMAND_PARAMETER_INVALID",
+     "{parameter}: the value is not valid.", "{parameter}: il valore non è valido.", "parameter",
+     required=("{parameter}: the parameter is required.", "{parameter}: parametro obbligatorio mancante.",
+               "parameter"),
+     unit_missing=("{parameter}: the unit is missing: a number for a quantity with a unit is not accepted without a "
+                   "unit.",
+                   "{parameter}: unità mancante: un numero per una grandezza con unità non si accetta senza unità.",
+                   "parameter"),
+     unit_invalid=("{parameter}: the unit {unit} is not valid in FITS nor in VOUnit (D18-2).",
+                   "{parameter}: l'unità {unit} non è valida in FITS né in VOUnit (D18-2).", "parameter unit"),
+     not_finite=("{parameter}: a finite number is required, not {given}.",
+                 "{parameter}: serve un numero finito, non {given}.", "parameter given"),
+     epoch_form=("{parameter}: epoch {given}: 'J…'/'B…' or {{value, format, scale}} is required.",
+                 "{parameter}: epoca {given}: serve 'J…'/'B…' oppure {{value, format, scale}}.", "parameter given"),
+     epoch_unreadable=("{parameter}: epoch {given} cannot be read ({detail}).",
+                       "{parameter}: epoca {given} non leggibile ({detail}).", "parameter given detail!"),
+     time_form=("{parameter}: a time is required: 'J…'/'B…' or {{value, format, scale}} (the scale is always written, "
+                "DC1).",
+                "{parameter}: tempo: 'J…'/'B…' oppure {{value, format, scale}} (scala sempre scritta, DC1).",
+                "parameter"),
+     time_format_unknown=("{parameter}: the time format {given} is not among {allowed}.",
+                          "{parameter}: il formato del tempo {given} non è tra {allowed}.",
+                          "parameter given allowed:list"),
+     time_scale_unknown=("{parameter}: the time scale {given} is not among {allowed}.",
+                         "{parameter}: la scala {given} non è tra {allowed}.", "parameter given allowed:list"),
+     time_isot_text=("{parameter}: an isot time must be an ISO 8601 text.",
+                     "{parameter}: un tempo isot è un testo ISO 8601.", "parameter"),
+     quantity_form=("{parameter}: {{\"value\": number, \"unit\": \"unit\"}} is required: a bare number is not enough "
+                    "for a quantity with a unit.",
+                    "{parameter}: serve {{\"value\": numero, \"unit\": \"unità\"}}: un numero puro non basta per una "
+                    "grandezza con unità.", "parameter"),
+     unit_not_convertible=("{parameter}: the unit {unit} ({physical_type}) is not convertible into {expected}.",
+                           "{parameter}: l'unità {unit} ({physical_type}) non è convertibile in {expected}.",
+                           "parameter unit physical_type expected:list"),
+     position_form=("{parameter}: a position is an object with {keys}.",
+                    "{parameter}: una posizione è un oggetto con {keys}.", "parameter keys:list"),
+     frame_name=("{parameter}: the name of an astropy.coordinates frame is required.",
+                 "{parameter}: serve il nome di un frame di astropy.coordinates.", "parameter"),
+     epoch_reason_missing=("{parameter}: epoch null without a reason (epoch_reason): the epoch is never assumed "
+                           "(D10-2).",
+                           "{parameter}: epoca null senza motivo (epoch_reason): l'epoca non si assume mai (D10-2).",
+                           "parameter"),
+     pixel_form=("{parameter}: {{\"x\", \"y\", \"convention\"}} is required.",
+                 "{parameter}: servono {{\"x\", \"y\", \"convention\"}}.", "parameter"),
+     pixel_convention=("{parameter}: in the recorded command the convention is always numpy (DC7).",
+                       "{parameter}: nel comando registrato la convenzione è sempre numpy (DC7).", "parameter"),
+     file_form=("{parameter}: {{\"path\": absolute path}} is required.",
+                "{parameter}: serve {{\"path\": percorso assoluto}}.", "parameter"),
+     path_not_absolute=("{parameter}: an absolute path is required, not {path}.",
+                        "{parameter}: serve un percorso assoluto, non {path}.", "parameter path!"),
+     file_unreadable=("{parameter}: the file {path} does not exist or cannot be read.",
+                      "{parameter}: il file {path} non esiste o non è leggibile.", "parameter path!"),
+     url_form=("{parameter}: an http(s) address is required, not {given}.",
+               "{parameter}: serve un indirizzo http(s), non {given}.", "parameter given"),
+     layer_form=("{parameter}: a layer identifier L<n> is required, not {given}.",
+                 "{parameter}: serve un identificativo di livello L<n>, non {given}.", "parameter given"),
+     layer_kind=("{parameter}: layer {layer} is of type {kind}: {expected} is required.",
+                 "{parameter}: il livello {layer} è di tipo {kind}: serve {expected}.",
+                 "parameter layer kind expected:list"),
+     choice=("{parameter}: {given} is not among {allowed}.", "{parameter}: {given} non è tra {allowed}.",
+             "parameter given allowed:list"),
+     integer_required=("{parameter}: an integer is required, not {given}.",
+                       "{parameter}: serve un intero, non {given}.", "parameter given"),
+     boolean_required=("{parameter}: true or false is required, not {given}.",
+                       "{parameter}: serve true o false, non {given}.", "parameter given"),
+     string_required=("{parameter}: a text is required, not {given}.", "{parameter}: serve un testo, non {given}.",
+                      "parameter given"),
+     list_required=("{parameter}: a list is required.", "{parameter}: serve una lista.", "parameter"),
+     list_too_long=("{parameter}: {count} elements, at most {maximum}.",
+                    "{parameter}: {count} elementi, al più {maximum}.", "parameter count:int maximum:int"),
+     record_required=("{parameter}: a JSON object (record) is required.",
+                      "{parameter}: serve un oggetto JSON (record).", "parameter"),
+     field_unknown=("{parameter}: the field is not declared in the record.",
+                    "{parameter}: campo non dichiarato nel record.", "parameter"),
+     parameters_form=("{parameter}: the parameters must be a JSON object.",
+                      "{parameter}: i parametri sono un oggetto JSON.", "parameter"),
+     parameter_unexpected=("{parameter}: the parameter is not expected by {command}.",
+                           "{parameter}: parametro non previsto da {command}.", "parameter command"),
+     module_rejected=("{error_type}: {detail}", "{error_type}: {detail}", "error_type detail!"),
+     rows_out_of_range=("{parameter}: rows {rows} are outside 0…{last}.",
+                        "{parameter}: righe {rows} fuori da 0…{last}.", "parameter rows:list last:int"),
+     column_unknown=("{parameter}: column {column} is not in the table.",
+                     "{parameter}: la colonna {column} non è nella tabella.", "parameter column!"),
+     columns_unknown=("{parameter}: columns not in the table: {columns}.",
+                      "{parameter}: colonne non nella tabella: {columns}.", "parameter columns:list!"),
+     position_beyond=("{parameter}: position {position} is beyond the last layer ({count}).",
+                      "{parameter}: posizione {position} oltre l'ultimo livello ({count}).",
+                      "parameter position:int count:int"),
+     distance_form=("{parameter}: exactly one form is required: (layer, p1, p2) for the pixels of an image or "
+                    "(sky1, sky2) for two sky positions.",
+                    "{parameter}: serve una sola forma: (layer, p1, p2) per i pixel di un'immagine oppure "
+                    "(sky1, sky2) per due posizioni celesti.", "parameter"),
+     sky_form_incomplete=("{parameter}: the sky form needs sky1 and sky2.",
+                          "{parameter}: la forma cielo vuole sky1 e sky2.", "parameter"),
+     snap_needs_pixels=("{parameter}: snapping to the centroid needs the pixels of an image (layer, p1, p2).",
+                        "{parameter}: l'aggancio al centroide vuole i pixel di un'immagine (layer, p1, p2).",
+                        "parameter"),
+     pixel_form_incomplete=("{parameter}: the pixel form needs layer, p1 and p2.",
+                            "{parameter}: la forma pixel vuole layer, p1 e p2.", "parameter"),
+     box_size_required=("{parameter}: snapping to the centroid needs box_size (odd integer ≥ 3).",
+                        "{parameter}: con l'aggancio al centroide serve box_size (intero dispari ≥ 3).",
+                        "parameter"),
+     **_range_variants)
+del _range_variants, _RANGE, _reason, _en, _it
+_add("LAYER_UNKNOWN", "Layer {layer} does not exist or was removed.", "Il livello {layer} non esiste o è stato rimosso.",
+     "layer",
+     in_parameter=("{parameter}: layer {layer} does not exist or was removed.",
+                   "{parameter}: il livello {layer} non esiste o è stato rimosso.", "parameter layer"))
+_add("COMMAND_UNKNOWN", "Command {command} is not registered.", "Il comando {command} non è registrato.", "command",
+     not_bound=("{command}: the execution of the interface ({module}) is not connected.",
+                "{command}: l'esecuzione dell'interfaccia ({module}) non è collegata.", "command module"),
+     in_session=("#{number}: command {command} is not registered.",
+                 "#{number}: il comando {command} non è registrato.", "number:int command"))
+_add("COMMAND_VERSION_UNSUPPORTED",
+     "{command}: version {version} is not supported (registered: {registered}).",
+     "{command}: versione {version} non supportata (registrata: {registered}).", "command version registered:int",
+     in_session=("#{number} {command}: version {version} is not supported (registered: {registered}).",
+                 "#{number} {command}: versione {version} non supportata (registrata: {registered}).",
+                 "number:int command version registered:int"))
+_add("COMMAND_CANCELLED", "The command was cancelled.", "Il comando è stato annullato.",
+     before_start=("The command was cancelled before it started.", "Comando annullato prima dell'inizio.", ""),
+     discarded=("The command was cancelled: the result is discarded and the state is unchanged.",
+                "Comando annullato: risultato scartato, stato invariato.", ""),
+     replay=("The reopening was cancelled.", "Riapertura annullata.", ""))
+_add("SESSION_INVALID", "The session file is not valid.", "Il file di sessione non è valido.",
+     unreadable=("The session file cannot be read: {detail}", "File di sessione non leggibile: {detail}", "detail!"),
+     structure=("The session file is not valid (format, schema_version, commands).",
+                "File di sessione non valido (format, schema_version, commands).", ""),
+     command=("A command in the session file is not valid: {detail}",
+              "Comando non valido nel file di sessione: {detail}", "detail!"))
+_add("SESSION_SCHEMA_UNSUPPORTED",
+     "The session schema {schema_version} is newer than the one of the application ({app_version}): nothing is "
+     "replayed.",
+     "Lo schema della sessione {schema_version} è più recente di quello dell'app ({app_version}): nessuna "
+     "riesecuzione.", "schema_version:int app_version:int")
+_add("SESSION_FILE_MISSING", "#{number} {command}: the file {path} is missing.",
+     "#{number} {command}: il file {path} manca.", "number:int command path!")
+_add("SESSION_FILE_CHANGED",
+     "#{number} {command}: the file {path} changed (expected SHA-256 {expected}, found {found}).",
+     "#{number} {command}: il file {path} è cambiato (SHA-256 atteso {expected}, trovato {found}).",
+     "number:int command path! expected found")
+_add("SESSION_REPLAY_FAILED", "#{number} {command} was ok and now fails: {error}",
+     "#{number} {command} era ok e ora fallisce: {error}", "number:int command error:msg")
+_add("SESSION_NETWORK_DATA_DIFFERS",
+     "#{number} {command}: network data differs from what was recorded ({changes}).",
+     "#{number} {command}: dati di rete diversi da quelli registrati ({changes}).", "number:int command changes:msgs",
+     count_differs=("#{number} {command}: network data differs from what was recorded (different number of "
+                    "responses).",
+                    "#{number} {command}: dati di rete diversi da quelli registrati (numero di risposte diverso).",
+                    "number:int command"))
+_add("SESSION_FINGERPRINT_CHANGE",  # solo annidato in SESSION_NETWORK_DATA_DIFFERS
+     "fingerprint {before_sha256} → {after_sha256}, origin {before_origin} of {before_retrieved_at} → "
+     "{after_origin} of {after_retrieved_at}, rows {rows_before} → {rows_after}",
+     "impronta {before_sha256} → {after_sha256}, origine {before_origin} del {before_retrieved_at} → "
+     "{after_origin} del {after_retrieved_at}, righe {rows_before} → {rows_after}",
+     "before_sha256 after_sha256 before_origin! before_retrieved_at after_origin! after_retrieved_at rows_before "
+     "rows_after")
+_add("SESSION_STATE_DIFFERS", "The final state differs from the recorded one: {differences}",
+     "Stato finale diverso da quello registrato: {differences}", "differences:msgs")
+_add("SESSION_STATE_DIFFERENCE",  # solo annidato in SESSION_STATE_DIFFERS
+     "{path}: {recorded} → {found}", "{path}: {recorded} → {found}", "path recorded found")
+_extend("WCS_INVALID",
+        no_celestial_coordinates=("The WCS is not valid ({cause_code}: {cause}): no celestial coordinates.",
+                                  "WCS non valido ({cause_code}: {cause}): nessuna coordinata celeste.",
+                                  "cause_code cause:msg"),
+        absent=("The WCS is missing or not valid: no celestial coordinates.",
+                "WCS assente o non valido: nessuna coordinata celeste.", ""),
+        absent_with_reasons=("The WCS is missing or not valid: no celestial coordinates ({reasons}).",
+                             "WCS assente o non valido: nessuna coordinata celeste ({reasons}).", "reasons:msgs"))
+_extend("WCS_MISSING",
+        pixel_grid_overlay=("The image has no WCS: pixel grid; while it is open HiPS, catalogues and MOCs are not "
+                            "overlaid (41 §3.5).",
+                            "Immagine senza WCS: griglia di pixel; finché è aperta non si sovrappongono HiPS, "
+                            "cataloghi o MOC (41 §3.5).", ""))
+_extend("NO_WCS",
+        distance=("Layer {layer}: the image has no WCS, the angular distance cannot be measured.",
+                  "Livello {layer}: immagine senza WCS, distanza angolare non misurabile.", "layer"))
+_add("HIPS_DISPLAY_FALLBACK",
+     "{hips_id}: the tile of ICRS (0°, 0°) at order {order} is not available ({cause_code}); limits from the first "
+     "covered tile.",
+     "{hips_id}: il tile di ICRS (0°, 0°) all'ordine {order} non c'è ({cause_code}); limiti dal primo tile coperto.",
+     "hips_id order:int cause_code")
+_add("HIPS_DISPLAY_LIMITS_UNDEFINED",
+     "{hips_id}: no tile to propose the colour limits from; give vmin and vmax.",
+     "{hips_id}: nessun tile da cui proporre i limiti di colore; indicare vmin e vmax.", "hips_id",
+     coverage_unknown=("{hips_id}: no tile to propose the colour limits from (coverage not known); give vmin and "
+                       "vmax.",
+                       "{hips_id}: nessun tile da cui proporre i limiti di colore (copertura non nota); indicare "
+                       "vmin e vmax.", "hips_id"),
+     coverage_empty=("{hips_id}: empty coverage; give vmin and vmax.",
+                     "{hips_id}: copertura vuota; indicare vmin e vmax.", "hips_id"))
+_add("TABLE_SORT_UNSUPPORTED", "Column {column} cannot be sorted.", "La colonna {column} non è ordinabile.",
+     "column!",
+     array_column=("Column {column} cannot be sorted (array per row).",
+                   "La colonna {column} non è ordinabile (array per riga).", "column!"),
+     not_sortable=("Column {column} cannot be sorted ({detail}).",
+                   "La colonna {column} non è ordinabile ({detail}).", "column! detail!"))
+_add("POSITION_COLUMNS_REQUIRED",
+     "Position columns to be confirmed with catalog.set_columns (never from the names).",
+     "Colonne di posizione da confermare con catalog.set_columns (mai dai nomi).")
+_add("VIEW_UNDEFINED", "The view is not defined.", "La vista non è definita.",
+     geometry=("The view has no centre, scale or window: there is no geometry of module 10.",
+               "Vista senza centro, scala o finestra: nessuna geometria del 10.", ""))
+_add("OUT_OF_SKY", "Outside the sky.", "Fuori dal cielo.",
+     point=("Outside the sky: the point has no coordinates in the projection.",
+            "Fuori dal cielo: il punto non ha coordinate nella proiezione.", ""))
+_add("MODULE_NOTE", "{note}", "{note}", "note!")
+
+
+# --- Chiavi nel Portachiavi (``ai/keychain_keys.py``, 31; sprint 8e) ---------------------------------------------
+# ``mdfiles/31-ia-chiavi-portachiavi.md`` §10.1. Nessun parametro contiene la chiave: ``detail`` è il testo del
+# sistema già ripulito del segreto (testo esterno).
+
+_add("KEYCHAIN_OPERATION",  # solo annidato negli errori del Portachiavi
+     "the operation on the key of profile {profile_id}", "l'operazione sulla chiave del profilo {profile_id}",
+     "profile_id",
+     read=("reading the key of profile {profile_id}", "lettura della chiave del profilo {profile_id}", "profile_id"),
+     write=("writing the key of profile {profile_id}", "scrittura della chiave del profilo {profile_id}",
+            "profile_id"),
+     delete=("deleting the key of profile {profile_id}", "cancellazione della chiave del profilo {profile_id}",
+             "profile_id"))
+_add("KEYCHAIN_UNAVAILABLE",
+     "The macOS Keychain is not available: the assistant is not available, the rest of the app works.",
+     "Il Portachiavi di macOS non è disponibile: l'assistente non è disponibile, il resto dell'app funziona.",
+     not_macos=("System {system}: there is no macOS Keychain; the assistant is not available, the rest of the app "
+                "works.",
+                "Sistema {system}: il Portachiavi di macOS non c'è; l'assistente non è disponibile, il resto "
+                "dell'app funziona.", "system!"),
+     backend_not_loadable=("The macOS backend of keyring cannot be loaded ({error_type}).",
+                           "Backend macOS di keyring non caricabile ({error_type}).", "error_type"),
+     api_unavailable=("The macOS Keychain is not available: {detail}", "Portachiavi di macOS non disponibile: {detail}",
+                      "detail!"),
+     unreachable=("{operation}: the Keychain cannot be reached ({detail}).",
+                  "{operation}: Portachiavi non raggiungibile ({detail}).", "operation:msg detail!"))
+_add("KEYCHAIN_ACCESS_DENIED", "{operation}: access to the Keychain was denied ({detail}).",
+     "{operation}: accesso al Portachiavi negato ({detail}).", "operation:msg detail!")
+_add("KEYCHAIN_WRITE_FAILED", "{operation}: {detail}", "{operation}: {detail}", "operation:msg detail!")
+_add("KEY_NOT_FOUND", "There is no key in the Keychain for profile {profile_id}.",
+     "Nessuna chiave nel Portachiavi per il profilo {profile_id}.", "profile_id")
+_add("KEY_FORMAT_INVALID", "The key is not valid: nothing was written.", "La chiave non è valida: nulla scritto.",
+     not_text=("The key must be a text.", "La chiave è un testo.", ""),
+     empty=("The key is empty: nothing was written.", "Chiave vuota: nulla scritto.", ""),
+     too_long=("The key has {length} characters, more than {maximum}: nothing was written.",
+               "Chiave di {length} caratteri, oltre {maximum}: nulla scritto.", "length:int maximum:int"),
+     control_characters=("The key contains control characters: nothing was written.",
+                         "La chiave contiene caratteri di controllo: nulla scritto.", ""))
+
+
+# --- Adattatore dei provider IA (``ai/provider_adapter.py``, 30; sprint 8e) -------------------------------------
+# ``mdfiles/30-ia-adattatore-provider.md`` §10.1. ``detail`` = testo del servizio o della libreria, già ripulito
+# della chiave (testo esterno); ``status`` = codice HTTP; i tempi sono grandezze in secondi.
+
+_add("AI_PROFILE_INVALID", "The provider profile is not valid.", "Il profilo del provider non è valido.",
+     kind=("kind {kind}: anthropic or openai_compatible is required.",
+           "kind {kind}: serve anthropic oppure openai_compatible.", "kind"),
+     base_url=("base_url {base_url}: an http(s) address is required.",
+               "base_url {base_url}: serve un indirizzo http(s).", "base_url"),
+     model_required=("model: chosen by the user (no default model in the code).",
+                     "model: scelto dall'utente (nessun modello predefinito nel codice).", ""),
+     max_output_tokens=("max_output_tokens: an integer > 0 is required.",
+                        "max_output_tokens: serve un intero > 0.", ""),
+     preset_unknown=("The preset {preset} is not in the list.", "Il preset {preset} non è nell'elenco.", "preset"),
+     max_tokens_field=("max_tokens_field: max_tokens or max_completion_tokens is required.",
+                       "max_tokens_field: serve max_tokens oppure max_completion_tokens.", ""),
+     preset_not_in_list=("The preset {preset} is not in the list ({presets}).",
+                         "Il preset {preset} non è nell'elenco ({presets}).", "preset presets:list"))
+_add("AI_AUTH", "The key is not valid or has no permissions (HTTP {status}): {detail}",
+     "Chiave non valida o senza permessi (HTTP {status}): {detail}", "status:int detail!")
+_add("AI_MODEL_NOT_FOUND", "The model or the endpoint does not exist (HTTP {status}): {detail}",
+     "Modello o endpoint inesistente (HTTP {status}): {detail}", "status:int detail!")
+_add("AI_RATE_LIMIT", "Too many requests (HTTP {status}): {detail}", "Troppe richieste (HTTP {status}): {detail}",
+     "status:int detail!")
+_add("AI_SERVICE", "The service returned an error.", "Il servizio ha restituito un errore.",
+     http_error=("Service error (HTTP {status}): {detail}", "Errore del servizio (HTTP {status}): {detail}",
+                 "status:int detail!"),
+     rejected=("Request rejected by the service (HTTP {status}): {detail}",
+               "Richiesta rifiutata dal servizio (HTTP {status}): {detail}", "status:int detail!"))
+_add("AI_CONTEXT_TOO_LONG", "The conversation exceeds the context of the model (HTTP {status}): {detail}",
+     "Conversazione oltre il contesto del modello (HTTP {status}): {detail}", "status:int detail!")
+_add("AI_NO_TOOLS", "The model does not call tools (HTTP {status}): {detail}",
+     "Il modello non chiama strumenti (HTTP {status}): {detail}", "status:int detail!")
+_add("AI_TIMEOUT", "The time limit was exceeded.", "Tempo massimo superato.",
+     connect_read=("Time limit exceeded (connection {connect}, read {read}).",
+                   "Tempo massimo superato (connessione {connect}, lettura {read}).", "connect:qty read:qty"),
+     silence=("Time limit exceeded: {silence} of silence in the stream.",
+              "Tempo massimo superato: {silence} di silenzio nello streaming.", "silence:qty"))
+_add("AI_CONNECTION", "Cannot connect to {host}: {detail}", "Connessione impossibile con {host}: {detail}",
+     "host detail!")
+_add("AI_BAD_RESPONSE", "The response of the provider is not valid.", "La risposta del provider non è conforme.",
+     other=("Non-conforming response: {error_type}: {detail}", "Risposta non conforme: {error_type}: {detail}",
+            "error_type detail!"),
+     stream_error=("Non-conforming response: error in the stream: {detail}",
+                   "Risposta non conforme: errore nello streaming: {detail}", "detail!"),
+     unknown_event=("Non-conforming response: unknown event {event}.",
+                    "Risposta non conforme: evento sconosciuto {event}.", "event!"),
+     stream_cut=("Non-conforming response: the stream stopped before message_stop.",
+                 "Risposta non conforme: streaming interrotto prima di message_stop.", ""),
+     unknown_stop_reason=("Non-conforming response: the stop reason {stop_reason} is not expected.",
+                          "Risposta non conforme: motivo di fine {stop_reason} non previsto.", "stop_reason!"),
+     no_finish_reason=("Non-conforming response: the stream ended without finish_reason.",
+                       "Risposta non conforme: streaming finito senza finish_reason.", ""),
+     unknown_finish_reason=("Non-conforming response: finish_reason {finish_reason} is not expected.",
+                            "Risposta non conforme: finish_reason {finish_reason} non previsto.", "finish_reason!"),
+     no_stop_reason=("The response of the provider ended without a stop reason.",
+                     "Risposta del provider finita senza motivo di fine.", ""))
+_add("AI_INSECURE_ENDPOINT", "{base_url}: a remote endpoint must be https; no request was sent.",
+     "{base_url}: un endpoint remoto deve essere https; nessuna richiesta inviata.", "base_url")
+_add("AI_MODELS_UNAVAILABLE", "The list of models is not available ({cause}): write the identifier by hand.",
+     "Elenco dei modelli non disponibile ({cause}): scrivere l'identificativo a mano.", "cause:msg")
+_add("AI_RETRY", "Repeating the request.", "Richiesta ripetuta.",
+     http_status=("Repeated after {error_code} (HTTP {status}), waiting {wait} (attempt {attempt} of {attempts}).",
+                  "Ripetuta dopo {error_code} (HTTP {status}), attesa {wait} (tentativo {attempt} di {attempts}).",
+                  "error_code status:int wait:qty attempt:int attempts:int"),
+     connection=("Repeated after {error_code} (cannot connect to {host}), waiting {wait} (attempt {attempt} of "
+                 "{attempts}).",
+                 "Ripetuta dopo {error_code} (connessione impossibile con {host}), attesa {wait} (tentativo "
+                 "{attempt} di {attempts}).", "error_code host wait:qty attempt:int attempts:int"))
+
+
+# --- Registro degli strumenti per l'IA (``ai/tool_registry.py``, 32; sprint 8e) ----------------------------------
+# ``mdfiles/32-ia-registro-strumenti.md`` §10.1. Questi errori vanno al modello (testo inglese) e compaiono nella
+# scheda del comando del pannello dell'assistente (lingua dell'interfaccia).
+
+_add("TOOL_NOT_EXPOSED",
+     "Tool '{tool}' does not exist or is not exposed: use one of valid_tools (names with '__').",
+     "Lo strumento '{tool}' non esiste o non è esposto: usare uno di valid_tools (nomi con '__').", "tool")
+_add("TOOL_ARGUMENTS_INVALID", "The arguments of the tool are not valid.",
+     "Gli argomenti dello strumento non sono validi.",
+     not_json=("Arguments are not valid JSON: {detail}", "Gli argomenti non sono JSON valido: {detail}", "detail"),
+     not_object=("Arguments must be a JSON object.", "Gli argomenti devono essere un oggetto JSON.", ""))
+_add("TOOL_NOT_CONFIRMED", "The user did not confirm this command: it was not executed.",
+     "L'utente non ha confermato questo comando: non è stato eseguito.")
+_add("TOOL_NAME_INVALID", "The name of a tool is not valid.", "Il nome di uno strumento non è valido.",
+     pattern=("The tool name {tool} is not valid for {command}.", "Il nome dello strumento {tool} non è valido per "
+              "{command}.", "tool command"),
+     repeated=("Repeated tool or command: {tool} ({command}).", "Strumento o comando ripetuto: {tool} ({command}).",
+               "tool command"),
+     not_registered=("{command} is not a registered command of module 05.",
+                     "{command} non è un comando registrato del 05.", "command"))
+
+
+# --- Verifica dei numeri (``ai/result_verification.py``, 34) e assistente (``ai/chat_assistant.py``, 35; sprint 8e) --
+# ``mdfiles/34-ia-verifica-risultati.md`` §10.1 e ``mdfiles/35-ia-assistente-chat.md`` §10.1. Le voci con la ragione
+# ``not_executed`` sono quelle che vanno al modello (testo inglese), le altre sono note per l'utente.
+
+_add("VERIFY_COMMAND_UNKNOWN", "The command {reference} does not exist.", "Il comando {reference} non esiste.",
+     "reference")
+_add("VERIFY_LAYER_UNKNOWN", "The layer {layer} does not exist.", "Il livello {layer} non esiste.", "layer")
+_add("ACTION_WITHOUT_CONFIRMATION",
+     "#{number} {command}: requested after an external text without the confirmation of the user (programming "
+     "error).",
+     "#{number} {command}: chiesto dopo un testo esterno senza la conferma dell'utente (errore di programmazione).",
+     "number:int command")
+_add("AI_TOOL_LIMIT", "The limit of commands for this answer was reached.",
+     "Il limite di comandi per questa risposta è stato raggiunto.",
+     note=("Limit of {max_calls} commands reached.", "Limite di {max_calls} comandi raggiunto.", "max_calls:int"),
+     not_executed=("Limit of {max_calls} commands for this answer reached: command not executed.",
+                   "Limite di {max_calls} comandi per questa risposta raggiunto: comando non eseguito.",
+                   "max_calls:int"))
+_add("AI_TIME_LIMIT", "Limit of {limit} reached.", "Limite di {limit} raggiunto.", "limit:qty")
+_add("AI_CANCELLED", "The answer was interrupted.", "La risposta è stata interrotta.",
+     note=("Answer interrupted.", "Risposta interrotta.", ""),
+     not_executed=("The answer was stopped: command not executed.",
+                   "La risposta è stata fermata: comando non eseguito.", ""))
+_add("AI_CONSENT_REQUIRED", "The consent to send data to {host} has not been given.",
+     "Il consenso all'invio dei dati a {host} non è stato dato.", "host")
+_add("AI_NO_PROFILE", "No profile is configured.", "Nessun profilo configurato.")
+_add("AI_BUSY", "An answer is in progress.", "Una risposta è in corso.",
+     stop_first=("An answer is in progress: press Stop first.", "Risposta in corso: prima Stop.", ""),
+     another_running=("Another answer is in progress.", "Un'altra risposta è in corso.", ""))
+_add("AI_ASSISTANT_FAILED", "The assistant stopped: {error_type}: {detail}",
+     "L'assistente si è fermato: {error_type}: {detail}", "error_type detail!")
+_extend("AI_NO_TOOLS",
+        model_without_tools=("The model {model} does not call tools.", "Il modello {model} non chiama strumenti.",
+                             "model"))
+
+
+# --- Interfaccia: finestra principale (40), visualizzatore (41), pannello dell'assistente (44); sprint 8e -------------
+# ``mdfiles/40-ui-finestra-principale.md`` §10.1, ``41`` §10.1, ``44`` §10.1. ``path``, ``folder``, ``layer``, ``log``:
+# nomi di file, di cartelle o di livelli e testi del sistema grafico (testo esterno).
+
+_add("UI_COMMAND_FAILED", "The command stopped because of an error: {error_type}: {detail}",
+     "Il comando si è fermato per un errore: {error_type}: {detail}", "error_type detail!")
+_add("SESSION_SAVE_FAILED", "The session cannot be saved: {error_type}: {detail}",
+     "La sessione non si può salvare: {error_type}: {detail}", "error_type detail!")
+_add("UI_TRANSLATION_MISSING", "A translation is missing: the interface stays in English.",
+     "Manca una traduzione: l'interfaccia resta in inglese.",
+     italian=("The Italian translation {path} is missing or unreadable: the interface is in English.",
+              "Traduzione italiana {path} mancante o illeggibile: interfaccia in inglese.", "path!"),
+     qt=("The Qt translation qtbase_it was not found in {folder}: standard dialogs are in English.",
+         "Traduzione di Qt qtbase_it non trovata in {folder}: dialoghi standard in inglese.", "folder!"))
+_add("PREFERENCE_VALUE_INVALID", "The value is not valid.", "Il valore non è valido.",
+     choice=("The value {value} is not among {allowed}.", "Il valore {value} non è tra {allowed}.",
+             "value allowed:list"),
+     cache_not_integer=("{value} is not a whole number of bytes.", "{value} non è un numero intero di byte.",
+                        "value"),
+     cache_not_positive=("Cache limit of {value} bytes: a positive integer is required.",
+                         "Limite della cache di {value} byte: serve un intero positivo.", "value:int"),
+     survey_empty=("The survey identifier is empty.", "Identificativo del survey vuoto.", ""),
+     box_not_integer=("{value} is not an integer.", "{value} non è un intero.", "value"),
+     box_range=("{value} is not an odd integer between {low} and {high}.",
+                "{value} non è un intero dispari tra {low} e {high}.", "value:int low:int high:int"),
+     profiles_json=("Profiles: the JSON is not valid ({detail}).", "Profili: JSON non valido ({detail}).",
+                    "detail!"),
+     profiles_object=("Profiles: a JSON object {{id: profile}} is required.",
+                      "Profili: serve un oggetto JSON {{id: profilo}}.", ""),
+     profile_fields=("Profile {profile}: the allowed fields are {allowed}.",
+                     "Profilo {profile}: campi ammessi {allowed}.", "profile allowed:list"),
+     profile_invalid=("Profile {profile}: {cause}", "Profilo {profile}: {cause}", "profile cause:msg"),
+     profile_other=("Profile {profile}: {error_type}: {detail}", "Profilo {profile}: {error_type}: {detail}",
+                    "profile error_type detail!"),
+     profile_id=("Profile {profile}: the address gives the identifier {id}.",
+                 "Profilo {profile}: l'indirizzo dà l'identificativo {id}.", "profile id"),
+     consents_json=("Consents: the JSON is not valid ({detail}).", "Consensi: JSON non valido ({detail}).",
+                    "detail!"),
+     consents_shape=("Consents: {{profile: {{version, given_at}}}} is required.",
+                     "Consensi: serve {{profilo: {{version, given_at}}}}.", ""),
+     true_false=("{value}: true or false is required.", "{value}: serve true o false.", "value"),
+     int_not_integer=("{value} is not an integer.", "{value} non è un intero.", "value"),
+     int_range=("{value}: an integer between {low} and {high} is required.",
+                "{value}: serve un intero tra {low} e {high}.", "value:int low:int high:int"))
+_add("PREFERENCE_INVALID", "The setting is not valid.", "L'impostazione non è valida.",
+     unknown_assistant_key=("The setting {key} is unknown ({allowed}).",
+                            "Impostazione {key} sconosciuta ({allowed}).", "key allowed:list"),
+     unknown_key=("The preference {key} is unknown ({allowed}).", "Preferenza {key} sconosciuta ({allowed}).",
+                  "key allowed:list"),
+     invalid_value=("{key}: {cause}; the previous value is kept.", "{key}: {cause}; resta il valore precedente.",
+                    "key cause:msg"),
+     invalid_value_other=("{key}: {detail}; the previous value is kept.",
+                          "{key}: {detail}; resta il valore precedente.", "key detail!"))
+_add("EXPORT_PATH_INVALID", "The path of the PNG is not valid.", "Il percorso del PNG non è valido.",
+     not_png=("{path}: an absolute path with the extension .png is required.",
+              "{path}: serve un percorso assoluto con estensione .png.", "path!"),
+     folder_unwritable=("{folder}: the folder does not exist or is not writable.",
+                        "{folder}: cartella inesistente o non scrivibile.", "folder!"),
+     is_directory=("{path} is a folder.", "{path} è una cartella.", "path!"))
+_add("EXPORT_FAILED", "{path}: the PNG was not written: {detail}", "{path}: il PNG non è stato scritto: {detail}",
+     "path! detail!")
+_add("GL_UNAVAILABLE", "The sky viewer is not available.", "Il visualizzatore del cielo non è disponibile.",
+     version=("OpenGL {found}: OpenGL {required} core profile is required; the viewer is not available.",
+              "OpenGL {found}: serve OpenGL {required} core profile; visualizzatore non disponibile.",
+              "found required"),
+     program=("The drawing program did not compile: {log}", "Programma di disegno non compilato: {log}", "log!"),
+     points_program=("The symbols program did not compile: {log}", "Programma dei simboli non compilato: {log}",
+                     "log!"),
+     moc_program=("The MOC program did not compile: {log}", "Programma dei MOC non compilato: {log}", "log!"))
+_add("VIEW_NO_WCS", "The image has no valid WCS: nothing is overlaid on the pixel grid.",
+     "L'immagine non ha un WCS valido: niente si sovrappone alla griglia di pixel.",
+     hips=("The image has no valid WCS: the HiPS background is not drawn under the pixel grid.",
+           "Immagine senza WCS valido: lo sfondo HiPS non si disegna sotto la griglia di pixel.", ""),
+     catalogs=("The image has no valid WCS: catalogues are not overlaid on the pixel grid.",
+               "Immagine senza WCS valido: i cataloghi non si sovrappongono alla griglia di pixel.", ""),
+     moc=("The image has no valid WCS: MOCs are not overlaid on the pixel grid.",
+          "Immagine senza WCS valido: i MOC non si sovrappongono alla griglia di pixel.", ""),
+     distance=("The image has no valid WCS: the angular distance cannot be measured on the pixel grid.",
+               "Immagine senza WCS valido: la distanza angolare non è misurabile sulla griglia di pixel.", ""))
+_add("CATALOG_EPOCH_UNKNOWN",
+     "{layer}: the epoch of the catalogue is not declared, the image is at epoch {image_epoch}; the positions of the "
+     "table are not propagated (proper motion with catalog.set_columns).",
+     "{layer}: epoca del catalogo non dichiarata, immagine all'epoca {image_epoch}; posizioni della tabella non "
+     "propagate (moto proprio con catalog.set_columns).", "layer! image_epoch")
+_add("CATALOG_EPOCH_DIFFERS",
+     "{layer}: the catalogue is at epoch {catalog_epoch}, the image at epoch {image_epoch}; the positions of the "
+     "table are not propagated (proper motion with catalog.set_columns).",
+     "{layer}: catalogo all'epoca {catalog_epoch}, immagine all'epoca {image_epoch}; posizioni della tabella non "
+     "propagate (moto proprio con catalog.set_columns).", "layer! catalog_epoch image_epoch")
+_extend("COMMAND_CANCELLED",
+        window_closed=("The command was cancelled: the window was closed.",
+                       "Comando annullato: finestra chiusa.", ""))
+_extend("VIEW_UNDEFINED",
+        export=("The view is not defined: centre, scale or window are missing.",
+                "Vista non definita: centro, scala o finestra mancanti.", ""))
+_extend("OUT_OF_SKY",
+        distance_point=("Outside the sky: a point has no coordinates in the projection.",
+                        "Fuori dal cielo: un punto non ha coordinate nella proiezione.", ""))
+
+
+# --- Cache comune (``core/cache.py``, 04; sprint 8e) ----------------------------------------------------------------
+# ``mdfiles/04-cache.md`` §10.1. ``detail`` = testo di SQLite o del sistema (testo esterno); ``key`` = chiave scelta dal
+# modulo chiamante (spesso un indirizzo): testo esterno.
+
+_add("CACHE_UNAVAILABLE", "The cache is not available: the data are read again from the source.",
+     "La cache non è disponibile: i dati si rileggono dalla sorgente.",
+     corrupt=("The database is corrupt ({detail}): the cache was recreated empty.",
+              "Database corrotto ({detail}): cache ricreata vuota.", "detail!"),
+     unusable=("The database cannot be used ({detail}): the cache is ignored.",
+               "Database non utilizzabile ({detail}): cache ignorata.", "detail!"),
+     folder_unwritable=("The folder {folder} is not writable ({detail}): the cache is ignored.",
+                        "Cartella {folder} non scrivibile ({detail}): cache ignorata.", "folder! detail!"),
+     recreate_failed=("The recreation failed ({detail}): the cache is ignored.",
+                      "Ricreazione non riuscita ({detail}): cache ignorata.", "detail!"),
+     entry_not_saved=("The cache is switched off: the entry was not saved.",
+                      "Cache disattivata: voce non salvata.", ""),
+     row_not_saved=("The cache is switched off: the row was not saved.", "Cache disattivata: riga non salvata.", ""))
+_add("CACHE_FULL", "The entry {key} ({size} bytes) alone exceeds the limit of {limit} bytes.",
+     "La voce {key} ({size} byte) supera da sola il limite di {limit} byte.", "key! size:int limit:int")
+_add("CACHE_PROVENANCE_MISSING", "No data without provenance can be written.",
+     "Nessun dato senza provenienza si può scrivere.",
+     origin=("The origin is missing: no data without provenance.", "Origine mancante: nessun dato senza provenienza.",
+             ""),
+     retrieved_at=("The download date is missing.", "Data di scaricamento mancante.", ""),
+     no_timezone=("The download date has no time zone: UTC is required.",
+                  "Data di scaricamento senza fuso orario: serve UTC.", ""))
+_add("CACHE_FORBIDDEN", "The cache entry cannot be used by this module.",
+     "La voce della cache non è utilizzabile da questo modulo.",
+     other_module=("The entry {key} belongs to module {owner}, not to {module}.",
+                   "La voce {key} appartiene al modulo {owner}, non al {module}.", "key! owner module"),
+     file_is_row=("The entry {key} is a row of the table {table}: use table().",
+                  "La voce {key} è una riga della tabella {table}: usare table().", "key! table"),
+     wrong_table=("The entry {key} does not belong to the table {table}.",
+                  "La voce {key} non appartiene alla tabella {table}.", "key! table"))

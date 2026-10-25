@@ -39,6 +39,7 @@ from astrotwo.core.measures import (
 from tests.core.test_measures import catalog, icrs, numpy_px, write_image
 from tests.message_helpers import (
     MODULE_14_SUBVARIANTS,
+    MODULE_05_SUBVARIANTS,
     MODULE_15_SUBVARIANTS,
     MODULE_16_SUBVARIANTS,
     MODULE_19_SUBVARIANTS,
@@ -177,7 +178,7 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(tmp_path, mon
         broken, 0, pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True, parallax="plx")], "arcsec")  # row_incomplete
 
     missing = (required_combinations() - seen.pairs - MODULE_14_SUBVARIANTS - MODULE_15_SUBVARIANTS
-               - MODULE_16_SUBVARIANTS - MODULE_19_SUBVARIANTS)
+               - MODULE_16_SUBVARIANTS - MODULE_19_SUBVARIANTS - MODULE_05_SUBVARIANTS)
     assert not missing, f"errori e avvisi del 17 mai provocati nel test: {sorted(missing, key=str)}"
 
 

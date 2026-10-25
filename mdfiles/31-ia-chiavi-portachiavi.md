@@ -185,6 +185,26 @@ funzioni dentro l'app costruita per il `.dmg` (PyInstaller, A2 del `01`).
 | Variabili `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` presenti | ignorate | — |
 | Cancellare una chiave che non c'è | esito "nessuna chiave da cancellare", nessun errore | — |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+`KeychainError(code, message, params=...)`: il testo italiano `message` resta invariato; il catalogo dei messaggi
+(`40` §3.7.1) ha la voce di ogni codice. **Nessun parametro contiene la chiave** (regola d'oro n. 5): `detail` è il
+testo del sistema già ripulito del segreto, testo esterno (`ext`). `operation` è un messaggio annidato (D40-7) del
+codice `KEYCHAIN_OPERATION`, che dice quale operazione sul profilo è fallita.
+
+| Codice | `reason` | Parametri |
+|---|---|---|
+| `KEYCHAIN_UNAVAILABLE` | `not_macos` | `system` (ext) |
+| | `backend_not_loadable` | `error_type` |
+| | `api_unavailable` | `detail` (ext) |
+| | `unreachable` | `operation` (messaggio), `detail` (ext) |
+| `KEYCHAIN_ACCESS_DENIED` | — | `operation` (messaggio), `detail` (ext) |
+| `KEYCHAIN_WRITE_FAILED` | — | `operation` (messaggio), `detail` (ext) |
+| `KEY_NOT_FOUND` | — | `profile_id` |
+| `KEY_FORMAT_INVALID` | `not_text`, `empty`, `control_characters` | — |
+| | `too_long` | `length` (int), `maximum` (int) |
+| `KEYCHAIN_OPERATION` (solo annidato) | `read`, `write`, `delete` | `profile_id` |
+
 ## 11. Esposizione all'IA
 
 Non applicabile: le chiavi non sono mai visibili all'IA né a uno
@@ -240,3 +260,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-16 | Claude Code | Verifiche prima del codice (§13) superate: licenze, Portachiavi di login non sincronizzabile, forzatura necessaria (variabile d'ambiente), backend funzionante in un'app PyInstaller. Resta per il 60 il permesso con l'app firmata. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | §3.1: i profili predefiniti del `30` §3.1.1 (decisione del proprietario del 2026-10-17) usano lo stesso identificativo e quindi una chiave ciascuno; nessuna regola nuova. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 2 della v1:** `src/astrotwo/ai/keychain_keys.py` (`KeychainStore` con il solo backend macOS di `keyring` creato direttamente, `SecretKey` opaco, `KeychainError`, `SERVICE_NAME`; messaggi d'errore ripuliti da ogni parte della chiave) e `tests/ai/test_keychain_keys.py` (T1–T7 con l'API Security simulata in memoria, 8 test; T8 con il marcatore `keychain`, aggiunto a `pyproject.toml` ed escluso di default). **T8 sul Portachiavi reale non ancora eseguito:** al primo tentativo il test è rimasto in attesa (probabile finestra di permesso di macOS), fermato senza lasciare elementi; da eseguire a mano dal proprietario. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `KeychainError` porta `params` (mai la chiave); nuova §10.1 con la tabella (l'operazione fallita è un messaggio annidato `KEYCHAIN_OPERATION`) scritta prima del codice. Test `tests/ai/test_messages_keychain.py`. Testo italiano invariato. Stato `approvato` invariato. |

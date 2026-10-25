@@ -123,7 +123,7 @@ def test_no_wcs_is_a_pixel_grid_without_coordinates(session, tmp_path):
     result = open_image(session, path)
     assert "WCS_MISSING" in [w.code for w in result.warnings]
     g = session.workspace.state.view.geometry
-    assert isinstance(g, PixelGridGeometry) and g.problem[0] == "WCS_INVALID"
+    assert isinstance(g, PixelGridGeometry) and g.problem.code == "WCS_INVALID"
     wx, wy = g.base_to_window(12, 7)
     read = read_cursor(session, float(wx), float(wy))
     assert read.status == "ok" and read.values["sky"] is None  # nessuna coordinata inventata
@@ -147,7 +147,7 @@ def test_invalid_wcs_is_reported_not_guessed(session, tmp_path):
     path = write(tmp_path / "bad.fits", bad)
     result = open_image(session, path)
     g = session.workspace.state.view.geometry
-    assert isinstance(g, PixelGridGeometry) and g.problem[0] == "WCS_INVALID"
+    assert isinstance(g, PixelGridGeometry) and g.problem.code == "WCS_INVALID"
     assert any(w.code in ("WCS_MISSING", "WCS_INVALID") for w in result.warnings)
     wx, wy = g.base_to_window(3, 4)
     assert read_cursor(session, float(wx), float(wy)).values["sky"] is None

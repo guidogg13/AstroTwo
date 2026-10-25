@@ -114,8 +114,25 @@ class CommandError(Exception):
         self.details = details
 
 
-def _invalid(path: str, message: str) -> CommandError:
-    return CommandError("COMMAND_PARAMETER_INVALID", f"{path}: {message}", parameter=path)
+def _invalid(where: str, reason: str, message: str, /, **params: object) -> CommandError:
+    """``COMMAND_PARAMETER_INVALID`` per il parametro ``where``: ``reason`` sceglie la sotto-voce del catalogo (§10.1)."""
+    return CommandError("COMMAND_PARAMETER_INVALID", f"{where}: {message}",
+                        params={"reason": reason, "parameter": where, **params}, parameter=where)
+
+
+def _given(value: object) -> str:
+    """Valore ricevuto, in JSON così com'è (per i messaggi: nessuna riformattazione)."""
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _nested(code: str, text: str, params: Mapping[str, object] | None = None) -> dict:
+    """Messaggio annidato (D40-7): codice, ``params`` e testo originale."""
+    return {"code": code, "params": _json_params(params), "text": text}
+
+
+def _nested_items(items) -> list[dict]:
+    """Avvisi dei moduli (coppie codice/testo con ``params`` facoltativi) come elenco di messaggi annidati."""
+    return [_nested(str(i[0]), str(i[1]), i[2] if len(i) == 3 else getattr(i, "params", None)) for i in items]
 
 
 # --------------------------------------------------------------------------
@@ -230,30 +247,39 @@ class CommandSpec:
 def _unit(text: object, path: str) -> u.UnitBase:
     """Unità nel formato FITS o, se non valida lì, VOUnit (D18-2)."""
     if not isinstance(text, str) or not text.strip():
-        raise _invalid(path, "unità mancante: un numero per una grandezza con unità non si accetta senza unità")
+        raise _invalid(path, "unit_missing", "unità mancante: un numero per una grandezza con unità non si accetta senza "
+                       "unità")
     for fmt in ("fits", "vounit"):
         try:
             return u.Unit(text, format=fmt)
         except ValueError:
             continue
-    raise _invalid(path, f"unità {text!r} non valida in FITS né in VOUnit (D18-2)")
+    raise _invalid(path, "unit_invalid", f"unità {text!r} non valida in FITS né in VOUnit (D18-2)", unit=text)
 
 
 def _finite_number(value: object, path: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise _invalid(path, f"serve un numero finito, non {value!r}")
+        raise _invalid(path, "not_finite", f"serve un numero finito, non {value!r}", given=_given(value))
     return float(value)
 
 
-def _check_range(number: float, spec: ParameterSpec, path: str, shown: str) -> None:
+def _check_range(number: float, spec: ParameterSpec, path: str, shown: str, given: Mapping | None = None) -> None:
+    """Intervallo del parametro; ``given``: la grandezza ricevuta (``{value, unit}``) se il parametro ne è una."""
+
+    def out(reason: str, op: str, limit: float) -> CommandError:
+        suffix = f" {spec.range_unit}" if spec.range_unit else ""
+        if given is not None:
+            return _invalid(path, reason + "_quantity", f"{shown} fuori intervallo: serve {op} {limit!r}{suffix}",
+                            value=dict(given), limit={"value": limit, "unit": spec.range_unit})
+        return _invalid(path, reason, f"{shown} fuori intervallo: serve {op} {limit!r}{suffix}",
+                        value=number, limit=limit)
+
     if spec.minimum is not None:
         if number < spec.minimum or (spec.exclusive_minimum and number == spec.minimum):
-            op = ">" if spec.exclusive_minimum else "≥"
-            raise _invalid(path, f"{shown} fuori intervallo: serve {op} {spec.minimum!r}"
-                           + (f" {spec.range_unit}" if spec.range_unit else ""))
+            raise out("not_above_minimum" if spec.exclusive_minimum else "below_minimum",
+                      ">" if spec.exclusive_minimum else "≥", spec.minimum)
     if spec.maximum is not None and number > spec.maximum:
-        raise _invalid(path, f"{shown} fuori intervallo: serve ≤ {spec.maximum!r}"
-                       + (f" {spec.range_unit}" if spec.range_unit else ""))
+        raise out("above_maximum", "≤", spec.maximum)
 
 
 def _check_time(value: object, path: str) -> object:
@@ -262,18 +288,22 @@ def _check_time(value: object, path: str) -> object:
         return None
     if isinstance(value, str):
         if value[:1] not in ("J", "B"):
-            raise _invalid(path, f"epoca {value!r}: 'J…'/'B…' oppure {{value, format, scale}}")
+            raise _invalid(path, "epoch_form", f"epoca {value!r}: 'J…'/'B…' oppure {{value, format, scale}}",
+                           given=_given(value))
         try:
             Time(value)
         except ValueError as exc:
-            raise _invalid(path, f"epoca {value!r} non leggibile ({exc})") from exc
+            raise _invalid(path, "epoch_unreadable", f"epoca {value!r} non leggibile ({exc})", given=_given(value),
+                           detail=str(exc)) from exc
         return value
     if not isinstance(value, Mapping) or set(value) != {"value", "format", "scale"}:
-        raise _invalid(path, "tempo: 'J…'/'B…' oppure {value, format, scale} (scala sempre scritta, DC1)")
+        raise _invalid(path, "time_form", "tempo: 'J…'/'B…' oppure {value, format, scale} (scala sempre scritta, DC1)")
     if value["format"] not in _TIME_FORMATS:
-        raise _invalid(path, f"formato del tempo {value['format']!r} non in {_TIME_FORMATS}")
+        raise _invalid(path, "time_format_unknown", f"formato del tempo {value['format']!r} non in {_TIME_FORMATS}",
+                       given=_given(value["format"]), allowed=list(_TIME_FORMATS))
     if value["scale"] not in _TIME_SCALES:
-        raise _invalid(path, f"scala {value['scale']!r} non in {_TIME_SCALES}")
+        raise _invalid(path, "time_scale_unknown", f"scala {value['scale']!r} non in {_TIME_SCALES}",
+                       given=_given(value["scale"]), allowed=list(_TIME_SCALES))
     raw = value["value"]
     pair = value["format"] == "jd" and isinstance(raw, list) and len(raw) == 2
     if pair:
@@ -281,7 +311,7 @@ def _check_time(value: object, path: str) -> object:
             _finite_number(part, f"{path}.value[{k}]")
     elif value["format"] == "isot":
         if not isinstance(raw, str):
-            raise _invalid(path, "tempo isot: testo ISO 8601")
+            raise _invalid(path, "time_isot_text", "tempo isot: testo ISO 8601")
     else:
         _finite_number(raw, f"{path}.value")
     return {"value": list(raw) if pair else raw, "format": value["format"], "scale": value["scale"]}
@@ -378,80 +408,87 @@ def _normalize(spec: ParameterSpec, value: object, path: str, ws: WorkspaceState
     """
     if value is None:
         if spec.required:
-            raise _invalid(path, "parametro obbligatorio mancante")
+            raise _invalid(path, "required", "parametro obbligatorio mancante")
         return None
     t = spec.type
     if t == "quantity":
         if not isinstance(value, Mapping) or set(value) != {"value", "unit"}:
-            raise _invalid(path, 'serve {"value": numero, "unit": "unità"}: un numero puro non basta per una '
-                           "grandezza con unità")
+            raise _invalid(path, "quantity_form", 'serve {"value": numero, "unit": "unità"}: un numero puro non basta per '
+                           "una grandezza con unità")
         number = _finite_number(value["value"], f"{path}.value")
         unit = _unit(value["unit"], f"{path}.unit")
         refs = [PHYSICAL_TYPES[k] for k in spec.physical_types]
         if not any(unit.is_equivalent(ref) for ref in refs):
-            raise _invalid(path, f"unità {value['unit']!r} ({unit.physical_type}) non convertibile in "
-                           f"{' o '.join(spec.physical_types)}")
+            raise _invalid(path, "unit_not_convertible", f"unità {value['unit']!r} ({unit.physical_type}) non "
+                           f"convertibile in {' o '.join(spec.physical_types)}", unit=value["unit"],
+                           physical_type=str(unit.physical_type), expected=list(spec.physical_types))
         if spec.minimum is not None or spec.maximum is not None:
             _check_range(float((number * unit).to_value(u.Unit(spec.range_unit))), spec, path,
-                         f"{number!r} {value['unit']}")
+                         f"{number!r} {value['unit']}", {"value": number, "unit": value["unit"]})
         return {"value": number, "unit": value["unit"]}
     if t == "sky_position":
         keys = {"lon", "lat", "frame", "equinox", "obstime", "epoch", "epoch_reason"}
         if not isinstance(value, Mapping) or not {"lon", "lat", "frame"} <= set(value) or set(value) - keys:
-            raise _invalid(path, f"posizione: oggetto con {sorted(keys)}")
+            raise _invalid(path, "position_form", f"posizione: oggetto con {sorted(keys)}", keys=sorted(keys))
         angle = ParameterSpec("lon", "quantity", "", "", physical_type="angle")
         out = {"lon": _normalize(angle, value["lon"], f"{path}.lon", ws),
                "lat": _normalize(angle, value["lat"], f"{path}.lat", ws)}
         if not isinstance(value["frame"], str) or not value["frame"]:
-            raise _invalid(f"{path}.frame", "nome del frame di astropy.coordinates")
+            raise _invalid(f"{path}.frame", "frame_name", "nome del frame di astropy.coordinates")
         out["frame"] = value["frame"]
         for key in ("equinox", "obstime", "epoch"):
             out[key] = _check_time(value.get(key), f"{path}.{key}")
         reason = value.get("epoch_reason")
         if out["epoch"] is None and (not isinstance(reason, str) or not reason.strip()):
-            raise _invalid(f"{path}.epoch", "epoca null senza motivo (epoch_reason): l'epoca non si assume mai "
-                           "(D10-2)")
+            raise _invalid(f"{path}.epoch", "epoch_reason_missing", "epoca null senza motivo (epoch_reason): l'epoca "
+                           "non si assume mai (D10-2)")
         out["epoch_reason"] = reason if out["epoch"] is None else None
         return out
     if t == "time":
         return _check_time(value, path)
     if t == "pixel_position":
         if not isinstance(value, Mapping) or set(value) != {"x", "y", "convention"}:
-            raise _invalid(path, 'serve {"x", "y", "convention"}')
+            raise _invalid(path, "pixel_form", 'serve {"x", "y", "convention"}')
         if value["convention"] != "numpy":
-            raise _invalid(f"{path}.convention", "nel comando registrato la convenzione è sempre numpy (DC7)")
+            raise _invalid(f"{path}.convention", "pixel_convention", "nel comando registrato la convenzione è sempre numpy "
+                           "(DC7)")
         return {"x": _finite_number(value["x"], f"{path}.x"), "y": _finite_number(value["y"], f"{path}.y"),
                 "convention": "numpy"}
     if t == "file":
         if not isinstance(value, Mapping) or "path" not in value or set(value) - {"path", "sha256", "size"}:
-            raise _invalid(path, 'serve {"path": percorso assoluto}')
+            raise _invalid(path, "file_form", 'serve {"path": percorso assoluto}')
         target = value["path"]
         if not isinstance(target, str) or not os.path.isabs(target):
-            raise _invalid(path, f"percorso assoluto, non {target!r}")
+            raise _invalid(path, "path_not_absolute", f"percorso assoluto, non {target!r}", path=_given(target))
         p = Path(target)
         if not p.is_file() or not os.access(p, os.R_OK):
-            raise _invalid(path, f"file {target!r} inesistente o non leggibile")
+            raise _invalid(path, "file_unreadable", f"file {target!r} inesistente o non leggibile", path=target)
         if not hash_files:
             return dict(value)
         sha, size = _sha256(p)
         return {"path": target, "sha256": sha, "size": size}
     if t == "url":
         if not isinstance(value, str) or not re.match(r"https?://", value):
-            raise _invalid(path, f"indirizzo http(s), non {value!r}")
+            raise _invalid(path, "url_form", f"indirizzo http(s), non {value!r}", given=_given(value))
         return value
     if t == "layer_ref":
         if not isinstance(value, str) or not _LAYER_ID.fullmatch(value):
-            raise _invalid(path, f"identificativo di livello L<n>, non {value!r}")
+            raise _invalid(path, "layer_form", f"identificativo di livello L<n>, non {value!r}", given=_given(value))
         if ws is not None:
             layer = ws.find(value)
             if layer is None:
-                raise CommandError("LAYER_UNKNOWN", f"{path}: livello {value} inesistente o rimosso", parameter=path)
+                raise CommandError("LAYER_UNKNOWN", f"{path}: livello {value} inesistente o rimosso",
+                                   params={"reason": "in_parameter", "parameter": path, "layer": value},
+                                   parameter=path)
             if spec.layer_kinds and layer.kind not in spec.layer_kinds:
-                raise _invalid(path, f"livello {value} di tipo {layer.kind}: serve {' o '.join(spec.layer_kinds)}")
+                raise _invalid(path, "layer_kind", f"livello {value} di tipo {layer.kind}: serve "
+                               f"{' o '.join(spec.layer_kinds)}", layer=value, kind=layer.kind,
+                               expected=list(spec.layer_kinds))
         return value
     if t == "enum":
         if value not in spec.choices:
-            raise _invalid(path, f"{value!r} non in {list(spec.choices)}")
+            raise _invalid(path, "choice", f"{value!r} non in {list(spec.choices)}", given=_given(value),
+                       allowed=list(spec.choices))
         return value
     if t == "number":
         number = _finite_number(value, path)
@@ -459,30 +496,31 @@ def _normalize(spec: ParameterSpec, value: object, path: str, ws: WorkspaceState
         return number
     if t == "integer":
         if isinstance(value, bool) or not isinstance(value, int):
-            raise _invalid(path, f"serve un intero, non {value!r}")
+            raise _invalid(path, "integer_required", f"serve un intero, non {value!r}", given=_given(value))
         _check_range(value, spec, path, repr(value))
         return value
     if t == "boolean":
         if not isinstance(value, bool):
-            raise _invalid(path, f"serve true o false, non {value!r}")
+            raise _invalid(path, "boolean_required", f"serve true o false, non {value!r}", given=_given(value))
         return value
     if t == "string":
         if not isinstance(value, str):
-            raise _invalid(path, f"serve un testo, non {value!r}")
+            raise _invalid(path, "string_required", f"serve un testo, non {value!r}", given=_given(value))
         return value
     if t == "list":
         if not isinstance(value, list):
-            raise _invalid(path, "serve una lista")
+            raise _invalid(path, "list_required", "serve una lista")
         if spec.max_items is not None and len(value) > spec.max_items:
-            raise _invalid(path, f"{len(value)} elementi, al più {spec.max_items}")
+            raise _invalid(path, "list_too_long", f"{len(value)} elementi, al più {spec.max_items}", count=len(value),
+                           maximum=spec.max_items)
         return [_normalize(spec.item, v, f"{path}[{k}]", ws, hash_files=hash_files) for k, v in enumerate(value)]
     if t == "record":
         if not isinstance(value, Mapping):
-            raise _invalid(path, "serve un oggetto JSON (record)")
+            raise _invalid(path, "record_required", "serve un oggetto JSON (record)")
         names = {f.name for f in spec.fields}
         extra = sorted(set(value) - names)
         if extra:
-            raise _invalid(f"{path}.{extra[0]}", "campo non dichiarato nel record")
+            raise _invalid(f"{path}.{extra[0]}", "field_unknown", "campo non dichiarato nel record")
         return {f.name: _normalize(f, value.get(f.name, f.default if f.default is not REQUIRED else None),
                                    f"{path}.{f.name}", ws, hash_files=hash_files) for f in spec.fields}
     raise AssertionError(t)  # pragma: no cover - elenco chiuso
@@ -778,7 +816,7 @@ class WorkspaceState:
     def layer(self, layer_id: str) -> Layer:
         found = self.find(layer_id)
         if found is None:
-            raise CommandError("LAYER_UNKNOWN", f"livello {layer_id} inesistente o rimosso")
+            raise CommandError("LAYER_UNKNOWN", f"livello {layer_id} inesistente o rimosso", params={"layer": layer_id})
         return found
 
     def of_kind(self, kind: str) -> tuple[Layer, ...]:
@@ -914,7 +952,7 @@ class CommandRegistry:
         try:
             return self._specs[name]
         except KeyError:
-            raise CommandError("COMMAND_UNKNOWN", f"comando {name!r} non registrato") from None
+            raise CommandError("COMMAND_UNKNOWN", f"comando {name!r} non registrato", params={"command": name}) from None
 
     def specs(self) -> tuple[CommandSpec, ...]:
         return tuple(self._specs.values())
@@ -926,13 +964,15 @@ class CommandRegistry:
         spec = self.spec(command.name)
         if command.version != spec.version:
             raise CommandError("COMMAND_VERSION_UNSUPPORTED", f"{command.name} versione {command.version!r} non "
-                               f"supportata (registrata: {spec.version})", name=command.name,
-                               version=command.version)
+                               f"supportata (registrata: {spec.version})",
+                               params={"command": command.name, "version": _given(command.version),
+                                       "registered": spec.version}, name=command.name, version=command.version)
         if not isinstance(command.parameters, Mapping):
-            raise _invalid(command.name, "parametri: oggetto JSON")
+            raise _invalid(command.name, "parameters_form", "parametri: oggetto JSON")
         extra = sorted(set(command.parameters) - {p.name for p in spec.parameters})
         if extra:
-            raise _invalid(extra[0], f"parametro non previsto da {command.name}")
+            raise _invalid(extra[0], "parameter_unexpected", f"parametro non previsto da {command.name}",
+                           command=command.name)
         ws = workspace.state if isinstance(workspace, Workspace) else workspace
         params = {}
         for p in spec.parameters:
@@ -963,11 +1003,13 @@ class CommandRegistry:
         executor = spec.executor if spec.bound_by is None else self._bound.get(spec.name)
         if executor is None:
             return registered, CommandResult("error", error=ResultMessage(
-                "COMMAND_UNKNOWN", f"{spec.name}: esecuzione dell'interfaccia ({spec.bound_by}) non collegata"),
+                "COMMAND_UNKNOWN", f"{spec.name}: esecuzione dell'interfaccia ({spec.bound_by}) non collegata",
+                {"reason": "not_bound", "command": spec.name, "module": str(spec.bound_by)}),
                 started_at=started, finished_at=_now())
         if cancel.cancelled:
             return registered, CommandResult("cancelled", error=ResultMessage(
-                "COMMAND_CANCELLED", "comando annullato prima dell'inizio"), started_at=started, finished_at=_now())
+                "COMMAND_CANCELLED", "comando annullato prima dell'inizio", {"reason": "before_start"}),
+                started_at=started, finished_at=_now())
         before = workspace.state
         ctx = ExecutionContext(self, spec, before, registered.parameters, cancel, progress, self.cache)
         if progress is not None and spec.steps is None:
@@ -983,13 +1025,16 @@ class CommandRegistry:
             message = _module_error(exc)
             if message is None:
                 if isinstance(exc, (TypeError, ValueError)):
-                    message = ResultMessage("COMMAND_PARAMETER_INVALID", f"{type(exc).__name__}: {exc}")
+                    message = ResultMessage("COMMAND_PARAMETER_INVALID", f"{type(exc).__name__}: {exc}",
+                                            {"reason": "module_rejected", "error_type": type(exc).__name__,
+                                             "detail": str(exc)})
                 else:
                     raise
             return registered, CommandResult("error", error=message, started_at=started, finished_at=_now())
         if outcome is None or cancel.cancelled:
             return registered, CommandResult("cancelled", error=ResultMessage(
-                "COMMAND_CANCELLED", "comando annullato: risultato scartato, stato invariato"),
+                "COMMAND_CANCELLED", "comando annullato: risultato scartato, stato invariato",
+                {"reason": "discarded"}),
                 started_at=started, finished_at=_now())
         if outcome.resolved:
             registered = Command(registered.name, registered.version, {**registered.parameters, **outcome.resolved},
@@ -1114,7 +1159,7 @@ def _module_warnings(items) -> list[ResultMessage]:
             params = item[2] if len(item) == 3 else getattr(item, "params", None)  # ModuleWarning del 10
             out.append(ResultMessage(str(item[0]), str(item[1]), _json_params(params)))
         else:
-            out.append(ResultMessage("MODULE_NOTE", str(item)))
+            out.append(ResultMessage("MODULE_NOTE", str(item), {"note": str(item)}))
     return out
 
 
@@ -1197,10 +1242,13 @@ def _frame_image(state: WorkspaceState, layer_id: str) -> tuple[WorkspaceState, 
                            method="centro dei pixel con pixel_to_sky e scala della base con make_view_wcs (10) × "
                                   "max(colonne immagine / colonne finestra, righe immagine / righe finestra)")
         except CoordinatesWcsError as exc:  # WCS presente ma non utilizzabile: griglia di pixel, nessuna coordinata
-            problem = ("WCS_INVALID", f"WCS non valido ({exc.code}: {exc}): nessuna coordinata celeste")
+            problem = ResultMessage(
+                "WCS_INVALID", f"WCS non valido ({exc.code}: {exc}): nessuna coordinata celeste",
+                {"reason": "no_celestial_coordinates", "cause_code": exc.code,
+                 "cause": _nested(exc.code, exc.message, exc.params)})
             layer = dataclasses.replace(layer, derived={**layer.derived, "wcs_problem": problem})
             state = state.replace_layer(layer)
-            framing["problem"] = problem
+            framing["problem"] = problem.to_json()
     return dataclasses.replace(state, view=_recompute_view(view, state)), framing
 
 
@@ -1232,7 +1280,7 @@ def _exec_image_open(ctx: ExecutionContext, p: Mapping) -> Outcome:
                                  force_body=p["force_body"], derived={"plane": plane})
     state, framing = _frame_image(state, layer_id)
     if framing.get("problem") is not None and image.wcs is not None:
-        warnings.append(ResultMessage(*framing["problem"]))
+        warnings.append(ResultMessage(**framing["problem"]))
     values = {"layer": layer_id, "replaced": old, "hdu_index": image.hdu_index, "hdu_name": image.hdu_name,
               "hdus": [{"index": h.index, "name": h.name, "shape": list(h.shape)} for h in hdus],
               "shape": list(image.data.shape), "unit": _image_unit(image), "wcs": image.wcs is not None,
@@ -1240,7 +1288,8 @@ def _exec_image_open(ctx: ExecutionContext, p: Mapping) -> Outcome:
     warnings += _module_warnings(image.warnings)
     if image.wcs is None:
         warnings.append(ResultMessage("WCS_MISSING", "immagine senza WCS: griglia di pixel; finché è aperta non si "
-                                      "sovrappongono HiPS, cataloghi o MOC (41 §3.5)"))
+                                      "sovrappongono HiPS, cataloghi o MOC (41 §3.5)",
+                                      {"reason": "pixel_grid_overlay"}))
     return Outcome(values=values, state=state, warnings=warnings, layers_created=[layer_id], resolved=resolved,
                    provenance=[_source(image.origin, image.retrieved_at, image.from_cache, file=path,
                                        sha256=p["file"]["sha256"])])
@@ -1294,14 +1343,17 @@ def _survey_display_limits(ctx: ExecutionContext, service, coverage, vmin, vmax)
             raise
         warnings.append(ResultMessage(
             "HIPS_DISPLAY_FALLBACK", f"{service.hips_id}: il tile di ICRS (0°, 0°) all'ordine {order} non c'è "
-            f"({exc.code}); limiti dal primo tile coperto"))
+            f"({exc.code}); limiti dal primo tile coperto",
+            {"hips_id": service.hips_id, "order": order, "cause_code": exc.code}))
     if tile is None:
         if coverage is None:
             raise CommandError("HIPS_DISPLAY_LIMITS_UNDEFINED", f"{service.hips_id}: nessun tile da cui proporre i "
-                               "limiti di colore (copertura non nota); indicare vmin e vmax")
+                               "limiti di colore (copertura non nota); indicare vmin e vmax",
+                               params={"reason": "coverage_unknown", "hips_id": service.hips_id})
         cells, _ = _tile_cells_at(coverage.moc, order)
         if len(cells) == 0:
-            raise CommandError("HIPS_DISPLAY_LIMITS_UNDEFINED", f"{service.hips_id}: copertura vuota; indicare vmin e vmax")
+            raise CommandError("HIPS_DISPLAY_LIMITS_UNDEFINED", f"{service.hips_id}: copertura vuota; indicare vmin e vmax",
+                               params={"reason": "coverage_empty", "hips_id": service.hips_id})
         index = int(np.min(cells))
         tile = fetch_tile(service, order, index, format="fits", cache=ctx.cache)
         where = "primo tile coperto"
@@ -1514,7 +1566,7 @@ def _exec_catalog_select(ctx: ExecutionContext, p: Mapping) -> Outcome:
     n = len(layer.data.table)
     bad = [r for r in p["rows"] if not 0 <= r < n]
     if bad:
-        raise _invalid("rows", f"righe {bad[:5]} fuori da 0…{n - 1}")
+        raise _invalid("rows", "rows_out_of_range", f"righe {bad[:5]} fuori da 0…{n - 1}", rows=bad[:5], last=n - 1)
     rows = tuple(dict.fromkeys(p["rows"]))
     card = _source_card(layer, rows[0]) if len(rows) == 1 else None
     return Outcome(values={"layer": layer.id, "selected": list(rows), "source": card},
@@ -1529,7 +1581,8 @@ def shown_order(table, sort: Mapping | None) -> np.ndarray:
     col = table[sort["column"]]
     data = np.asarray(getattr(col, "data", col))
     if data.ndim != 1:
-        raise CommandError("TABLE_SORT_UNSUPPORTED", f"colonna {sort['column']!r} non ordinabile (array per riga)")
+        raise CommandError("TABLE_SORT_UNSUPPORTED", f"colonna {sort['column']!r} non ordinabile (array per riga)",
+                           params={"reason": "array_column", "column": sort["column"]})
     mask = np.asarray(getattr(col, "mask", np.zeros(n, dtype=bool)), dtype=bool)
     if data.dtype.kind == "f":
         mask = mask | ~np.isfinite(data)
@@ -1537,7 +1590,8 @@ def shown_order(table, sort: Mapping | None) -> np.ndarray:
     try:
         order = present[np.argsort(data[present], kind="stable")]
     except TypeError as exc:
-        raise CommandError("TABLE_SORT_UNSUPPORTED", f"colonna {sort['column']!r} non ordinabile ({exc})") from exc
+        raise CommandError("TABLE_SORT_UNSUPPORTED", f"colonna {sort['column']!r} non ordinabile ({exc})",
+                           params={"reason": "not_sortable", "column": sort["column"], "detail": str(exc)}) from exc
     if sort["direction"] == "descending":
         # Stabile anche al contrario: a pari valore resta l'ordine originale.
         values = data[order]
@@ -1549,7 +1603,7 @@ def shown_order(table, sort: Mapping | None) -> np.ndarray:
 def _exec_table_sort(ctx: ExecutionContext, p: Mapping) -> Outcome:
     layer = ctx.state.layer(p["layer"])
     if p["column"] not in layer.data.table.colnames:
-        raise _invalid("column", f"colonna {p['column']!r} non nella tabella")
+        raise _invalid("column", "column_unknown", f"colonna {p['column']!r} non nella tabella", column=p["column"])
     sort = {"column": p["column"], "direction": p["direction"]}
     shown_order(layer.data.table, sort)  # controlla che la colonna sia ordinabile
     return Outcome(values={"layer": layer.id, "sort": sort},
@@ -1595,7 +1649,7 @@ class PixelGridGeometry:
     image_shape: tuple[int, int]  # (righe, colonne) dell'immagine
     factor: float
     origin: tuple[float, float]
-    problem: tuple[str, str]  # (codice, testo) del motivo per cui mancano le coordinate
+    problem: ResultMessage  # motivo (codice, testo, params) per cui mancano le coordinate
 
     def window_to_base(self, x, y) -> tuple[np.ndarray, np.ndarray]:
         x = np.asarray(x, dtype=np.float64)
@@ -1608,16 +1662,20 @@ class PixelGridGeometry:
         return (bx - self.origin[0]) * self.factor, (by - self.origin[1]) * self.factor
 
 
-def _wcs_problem(layer) -> tuple[str, str] | None:
+def _wcs_problem(layer) -> ResultMessage | None:
     """Perché un'immagine non ha coordinate celesti (WCS assente o non valido), o ``None`` se ce l'ha."""
     image = layer.data
     if image.wcs is None:
-        reasons = "; ".join(text for code, text in image.warnings if code in ("WCS_MISSING", "WCS_INVALID"))
-        return "WCS_INVALID", "WCS assente o non valido: nessuna coordinata celeste" + (f" ({reasons})" if reasons else "")
+        causes = [w for w in image.warnings if w[0] in ("WCS_MISSING", "WCS_INVALID")]
+        reasons = "; ".join(w[1] for w in causes)
+        text = "WCS assente o non valido: nessuna coordinata celeste" + (f" ({reasons})" if reasons else "")
+        if not causes:
+            return ResultMessage("WCS_INVALID", text, {"reason": "absent"})
+        return ResultMessage("WCS_INVALID", text, {"reason": "absent_with_reasons", "reasons": _nested_items(causes)})
     return layer.derived.get("wcs_problem")
 
 
-def _pixel_grid(layer, window: tuple[int, int], problem: tuple[str, str]) -> PixelGridGeometry:
+def _pixel_grid(layer, window: tuple[int, int], problem: ResultMessage) -> PixelGridGeometry:
     cols, rows = window
     ny, nx = layer.data.shape
     factor = min(cols / nx, rows / ny)
@@ -1640,7 +1698,7 @@ def _recompute_view(view: ViewState, state: WorkspaceState, info: dict | None = 
     problem = None if base is None else _wcs_problem(base)
     if problem is not None and view.window is not None:
         # Immagine senza WCS valido: griglia di pixel intera nella finestra, senza coordinate (41 §3.5)
-        info["base"] = f"griglia di pixel dell'immagine {base.id} ({problem[0]})"
+        info["base"] = f"griglia di pixel dell'immagine {base.id} ({problem.code})"
         return dataclasses.replace(view, projection=None, tangent_point=None, grid=None, compass=None,
                                    geometry=_pixel_grid(base, view.window, problem))
     if view.center is None or view.scale is None or view.window is None:
@@ -1719,7 +1777,7 @@ def _view_values(view: ViewState, info: dict) -> dict:
            "window": None if view.window is None else {"width": view.window[0], "height": view.window[1]}}
     if isinstance(g, PixelGridGeometry):
         out.update(pixel_grid={"image_shape": list(g.image_shape), "factor": g.factor, "origin": list(g.origin)},
-                   wcs_problem={"code": g.problem[0], "text": g.problem[1]}, **info)
+                   wcs_problem=g.problem.to_json(), **info)
     elif g is not None:
         out.update(field_radius=quantity_json(g.field_radius), field_radius_method=g.field_radius_method,
                    field_of_view=quantity_json(2 * g.field_radius),
@@ -1850,7 +1908,8 @@ def _exec_layer_move(ctx: ExecutionContext, p: Mapping) -> Outcome:
     layer = ctx.state.layer(p["layer"])
     rest = [x for x in ctx.state.layers if x.id != layer.id]
     if p["position"] > len(rest):
-        raise _invalid("position", f"posizione {p['position']} oltre l'ultimo livello ({len(rest)})")
+        raise _invalid("position", "position_beyond", f"posizione {p['position']} oltre l'ultimo livello ({len(rest)})",
+                       position=p["position"], count=len(rest))
     rest.insert(p["position"], layer)
     state = dataclasses.replace(ctx.state, layers=tuple(rest))
     return Outcome(values={"layer": layer.id, "order": [x.id for x in rest]}, state=state)
@@ -1878,26 +1937,30 @@ def _exec_measure_distance(ctx: ExecutionContext, p: Mapping) -> Outcome:
     pixel_form = [name for name in ("layer", "p1", "p2") if p[name] is not None]
     sky_form = [name for name in ("sky1", "sky2") if p[name] is not None]
     if bool(pixel_form) == bool(sky_form):
-        raise _invalid("layer", "serve una sola forma: (layer, p1, p2) per i pixel di un'immagine oppure "
-                       "(sky1, sky2) per due posizioni celesti")
+        raise _invalid("layer", "distance_form", "serve una sola forma: (layer, p1, p2) per i pixel di un'immagine "
+                       "oppure (sky1, sky2) per due posizioni celesti")
     if sky_form:
         if len(sky_form) != 2:
-            raise _invalid("sky2" if "sky1" in sky_form else "sky1", "la forma cielo vuole sky1 e sky2")
+            raise _invalid("sky2" if "sky1" in sky_form else "sky1", "sky_form_incomplete",
+                           "la forma cielo vuole sky1 e sky2")
         if p["snap"]:
-            raise _invalid("snap", "l'aggancio al centroide vuole i pixel di un'immagine (layer, p1, p2)")
+            raise _invalid("snap", "snap_needs_pixels",
+                           "l'aggancio al centroide vuole i pixel di un'immagine (layer, p1, p2)")
         points = [(None, None, _sky(p[name]), None) for name in ("sky1", "sky2")]
         centroids: list = []
         source, name = None, "distance"
     else:
         if len(pixel_form) != 3:
             missing = [x for x in ("layer", "p1", "p2") if x not in pixel_form]
-            raise _invalid(missing[0], "la forma pixel vuole layer, p1 e p2")
+            raise _invalid(missing[0], "pixel_form_incomplete", "la forma pixel vuole layer, p1 e p2")
         layer = ctx.state.layer(p["layer"])
         image = layer.data
         if image.wcs is None:
-            raise CommandError("NO_WCS", f"livello {layer.id}: immagine senza WCS, distanza angolare non misurabile")
+            raise CommandError("NO_WCS", f"livello {layer.id}: immagine senza WCS, distanza angolare non misurabile",
+                               params={"reason": "distance", "layer": layer.id})
         if p["snap"] and p["box_size"] is None:
-            raise _invalid("box_size", "con l'aggancio al centroide serve box_size (intero dispari ≥ 3)")
+            raise _invalid("box_size", "box_size_required",
+                           "con l'aggancio al centroide serve box_size (intero dispari ≥ 3)")
         points, centroids = [], []
         for name in ("p1", "p2"):
             x, y = p[name]["x"], p[name]["y"]
@@ -1928,7 +1991,8 @@ def _cursor_point(ctx: ExecutionContext, p: Mapping):
 
     g = ctx.state.view.geometry
     if g is None:
-        raise CommandError("VIEW_UNDEFINED", "vista senza centro, scala o finestra: nessuna geometria del 10")
+        raise CommandError("VIEW_UNDEFINED", "vista senza centro, scala o finestra: nessuna geometria del 10",
+                           params={"reason": "geometry"})
     bx, by = g.window_to_base(p["position"]["x"], p["position"]["y"])
     bx, by = float(bx), float(by)
     if isinstance(g, PixelGridGeometry):
@@ -1947,10 +2011,10 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
     warnings: list[ResultMessage] = []
     if sky is None:
         # Griglia di pixel: nessuna coordinata celeste (41 §3.5); il motivo va nel risultato e nel messaggio
-        code, text = ctx.state.view.geometry.problem
+        problem = ctx.state.view.geometry.problem
         values["sky"] = None
-        values["wcs_problem"] = {"code": code, "text": text}
-        warnings.append(ResultMessage(code, text))
+        values["wcs_problem"] = problem.to_json()
+        warnings.append(problem)
         finite = False
     else:
         finite = bool(np.all(np.isfinite([sky.coords.lon.to_value(u.deg), sky.coords.lat.to_value(u.deg)])))
@@ -1963,10 +2027,12 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
             try:
                 shown = convert_coordinates(sky.coords, ctx.state.view.coordinate_frame)
             except CoordinatesWcsError as exc:
-                warnings.append(ResultMessage(exc.code, f"{exc}; coordinate nel frame dell'immagine"))
+                warnings.append(ResultMessage(exc.code, f"{exc}; coordinate nel frame dell'immagine",
+                                              _json_params(getattr(exc, "params", None))))
         values["sky"] = sky_json(shown) if finite else None
         if not finite:
-            warnings.append(ResultMessage("OUT_OF_SKY", "fuori dal cielo: il punto non ha coordinate nella proiezione"))
+            warnings.append(ResultMessage("OUT_OF_SKY", "fuori dal cielo: il punto non ha coordinate nella proiezione",
+                                          {"reason": "point"}))
     base = ctx.state.find(ctx.state.view.base_layer) if ctx.state.view.base_layer else None
     if base is not None:
         try:
@@ -2010,8 +2076,8 @@ def _exec_simbad_pointer(ctx: ExecutionContext, p: Mapping) -> Outcome:
 
     _, _, sky = _cursor_point(ctx, p)
     if sky is None:
-        code, text = ctx.state.view.geometry.problem
-        raise CommandError(code, text)
+        problem = ctx.state.view.geometry.problem
+        raise CommandError(problem.code, problem.text, params=problem.params)
     found = simbad_pointer(sky.coords, _q(p["radius"]), cache=ctx.cache)
     obj = found.object
     values = {"position": sky_json(sky.coords), "object": None if obj is None else {
@@ -2112,7 +2178,7 @@ def _exec_catalog_rows(ctx: ExecutionContext, p: Mapping) -> Outcome:
     if wanted is not None:
         missing = [c for c in wanted if c not in table.table.colnames]
         if missing:
-            raise _invalid("columns", f"colonne non nella tabella: {missing}")
+            raise _invalid("columns", "columns_unknown", f"colonne non nella tabella: {missing}", columns=missing)
     rows = []
     for index in chosen:
         record = record_view(table, int(index))
@@ -2803,17 +2869,22 @@ class Session:
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise CommandError("SESSION_INVALID", f"file di sessione non leggibile: {exc}") from exc
+            raise CommandError("SESSION_INVALID", f"file di sessione non leggibile: {exc}",
+                               params={"reason": "unreadable", "detail": str(exc)}) from exc
         if not isinstance(data, dict) or data.get("format") != "astrotwo-session" \
                 or not isinstance(data.get("schema_version"), int) or not isinstance(data.get("commands"), list):
-            raise CommandError("SESSION_INVALID", "file di sessione non valido (format, schema_version, commands)")
+            raise CommandError("SESSION_INVALID", "file di sessione non valido (format, schema_version, commands)",
+                               params={"reason": "structure"})
         if data["schema_version"] > SESSION_SCHEMA_VERSION:
             raise CommandError("SESSION_SCHEMA_UNSUPPORTED", f"schema della sessione {data['schema_version']} più "
-                               f"recente di quello dell'app ({SESSION_SCHEMA_VERSION}): nessuna riesecuzione")
+                               f"recente di quello dell'app ({SESSION_SCHEMA_VERSION}): nessuna riesecuzione",
+                               params={"schema_version": data["schema_version"],
+                                       "app_version": SESSION_SCHEMA_VERSION})
         try:
             entries = [HistoryEntry.from_json(e) for e in data["commands"]]
         except (KeyError, TypeError, ValueError) as exc:
-            raise CommandError("SESSION_INVALID", f"comando non valido nel file di sessione: {exc}") from exc
+            raise CommandError("SESSION_INVALID", f"comando non valido nel file di sessione: {exc}",
+                               params={"reason": "command", "detail": str(exc)}) from exc
         session = cls(registry)
         session.loaded = {"data": data, "entries": entries}
         return session
@@ -2837,36 +2908,44 @@ class Session:
         warnings: list[ResultMessage] = []
         details: list[dict] = []
 
-        def stopped(code: str, message: str, **info) -> ReplayReport:
-            return ReplayReport("stopped", tuple(replayed), skipped, ResultMessage(code, message), info,
-                                tuple(warnings), tuple(details))
+        def stopped(code: str, message: str, params: Mapping[str, object] | None = None, **info) -> ReplayReport:
+            return ReplayReport("stopped", tuple(replayed), skipped, ResultMessage(code, message, _json_params(params)),
+                                info, tuple(warnings), tuple(details))
 
         for k, entry in enumerate(todo, start=1):
             if cancel.cancelled:
                 return ReplayReport("cancelled", tuple(replayed), skipped, ResultMessage(
-                    "COMMAND_CANCELLED", "riapertura annullata"), {}, tuple(warnings), tuple(details))
+                    "COMMAND_CANCELLED", "riapertura annullata", {"reason": "replay"}), {}, tuple(warnings),
+                    tuple(details))
             if progress is not None:
                 progress(ProgressReport(k, len(todo), f"#{entry.number} {entry.command.name}"))
             name = entry.command.name
             try:
                 spec = registry.spec(name)
             except CommandError as exc:
-                return stopped(exc.code, f"#{entry.number}: {exc.message}", number=entry.number)
+                return stopped(exc.code, f"#{entry.number}: {exc.message}",
+                               {**exc.params, "reason": "in_session", "number": entry.number}, number=entry.number)
             if entry.command.version != spec.version:
                 return stopped("COMMAND_VERSION_UNSUPPORTED", f"#{entry.number} {name} versione "
                                f"{entry.command.version} non supportata (registrata: {spec.version})",
+                               {"reason": "in_session", "number": entry.number, "command": name,
+                                "version": _given(entry.command.version), "registered": spec.version},
                                number=entry.number, name=name, version=entry.command.version)
             for p in spec.parameters:
                 for f in _file_values(p, entry.command.parameters.get(p.name)):
                     target = Path(f["path"])
                     if not target.is_file():
                         return stopped("SESSION_FILE_MISSING", f"#{entry.number} {name}: file {f['path']} mancante",
+                                       {"number": entry.number, "command": name, "path": f["path"]},
                                        number=entry.number, name=name, file=f["path"])
                     found, _ = _sha256(target)
                     if found != f.get("sha256"):
                         return stopped("SESSION_FILE_CHANGED", f"#{entry.number} {name}: file {f['path']} cambiato "
-                                       f"(SHA-256 atteso {f.get('sha256')}, trovato {found})", number=entry.number,
-                                       name=name, file=f["path"], expected=f.get("sha256"), found=found)
+                                       f"(SHA-256 atteso {f.get('sha256')}, trovato {found})",
+                                       {"number": entry.number, "command": name, "path": f["path"],
+                                        "expected": f.get("sha256") or "", "found": found},
+                                       number=entry.number, name=name, file=f["path"], expected=f.get("sha256"),
+                                       found=found)
             registered, result = registry.run(entry.command, self.workspace, cancel)
             self.history.record(spec, registered, result)
             if result.status == "cancelled":
@@ -2874,8 +2953,10 @@ class Session:
                                     tuple(details))
             if result.status != "ok":
                 return stopped("SESSION_REPLAY_FAILED", f"#{entry.number} {name} era ok e ora fallisce: "
-                               f"{result.error.code}: {result.error.text}", number=entry.number, name=name,
-                               error=result.error.to_json())
+                               f"{result.error.code}: {result.error.text}",
+                               {"number": entry.number, "command": name,
+                                "error": _nested(result.error.code, result.error.text, result.error.params)},
+                               number=entry.number, name=name, error=result.error.to_json())
             replayed.append(entry.number)
             before = [dict(f) for f in entry.result.network_fingerprint]
             after = [dict(f) for f in result.network_fingerprint]
@@ -2883,20 +2964,34 @@ class Session:
                        (b.get("sha256"), b.get("rows"))] + ([(None, None)] if len(before) != len(after) else [])
             if changed:
                 info = {"number": entry.number, "name": name, "before": before, "after": after}
-                text = "; ".join(
-                    f"impronta {a.get('sha256')} → {b.get('sha256')}, origine {a.get('origin')} del "
-                    f"{a.get('retrieved_at')} → {b.get('origin')} del {b.get('retrieved_at')}, righe "
-                    f"{a.get('rows')} → {b.get('rows')}" for a, b in changed if a is not None)
+                pieces = [(f"impronta {a.get('sha256')} → {b.get('sha256')}, origine {a.get('origin')} del "
+                           f"{a.get('retrieved_at')} → {b.get('origin')} del {b.get('retrieved_at')}, righe "
+                           f"{a.get('rows')} → {b.get('rows')}", a, b) for a, b in changed if a is not None]
+                text = "; ".join(piece for piece, _, _ in pieces)
+                params = {"number": entry.number, "command": name}
+                if pieces:
+                    params["changes"] = [_nested("SESSION_FINGERPRINT_CHANGE", piece, {
+                        "before_sha256": a.get("sha256") or "", "after_sha256": b.get("sha256") or "",
+                        "before_origin": a.get("origin") or "", "before_retrieved_at": a.get("retrieved_at") or "",
+                        "after_origin": b.get("origin") or "", "after_retrieved_at": b.get("retrieved_at") or "",
+                        "rows_before": _given(a.get("rows")), "rows_after": _given(b.get("rows"))})
+                        for piece, a, b in pieces]
+                else:
+                    params = {"reason": "count_differs", **params}
                 warnings.append(ResultMessage("SESSION_NETWORK_DATA_DIFFERS",
                                               f"#{entry.number} {name}: dati di rete diversi da quelli registrati "
-                                              f"({text or 'numero di risposte diverso'})"))
+                                              f"({text or 'numero di risposte diverso'})", params))
                 details.append(info)
         recorded = self.loaded["data"].get("final_state")
         if recorded is not None:
             diff = _differences(recorded, self.workspace.state.state_json())
             if diff:
-                warnings.append(ResultMessage("SESSION_STATE_DIFFERS", "stato finale diverso da quello registrato: "
-                                              + "; ".join(f"{d['path']}: {d['recorded']!r} → {d['found']!r}"
-                                                          for d in diff[:20])))
+                shown = [(f"{d['path']}: {d['recorded']!r} → {d['found']!r}", d) for d in diff[:20]]
+                warnings.append(ResultMessage(
+                    "SESSION_STATE_DIFFERS", "stato finale diverso da quello registrato: "
+                    + "; ".join(piece for piece, _ in shown),
+                    {"differences": [_nested("SESSION_STATE_DIFFERENCE", piece, {
+                        "path": str(d["path"]), "recorded": _given(d["recorded"]), "found": _given(d["found"])})
+                        for piece, d in shown]}))
                 details.append({"state_differences": diff})
         return ReplayReport("ok", tuple(replayed), skipped, None, {}, tuple(warnings), tuple(details))

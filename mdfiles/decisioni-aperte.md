@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-24, con lo sprint 8c-bis: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **14** (decisa `D40-7` — tipo di parametro `message`/`messages` ricorsivo nel catalogo, testo di terzi sempre esterno; prima nel file di origine 40 §13).
+**Dal 2026-10-25, con lo sprint 8e: 16 aperte (invariate)** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **14**; **`D40-3` chiusa** (era già decisa il 2026-10-24: applicata a tutti i moduli negli sprint 8b–8e, controllata da T18 su tutto `src/astrotwo`); prima nel file di origine 40 §13.
+
+Prima, **dal 2026-10-24, con lo sprint 8c-bis: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **14** (decisa `D40-7` — tipo di parametro `message`/`messages` ricorsivo nel catalogo, testo di terzi sempre esterno; prima nel file di origine 40 §13).
 
 Prima, **dal 2026-10-24, con lo sprint 8c: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **15** (nuova `D40-7` — messaggi annidati nel catalogo, oggi parametri esterni nella lingua del modulo; prima nel file di origine 40 §13).
 
@@ -398,3 +400,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-24 | Claude Code | **`D40-5` decisa** (proprietario, 2026-10-24; sprint 8b): modulo neutro `src/astrotwo/messages_catalog.py` usato da `ui/` e `ai/`, i moduli 10–19 non lo importano. **`D40-6` decisa subito** (proprietario, 2026-10-24, tra le opzioni proposte): voci del catalogo con sotto-voci scelte dal parametro `reason` per i codici sollevati per ragioni diverse; nessun codice cambia. Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 14). |
 | 2026-10-24 | Claude Code | **Aperta `D40-7`** (Gruppo 3; sprint 8c, modulo 12): messaggi annidati nel catalogo (parametro esterno oggi; tipo `message` ricorsivo raccomandato se l'inglese è un requisito della v1). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). |
 | 2026-10-24 | Claude Code | **`D40-7` decisa** (proprietario, 2026-10-24, opzione (b); sprint 8c-bis): tipo di parametro `message` (e `messages`) con `code`, `params`, `text`, reso in modo ricorsivo (profondità massima 3); il testo di terzi resta esterno e marcato anche verso l'IA. Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 14). |
+| 2026-10-25 | Claude Code | **`D40-3` chiusa** (sprint 8e, ultimo della traduzione dei messaggi; la decisione era del 2026-10-24): `04`, `05`, `30`–`35`, `40`, `41`, `42`, `44` convertiti, T18 su tutto `src/astrotwo`; scritta prima nel file di origine 40 §13. Nessuna decisione nuova né aperta (16 aperte). |

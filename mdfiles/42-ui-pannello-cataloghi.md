@@ -165,6 +165,12 @@ Nomi proposti, descrizione in parole. File Python
 | Riga selezionata non disegnabile | selezionata qui, marcata "non disegnata" | — |
 | Livello rimosso nel `41` | scheda chiusa | — |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+Il pannello non ha messaggi propri: il solo codice è `TABLE_SORT_UNSUPPORTED` del `05` (`05` §10.1, sotto-voci
+`array_column` e `not_sortable`), mostrato nella lingua dell'interfaccia dal catalogo. I testi del pannello (etichette,
+intestazioni, "non disegnata") sono testi di interfaccia tradotti da Qt, non messaggi dei moduli.
+
 ## 11. Esposizione all'IA
 
 Non applicabile: è interfaccia. I comandi sono del `05`.
@@ -265,3 +271,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-21 | Claude Code | **Codice dello sprint 5a** ("FASE: CODICE – interfaccia v1", parte 5): `src/astrotwo/ui/catalog_panel.py` (`CatalogPanel`, `CatalogTab`, `CatalogTableModel` virtuale con l'ordine di `shown_order` del 05), pannello Tabella del 40 al posto dello stato vuoto; valori di §3.2 (posizioni con `format_coordinates` del 10 nel frame della colonna e nello stile di "Coordinates shown", magnitudini a 3 decimali, formato dichiarato o rappresentazione più breve, valore pieno nel suggerimento e nella copia), ordinamento con `table.sort`, selezione nei due versi con `catalog.select`, record da `record_view` nel risultato del comando, righe non disegnate marcate. Test T1–T6 in `tests/ui/test_catalog_panel.py` (T6 `perf`, misura in §9), modalità notte e punto decimale in italiano. Filtro `search` fuori dalla v1 confermato dal proprietario; scelte minori di presentazione da confermare (§13). Trovato e corretto un difetto del 13 (`record_view` con colonne array). **Resta lo sprint 5b:** dialoghi delle colonne di posizione e di moto proprio (§3.5, `PositionColumnsDialog`, `ProperMotionColumnsDialog`, T7). Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Sprint 5b** ("FASE: CODICE – interfaccia v1", parte 5): `PositionColumnsDialog` e `ProperMotionColumnsDialog` in `src/astrotwo/ui/catalog_panel.py`, aperti dalla finestra principale dopo `catalog.open_file`/`catalog.load_region` e dal pulsante "Colonne…" della scheda; un solo `catalog.set_columns` per apertura, nulla assunto (sistema, unità, equinozio e cos δ sempre dichiarati dall'utente; ipotesi dai nomi marcate; moto preselezionato solo dagli UCD). Test T7 e correlati in `tests/ui/test_column_dialogs.py`; traduzioni italiane. **Decisione del proprietario del 2026-10-22:** le 8 scelte di presentazione dello sprint 5a (a–h) sono confermate (tolto "da confermare"). Scelte minori dello sprint 5b da confermare in §13. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22 (ripresa della parte 6):** confermate le scelte minori dello sprint 5b (§13, tolto "da confermare"). Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1: il pannello non ha messaggi propri (solo `TABLE_SORT_UNSUPPORTED` del `05`). Stato `approvato` invariato. |

@@ -510,6 +510,85 @@ codice del modulo sui tipi chiusi di §3.1.
 | Ordinamento di una colonna non ordinabile (dal 42) | nessun ordinamento | `TABLE_SORT_UNSUPPORTED` |
 | Parametro rifiutato dalla funzione del modulo con `TypeError`/`ValueError` (senza codice) (2026-10-17) | risultato `error` con il testo del modulo | `COMMAND_PARAMETER_INVALID` |
 
+### 10.1 Messaggi con codice e `params` (D40-3, sprint 8e, 2026-10-25)
+
+Il `05` restituisce **codice + `params`** (`CommandError(code, message, params=...)`, `ResultMessage(code, text,
+params)`); il testo italiano `message`/`text` resta invariato. Il catalogo dei messaggi (`40` §3.7.1) ha una voce
+per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reason` (D40-6). `ext` = testo esterno
+(nome di file o di colonna, eccezione di una libreria): inserito tale e quale. I valori dei parametri dei comandi
+(`given`) sono scritti in JSON così come arrivati, senza riformattarli.
+
+**`COMMAND_PARAMETER_INVALID`** (voce generale: parametro `parameter` = percorso del parametro; ogni ragione ha
+`parameter` più quanto indicato):
+
+| `reason` | Parametri oltre a `parameter` | Quando |
+|---|---|---|
+| `required` | — | parametro obbligatorio mancante |
+| `unit_missing` | — | numero senza unità per una grandezza |
+| `unit_invalid` | `unit` | unità non valida in FITS né in VOUnit |
+| `not_finite` | `given` | serve un numero finito |
+| `below_minimum`, `not_above_minimum`, `above_maximum` | `value` (num), `limit` (num) | fuori intervallo (≥, >, ≤) |
+| `below_minimum_quantity`, `not_above_minimum_quantity`, `above_maximum_quantity` | `value` (qty), `limit` (qty) | idem per una grandezza (unità del limite = `range_unit`) |
+| `epoch_form` | `given` | epoca non `J…`/`B…` |
+| `epoch_unreadable` | `given`, `detail` (ext) | epoca non leggibile da astropy |
+| `time_form` | — | tempo né epoca né `{value, format, scale}` |
+| `time_format_unknown`, `time_scale_unknown` | `given`, `allowed` (list) | formato o scala non ammessi |
+| `time_isot_text` | — | tempo `isot` non testo |
+| `quantity_form` | — | grandezza senza `{value, unit}` |
+| `unit_not_convertible` | `unit`, `physical_type`, `expected` (list) | unità non della grandezza attesa |
+| `position_form` | `keys` (list) | posizione non nella forma del §3.1 |
+| `frame_name` | — | nome del frame mancante |
+| `epoch_reason_missing` | — | epoca `null` senza `epoch_reason` (D10-2) |
+| `pixel_form`, `pixel_convention` | — | pixel senza `{x, y, convention}`, convenzione non numpy |
+| `file_form` | — | file senza `{path}` |
+| `path_not_absolute`, `file_unreadable` | `path` (ext) | percorso non assoluto, file inesistente o illeggibile |
+| `url_form`, `layer_form` | `given` | indirizzo non http(s), identificativo non `L<n>` |
+| `layer_kind` | `layer`, `kind`, `expected` (list) | livello di tipo non ammesso |
+| `choice` | `given`, `allowed` (list) | valore fuori da un elenco chiuso |
+| `integer_required`, `boolean_required`, `string_required` | `given` | tipo sbagliato |
+| `list_required`, `record_required`, `field_unknown` | — | lista/record richiesto, campo non dichiarato (`parameter` = `percorso.campo`) |
+| `list_too_long` | `count` (int), `maximum` (int) | troppi elementi |
+| `parameters_form` | — | parametri non un oggetto JSON |
+| `parameter_unexpected` | `command` | parametro non previsto dal comando |
+| `module_rejected` | `error_type`, `detail` (ext) | `TypeError`/`ValueError` senza codice di un modulo (nessun `parameter`) |
+| `rows_out_of_range` | `rows` (list), `last` (int) | righe fuori da `0…last` (`catalog.select`) |
+| `column_unknown` | `column` (ext) | colonna non nella tabella (`table.sort`) |
+| `columns_unknown` | `columns` (list, ext) | colonne non nella tabella (`catalog.rows`) |
+| `position_beyond` | `position` (int), `count` (int) | `layer.move` oltre l'ultimo livello |
+| `distance_form`, `sky_form_incomplete`, `snap_needs_pixels`, `pixel_form_incomplete`, `box_size_required` | — | combinazioni di parametri di `measure.distance` non ammesse |
+
+**Altri codici del `05`:**
+
+| Codice | `reason` | Parametri | Note |
+|---|---|---|---|
+| `LAYER_UNKNOWN` | — / `in_parameter` | `layer` / `parameter`, `layer` | livello inesistente o rimosso |
+| `COMMAND_UNKNOWN` | — / `not_bound` / `in_session` | `command` / `command`, `module` / `number` (int), `command` | non registrato, esecuzione dell'interfaccia non collegata, riapertura |
+| `COMMAND_VERSION_UNSUPPORTED` | — / `in_session` | `command`, `version` (testo), `registered` (int) [+ `number` (int)] | |
+| `COMMAND_CANCELLED` | `before_start`, `discarded`, `replay` | — | |
+| `SESSION_INVALID` | `unreadable`, `structure`, `command` | `detail` (ext) per `unreadable` e `command` | |
+| `SESSION_SCHEMA_UNSUPPORTED` | — | `schema_version` (int), `app_version` (int) | |
+| `SESSION_FILE_MISSING` | — | `number` (int), `command`, `path` (ext) | |
+| `SESSION_FILE_CHANGED` | — | `number` (int), `command`, `path` (ext), `expected`, `found` | SHA-256 |
+| `SESSION_REPLAY_FAILED` | — | `number` (int), `command`, `error` (messaggio annidato, D40-7) | l'errore del comando |
+| `SESSION_NETWORK_DATA_DIFFERS` | — / `count_differs` | `number` (int), `command`, `changes` (messaggi) / `number`, `command` | |
+| `SESSION_FINGERPRINT_CHANGE` | — | `before_sha256`, `after_sha256`, `before_origin` (ext), `before_retrieved_at`, `after_origin` (ext), `after_retrieved_at`, `rows_before`, `rows_after` | solo annidato; `rows_*` in JSON (`null` se ignote) |
+| `SESSION_STATE_DIFFERS` | — | `differences` (messaggi) | |
+| `SESSION_STATE_DIFFERENCE` | — | `path`, `recorded`, `found` | solo annidato; valori in JSON |
+| `WCS_INVALID` (condiviso con 10) | `no_celestial_coordinates` / `absent` / `absent_with_reasons` | `cause_code`, `cause` (messaggio) / — / `reasons` (messaggi) | immagine senza coordinate celesti |
+| `WCS_MISSING` (condiviso con 11) | `pixel_grid_overlay` | — | griglia di pixel, nessuna sovrapposizione |
+| `NO_WCS` (condiviso con 17) | `distance` | `layer` | `measure.distance` su immagine senza WCS |
+| `HIPS_DISPLAY_FALLBACK` | — | `hips_id`, `order` (int), `cause_code` | tile di ICRS (0°, 0°) assente |
+| `HIPS_DISPLAY_LIMITS_UNDEFINED` | `coverage_unknown`, `coverage_empty` | `hips_id` | |
+| `TABLE_SORT_UNSUPPORTED` | `array_column` / `not_sortable` | `column` (ext) / `column` (ext), `detail` (ext) | |
+| `POSITION_COLUMNS_REQUIRED` | — | — | |
+| `OUT_OF_SKY` | `point` | — | punto del cursore fuori dalla proiezione (la sotto-voce `distance_point` è del `41`) |
+| `VIEW_UNDEFINED` | `geometry` | — | lettura sotto il cursore senza geometria (la sotto-voce `export` è del `41`) |
+| `MODULE_NOTE` | — | `note` (ext) | avviso di un modulo non convertito, solo testo |
+
+Gli errori e gli avvisi **dei moduli 10–19** non cambiano: il `05` li riporta con codice, testo e `params` invariati
+(`§3.2`); l'avviso di `cursor.read` per un'epoca mancante porta i `params` dell'errore del 10 e lo stesso codice
+(il testo del `05` aggiunge che le coordinate sono nel frame dell'immagine, ma in catalogo vale il testo del 10).
+
 ## 11. Esposizione all'IA
 
 Non applicabile come strumento: il 05 non è uno strumento per l'IA. È la
@@ -739,3 +818,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-21 | Claude Code | **Sprint 4f del 41 (decisione del proprietario del 2026-10-21):** `moc.open` assegna lo stile iniziale del MOC (Okabe e Ito senza il nero in ordine inverso, contatore dello stato, `fill` 0,25) e lo scrive nel risultato e nello stato (§7). Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **D32-1 (c) decisa dal proprietario (il 05 resta `approvato`):** la descrizione del parametro `catalog` di `catalog.load_region` elenca gli identificativi del gruppo fisso del 13 e dice che serve una tabella (§7, nota "Identificativi dei cataloghi nella descrizione"). |
 | 2026-10-23 | Claude Code | **`measure.distance` esteso (sprint 4g del 41, decisione del proprietario del 2026-10-23):** `layer`, `p1`, `p2` facoltativi e nuova forma cielo con `sky1`, `sky2` (§7, nota "`measure.distance` anche tra posizioni celesti"); versione 1 invariata. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `CommandError` e `ResultMessage` portano `params` in tutto il `05`; nuova §10.1 con la tabella di codici, ragioni e parametri (`COMMAND_PARAMETER_INVALID` con 40 ragioni, `SESSION_*` con messaggi annidati, `WCS_INVALID`/`WCS_MISSING`/`NO_WCS` come sotto-voci condivise) scritta prima del codice; il motivo per cui mancano le coordinate (`PixelGridGeometry.problem`) diventa un `ResultMessage`. Test `tests/core/test_messages_commands.py`. Testo italiano invariato. Stato `approvato` invariato. |

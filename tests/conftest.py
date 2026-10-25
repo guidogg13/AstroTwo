@@ -64,6 +64,13 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.core.crossmatch", "CrossmatchError"),
     ("astrotwo.core.measures", "MeasuresError"),
     ("astrotwo.core.calculators", "CalculatorError"),
+    ("astrotwo.core.commands", "CommandError"),
+    ("astrotwo.core.cache", "CacheError"),
+    ("astrotwo.ai.keychain_keys", "KeychainError"),
+    ("astrotwo.ai.provider_adapter", "ProviderAdapterError"),
+    ("astrotwo.ai.provider_adapter", "ProfileError"),
+    ("astrotwo.ai.tool_registry", "ToolRegistryError"),
+    ("astrotwo.ai.chat_assistant", "AssistantError"),
 )
 
 
@@ -82,9 +89,13 @@ def _module_messages_match_catalog():
         cls = getattr(importlib.import_module(module_name), class_name)
         original = cls.__init__
 
-        def checked(self, *args, __original=original, **kwargs):
+        def checked(self, *args, __original=original, __name=class_name, **kwargs):
             __original(self, *args, **kwargs)
-            check_error(self)
+            from astrotwo.messages_catalog import has_message
+
+            # I codici dei moduli dell'interfaccia (UI_*, EXPORT_*, PREFERENCE_*) li controlla il test di T18 sul codice.
+            if has_message(self.code) or __name != "CommandError":
+                check_error(self)
 
         cls.__init__ = checked
         restore.append((cls, "__init__", original))
@@ -101,6 +112,38 @@ def _module_messages_match_catalog():
 
     warning_cls.__new__ = checked_new
     restore.append((warning_cls, "__new__", original_new))
+    # Avvisi ed errori del 05 (``ResultMessage``): con ``params`` (o senza, se la voce non ne chiede) si controllano
+    # contro il catalogo; i codici dei moduli non ancora convertiti non hanno voce.
+    result_cls = importlib.import_module("astrotwo.core.commands").ResultMessage
+    original_init = result_cls.__init__
+
+    def checked_init(self, code, text, params=None):
+        original_init(self, code, text, {} if params is None else params)
+        from astrotwo.messages_catalog import has_message, uses_catalog
+
+        if has_message(code) and (self.params or uses_catalog(code, self.params)):
+            check_message(code, self.params, text)
+
+    result_cls.__init__ = checked_init
+    restore.append((result_cls, "__init__", original_init))
+    # Errori e avvisi dell'adattatore del 30: ``ProviderError`` (codice, testo, attesa, params) e ``ProviderNotice``.
+    adapter_module = importlib.import_module("astrotwo.ai.provider_adapter")
+    verification = importlib.import_module("astrotwo.ai.result_verification")
+    assistant = importlib.import_module("astrotwo.ai.chat_assistant")
+    for cls, text_name in ((adapter_module.ProviderError, "message"), (adapter_module.ProviderNotice, "text"),
+                           (verification.VerificationIssue, "text"), (assistant.Note, "text"),
+                           (importlib.import_module("astrotwo.core.cache").CacheWarning, "message")):
+        original_cls_init = cls.__init__
+
+        def checked_cls_init(self, *args, __original=original_cls_init, __text=text_name, **kwargs):
+            __original(self, *args, **kwargs)
+            from astrotwo.messages_catalog import has_message, uses_catalog
+
+            if has_message(self.code) and (self.params or uses_catalog(self.code, self.params)):
+                check_message(self.code, self.params, getattr(self, __text))
+
+        cls.__init__ = checked_cls_init
+        restore.append((cls, "__init__", original_cls_init))
     yield
     for cls, name, original in restore:
         setattr(cls, name, original)

@@ -121,7 +121,8 @@ def compose_metadata(state: WorkspaceState, *, night: bool, now: datetime | None
     """Blocchi ``tEXt`` del PNG dallo stato (41 §3.14): parole chiave e valori testuali."""
     view = state.view
     if view.geometry is None or view.window is None:
-        raise CommandError("VIEW_UNDEFINED", "vista non definita: centro, scala o finestra mancanti")
+        raise CommandError("VIEW_UNDEFINED", "vista non definita: centro, scala o finestra mancanti",
+                           params={"reason": "export"})
     info = view.state_json()
     info["field_of_view"] = quantity_json(2 * view.geometry.field_radius) if hasattr(
         view.geometry, "field_radius") else None
@@ -144,11 +145,14 @@ def validate_path(path: str) -> Path:
     """Percorso assoluto con estensione ``.png`` in una cartella scrivibile (``EXPORT_PATH_INVALID``)."""
     target = Path(path)
     if not target.is_absolute() or target.suffix.lower() != ".png":
-        raise CommandError("EXPORT_PATH_INVALID", f"{path!r}: serve un percorso assoluto con estensione .png")
+        raise CommandError("EXPORT_PATH_INVALID", f"{path!r}: serve un percorso assoluto con estensione .png",
+                           params={"reason": "not_png", "path": path})
     if not target.parent.is_dir() or not os.access(target.parent, os.W_OK):
-        raise CommandError("EXPORT_PATH_INVALID", f"{str(target.parent)!r}: cartella inesistente o non scrivibile")
+        raise CommandError("EXPORT_PATH_INVALID", f"{str(target.parent)!r}: cartella inesistente o non scrivibile",
+                           params={"reason": "folder_unwritable", "folder": str(target.parent)})
     if target.is_dir():
-        raise CommandError("EXPORT_PATH_INVALID", f"{path!r} è una cartella")
+        raise CommandError("EXPORT_PATH_INVALID", f"{path!r} è una cartella",
+                           params={"reason": "is_directory", "path": path})
     return target
 
 

@@ -24,6 +24,7 @@ from tests.message_helpers import (
     MODULE_14_SUBVARIANTS,
     MODULE_16_SUBVARIANTS,
     MODULE_17_SUBVARIANTS,
+    MODULE_05_SUBVARIANTS,
     MODULE_18_SUBVARIANTS,
     MODULE_15_SUBVARIANTS,
     MODULE_19_SUBVARIANTS,
@@ -308,7 +309,7 @@ def test_every_module_10_error_matches_the_catalog(monkeypatch, cache):
 
     # ragioni di WCS_MISSING e NET_TIMEOUT sollevate dal modulo 11 (provate in test_messages_images_fits.py)
     module_13 = {("COORD_UNIT_MISSING", "column_unit_required"), ("COORD_UNIT_MISSING", "column_not_angular")}
-    module_11 = module_13 | MODULE_14_SUBVARIANTS | MODULE_15_SUBVARIANTS | MODULE_16_SUBVARIANTS | MODULE_17_SUBVARIANTS | MODULE_18_SUBVARIANTS | MODULE_19_SUBVARIANTS | {("NET_TIMEOUT", "url")} | {("WCS_MISSING", r) for r in CATALOG["WCS_MISSING"].variants
+    module_11 = module_13 | MODULE_14_SUBVARIANTS | MODULE_15_SUBVARIANTS | MODULE_16_SUBVARIANTS | MODULE_17_SUBVARIANTS | MODULE_18_SUBVARIANTS | MODULE_05_SUBVARIANTS | MODULE_19_SUBVARIANTS | {("NET_TIMEOUT", "url")} | {("WCS_MISSING", r) for r in CATALOG["WCS_MISSING"].variants
                                              if r not in ("header_required", "no_celestial_wcs", "not_celestial",
                                                            "wcs_required")}
     required = {c for c in catalog_combinations(MODULE_CODES)

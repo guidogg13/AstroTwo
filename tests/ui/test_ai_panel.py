@@ -320,7 +320,8 @@ def test_t8_consent(qtbot, settings_path, cache, closing):  # noqa: F811
     assert "api.example.invalid" in dialog.label.text() and "API keys" in dialog.label.text()
     dialog.later_button.click()  # Non ora: nulla inviato
     assert adapter.requests == [] and panel.bottom.currentIndex() == 1
-    assert "consent to send data to api.example.invalid not given" in panel.unavailable.text()
+    assert "AI_CONSENT_REQUIRED: The consent to send data to api.example.invalid has not been given." in \
+        panel.unavailable.text()
     assert panel.fix_button.text() == "Give consent…"
     panel.input.setPlainText("Ciao di nuovo")
     panel.bottom.setCurrentIndex(0)
@@ -340,8 +341,9 @@ def test_t9_unavailable(qtbot, settings_path, cache, closing):  # noqa: F811
     closing.append(win)
     panel = win.ai_panel
     assert panel.bottom.currentIndex() == 1
-    assert panel.unavailable.text() == ("The assistant is not available: no key in the Keychain for "
-                                        "openai-compatible:api.example.invalid. The rest of AstroTwo works normally.")
+    assert panel.unavailable.text() == (
+        "The assistant is not available. KEY_NOT_FOUND: There is no key in the Keychain for profile "
+        "openai-compatible:api.example.invalid. The rest of AstroTwo works normally.")
     assert panel.fix_button.text() == "Open assistant settings…"
     assert panel.lock.toolTip() == "no key in the Keychain"
     win.act_grid.trigger()  # il resto della finestra funziona
@@ -357,7 +359,7 @@ def test_no_profile(qtbot, settings_path, cache, closing):  # noqa: F811
     win = make_window(qtbot, settings_path, cache, keychain=FakeKeychain())
     closing.append(win)
     assert win.ai_panel.profile_label.text() == "No profile"
-    assert "no profile configured" in win.ai_panel.unavailable.text()
+    assert "AI_NO_PROFILE: No profile is configured." in win.ai_panel.unavailable.text()
 
 
 def test_t11_local(qtbot, settings_path, cache, closing):  # noqa: F811
@@ -395,7 +397,7 @@ def test_t10_stop(qtbot, settings_path, cache, closing):  # noqa: F811
     qtbot.waitUntil(lambda: len(panel.answers) == 1, timeout=10000)
     assert panel.send_button.text() == "Send" and panel.new_button.isEnabled()
     notes = [label.text() for label in panel.messages.findChildren(type(panel.privacy), "aiLimitNote")]
-    assert notes == ["answer interrupted"]
+    assert notes == ["Answer interrupted."]
     assert panel.answers[0].interrupted
 
 
@@ -486,7 +488,8 @@ def test_italian(qtbot, settings_path, cache, closing):  # noqa: F811
     try:
         panel = win.ai_panel
         assert win.language == "it" and panel.send_button.text() == "Invia"
-        assert panel.unavailable.text().startswith("L'assistente non è disponibile: nessuna chiave nel Portachiavi")
+        assert panel.unavailable.text().startswith(
+            "L'assistente non è disponibile. KEY_NOT_FOUND: Nessuna chiave nel Portachiavi per il profilo")
         assert panel.privacy.text().startswith("Al provider vanno il testo e i risultati dei comandi")
         unverified = CheckedNumber(WrittenNumber("7", 0, 1, "decimal"), "not_verified")
         assert panel.number_tooltip(unverified) == ("Non viene da un comando", None)
@@ -720,20 +723,23 @@ def test_refresh_models_and_probe(qtbot, settings_path, cache, closing, provider
 
 
 def test_provider_error_and_context_too_long(qtbot, settings_path, cache, closing):  # noqa: F811
-    script = [[TextDelta("Inizio la risposta"), ProviderError("AI_AUTH", "chiave rifiutata dal provider (401)")],
-              [ProviderError("AI_CONTEXT_TOO_LONG", "conversazione oltre il contesto del modello")]]
+    script = [[TextDelta("Inizio la risposta"), ProviderError(
+        "AI_AUTH", "chiave rifiutata dal provider (401)", params={"status": 401, "detail": "rejected by the provider"})],
+              [ProviderError("AI_CONTEXT_TOO_LONG", "conversazione oltre il contesto del modello",
+                             params={"status": 400, "detail": "prompt is too long"})]]
     win, _, _ = ai_window(qtbot, settings_path, cache, script)
     closing.append(win)
     panel = win.ai_panel
     first = ask(qtbot, win, "Ciao")
     assert first.error.code == "AI_AUTH"
     errors = [label.text() for label in panel.messages.findChildren(type(panel.privacy), "aiError")]
-    assert errors == ["AI_AUTH: chiave rifiutata dal provider (401)"]  # codice e testo del 30 invariati
+    assert errors == ["AI_AUTH: The key is not valid or has no permissions (HTTP 401): rejected by the provider"]
     assert "Inizio la risposta" in panel.messages.findChildren(MessageView)[-1].toPlainText()
     assert panel.send_button.text() == "Send" and panel.bottom.currentIndex() == 0
     ask(qtbot, win, "Ancora")
     footer = panel.messages.findChildren(type(panel.privacy), "aiError")[-1]
-    assert footer.text() == "AI_CONTEXT_TOO_LONG: conversazione oltre il contesto del modello"
+    assert footer.text() == ("AI_CONTEXT_TOO_LONG: The conversation exceeds the context of the model (HTTP 400): "
+                             "prompt is too long")
     again = next(b for b in panel.messages.findChildren(QPushButton) if b.text() == "New conversation")
     conversation = panel.assistant.conversation
     again.click()

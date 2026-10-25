@@ -13,6 +13,7 @@ altri pacchetti (es. ``keyrings.alt``, in chiaro su file) non si usano mai, e no
 from __future__ import annotations
 
 import platform
+from collections.abc import Mapping
 
 __all__ = [
     "SERVICE_NAME",
@@ -32,10 +33,18 @@ _MASK = "••••"
 class KeychainError(Exception):
     """Errore del modulo 31 con codice di §10 e testo **senza** la chiave."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, params: Mapping[str, object] | None = None) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        self.params = dict(params or {})  # valori JSON del messaggio (D40-3); mai la chiave
+
+
+def _operation(kind: str, profile_id: str) -> dict:
+    """Messaggio annidato (D40-7) che dice quale operazione sul profilo è fallita: ``read``, ``write``, ``delete``."""
+    text = {"read": "lettura", "write": "scrittura", "delete": "cancellazione"}[kind]
+    return {"code": "KEYCHAIN_OPERATION", "params": {"reason": kind, "profile_id": profile_id},
+            "text": f"{text} della chiave del profilo {profile_id!r}"}
 
 
 class SecretKey:
@@ -95,16 +104,19 @@ def _macos_backend():
     """Il solo backend macOS di ``keyring``, creato direttamente (nessuna scelta automatica, nessun ripiego)."""
     if platform.system() != "Darwin":
         raise KeychainError("KEYCHAIN_UNAVAILABLE", f"sistema {platform.system()!r}: il Portachiavi di macOS non "
-                            "c'è; l'assistente non è disponibile, il resto dell'app funziona")
+                            "c'è; l'assistente non è disponibile, il resto dell'app funziona",
+                            params={"reason": "not_macos", "system": platform.system()})
     try:
         from keyring.backends import macOS
     except Exception as exc:  # noqa: BLE001 - libreria Security non caricabile
         raise KeychainError("KEYCHAIN_UNAVAILABLE", f"backend macOS di keyring non caricabile "
-                            f"({type(exc).__name__})") from exc
+                            f"({type(exc).__name__})",
+                            params={"reason": "backend_not_loadable", "error_type": type(exc).__name__}) from exc
     try:
         macOS.Keyring.priority  # noqa: B018 - solleva se l'API Security non è disponibile
     except Exception as exc:  # noqa: BLE001
-        raise KeychainError("KEYCHAIN_UNAVAILABLE", f"Portachiavi di macOS non disponibile: {exc}") from exc
+        raise KeychainError("KEYCHAIN_UNAVAILABLE", f"Portachiavi di macOS non disponibile: {exc}",
+                            params={"reason": "api_unavailable", "detail": str(exc)}) from exc
     backend = macOS.Keyring()
     backend.keychain = None  # KEYCHAIN_PATH dell'ambiente ignorato: solo il Portachiavi di login
     return backend
@@ -119,15 +131,24 @@ class KeychainStore:
         self.service = service
         self._backend = _macos_backend()
 
-    def _failure(self, exc: BaseException, operation: str, secret: str | None = None) -> KeychainError:
+    def _failure(self, exc: BaseException, operation: str, profile_id: str, secret: str | None = None) -> KeychainError:
+        """Errore del Portachiavi per l'operazione ``operation`` (``read``, ``write``, ``delete``) sul profilo."""
         from keyring.errors import KeyringLocked, PasswordDeleteError, PasswordSetError
 
         text = _clean_text(str(exc), secret)
+        what = {"read": f"lettura della chiave del profilo {profile_id!r}",
+                "write": f"scrittura della chiave del profilo {profile_id!r}",
+                "delete": f"cancellazione della chiave del profilo {profile_id!r}"}[operation]
+        nested = {"read": _operation("read", profile_id), "write": _operation("write", profile_id),
+                  "delete": _operation("delete", profile_id)}[operation]
+        params = {"operation": nested, "detail": text}
         if isinstance(exc, KeyringLocked):
-            return KeychainError("KEYCHAIN_ACCESS_DENIED", f"{operation}: accesso al Portachiavi negato ({text})")
+            return KeychainError("KEYCHAIN_ACCESS_DENIED", f"{what}: accesso al Portachiavi negato ({text})",
+                                 params=params)
         if isinstance(exc, (PasswordSetError, PasswordDeleteError)):
-            return KeychainError("KEYCHAIN_WRITE_FAILED", f"{operation}: {text}")
-        return KeychainError("KEYCHAIN_UNAVAILABLE", f"{operation}: Portachiavi non raggiungibile ({text})")
+            return KeychainError("KEYCHAIN_WRITE_FAILED", f"{what}: {text}", params=params)
+        return KeychainError("KEYCHAIN_UNAVAILABLE", f"{what}: Portachiavi non raggiungibile ({text})",
+                             params={"reason": "unreachable", **params})
 
     def _read(self, profile_id: str) -> str | None:
         from keyring.errors import KeyringError
@@ -135,7 +156,7 @@ class KeychainStore:
         try:
             return self._backend.get_password(self.service, profile_id)
         except KeyringError as exc:
-            raise self._failure(exc, f"lettura della chiave del profilo {profile_id!r}") from None
+            raise self._failure(exc, "read", profile_id) from None
 
     def store_key(self, profile_id: str, key: str) -> None:
         """Salva (o sostituisce) la chiave del profilo; spazi e a capo ai bordi tolti (scelta minore 3)."""
@@ -143,19 +164,21 @@ class KeychainStore:
 
         profile_id = _profile(profile_id)
         if not isinstance(key, str):
-            raise KeychainError("KEY_FORMAT_INVALID", "la chiave è un testo")
+            raise KeychainError("KEY_FORMAT_INVALID", "la chiave è un testo", params={"reason": "not_text"})
         cleaned = key.strip()
         if not cleaned:
-            raise KeychainError("KEY_FORMAT_INVALID", "chiave vuota: nulla scritto")
+            raise KeychainError("KEY_FORMAT_INVALID", "chiave vuota: nulla scritto", params={"reason": "empty"})
         if len(cleaned) > MAX_KEY_LENGTH:
             raise KeychainError("KEY_FORMAT_INVALID", f"chiave di {len(cleaned)} caratteri, oltre {MAX_KEY_LENGTH}: "
-                                "nulla scritto")
+                                "nulla scritto",
+                                params={"reason": "too_long", "length": len(cleaned), "maximum": MAX_KEY_LENGTH})
         if any(ord(c) < 32 or ord(c) == 127 for c in cleaned):
-            raise KeychainError("KEY_FORMAT_INVALID", "la chiave contiene caratteri di controllo: nulla scritto")
+            raise KeychainError("KEY_FORMAT_INVALID", "la chiave contiene caratteri di controllo: nulla scritto",
+                                params={"reason": "control_characters"})
         try:
             self._backend.set_password(self.service, profile_id, cleaned)
         except KeyringError as exc:
-            raise self._failure(exc, f"scrittura della chiave del profilo {profile_id!r}", cleaned) from None
+            raise self._failure(exc, "write", profile_id, cleaned) from None
 
     def has_key(self, profile_id: str) -> bool:
         """Sì/no; il segreto letto si scarta subito (la libreria non offre una lettura dell'esistenza)."""
@@ -166,7 +189,8 @@ class KeychainStore:
         profile_id = _profile(profile_id)
         value = self._read(profile_id)
         if value is None:
-            raise KeychainError("KEY_NOT_FOUND", f"nessuna chiave nel Portachiavi per il profilo {profile_id!r}")
+            raise KeychainError("KEY_NOT_FOUND", f"nessuna chiave nel Portachiavi per il profilo {profile_id!r}",
+                                params={"profile_id": profile_id})
         return SecretKey(value)
 
     def delete_key(self, profile_id: str) -> str:
@@ -179,5 +203,5 @@ class KeychainStore:
         try:
             self._backend.delete_password(self.service, profile_id)
         except KeyringError as exc:
-            raise self._failure(exc, f"cancellazione della chiave del profilo {profile_id!r}") from None
+            raise self._failure(exc, "delete", profile_id) from None
         return "deleted"
