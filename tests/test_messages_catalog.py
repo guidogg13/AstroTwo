@@ -357,6 +357,27 @@ def test_t19_external_text_is_masked_for_the_model(probe):
     assert "ignore rules" not in masked and masked.endswith("/ <external>")
 
 
+def test_layer_context_prefixes_the_text_and_is_accepted(probe):
+    """Contesto di livello (sprint 8f, 40 §3.7.1): prefisso nella lingua, nome esterno mascherato per il modello."""
+    context = {"id": "L2", "name": "Gaia DR3", "kind": "catalog"}
+    params = {"name": "x", "number": 1, "measure": {"value": 2, "unit": "m"}, "items": [], "external": "e",
+              "layer_context": context}
+    assert mc.validate_params(probe, params) == []
+    assert mc.message_text(probe, params, "en").startswith("Catalog layer L2 «Gaia DR3»: x: 1 / ")
+    assert mc.message_text(probe, params, "it").startswith("Livello catalogo L2 «Gaia DR3»: e — ")
+    masked = mc.message_text(probe, params, "en", mask_external=True)
+    assert masked.startswith("Catalog layer L2 «<layer_name>»: ") and "Gaia" not in masked
+    moc = mc.message_text(probe, {**params, "layer_context": {**context, "kind": "moc", "name": ""}}, "en")
+    assert moc.startswith("MOC layer L2: x")
+
+
+def test_layer_context_must_be_well_formed(probe):
+    params = {"name": "x", "number": 1, "measure": {"value": 2, "unit": "m"}, "items": [], "external": "e"}
+    for bad in ({"id": "L2", "name": "n", "kind": "table"}, {"id": "L2", "name": "n"}, "L2"):
+        assert any("contesto di livello" in p for p in mc.validate_params(probe, {**params, "layer_context": bad}))
+    assert mc.message_text(probe, {**params, "layer_context": "L2"}, "en").startswith("x: 1")
+
+
 def test_missing_parameter_keeps_the_placeholder_and_logs(probe, caplog):
     with caplog.at_level(logging.WARNING, logger="astrotwo.messages"):
         text = mc.message_text(probe, {"name": "x", "number": 1}, "en")

@@ -17,7 +17,6 @@ from types import SimpleNamespace
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord
 from astropy.io import ascii as astropy_ascii
 from astropy.table import MaskedColumn, Table
 from astropy.time import Time

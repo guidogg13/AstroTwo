@@ -300,7 +300,19 @@ def catalog_key(layer, image) -> tuple:
             None if image is None else id(image.data))
 
 
-def _epoch_warnings(table, image, layer_name: str) -> tuple[ResultMessage, ...]:
+def layer_context(layer) -> dict:
+    """Contesto di livello dei messaggi (``layer_context``, 40 §3.7.1): identificativo, nome e tipo del livello."""
+    return {"id": layer.id, "name": layer.name, "kind": layer.kind}
+
+
+def with_layer(message: ResultMessage, layer) -> ResultMessage:
+    """Il messaggio di un modulo con il livello a cui si riferisce: ``params`` + ``layer_context``, testo originale
+    preceduto dal nome del livello (ripiego, 40 §3.7.2)."""
+    return ResultMessage(message.code, f"{layer.name}: {message.text}",
+                         {**message.params, "layer_context": layer_context(layer)})
+
+
+def _epoch_warnings(table, image, layer) -> tuple[ResultMessage, ...]:
     """Avviso di epoche diverse (D10-2, 41 §3.8) quando le posizioni non sono propagate: epoca del catalogo e
     dell'immagine base entrambe dichiarate e diverse, o epoca del catalogo non dichiarata con un'immagine datata."""
     wcs = None if image is None else image.data.wcs
@@ -310,18 +322,18 @@ def _epoch_warnings(table, image, layer_name: str) -> tuple[ResultMessage, ...]:
     epoch = table.positions.epoch
     shown = time_text(image_epoch)
     if epoch is None:
-        return (ResultMessage("CATALOG_EPOCH_UNKNOWN", f"{layer_name}: epoca del catalogo non dichiarata, immagine "
-                              f"all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
-                              "catalog.set_columns)", {"layer": layer_name, "image_epoch": shown}),)
+        return (with_layer(ResultMessage("CATALOG_EPOCH_UNKNOWN", f"epoca del catalogo non dichiarata, immagine "
+                                         f"all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
+                                         "catalog.set_columns)", {"image_epoch": shown}), layer),)
     from astrotwo.core.coordinates_wcs import SkyFrame
 
     catalog_epoch = SkyFrame.from_lonlat(0 * u.deg, 0 * u.deg, "icrs", epoch=epoch).epoch  # lettura del 10
     if (catalog_epoch - image_epoch).to_value(u.s) == 0.0:
         return ()
-    return (ResultMessage("CATALOG_EPOCH_DIFFERS", f"{layer_name}: catalogo all'epoca {time_text(catalog_epoch)}, "
-                          f"immagine all'epoca {shown}; posizioni della tabella non propagate (moto proprio con "
-                          "catalog.set_columns)", {"layer": layer_name, "catalog_epoch": time_text(catalog_epoch),
-                                                   "image_epoch": shown}),)
+    return (with_layer(ResultMessage("CATALOG_EPOCH_DIFFERS", f"catalogo all'epoca {time_text(catalog_epoch)}, "
+                                     f"immagine all'epoca {shown}; posizioni della tabella non propagate (moto "
+                                     "proprio con catalog.set_columns)",
+                                     {"catalog_epoch": time_text(catalog_epoch), "image_epoch": shown}), layer),)
 
 
 def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
@@ -350,7 +362,7 @@ def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
     else:
         coords, valid = catalog_positions(table)
         epoch, propagated, source = table.positions.epoch, False, None
-        warnings_ = _epoch_warnings(table, image, layer.name)
+        warnings_ = _epoch_warnings(table, image, layer)
     if coords is None:
         return dataclasses.replace(empty, epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_)
     rows = np.flatnonzero(valid)
@@ -608,7 +620,7 @@ class TilePool:
                 result = catalog_points(key, layer, geometry, image)
             except Exception as exc:  # noqa: BLE001 - errori del 10/13: catalogo non disegnato e un messaggio
                 relayed = exception_message(exc)  # codice e params del modulo; il testo originale nomina il livello
-                result = ResultMessage(relayed.code, f"{layer.name}: {relayed.text}", relayed.params)
+                result = with_layer(relayed, layer)
             self.bridge.catalog.emit(key, result)
 
         self.pool.start(_Task(run))
@@ -622,7 +634,7 @@ class TilePool:
                 result = moc_shapes(key, layer, geometry)
             except Exception as exc:  # noqa: BLE001 - errori del 10/16: MOC non disegnato e un messaggio
                 relayed = exception_message(exc)  # codice e params del modulo; il testo originale nomina il livello
-                result = ResultMessage(relayed.code, f"{layer.name}: {relayed.text}", relayed.params)
+                result = with_layer(relayed, layer)
             self.bridge.moc.emit(key, result)
 
         self.pool.start(_Task(run))

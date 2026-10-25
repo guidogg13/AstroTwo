@@ -27,6 +27,8 @@ __all__ = [
     "PARAM_TYPES",
     "MAX_MESSAGE_DEPTH",
     "NO_TRANSLATION",
+    "LAYER_CONTEXT",
+    "LAYER_KINDS",
     "Param",
     "Variant",
     "Entry",
@@ -56,6 +58,15 @@ NO_TRANSLATION = {"en": "(no translation)", "it": "(nessuna traduzione)"}
 
 #: Parametro riservato: sceglie la sotto-voce (D40-6); non si inserisce nel testo.
 REASON = "reason"
+
+#: Parametro di contesto riservato (sprint 8f, 40 §3.7.1): ``{"id": "L2", "name": "Gaia DR3", "kind": "catalog"}``, il
+#: livello a cui si riferisce il messaggio. Come ``reason`` non si dichiara nelle voci; ``message_text`` lo premette al
+#: testo («Catalog layer L2 «Gaia DR3»: …»). ``name`` (scelto dall'utente o letto da un file) è testo esterno.
+LAYER_CONTEXT = "layer_context"
+
+#: Tipi di livello ammessi in ``LAYER_CONTEXT`` → etichetta inglese e italiana.
+LAYER_KINDS = {"catalog": ("Catalog layer", "Livello catalogo"), "moc": ("MOC layer", "Livello MOC"),
+               "image": ("Image layer", "Livello immagine"), "hips": ("HiPS layer", "Livello HiPS")}
 
 #: Segnaposto ``{nome}``; ``{{`` e ``}}`` sono le graffe scritte nel testo (es. ``${{...}}`` per ``${...}``).
 _PLACEHOLDER = re.compile(r"\{\{|\}\}|\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -228,7 +239,23 @@ def message_text(code: str, params: Mapping[str, object] | None, lang: str, *, t
             return "; ".join(_render_message(v, name, lang, mask_external, _depth + 1) for v in params[name]) or "—"
         return _render(params[name])
 
-    return _PLACEHOLDER.sub(fill, it if lang == "it" else en)
+    return _layer_prefix(params, lang, mask_external) + _PLACEHOLDER.sub(fill, it if lang == "it" else en)
+
+
+def _is_layer_context(value: object) -> bool:
+    return (isinstance(value, Mapping) and set(value) == {"id", "name", "kind"} and value["kind"] in LAYER_KINDS
+            and isinstance(value["id"], str) and isinstance(value["name"], str))
+
+
+def _layer_prefix(params: Mapping[str, object], lang: str, mask_external: bool) -> str:
+    """«Catalog layer L2 «Gaia DR3»: » se ``params`` ha il contesto del livello (vuoto altrimenti); un nome vuoto si
+    omette, per il modello il nome (testo esterno) è ``<layer_name>``."""
+    context = params.get(LAYER_CONTEXT)
+    if not _is_layer_context(context):
+        return ""
+    label = LAYER_KINDS[context["kind"]][1 if lang == "it" else 0]
+    name = "<layer_name>" if mask_external else context["name"]
+    return f"{label} {context['id']} «{name}»: " if name else f"{label} {context['id']}: "
 
 
 def _from_catalog_source(entry: Entry, params: Mapping[str, object]) -> bool:
@@ -305,7 +332,10 @@ def validate_params(code: str, params: Mapping[str, object] | None, _depth: int 
             for item in params[name]:
                 problems.extend(_validate_nested(code, name, item, _depth + 1))
     for name in params:
-        if name not in expected and name != REASON:
+        if name == LAYER_CONTEXT:
+            if not _is_layer_context(params[name]):
+                problems.append(f"{code}: parametro {name} non è un contesto di livello: {params[name]!r}")
+        elif name not in expected and name != REASON:
             problems.append(f"{code}: parametro {name} non dichiarato")
     return problems
 
@@ -3103,15 +3133,15 @@ _add("VIEW_NO_WCS", "The image has no valid WCS: nothing is overlaid on the pixe
      distance=("The image has no valid WCS: the angular distance cannot be measured on the pixel grid.",
                "Immagine senza WCS valido: la distanza angolare non è misurabile sulla griglia di pixel.", ""))
 _add("CATALOG_EPOCH_UNKNOWN",
-     "{layer}: the epoch of the catalogue is not declared, the image is at epoch {image_epoch}; the positions of the "
+     "The epoch of the catalogue is not declared, the image is at epoch {image_epoch}; the positions of the "
      "table are not propagated (proper motion with catalog.set_columns).",
-     "{layer}: epoca del catalogo non dichiarata, immagine all'epoca {image_epoch}; posizioni della tabella non "
-     "propagate (moto proprio con catalog.set_columns).", "layer! image_epoch")
+     "Epoca del catalogo non dichiarata, immagine all'epoca {image_epoch}; posizioni della tabella non "
+     "propagate (moto proprio con catalog.set_columns).", "image_epoch")
 _add("CATALOG_EPOCH_DIFFERS",
-     "{layer}: the catalogue is at epoch {catalog_epoch}, the image at epoch {image_epoch}; the positions of the "
+     "The catalogue is at epoch {catalog_epoch}, the image at epoch {image_epoch}; the positions of the "
      "table are not propagated (proper motion with catalog.set_columns).",
-     "{layer}: catalogo all'epoca {catalog_epoch}, immagine all'epoca {image_epoch}; posizioni della tabella non "
-     "propagate (moto proprio con catalog.set_columns).", "layer! catalog_epoch image_epoch")
+     "Catalogo all'epoca {catalog_epoch}, immagine all'epoca {image_epoch}; posizioni della tabella non "
+     "propagate (moto proprio con catalog.set_columns).", "catalog_epoch image_epoch")
 _extend("COMMAND_CANCELLED",
         window_closed=("The command was cancelled: the window was closed.",
                        "Comando annullato: finestra chiusa.", ""))

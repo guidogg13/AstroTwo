@@ -229,6 +229,17 @@ esterno (`{"external_text": ...}`) e nel testo restano `<nome>`; un annidato
 ripiegato su `text` (senza voce) è testo esterno e nel testo resta `<nome del
 parametro>`. Gli errori di 14, 16 e 19 incorporati da 12 e 13 sono messaggi annidati (sprint 8d, fatto).
 
+**Contesto di livello (sprint 8f, 2026-10-25).** Un messaggio che nasce mentre si lavora su un livello
+(disegno di un catalogo o di un MOC, avvisi di epoca) porta nei `params` il parametro di contesto riservato
+`layer_context`: `{"id": "L2", "name": "Gaia DR3", "kind": "catalog"}` con `kind` tra `catalog`, `moc`, `image`,
+`hips`. Come `reason` **non si dichiara nelle voci** e vale per qualunque codice; `message_text` lo premette al testo,
+nella lingua richiesta: «Catalog layer L2 «Gaia DR3»: …» / «Livello catalogo L2 «Gaia DR3»: …» (etichette: *Catalog /
+MOC / Image / HiPS layer*, *Livello catalogo / MOC / immagine / HiPS*); con il nome vuoto si omette («MOC layer L2: …»).
+Il nome del livello (scelto dall'utente o letto da un file) è **testo esterno**: verso l'IA nel testo resta
+`<layer_name>` e nei `params` viaggia come `{"external_text": ...}` (`32` §3.7). Non va confuso con un parametro
+dichiarato di nome `layer` (identificativo `L<n>` citato nel testo, es. `LAYER_UNKNOWN`). `validate_params` (T18) rifiuta un
+`layer_context` malformato. Il testo originale `text` continua a cominciare con il nome del livello (ripiego, §3.7.2).
+
 **Posizione del catalogo (D40-5, decisa il 2026-10-24).** L'IA (livello 3)
 non può importare l'interfaccia (dipendenze solo verso il basso, regola d'oro
 n. 7): il catalogo sta nel modulo neutro `src/astrotwo/messages_catalog.py`,
@@ -675,6 +686,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-22 | Claude Code | **Parte 6, sprint 6c (35):** collegamento dell'assistente alla coda (§3.8): `assistant_executor()`, `submit_command` con il `CancelToken` della risposta, attese chiuse all'uscita; test in `tests/ui/test_assistant_queue.py`. Nessun cambiamento di comportamento per l'utente. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Sprint 7a del `44`:** l'area a destra ospita il pannello dell'assistente (`AiPanel`, larghezza iniziale 400 pt) al posto dello stato vuoto; preferenze Assistant come pulsante verso le impostazioni del `44` (§3.10), chiavi `assistant/…` accettate da `prefs.set`; Save session con il testo delle conversazioni del `35` quando la casella è attiva; uscita con una risposta in corso: stessa conferma dei comandi in corso, poi Stop; `HistoryPanel.select_number` per il clic sulle schede del `44`. T6 controlla anche le traduzioni di `ui/ai_panel.py`. Stato `approvato` invariato. |
 | 2026-10-23 | Claude Code | **Sprint 4g del 41:** `ui.set_tool` attiva davvero lo strumento nel visualizzatore (`SkyViewer.set_tool`); tre impostazioni nuove controllate da `prefs.set` e ricordate in `QSettings` per le opzioni della distanza (`tools/distance_unit`, `tools/distance_snap`, `tools/distance_box_size`, §3.10); 12 testi nuovi tradotti nel `.ts`/`.qm`. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 8f (rifinitura):** parametro di contesto riservato `layer_context` (§3.7.1) per i messaggi che nascono su un livello; nome del livello testo esterno. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3 decisa (sprint 8, solo specifiche):** messaggi dei moduli nella lingua dell'interfaccia (inglese/italiano) da un catalogo codice → testo con parametri (nuove §3.7.1 e §3.7.2), verso l'IA sempre inglese; i moduli 10–19 e il `05` passano da codice + testo a codice + `params` (testo originale conservato, vedi `05`); D40-1 superata; test T5 riscritto, nuovi T18–T20; aperta D40-5 (posizione del catalogo, raccomandato un modulo neutro). Nessun codice scritto. |
 | 2026-10-24 | Claude Code | **Sprint 8b (codice):** approvati i `.md` dello sprint 8; D40-5 decisa (catalogo in `src/astrotwo/messages_catalog.py`); nuova e decisa D40-6 (varianti per `reason`); §3.7.1 aggiornata e passaggio graduale di T18 (solo moduli convertiti). |
 | 2026-10-24 | Claude Code | **Sprint 8c (codice):** modulo 12 convertito a codice + `params` (voci del catalogo e test T18 aggiornati, `12` §10); aperta D40-7 (messaggi annidati, Gruppo 3). Nessun comportamento cambia. |

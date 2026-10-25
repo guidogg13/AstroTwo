@@ -166,3 +166,18 @@ def test_session_save_failure_is_a_message(qtbot, settings_path, cache, monkeypa
     finally:
         win.confirm = lambda title, text: True
         win.close()
+
+
+def test_module_errors_while_drawing_name_the_layer():
+    """Errore di un modulo mentre si disegna un catalogo o un MOC (sprint 8f): ``layer_context`` nei ``params``."""
+    from astrotwo.core.commands import ResultMessage
+    from astrotwo.ui.sky_viewer import with_layer
+
+    error = ValueError("corpo ignoto")  # → UI_COMMAND_FAILED con tipo e testo dell'eccezione
+    for kind, label in (("catalog", "Catalog layer"), ("moc", "MOC layer")):
+        layer = SimpleNamespace(id="L2", name="Gaia DR3", kind=kind)
+        message = with_layer(exception_message(error), layer)
+        assert isinstance(message, ResultMessage) and message.text == "Gaia DR3: ValueError: corpo ignoto"
+        assert message.params["layer_context"] == {"id": "L2", "name": "Gaia DR3", "kind": kind}
+        assert mc.validate_params(message.code, message.params) == []
+        assert mc.message_text(message.code, message.params, "en").startswith(f"{label} L2 «Gaia DR3»: ")

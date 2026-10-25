@@ -20,7 +20,14 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from astrotwo.messages_catalog import MAX_MESSAGE_DEPTH, external_params, message_params, message_text, uses_catalog
+from astrotwo.messages_catalog import (
+    LAYER_CONTEXT,
+    MAX_MESSAGE_DEPTH,
+    external_params,
+    message_params,
+    message_text,
+    uses_catalog,
+)
 from astrotwo.core.commands import (
     PHYSICAL_TYPES,
     Command,
@@ -622,6 +629,8 @@ class _Marker:
             nested = message_params(code, params)
 
             def one(key: str, value: object) -> object:
+                if key == LAYER_CONTEXT and isinstance(value, Mapping):  # il nome del livello è testo esterno
+                    return {**value, "name": self.text(value["name"])}
                 if key in external and isinstance(value, str):
                     return self.text(value)
                 if key in external and isinstance(value, (list, tuple)):

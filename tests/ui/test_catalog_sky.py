@@ -21,6 +21,7 @@ from astrotwo.core import coordinates_wcs as cw
 from astrotwo.core.catalogs import display_positions, load_table
 from astrotwo.core.commands import CATALOG_COLORS, catalog_positions, quantity_json, sky_json, time_text
 from astrotwo.core.images_fits import load_image
+from astrotwo.messages_catalog import message_text
 from tests.core.test_commands_catalog_sky import ROWS, write_catalog
 from tests.core.test_commands_image_base import header, write
 from tests.ui.test_main_window import make_window, settings_path, wait_idle  # noqa: F401 - fixture
@@ -244,6 +245,12 @@ def test_t28_epoch_warnings(qtbot, win, tmp_path):
     codes = {m.code: m.text for m in win.seen}
     assert "J2016" in codes["CATALOG_EPOCH_DIFFERS"] and "2009-06-18T00:00:00 UTC" in codes["CATALOG_EPOCH_DIFFERS"]
     assert "CATALOG_EPOCH_UNKNOWN" in codes
+    for message in win.seen:  # ogni avviso dice a quale livello si riferisce (sprint 8f)
+        if message.code.startswith("CATALOG_EPOCH"):
+            context = message.params["layer_context"]
+            assert context["kind"] == "catalog" and context["id"].startswith("L") and context["name"]
+            assert message_text(message.code, message.params, "en", text=message.text).startswith(
+                f"Catalog layer {context['id']} «{context['name']}»: ")
 
 
 def test_pixel_grid_draws_no_catalog(qtbot, win, tmp_path):
