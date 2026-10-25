@@ -146,6 +146,7 @@ ASTROTWO_FIELDS: dict[str, tuple[str, ...]] = {
                         "values.display.limits_source", "values.display.palette", "values.display.stretch"),
     "catalog.load_region": _CATALOG_ASTROTWO,
     "catalog.select": ("values.layer", "values.source.position.*", "values.source.position_reason",
+                       "values.source.position_reason_code",
                        "values.source.catalog.layer", "values.source.catalog.source", "values.source.catalog.origin",
                        "values.source.catalog.retrieved_at"),
     "catalog.set_style": ("values.layer", "values.style.*"),

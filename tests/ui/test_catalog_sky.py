@@ -8,6 +8,7 @@ Piattaforma ``offscreen`` con il renderer in memoria; valori attesi ricalcolati 
 ``ViewGeometry``, ``format_coordinates``) e con il 13 (``display_positions``).
 """
 
+import html
 import time
 
 import astropy.units as u
@@ -337,3 +338,120 @@ def test_gl_symbols_drawn_at_positions_and_red_at_night(qtbot):
     pixels = [shot.pixelColor(x, y) for x in range(0, shot.width(), 3) for y in range(0, shot.height(), 3)]
     assert all(c.green() <= 8 and c.blue() <= 8 for c in pixels)
     assert max(c.red() for c in pixels) > 120
+
+
+ITALIAN = ("epoca", "immagine", "colonne", "posizion", "riga", "dichiarat", "nessun", "indicata", "propagate ")
+
+
+def test_t28b_propagation_after_set_columns_replaces_the_warning(qtbot, win, tmp_path):
+    """Sprint 9 (E7-a): immagine datata, catalogo J2016.0 → CATALOG_EPOCH_DIFFERS; dopo catalog.set_columns con il
+    moto proprio la nota CATALOG_EPOCH_PROPAGATED dice che le posizioni sono propagate all'epoca dell'immagine."""
+    image = write(tmp_path / "img.fits", header(**{"RADESYS": "ICRS", "MJD-OBS": 55000.0}))
+    open_file(qtbot, win, "image.open", image)
+    rows = (("A", 150.01, 2.005, 300.0, -200.0), ("B", 149.99, 1.995, -150.0, 80.0))
+    open_file(qtbot, win, "catalog.open_file", write_catalog(tmp_path / "c.xml", rows))
+    wait_points(qtbot, win, 2)
+    assert [m.code for m in win.seen if m.code.startswith("CATALOG_EPOCH")] == ["CATALOG_EPOCH_DIFFERS"]
+    for _ in range(2):  # una sola nota per livello e immagine, anche ripetendo il comando
+        win.submit("catalog.set_columns", {"layer": "L2", "lon": "RA_ICRS", "lat": "DE_ICRS", "frame": "icrs",
+                                           "pm_ra": "pmRA", "pm_dec": "pmDE", "pm_ra_includes_cosdec": True})
+        wait_points(qtbot, win, 2)
+    epochs = [m for m in win.seen if m.code.startswith("CATALOG_EPOCH")]
+    assert [m.code for m in epochs] == ["CATALOG_EPOCH_DIFFERS", "CATALOG_EPOCH_PROPAGATED"]
+    note = epochs[-1]
+    layer = win.session.workspace.state.layer("L2")
+    shown = display_positions(layer.data, load_image(image), pm_ra="pmRA", pm_dec="pmDE", pm_ra_includes_cosdec=True)
+    assert note.params["image_epoch"] == time_text(shown.epoch) == "2009-06-18T00:00:00 UTC"
+    assert (note.params["drawable"], note.params["rows"]) == (2, 2)
+    assert message_text(note.code, note.params, "en", text=note.text) == (
+        "Catalog layer L2 «stars»: Positions propagated with the proper motion to the epoch of the image, "
+        "2009-06-18T00:00:00 UTC (2 of 2 rows can be drawn).")
+    ref, code, text, error = win.messages.messages[-1]
+    assert code == "CATALOG_EPOCH_PROPAGATED" and not error and "not propagated" not in text
+    points = win.sky.points_for(layer)
+    assert points.propagated and points.warnings == () and points.epoch_origin == "image"
+    win.submit("catalog.select", {"layer": "L2", "rows": [0]})
+    wait_idle(qtbot, win)
+    card = win.sky.card.text()
+    assert "⚠" not in card and "drawn at epoch 2009-06-18T00:00:00 UTC (proper motion; epoch of the image" in card
+
+
+def test_t28c_source_card_and_labels_in_the_interface_language(qtbot, win, tmp_path, monkeypatch):
+    """Sprint 9 (E7-b): con l'interfaccia in inglese nessuna parola italiana nella scheda della sorgente (riga
+    propagata, riga senza posizione) e nel pannello dei livelli; in italiano le stesse righe dal catalogo."""
+    from astrotwo.ui import message_view
+
+    monkeypatch.setattr(message_view, "_language", "en")
+    image = write(tmp_path / "img.fits", header(**{"RADESYS": "ICRS", "MJD-OBS": 55000.0}))
+    open_file(qtbot, win, "image.open", image)
+    open_file(qtbot, win, "catalog.open_file", write_catalog(tmp_path / "c.xml", (("A", 150.01, 2.005, 30.0, 2.0),)))
+    win.submit("catalog.set_columns", {"layer": "L2", "lon": "RA_ICRS", "lat": "DE_ICRS", "frame": "icrs",
+                                       "pm_ra": "pmRA", "pm_dec": "pmDE", "pm_ra_includes_cosdec": True})
+    wait_points(qtbot, win, 1)
+    shown = {}
+    for lang in ("en", "it"):
+        message_view.set_language(lang)
+        win.submit("catalog.select", {"layer": "L2", "rows": [0]})
+        wait_idle(qtbot, win)
+        shown[lang] = html.unescape(win.sky.card.text())
+    assert not [w for w in ITALIAN if w in shown["en"].lower()], shown["en"]
+    assert "epoca dell'immagine (MJD-OBS/DATE-OBS del WCS, D10-2)" in shown["it"]
+    for kind, lines in win.sky.layer_rows().items() if hasattr(win.sky, "layer_rows") else ():
+        assert not [w for w in ITALIAN if w in " ".join(lines).lower()], kind
+    # riga senza posizione: colonne non confermate (catalogo senza UCD di posizione)
+    message_view.set_language("en")
+    plain = tmp_path / "plain.xml"
+    text = (tmp_path / "c.xml").read_text()
+    text = text.replace('ucd="pos.eq.ra;meta.main"', "").replace('ucd="pos.eq.dec;meta.main"', "")
+    text = text.replace('ucd="pos.pm;pos.eq.ra"', "").replace('ucd="pos.pm;pos.eq.dec"', "")  # altrimenti il 13 le prende come posizioni (D13-22)
+    plain.write_text(text.replace('name="RA_ICRS"', 'name="X1"').replace('name="DE_ICRS"', 'name="X2"'))
+    open_file(qtbot, win, "catalog.open_file", str(plain))
+    win.submit("catalog.select", {"layer": "L3", "rows": [0]})
+    wait_idle(qtbot, win)
+    source = win.session.history.entries[-1].result.values["source"]
+    assert source["position"] is None and source["position_reason_code"] == "columns_not_confirmed"
+    card = html.unescape(win.sky.card.text())
+    assert "no position: position columns not confirmed (catalog.set_columns)" in card
+    assert not [w for w in ITALIAN if w in card.lower()], card
+
+
+def test_t28c_no_italian_literals_shown_by_the_interface():
+    """Sprint 9 (E7-b): scansione delle stringhe dei moduli dell'interfaccia. Una stringa con parole italiane è
+    ammessa solo se è un docstring, il testo di ripiego di un messaggio con codice (``ResultMessage``,
+    ``ValueProblem``, errori dei moduli, ``_report``/``_unavailable``), un testo passato a ``tr`` (tradotto da Qt) o
+    una riga di log diagnostico; ogni altro testo mostrato va nel catalogo dei messaggi o in ``tr``."""
+    import ast
+    import pathlib
+    import re
+
+    import astrotwo.ui
+
+    words = re.compile(r"\b(della|dell'|delle|degli|nella|non |colonn[ae]|riga|righe|immagin[ei]|epoca|"
+                       r"posizion[ei]|nessun|disegnat[aeio]|catalogo|livello|errore|avviso|valore|sorgente|"
+                       r"propagat[aeio])\b", re.I)
+    # Testi di ripiego dei messaggi con codice, errori di programmazione (ValueError) e log diagnostico.
+    fallback_calls = {"ResultMessage", "ValueProblem", "HiPSError", "CommandError", "_report", "_unavailable",
+                      "with_layer", "ValueError", "RuntimeError", "debug_input", "print"}
+    # Valori di sessione scritti dal 05 e non mostrati (motivo dell'epoca della vista iniziale).
+    allowed = {"epoca delle posizioni non nota (non assunta)"}
+    found = []
+    for path in sorted(pathlib.Path(astrotwo.ui.__file__).parent.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        skip = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                skip.add(id(node.value))  # docstring e stringhe isolate
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+                if name in fallback_calls or name in ("tr", "translate"):
+                    for arg in [*node.args, *(k.value for k in node.keywords)]:
+                        skip.update(id(n) for n in ast.walk(arg))
+            if isinstance(node, ast.Assign) and any(getattr(t, "id", "").startswith("_VERTEX") or
+                                                    getattr(t, "id", "").startswith("_FRAGMENT") or
+                                                    "SHADER" in getattr(t, "id", "") for t in node.targets):
+                skip.update(id(n) for n in ast.walk(node.value))  # programmi GLSL con commenti
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in skip
+                    and node.value not in allowed and words.search(node.value)):
+                found.append(f"{path.name}:{node.lineno}: {node.value[:80]!r}")
+    assert found == [], "\n".join(found)

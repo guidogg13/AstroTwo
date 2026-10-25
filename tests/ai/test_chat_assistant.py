@@ -51,6 +51,7 @@ from tests.ai.fake_providers import (
 )
 from tests.core.test_commands import PIXEL_MARK, region_command
 from tests.core.test_commands_catalog_sky import write_catalog
+from tests.core.test_coordinates_wcs import simbad_table
 
 TODAY = "2026-10-22"
 SECRET = "sk-finta-0123456789"
@@ -340,12 +341,34 @@ def test_t7_system_rules(session, tools, kind):
     body = answer.requests[0].body
     sent = body["system"] if kind == "anthropic" else body["messages"][0]["content"]
     assert sent == system_rules("Italian", TODAY)
-    assert SYSTEM_RULES_VERSION == 1 and RULE_IDS == tuple(f"R{k}" for k in range(1, 10))
+    assert SYSTEM_RULES_VERSION == 2 and RULE_IDS == tuple(f"R{k}" for k in range(1, 11))
     for rule in RULE_IDS:
         assert f"\n{rule}. " in sent
-    assert sent.endswith("R9. Answer in Italian. Be concise. Today is 2026-10-22 (UTC).")
+    assert "\nR9. Answer in Italian. Be concise. Today is 2026-10-22 (UTC).\n" in sent
     assert sent.replace("Italian", "{language}").replace(TODAY, "{date}") == SYSTEM_RULES
-    assert assistant.export_conversations()[0]["system_rules_version"] == 1
+    assert assistant.export_conversations()[0]["system_rules_version"] == 2
+
+
+def test_t7_planets_not_available(session, tools, monkeypatch):
+    """Sprint 9 (H-c): "dov'è Marte" → SIMBAD non lo trova; R10 dice al modello che pianeti, Luna e Sole non sono
+    disponibili nella v1 e di non proporre azioni impossibili. Nessuno strumento dà effemeridi."""
+    import astrotwo.core.coordinates_wcs as cw
+
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (simbad_table(rows=0), "https://simbad.invalid"))
+    script = [calls_turn(tool_call("c1", "coords__resolve_name", name="Mars")),
+              text_turn("Planet positions are not available in this version of AstroTwo.")]
+    assistant, adapter, rec = make(session, tools, script, language="English")
+    answer = ask(assistant, "Where is Mars?")
+    assert answer.error is None and len(adapter.requests) == 2
+    r10 = ("R10. Positions of the planets, the Moon and the Sun (ephemerides) are not\n    available in this version "
+           "of AstroTwo")
+    for messages, offered in adapter.requests:
+        system, = [m for m in messages if isinstance(m, SystemMessage)]
+        assert r10 in system.text and "Never offer an\n    action that the tools you have cannot do" in system.text
+        names = [t.name for t in offered]
+        assert not [n for n in names if any(w in n for w in ("planet", "ephem", "body", "moon", "sun"))], names
+    assert last_result(adapter.requests[1][0])["error"]["code"] == "NAME_NOT_FOUND"
+    assert [e.command.name for e in ai_entries(session)] == ["coords.resolve_name"]  # nessun comando di vista
 
 
 def test_t8_prompt_injection(session, tools):

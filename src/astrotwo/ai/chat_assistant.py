@@ -102,8 +102,8 @@ __all__ = [
 # Regole di sistema (§3.4): testo fisso, in inglese, uguale per tutti i provider
 # --------------------------------------------------------------------------
 
-SYSTEM_RULES_VERSION = 1
-RULE_IDS = ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9")
+SYSTEM_RULES_VERSION = 2  # 2: R10 (pianeti, Luna e Sole non disponibili nella v1, sprint 9)
+RULE_IDS = ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10")
 SYSTEM_RULES = """\
 You are the assistant inside AstroTwo, a desktop application for professional
 astronomers. You help the user by choosing and running AstroTwo commands
@@ -135,7 +135,12 @@ R7. Use only the layers that exist (call layer__list when unsure). Epochs
     and frames are those stated in the results: never assume an epoch.
 R8. If a tool returns an error, read the error code and message; correct
     the parameters if you can, otherwise explain the error to the user.
-R9. Answer in {language}. Be concise. Today is {date} (UTC)."""
+R9. Answer in {language}. Be concise. Today is {date} (UTC).
+R10. Positions of the planets, the Moon and the Sun (ephemerides) are not
+    available in this version of AstroTwo: no tool gives or shows them. If
+    the user asks where one of them is, say so plainly. Never offer an
+    action that the tools you have cannot do (for example centring the view
+    on a planet)."""
 
 #: Messaggio di sistema dell'ultima richiesta dopo il limite di chiamate (§3.3), in inglese come le regole.
 TOOL_LIMIT_MESSAGE = ("Limit of {limit} commands for this answer reached: answer with the results you have. "

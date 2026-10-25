@@ -338,6 +338,16 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
     (una volta per livello e base) e nella scheda della sorgente, con le due epoche in ISO 8601 o come epoca
     giuliana (`J2016.0`) e la scala; epoca del catalogo non dichiarata con un'immagine datata →
     `CATALOG_EPOCH_UNKNOWN`. Con lo sfondo HiPS (epoca non nota) nessun avviso.
+    **Dallo sprint 9 (E7-a, 2026-10-25):** quando le posizioni del livello sono propagate (colonne di moto
+    proprio scelte con `catalog.set_columns`) all'epoca dichiarata dell'immagine base, il pannello Messaggi
+    riceve la nota `CATALOG_EPOCH_PROPAGATED` (una volta per livello e base, non è un avviso e non compare con
+    il ⚠ nella scheda) con l'epoca dell'immagine e il numero di righe disegnabili su quelle della tabella: così
+    dopo `catalog.set_columns` il pannello non resta con il solo `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN`
+    di prima, che resta nel registro com'era (era vero quando fu scritto).
+  - **Testi della scheda della sorgente (sprint 9, E7-b):** le righe della scheda vengono tutte dalla lingua
+    dell'interfaccia: la fonte dell'epoca di visualizzazione da `epoch_origin` del 13 con la voce
+    `DISPLAY_EPOCH_SOURCE`, il motivo della posizione mancante da `position_reason_code` del `05` con la voce
+    `SOURCE_NO_POSITION`; i testi italiani della storia della tabella e del risultato restano dove sono.
   - **Clic:** un clic (pressione e rilascio a meno di 3 pixel logici) sceglie il simbolo più vicino entro
     **metà della sua dimensione** (il simbolo disegnato) o, se più grande, entro 4 pixel logici (scelta minore
     5), tra i cataloghi visibili, a pari distanza il livello più in alto; ne nasce `catalog.select`
@@ -865,12 +875,16 @@ ai `params` di questi errori e degli avvisi di epoca. Un'eccezione senza codice 
 | `VIEW_NO_WCS` | `hips`, `catalogs`, `moc`, `distance` | — |
 | `CATALOG_EPOCH_UNKNOWN` | — | `image_epoch` (+ `layer_context`) |
 | `CATALOG_EPOCH_DIFFERS` | — | `catalog_epoch`, `image_epoch` (+ `layer_context`) |
+| `CATALOG_EPOCH_PROPAGATED` | — | `image_epoch`, `drawable` (integer), `rows` (integer) (+ `layer_context`); nota, sprint 9 |
+| `DISPLAY_EPOCH_SOURCE` | `image`, `image_undeclared`, `image_no_wcs`, `no_image`, `user` | — ; solo testo della scheda della sorgente, sprint 9 |
+| `SOURCE_NO_POSITION` | `columns_not_confirmed`, `row_invalid` | — ; solo testo della scheda della sorgente, sprint 9 |
 | `HIPS_DISPLAY_UNKNOWN` (condiviso con 12) | `no_limits`, `reopen` | — / `hips_id` |
 | `GL_UNAVAILABLE` | `version` | `found`, `required` |
 | | `program`, `points_program`, `moc_program` | `log` (ext) |
 | `EXPORT_PATH_INVALID` | `not_png`, `is_directory` | `path` (ext) |
 | | `folder_unwritable` | `folder` (ext) |
 | `EXPORT_FAILED` | — | `path` (ext), `detail` (ext) |
+| `EXPORT_FAILED` | `offscreen` | `path` (ext); disegno fuori schermo non disponibile, sprint 9 |
 | `VIEW_UNDEFINED` (condiviso con 05) | `export` | — |
 | `OUT_OF_SKY` (condiviso con 05) | `distance_point`, `point` | — |
 | `WCS_INVALID` (condiviso con 10 e 05) | `absent` | — |
@@ -921,6 +935,8 @@ mai abbassare in silenzio".
 | T26 | Cataloghi disegnati (sprint 4e) | catalogo sintetico su base `TAN`, poi sull'immagine FITS base; zoom e spostamento | posizioni disegnate entro 1 pixel da `sky_to_pixel` del 10 composto con `ViewGeometry`; forma, colore e dimensione dallo stile del livello (`set_plot_rules`); stile iniziale nel risultato del caricamento e nella riesecuzione | ricalcolo con il 10 e il 13 |
 | T27 | Clic e scheda (sprint 4e) | clic a 2 pixel logici da una sorgente, nel vuoto, Esc | `catalog.select` della riga giusta con `requested_by` = `mouse`; scheda con nome da UCD `meta.id;meta.main`, coordinate uguali a `format_coordinates` del 10, epoca del catalogo e sorgente; clic nel vuoto → selezione vuota; Esc chiude | test |
 | T28 | Epoche diverse (sprint 4e) | catalogo con epoca `J2016.0` su un'immagine con `MJD-OBS`; catalogo senza epoca; sfondo HiPS | `CATALOG_EPOCH_DIFFERS` con le due epoche; `CATALOG_EPOCH_UNKNOWN`; nessun avviso su HiPS | test |
+| T28b | Epoche dopo `catalog.set_columns` (sprint 9, E7-a) | come T28, poi `catalog.set_columns` con pmRA/pmDE/Plx | nota `CATALOG_EPOCH_PROPAGATED` con l'epoca dell'immagine nel pannello Messaggi, una volta sola; nessun nuovo `CATALOG_EPOCH_DIFFERS`; scheda senza ⚠ | test |
+| T28c | Lingua della scheda e delle etichette (sprint 9, E7-b) | interfaccia in inglese: scheda di una riga propagata, di una riga senza posizione, testi del pannello dei livelli; scansione delle stringhe dei moduli dell'interfaccia | nessuna parola italiana nelle righe mostrate; in italiano le stesse righe dal catalogo; la scansione trova solo testi di ripiego dei messaggi con codice, docstring e log | test |
 | T29 | Epoca nella barra (correzione del 2026-10-21) | mouse su un'immagine con `MJD-OBS` | `epoch AAAA-MM-GGThh:mm:ss UTC` (ISO 8601 con scala), nessun "JD" nei testi dell'interfaccia | test |
 | T31 | MOC disegnato (sprint 4f) | MOC da cerchio all'ordine 8 su base `TAN`, poi sull'immagine FITS base; MOC all'ordine 12 su gran parte del cielo; zoom | vertici dei triangoli e del perimetro entro 1 pixel da `sky_to_pixel` del 10 sui punti di `healpix_grid` del 16; solo i lati di `boundary`; ordine ridotto finché il 16 accetta, "per eccesso" nel pannello; colore e `fill` dallo stile del `05` | ricalcolo con 10 e 16 (`tests/ui/test_layers_moc.py`) |
 | T32 | Sfondo sotto l'immagine (sprint 4f) | immagine FITS con WCS e survey a colori simulato; opacità dell'immagine 0,5; spostare lo sfondo sopra | tile richiesti anche con l'immagine base; texture dello sfondo e dell'immagine nell'ordine dei livelli con le opacità scelte; nessun nuovo tile per opacità e visibilità | ispezione del renderer |
@@ -1035,6 +1051,29 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
   funzioni HiPS pubbliche di `reproject` rispetto al campionamento del 12
   (12, P6); licenze di PySide6/Qt e di pytest-qt.
 
+- **D41-9 — "Vai a" fuori dalla proiezione dell'immagine base (B3): APERTA il 2026-10-25 (Gruppo 3, sprint 9).**
+  Nella prova del proprietario "Go to" `85.25 -2.46` con HorseHead.fits come base ha dato `VIEW_PARAMETERS_INVALID`
+  (`center_outside_projection`). **Causa riprodotta** (test `test_b3_go_to_with_image_base_and_galactic_display`):
+  "Vai a" legge le coppie di numeri nel frame delle coordinate mostrate (`05`, `view.set_coordinate_display`); con il
+  galattico il punto (l = 85.25°, b = −2.46°) è a circa 119° dal punto di tangenza della `TAN` dell'immagine, che
+  non lo rappresenta; il ricentramento della base (§3.2, correzione del 2026-10-19) vale **solo senza immagine**.
+  Lo stesso errore viene da qualsiasi punto a più di 90° dall'immagine, anche in ICRS. Dopo il riavvio il frame
+  mostrato torna ICRS, per questo non si è ripresentato (ipotesi coerente, non verificabile dalla cronologia).
+  Opzioni: **(a)** errore più chiaro: ragione propria (`center_outside_image_base`) con il frame in cui la coppia è
+  stata letta e il suggerimento (controllare il frame delle coordinate, o togliere l'immagine dalla base);
+  **(b)** (a) più il frame scritto nel campo "Vai a" (testo d'aiuto «Go to (Galactic)…»), così l'utente sa come
+  vengono lette le coordinate; **(c)** passare da soli a una base creata centrata sul punto, con l'immagine che resta
+  livello ma non si vede finché non si torna sul suo campo (cambia la regola «con un'immagine aperta la base è il suo
+  WCS» e serve il disegno di un'immagine su una base non sua). Raccomandazione: **(b)**; (c) è una funzione nuova.
+- **D41-10 — Campi larghi con migliaia di simboli (E5): APERTA il 2026-10-25 (Gruppo 3, sprint 9).** Con un campo di
+  circa 4.6° SIMBAD dà migliaia di oggetti e il cielo diventa illeggibile. Opzioni: **(a)** simboli più piccoli
+  oltre una densità (es. più di N simboli per 100 × 100 pixel logici → dimensione 3 pixel), scritta nel pannello dei
+  livelli; **(b)** nota `CATALOG_DENSE` nel pannello Messaggi con il numero di simboli disegnati e i suggerimenti
+  (raggio minore, regole di stile per magnitudine con `catalog.set_style`, righe massime); **(c)** default più basso
+  delle righe massime nella finestra «Catalogo nel campo» (oggi 100 000, `DEFAULT_MAX_ROWS` del 14), es. 5 000, con il
+  troncamento già dichiarato dal 13 (`PARTIAL_CATALOG`/`ROW_LIMIT_EXCEEDED`); l'utente può alzarlo; **(d)** (b) + (c).
+  Raccomandazione: **(d)**: nessun cambiamento nascosto di ciò che si disegna, tutto dichiarato; (a) cambia lo stile
+  scelto dall'utente senza un comando.
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -1060,3 +1099,5 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-24 | Claude Code | **Codice dello sprint 4h** ("FASE: CODICE – interfaccia v1", parte 4, ultimo sprint del 41): `ui/export_view.py` (testi, crediti, scrittura atomica del PNG), `view.export_png` collegato in `main_window.py`, `render_offscreen` nell'interfaccia di disegno; cambio di base in un passo in `sky_viewer.py` (`_stage`, `_try_commit`, `_base_ready`); test `tests/ui/test_export_png.py` (T14, più un test `gl`), `tests/ui/test_base_switch.py` (T17), `tests/ui/test_perf.py` (TP1–TP7, `perf`); risultati misurati nel §3.15 (P1 e P5 non raggiunti sul Mac minimo). 831 test di default. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1 con la tabella dei messaggi del visualizzatore (`VIEW_NO_WCS`, `CATALOG_EPOCH_*`, `GL_UNAVAILABLE`, `EXPORT_*`, sotto-voci condivise); gli errori dei moduli incontrati mentre si disegna si mostrano con il loro codice e i loro `params`. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8f:** i messaggi di disegno di cataloghi e MOC e `CATALOG_EPOCH_*` portano `layer_context` (`40` §3.7.1); tabella di §10.1 aggiornata. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9 (E7-a, E7-b):** nota `CATALOG_EPOCH_PROPAGATED` nel pannello Messaggi dopo la propagazione all'epoca dell'immagine (§3.8); scheda della sorgente tutta nella lingua dell'interfaccia (`DISPLAY_EPOCH_SOURCE`, `SOURCE_NO_POSITION`); tabella di §10.1 e test T28b, T28c. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9:** aperte **D41-9** (B3, "Vai a" fuori dalla proiezione dell'immagine base: causa riprodotta, opzioni) e **D41-10** (E5, campi larghi con migliaia di simboli: opzioni), §13. Stato `approvato` invariato. |

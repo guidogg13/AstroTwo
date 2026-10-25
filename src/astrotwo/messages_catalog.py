@@ -3113,7 +3113,9 @@ _add("EXPORT_PATH_INVALID", "The path of the PNG is not valid.", "Il percorso de
                         "{folder}: cartella inesistente o non scrivibile.", "folder!"),
      is_directory=("{path} is a folder.", "{path} è una cartella.", "path!"))
 _add("EXPORT_FAILED", "{path}: the PNG was not written: {detail}", "{path}: il PNG non è stato scritto: {detail}",
-     "path! detail!")
+     "path! detail!",
+     offscreen=("{path}: the PNG was not written: off-screen drawing is not available.",
+                "{path}: il PNG non è stato scritto: disegno fuori schermo non disponibile.", "path!"))
 _add("GL_UNAVAILABLE", "The sky viewer is not available.", "Il visualizzatore del cielo non è disponibile.",
      version=("OpenGL {found}: OpenGL {required} core profile is required; the viewer is not available.",
               "OpenGL {found}: serve OpenGL {required} core profile; visualizzatore non disponibile.",
@@ -3142,6 +3144,25 @@ _add("CATALOG_EPOCH_DIFFERS",
      "table are not propagated (proper motion with catalog.set_columns).",
      "Catalogo all'epoca {catalog_epoch}, immagine all'epoca {image_epoch}; posizioni della tabella non "
      "propagate (moto proprio con catalog.set_columns).", "catalog_epoch image_epoch")
+_add("CATALOG_EPOCH_PROPAGATED",
+     "Positions propagated with the proper motion to the epoch of the image, {image_epoch} ({drawable} of {rows} "
+     "rows can be drawn).",
+     "Posizioni propagate con il moto proprio all'epoca dell'immagine, {image_epoch} (disegnabili {drawable} righe "
+     "su {rows}).", "image_epoch drawable:int rows:int")
+_add("DISPLAY_EPOCH_SOURCE", "source of the display epoch",
+     "fonte dell'epoca di visualizzazione",
+     image=("epoch of the image (MJD-OBS/DATE-OBS of the WCS, D10-2)",
+            "epoca dell'immagine (MJD-OBS/DATE-OBS del WCS, D10-2)"),
+     image_undeclared=("J2000 (epoch of the image not declared, D10-2)",
+                       "J2000 (epoca dell'immagine non dichiarata, D10-2)"),
+     image_no_wcs=("J2000 (image without WCS or declared epoch, D10-2)",
+                   "J2000 (immagine senza WCS né epoca dichiarata, D10-2)"),
+     no_image=("J2000 (no image, D10-2)", "J2000 (nessuna immagine, D10-2)"),
+     user=("given by the user", "indicata dall'utente"))
+_add("SOURCE_NO_POSITION", "no position", "nessuna posizione",
+     columns_not_confirmed=("position columns not confirmed (catalog.set_columns)",
+                            "colonne di posizione non confermate (catalog.set_columns)"),
+     row_invalid=("position missing or not valid in this row", "posizione mancante o non valida in questa riga"))
 _extend("COMMAND_CANCELLED",
         window_closed=("The command was cancelled: the window was closed.",
                        "Comando annullato: finestra chiusa.", ""))

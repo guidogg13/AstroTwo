@@ -543,9 +543,11 @@ def confirm_position_columns(table: CatalogTable, lon: str, lat: str, frame: str
             notes.append(ModuleWarning("UNIT_DECLARED", f"colonna {name!r}: unità {u.Unit(unit)} dichiarata dall'utente",
                                        {"column": name, "unit": str(u.Unit(unit))}))
     # D41-6: stesse colonne e stesso sistema dei metadati (COOSYS, utype MANGO, ECSV) → epoca ed equinozio
-    # dichiarati conservati; altrimenti nessuna epoca (mai assunta).
+    # dichiarati conservati, anche a una conferma ripetuta che li aveva già conservati (sprint 9); altrimenti nessuna
+    # epoca (mai assunta).
     old = table.positions
-    same = old is not None and old.source == "ucd" and (old.lon, old.lat, old.frame) == (lon, lat, frame)
+    from_metadata = old is not None and (old.source == "ucd" or (old.source == "confirmed" and old.epoch is not None))
+    same = from_metadata and (old.lon, old.lat, old.frame) == (lon, lat, frame)
     epoch = old.epoch if same else None
     kept_equinox = old.equinox if same and equinox is None else (None if equinox is None else str(equinox))
     positions = PositionColumns(lon=lon, lat=lat, frame=frame, equinox=kept_equinox, epoch=epoch,
@@ -2053,26 +2055,28 @@ class DisplayPositions:
     shift_max: u.Quantity | None
     coords: SkyFrame | None  # righe disegnabili (ordine di numpy.flatnonzero(drawable)), all'epoca di visualizzazione
     notes: tuple[str, ...]
+    epoch_origin: str = ""  # identificativo della fonte dell'epoca (§7, sprint 9): image, image_undeclared, … , user
 
 
 _J2000 = "J2000.0"
 
 
-def _display_epoch(image_or_epoch) -> tuple[object, str]:
-    """Epoca di visualizzazione e sua fonte (D10-2): epoca dell'immagine se nota, altrimenti J2000; o dell'utente."""
+def _display_epoch(image_or_epoch) -> tuple[object, str, str]:
+    """Epoca di visualizzazione, sua fonte e identificativo della fonte (D10-2, §7): epoca dell'immagine se nota,
+    altrimenti J2000; o dell'utente."""
     if image_or_epoch is None:
-        return Time(_J2000, scale="tt"), "J2000 (nessuna immagine, D10-2)"
+        return Time(_J2000, scale="tt"), "J2000 (nessuna immagine, D10-2)", "no_image"
     if isinstance(image_or_epoch, (Time, str, int, float)) and not isinstance(image_or_epoch, bool):
-        return image_or_epoch, "indicata dall'utente"
+        return image_or_epoch, "indicata dall'utente", "user"
     solution = image_or_epoch
     if not hasattr(solution, "image_epoch") and hasattr(solution, "wcs"):  # immagine (modulo 11) con il suo WCS
         solution = solution.wcs
         if solution is None:
-            return Time(_J2000, scale="tt"), "J2000 (immagine senza WCS né epoca dichiarata, D10-2)"
+            return Time(_J2000, scale="tt"), "J2000 (immagine senza WCS né epoca dichiarata, D10-2)", "image_no_wcs"
     if hasattr(solution, "image_epoch"):
         if solution.image_epoch is None:
-            return Time(_J2000, scale="tt"), "J2000 (epoca dell'immagine non dichiarata, D10-2)"
-        return solution.image_epoch, "epoca dell'immagine (MJD-OBS/DATE-OBS del WCS, D10-2)"
+            return Time(_J2000, scale="tt"), "J2000 (epoca dell'immagine non dichiarata, D10-2)", "image_undeclared"
+        return solution.image_epoch, "epoca dell'immagine (MJD-OBS/DATE-OBS del WCS, D10-2)", "image"
     raise CatalogsError("EPOCH_INVALID", f"display_positions: image_or_epoch di tipo {type(image_or_epoch).__name__} "
                         "non riconosciuto (immagine con WCS, WCS del 10, epoca o None): nessuna epoca assunta",
                         params={"reason": "display_type", "type": type(image_or_epoch).__name__})
@@ -2081,7 +2085,7 @@ def _display_epoch(image_or_epoch) -> tuple[object, str]:
 def display_positions(table: CatalogTable, image_or_epoch, *, pm_ra: str, pm_dec: str, pm_ra_includes_cosdec,
                       parallax=None, radial_velocity=None, source_epoch=None) -> DisplayPositions:
     """Posizioni all'epoca di visualizzazione (D10-2, decisione del 2026-10-14) con il calcolo di ``propagate``."""
-    epoch, epoch_source = _display_epoch(image_or_epoch)
+    epoch, epoch_source, epoch_origin = _display_epoch(image_or_epoch)
     moved = propagate(table, epoch, pm_ra=pm_ra, pm_dec=pm_dec, pm_ra_includes_cosdec=pm_ra_includes_cosdec,
                       parallax=parallax, radial_velocity=radial_velocity, source_epoch=source_epoch)
     pos = table.positions
@@ -2108,7 +2112,7 @@ def display_positions(table: CatalogTable, image_or_epoch, *, pm_ra: str, pm_dec
     result = dataclasses.replace(moved.table, history=moved.table.history + (step,))
     return DisplayPositions(
         table=result, lon=lon, lat=lat, frame=pos.frame, drawable=drawable, mode=mode, counts=moved.counts,
-        epoch=moved.target_epoch, epoch_source=epoch_source, source_epoch=moved.source_epoch,
+        epoch=moved.target_epoch, epoch_source=epoch_source, epoch_origin=epoch_origin, source_epoch=moved.source_epoch,
         pm_ra_includes_cosdec=moved.pm_ra_includes_cosdec, shift=shift,
         shift_mean=np.mean(shift[drawable]) if any_drawable else None,
         shift_max=np.max(shift[drawable]) if any_drawable else None, coords=coords,

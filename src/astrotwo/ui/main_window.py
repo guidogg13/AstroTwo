@@ -2125,7 +2125,10 @@ class MainWindow(QMainWindow):
         try:
             image = self.sky.renderer.render_offscreen()
             if image is None or image.isNull():
-                raise RuntimeError("disegno fuori schermo non disponibile")
+                self.messages.add(None, ResultMessage("EXPORT_FAILED", f"{values['path']}: disegno fuori schermo non "
+                                                      "disponibile", {"reason": "offscreen", "path": values["path"]}),
+                                  error=True)
+                return
             export_view.write_png(image, Path(values["path"]), values["metadata"], values["credit_line"])
         except Exception as exc:  # noqa: BLE001 - disco pieno, permessi, GPU: un messaggio, mai un file a metà
             self.messages.add(None, ResultMessage("EXPORT_FAILED", f"{values['path']}: {exc}",

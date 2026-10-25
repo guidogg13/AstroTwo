@@ -443,6 +443,12 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 - **D32-1 — Come l'assistente trova l'identificativo di un catalogo VizieR: DECISA il 2026-10-23** dal proprietario: **(c)** gli identificativi del gruppo fisso nella descrizione del parametro `catalog` (§3.4 punto 2, `05`) e **(b)** `CATALOG_UNKNOWN` con le tabelle che cominciano con l'identificativo scritto (`13` §7), subito. **(a)**, un comando di ricerca nell'elenco dei cataloghi (nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13), **dopo la v1**: registrata come `D32-2` (Gruppo 3, rinviata) e come proposta nella panoramica.
 - **D32-2 — Comando di ricerca nell'elenco dei cataloghi per l'assistente: RINVIATA a dopo la v1** (aperta e rinviata il 2026-10-23, Gruppo 3). Nuovo comando di sola lettura del `05` sull'albero delle collezioni del 13 (`collection_tree`: identificativo e titolo, ricerca nel titolo), poi esposto qui con una nuova versione dell'elenco di §3.2 (richiede la decisione del proprietario sulla scheda del comando).
 
+- **D32-3 — Risultati più leggeri verso l'IA per i provider con limiti bassi di token: RINVIATA a dopo la v1**
+  (registrata il 2026-10-25 su richiesta del proprietario, sprint 9, Gruppo 3; non implementata). Nella prova con
+  provider a limiti bassi (es. Groq gratuito, circa 8 000 token al minuto) i risultati dei cataloghi consegnati al
+  modello pesano troppo. Idea: per i cataloghi solo le colonne principali (identificativo, posizione, magnitudini
+  principali, con il numero di colonne omesse dichiarato e `catalog__rows` per chiedere le altre), eventualmente
+  come opzione del profilo IA. Da specificare qui e nel `35` prima del codice.
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -460,3 +466,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** nel risultato ridotto, `warnings` ed `error` portano codice, `params` e testo inglese del catalogo (`40` §3.7.1); testo esterno invariato. Nessun codice scritto. |
 | 2026-10-24 | Claude Code | **D40-7 (sprint 8c-bis):** `warnings` ed `error` rendono anche i messaggi annidati (tipo `message`) in inglese, con i parametri esterni marcati come testo esterno (§3.7). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `ToolRegistryError` porta `params`; gli errori della chiamata vanno al modello con il testo inglese del catalogo e i parametri esterni marcati; nuova §10.1 con la tabella scritta prima del codice. Test `tests/ai/test_messages_assistant.py`. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9:** registrata **D32-3** (risultati più leggeri verso l'IA per i provider con limiti bassi di token), rinviata a dopo la v1, §13. Stato `approvato` invariato. |

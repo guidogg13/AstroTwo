@@ -1475,11 +1475,11 @@ def _source_card(layer: Layer, row: int) -> dict:
             name = (value.decode() if isinstance(value, bytes) else str(value)).strip() or None
     coords, _ = catalog_positions(table, [row])
     position = None if coords is None else sky_json(SkyFrame(coord=coords.coord[0], epoch=coords.epoch))
-    reason = None if position is not None else (
-        "colonne di posizione non confermate (catalog.set_columns)" if table.positions is None
-        else "posizione mancante o non valida in questa riga")
+    code = None if position is not None else ("columns_not_confirmed" if table.positions is None else "row_invalid")
+    reason = {None: None, "columns_not_confirmed": "colonne di posizione non confermate (catalog.set_columns)",
+              "row_invalid": "posizione mancante o non valida in questa riga"}[code]
     return {"row": row, "name": {"column": name_column, "value": name}, "position": position,
-            "position_reason": reason,
+            "position_reason": reason, "position_reason_code": code,
             "catalog": {"layer": layer.id, "name": layer.name, "source": table.source, "origin": table.origin,
                         "retrieved_at": _iso(table.retrieved_at)},
             "record": _jsonable(record_view(table, row))}

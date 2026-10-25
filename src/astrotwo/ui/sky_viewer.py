@@ -83,6 +83,10 @@ DEFAULT_CARD_TEXTS = {
     "propagated": "drawn at epoch %1 (proper motion; %2)", "not_drawn": "not drawn in this view",
     "catalog": "catalog %1", "retrieved": "retrieved %1",
 }
+#: Ragioni di ``DISPLAY_EPOCH_SOURCE`` (``epoch_origin`` del 13) e di ``SOURCE_NO_POSITION`` (``position_reason_code``
+#: del 05): righe della scheda della sorgente nella lingua dell'interfaccia (41 §3.8, sprint 9).
+EPOCH_ORIGIN_REASONS = ("image", "image_undeclared", "image_no_wcs", "no_image", "user")
+NO_POSITION_REASONS = ("columns_not_confirmed", "row_invalid")
 #: Testi del pannello dei livelli nella lingua dell'interfaccia (la finestra principale li traduce, 40).
 DEFAULT_PANEL_TEXTS = {
     "image": "image", "hips": "HiPS", "catalog": "catalog", "moc": "MOC", "measure": "measure",
@@ -212,7 +216,9 @@ class CatalogPoints:
     ``rows``: righe della tabella disegnate; ``base_xy``: pixel della base (convenzione numpy, ``float64``) da
     ``sky_to_pixel`` del 10; ``rgba``/``size``/``shape``: stile per riga da ``set_plot_rules`` del 13 (colore in
     [0, 1], dimensione in pixel logici, indice nella lista delle forme del 13). ``epoch`` è l'epoca delle posizioni
-    disegnate (13), ``propagated`` dice se viene da ``display_positions``; ``seconds`` il tempo del calcolo."""
+    disegnate (13), ``propagated`` dice se viene da ``display_positions``, ``epoch_origin`` l'identificativo della
+    fonte dell'epoca (13); ``warnings`` avvisi e ``notes`` note per il pannello Messaggi (solo gli avvisi vanno anche
+    nella scheda); ``seconds`` il tempo del calcolo."""
 
     key: tuple
     layer: str
@@ -225,6 +231,8 @@ class CatalogPoints:
     propagated: bool = False
     epoch_source: str | None = None
     warnings: tuple[ResultMessage, ...] = ()
+    epoch_origin: str | None = None
+    notes: tuple[ResultMessage, ...] = ()
     seconds: float = 0.0
 
 
@@ -336,6 +344,17 @@ def _epoch_warnings(table, image, layer) -> tuple[ResultMessage, ...]:
                                      {"catalog_epoch": time_text(catalog_epoch), "image_epoch": shown}), layer),)
 
 
+def _propagated_notes(shown, layer) -> tuple[ResultMessage, ...]:
+    """Nota delle posizioni propagate all'epoca dichiarata dell'immagine base (41 §3.8, sprint 9): dopo
+    ``catalog.set_columns`` il pannello Messaggi non resta con il solo avviso di epoche diverse."""
+    if shown.epoch_origin != "image":
+        return ()
+    shown_epoch, drawable, rows = time_text(shown.epoch), int(np.count_nonzero(shown.drawable)), len(shown.drawable)
+    return (with_layer(ResultMessage("CATALOG_EPOCH_PROPAGATED", f"posizioni propagate con il moto proprio all'epoca "
+                                     f"dell'immagine, {shown_epoch} (disegnabili {drawable} righe su {rows})",
+                                     {"image_epoch": shown_epoch, "drawable": drawable, "rows": rows}), layer),)
+
+
 def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
     """Posizioni di un catalogo nei pixel della base (41 §3.8): con le colonne di moto proprio scelte
     (``catalog.set_columns``) ``display_positions`` del 13 all'epoca di visualizzazione (D10-2), altrimenti le
@@ -358,13 +377,15 @@ def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
                                   pm_dec=columns["pm_dec"], pm_ra_includes_cosdec=columns.get("pm_ra_includes_cosdec"),
                                   parallax=columns.get("parallax"), radial_velocity=columns.get("radial_velocity"))
         coords, valid = shown.coords, shown.drawable
-        epoch, propagated, source, warnings_ = shown.epoch, True, shown.epoch_source, ()
+        epoch, propagated, source, origin, warnings_ = shown.epoch, True, shown.epoch_source, shown.epoch_origin, ()
+        notes = _propagated_notes(shown, layer)
     else:
         coords, valid = catalog_positions(table)
-        epoch, propagated, source = table.positions.epoch, False, None
+        epoch, propagated, source, origin, notes = table.positions.epoch, False, None, None, ()
         warnings_ = _epoch_warnings(table, image, layer)
     if coords is None:
-        return dataclasses.replace(empty, epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_)
+        return dataclasses.replace(empty, epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_,
+                                   epoch_origin=origin, notes=notes)
     rows = np.flatnonzero(valid)
     pixels = sky_to_pixel(geometry.base, coords, convention="numpy")
     bx, by = np.asarray(pixels.pixels.x, dtype=np.float64), np.asarray(pixels.pixels.y, dtype=np.float64)
@@ -376,7 +397,7 @@ def catalog_points(key: tuple, layer, geometry, image) -> CatalogPoints:
     return CatalogPoints(
         key, layer.id, rows, np.column_stack([bx, by]), _hex_rgba(style.color[rows]),
         np.asarray(style.size[rows], dtype=np.float32), np.array([shapes[x] for x in style.shape[rows]], np.float32),
-        epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_,
+        epoch=epoch, propagated=propagated, epoch_source=source, warnings=warnings_, epoch_origin=origin, notes=notes,
         seconds=time.perf_counter() - start)
 
 
@@ -1142,7 +1163,7 @@ class SkyViewer(QWidget):
             self._try_commit()
             return
         self.catalog_cache[key] = result
-        for message in result.warnings:  # epoche diverse: una volta per livello e immagine (41 §3.8)
+        for message in result.warnings + result.notes:  # epoche: una volta per livello e immagine (41 §3.8)
             self._report_once((key[0][0], message.code, key[0][4]), message)
         self.refresh_points()
         self._try_commit()
@@ -1306,7 +1327,11 @@ class SkyViewer(QWidget):
         position = card.get("position")
         style = self.view.coordinate_format if self.view is not None else "sexagesimal"
         if position is None:
-            lines.append(html.escape(t["no_position"].replace("%1", card.get("position_reason") or "")))
+            code = card.get("position_reason_code")
+            reason = (shown_text(ResultMessage("SOURCE_NO_POSITION", card.get("position_reason") or "",
+                                               {"reason": code})) if code in NO_POSITION_REASONS
+                      else card.get("position_reason") or "")
+            lines.append(html.escape(t["no_position"].replace("%1", reason)))
         else:
             frame = position["frame"]
             q = {axis: position[axis]["value"] * u.Unit(position[axis]["unit"]) for axis in ("lon", "lat")}
@@ -1320,8 +1345,11 @@ class SkyViewer(QWidget):
         points = None if layer is None else self.points_for(layer)
         if points is not None:
             if points.propagated:
+                origin = (shown_text(ResultMessage("DISPLAY_EPOCH_SOURCE", points.epoch_source or "",
+                                                   {"reason": points.epoch_origin}))
+                          if points.epoch_origin in EPOCH_ORIGIN_REASONS else points.epoch_source or "")
                 lines.append(html.escape(t["propagated"].replace("%1", time_text(points.epoch) or "")
-                                         .replace("%2", points.epoch_source or "")))
+                                         .replace("%2", origin)))
             else:
                 lines.append(html.escape(t["not_propagated"]))
             for message in points.warnings:

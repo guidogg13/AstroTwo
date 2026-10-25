@@ -419,7 +419,11 @@ le scelte minori di §13; tutti versione 1):
   scrive "riga N"), `position` (posizione **della tabella** dalle colonne di
   posizione, nel loro frame, con l'equinozio e l'**epoca del catalogo**
   come dichiarati dal 13, mai assunti; `null` con il motivo se la riga non
-  ha posizione), `catalog` (livello, nome, sorgente, origine e data) e
+  ha posizione; **dallo sprint 9** anche `position_reason_code`,
+  identificativo del motivo — `columns_not_confirmed` o `row_invalid` —
+  che l'interfaccia mostra nella sua lingua con la voce
+  `SOURCE_NO_POSITION` del catalogo dei messaggi, `41` §10.1), `catalog`
+  (livello, nome, sorgente, origine e data) e
   `record` (`record_view` del 13). Con zero o più righe, `source` = `null`.
   Lettura senza rete. `rows` vuoto toglie la selezione.
 
@@ -819,3 +823,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-23 | Claude Code | **D32-1 (c) decisa dal proprietario (il 05 resta `approvato`):** la descrizione del parametro `catalog` di `catalog.load_region` elenca gli identificativi del gruppo fisso del 13 e dice che serve una tabella (§7, nota "Identificativi dei cataloghi nella descrizione"). |
 | 2026-10-23 | Claude Code | **`measure.distance` esteso (sprint 4g del 41, decisione del proprietario del 2026-10-23):** `layer`, `p1`, `p2` facoltativi e nuova forma cielo con `sky1`, `sky2` (§7, nota "`measure.distance` anche tra posizioni celesti"); versione 1 invariata. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `CommandError` e `ResultMessage` portano `params` in tutto il `05`; nuova §10.1 con la tabella di codici, ragioni e parametri (`COMMAND_PARAMETER_INVALID` con 40 ragioni, `SESSION_*` con messaggi annidati, `WCS_INVALID`/`WCS_MISSING`/`NO_WCS` come sotto-voci condivise) scritta prima del codice; il motivo per cui mancano le coordinate (`PixelGridGeometry.problem`) diventa un `ResultMessage`. Test `tests/core/test_messages_commands.py`. Testo italiano invariato. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Sprint 9 (E7-b):** la scheda della sorgente di `catalog.select` porta `position_reason_code` (§7), così il motivo della posizione mancante si mostra nella lingua dell'interfaccia. Stato `approvato` invariato. |

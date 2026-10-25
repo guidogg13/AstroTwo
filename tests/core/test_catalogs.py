@@ -1531,3 +1531,25 @@ def test_t35_coosys_epoch_kept_after_confirmation(service, cache, monkeypatch):
         with pytest.raises(CatalogsError) as err:
             propagate(other, target, **pm)
         assert err.value.code == "EPOCH_INVALID"
+
+
+def test_t35b_repeated_confirmation_keeps_metadata_epoch(service, cache, monkeypatch):
+    """Sprint 9 (E7-a): un secondo ``catalog.set_columns`` uguale perdeva l'epoca del COOSYS (``EPOCH_INVALID``)."""
+    from astropy.time import Time
+
+    from astrotwo.core.catalogs import confirm_position_columns, propagate
+    from tests.core import synthetic_catalog as gaia
+
+    gaia.serve(service, monkeypatch)
+    cat = load_catalog(gaia.CATALOG, region=(gaia.center(), gaia.RADIUS), max_rows=100, cache=cache)
+    once = confirm_position_columns(cat, "RA_ICRS", "DE_ICRS", "icrs")
+    twice = confirm_position_columns(once, "RA_ICRS", "DE_ICRS", "icrs")
+    assert twice.positions.epoch == once.positions.epoch == "J2016"
+    assert twice.positions.system == once.positions.system and "EPOCH_FROM_METADATA" in dict(twice.warnings)
+    target = Time("2009-06-18T00:00:00", scale="utc")
+    pm = {"pm_ra": "pmRA", "pm_dec": "pmDE", "pm_ra_includes_cosdec": True}
+    assert "J2016" in propagate(twice, target, **pm).source_epoch
+    # colonne diverse e poi di nuovo le prime: l'epoca persa non torna (mai assunta)
+    other = confirm_position_columns(once, "e_RA_ICRS", "DE_ICRS", "icrs", unit="deg")
+    back = confirm_position_columns(other, "RA_ICRS", "DE_ICRS", "icrs")
+    assert other.positions.epoch is None and back.positions.epoch is None

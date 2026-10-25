@@ -188,6 +188,10 @@ def scan_module(path: Path, error_name: str | tuple[str, ...], helpers: dict | N
     for node in ast.walk(tree):  # reason = "x" if ... else "y": assegnazioni di una variabile ``reason``
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "reason" for t in node.targets):
             reasons.update((ANY, c) for c in _constants(node.value))
+        # tupla di ragioni con nome ``*_REASONS`` (ragioni che arrivano da un altro modulo, es. ``epoch_origin`` del 13)
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Tuple)
+                and any(isinstance(t, ast.Name) and t.id.endswith("_REASONS") for t in node.targets)):
+            reasons.update((ANY, c) for e in node.value.elts for c in _constants(e))
     for node in ast.walk(tree):  # ragioni costruite altrove (es. in una funzione di appoggio): {"reason": "x"}
         if isinstance(node, ast.Dict):
             for k, v in zip(node.keys, node.values, strict=True):

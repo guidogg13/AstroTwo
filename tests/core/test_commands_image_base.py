@@ -203,3 +203,29 @@ def test_hips_set_survey_warnings_once_per_source(session, service, cache, monke
     cached = [w for w in result.warnings if w.code == "FROM_CACHE"]
     assert len({w.text for w in cached}) == len(cached)
     print(pairs)
+
+
+def test_b3_go_to_with_image_base_and_galactic_display(session, tmp_path):
+    """Sprint 9, B3 (prova del proprietario: HorseHead.fits come base, "Go to" 85.25 -2.46 →
+    ``VIEW_PARAMETERS_INVALID`` «The centre falls outside the projection of the base»). Riprodotto: "Vai a" legge le
+    coordinate nel frame delle coordinate mostrate; con il galattico (l = 85.25°, b = −2.46°) il punto è a circa 119°
+    dal punto di tangenza della TAN dell'immagine e il ricentramento della base (fdce99b, 41 §3.2) vale solo senza
+    immagine. Il test fissa il comportamento attuale, in attesa della decisione del proprietario su B3."""
+    from astropy.coordinates import SkyCoord
+
+    image = write(tmp_path / "hh.fits", header(crval=(85.27497, -2.458265), **{"RADESYS": "ICRS"}))
+    assert run(session, "view.set_zoom", scale={"value": 1.0, "unit": "arcsec"}, window=WINDOW).status == "ok"
+    assert run(session, "image.open", file={"path": image}).status == "ok"
+    assert session.workspace.state.view.base_layer == "L1"
+    assert run(session, "view.go_to", text="85.25 -2.46", window=WINDOW).status == "ok"  # ICRS: accanto all'immagine
+    assert run(session, "view.set_coordinate_display", frame="galactic", format="decimal").status == "ok"
+    far = run(session, "view.go_to", text="85.25 -2.46", window=WINDOW)
+    assert far.status == "error" and far.error.code == "VIEW_PARAMETERS_INVALID"
+    assert far.error.params["reason"] == "center_outside_projection"
+    typed = SkyCoord(85.25 * u.deg, -2.46 * u.deg, frame="galactic")
+    assert typed.separation(SkyCoord(85.27497 * u.deg, -2.458265 * u.deg, frame="icrs")) > 90 * u.deg
+    # stesso caso in ICRS con un punto lontano dall'immagine (centro galattico, a più di 90°): la base resta
+    # l'immagine e non si ricrea
+    assert run(session, "view.set_coordinate_display", frame="icrs", format="decimal").status == "ok"
+    assert run(session, "view.go_to", text="266.4 -28.9", window=WINDOW).error.params["reason"] == \
+        "center_outside_projection"
