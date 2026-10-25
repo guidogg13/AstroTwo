@@ -84,7 +84,7 @@ DEFAULT_CARD_TEXTS = {
     "catalog": "catalog %1", "retrieved": "retrieved %1",
 }
 #: Simboli disegnati di un catalogo oltre i quali il pannello Messaggi riceve ``CATALOG_DENSE`` (41 §3.8, D41-10;
-#: scelta minore da confermare).
+#: valore confermato dal proprietario il 2026-10-25).
 DENSE_SYMBOLS = 2_000
 #: Ragioni di ``DISPLAY_EPOCH_SOURCE`` (``epoch_origin`` del 13) e di ``SOURCE_NO_POSITION`` (``position_reason_code``
 #: del 05): righe della scheda della sorgente nella lingua dell'interfaccia (41 §3.8, sprint 9).

@@ -523,7 +523,7 @@
     <name>HistoryPanel</name>
     <message>
         <source>AI</source>
-        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
+        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25; valore confermato il 2026-10-25): il troncamento lo dichiara il 13; il comando resta con il default del 14. Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
         <translation>IA</translation>
     </message>
     <message>
@@ -608,11 +608,34 @@
     </message>
 </context>
 <context>
-    <name>MainWindow</name>
+    <name>LicensesDialog</name>
     <message>
-        <source>THIRD_PARTY_LICENSES not found.</source>
-        <translation>THIRD_PARTY_LICENSES non trovato.</translation>
+        <source>Licenses</source>
+        <translation>Licenze</translation>
     </message>
+    <message>
+        <source>Third-party</source>
+        <translation>Terze parti</translation>
+    </message>
+    <message>
+        <source>Sources</source>
+        <translation>Sorgenti</translation>
+    </message>
+    <message>
+        <source>Acknowledgement text not yet verified.</source>
+        <translation>Testo di riconoscimento non ancora verificato.</translation>
+    </message>
+    <message>
+        <source>Data credits</source>
+        <translation>Crediti dei dati</translation>
+    </message>
+    <message>
+        <source>Build {build}, commit {commit}</source>
+        <translation>Build {build}, commit {commit}</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindow</name>
     <message>
         <source>Layers</source>
         <translation>Livelli</translation>
@@ -1102,6 +1125,10 @@
         <translation>Informazioni su AstroTwo</translation>
     </message>
     <message>
+        <source>Licenses…</source>
+        <translation>Licenze…</translation>
+    </message>
+    <message>
         <source>File</source>
         <translation>File</translation>
     </message>
@@ -1194,8 +1221,12 @@
         <translation>La vista non ha ancora centro, scala o dimensioni: prima centrala (Vai a…).</translation>
     </message>
     <message>
-        <source>Third-party licenses</source>
-        <translation>Licenze di terze parti</translation>
+        <source>Build {build}, commit {commit}</source>
+        <translation>Build {build}, commit {commit}</translation>
+    </message>
+    <message>
+        <source>Free software under the GNU General Public License, version 3 or later.</source>
+        <translation>Software libero con licenza GNU General Public License, versione 3 o successiva.</translation>
     </message>
     <message>
         <source>The session cannot be saved</source>
@@ -1440,6 +1471,13 @@
     <message>
         <source>step %1 of %2</source>
         <translation>passo %1 di %2</translation>
+    </message>
+</context>
+<context>
+    <name>_TextTab</name>
+    <message>
+        <source>Search</source>
+        <translation>Cerca</translation>
     </message>
 </context>
 </TS>

@@ -3078,6 +3078,8 @@ _add("UI_TRANSLATION_MISSING", "A translation is missing: the interface stays in
               "Traduzione italiana {path} mancante o illeggibile: interfaccia in inglese.", "path!"),
      qt=("The Qt translation qtbase_it was not found in {folder}: standard dialogs are in English.",
          "Traduzione di Qt qtbase_it non trovata in {folder}: dialoghi standard in inglese.", "folder!"))
+_add("LICENSE_FILE_MISSING", "The license file {file} was not found in {path}.",
+     "File di licenza {file} non trovato in {path}.", "file path!")
 _add("PREFERENCE_VALUE_INVALID", "The value is not valid.", "Il valore non è valido.",
      choice=("The value {value} is not among {allowed}.", "Il valore {value} non è tra {allowed}.",
              "value allowed:list"),

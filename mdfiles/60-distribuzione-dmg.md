@@ -1,6 +1,6 @@
 # 60-distribuzione-dmg.md — Costruzione e consegna di AstroTwo.app e del `.dmg`
 
-**Stato:** bozza
+**Stato:** approvato
 
 > Parte A (sprint **60a**, questo file completo): costruzione di `dist/AstroTwo.app` per macOS su Apple Silicon.
 > Parte B (sprint **60b**): immagine disco `.dmg`, §3.10, **da completare** prima del suo codice.
@@ -86,7 +86,11 @@ primo errore con un messaggio che dice il passo e il motivo:
    (nessun file `.spec` scritto a mano nel repository): contenuto in §3.4, esclusioni in §3.5. Uscita in
    `dist/AstroTwo.app`, che prima si cancella se esiste. La cancellazione tocca solo `dist/AstroTwo.app` e
    `build/`, cartelle ignorate da git.
-8. **Firma ad hoc** di tutto il pacchetto (`codesign --force --deep --sign -`), poi
+8. **Qt dalla ruota (D60-3, decisione del proprietario del 2026-10-25):** ogni binario di Qt dell'app (i
+   `.framework` e i plugin tenuti, sotto `Contents/Frameworks/PySide6/Qt/`) si sostituisce con la copia esatta del
+   file della ruota di PySide6 in `build/env/` (universale `x86_64` + `arm64`, intestazioni originali), perché
+   PyInstaller toglie la parte `x86_64` e riscrive le intestazioni Mach-O (§3.7 punto 4). Poi:
+   **firma ad hoc** di tutto il pacchetto (`codesign --force --deep --sign -`), poi
    `codesign --verify --deep --strict`.
 9. **Controlli dell'app costruita** (§3.8). Un controllo fallito ferma la costruzione e lascia l'app per l'esame,
    ma con il nome `dist/AstroTwo.app` sostituito da `dist/AstroTwo-FAILED.app`.
@@ -152,8 +156,8 @@ L'icona la fornisce il proprietario (decisione del 2026-10-25): file **`assets/i
 immagine esterna, più un manifesto C2PA nei metadati, che non si disegna). Lo script disegna con `QSvgRenderer` di
 Qt (stesso PySide6 dell'app) le dimensioni richieste da `iconutil` (`icon_16x16` … `icon_512x512@2x`, cioè da 16
 a 1024 pixel) in `build/AstroTwo.iconset/`, poi `iconutil -c icns`. Il file SVG non si modifica e non entra
-nell'app (solo l'`.icns`). La licenza dell'icona è quella dichiarata dal proprietario (**da confermare**: GPL-3.0-or-later
-come il resto di AstroTwo, oppure un'altra) e va scritta in `assets/icon/README.md`. Senza il file l'app si
+nell'app (solo l'`.icns`). L'icona è un disegno originale del proprietario, con licenza **GPL-3.0-or-later** come il resto di AstroTwo
+(dichiarazione del proprietario del 2026-10-25), scritta in `assets/icon/README.md`. Senza il file l'app si
 costruisce con l'icona generica di macOS e il rapporto lo dice. Nessuna immagine presa da altri (regola d'oro 8).
 
 ### 3.7 Licenze dentro l'app
@@ -176,10 +180,9 @@ Requisiti di `01` §6.1, punti 1–5:
    - il generatore legge i pacchetti installati: con `build/env/` (passo 5 di §3.3) il file corrisponde a ciò che
      sta nell'app.
 3. **`SOURCES.txt`** (inglese, come i testi di licenza) dice:
-   - versione, build e commit di AstroTwo, l'indirizzo del sorgente corrispondente di AstroTwo (GPL-3.0 §6):
-     **da decidere**, D60-1; finché non è deciso, il file contiene solo il commit e la frase "source available
-     from the author", e la costruzione lo segnala come avviso (non è ancora una distribuzione pubblica: quella è
-     il 60b);
+   - versione, build e commit di AstroTwo e il sorgente corrispondente (GPL-3.0 §6, D60-1): repository
+     `https://github.com/guidogg13/AstroTwo`, tag `v<versione SemVer>` e commit, e l'archivio del sorgente accanto
+     al `.dmg` (60b);
    - il sorgente esatto di **PySide6 e shiboken6 6.12.0** (`https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.zip`,
      SHA-256 già registrata in `scripts/third_party_licenses.py`) e di **Qt 6.12.0**
      (`https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/`, archivi `qtbase` e `qtsvg` con SHA-256);
@@ -193,9 +196,16 @@ Requisiti di `01` §6.1, punti 1–5:
 4. **Librerie Qt non modificate e separate** (`01` §6.1 punto 2): restano `.framework` distinti, mai uniti in un
    unico eseguibile né ridotti (`strip` disattivato per Qt, nessun `upx`). La firma ad hoc riscrive la firma
    (obbligatoria su Apple Silicon) e PyInstaller può riscrivere i percorsi delle librerie nelle intestazioni
-   Mach-O. Il controllo V5 di §3.8 confronta ogni binario Qt dell'app con quello della ruota installata, **tolta la
-   firma** da entrambe le copie: devono essere identici. Se PyInstaller ha cambiato i percorsi, il controllo fallisce
-   e lo dice: in quel caso si decide con il proprietario (D60-3).
+   Mach-O. **Verificato il 2026-10-25 (V-e):** PyInstaller 6.22.3 toglie la parte `x86_64` dei binari universali
+   di Qt e riscrive identificativo (`LC_ID_DYLIB`) e percorsi di ricerca (`LC_RPATH`); il codice `arm64` resta
+   identico (differenze solo nei primi ~5 KB, l'intestazione). Per questo lo script rimette i file della ruota
+   (§3.3 punto 8, D60-3). Il controllo V5 di §3.8 confronta ogni binario Qt dell'app con quello della ruota, **tolta
+   la firma** da entrambe le copie (`codesign --remove-signature`) e ignorato il solo campo `vmsize` del segmento
+   `__LINKEDIT`: la firma ad hoc dell'app è più grande di quella del linker della ruota e lo ingrandisce, e
+   `--remove-signature` non lo riporta indietro (verificato il 2026-10-25: è l'unica differenza, un campo per
+   parte del file universale). Tutto il resto del file deve essere identico; che si carichino lo provano V4 e V7.
+   Non si può evitare di rifirmare i binari di Qt: nella ruota i `.framework` come pacchetti non sono firmati
+   (lo è solo il binario, dal linker) e macOS chiede che ogni pacchetto annidato nell'app sia firmato.
 
 ### 3.8 Controlli sull'app costruita (passo 9 di §3.3)
 
@@ -208,15 +218,19 @@ Ogni controllo ha un nome (V1…V9) che compare nel rapporto con l'esito.
 - **V3 — Disposizione:** i file di §3.4 esistono ai loro percorsi; `Info.plist` ha le chiavi di §3.2;
   `LSMinimumSystemVersion` coincide con il massimo dei `minos` dei binari.
 - **V4 — Autocontrollo** dell'app (`AstroTwo --self-check`, §7) eseguito con un ambiente vuoto
-  (`env -i HOME=$HOME PATH=/usr/bin:/bin`, cartella di lavoro `/`), senza `uv` né `.venv` nel `PATH`: deve uscire
-  con 0 e un rapporto JSON in cui ogni voce è `ok`.
-- **V5 — Qt non modificato:** §3.7 punto 4.
+  (`env -i HOME=<cartella temporanea> PATH=/usr/bin:/bin`, cartella di lavoro `/`), senza `uv` né `.venv` nel
+  `PATH`: deve uscire con 0 e un rapporto JSON in cui ogni voce è `ok`. **HOME temporanea anche per V7**
+  (2026-10-25): con la HOME vera l'app costruita legge all'avvio la chiave del profilo IA e macOS chiede il permesso
+  del Portachiavi (firma ad hoc nuova, §10), cosa vietata nei controlli automatici; con una HOME temporanea macOS
+  non trova il Portachiavi di login, e impostazioni e cache sono quelle di un utente nuovo.
+- **V5 — Qt non modificato:** §3.7 punto 4 (file della ruota, tolta la firma e ignorato `vmsize` di `__LINKEDIT`).
 - **V6 — Nessuna scrittura nell'app:** impronta (percorso, dimensione, SHA-256, data) di ogni file dell'app prima e
   dopo V4 e V7: devono essere uguali. Nessun `__pycache__` né `.pyc` creato.
-- **V7 — Avvio reale:** l'app si lancia (`open -n -W dist/AstroTwo.app --args --quit-after-first-view`), mostra la
-  finestra, disegna la prima vista del cielo (segnale `first_shown` del `41`) ed esce da sola. Si misura il tempo
-  dal lancio all'uscita con un orologio esterno, una volta "a freddo" (prima esecuzione dopo la costruzione) e una
-  "a caldo". La misura **si riporta** e non ferma la costruzione (obiettivo P5 del `41`, D41-8). Se non c'è uno
+- **V7 — Avvio reale:** l'app si lancia (`open -n -W --stdout <file> dist/AstroTwo.app --args
+  --quit-after-first-view`), mostra la finestra, disegna la prima vista del cielo (segnale `first_shown` del `41`),
+  scrive la riga `astrotwo: first_view` ed esce da sola. Si misura con un orologio esterno il tempo dal lancio a
+  quella riga (prova che la prima vista c'è stata, non solo che l'app è uscita), una volta "a freddo" (prima
+  esecuzione dopo la costruzione) e una "a caldo". La misura **si riporta** e non ferma la costruzione (obiettivo P5 del `41`, D41-8). Se non c'è uno
   schermo (sessione senza interfaccia grafica), V7 è "non eseguito" con il motivo.
 - **V8 — Licenze:** i file di `Resources/licenses/` sono uguali byte per byte a quelli del progetto (per
   `SOURCES.txt`: a quello generato); `THIRD_PARTY_LICENSES` contiene le sezioni Python, Qt e PyInstaller.
@@ -312,6 +326,7 @@ distribuzione pubblica.
   `build/env` se esiste ed è stato creato dallo stesso `uv.lock` e dallo stesso Python, per prove ripetute;
   dichiarato nel rapporto); restituisce il codice di uscita di §6.
 - **`spec_text`** — testo della specifica di PyInstaller generata (dati, metadati, esclusioni, `Info.plist`).
+- **`keep_entry`** — filtro dei file di Qt (plugin, traduzioni, QML) di §3.4–§3.5, usato dalla specifica generata.
 - **`make_iconset`** — PNG dell'iconset da un SVG con `QSvgRenderer` (§3.6).
 - **`minimum_macos`** — massimo dei `minos` dei Mach-O di una cartella.
 - **`check_bundle`** — controlli V1–V9 su un'app; restituisce l'elenco degli esiti (nome, `ok`/`failed`/`not_run`,
@@ -333,7 +348,9 @@ distribuzione pubblica.
   chiavi vere (`dev.pages.astrotwo.ai`).
 - **`main`** — punto d'ingresso dell'app: `--self-check` e `--self-check-keychain` stampano il rapporto ed
   escono (0 se tutto `ok`, 1 altrimenti) senza aprire finestre; `--quit-after-first-view` avvia l'app normale ed
-  esce dopo il primo `first_shown` del `41` (per V7); senza opzioni chiama `astrotwo.ui.main_window.main`.
+  esce dopo il primo `first_shown` del `41` scrivendo `astrotwo: first_view` (per V7), tramite il parametro
+  `on_first_view` di `astrotwo.ui.main_window.main` (funzione chiamata con l'applicazione alla prima vista);
+  senza opzioni chiama `astrotwo.ui.main_window.main`.
 
 **Interfaccia** — `src/astrotwo/ui/licenses_dialog.py` (nuovo file, parte di §3.9 e del `40`):
 
@@ -388,7 +405,7 @@ messaggi dell'app); l'app costruita usa il catalogo (`40` §3.7.1).
 | `THIRD_PARTY_LICENSES` non aggiornato | si ferma, uscita 1 | `BUILD_LICENSES_OUTDATED` (script) |
 | Qt di versione diversa da quella dei link di `SOURCES.txt` | si ferma, uscita 1 | `BUILD_QT_VERSION_MISMATCH` (script) |
 | Icona mancante | costruisce senza icona, avviso nel rapporto | `BUILD_ICON_MISSING` (avviso) |
-| Sorgente di AstroTwo non deciso (D60-1) | costruisce, avviso nel rapporto e frase in `SOURCES.txt` | `BUILD_SOURCE_URL_UNDECIDED` (avviso) |
+| Repository non ancora pubblico o tag non ancora creato (D60-1) | costruisce, avviso nel rapporto (si controlla solo che il tag esista in locale; la visibilità del repository non si controlla dalla rete) | `BUILD_SOURCE_NOT_PUBLIC` (avviso) |
 | Un controllo V1–V6 o V8 fallisce | app rinominata `AstroTwo-FAILED.app`, uscita 1 | `BUILD_CHECK_FAILED` con il nome del controllo |
 | V7 senza schermo | "non eseguito" con il motivo, nessun fallimento | — |
 | Nell'app: file di licenza mancante | la scheda mostra il messaggio, nessun blocco | `LICENSE_FILE_MISSING` (catalogo, `en`/`it`, parametri `file`, `path`) |
@@ -439,22 +456,27 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   ambiente separato da `uv.lock`, test eseguiti in quell'ambiente; macOS minimo letto dai binari (14.4 oggi).
 - **Versione: DECISA il 2026-10-25** dal proprietario: §3.2.
 - **Icona: DECISA il 2026-10-25** dal proprietario: la fornisce il proprietario, consegnata lo stesso giorno in
-  `assets/icon/AstroNew.svg` (§3.6); licenza dell'icona da confermare.
-- **D60-1 — Sorgente di AstroTwo per la GPL-3.0 (§6):** chi riceve l'app deve poter avere il sorgente
-  corrispondente. Opzioni: (a) repository pubblico con un tag per ogni versione (`v0.1.0-beta.1`) e il link in
-  `SOURCES.txt`; (b) archivio del sorgente (`git archive` del commit) pubblicato accanto al `.dmg`; (c) offerta
-  scritta valida tre anni. **Raccomandazione: (a) + (b).** Non blocca il 60a (nessuna distribuzione pubblica);
-  **blocca il 60b**. Da decidere.
-- **D60-2 — Scelte minori da confermare:** numero di build in `[tool.astrotwo.bundle]`; `--skip-tests`,
+  `assets/icon/AstroNew.svg` (§3.6); disegno originale del proprietario, licenza GPL-3.0-or-later.
+- **D60-1 — Sorgente di AstroTwo per la GPL-3.0 (§6): DECISA il 2026-10-25** dal proprietario: **(a) + (b)** —
+  repository GitHub pubblico `https://github.com/guidogg13/AstroTwo` con un tag per ogni versione
+  (`v0.1.0-beta.1`) e archivio del sorgente (`git archive` del commit) accanto al `.dmg`. Oggi il repository è
+  privato: il proprietario lo renderà pubblico al momento della pubblicazione (prima del 60b non serve).
+  `SOURCES.txt` riporta l'indirizzo del repository, il tag della versione e il commit; finché il repository non è
+  pubblico la costruzione scrive l'avviso `BUILD_SOURCE_NOT_PUBLIC` nel rapporto (non bloccante nel 60a). Opzioni
+  che c'erano: (a) repository pubblico con tag; (b) archivio accanto al `.dmg`; (c) offerta scritta.
+- **D60-2 — Scelte minori: CONFERMATE dal proprietario il 2026-10-25:** numero di build in `[tool.astrotwo.bundle]`; `--skip-tests`,
   `--allow-dirty` e `--keep-build` come opzioni dichiarate nel rapporto; voce Licenze nel menu dell'app (non in
   Help); V7 e V9 riportati senza bloccare.
-- **D60-3 — Se V5 fallisce** (PyInstaller riscrive i percorsi nelle intestazioni dei `.framework` di Qt): opzioni
-  (a) accettarlo come modifica non sostanziale (le librerie restano separate e sostituibili, cambia solo il
-  percorso di caricamento) e scriverlo in `SOURCES.txt`; (b) copiare i `.framework` di Qt dalla ruota dopo
-  PyInstaller e firmare di nuovo. Si apre solo se V5 fallisce: da decidere allora.
+- **D60-3 — V5 fallito alla prima costruzione: DECISA il 2026-10-25** dal proprietario: **(b)** — dopo PyInstaller
+  i binari di Qt si sostituiscono con le copie esatte della ruota (universali, intestazioni originali) e l'app si
+  firma di nuovo (§3.3 punto 8); circa 25–30 MB in più. Causa: PyInstaller toglie la parte `x86_64` e riscrive
+  `LC_ID_DYLIB` e `LC_RPATH` (codice `arm64` identico). Opzione scartata: (a) accettare la modifica e dichiararla in
+  `SOURCES.txt`.
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-25 | Claude Code | Creazione del file (stato: bozza), sprint 60a. Decisioni del proprietario del 2026-10-25: A2 (PyInstaller, dopo il confronto con Briefcase), A6 (firma ad hoc senza notarizzazione per la prima beta; Developer ID rinviata), Python di python-build-standalone gestito da uv, forma della versione (`0.1.0b1` / `0.1.0-beta.1`, build `1`), icona fornita dal proprietario. Parte A (app) completa; parte B (`.dmg`, 60b) da completare. Aperte D60-1, D60-2, D60-3. |
+| 2026-10-25 | Claude Code | **Approvato dal proprietario** (stato `approvato`). Icona: disegno originale del proprietario, GPL-3.0-or-later (§3.6). D60-1 decisa (a) + (b): repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg` (§3.7, §10, §13). D60-2 confermata. |
+| 2026-10-25 | Claude Code | Codice dello sprint 60a: verifiche V-a…V-e fatte (§3.7, §3.11); D60-3 aperta dal fallimento di V5 alla prima costruzione e decisa (b) dal proprietario (§3.3 punto 8, §3.7 punto 4, §13); V7 misura fino alla riga `first_view`, `on_first_view` di `main_window.main`, `keep_entry` (§3.8, §7). Stato `approvato` invariato. |

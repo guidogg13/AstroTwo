@@ -912,7 +912,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `52-avanzate-collaborazione.md` | Collaborazione tra utenti | 4 | non esiste |
 | `53-avanzate-vista-3d.md` | Vista 3D | 4 | non esiste |
 | **Distribuzione e test** | | | |
-| `60-distribuzione-dmg.md` | Pacchetto macOS: `AstroTwo.app` (60a, PyInstaller, firma ad hoc) e `.dmg` (60b) | distribuzione | bozza |
+| `60-distribuzione-dmg.md` | Pacchetto macOS: `AstroTwo.app` (60a, PyInstaller, firma ad hoc) e `.dmg` (60b) | distribuzione | approvato |
 | `61-strategia-test.md` | Strategia dei test | — | non esiste |
 
 ## 5. Decisioni prese
@@ -1128,7 +1128,6 @@ poi `decisioni-aperte.md`.
 | # | Decisione | File pertinente | Stato |
 |---|---|---|---|
 | A6-b | Firma Developer ID e notarizzazione Apple | `60-distribuzione-dmg.md` §13 | **rinviata** (proprietario, 2026-10-25): la prima beta è firmata solo ad hoc |
-| D60-1 | Sorgente di AstroTwo per la GPL-3.0 (repository pubblico con tag, archivio accanto al `.dmg`, offerta scritta) | `60-distribuzione-dmg.md` §13 | aperta il 2026-10-25, blocca il 60b |
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
 | D05-3, D40-2 | Adattatore del 19; avvio tramite URL (H18) | `05`, `40` §13 | **rimandate** il 2026-10-15 (Gruppo 3) |
 | D40-3 | Messaggi dei moduli in inglese e italiano: catalogo codice → testo con `params`; i moduli 10–19 e il `05` restituiscono codice + `params` (testo originale conservato); inglese verso l'IA | `40-ui-finestra-principale.md` §13, §3.7.1 | **decisa il 2026-10-24; chiusa il 2026-10-25** (applicata a `04`, `05`, 10–19, `30`–`35`, `40`, `41`, `42`, `44` negli sprint 8b–8e; T18 su tutto `src/astrotwo`) |

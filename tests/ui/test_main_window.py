@@ -311,7 +311,8 @@ def test_t6_translations_complete(qapp, tmp_path):
     copy = tmp_path / "check_it.ts"
     shutil.copy(TS_FILE, copy)
     lupdate = Path(sys.executable).parent / "pyside6-lupdate"
-    sources = [mw.__file__, str(Path(mw.__file__).with_name("ai_panel.py"))]  # finestra e pannello del 44
+    sources = [mw.__file__, str(Path(mw.__file__).with_name("ai_panel.py")),  # finestra e pannello del 44
+               str(Path(mw.__file__).with_name("licenses_dialog.py"))]  # finestra Licenze del 60
     subprocess.run([str(lupdate), *sources, "-ts", str(copy), "-no-obsolete", "-locations", "none"],
                    check=True, capture_output=True)
     messages = list(ET.parse(copy).getroot().iter("message"))

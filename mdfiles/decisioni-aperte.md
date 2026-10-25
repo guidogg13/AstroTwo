@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-25, con lo sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (decise dal proprietario il 2026-10-25 `A2` = PyInstaller e `A6` = firma ad hoc senza notarizzazione per la prima beta, prima nei file di origine `01` §5 e `60` §13; nuove `A6-b` — firma Developer ID e notarizzazione, **rinviata** — e `D60-1` — sorgente di AstroTwo per la GPL-3.0, blocca il 60b — nel `60` §13; `D41-10` confermata: 2 000 simboli e 5 000 righe).
+**Dal 2026-10-25, con il codice dello sprint 60a: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D60-1` decisa dal proprietario il 2026-10-25: (a) + (b), repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg`; prima nel file di origine `60` §13; `60` approvato).
+
+Prima, **Dal 2026-10-25, con lo sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (decise dal proprietario il 2026-10-25 `A2` = PyInstaller e `A6` = firma ad hoc senza notarizzazione per la prima beta, prima nei file di origine `01` §5 e `60` §13; nuove `A6-b` — firma Developer ID e notarizzazione, **rinviata** — e `D60-1` — sorgente di AstroTwo per la GPL-3.0, blocca il 60b — nel `60` §13; `D41-10` confermata: 2 000 simboli e 5 000 righe).
 
 Prima, **Dal 2026-10-25, con lo sprint 9b: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **15** (decise dal proprietario lo stesso giorno `D41-9` = (b) errore `VIEW_CENTER_OUTSIDE_IMAGE` con il frame di lettura e frame nel campo "Vai a", `D41-10` = (d) nota `CATALOG_DENSE` e 5 000 righe di default nella finestra, `D13-22` = (a) prima parola dell'UCD; prima nei file di origine 41 §13 e 13 §13).
 
@@ -301,12 +303,11 @@ gruppi successivi, A8 dopo il livello 1).
 |---|---|---|
 | — | Nessuna: `A2` e `A6` decise dal proprietario il 2026-10-25 (`60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (17)
+## 5. GRUPPO 3 — rimandabili al momento del codice (16)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **rinviate** (decisione del proprietario del 2026-10-25: la prima beta è firmata solo ad hoc); da riprendere prima di una versione non beta | `60-distribuzione-dmg.md` §13 |
-| `D60-1` | Sorgente corrispondente di AstroTwo per la GPL-3.0 (§6): (a) repository pubblico con tag per versione, (b) archivio del sorgente accanto al `.dmg`, (c) offerta scritta; raccomandazione (a) + (b). Non blocca il 60a, **blocca il 60b** | `60-distribuzione-dmg.md` §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
@@ -412,3 +413,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-25 | Claude Code | **Sprint 9:** aperte `D41-9` (B3), `D41-10` (E5), `D13-22` (colonne di moto proprio prese come posizioni) e registrata `D32-3` (risultati più leggeri verso l'IA, rinviata a dopo la v1); prima nei file di origine 41, 13 e 32 §13. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 18). |
 | 2026-10-25 | Claude Code | **`D41-9`, `D41-10`, `D13-22` decise** (proprietario, 2026-10-25; prima nei file di origine 41 §13 e 13 §13): (b), (d), (a). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). |
 | 2026-10-25 | Claude Code | **Sprint 60a:** `A2` (PyInstaller) e `A6` (firma ad hoc, nessuna notarizzazione per la prima beta) decise dal proprietario (prima nei file di origine `01` §5 e `60` §13), Gruppo 2 vuoto; nuove `A6-b` (Developer ID e notarizzazione, rinviata) e `D60-1` (sorgente di AstroTwo, blocca il 60b) nel Gruppo 3; `D41-10` confermata. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
+| 2026-10-25 | Claude Code | **`D60-1` decisa** (proprietario, 2026-10-25; prima nel file di origine `60` §13): (a) + (b). Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 16). |

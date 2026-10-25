@@ -183,6 +183,26 @@ class Component:
     license_text: str
 
 
+def _texts(folder: Path, names: tuple[str, ...]) -> str:
+    return "\n\n".join(f"--- {name} ---\n\n" + (folder / name).read_text(encoding="utf-8").rstrip() for name in names)
+
+
+#: Testi del Python di AstroTwo.app (60 §3.7): CPython e librerie compilate in libpython da python-build-standalone.
+_PYTHON_LICENSES = ("LICENSE.cpython.txt", "LICENSE.openssl-3.txt", "LICENSE.sqlite.txt", "LICENSE.libffi.txt",
+                    "LICENSE.liblzma.txt", "LICENSE.bzip2.txt", "LICENSE.mpdecimal.txt", "LICENSE.expat.txt",
+                    "LICENSE.libuuid.txt")
+
+
+def _pyinstaller_texts() -> str:
+    """Licenza del bootloader e degli hook di esecuzione inclusi nell'app, dai pacchetti installati (gruppo build)."""
+    parts = []
+    for name in ("pyinstaller", "pyinstaller-hooks-contrib"):
+        distribution = md.distribution(name)
+        parts += [f"--- {name} {distribution.version}: {filename} ---\n\n{text.rstrip()}"
+                  for filename, text in _license_files(distribution)]
+    return "\n\n".join(parts)
+
+
 #: Componenti non Python inclusi nel progetto (es. kernel della NAIF), con il testo dell'avviso.
 EXTRA_COMPONENTS: tuple[Component, ...] = (
     Component(
@@ -208,6 +228,39 @@ EXTRA_COMPONENTS: tuple[Component, ...] = (
 )
 
 
+def app_components() -> tuple[Component, ...]:
+    """Componenti che entrano solo in AstroTwo.app (60 §3.7): Python, avvisi di Qt, bootloader di PyInstaller."""
+    return (
+        Component(
+            name="Python (CPython, python-build-standalone)",
+            version="3.12.15+20261003",
+            license="PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; "
+                    "mpdecimal BSD-2-Clause; libuuid BSD-3-Clause",
+            source=("interprete di AstroTwo.app (60 §3.3): archivio cpython-3.12.15+20261003-aarch64-apple-darwin di "
+                    "https://github.com/astral-sh/python-build-standalone/releases/tag/20261003; testi in "
+                    "scripts/licenses/python/ (provenienza e SHA-256 nel README.md di quella cartella)"),
+            license_text=_texts(_LICENSES_DIR / "python", _PYTHON_LICENSES),
+        ),
+        Component(
+            name="Qt 6.12.0, componenti di terze parti (qtbase, qtsvg)",
+            version="6.12.0",
+            license="licenze delle singole componenti, elencate sotto (Licenses Used in Qt)",
+            source=("qt_attribution.json e LICENSES/ dei sorgenti ufficiali qtbase e qtsvg 6.12.0 "
+                    "(https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/); criterio e SHA-256 in "
+                    "scripts/licenses/qt/README.md"),
+            license_text=(_LICENSES_DIR / "qt" / "QT_THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8"),
+        ),
+        Component(
+            name="Bootloader e hook di esecuzione di PyInstaller",
+            version=f"pyinstaller {md.version('pyinstaller')}, hooks-contrib {md.version('pyinstaller-hooks-contrib')}",
+            license="GPL-2.0-or-later con eccezione del bootloader; hook di esecuzione Apache-2.0",
+            source=("eseguibile Contents/MacOS/AstroTwo e hook di esecuzione dell'app, dai pacchetti pyinstaller e "
+                    "pyinstaller-hooks-contrib (gruppo build); lo strumento PyInstaller non si distribuisce"),
+            license_text=_pyinstaller_texts(),
+        ),
+    )
+
+
 #: Dati di terze parti inclusi solo per i test (tests/core/data/README.md), con le condizioni d'uso delle fonti.
 TEST_DATA: tuple[tuple[str, str], ...] = ()  # dal 2026-10-22 nessuno: i dati di test sono sintetici
 
@@ -219,7 +272,7 @@ def _roots() -> list[Requirement]:
 
 def _dev_roots() -> list[Requirement]:
     groups = tomllib.loads((ROOT / "pyproject.toml").read_text()).get("dependency-groups", {})
-    return [Requirement(text) for text in groups.get("dev", [])]
+    return [Requirement(text) for group in ("dev", "build") for text in groups.get(group, [])]
 
 
 def runtime_closure() -> list[md.Distribution]:
@@ -228,7 +281,7 @@ def runtime_closure() -> list[md.Distribution]:
 
 
 def dev_closure() -> list[md.Distribution]:
-    """Strumenti di sviluppo (gruppo ``dev``) che non sono già dipendenze di esecuzione: non vanno nel .dmg."""
+    """Strumenti di sviluppo (gruppi ``dev`` e ``build``) che non sono già dipendenze di esecuzione: non vanno nel .dmg."""
     runtime = {canonicalize_name(d.metadata["Name"]) for d in runtime_closure()}
     return [d for d in _closure(_dev_roots()) if canonicalize_name(d.metadata["Name"]) not in runtime]
 
@@ -290,9 +343,10 @@ def render() -> str:
         "dichiarata e il testo integrale dei file di licenza e degli avvisi distribuiti con ogni pacchetto,",
         "più i componenti non Python inclusi nel progetto. Licenza di AstroTwo: GPL-3.0-or-later (A11 decisa il 2026-10-17).",
         "Pacchetti esclusi perché richiesti solo su Linux o Windows (marcatori di piattaforma): non",
-        "elencati. Python stesso (PSF) e gli avvisi delle componenti incluse nelle librerie Qt si",
-        "aggiungeranno con il modulo 60. In fondo, a parte, gli strumenti di sviluppo (test), che non si",
-        "distribuiscono nel .dmg.",
+        "elencati. Dal modulo 60 (2026-10-25) anche i componenti che entrano solo in AstroTwo.app: il",
+        "Python dell'app (PSF e librerie incluse), gli avvisi delle componenti incluse nelle librerie Qt e",
+        "il bootloader di PyInstaller. In fondo, a parte, gli strumenti di sviluppo (test e costruzione),",
+        "che non si distribuiscono.",
         "",
         "Riepilogo",
         "=========",
@@ -301,7 +355,8 @@ def render() -> str:
     width = max(len(d.metadata["Name"]) for d in distributions)
     for distribution in distributions:
         lines.append(f"{distribution.metadata['Name']:<{width}}  {distribution.version:<22}  {_license(distribution)}")
-    for component in EXTRA_COMPONENTS:
+    components = EXTRA_COMPONENTS + app_components()
+    for component in components:
         lines.append(f"{component.name:<{width}}  {component.version:<22}  {component.license}")
     lines.append("")
     for distribution in distributions:
@@ -323,12 +378,12 @@ def render() -> str:
             lines.append("Testo di licenza: non incluso nel pacchetto installato (vedi la nota).")
         for filename, text in files:
             lines += ["", f"--- {filename} ---", "", text.rstrip()]
-    for component in EXTRA_COMPONENTS:
+    for component in components:
         lines += ["", "=" * 78, f"{component.name} {component.version}", "=" * 78,
                   f"Licenza: {component.license}", f"Fonte: {component.source}", "", component.license_text.rstrip()]
     dev = dev_closure()
-    lines += ["", "", "Strumenti di sviluppo (solo test, non distribuiti nel .dmg)",
-              "==========================================================", ""]
+    lines += ["", "", "Strumenti di sviluppo (test e costruzione, non distribuiti nell'app né nel .dmg)",
+              "================================================================================", ""]
     for distribution in dev:
         lines.append(f"{distribution.metadata['Name']:<{width}}  {distribution.version:<22}  {_license(distribution)}")
     for distribution in dev:

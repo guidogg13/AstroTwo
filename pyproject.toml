@@ -1,6 +1,6 @@
 [project]
 name = "astrotwo"
-version = "0.1.0"
+version = "0.1.0b1"
 description = "AstroTwo: successore di Aladin per gli astrofisici"
 readme = "CLAUDE.md"
 license = "GPL-3.0-or-later"
@@ -38,6 +38,21 @@ dev = [
     "pytest-timeout>=2.4.0",
     "ruff>=0.17.2",
 ]
+# Costruzione di AstroTwo.app (60-distribuzione-dmg.md): versioni fissate, almeno due settimane al 2026-10-25 (§3.11 V-c).
+build = [
+    "pyinstaller==6.22.3",
+    "pyinstaller-hooks-contrib==2026.8",
+    "setuptools==84.0.0",
+]
+
+[tool.uv]
+# Anche il gruppo ``build`` nel .venv: THIRD_PARTY_LICENSES legge PyInstaller installato (60 §3.7) e i due ambienti
+# (.venv e build/env) hanno gli stessi pacchetti.
+default-groups = ["dev", "build"]
+
+[tool.astrotwo.bundle]
+# Numero di build di AstroTwo.app (CFBundleVersion, 60 §3.2): intero, +1 a ogni app consegnata.
+build = 1
 
 [build-system]
 requires = ["hatchling"]

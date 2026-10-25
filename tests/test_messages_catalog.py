@@ -48,6 +48,7 @@ CONVERTED = {
     "ui/main_window.py": "CommandError",
     "ui/message_view.py": "CommandError",
     "ui/ai_panel.py": "ValueProblem",
+    "app_bundle.py": "CommandError",  # LICENSE_FILE_MISSING della finestra Licenze (60 §3.9)
 }
 
 #: Funzioni di appoggio che costruiscono un errore o un avviso: nome → (codice, posizione dell'argomento ``reason``).
@@ -88,6 +89,7 @@ def _constants(node: ast.AST):
 WARNING_BUILDERS = {"core/cache.py": ("CacheWarning",), "ui/sky_viewer.py": ("ModuleWarning", "ResultMessage"),
                     "ui/sky_tools.py": ("ResultMessage",), "ui/main_window.py": ("ResultMessage",),
                     "ui/message_view.py": ("ResultMessage",), "ui/ai_panel.py": ("ResultMessage",),
+                    "app_bundle.py": ("ResultMessage",),
                     "core/commands.py": ("ModuleWarning", "ResultMessage", "stopped", "_nested"),
                     "ai/provider_adapter.py": ("ModuleWarning", "ProviderNotice"),
                     "ai/chat_assistant.py": ("note", "Availability", "_not_executed")}

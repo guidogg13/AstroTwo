@@ -117,7 +117,9 @@ from astrotwo.core.commands import (
     time_text,
 )
 from astrotwo.core.coordinates_wcs import format_coordinates
+from astrotwo.app_bundle import build_info
 from astrotwo.ui.ai_panel import PANEL_WIDTH
+from astrotwo.ui.licenses_dialog import LicensesDialog
 from astrotwo.ui.message_view import (
     ValueProblem,
     exception_message,
@@ -156,7 +158,7 @@ COORDINATE_DISPLAYS: dict[str, tuple[str, str]] = {
     "galactic": ("galactic", "decimal"),
 }
 #: Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25;
-#: valore scelta minore da confermare): il troncamento lo dichiara il 13; il comando resta con il default del 14.
+#: valore confermato il 2026-10-25): il troncamento lo dichiara il 13; il comando resta con il default del 14.
 CATALOG_IN_VIEW_MAX_ROWS = 5_000
 LANGUAGES = ("system", "en", "it")
 APPEARANCES = ("system", "dark", "light", "night")
@@ -1491,14 +1493,6 @@ class _MissingKeychain:
     has_key = get_key = store_key = delete_key = _fail
 
 
-def _licenses_text() -> str:
-    for candidate in (Path(astrotwo.__file__).resolve().parents[2] / "THIRD_PARTY_LICENSES",
-                      Path(sys.prefix) / "THIRD_PARTY_LICENSES"):
-        if candidate.is_file():
-            return candidate.read_text(encoding="utf-8")
-    return QCoreApplication.translate("MainWindow", "THIRD_PARTY_LICENSES not found.")
-
-
 # --------------------------------------------------------------------------
 # Finestra principale
 # --------------------------------------------------------------------------
@@ -1896,6 +1890,10 @@ class MainWindow(QMainWindow):
         self.panel_actions["assistant"].setShortcut(QKeySequence("Meta+Ctrl+A"))
         self.act_about = a(self.tr("About AstroTwo"), self.about_dialog, name="about")
         self.act_about.setMenuRole(QAction.MenuRole.AboutRole)
+        # Finestra Licenze (60 §3.9): nel menu dell'app subito dopo About su macOS, nel menu Help altrove.
+        self.act_licenses = a(self.tr("Licenses…"), self.licenses_dialog, name="licenses")
+        self.act_licenses.setMenuRole(QAction.MenuRole.ApplicationSpecificRole)
+        self._licenses: LicensesDialog | None = None
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
@@ -1938,6 +1936,7 @@ class MainWindow(QMainWindow):
             m.addAction(act)
         m = bar.addMenu(self.tr("Help"))
         m.addAction(self.act_about)
+        m.addAction(self.act_licenses)
 
     def _build_toolbar(self) -> None:
         tb = QToolBar(self.tr("Toolbar"))
@@ -2300,21 +2299,34 @@ class MainWindow(QMainWindow):
         return dialog
 
     def about_dialog(self) -> QDialog:
+        """Nome, versione SemVer, build, copyright, una riga di licenza e il pulsante Licenses… (60 §3.9)."""
         dialog = QDialog(self)
         dialog.setWindowTitle(self.tr("About AstroTwo"))
-        text = QPlainTextEdit(_licenses_text())
-        text.setReadOnly(True)
         layout = QVBoxLayout(dialog)
-        title = QLabel(f"<b>AstroTwo</b> {astrotwo.__version__}")
-        layout.addWidget(title)
-        layout.addWidget(QLabel(self.tr("Third-party licenses")))
-        layout.addWidget(text)
+        layout.addWidget(QLabel(f"<b>AstroTwo</b> {astrotwo.__version__}"))
+        info = build_info()
+        if info:
+            layout.addWidget(QLabel(self.tr("Build {build}, commit {commit}").format(build=info.get("build"),
+                                                                                      commit=info.get("commit"))))
+        layout.addWidget(QLabel("Copyright © 2026 Guido Ratti"))
+        layout.addWidget(QLabel(self.tr("Free software under the GNU General Public License, version 3 or later.")))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        licenses = buttons.addButton(self.tr("Licenses…"), QDialogButtonBox.ButtonRole.ActionRole)
+        licenses.setObjectName("aboutLicenses")
+        licenses.clicked.connect(self.licenses_dialog)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
-        dialog.resize(640, 480)
         dialog.open()
         return dialog
+
+    def licenses_dialog(self) -> LicensesDialog:
+        """Finestra Licenze, non modale e una sola aperta (60 §3.9): se c'è già si porta davanti."""
+        if self._licenses is None:
+            self._licenses = LicensesDialog(self)
+        self._licenses.show()
+        self._licenses.raise_()
+        self._licenses.activateWindow()
+        return self._licenses
 
     # --- cronologia ---------------------------------------------------------------------
 
@@ -2556,8 +2568,13 @@ class _DockHeader(QWidget):
         self.close_button.setIcon(themed_icon("x", quiet, 14))
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Avvio con ``uv run astrotwo``."""
+def main(argv: list[str] | None = None, *,
+         on_first_view: Callable[[QApplication, MainWindow], None] | None = None) -> int:
+    """Avvio con ``uv run astrotwo`` (e dall'app costruita, ``app_bundle.main``).
+
+    ``on_first_view``: chiamata con l'applicazione e la finestra alla prima vista del cielo (``first_shown`` del 41); serve a
+    ``--quit-after-first-view`` dell'app costruita (controllo V7 del 60).
+    """
     from PySide6.QtGui import QSurfaceFormat
 
     from astrotwo.ui.sky_renderer_gl import surface_format
@@ -2569,6 +2586,8 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationDisplayName("AstroTwo")
     app.setApplicationVersion(astrotwo.__version__)
     window = MainWindow()
+    if on_first_view is not None:
+        window.sky.first_shown.connect(lambda: on_first_view(app, window))
     window.show()
     QTimer.singleShot(0, window.raise_)
     return app.exec()
