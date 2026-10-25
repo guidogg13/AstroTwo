@@ -18,6 +18,7 @@ proprietario del 2026-10-15, in `CLAUDE.md`), valida per 40, 41, 42 e 44
 `approvato`, per il `05` e, dal 2026-10-16, per i moduli IA della v1 30,
 31, 32, 34, 35 `approvato`; **dichiarata dal proprietario il 2026-10-16**.
 
+- **Stato al 2026-10-25 — **sprint 60a, specifica (decisioni del proprietario del 2026-10-25):** creato `60-distribuzione-dmg.md` (`bozza`, parte A: costruzione di `AstroTwo.app` completa; parte B `.dmg` per il 60b da completare) — A2 decisa (**PyInstaller**, dopo il confronto con Briefcase), A6 decisa per la prima beta (**firma ad hoc, nessuna notarizzazione**; Developer ID rinviata, `A6-b`), Python dell'app CPython 3.12.15 di python-build-standalone gestito da uv (macOS minimo letto dai binari, 14.4 oggi), versione `0.1.0b1` / `0.1.0-beta.1` con build 1, icona fornita dal proprietario; D41-10 confermata (2 000 simboli, 5 000 righe); nuova D60-1 (sorgente di AstroTwo per la GPL-3.0, blocca il 60b); 17 decisioni aperte (Gruppo 2 vuoto). In attesa dell'approvazione del `60` prima del codice. **
 - **Stato al 2026-10-25 — **sprint 9b (decisioni del proprietario del 2026-10-25):** D41-9 (b) — con un'immagine come base un centro fuori dalla sua proiezione dà `VIEW_CENTER_OUTSIDE_IMAGE` del `05` (per "Vai a" con una coppia di coordinate, sotto-voce `typed` con il frame di lettura) e il campo "Vai a" dice il frame («(ICRS)», «(Galactic)»); D41-10 (d) — nota `CATALOG_DENSE` sopra 2 000 simboli disegnati e 5 000 righe di default nella finestra Catalog in view (valori scelte minori da confermare); D13-22 (a) — per le posizioni conta solo la prima parola dell'UCD (UCD1+), anche in `TAP_SCHEMA`; 17 decisioni aperte.**
 
 - **Stato al 2026-10-25 — **sprint 9 (correzioni dopo la prova completa del proprietario, 2026-10-25):** regola di sistema **R10** del `35` (posizioni di pianeti, Luna e Sole non disponibili nella v1: l'IA lo dice e non propone azioni impossibili; `SYSTEM_RULES` versione 2); nota `CATALOG_EPOCH_PROPAGATED` nel pannello Messaggi dopo `catalog.set_columns` con il moto proprio (posizioni propagate all'epoca dell'immagine); scheda della sorgente tutta nella lingua dell'interfaccia (`DisplayPositions.epoch_origin` del 13, `position_reason_code` del `05`, voci `DISPLAY_EPOCH_SOURCE` e `SOURCE_NO_POSITION`; `EXPORT_FAILED` `offscreen`) con un test che scandisce le stringhe dell'interfaccia; corretto il 13: una seconda conferma uguale delle colonne perdeva l'epoca del COOSYS (D41-6); **B3** riprodotto ("Vai a" legge le coordinate nel frame mostrato, con il galattico il punto è a 119° dalla `TAN` dell'immagine base; il ricentramento vale solo senza immagine): aperta **D41-9**; aperte **D41-10** (campi larghi con migliaia di simboli, E5) e **D13-22** (colonne di moto proprio prese come posizioni); registrata **D32-3** (risultati più leggeri verso l'IA, rinviata a dopo la v1); 20 decisioni aperte. Test di rete non eseguiti (`--no-network`).**
@@ -911,7 +912,7 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | `52-avanzate-collaborazione.md` | Collaborazione tra utenti | 4 | non esiste |
 | `53-avanzate-vista-3d.md` | Vista 3D | 4 | non esiste |
 | **Distribuzione e test** | | | |
-| `60-distribuzione-dmg.md` | Pacchetto macOS `.dmg` | — | non esiste |
+| `60-distribuzione-dmg.md` | Pacchetto macOS: `AstroTwo.app` (60a, PyInstaller, firma ad hoc) e `.dmg` (60b) | distribuzione | bozza |
 | `61-strategia-test.md` | Strategia dei test | — | non esiste |
 
 ## 5. Decisioni prese
@@ -1062,6 +1063,8 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | Opzioni della distanza (41) | Barra sul cielo con unità, aggancio e finestra del centroide, ricordate con `prefs.set` (`tools/…`) | 2026-10-23 | decisione del proprietario, `41` §3.19 | sprint 4g |
 | Strumento sconosciuto (32) | Il risultato d'errore `TOOL_NOT_EXPOSED` porta l'elenco `valid_tools`; nulla eseguito | 2026-10-23 | richiesta del proprietario, `32` §3.5 | sprint 7b |
 | Testo di `PLANETARY_DATA_DISABLED` | "i dati planetari non sono disponibili in questa versione" finché la preferenza non esiste; solo italiano (D40-1, inglese con D40-3); comportamento invariato | 2026-10-21 | decisione del proprietario, `19` §10 | |
+| A2, A6 (60) | **PyInstaller** per `AstroTwo.app` (`onedir` + `BUNDLE`); firma **ad hoc** senza notarizzazione per la prima beta (Developer ID rinviata, `A6-b`); Python di python-build-standalone gestito da uv; versione `0.1.0b1` / `0.1.0-beta.1`, build 1; icona fornita dal proprietario | 2026-10-25 | decisione del proprietario | `60-distribuzione-dmg.md` §3, §13 |
+| D41-10 (conferma) | Soglia di `CATALOG_DENSE` 2 000 simboli e 5 000 righe di default nella finestra Catalog in view confermate | 2026-10-25 | decisione del proprietario | `41` §3.8, `40` §3.3 |
 
 ## 6. Decisioni aperte
 
@@ -1124,8 +1127,8 @@ poi `decisioni-aperte.md`.
 
 | # | Decisione | File pertinente | Stato |
 |---|---|---|---|
-| A2 | Strumento di packaging del `.dmg` | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): PyInstaller + dmgbuild; non blocca il livello 1, blocca l'approvazione di `60` |
-| A6 | Firma e notarizzazione Apple | `01-architettura.md`, `60-distribuzione-dmg.md` | orientamento (2026-10-09): sì, notarizzazione con account Apple Developer solo al momento della distribuzione; blocca l'approvazione di `60` |
+| A6-b | Firma Developer ID e notarizzazione Apple | `60-distribuzione-dmg.md` §13 | **rinviata** (proprietario, 2026-10-25): la prima beta è firmata solo ad hoc |
+| D60-1 | Sorgente di AstroTwo per la GPL-3.0 (repository pubblico con tag, archivio accanto al `.dmg`, offerta scritta) | `60-distribuzione-dmg.md` §13 | aperta il 2026-10-25, blocca il 60b |
 | A8 | Livello di compatibilità con lo scripting di Aladin | `01-architettura.md`, `24-analisi-pipeline-riproducibili.md` | rimandata: strada scelta = scripting principale in Python; compatibilità con i comandi Aladin da decidere **dopo il completamento del livello 1** |
 | D05-3, D40-2 | Adattatore del 19; avvio tramite URL (H18) | `05`, `40` §13 | **rimandate** il 2026-10-15 (Gruppo 3) |
 | D40-3 | Messaggi dei moduli in inglese e italiano: catalogo codice → testo con `params`; i moduli 10–19 e il `05` restituiscono codice + `params` (testo originale conservato); inglese verso l'IA | `40-ui-finestra-principale.md` §13, §3.7.1 | **decisa il 2026-10-24; chiusa il 2026-10-25** (applicata a `04`, `05`, 10–19, `30`–`35`, `40`, `41`, `42`, `44` negli sprint 8b–8e; T18 su tutto `src/astrotwo`) |
@@ -1155,6 +1158,8 @@ modulo va diviso o che serve un modulo aggiuntivo. Non si aggiungono file di
 propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
+
+**Prossimo (2026-10-25, sprint 60a):** approvazione di `60-distribuzione-dmg.md` da parte del proprietario; poi le verifiche V-a…V-e del `60` §3.11 e il codice (`scripts/build_app.py`, `src/astrotwo/app_bundle.py`, finestra Licenze), costruzione e verifica di `dist/AstroTwo.app`; icona dal proprietario; poi 60b (`.dmg`, con D60-1). Resta lo sprint di prestazioni per D41-7 e D41-8.
 
 **Prossimo (2026-10-25, dopo lo sprint 9b):** conferma delle scelte minori di D41-10 (soglia 2 000 simboli, 5 000 righe di default); resta lo sprint di prestazioni per D41-7 e D41-8. **Miglioramento dopo la v1 (registrato, non implementato):** risultati verso l'IA più leggeri per i provider con limiti bassi di token (D32-3).
 
@@ -1309,3 +1314,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-25 | Claude Code | **Sprint 8f (rifiniture):** `layer_context` (`40` §3.7.1) nei messaggi di disegno di cataloghi e MOC e negli avvisi `CATALOG_EPOCH_*` (voci senza più il segnaposto `layer`); SkyCoord inutilizzato tolto da un test; test di rete: IERS `datacenter.iers.org` HTTP 400 per ogni percorso (causa lato server, non URL/intestazioni/test), ripiego sul mirror USNO deciso dal proprietario e implementato (`18`); EPN-TAP non raggiungibile. Nessun valore di UT1 assunto. |
 | 2026-10-25 | Claude Code | **Sprint 9 (correzioni dopo la prova completa):** R10 nel `35` (pianeti, Luna e Sole non disponibili); `CATALOG_EPOCH_PROPAGATED` (`41`); scheda della sorgente nella lingua dell'interfaccia (`13` `epoch_origin`, `05` `position_reason_code`, `41` §10.1); conferma ripetuta delle colonne che conserva l'epoca del COOSYS (`13`); B3 riprodotto. Aperte D41-9, D41-10, D13-22; D32-3 rinviata a dopo la v1. Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 18). §2, §6, §7 aggiornati. Test di rete non eseguiti (`--no-network`). |
 | 2026-10-25 | Claude Code | **Sprint 9b:** D41-9 (b), D41-10 (d) e D13-22 (a) decise dal proprietario e scritte (`05`, `13`, `40`, `41` prima del codice): `VIEW_CENTER_OUTSIDE_IMAGE`, frame nel campo "Vai a", `CATALOG_DENSE`, 5 000 righe di default nella finestra, prima parola dell'UCD per le posizioni. Aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). §2, §6, §7 aggiornati. Test di rete non eseguiti (`--no-network`). |
+| 2026-10-25 | Claude Code | **Sprint 60a, specifica:** creato `60-distribuzione-dmg.md` (`bozza`); decise dal proprietario A2 (PyInstaller), A6 per la prima beta (firma ad hoc, nessuna notarizzazione), Python di uv, versione, icona; D41-10 confermata; nuove `A6-b` (rinviata) e `D60-1`; `01`, `02`, `40`, `41`, `decisioni-aperte.md` aggiornati. 17 decisioni aperte. Riepilogo: approvato 24, bozza 6, non esiste 13, totale 43. |

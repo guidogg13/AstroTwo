@@ -71,14 +71,17 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   l'identificativo del catalogo come lo accetta `load_catalog` del 13 —
   VizieR, Simbad, Gaia DR3 dall'elenco dei server del 14, D14-4 — e
   `max_rows` con il default **5 000** della finestra (D41-10, decisione del proprietario del 2026-10-25, valore
-  scelta minore DA CONFERMARE; prima 100 000 di D14-5, che resta il default del comando e del 14; il troncamento si
+  confermato il 2026-10-25; prima 100 000 di D14-5, che resta il default del comando e del 14; il troncamento si
   dichiara con `PARTIAL_CATALOG`/`ROW_LIMIT_EXCEEDED` del 13); centro e raggio sono quelli
   della vista calcolati dal 10: `catalog.load_region`).
 - **Tools:** Distance (strumento di misura del `41`); Simbad pointer
   (puntatore del `41`). L'attivazione è `ui.set_tool`.
 - **Window:** mostra o nasconde i pannelli.
-- **Help:** About AstroTwo (versione SemVer, DC4, e testo di
-  `THIRD_PARTY_LICENSES`).
+- **Help:** About AstroTwo (versione SemVer, DC4, build, copyright, una riga
+  di licenza e il pulsante Licenses…; su macOS la voce va nel menu dell'app).
+  **Licenses…** / **Licenze…** subito dopo About (finestra con le schede
+  AstroTwo, Third-party, Sources, Data credits): specificata in
+  `60-distribuzione-dmg.md` §3.9 (requisito 1 di `01` §6.1, dal 2026-10-25).
 - **Assistant** (voce nel menu Window e pulsante nella barra degli
   strumenti, ⌃⌘A): mostra o nasconde il pannello del `44` (`ui.*`, classe
   `application`).
@@ -701,3 +704,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-24 | Claude Code | **Sprint 8d (codice):** moduli 14, 16, 19, 15, 17 e 18 convertiti a codice + `params`; T18 comprende tutti i moduli 10–19 e gli errori di 14, 16 e 19 incorporati da 12 e 13 sono messaggi annidati (§3.7.1 aggiornata). Restano il `05` e i moduli dell'interfaccia e dell'IA (sprint 8e). Nessun comportamento visibile cambia. |
 | 2026-10-25 | Claude Code | **Sprint 8e, ultimo della traduzione (D40-3):** nuova §10.1 con la tabella dei messaggi scritti dalla finestra (`PREFERENCE_INVALID`, `PREFERENCE_VALUE_INVALID` con `ValueProblem`, `UI_COMMAND_FAILED`, `SESSION_SAVE_FAILED`, `UI_TRANSLATION_MISSING`) scritta prima del codice; §3.7.1 e T18 estese a tutto `src/astrotwo`; **D40-3 chiusa**. Test `tests/ui/test_messages_ui.py`. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b (D41-9 e D41-10 decise dal proprietario):** frame di lettura nel testo d'aiuto del campo "Vai a" (§3.4); righe massime di default 5 000 nella finestra Catalog in view (§3.3, valore da confermare). Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | D41-10: 5 000 righe di default confermate dal proprietario (§3.3). §3.3: About ridotto e nuova voce Licenses… (finestra specificata nel `60` §3.9, sprint 60a). Stato `approvato` invariato. |

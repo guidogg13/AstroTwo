@@ -345,7 +345,7 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
     dopo `catalog.set_columns` il pannello non resta con il solo `CATALOG_EPOCH_DIFFERS`/`CATALOG_EPOCH_UNKNOWN`
     di prima, che resta nel registro com'era (era vero quando fu scritto).
   - **Campi densi (D41-10, decisione del proprietario del 2026-10-25, sprint 9b):** quando un catalogo visibile ha più
-    di `DENSE_SYMBOLS` = **2 000** simboli disegnati sulla base (scelta minore DA CONFERMARE), il pannello Messaggi
+    di `DENSE_SYMBOLS` = **2 000** simboli disegnati sulla base (confermato dal proprietario il 2026-10-25), il pannello Messaggi
     riceve la nota `CATALOG_DENSE` (una volta per livello e base) con il numero di simboli e la soglia, e i
     suggerimenti: campo più piccolo, meno righe massime, simboli più piccoli con `catalog.set_style`. Nessuno stile
     cambia da solo.
@@ -1077,7 +1077,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
   WCS» e serve il disegno di un'immagine su una base non sua). Raccomandazione: **(b)**; (c) è una funzione nuova.
 - **D41-10 — Campi larghi con migliaia di simboli (E5): DECISA il 2026-10-25** dal proprietario: **(d)** — nota
   `CATALOG_DENSE` (§3.8) e righe massime di default 5 000 nella finestra Catalog in view (`40` §3.3); soglia della
-  nota e valore del default sono scelte minori DA CONFERMARE; codice nello sprint 9b. Testo della domanda com'era
+  nota (2 000) e valore del default (5 000) **confermati dal proprietario il 2026-10-25**; codice nello sprint 9b. Testo della domanda com'era
   (aperta lo stesso giorno, Gruppo 3, sprint 9): Con un campo di
   circa 4.6° SIMBAD dà migliaia di oggetti e il cielo diventa illeggibile. Opzioni: **(a)** simboli più piccoli
   oltre una densità (es. più di N simboli per 100 × 100 pixel logici → dimensione 3 pixel), scritta nel pannello dei
@@ -1115,3 +1115,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-a, E7-b):** nota `CATALOG_EPOCH_PROPAGATED` nel pannello Messaggi dopo la propagazione all'epoca dell'immagine (§3.8); scheda della sorgente tutta nella lingua dell'interfaccia (`DISPLAY_EPOCH_SOURCE`, `SOURCE_NO_POSITION`); tabella di §10.1 e test T28b, T28c. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9:** aperte **D41-9** (B3, "Vai a" fuori dalla proiezione dell'immagine base: causa riprodotta, opzioni) e **D41-10** (E5, campi larghi con migliaia di simboli: opzioni), §13. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b:** D41-9 decisa (b) e D41-10 decisa (d) dal proprietario (§13); nota `CATALOG_DENSE` sopra 2 000 simboli (§3.8, scelta minore da confermare), tabella di §10.1, T28d. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | D41-10: soglia di 2 000 simboli per `CATALOG_DENSE` e 5 000 righe di default **confermate dal proprietario** (§3.8, §13). Stato `approvato` invariato. |

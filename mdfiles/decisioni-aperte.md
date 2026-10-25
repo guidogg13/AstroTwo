@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-25, con lo sprint 9b: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **15** (decise dal proprietario lo stesso giorno `D41-9` = (b) errore `VIEW_CENTER_OUTSIDE_IMAGE` con il frame di lettura e frame nel campo "Vai a", `D41-10` = (d) nota `CATALOG_DENSE` e 5 000 righe di default nella finestra, `D13-22` = (a) prima parola dell'UCD; prima nei file di origine 41 §13 e 13 §13).
+**Dal 2026-10-25, con lo sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (decise dal proprietario il 2026-10-25 `A2` = PyInstaller e `A6` = firma ad hoc senza notarizzazione per la prima beta, prima nei file di origine `01` §5 e `60` §13; nuove `A6-b` — firma Developer ID e notarizzazione, **rinviata** — e `D60-1` — sorgente di AstroTwo per la GPL-3.0, blocca il 60b — nel `60` §13; `D41-10` confermata: 2 000 simboli e 5 000 righe).
+
+Prima, **Dal 2026-10-25, con lo sprint 9b: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **15** (decise dal proprietario lo stesso giorno `D41-9` = (b) errore `VIEW_CENTER_OUTSIDE_IMAGE` con il frame di lettura e frame nel campo "Vai a", `D41-10` = (d) nota `CATALOG_DENSE` e 5 000 righe di default nella finestra, `D13-22` = (a) prima parola dell'UCD; prima nei file di origine 41 §13 e 13 §13).
 
 Prima, **Dal 2026-10-25, con lo sprint 9: 20 aperte** — Gruppo 1: **0** · Gruppo 2: **2** (`A2`, `A6`) · Gruppo 3: **18** (nuove `D41-9` — "Vai a" fuori dalla proiezione dell'immagine base, B3 — e `D41-10` — campi larghi con migliaia di simboli, E5 — nel 41 §13; `D13-22` — colonne di moto proprio prese come posizioni — nel 13 §13; `D32-3` — risultati più leggeri verso l'IA — nel 32 §13, **rinviata a dopo la v1**).
 
@@ -293,17 +295,18 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (2)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (0)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `A2` | Quale strumento produce il file `.dmg`? **Orientamento (2026-10-09): PyInstaller + dmgbuild** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
-| `A6` | Si fa firma e notarizzazione Apple per il `.dmg`? **Orientamento (2026-10-09): sì, con account Apple Developer solo al momento della distribuzione** | `60-distribuzione-dmg.md` (blocca solo l'approvazione del 60) |
+| — | Nessuna: `A2` e `A6` decise dal proprietario il 2026-10-25 (`60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (15)
+## 5. GRUPPO 3 — rimandabili al momento del codice (17)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **rinviate** (decisione del proprietario del 2026-10-25: la prima beta è firmata solo ad hoc); da riprendere prima di una versione non beta | `60-distribuzione-dmg.md` §13 |
+| `D60-1` | Sorgente corrispondente di AstroTwo per la GPL-3.0 (§6): (a) repository pubblico con tag per versione, (b) archivio del sorgente accanto al `.dmg`, (c) offerta scritta; raccomandazione (a) + (b). Non blocca il 60a, **blocca il 60b** | `60-distribuzione-dmg.md` §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
@@ -408,3 +411,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-25 | Claude Code | **`D40-3` chiusa** (sprint 8e, ultimo della traduzione dei messaggi; la decisione era del 2026-10-24): `04`, `05`, `30`–`35`, `40`, `41`, `42`, `44` convertiti, T18 su tutto `src/astrotwo`; scritta prima nel file di origine 40 §13. Nessuna decisione nuova né aperta (16 aperte). |
 | 2026-10-25 | Claude Code | **Sprint 9:** aperte `D41-9` (B3), `D41-10` (E5), `D13-22` (colonne di moto proprio prese come posizioni) e registrata `D32-3` (risultati più leggeri verso l'IA, rinviata a dopo la v1); prima nei file di origine 41, 13 e 32 §13. Conteggi: aperte **20** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 18). |
 | 2026-10-25 | Claude Code | **`D41-9`, `D41-10`, `D13-22` decise** (proprietario, 2026-10-25; prima nei file di origine 41 §13 e 13 §13): (b), (d), (a). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). |
+| 2026-10-25 | Claude Code | **Sprint 60a:** `A2` (PyInstaller) e `A6` (firma ad hoc, nessuna notarizzazione per la prima beta) decise dal proprietario (prima nei file di origine `01` §5 e `60` §13), Gruppo 2 vuoto; nuove `A6-b` (Developer ID e notarizzazione, rinviata) e `D60-1` (sorgente di AstroTwo, blocca il 60b) nel Gruppo 3; `D41-10` confermata. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |

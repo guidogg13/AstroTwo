@@ -105,8 +105,8 @@ qui, `AP1` in `03-parita-aladin.md`, `AM1` in `panoramica.md`.
 
 | # | Argomento | Opzioni in lizza / orientamento | Coinvolti | Stato |
 |---|---|---|---|---|
-| A2 | Strumento che produce il `.dmg` | PyInstaller/briefcase + script di creazione dmg · pacchetto nativo Xcode · altro | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): PyInstaller + dmgbuild**; non blocca il livello 1, blocca l'approvazione di `60-distribuzione-dmg.md` |
-| A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **orientamento (2026-10-09): sì**, firma e notarizzazione con account Apple Developer **solo al momento della distribuzione**; blocca l'approvazione di `60-distribuzione-dmg.md` |
+| A2 | Strumento che produce il `.dmg` | PyInstaller/briefcase + script di creazione dmg · pacchetto nativo Xcode · altro | `60-distribuzione-dmg.md` | **DECISA il 2026-10-25** (proprietario): **PyInstaller** (`onedir` + `BUNDLE`) per `AstroTwo.app`, dopo il confronto con Briefcase (`60` §8); lo strumento del `.dmg` si decide nel 60b (orientamento `dmgbuild`) |
+| A6 | Firma e notarizzazione Apple | account sviluppatore Apple con firma + notarizzazione · senza firma (con limiti d'installazione) | `60-distribuzione-dmg.md` | **DECISA per la prima beta il 2026-10-25** (proprietario): niente Apple Developer Program, firma **ad hoc** soltanto, **nessuna notarizzazione** ("Apri comunque" spiegato dal sito); **firma Developer ID e notarizzazione rinviate** (`A6-b`) |
 | A8 | Livello di compatibilità con lo scripting di Aladin | strada già scelta: **scripting principale in Python**; la compatibilità con i comandi di Aladin è **rimandata** | `24-analisi-pipeline-riproducibili.md` | **rimandata: dopo il completamento del livello 1** |
 | A10 | Tetti di memoria per immagini, cataloghi e HiPS caricati | valori per modulo, coerenti con l'obiettivo di §8 | `11`, `12`, `13`, `61-strategia-test.md` | **immagini (11): decisa il 2026-10-10** — in memoria fino a 1 GB, `memmap` oltre per i non compressi, due livelli oltre 4 GB o per i compressi oltre 1 GB, anteprima ≤ 4096 pixel (strategia di caricamento; il **limite delle operazioni**, 4 GB configurabile, è separato: D11-11 nell'11); **cataloghi (13): decisa il 2026-10-10** — tetto di 1 milione di righe per tabella, configurabile, più la stima della memoria con il limite delle operazioni (D13-4); **HiPS (12): decisa il 2026-10-12** — tile in memoria entro **512 MB, configurabili**; `build_hips` lavora **un tile alla volta** entro il **limite delle operazioni** (4 GB, D11-11); su disco la **cache comune di 5 GB** (`04-cache.md`). **A10 interamente decisa** |
 
@@ -144,8 +144,10 @@ astrotwo/
   per il `60-distribuzione-dmg.md` e la radice degli altri identificativi:
   il servizio del Portachiavi per le chiavi dell'IA è
   `dev.pages.astrotwo.ai` (`31` §3.1).
-- Dove vivano gli strumenti di packaging del modulo 60: da definire in
-  `60-distribuzione-dmg.md`.
+- Strumenti di packaging del modulo 60 (dal 2026-10-25): `scripts/build_app.py`
+  (costruzione), `assets/icon/` (icona fornita dal proprietario); codice
+  dell'app per il 60 in `src/astrotwo/app_bundle.py` e
+  `src/astrotwo/ui/licenses_dialog.py` (`60` §7).
 - **`THIRD_PARTY_LICENSES`** (decisione del proprietario del 2026-10-13):
   file nella radice del progetto con **nome, versione, licenza e avvisi
   richiesti di tutte le dipendenze** di esecuzione su macOS (chiusura delle
@@ -304,17 +306,19 @@ esecuzione è incompatibile con la GPL-3.0:
   (chiamata di strumenti, streaming) con due implementazioni iniziali
   (provider cloud + endpoint compatibile OpenAI); spostata in §4.2. Dettagli
   e vincoli in `30-ia-adattatore-provider.md`.
-- **DA-03 — A6, Firma Apple:** orientamento del 2026-10-09: sì, firma e
-  notarizzazione con account Apple Developer solo al momento della
-  distribuzione; si decide con l'approvazione di `60-distribuzione-dmg.md`.
+- **DA-03 — A6, Firma Apple: DECISA per la prima beta il 2026-10-25**
+  (proprietario): firma ad hoc, nessuna notarizzazione; Developer ID e
+  notarizzazione **rinviate** (`A6-b`). Dettaglio in `60-distribuzione-dmg.md`
+  §3.1 e §13. (Orientamento del 2026-10-09: sì, con account Apple Developer.)
 - **DA-04 — A9, Lingua dell'interfaccia: DECISA il 2026-10-15** (decisione
   del proprietario): testi in inglese con `tr()`, traduzione italiana nostra
   con Qt Linguist, traduzioni di Qt per i dialoghi standard, lingua dal
   sistema cambiabile nelle preferenze, numeri scientifici sempre con il
   punto decimale; spostata in §4.2, dettagli in `40-ui-finestra-principale.md`.
-- **DA-05 — A2, Strumento di packaging del `.dmg`:** orientamento del
-  2026-10-09: PyInstaller + dmgbuild; si decide con l'approvazione di
-  `60-distribuzione-dmg.md`, insieme ad A6.
+- **DA-05 — A2, Strumento di packaging: DECISA il 2026-10-25**
+  (proprietario): PyInstaller per `AstroTwo.app` (`60` §3.1, §8); per il
+  `.dmg` lo strumento si decide nel 60b. Python dell'app: CPython 3.12 di
+  python-build-standalone gestito da uv (`60` §3.3).
 - **DA-07 — A10, Tetti di memoria:** valori per immagini, cataloghi e HiPS,
   coerenti con l'obiettivo di §8; **per le immagini decisi il 2026-10-10**
   (valori in `11-core-immagini-fits.md` §3); **per i cataloghi il
@@ -354,3 +358,4 @@ esecuzione è incompatibile con la GPL-3.0:
 | 2026-10-16 | Claude Code | §6: `THIRD_PARTY_LICENSES` con le dipendenze della v1 dell'interfaccia e dell'IA e la sezione degli strumenti di sviluppo (verifiche del 2026-10-16, nell'ambito di "FASE: CODICE – interfaccia v1"). Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Decisione del proprietario del 2026-10-17** (autorizzazione esplicita a modificare il file approvato): §6 — verifica di `httpx2` registrata (dipendenza ufficiale di `anthropic` e `openai`, impronte del `uv.lock` uguali a PyPI, autore Tom Christie, manutentore Pydantic Services Inc., repository `github.com/pydantic/httpx2`, prosecuzione dichiarata da Pydantic e non da `encode/httpx`, nessuna attestazione di pubblicazione su PyPI) e accettata; regola: versioni bloccate nel `uv.lock`, aggiornamento solo esplicito e con nuovo controllo delle impronte. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026 (autorizzazione esplicita a modificare il file approvato): riga A11 spostata da §5 a §4.2; nuova §6.1 (licenza, verifica di compatibilità con le dipendenze, crediti dei dati, requisiti del modulo 60); DA-08 chiusa. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Decisioni del proprietario del 2026-10-25 (sprint 60a):** A2 decisa (PyInstaller), A6 decisa per la prima beta (firma ad hoc, nessuna notarizzazione; Developer ID rinviata, `A6-b`) in §5 e §9; §6: posizione degli strumenti del 60. Dettaglio in `60-distribuzione-dmg.md`. |

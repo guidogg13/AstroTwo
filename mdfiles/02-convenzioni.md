@@ -273,7 +273,10 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
   proprietario sulla checklist del livello 1).** **SemVer**
   `MAJOR.MINOR.PATCH` (es. `0.1.0` in sviluppo): permette di confrontare le
   versioni registrate nei comandi riproducibili; applicazione in
-  `60-distribuzione-dmg.md`.
+  `60-distribuzione-dmg.md`. **Pre-release (decisione del proprietario del
+  2026-10-25):** `astrotwo.__version__` = `0.1.0-beta.1` (SemVer), in
+  `pyproject.toml` la stessa versione in forma PEP 440 `0.1.0b1`; un test
+  controlla che coincidano (`60` §3.2).
 - **DC5 — Nomi dei file Python e delle cartelle:** **risolta il 2026-10-04** con
   A3/A4 in `01-architettura.md`: `src/astrotwo/` con sotto-pacchetti
   `core`, `analysis`, `ai`, `ui`, `advanced`, `pyproject.toml`, `uv`, test in
@@ -316,3 +319,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15** (proposta della fase 1 dell'interfaccia, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per `05` (`core/commands.py`), `40`, `41`, `42`; corretto il file del 17 (`measures.py`, come scritto nel codice, non `measurements.py`); §8 punto 10 — test dell'interfaccia con pytest-qt in `offscreen`, controllo entro 1 pixel, marcatori `perf` e `gl`. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Regola dei commit (decisione del proprietario del 2026-10-16**, autorizzazione esplicita a modificare il file approvato): §8 punti 8 e 9 — le risposte HTTP 429, 502, 503 e 504 dei servizi esterni contano come "connessione" (servizio temporaneamente non disponibile), con le stesse ripetizioni e la dichiarazione nel messaggio di commit; gli altri 4xx restano risultati sbagliati e bloccano il commit. Aggiornati `tests/conftest.py` (`network_reason`), `scripts/commit_checked.py` e i loro test. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per 30, 31, 32, 34, 35 e 44; §8 punto 4 — test del livello 3 con servizi simulati delle due API, adattatore finto e Portachiavi simulato, provider reali solo nella lista di controllo manuale. Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | DC4: forma della pre-release `0.1.0-beta.1` / `0.1.0b1` (decisione del proprietario del 2026-10-25, `60` §3.2). |
