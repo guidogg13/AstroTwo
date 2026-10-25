@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-25, con il codice dello sprint 60a: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D60-1` decisa dal proprietario il 2026-10-25: (a) + (b), repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg`; prima nel file di origine `60` §13; `60` approvato).
+**Dal 2026-10-25, con la costruzione dello sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D60-4`: macOS minimo 26.0 per i moduli di collegamento della ruota di PySide6 6.12.0, nel `60` §13; `D60-3` aperta e decisa lo stesso giorno, (b) Qt copiato dalla ruota).
+
+Prima, **Dal 2026-10-25, con il codice dello sprint 60a: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D60-1` decisa dal proprietario il 2026-10-25: (a) + (b), repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg`; prima nel file di origine `60` §13; `60` approvato).
 
 Prima, **Dal 2026-10-25, con lo sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (decise dal proprietario il 2026-10-25 `A2` = PyInstaller e `A6` = firma ad hoc senza notarizzazione per la prima beta, prima nei file di origine `01` §5 e `60` §13; nuove `A6-b` — firma Developer ID e notarizzazione, **rinviata** — e `D60-1` — sorgente di AstroTwo per la GPL-3.0, blocca il 60b — nel `60` §13; `D41-10` confermata: 2 000 simboli e 5 000 righe).
 
@@ -303,10 +305,11 @@ gruppi successivi, A8 dopo il livello 1).
 |---|---|---|
 | — | Nessuna: `A2` e `A6` decise dal proprietario il 2026-10-25 (`60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (16)
+## 5. GRUPPO 3 — rimandabili al momento del codice (17)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| `D60-4` | macOS minimo dell'app 26.0: i moduli di collegamento della ruota di PySide6/shiboken6 6.12.0 hanno `minos 26.0` (ruota etichettata `macosx_14_0`); su macOS 14/15 l'app con ogni probabilità non parte (da verificare). Opzioni: (a) macOS 26 minimo per la beta, (b) altra versione di PySide6 (aggiornamento di dipendenza su richiesta), (c) segnalazione a Qt for Python; raccomandazione (a) + (c). Non blocca il 60a, conta per il 60b | `60-distribuzione-dmg.md` §3.1, §13 |
 | `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **rinviate** (decisione del proprietario del 2026-10-25: la prima beta è firmata solo ad hoc); da riprendere prima di una versione non beta | `60-distribuzione-dmg.md` §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
@@ -414,3 +417,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-25 | Claude Code | **`D41-9`, `D41-10`, `D13-22` decise** (proprietario, 2026-10-25; prima nei file di origine 41 §13 e 13 §13): (b), (d), (a). Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). |
 | 2026-10-25 | Claude Code | **Sprint 60a:** `A2` (PyInstaller) e `A6` (firma ad hoc, nessuna notarizzazione per la prima beta) decise dal proprietario (prima nei file di origine `01` §5 e `60` §13), Gruppo 2 vuoto; nuove `A6-b` (Developer ID e notarizzazione, rinviata) e `D60-1` (sorgente di AstroTwo, blocca il 60b) nel Gruppo 3; `D41-10` confermata. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
 | 2026-10-25 | Claude Code | **`D60-1` decisa** (proprietario, 2026-10-25; prima nel file di origine `60` §13): (a) + (b). Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 16). |
+| 2026-10-25 | Claude Code | **Costruzione dello sprint 60a:** `D60-3` aperta da V5 e decisa (b) dal proprietario; nuova `D60-4` (macOS minimo 26.0, ruota di PySide6) nel Gruppo 3. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |

@@ -20,8 +20,11 @@ le librerie dentro, l'utente non installa niente) che rispetta le licenze di Ast
 - **Piattaforma:** macOS su Apple Silicon (`arm64`) soltanto. Nessuna app `x86_64` né `universal2`.
 - **macOS minimo:** non scelto a mano. Lo script lo **legge** dai binari inclusi: è il massimo dei `minos` di
   `LC_BUILD_VERSION`. Lo scrive in `LSMinimumSystemVersion`, nel rapporto della costruzione e nella finestra Licenze.
-  Con le versioni di `uv.lock` del 2026-10-25 vale **14.4** (Qt 6.12; numpy e scipy chiedono 14.0); se una
-  dipendenza lo alza, il rapporto lo dice.
+  Con le versioni di `uv.lock` del 2026-10-25 vale **26.0** (misurato sull'app costruita il 2026-10-25): le
+  librerie di Qt chiedono 14.4 e numpy e scipy 14.0, ma i moduli di collegamento di PySide6 e shiboken6 6.12.0
+  (`PySide6/*.abi3.so`, `libpyside6`, `libshiboken6`, `shiboken6/Shiboken.abi3.so`) hanno `minos 26.0` e
+  `sdk 26.0` già nella ruota ufficiale, che pure è etichettata `macosx_14_0_universal2`. Si decide con D60-4; se
+  una dipendenza cambia, il rapporto lo dice.
 - **Firma (A6, decisione del proprietario del 2026-10-25):** solo **ad hoc** (`codesign --sign -`), necessaria perché
   macOS su Apple Silicon non avvia codice non firmato. **Nessuna notarizzazione.** Chi scarica l'app dovrà usare
   "Apri comunque" (Impostazioni di Sistema → Privacy e sicurezza): il sito lo spiegherà (60b). La firma con
@@ -473,6 +476,17 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   `LC_ID_DYLIB` e `LC_RPATH` (codice `arm64` identico). Opzione scartata: (a) accettare la modifica e dichiararla in
   `SOURCES.txt`.
 
+- **D60-4 — macOS minimo 26.0 per colpa della ruota di PySide6 6.12.0:** i moduli di collegamento di PySide6 e
+  shiboken6 6.12.0 dichiarano `minos 26.0` (la ruota è etichettata `macosx_14_0`), quindi `LSMinimumSystemVersion`
+  è 26.0 e su macOS 14 e 15 l'app con ogni probabilità non parte (dyld rifiuta librerie costruite per un macOS più
+  nuovo; **da verificare** su un Mac con macOS 14 o 15, non disponibile qui). Vale anche per `uv run astrotwo` con
+  lo stesso `uv.lock`. Opzioni: (a) accettare macOS 26 come minimo della prima beta e scriverlo sul sito;
+  (b) cambiare versione di PySide6 (una con le librerie costruite per macOS 14, da cercare e verificare: è un
+  aggiornamento di dipendenza, solo su richiesta esplicita, con nuovo controllo delle impronte e i test); (c)
+  segnalarlo al progetto Qt for Python e aspettare una ruota corretta. **Raccomandazione: (a) per la prima beta
+  e (c) in parallelo**; (b) solo se servono utenti con macOS 14/15 subito. Da decidere (non blocca il 60a, conta
+  per il 60b).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -480,3 +494,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-10-25 | Claude Code | Creazione del file (stato: bozza), sprint 60a. Decisioni del proprietario del 2026-10-25: A2 (PyInstaller, dopo il confronto con Briefcase), A6 (firma ad hoc senza notarizzazione per la prima beta; Developer ID rinviata), Python di python-build-standalone gestito da uv, forma della versione (`0.1.0b1` / `0.1.0-beta.1`, build `1`), icona fornita dal proprietario. Parte A (app) completa; parte B (`.dmg`, 60b) da completare. Aperte D60-1, D60-2, D60-3. |
 | 2026-10-25 | Claude Code | **Approvato dal proprietario** (stato `approvato`). Icona: disegno originale del proprietario, GPL-3.0-or-later (§3.6). D60-1 decisa (a) + (b): repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg` (§3.7, §10, §13). D60-2 confermata. |
 | 2026-10-25 | Claude Code | Codice dello sprint 60a: verifiche V-a…V-e fatte (§3.7, §3.11); D60-3 aperta dal fallimento di V5 alla prima costruzione e decisa (b) dal proprietario (§3.3 punto 8, §3.7 punto 4, §13); V7 misura fino alla riga `first_view`, `on_first_view` di `main_window.main`, `keep_entry` (§3.8, §7). Stato `approvato` invariato. |
+| 2026-10-25 | Claude Code | **Costruzione e verifica dello sprint 60a (commit `3b697a7`, albero pulito, nessuna opzione):** 943 test di default passati in `build/env` (Python 3.12.15 di python-build-standalone); V1–V9 tutti `ok`: firma ad hoc, nessun riferimento esterno, autocontrollo in ambiente vuoto, 14 binari di Qt uguali alla ruota (tolta la firma, D60-3), nessuna scrittura nell'app, avvio, licenze. **Dimensione 248,1 MB** (260 100 096 byte; PySide6 82,7 MB di cui Qt 50,3, scipy 32,8, Pillow 11,5). **Avvio fino alla prima vista: 2,59 s a freddo, 1,96 s a caldo** (eseguibile, ambiente vuoto con HOME temporanea, cache vuota, iMac di sviluppo); lancio con `open` riuscito. Prove a mano: T13 — `.venv` rinominato, `uv` fuori dal `PATH`, app copiata fuori dal progetto e aperta con `open`: scaricati in HTTPS i 12 tile di ordine 0 di DSS2 (cielo intero), `properties` e `Moc.fits`; copia identica prima e dopo (1951 file); T14 — `--self-check-keychain` con il Portachiavi di login: `keychain_roundtrip` ok, nessuna voce rimasta. Controlli V4 e V7 con HOME temporanea (con la HOME vera l'app leggeva la chiave del profilo IA e macOS chiedeva il permesso, §10). Aperta D60-4 (macOS minimo 26.0 per la ruota di PySide6). T17 (ripetibilità) non ancora eseguito. Stato `approvato` invariato. |
