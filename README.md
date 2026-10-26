@@ -54,7 +54,7 @@ AstroTwo is a native macOS application to explore the sky, open FITS images, ove
 
 ## Requirements
 
-- macOS on Apple Silicon (tested on Apple M1 with 8 GB of RAM)
+- macOS 26 or later, Apple Silicon (M1 or later). Intel Macs are not supported.
 - Internet connection for online surveys and catalogues
 - For the AI assistant: an API key from a supported provider, or a local model with Ollama or LM Studio
 
