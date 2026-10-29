@@ -25,7 +25,7 @@ import math
 import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 import astropy
@@ -404,12 +404,49 @@ _NAME_COLUMNS = {
     "coo_bibcode": "TEXT",
 }
 _SIMBAD_EPOCH_NOTE = "coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD)"
+_NED_FRAME_NOTE = (
+    "coordinate NED: equatoriali, equinozio J2000.0 (descrizione delle colonne ra/dec del TAP di NED); "
+    "NED non dichiara se ICRS o FK5 né un'epoca: frame fk5, epoca non dichiarata"
+)
 _NETWORK_ERRORS = (requests.exceptions.RequestException, pyvo.dal.DALServiceError, OSError)
+
+#: Timeout dei nomi (decisione del proprietario del 2026-10-29): il ripiego parte in fretta.
+NAME_TIMEOUTS = NetworkTimeouts(connect=5.0, read=15.0)
+#: Le voci di NED scadono dopo 24 ore (decisione del proprietario del 2026-10-29).
+NED_CACHE_LIFETIME = timedelta(hours=24)
+_NED_ORIGIN = "https://ned.ipac.caltech.edu/srs/ObjectLookup"
+
+
+@dataclass(frozen=True)
+class _NameService:
+    """Servizio di risoluzione dei nomi: chiave, etichetta e (per SIMBAD) il server di astroquery."""
+
+    key: str
+    label: str
+    simbad_server: str | None = None
+
+
+#: Ordine di prova (10 §7): Strasburgo → mirror di Harvard → NED.
+_NAME_SERVICES = (
+    _NameService("simbad_cds", "SIMBAD (CDS)", "simbad.cds.unistra.fr"),
+    _NameService("simbad_harvard", "SIMBAD (Harvard mirror)", "simbad.harvard.edu"),
+    _NameService("ned", "NED (NASA/IPAC)"),
+)
+_SERVICE_BY_KEY = {s.key: s for s in _NAME_SERVICES}
+
+
+def _service_of_origin(origin: str) -> _NameService:
+    """Servizio che ha dato una voce di cache, dall'origine scritta (indirizzo del servizio)."""
+    if origin.startswith(_NED_ORIGIN):
+        return _SERVICE_BY_KEY["ned"]
+    if "harvard" in origin:
+        return _SERVICE_BY_KEY["simbad_harvard"]
+    return _SERVICE_BY_KEY["simbad_cds"]
 
 
 @dataclass(frozen=True)
 class ResolvedName:
-    """Nome risolto: coordinate ICRS con fonte, origine, data e incertezza."""
+    """Nome risolto: coordinate con fonte, servizio, origine, data e incertezza."""
 
     name: str
     main_id: str
@@ -423,6 +460,8 @@ class ResolvedName:
     coo_err_angle: u.Quantity | None
     coo_bibcode: str | None
     notes: tuple[str, ...] = ()
+    service: str = "simbad_cds"
+    warnings: tuple[ModuleWarning, ...] = ()
 
 
 class _TimeoutSession(requests.Session):
@@ -463,10 +502,26 @@ def _simbad_with_timeouts(timeouts: NetworkTimeouts):
     return simbad
 
 
-def _query_simbad(name: str, timeouts: NetworkTimeouts):
-    """Interroga SIMBAD (TAP) con ``astroquery``; restituisce (tabella, URL del servizio)."""
+def _query_simbad(name: str, timeouts: NetworkTimeouts, server: str):
+    """Interroga SIMBAD (TAP) con ``astroquery`` sul server indicato; restituisce (tabella, URL del servizio)."""
     simbad = _simbad_with_timeouts(timeouts)
+    simbad.server = server
     return simbad.query_object(name), simbad.tap.baseurl
+
+
+def _query_ned(name: str, timeouts: NetworkTimeouts) -> dict:
+    """Interroga l'ObjectLookup di NED (JSON); un guasto del servizio solleva un errore di rete."""
+    session = _TimeoutSession(timeouts)
+    response = session.get(_NED_ORIGIN, params={"name": name, "of": "json"})
+    response.raise_for_status()
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise requests.exceptions.RequestException(f"risposta di NED non valida: {exc}") from exc
+    if not isinstance(data, dict) or data.get("StatusCode") != 100:
+        status = data.get("StatusCode") if isinstance(data, dict) else None
+        raise requests.exceptions.RequestException(f"NED: StatusCode {status!r} (atteso 100)")
+    return data
 
 
 def _column_value(table, column: str, target_unit) -> float | None:
@@ -483,19 +538,26 @@ def _column_value(table, column: str, target_unit) -> float | None:
     return float((float(value) * u.Unit(unit)).to_value(target_unit))
 
 
-def _name_result(name: str, values: dict, origin: str, retrieved_at: datetime, from_cache: bool, notes=()) -> ResolvedName:
+def _name_result(name: str, values: dict, origin: str, retrieved_at: datetime, from_cache: bool, notes=(),
+                 warnings=()) -> ResolvedName:
     def quantity(key, unit):
         value = values.get(key)
         return None if value is None else value * unit
 
-    coords = SkyFrame.from_lonlat(
-        values["ra_deg"] * u.deg, values["dec_deg"] * u.deg, "icrs", epoch=Time("J2000.0")
-    )
+    service = _service_of_origin(origin)
+    if service.key == "ned":
+        coords = SkyFrame.from_lonlat(values["ra_deg"] * u.deg, values["dec_deg"] * u.deg, "fk5",
+                                      equinox=Time("J2000.0"))  # epoca non dichiarata da NED: mai assunta
+        source = f"{service.label} ObjectLookup; {_NED_FRAME_NOTE}"
+    else:
+        coords = SkyFrame.from_lonlat(values["ra_deg"] * u.deg, values["dec_deg"] * u.deg, "icrs",
+                                      epoch=Time("J2000.0"))
+        source = f"{service.label} via astroquery; {_SIMBAD_EPOCH_NOTE}"
     return ResolvedName(
         name=name,
         main_id=values["main_id"],
         coords=coords,
-        source=f"SIMBAD (CDS) via astroquery; {_SIMBAD_EPOCH_NOTE}",
+        source=source,
         origin=origin,
         retrieved_at=retrieved_at,
         from_cache=from_cache,
@@ -504,68 +566,28 @@ def _name_result(name: str, values: dict, origin: str, retrieved_at: datetime, f
         coo_err_angle=quantity("coo_err_angle_deg", u.deg),
         coo_bibcode=values.get("coo_bibcode"),
         notes=tuple(notes),
+        service=service.key,
+        warnings=tuple(warnings),
     )
 
 
-def resolve_name(
-    name: str,
-    *,
-    source: str = "simbad",
-    cache: SharedCache | None = None,
-    refresh: bool = False,
-    timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
-) -> ResolvedName:
-    """Risolve un nome di oggetto in coordinate ICRS con SIMBAD.
-
-    Politica (D10-3 e decisione del 2026-10-09): **prima la cache** — un nome
-    già risolto viene dalla cache comune, dichiarato tale con origine e data;
-    ``refresh=True`` interroga di nuovo SIMBAD. Se la rete non risponde si usa
-    la copia in cache, se c'è, dichiarandolo; altrimenti ``NET_TIMEOUT``.
-    """
-    if not isinstance(name, str) or not name.strip():
-        raise CoordinatesWcsError("NAME_NOT_FOUND", "nome vuoto", params={"reason": "empty_name"})
-    if source != "simbad":
-        raise CoordinatesWcsError("NAME_NOT_FOUND", f"fonte {source!r} non prevista: unica fonte 'simbad'",
-                                  params={"reason": "source_unsupported", "source": str(source)})
-    clean = " ".join(name.split())
-    key = f"simbad:{clean}"
-    cache = SharedCache() if cache is None else cache
-    table = cache.table("10", _NAME_TABLE, _NAME_COLUMNS)
-
-    cached = table.get(key)
-    if cached is not None and not refresh:
-        return _name_result(clean, cached.data, cached.origin, cached.retrieved_at, from_cache=True)
-
-    try:
-        result, origin = _query_simbad(clean, timeouts)
-    except _NETWORK_ERRORS as exc:
-        if cached is not None:
-            return _name_result(
-                clean, cached.data, cached.origin, cached.retrieved_at, from_cache=True,
-                notes=(f"SIMBAD non raggiungibile ({type(exc).__name__}): copia in cache",),
-            )
-        raise CoordinatesWcsError(
-            "NET_TIMEOUT",
-            f"SIMBAD non raggiungibile per {clean!r} (timeout {timeouts.connect:g} s connessione, "
-            f"{timeouts.read:g} s lettura): {exc}",
-            params={"service": "SIMBAD", "target": clean, "connect": _q(timeouts.connect, "s"),
-                    "read": _q(timeouts.read, "s"), "detail": str(exc)},
-        ) from exc
-
+def _simbad_values(result, clean: str, service: _NameService) -> dict:
+    """Valori di una risposta SIMBAD; nome non trovato, ambiguo o senza coordinate → ``NAME_NOT_FOUND``."""
+    params = {"name": clean, "service": service.label}
     if result is None or len(result) == 0:
-        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} non trovato in SIMBAD", params={"name": clean})
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} non trovato in {service.label}", params=params)
     if len({str(r["main_id"]) for r in result}) > 1:
         raise CoordinatesWcsError(
-            "NAME_NOT_FOUND", f"{clean!r} è ambiguo in SIMBAD: nessun nome risolto approssimativamente",
-            params={"reason": "ambiguous", "name": clean},
+            "NAME_NOT_FOUND", f"{clean!r} è ambiguo in {service.label}: nessun nome risolto approssimativamente",
+            params={"reason": "ambiguous", **params},
         )
     ra, dec = _column_value(result, "ra", u.deg), _column_value(result, "dec", u.deg)
     if ra is None or dec is None:
-        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} è in SIMBAD ma senza coordinate",
-                                  params={"reason": "no_coordinates", "name": clean})
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} è in {service.label} ma senza coordinate",
+                                  params={"reason": "no_coordinates", **params})
     row = result[0]
     bibcode = None if "coo_bibcode" not in result.colnames or np.ma.is_masked(row["coo_bibcode"]) else str(row["coo_bibcode"])
-    values = {
+    return {
         "main_id": str(row["main_id"]),
         "ra_deg": ra,
         "dec_deg": dec,
@@ -574,9 +596,112 @@ def resolve_name(
         "coo_err_angle_deg": _column_value(result, "coo_err_angle", u.deg),
         "coo_bibcode": bibcode,
     }
+
+
+def _ned_values(data: dict, clean: str, service: _NameService) -> dict:
+    """Valori di una risposta di NED (10 §7, ``ResultCode``); le incertezze non si usano (unità non documentate)."""
+    params = {"name": clean, "service": service.label}
+    code = data.get("ResultCode")
+    if code == 1:
+        raise CoordinatesWcsError(
+            "NAME_NOT_FOUND", f"{clean!r} è ambiguo in {service.label}: nome non specifico",
+            params={"reason": "ambiguous", **params},
+        )
+    if code != 3:
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} non trovato in {service.label}", params=params)
+    preferred = data.get("Preferred") or {}
+    position = preferred.get("Position") or {}
+    ra, dec, main_id = position.get("RA"), position.get("Dec"), preferred.get("Name")
+    if not isinstance(ra, (int, float)) or not isinstance(dec, (int, float)) or not main_id:
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"{clean!r} è in {service.label} ma senza coordinate",
+                                  params={"reason": "no_coordinates", **params})
+    return {"main_id": str(main_id), "ra_deg": float(ra), "dec_deg": float(dec), "coo_err_maj_mas": None,
+            "coo_err_min_mas": None, "coo_err_angle_deg": None, "coo_bibcode": None}
+
+
+def _ask_service(service: _NameService, clean: str, timeouts: NetworkTimeouts) -> tuple[dict, str]:
+    """Interroga un servizio: (valori, origine). Gli errori di rete o del servizio salgono a ``resolve_name``."""
+    if service.key == "ned":
+        return _ned_values(_query_ned(clean, timeouts), clean, service), _NED_ORIGIN
+    result, origin = _query_simbad(clean, timeouts, service.simbad_server)
+    return _simbad_values(result, clean, service), origin
+
+
+def _failure_text(service: _NameService, exc: BaseException) -> str:
+    """Servizio e motivo del guasto su una riga (i messaggi delle librerie vanno a capo)."""
+    return f"{service.label}: {type(exc).__name__}: {' '.join(str(exc).split())}"
+
+
+def resolve_name(
+    name: str,
+    *,
+    source: str = "auto",
+    cache: SharedCache | None = None,
+    refresh: bool = False,
+    timeouts: NetworkTimeouts = NAME_TIMEOUTS,
+) -> ResolvedName:
+    """Risolve un nome di oggetto in coordinate con SIMBAD (Strasburgo), il suo mirror di Harvard o NED.
+
+    Politica (D10-3 e decisione del 2026-10-09): **prima la cache** — un nome
+    già risolto viene dalla cache comune, dichiarato tale con origine e data;
+    ``refresh=True`` riparte da Strasburgo. I servizi si provano nell'ordine
+    di ``_NAME_SERVICES``, passando al successivo solo per errori di rete o del
+    servizio, mai per ``NAME_NOT_FOUND``; un ripiego è dichiarato con
+    ``NAME_RESOLVER_FALLBACK``. Le voci di NED scadono dopo 24 ore. Se nessun
+    servizio risponde si usa la copia in cache, se c'è, dichiarandolo;
+    altrimenti ``NET_TIMEOUT``.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise CoordinatesWcsError("NAME_NOT_FOUND", "nome vuoto", params={"reason": "empty_name"})
+    if source != "auto":
+        raise CoordinatesWcsError("NAME_NOT_FOUND", f"fonte {source!r} non prevista: unica fonte 'auto'",
+                                  params={"reason": "source_unsupported", "source": str(source)})
+    clean = " ".join(name.split())
+    key = f"simbad:{clean}"  # chiave di prima, una sola voce per nome qualunque sia il servizio (10 §3)
+    cache = SharedCache() if cache is None else cache
+    table = cache.table("10", _NAME_TABLE, _NAME_COLUMNS)
+
+    cached = table.get(key)
+    expired = (cached is not None and _service_of_origin(cached.origin).key == "ned"
+               and datetime.now(UTC) - cached.retrieved_at > NED_CACHE_LIFETIME)
+    if cached is not None and not refresh and not expired:
+        return _name_result(clean, cached.data, cached.origin, cached.retrieved_at, from_cache=True)
+
+    failures: list[tuple[_NameService, BaseException]] = []
+    for service in _NAME_SERVICES:
+        try:
+            values, origin = _ask_service(service, clean, timeouts)
+        except _NETWORK_ERRORS as exc:
+            failures.append((service, exc))
+            continue
+        break
+    else:
+        tried = ", ".join(s.label for s, _ in failures)
+        detail = "; ".join(_failure_text(s, e) for s, e in failures)
+        if cached is not None:
+            return _name_result(
+                clean, cached.data, cached.origin, cached.retrieved_at, from_cache=True,
+                notes=(f"nessun servizio dei nomi raggiungibile ({tried}): copia in cache",),
+            )
+        raise CoordinatesWcsError(
+            "NET_TIMEOUT",
+            f"nessun servizio dei nomi raggiungibile per {clean!r} (provati: {tried}; timeout "
+            f"{timeouts.connect:g} s connessione, {timeouts.read:g} s lettura per ciascuno): {detail}. "
+            "Usa le coordinate al posto del nome.",
+            params={"reason": "name_services", "target": clean, "services": tried,
+                    "connect": _q(timeouts.connect, "s"), "read": _q(timeouts.read, "s"), "detail": detail},
+        ) from failures[-1][1]
+
+    warnings = ()
+    if failures:
+        failed = "; ".join(_failure_text(s, e) for s, e in failures)
+        warnings = (ModuleWarning(
+            "NAME_RESOLVER_FALLBACK",
+            f"{service.label} ha risposto al posto di: {failed}",
+            {"service": service.label, "failed": failed}),)
     retrieved_at = datetime.now(UTC)
     table.put(key, values, origin=origin, retrieved_at=retrieved_at)
-    return _name_result(clean, values, origin, retrieved_at, from_cache=False)
+    return _name_result(clean, values, origin, retrieved_at, from_cache=False, warnings=warnings)
 
 
 def parse_sexagesimal(values, *, hours: bool) -> u.Quantity:

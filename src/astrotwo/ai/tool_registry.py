@@ -107,7 +107,7 @@ _VIEW = ("values.base", "values.base_layer", "values.base_scale.unit", "values.b
          "values.grid.*", "values.grid_frame", "values.notes[]", "values.pixel_grid.*", "values.wcs_problem.*",
          "values.interpreted_as", "values.overlays.*", "values.cursor_frame", "values.layer")
 # valori di resolve_name del 10 (``coords.resolve_name``; dentro ``resolved`` per ``view.go_to``)
-_RESOLVED_ASTROTWO = ("name", "position.*", "source", "origin", "retrieved_at", "notes[]")
+_RESOLVED_ASTROTWO = ("name", "position.*", "source", "service", "origin", "retrieved_at", "notes[]")
 _RESOLVED_EXTERNAL = ("main_id", "coo_bibcode")
 # valori di un catalogo caricato (``_catalog_values`` del 05)
 _CATALOG_ASTROTWO = ("values.layer", "values.body", "values.positions.frame", "values.positions.source",

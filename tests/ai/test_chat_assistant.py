@@ -354,7 +354,7 @@ def test_t7_planets_not_available(session, tools, monkeypatch):
     disponibili nella v1 e di non proporre azioni impossibili. Nessuno strumento dà effemeridi."""
     import astrotwo.core.coordinates_wcs as cw
 
-    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (simbad_table(rows=0), "https://simbad.invalid"))
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts, server=None: (simbad_table(rows=0), "https://simbad.invalid"))
     script = [calls_turn(tool_call("c1", "coords__resolve_name", name="Mars")),
               text_turn("Planet positions are not available in this version of AstroTwo.")]
     assistant, adapter, rec = make(session, tools, script, language="English")

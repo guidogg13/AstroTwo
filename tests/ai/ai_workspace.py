@@ -33,7 +33,7 @@ INJECTION_ROWS = ROWS + ((INJECTION, 56.5, 24.2, 1.0, -1.0),)
 @pytest.fixture
 def offline(service, monkeypatch):
     """SIMBAD, TAP di VizieR e copertura HiPS simulati: nessuna richiesta esce dal Mac."""
-    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (simbad_table(), SIMBAD_TAP))
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts, server=None: (simbad_table(), SIMBAD_TAP))
     monkeypatch.setattr(hips, "survey_coverage", lambda svc, **k: hips.service_coverage(svc, **k))
     entries = tuple(dataclasses.replace(e, url=service.url + "/viz") if e.id == "cds-vizier-tap" else e
                     for e in vo.BUILTIN_SERVERS)

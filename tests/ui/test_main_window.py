@@ -79,7 +79,7 @@ def offline(monkeypatch):
 
 @pytest.fixture
 def fake_simbad(monkeypatch):
-    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts, server=None: (
         simbad_table(rows=1 if name == "M31" else 0), "https://simbad.cds.unistra.fr/simbad/sim-tap"))
 
 

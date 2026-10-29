@@ -366,7 +366,7 @@ le scelte minori di §13; tutti versione 1):
 | `cursor.read` (posizione sullo schermo, `order`) | 10 `pixel_to_sky`, `convert_coordinates`, `convert_pixel_convention`; 17 `read_pixel` o 12 `pixel_values` | passive | |
 | `simbad.pointer` (posizione, raggio) | 10 `pixel_to_sky`, 17 `angular_distance`, 14 `simbad_pointer` | passive | rete |
 | `calc.*` (cinque calcolatrici) | 18 (adattatore `run_command`) | session | |
-| `coords.resolve_name` (testo del nome) — nuovo, 2026-10-16 | 10 `resolve_name` | session | sola lettura, rete |
+| `coords.resolve_name` (testo del nome) — nuovo, 2026-10-16; dal 2026-10-29 il risultato porta `service` (servizio che ha risposto) e, se ha risposto un ripiego, l'avviso `NAME_RESOLVER_FALLBACK`; `view.go_to` con un nome idem (`10` §3, §7) | 10 `resolve_name` | session | sola lettura, rete |
 | `catalog.search` (livello, espressione, maiuscole sì/no) — nuovo | 13 `search` (grammatica chiusa, D13-1): numero delle righe che soddisfano l'espressione e i primi 50 indici; la selezione non cambia | session | sola lettura |
 | `catalog.describe` (livello) — nuovo | metadati della tabella del 13 (colonne con nome, tipo, unità, UCD, descrizione; righe; colonne di posizione; epoca; sorgente con origine e data) | session | sola lettura |
 | `catalog.rows` (livello, prima riga, numero di righe ≤ 50, colonne facoltative, ordine della tabella o mostrato) — nuovo | 13 `record_view` per ogni riga | session | sola lettura |

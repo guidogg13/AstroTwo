@@ -430,18 +430,25 @@ _add("COORD_OUT_OF_RANGE",
      fov_threshold_positive=("The field of view and the threshold must be positive.",
                              "Il campo di vista e la soglia devono essere positivi.", ""))
 _add("NAME_NOT_FOUND",
-     "'{name}' was not found in SIMBAD.", "'{name}' non trovato in SIMBAD.", "name",
+     "'{name}' was not found in {service}.", "'{name}' non trovato in {service}.", "name service",
      empty_name=("The name is empty.", "Il nome è vuoto.", ""),
-     source_unsupported=("Source '{source}' is not provided: the only source is 'simbad'.",
-                         "La fonte '{source}' non è prevista: l'unica fonte è 'simbad'.", "source"),
-     ambiguous=("'{name}' is ambiguous in SIMBAD: no name was resolved approximately.",
-                "'{name}' è ambiguo in SIMBAD: nessun nome risolto approssimativamente.", "name"),
-     no_coordinates=("'{name}' is in SIMBAD but has no coordinates.",
-                     "'{name}' è in SIMBAD ma senza coordinate.", "name"))
+     source_unsupported=("Source '{source}' is not provided: the only source is 'auto'.",
+                         "La fonte '{source}' non è prevista: l'unica fonte è 'auto'.", "source"),
+     ambiguous=("'{name}' is ambiguous in {service}: no name was resolved approximately.",
+                "'{name}' è ambiguo in {service}: nessun nome risolto approssimativamente.", "name service"),
+     no_coordinates=("'{name}' is in {service} but has no coordinates.",
+                     "'{name}' è in {service} ma senza coordinate.", "name service"))
+_add("NAME_RESOLVER_FALLBACK",
+     "{service} answered instead of: {failed}", "{service} ha risposto al posto di: {failed}", "service failed!")
 _add("NET_TIMEOUT",
      "{service} is not reachable for '{target}' (timeout {connect} connection, {read} read): {detail}",
      "{service} non raggiungibile per '{target}' (timeout {connect} connessione, {read} lettura): {detail}",
      "service target connect:qty read:qty detail!",
+     name_services=("No name-resolution service is reachable for '{target}' (tried: {services}; timeout {connect} "
+                    "connection, {read} read, for each): {detail}. Use the coordinates instead of the name.",
+                    "Nessun servizio dei nomi raggiungibile per '{target}' (provati: {services}; timeout {connect} "
+                    "connessione, {read} lettura, per ciascuno): {detail}. Usa le coordinate al posto del nome.",
+                    "target services connect:qty read:qty detail!"),
      url=("{url} is not reachable (timeout {connect} connection, {read} read): {detail}",
           "{url} non raggiungibile (timeout {connect} connessione, {read} lettura): {detail}",
           "url connect:qty read:qty detail!"))

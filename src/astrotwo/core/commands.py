@@ -1882,6 +1882,8 @@ def _exec_view_go_to(ctx: ExecutionContext, p: Mapping) -> Outcome:
                            f"{exc.message}", params={**exc.params, "reason": "typed", "frame": frame}) from exc
     outcome.values.update(interpreted_as=how, **extra)
     outcome.provenance, outcome.network_fingerprint = provenance, fingerprint
+    if extra:
+        outcome.warnings.extend(_resolver_warnings(resolved))
     return outcome
 
 
@@ -2144,7 +2146,12 @@ def _resolved_values(resolved) -> dict:
             "source": resolved.source, "origin": resolved.origin, "retrieved_at": _iso(resolved.retrieved_at),
             "from_cache": resolved.from_cache, "coo_err_maj": quantity_json(resolved.coo_err_maj),
             "coo_err_min": quantity_json(resolved.coo_err_min), "coo_err_angle": quantity_json(resolved.coo_err_angle),
-            "coo_bibcode": resolved.coo_bibcode, "notes": list(resolved.notes)}
+            "coo_bibcode": resolved.coo_bibcode, "notes": list(resolved.notes), "service": resolved.service}
+
+
+def _resolver_warnings(resolved) -> list[ResultMessage]:
+    """Avvisi di ``resolve_name`` (``NAME_RESOLVER_FALLBACK``) come messaggi del risultato (10 §7)."""
+    return [ResultMessage(w[0], w[1], _json_params(w.params)) for w in resolved.warnings]
 
 
 def _exec_coords_resolve_name(ctx: ExecutionContext, p: Mapping) -> Outcome:
@@ -2152,7 +2159,7 @@ def _exec_coords_resolve_name(ctx: ExecutionContext, p: Mapping) -> Outcome:
 
     resolved = resolve_name(p["name"], cache=ctx.cache)
     values = _resolved_values(resolved)
-    return Outcome(values=values,
+    return Outcome(values=values, warnings=_resolver_warnings(resolved),
                    provenance=[_source(resolved.origin, resolved.retrieved_at, resolved.from_cache,
                                        source=resolved.source)],
                    network_fingerprint=[_fingerprint(_json_digest(values["position"]), resolved.origin,

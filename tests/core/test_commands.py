@@ -458,7 +458,7 @@ def test_t13_module_errors_unchanged(registry):
 def fake_simbad(monkeypatch):
     calls = []
 
-    def query(name, timeouts):
+    def query(name, timeouts, server=None):
         calls.append(name)
         return simbad_table(), "https://simbad.cds.unistra.fr/simbad/sim-tap"
 
@@ -744,7 +744,7 @@ def test_go_to_center_outside_current_projection_recreates_base(registry, monkey
     ``VIEW_PARAMETERS_INVALID``. Risposte di SIMBAD registrate dal servizio reale il 2026-10-19."""
     recorded = {"Sirius": ("* alf CMa", 101.28715533333335, -16.71611586111111),
                 "M31": ("M  31", 10.684708333333333, 41.268750000000004)}
-    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts, server=None: (
         simbad_table(*recorded[name]), "https://simbad.cds.unistra.fr/simbad/sim-tap"))
     s = Session(registry)
     assert run(s, "view.set_zoom", scale={"value": 7.5, "unit": "arcsec"}, window=WINDOW).status == "ok"
@@ -759,3 +759,26 @@ def test_go_to_center_outside_current_projection_recreates_base(registry, monkey
         # il centro del cielo disegnato è quello chiesto (10, window_to_sky)
         mid = view.geometry.window_to_sky((WINDOW["width"] - 1) / 2, (WINDOW["height"] - 1) / 2)
         assert mid.spherical.lon.deg == pytest.approx(ra, abs=1e-6)
+
+
+def test_name_fallback_to_ned_is_declared_in_commands(registry, monkeypatch):
+    """Sprint 10a: Strasburgo e mirror giù → NED; servizio, frame, epoca e avviso arrivano nel risultato."""
+    import requests
+
+    def simbad_down(name, timeouts, server=None):
+        raise requests.exceptions.ConnectTimeout("rete assente")
+
+    ned = {"StatusCode": 100, "ResultCode": 3,
+           "Preferred": {"Name": "Messier 031", "Position": {"RA": 10.68479292, "Dec": 41.269065}}}
+    monkeypatch.setattr(cw, "_query_simbad", simbad_down)
+    monkeypatch.setattr(cw, "_query_ned", lambda name, timeouts: ned)
+    s = Session(registry)
+    resolved = run(s, "coords.resolve_name", name="M31")
+    assert resolved.status == "ok" and resolved.values["service"] == "ned"
+    position = resolved.values["position"]
+    assert position["frame"] == "fk5" and position["epoch"] is None and position["equinox"] is not None
+    assert [w.code for w in resolved.warnings] == ["NAME_RESOLVER_FALLBACK"]
+    moved = run(s, "view.go_to", text="NGC 224", window=WINDOW)  # altro nome: non dalla cache
+    assert moved.status == "ok", moved.error
+    assert moved.values["resolved"]["service"] == "ned"
+    assert [w.code for w in moved.warnings] == ["NAME_RESOLVER_FALLBACK"]

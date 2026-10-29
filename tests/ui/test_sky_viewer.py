@@ -607,7 +607,7 @@ def test_go_to_far_target_from_tan_view(qtbot, viewer_window, monkeypatch):
 
     recorded = {"Sirius": ("* alf CMa", 101.28715533333335, -16.71611586111111),
                 "M31": ("M  31", 10.684708333333333, 41.268750000000004)}
-    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts, server=None: (
         simbad_table(*recorded[name]), "https://simbad.cds.unistra.fr/simbad/sim-tap"))
     win = viewer_window
     start(qtbot, win)

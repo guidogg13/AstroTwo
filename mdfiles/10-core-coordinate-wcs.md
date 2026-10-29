@@ -14,22 +14,43 @@ da AstroTwo sia determinista, con unità e sistema di riferimento sempre dichiar
   (l, b), eclittiche e gli altri sistemi supportati da `astropy.coordinates`;
   conversioni anche tra epoche diverse (precessione/nutazione) sempre tramite
   Astropy, mai con formule scritte a mano.
-- **Risoluzione dei nomi:** tradurre un nome di oggetto (es. "M31", "NGC 224",
-  "Aldebaran") in coordinate, con fonte dichiarata (servizio SIMBAD via
-  `astroquery`). Le risoluzioni si **cacheano** in una **tabella SQLite
-  separata dentro la cache A7** (limite e provenienza unici, schema non
-  condiviso con `13-core-cataloghi.md` — D10-3 decisa il 2026-10-04), cioè
-  nella cache condivisa descritta in `04-cache.md` (cartella, limite e
-  timeout di rete — 10 s connessione, 60 s lettura — sono definiti lì;
-  approvato il 2026-10-09). **Politica (decisione del proprietario del
+- **Risoluzione dei nomi (con ripiego, sprint 10a, 2026-10-29):** tradurre un
+  nome di oggetto (es. "M31", "NGC 224", "Aldebaran") in coordinate, con
+  fonte dichiarata. I servizi si provano **nell'ordine** (§7, "Servizi di
+  risoluzione"): SIMBAD di Strasburgo (CDS) → mirror SIMBAD di Harvard →
+  NED (NASA/IPAC). Si passa al servizio successivo **solo per errori di rete
+  o del servizio** (timeout, connessione, HTTP 5xx e 429, risposta non
+  valida), **mai per "nome non trovato"**: `NAME_NOT_FOUND` è un risultato
+  valido del primo servizio che risponde. Il risultato dichiara **quale
+  servizio ha risposto**; se non è il primo, accompagna il risultato un
+  avviso `NAME_RESOLVER_FALLBACK` con il servizio usato e il motivo per cui
+  i precedenti sono stati saltati. Le risoluzioni si **cacheano** in una
+  **tabella SQLite separata dentro la cache A7** (limite e provenienza unici,
+  schema non condiviso con `13-core-cataloghi.md` — D10-3 decisa il
+  2026-10-04), cioè nella cache condivisa descritta in `04-cache.md`
+  (cartella e limite sono definiti lì). **Politica (decisione del proprietario del
   2026-10-09): prima la cache** — se il nome è già in cache, il risultato
-  viene da lì, dichiarato tale con origine e data, senza rete; con
-  `refresh=True` si interroga di nuovo SIMBAD e si aggiorna la cache; se la
-  rete non risponde e il nome è in cache, si restituisce la copia in cache
-  dichiarandolo. Le richieste a SIMBAD (TAP di `astroquery`) usano i timeout
-  comuni di `04-cache.md` (10 s connessione, 60 s lettura). Le coordinate
-  SIMBAD sono ICRS all'epoca J2000 (documentazione di SIMBAD): l'epoca è
-  scritta nel risultato con questa fonte.
+  viene da lì, dichiarato tale con origine (che identifica il servizio) e
+  data, senza rete; con `refresh=True` si riparte sempre da Strasburgo e si
+  aggiorna la cache; se nessun servizio risponde e il nome è in cache, si
+  restituisce la copia in cache dichiarandolo. **Una sola voce per nome**,
+  qualunque servizio abbia risposto (decisione del proprietario del
+  2026-10-29); le voci di SIMBAD (Strasburgo o mirror, stessi dati SIMBAD)
+  seguono la durata normale della cache; le voci di **NED scadono dopo 24
+  ore**: scadute, il nome si riprova dalla catena partendo da Strasburgo
+  (la copia scaduta si usa solo se nessun servizio risponde, dichiarandolo).
+  **Timeout dei nomi (decisione del proprietario del 2026-10-29): 5 s di
+  connessione e 15 s di lettura per ciascun servizio**, propri di
+  `resolve_name` (i timeout comuni di 10/60 s di `04-cache.md` restano per
+  tutti gli altri moduli). Frame ed epoca delle coordinate dipendono dal
+  servizio e sono sempre scritti nel risultato: SIMBAD (Strasburgo e
+  mirror) = ICRS all'epoca J2000 (documentazione di SIMBAD); **NED =
+  equatoriale con equinozio J2000.0, dichiarato dalla descrizione delle
+  colonne `ra`/`dec` del TAP di NED; non dichiara se sia ICRS o FK5 né
+  un'epoca** (decisione del proprietario del 2026-10-29): il risultato è in
+  frame `fk5` con equinozio J2000.0 e **epoca non dichiarata** (`None`,
+  mai assunta). Le coordinate di NED non si presumono uguali a quelle di
+  SIMBAD (le conversioni passano da Astropy).
 - **Letture e raffigurazioni:** coordinate del cursore nel campo visualizzato
   (con `pixel_to_sky`); **geometria della griglia di coordinate** con
   `compute_grid_lines` — meridiani e paralleli a passo dichiarato, come
@@ -204,13 +225,41 @@ Funzioni e classi (nomi proposti, descrizione in parole, nessun codice):
 - **`convert_coordinates(...)`** — converge coordinate tra frame e epoche;
   parametri: coordinate di origine, frame di partenza, frame/epoca di arrivo;
   restituisce coordinate con unità e frame di destinazione.
-- **`resolve_name(name)`** — risolve un nome in coordinate ICRS; parametri:
-  nome, opzione di fonte (solo `simbad`), cache comune, `refresh`;
-  restituisce coordinate (epoca J2000 dichiarata) + identificativo
-  principale SIMBAD + fonte + origine + data di scaricamento + "dalla cache
-  sì/no" + incertezza dichiarata da SIMBAD se presente, o errore se non
-  trovato o se la rete non risponde e il nome non è in cache. Cache e
-  timeout: `04-cache.md`.
+- **`resolve_name(name)`** — risolve un nome in coordinate; parametri:
+  nome, `source` (solo `auto`: la catena dei servizi qui sotto), cache comune,
+  `refresh`, `timeouts` (default 5 s connessione / 15 s lettura);
+  restituisce coordinate con frame ed epoca del servizio (SIMBAD: ICRS,
+  epoca J2000; NED: `fk5` equinozio J2000.0, epoca non dichiarata) +
+  identificativo principale del servizio (`main_id`) + **`service`**
+  (`simbad_cds`, `simbad_harvard` o `ned`) + fonte + origine + data di
+  scaricamento + "dalla cache sì/no" + incertezza dichiarata da SIMBAD se
+  presente (NED: nessuna; unità non documentate, "da verificare") + `notes` +
+  `warnings` (`NAME_RESOLVER_FALLBACK` se ha risposto un ripiego), o errore
+  se non trovato o se nessun servizio risponde e il nome non è in cache.
+  Cache e timeout: §3.
+
+  **Servizi di risoluzione** (verificati con richieste reali il 2026-10-29):
+
+  | # | Servizio | Indirizzo | Accesso |
+  |---|---|---|---|
+  | 1 | SIMBAD, CDS Strasburgo | `https://simbad.cds.unistra.fr/simbad/sim-tap` | `astroquery.simbad`, `query_object` |
+  | 2 | Mirror SIMBAD, Harvard (CfA) | `https://simbad.harvard.edu/simbad/sim-tap` (risponde 200 anche `simbad.cfa.harvard.edu`) | `astroquery.simbad` con `server = "simbad.harvard.edu"` (nome ammesso da astroquery 0.4.11) |
+  | 3 | NED, NASA/IPAC | `https://ned.ipac.caltech.edu/srs/ObjectLookup?name=<nome>&of=json` | HTTP GET, JSON; documentazione: <https://ned.ipac.caltech.edu/Documents/Guides/Interface/ObjectLookup> |
+
+  Il 2026-10-29 il servizio 1 non rispondeva (nessuna risposta in 15 s,
+  `NET_TIMEOUT` anche sull'endpoint `capabilities`); i servizi 2 e 3
+  rispondevano in meno di 1 s (M31: SIMBAD 10,684708°, +41,268750°; NED
+  10,68479292°, +41,269065°). **NED, `ResultCode`:** 3 = nome noto (si legge
+  `Preferred.Position.RA/Dec` e `Preferred.Name`); 0 = non è un nome
+  interpretabile e 2 = nome valido ma sconosciuto a NED → `NAME_NOT_FOUND`; 1 =
+  nome non specifico (elenco di alias) → `NAME_NOT_FOUND`, `reason =
+  ambiguous`; `StatusCode` diverso da 100 → errore del servizio (si
+  considera guasto). **Frame di NED:** la pagina dell'ObjectLookup non
+  dichiara frame, equinozio né epoca; l'unica dichiarazione trovata è
+  quella delle colonne `ra`/`dec` del TAP di NED («Equatorial Coordinate
+  System, J2000.0»). **Da verificare:** che le coordinate dell'ObjectLookup
+  coincidano con quelle del TAP (probabile, non documentato) e le unità
+  delle incertezze (`UncSemiMajor`…), che per questo non si usano.
 - **`wcs_from_header(header)`** / **`sky_to_pixel(...)`** / **`pixel_to_sky(...)`**
   — costruiscono la WCS da un header e fanno le trasformazioni in entrambe le
   direzioni. `wcs_from_header` restituisce la parte celeste della WCS con
@@ -400,7 +449,8 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 | `astropy.erfa` (via Astropy) | trasformazioni di riferimento a basso livello | librerie IAU verificate |
 | `astropy.wcs.utils.fit_wcs_from_points` (richiede `scipy`) | calibrazione per associazione di stelle (D10-1, D10-7) | adattamento consolidato di Astropy |
 | `numpy` | campionamento delle linee della griglia, residui | consolidato |
-| `astroquery.simbad` | risoluzione dei nomi | servizio CDS ufficiale |
+| `astroquery.simbad` | risoluzione dei nomi (Strasburgo e mirror di Harvard) | servizio CDS ufficiale, con il suo mirror |
+| `requests` + ObjectLookup di NED | risoluzione dei nomi (terzo ripiego) | API pubblica di NED/IPAC, JSON |
 | Standard FITS WCS (paper I/IV) | struttura delle soluzioni | standard IAU/OHSA |
 
 ## 9. Regole e vincoli
@@ -470,8 +520,9 @@ offset e il calcolo inverso in `17-core-misure.md`, l'interfaccia in
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
-| Nome non trovato | nessuna coordinata prodotta, messaggio con il nome e la fonte interrogata | `NAME_NOT_FOUND` |
-| Rete assente durante la risoluzione nomi | errore esplicito, nessun valore inventato | `NET_TIMEOUT` |
+| Nome non trovato | nessuna coordinata prodotta, messaggio con il nome; **non** si prova un altro servizio: vale il primo che risponde | `NAME_NOT_FOUND` |
+| Un servizio dei nomi non risponde (timeout, connessione, 5xx, 429, risposta non valida) | si prova il successivo; se risponde un ripiego, avviso con servizio usato e motivo | `NAME_RESOLVER_FALLBACK` (avviso) |
+| Rete assente durante la risoluzione nomi (nessun servizio risponde, nome non in cache) | errore esplicito con i servizi provati e il suggerimento di usare le coordinate, nessun valore inventato | `NET_TIMEOUT` |
 | Dec fuori [−90,+90] o RA fuori intervallo | rifiuto dell'input prima del calcolo | `COORD_OUT_OF_RANGE` |
 | Header senza WCS o WCS incoerente (matrice di scala singolare, andata e ritorno al centro oltre 1e-6 pixel, matrice CD tutta nulla — che WCSLIB sostituirebbe in silenzio con l'identità) | la WCS non viene costruita; l'immagine si apre solo come griglia di pixel | `WCS_MISSING` / `WCS_INVALID` |
 | Conversione a un frame sconosciuto | errore con elenco dei frame supportati | `FRAME_UNSUPPORTED` |
@@ -550,12 +601,14 @@ gli errori del 10 con quel tipo.
 | `COORD_OUT_OF_RANGE` | `longitude_range` | `values` (quantity) |
 | `COORD_OUT_OF_RANGE` | `parallax_not_positive` | — |
 | `COORD_OUT_OF_RANGE` | `fov_threshold_positive` | — |
-| `NAME_NOT_FOUND` | (generale) | `name` (string) |
+| `NAME_NOT_FOUND` | (generale) | `name` (string), `service` (string) |
 | `NAME_NOT_FOUND` | `empty_name` | — |
 | `NAME_NOT_FOUND` | `source_unsupported` | `source` (string) |
-| `NAME_NOT_FOUND` | `ambiguous` | `name` (string) |
-| `NAME_NOT_FOUND` | `no_coordinates` | `name` (string) |
+| `NAME_NOT_FOUND` | `ambiguous` | `name` (string), `service` (string) |
+| `NAME_NOT_FOUND` | `no_coordinates` | `name` (string), `service` (string) |
 | `NET_TIMEOUT` | (generale) | `service` (string), `target` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
+| `NET_TIMEOUT` | `name_services` | `target` (string), `services` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
+| `NAME_RESOLVER_FALLBACK` (avviso) | (generale) | `service` (string), `failed` (string, esterno) |
 | `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) |
 | `COORD_FORMAT_INVALID` | (generale) | `detail` (string, esterno) |
 | `PROPAGATION_MODE_CONFLICT` | (generale) | — |
@@ -636,8 +689,9 @@ gli errori del 10 con quel tipo.
 Il modulo espone strumenti deterministici; **l'IA non calcola coordinate**:
 propone i parametri e interpreta il risultato.
 
-- **`resolve_name`** — input: nome oggetto; output: coordinate ICRS + fonte.
-  Calcolo: SIMBAD via `astroquery`.
+- **`resolve_name`** — input: nome oggetto; output: coordinate con frame ed epoca
+  del servizio + servizio che ha risposto + fonte. Calcolo: SIMBAD (Strasburgo,
+  mirror di Harvard) via `astroquery`, o NED (ObjectLookup).
 - **`convert_coordinates`** — input: coordinate, frame/epoca sorgente e target;
   output: coordinate convertite. Calcolo: `astropy.coordinates`.
 - **`propagate_position`** — input: posizione, moto proprio, parallasse, epoca
@@ -653,7 +707,8 @@ propone i parametri e interpreta il risultato.
 | T2 | Conversione nota | convertire le coordinate di una sorgente presa da SIMBAD (fonte scelta dal tester) da ICRS a galattico | coincidenza con il valore ricalcolato dallo stesso test con Astropy, entro 1e-9 gradi | confronto con `astropy.coordinates` + seconda lettura da SIMBAD |
 | T3 | Round-trip pixel ↔ cielo | costruire la WCS da un header FITS di prova, passare da pixel a cielo e ritorno | errore < 1e-6 pixel | ricalcolo con `astropy.wcs` |
 | T4 | Propagazione con moto proprio | propagare una posizione con moto proprio noto (valori presi dal tester da un catalogo Gaia) a un'epoca +10 anni | coincidenza con `SkyCoord.apply_space_motion` calcolata nel test | ricalcolo con Astropy |
-| T5 | Risoluzione nome | `resolve_name("M31")` con rete disponibile | coordinate coerenti con quelle di SIMBAD entro la precisione dichiarata da SIMBAD | confronto incrociato con SIMBAD (test marcato di rete); nei test di default, risposte simulate di SIMBAD: prima la cache, `refresh`, nome non trovato o ambiguo, rete assente con e senza copia in cache, timeout applicati alla sessione HTTP, colonna senza unità |
+| T5 | Risoluzione nome | `resolve_name("M31")` con rete disponibile | coordinate coerenti con quelle di SIMBAD entro la precisione dichiarata da SIMBAD | confronto incrociato con SIMBAD (test marcato di rete); nei test di default, servizi simulati: prima la cache, `refresh`, nome non trovato o ambiguo, rete assente con e senza copia in cache, timeout dei nomi (5/15 s) applicati alla sessione HTTP, colonna senza unità |
+| T5b | Ripiego dei nomi (sprint 10a) | servizi simulati: Strasburgo giù → mirror di Harvard con `NAME_RESOLVER_FALLBACK`; Strasburgo e mirror giù → NED con frame `fk5`, equinozio J2000.0, epoca non dichiarata; tutti giù → `NET_TIMEOUT` (`name_services`) con il suggerimento delle coordinate; nome non trovato dal primo servizio → `NAME_NOT_FOUND` senza provare gli altri; voce di NED scaduta dopo 24 h → si riprova da Strasburgo; copia in cache servita se tutti giù | ordine e conteggio delle chiamate, campi `service`/`origin`/frame/epoca, avvisi | test di unità con servizi finti; nei test di rete, M31 dal mirror e da NED |
 | T6 | Input fuori range | passare Dec = 95° | errore `COORD_OUT_OF_RANGE`, nessun output numerico | test di unità |
 | T7 | Una prova per proiezione (D10-4) | per ciascuna delle 8 proiezioni dell'elenco D10-4 (`SIN`, `TAN`, `AIT`, `ZEA`, `STG`, `CAR`, `NCP`, `ZPN`), convertire lo stesso campo pixel ↔ cielo | round-trip entro 1e-6 pixel per **ogni** proiezione; `TAN` di default per le immagini, `AIT` per le viste all-sky | ricalcolo con `astropy.wcs` per ciascuna proiezione |
 | T8 | Convenzione dei pixel (DC7) | `convert_pixel_convention` su (1, 1) da `fits` a `numpy` e su (−0.5, −0.5) da `numpy` a `fits` | (0, 0) e (0.5, 0.5) | aritmetica esatta della regola DC7 |
@@ -815,3 +870,4 @@ propone i parametri e interpreta il risultato.
 | 2026-10-17 | Claude Code | §13: tolte le frasi superate "codice da scrivere" per le funzioni della v1, scritte il 2026-10-16 (nessun cambiamento di contenuto). Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8b:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-7, sprint 8c-bis:** §10 — nessun messaggio annidato di AstroTwo nel modulo (tipo `message` non usato); nessun codice cambia. |
+| 2026-10-29 | Claude Code | **Sprint 10a (FASE: CODICE – SPRINT 10a, richiesta del proprietario):** SIMBAD di Strasburgo non risponde (NET_TIMEOUT, sito giù) e Sesame cade con esso → `resolve_name` con **catena di ripiego** Strasburgo → mirror SIMBAD di Harvard → NED (ObjectLookup), passando oltre solo per errori di rete o del servizio e mai per `NAME_NOT_FOUND`; indirizzi verificati con richieste reali (§7); `service` e avviso `NAME_RESOLVER_FALLBACK`; NED in frame `fk5` equinozio J2000.0 con epoca non dichiarata (la fonte non dice ICRS né epoca), voci di NED in cache per 24 ore, una voce per nome; timeout dei nomi 5 s connessione / 15 s lettura (decisioni del proprietario del 2026-10-29); `source` accetta solo `auto`; test T5b. Stato `approvato` invariato. |

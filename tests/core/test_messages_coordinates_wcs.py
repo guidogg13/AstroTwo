@@ -19,7 +19,7 @@ from astropy.wcs import WCS
 from astrotwo.core import coordinates_wcs as cw
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, SkyFrame
 from astrotwo.messages_catalog import message_text
-from tests.core.test_coordinates_wcs import SHAPE, make_header
+from tests.core.test_coordinates_wcs import SHAPE, make_header, simbad_table
 from tests.message_helpers import (
     MODULE_14_SUBVARIANTS,
     MODULE_16_SUBVARIANTS,
@@ -45,7 +45,7 @@ MODULE_CODES = (
 #: Voci generali che i moduli non sollevano mai da sole (ogni punto di sollevamento ha una ragione).
 GENERAL_IS_FALLBACK = {
     "EPOCH_REQUIRED", "COORD_UNIT_MISSING", "COORD_OUT_OF_RANGE", "WCS_INVALID", "WCS_MISSING", "GRID_SPACING_INVALID",
-    "VIEW_PARAMETERS_INVALID", "FORMAT_PRECISION_INVALID", "NORTH_UNDEFINED",
+    "VIEW_PARAMETERS_INVALID", "FORMAT_PRECISION_INVALID", "NORTH_UNDEFINED", "NET_TIMEOUT",
 }
 
 DEG = u.deg
@@ -166,15 +166,16 @@ def table_with(**columns):
 
 
 def trigger_net_timeout(monkeypatch, cache):
-    def fail(name, timeouts):
+    def fail(*args):
         raise ConnectionError("rete assente")
 
     monkeypatch.setattr(cw, "_query_simbad", fail)
+    monkeypatch.setattr(cw, "_query_ned", fail)
     return cw.resolve_name("M31", cache=cache)
 
 
 def trigger_name(monkeypatch, cache, table):
-    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts: (table, "https://simbad.example/tap"))
+    monkeypatch.setattr(cw, "_query_simbad", lambda name, timeouts, server: (table, "https://simbad.example/tap"))
     return cw.resolve_name("M31", cache=cache)
 
 
@@ -338,6 +339,21 @@ def test_warnings_of_module_10_match_the_catalog():
     assert ("NORTH_UNDEFINED", "pole_near") in seen
     assert ("SCALE_BAR_TOO_LONG", None) in seen
     assert ("OUT_OF_FIELD", None) in seen
+
+
+def test_name_resolver_fallback_warning_matches_the_catalog(monkeypatch, cache):
+    import requests
+
+    def down_simbad(name, timeouts, server):
+        if server == "simbad.cds.unistra.fr":
+            raise requests.exceptions.ConnectTimeout("rete assente")
+        return simbad_table(), "https://simbad.harvard.edu/simbad/sim-tap"
+
+    monkeypatch.setattr(cw, "_query_simbad", down_simbad)
+    result = cw.resolve_name("M31", cache=cache)
+    (warning,) = result.warnings
+    check_message(warning[0], warning.params, warning[1])
+    assert "SIMBAD (Harvard mirror)" in message_text(warning[0], warning.params, "en")
 
 
 def test_numbers_of_module_10_errors_keep_their_full_value():

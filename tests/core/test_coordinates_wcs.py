@@ -245,25 +245,29 @@ def fake_simbad(monkeypatch):
     calls = []
     state = {"response": simbad_table()}
 
-    def query(name, timeouts):
+    def query(name, timeouts, server):
         calls.append((name, timeouts))
         response = state["response"]
         if isinstance(response, Exception):
             raise response
         return response, SIMBAD_TAP
 
+    def ned_down(name, timeouts):
+        raise ConnectionError("NED non raggiungibile nei test di default")
+
     monkeypatch.setattr(cw, "_query_simbad", query)
+    monkeypatch.setattr(cw, "_query_ned", ned_down)  # nessuna rete: il ripiego di NED ha i suoi test (T5b)
     return calls, state
 
 
 def test_t5_resolve_name_cache_first(fake_simbad, tmp_path):
-    from astrotwo.core.cache import NETWORK_TIMEOUTS, SharedCache
+    from astrotwo.core.cache import SharedCache
 
     calls, _ = fake_simbad
     with SharedCache(tmp_path) as cache:
         first = cw.resolve_name("  M31 ", cache=cache)
         assert not first.from_cache and len(calls) == 1
-        assert calls[0] == ("M31", NETWORK_TIMEOUTS)
+        assert calls[0] == ("M31", cw.NAME_TIMEOUTS)
         expected = SkyCoord(10.684708333333333, 41.268750000000004, unit="deg", frame="icrs")
         assert first.coords.coord.separation(expected).deg < 1e-12
         assert first.coords.frame_name == "icrs" and first.coords.epoch == Time("J2000.0")
@@ -290,7 +294,7 @@ def test_t5_name_not_found_and_ambiguous(fake_simbad, tmp_path):
         state["response"] = simbad_table(ra=np.nan, dec=np.nan)
         expect_error("NAME_NOT_FOUND", cw.resolve_name, "SenzaCoordinate", cache=cache)
         assert cache.usage().total_bytes == 0  # nulla in cache
-    expect_error("NAME_NOT_FOUND", cw.resolve_name, "M31", source="ned", cache=SharedCache(tmp_path / "c2"))
+    expect_error("NAME_NOT_FOUND", cw.resolve_name, "M31", source="simbad", cache=SharedCache(tmp_path / "c2"))
 
 
 def test_t5_network_down(fake_simbad, tmp_path):
@@ -302,12 +306,227 @@ def test_t5_network_down(fake_simbad, tmp_path):
     with SharedCache(tmp_path) as cache:
         state["response"] = requests.exceptions.ConnectTimeout("rete assente")
         err = expect_error("NET_TIMEOUT", cw.resolve_name, "M31", cache=cache)
-        assert "10 s" in err.message and "60 s" in err.message
+        assert "5 s" in err.message and "15 s" in err.message and "coordinate" in err.message
         state["response"] = simbad_table()
         cw.resolve_name("M31", cache=cache)
         state["response"] = requests.exceptions.ConnectionError("rete assente")
         stale = cw.resolve_name("M31", cache=cache, refresh=True)
         assert stale.from_cache and any("copia in cache" in note for note in stale.notes)
+
+
+# --- T5b: ripiego dei nomi (sprint 10a) ---------------------------------------
+
+MIRROR_TAP = "https://simbad.harvard.edu/simbad/sim-tap"
+NED_URL = "https://ned.ipac.caltech.edu/srs/ObjectLookup"
+
+
+def ned_response(result_code=3, name="Messier 031", ra=10.68479292, dec=41.269065):
+    data = {"StatusCode": 100, "ResultCode": result_code}
+    if result_code == 3:
+        data["Preferred"] = {"Name": name, "Position": {"RA": ra, "Dec": dec, "UncSemiMajor": 2.2e-5}}
+    return data
+
+
+@pytest.fixture
+def fake_chain(monkeypatch):
+    """Tre servizi finti: ``state[servizio]`` è la risposta o l'eccezione; ``calls`` l'ordine delle chiamate."""
+    calls = []
+    state = {"simbad.cds.unistra.fr": simbad_table(), "simbad.harvard.edu": simbad_table(), "ned": ned_response()}
+    taps = {"simbad.cds.unistra.fr": SIMBAD_TAP, "simbad.harvard.edu": MIRROR_TAP}
+
+    def reply(key):
+        response = state[key]
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    def query(name, timeouts, server):
+        calls.append((server, timeouts))
+        return reply(server), taps[server]
+
+    def ned(name, timeouts):
+        calls.append(("ned", timeouts))
+        return reply("ned")
+
+    monkeypatch.setattr(cw, "_query_simbad", query)
+    monkeypatch.setattr(cw, "_query_ned", ned)
+    return calls, state
+
+
+def down():
+    import requests
+
+    return requests.exceptions.ConnectTimeout("rete assente")
+
+
+def test_t5b_strasbourg_down_uses_the_mirror(fake_chain, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    calls, state = fake_chain
+    state["simbad.cds.unistra.fr"] = down()
+    with SharedCache(tmp_path) as cache:
+        result = cw.resolve_name("M31", cache=cache)
+    assert [c[0] for c in calls] == ["simbad.cds.unistra.fr", "simbad.harvard.edu"]
+    assert all(c[1] == cw.NAME_TIMEOUTS for c in calls)
+    assert result.service == "simbad_harvard" and result.origin == MIRROR_TAP and not result.from_cache
+    assert "Harvard" in result.source and result.coords.frame_name == "icrs"
+    assert result.coords.epoch == Time("J2000.0")
+    (warning,) = result.warnings
+    assert warning[0] == "NAME_RESOLVER_FALLBACK" and warning.params["service"] == "SIMBAD (Harvard mirror)"
+    assert "SIMBAD (CDS)" in warning.params["failed"] and "ConnectTimeout" in warning.params["failed"]
+
+
+def test_t5b_both_simbad_down_uses_ned_with_its_frame(fake_chain, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    calls, state = fake_chain
+    state["simbad.cds.unistra.fr"] = down()
+    state["simbad.harvard.edu"] = down()
+    with SharedCache(tmp_path) as cache:
+        result = cw.resolve_name("M31", cache=cache)
+    assert [c[0] for c in calls] == ["simbad.cds.unistra.fr", "simbad.harvard.edu", "ned"]
+    assert result.service == "ned" and result.origin == NED_URL and result.main_id == "Messier 031"
+    assert result.coords.frame_name == "fk5" and result.coords.coord.frame.equinox == Time("J2000.0")
+    assert result.coords.epoch is None  # NED non dichiara l'epoca: non assunta
+    assert "equinozio J2000.0" in result.source and "non dichiarata" in result.source or "non dichiara" in result.source
+    assert result.coo_err_maj is None
+    assert result.coords.coord.ra.deg == pytest.approx(10.68479292) and result.coords.coord.dec.deg == pytest.approx(41.269065)
+    (warning,) = result.warnings
+    assert warning.params["service"] == "NED (NASA/IPAC)" and warning.params["failed"].count(":") >= 2
+    icrs = cw.convert_coordinates(result.coords, "icrs")  # la conversione passa da Astropy, nessuna coincidenza presunta
+    assert icrs.frame_name == "icrs"
+
+
+def test_t5b_all_down_is_a_clear_error(fake_chain, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    calls, state = fake_chain
+    for key in state:
+        state[key] = down()
+    with SharedCache(tmp_path) as cache:
+        err = expect_error("NET_TIMEOUT", cw.resolve_name, "M31", cache=cache)
+    assert len(calls) == 3 and err.params["reason"] == "name_services"
+    for label in ("SIMBAD (CDS)", "Harvard", "NED"):
+        assert label in err.params["services"]
+    assert "coordinate" in err.message and "5 s" in err.message and "15 s" in err.message
+
+
+def test_t5b_not_found_does_not_fall_back(fake_chain, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    calls, state = fake_chain
+    state["simbad.cds.unistra.fr"] = simbad_table(rows=0)
+    with SharedCache(tmp_path) as cache:
+        err = expect_error("NAME_NOT_FOUND", cw.resolve_name, "NonEsiste", cache=cache)
+    assert [c[0] for c in calls] == ["simbad.cds.unistra.fr"] and err.params["service"] == "SIMBAD (CDS)"
+    # "non trovato" del mirror dopo il guasto di Strasburgo: risultato valido, NED non interrogato
+    calls.clear()
+    state["simbad.cds.unistra.fr"] = down()
+    state["simbad.harvard.edu"] = simbad_table(rows=0)
+    with SharedCache(tmp_path / "c2") as cache:
+        expect_error("NAME_NOT_FOUND", cw.resolve_name, "NonEsiste", cache=cache)
+    assert [c[0] for c in calls] == ["simbad.cds.unistra.fr", "simbad.harvard.edu"]
+
+
+def test_t5b_ned_result_codes(fake_chain, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    _, state = fake_chain
+    state["simbad.cds.unistra.fr"] = state["simbad.harvard.edu"] = down()
+    with SharedCache(tmp_path) as cache:
+        for code, reason in ((0, None), (2, None), (1, "ambiguous")):
+            state["ned"] = ned_response(code)
+            err = expect_error("NAME_NOT_FOUND", cw.resolve_name, "Qualcosa", cache=cache)
+            assert err.params.get("reason") == reason and err.params["service"] == "NED (NASA/IPAC)"
+        assert cache.usage().total_bytes == 0
+
+
+def test_t5b_ned_entry_expires_after_24_hours(fake_chain, tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    from astrotwo.core.cache import SharedCache
+
+    calls, state = fake_chain
+    state["simbad.cds.unistra.fr"] = state["simbad.harvard.edu"] = down()
+    with SharedCache(tmp_path) as cache:
+        cw.resolve_name("M31", cache=cache)
+        calls.clear()
+        again = cw.resolve_name("M31", cache=cache)  # entro 24 ore: dalla cache, senza rete
+        assert again.from_cache and again.service == "ned" and not calls
+        table = cache.table("10", cw._NAME_TABLE, cw._NAME_COLUMNS)
+        old = table.get("simbad:M31")
+        table.put("simbad:M31", old.data, origin=old.origin, retrieved_at=datetime.now(UTC) - timedelta(hours=25))
+        state["simbad.cds.unistra.fr"] = simbad_table()  # Strasburgo torna su
+        fresh = cw.resolve_name("M31", cache=cache)
+        assert not fresh.from_cache and fresh.service == "simbad_cds" and calls[0][0] == "simbad.cds.unistra.fr"
+        assert cw.resolve_name("M31", cache=cache).service == "simbad_cds"  # una sola voce per nome
+
+
+def test_t5b_expired_ned_copy_used_only_if_everything_is_down(fake_chain, tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    from astrotwo.core.cache import SharedCache
+
+    _, state = fake_chain
+    state["simbad.cds.unistra.fr"] = state["simbad.harvard.edu"] = down()
+    with SharedCache(tmp_path) as cache:
+        cw.resolve_name("M31", cache=cache)
+        table = cache.table("10", cw._NAME_TABLE, cw._NAME_COLUMNS)
+        old = table.get("simbad:M31")
+        table.put("simbad:M31", old.data, origin=old.origin, retrieved_at=datetime.now(UTC) - timedelta(hours=25))
+        state["ned"] = down()
+        stale = cw.resolve_name("M31", cache=cache)
+        assert stale.from_cache and stale.service == "ned" and any("copia in cache" in n for n in stale.notes)
+
+
+def test_t5b_refresh_restarts_from_strasbourg(fake_chain, tmp_path):
+    from astrotwo.core.cache import SharedCache
+
+    calls, state = fake_chain
+    state["simbad.cds.unistra.fr"] = down()
+    with SharedCache(tmp_path) as cache:
+        cw.resolve_name("M31", cache=cache)
+        calls.clear()
+        state["simbad.cds.unistra.fr"] = simbad_table()
+        result = cw.resolve_name("M31", cache=cache, refresh=True)
+    assert calls[0][0] == "simbad.cds.unistra.fr" and result.service == "simbad_cds" and not result.warnings
+
+
+def test_t5b_ned_http_path(monkeypatch):
+    """Percorso reale di ``_query_ned``: 5xx, JSON non valido e StatusCode inatteso sono guasti del servizio."""
+    import requests
+
+    from astrotwo.core.cache import NetworkTimeouts
+
+    seen = []
+
+    class Reply:
+        def __init__(self, status, payload):
+            self.status_code, self.payload = status, payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(f"{self.status_code}")
+
+        def json(self):
+            if isinstance(self.payload, Exception):
+                raise self.payload
+            return self.payload
+
+    replies = iter([Reply(503, None), Reply(200, ValueError("non json")), Reply(200, {"StatusCode": 500}),
+                    Reply(200, ned_response())])
+
+    def fake_request(self, method, url, **kwargs):
+        seen.append((url, kwargs.get("params"), kwargs.get("timeout")))
+        return next(replies)
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    custom = NetworkTimeouts(connect=2.0, read=4.0)
+    for _ in range(3):
+        with pytest.raises(requests.exceptions.RequestException):
+            cw._query_ned("M31", custom)
+    assert cw._query_ned("M31", custom)["ResultCode"] == 3
+    assert all(s == (NED_URL, {"name": "M31", "of": "json"}, (2.0, 4.0)) for s in seen)
 
 
 def test_t5_timeouts_reach_the_http_session(monkeypatch, tmp_path):
@@ -356,6 +575,18 @@ def test_t5_network_resolve_m31(tmp_path):
     assert resolved.coords.coord.separation(expected).deg <= tolerance_deg
     assert not resolved.from_cache and again.from_cache
     assert resolved.main_id == str(reference["main_id"][0])
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("index", [1, 2], ids=["mirror_harvard", "ned"])
+def test_t5b_network_fallback_services_resolve_m31(index):
+    """Il mirror di Harvard e NED (ObjectLookup) risolvono M31 con i servizi reali (indirizzi di 10 §7)."""
+    service = cw._NAME_SERVICES[index]
+    values, origin = cw._ask_service(service, "M31", cw.NAME_TIMEOUTS)
+    expected = SkyCoord(10.6847, 41.2687, unit="deg", frame="icrs")
+    found = SkyCoord(values["ra_deg"], values["dec_deg"], unit="deg", frame="icrs")
+    assert found.separation(expected).arcsec < 5.0  # NED in FK5 J2000: scarto dall'ICRS ben sotto questa soglia
+    assert cw._service_of_origin(origin).key == service.key
 
 
 # --- T6 ---------------------------------------------------------------------

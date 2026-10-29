@@ -11,6 +11,8 @@ funzioni avanzate, consegnata come file `.dmg`.
 
 ## 2. Fase attuale
 
+**2026-10-29 — sprint 10a (FASE: CODICE – SPRINT 10a):** ripiego dei nomi nel `10` (Strasburgo → mirror SIMBAD di Harvard → NED), dettagli nel registro modifiche (§8).
+
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
 tutti gli altri livelli restano in **FASE: SPECIFICHE**. Per l'interfaccia
 la formula è a parte: **"FASE: CODICE – interfaccia v1"** (regola del
@@ -1161,6 +1163,8 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
 
+**Prossimo (2026-10-29, dopo lo sprint 10a):** il proprietario prova "Go to" con un nome mentre Strasburgo è giù (deve rispondere il mirror di Harvard con l'avviso di ripiego); da verificare con NED se le coordinate dell'ObjectLookup coincidono con quelle del TAP e le unità delle incertezze (`10` §7); poi D60-4 e il resto come sotto.
+
 **Prossimo (2026-10-25, dopo lo sprint 60a):** decisione su D60-4 (macOS minimo 26.0); T17 del 60 (ripetibilità, due costruzioni di seguito); errore segnalato nel 41 alla chiusura rapida (`RuntimeError: Signal source has been deleted` in un thread dei tile, `sky_viewer.py`, uscita comunque 0): da specificare e correggere nel 41 se il proprietario lo chiede; poi sprint 60b (`.dmg`, tag `v0.1.0-beta.1`, repository pubblico e archivio del sorgente, D60-1). Resta lo sprint di prestazioni per D41-7 e D41-8.
 
 **Prossimo (2026-10-25, sprint 60a):** approvazione di `60-distribuzione-dmg.md` da parte del proprietario; poi le verifiche V-a…V-e del `60` §3.11 e il codice (`scripts/build_app.py`, `src/astrotwo/app_bundle.py`, finestra Licenze), costruzione e verifica di `dist/AstroTwo.app`; icona dal proprietario; poi 60b (`.dmg`, con D60-1). Resta lo sprint di prestazioni per D41-7 e D41-8.
@@ -1320,3 +1324,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-25 | Claude Code | **Sprint 9b:** D41-9 (b), D41-10 (d) e D13-22 (a) decise dal proprietario e scritte (`05`, `13`, `40`, `41` prima del codice): `VIEW_CENTER_OUTSIDE_IMAGE`, frame nel campo "Vai a", `CATALOG_DENSE`, 5 000 righe di default nella finestra, prima parola dell'UCD per le posizioni. Aperte **17** (Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 15). §2, §6, §7 aggiornati. Test di rete non eseguiti (`--no-network`). |
 | 2026-10-25 | Claude Code | **Sprint 60a, specifica:** creato `60-distribuzione-dmg.md` (`bozza`); decise dal proprietario A2 (PyInstaller), A6 per la prima beta (firma ad hoc, nessuna notarizzazione), Python di uv, versione, icona; D41-10 confermata; nuove `A6-b` (rinviata) e `D60-1`; `01`, `02`, `40`, `41`, `decisioni-aperte.md` aggiornati. 17 decisioni aperte. Riepilogo: approvato 24, bozza 6, non esiste 13, totale 43. |
 | 2026-10-25 | Claude Code | **Sprint 60a, codice e costruzione:** `60` approvato; D60-1, D60-2, D60-3 decise; nuova D60-4; `scripts/build_app.py`, `app_bundle.py`, finestra Licenze, `THIRD_PARTY_LICENSES` esteso; costruzione verificata (V1–V9 ok, 248,1 MB, 2,59 s / 1,96 s). 17 decisioni aperte. Riepilogo: approvato 25, bozza 5, non esiste 13, totale 43. |
+| 2026-10-29 | Claude Code | **sprint 10a (FASE: CODICE – SPRINT 10a, 2026-10-29):** SIMBAD di Strasburgo non risponde (e con esso Sesame) → `resolve_name` del `10` con ripiego **Strasburgo → mirror SIMBAD di Harvard → NED (ObjectLookup)**, solo per errori di rete o del servizio e mai per `NAME_NOT_FOUND`; indirizzi verificati con richieste reali e scritti in `10` §7; risultato con `service`, `origin` e avviso `NAME_RESOLVER_FALLBACK`; NED in frame `fk5` equinozio J2000.0 con epoca non dichiarata (la fonte non dice ICRS né epoca); una voce di cache per nome, voci di NED valide 24 ore; timeout dei nomi 5 s / 15 s (decisioni del proprietario del 2026-10-29); se tutti i servizi sono giù `NET_TIMEOUT` suggerisce le coordinate. Nessuna decisione aperta nuova. Test di rete non eseguiti nel commit (`--no-network`). |
