@@ -6,4 +6,4 @@ Specifiche in ``mdfiles/``; versione SemVer (DC4 di ``02-convenzioni.md``): la s
 scrive in forma PEP 440 (``0.1.0b1``, 60 §3.2).
 """
 
-__version__ = "0.1.0-beta.1"
+__version__ = "0.1.0-beta.2"

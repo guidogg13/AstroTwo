@@ -73,7 +73,7 @@ def test_t8_about_is_short_with_licenses_button(qtbot, settings_path, cache):
     win = make_window(qtbot, settings_path, cache)
     dialog = win.about_dialog()
     labels = " ".join(label.text() for label in dialog.findChildren(QLabel))
-    assert "0.1.0-beta.1" in labels and astrotwo.__version__ in labels and "Guido Ratti" in labels
+    assert "0.1.0-beta.2" in labels and astrotwo.__version__ in labels and "Guido Ratti" in labels
     assert "General Public License" in labels and not dialog.findChildren(QPlainTextEdit)
     dialog.findChild(QPushButton, "aboutLicenses").click()
     assert win.findChild(LicensesDialog).isVisible()

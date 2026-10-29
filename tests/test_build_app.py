@@ -28,7 +28,7 @@ CSPICE = SITE / "spiceypy" / "utils" / "libcspice.dylib"
 
 def test_t2_spec_contains_data_exclusions_and_plist(tmp_path):
     stage = tmp_path / "stage"
-    text = build_app.spec_text(entry=tmp_path / "launch.py", stage=stage, icon=None, version="0.1.0-beta.1",
+    text = build_app.spec_text(entry=tmp_path / "launch.py", stage=stage, icon=None, version="0.1.0-beta.2",
                                build=1, metadata=["astropy", "keyring"])
     compile(text, "AstroTwo.spec", "exec")  # Python valido
     for needle in ("astrotwo/ui/i18n", "astrotwo_it.qm", "pck00011.tpc", "astrotwo/core/data/naif",
@@ -38,7 +38,7 @@ def test_t2_spec_contains_data_exclusions_and_plist(tmp_path):
                    "strip=False", "upx=False", "**/tests/**"):
         assert needle in text, needle
     assert "astrotwo_it.ts" not in text
-    plist = build_app.info_plist("0.1.0-beta.1", 1, "14.4", True)
+    plist = build_app.info_plist("0.1.0-beta.2", 1, "14.4", True)
     assert plist["LSMinimumSystemVersion"] == "14.4" and plist["CFBundleIconFile"] == "AstroTwo.icns"
     assert str(ROOT) not in repr(plist)
 
@@ -58,9 +58,9 @@ def test_t2_qt_plugins_and_translations_filter():
 
 
 def test_versions():
-    assert build_app.short_version("0.1.0-beta.1") == "0.1.0"
+    assert build_app.short_version("0.1.0-beta.2") == "0.1.0"
     version, build = build_app.bundle_version()
-    assert version == "0.1.0-beta.1" and build == 1
+    assert version == "0.1.0-beta.2" and build == 2
 
 
 @pytest.mark.skipif(not (QTCORE.is_file() and CSPICE.is_file()), reason="librerie della ruota non installate")

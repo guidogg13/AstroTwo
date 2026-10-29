@@ -1,6 +1,6 @@
 [project]
 name = "astrotwo"
-version = "0.1.0b1"
+version = "0.1.0b2"
 description = "AstroTwo: successore di Aladin per gli astrofisici"
 readme = "CLAUDE.md"
 license = "GPL-3.0-or-later"
@@ -52,7 +52,7 @@ default-groups = ["dev", "build"]
 
 [tool.astrotwo.bundle]
 # Numero di build di AstroTwo.app (CFBundleVersion, 60 §3.2): intero, +1 a ogni app consegnata.
-build = 1
+build = 2
 
 [build-system]
 requires = ["hatchling"]
