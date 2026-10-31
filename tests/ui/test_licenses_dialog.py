@@ -31,6 +31,10 @@ def test_t6_licenses_window_from_the_menu(qtbot, settings_path, cache):
     assert "pyside-setup-everywhere-src-6.12.0.zip" in dialog.tab_text("sources")
     credits = dialog.tab_text("data_credits")
     assert SIMBAD_TEXT in credits and DSS_TEXT in credits and "Acknowledgement text not yet verified." in credits
+    assert "This research has made use of ESASky, developed by the ESAC Science Data Centre" in credits
+    assert "https://cosmos.esa.int/web/esdc/esasky-credits" in credits
+    assert "made use of the NASA/IPAC Infrared Science Archive, which is funded by" in credits
+    assert "https://irsa.ipac.caltech.edu/ack.html" in credits
     trigger(win, "licenses")  # una sola finestra
     assert len(win.findChildren(LicensesDialog)) == 1
     win.close()

@@ -50,6 +50,15 @@ DATA_CREDITS: tuple[tuple[str, str | None, str], ...] = (
      "The images are copyrighted (Caltech 1993-1995 for the northern part, AAO Board 1993-5, UK SERC/PPARC and AAT "
      "Board 1992-5, AURA 1995 for the rest) and distributed by agreement.",
      "https://archive.stsci.edu/dss/copyright.html"),
+    ("ESASky (ESA), HiPS mirror",
+     "This research has made use of ESASky, developed by the ESAC Science Data Centre (ESDC) team and maintained "
+     "alongside other ESA science mission's archives at ESA's European Space Astronomy Centre (ESAC, Madrid, "
+     "Spain). Cite also: Giordano, F. et al. (2018), A&C, 24, 97; Baines, D. et al. (2017), PASP, 129, 028001.",
+     "https://cosmos.esa.int/web/esdc/esasky-credits"),
+    ("NASA/IPAC Infrared Science Archive (IRSA), HiPS mirror",
+     "This research has made use of the NASA/IPAC Infrared Science Archive, which is funded by the National "
+     "Aeronautics and Space Administration and operated by the California Institute of Technology.",
+     "https://irsa.ipac.caltech.edu/ack.html"),
     ("NAIF / SPICE (kernel and toolkit)", None, "https://naif.jpl.nasa.gov/naif/rules.html"),
 )
 
