@@ -1375,6 +1375,8 @@ def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
         ctx.step("suggest_display_limits")
         display, display_warnings = _survey_display_limits(ctx, service, active.coverage, p["vmin"], p["vmax"])
         resolved = {"vmin": display["vmin"], "vmax": display["vmax"]}  # limiti scelti registrati nel comando (D41-3)
+    if service.servers is not None:  # cambio di server durante i limiti di colore (12 §3, ripiego sui mirror)
+        display_warnings += _module_warnings(service.servers.take_notes())
     old = [layer.id for layer in state.of_kind("hips")]  # uno sfondo HiPS (il survey attivo, 41 §3.5)
     state = dataclasses.replace(state, layers=tuple(x for x in state.layers if x.id not in old))
     layer_id, state = _add_layer(state, "hips", service.title or service.hips_id, service, source=service.base_url,
@@ -1384,7 +1386,9 @@ def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
     state = dataclasses.replace(state, layers=layers)
     props = {k: list(v) for k, v in dict(service.properties).items()}
     values = {"layer": layer_id, "replaced": old, "hips_id": service.hips_id, "title": service.title,
-              "base_url": service.base_url, "frame": service.frame, "order": service.order,
+              "base_url": service.base_url, "server": service.server,
+              "servers": list(service.servers.servers) if service.servers is not None else [service.base_url],
+              "frame": service.frame, "order": service.order,
               "tile_formats": list(service.tile_formats), "body": service.body,
               "coverage": active.coverage is not None, "display": display}
     return Outcome(values=values, state=state, layers_created=[layer_id], resolved=resolved,

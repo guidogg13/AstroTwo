@@ -11,6 +11,8 @@ funzioni avanzate, consegnata come file `.dmg`.
 
 ## 2. Fase attuale
 
+**2026-10-31 — sprint 10b:** ripiego automatico dei survey HiPS sui mirror nel `12` (MocServer + tabella verificata, prima i mirror fuori Strasburgo), dettagli nel registro modifiche (§8).
+
 **2026-10-29 — sprint 10a (FASE: CODICE – SPRINT 10a):** ripiego dei nomi nel `10` (Strasburgo → mirror SIMBAD di Harvard → NED), dettagli nel registro modifiche (§8).
 
 **FASE: CODICE – livello 1** (dichiarata dal proprietario il 2026-10-09);
@@ -1070,6 +1072,9 @@ Stati: `non esiste` (file non ancora scritto) → `bozza` → `in revisione` →
 | D41-10 (conferma) | Soglia di `CATALOG_DENSE` 2 000 simboli e 5 000 righe di default nella finestra Catalog in view confermate | 2026-10-25 | decisione del proprietario | `41` §3.8, `40` §3.3 |
 | D60-1, D60-2, D60-3 (60) | Sorgente: repository GitHub pubblico con tag per versione + archivio accanto al `.dmg`; scelte minori confermate; Qt copiato dalla ruota dopo PyInstaller (che toglieva la parte x86_64 e riscriveva le intestazioni) | 2026-10-25 | decisione del proprietario | `60` §3.3, §3.7, §13 |
 
+- **D12-9 — regola del cambio di server dei survey HiPS (sprint 10b): DECISA il 2026-10-31** (delegata dal proprietario nel testo dello sprint, da confermare alla prova a mano): `properties` del principale non leggibile per una causa di rete → cambio subito; tile → cambio dopo 3 tile consecutivi falliti per cause di rete sul server in uso; vale per tutto il survey fino alla riapertura o a `refresh=True` (`12` §13).
+- **D12-10 — chiave della cache dei tile (sprint 10b): DECISA il 2026-10-31** (stessa delega): `tile:<hips_id>/<percorso dello standard>`, indipendente dall'host; le chiavi di prima si rileggono (`12` §13).
+
 ## 6. Decisioni aperte
 
 Ogni decisione qui ha una voce corrispondente nel file `.md` pertinente.
@@ -1162,6 +1167,8 @@ modulo va diviso o che serve un modulo aggiuntivo. Non si aggiungono file di
 propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 
 ## 7. Prossimi passi
+
+**Prossimo (2026-10-31, dopo lo sprint 10b):** il proprietario prova a mano il cielo con il CDS giù (DSS2 a colori deve arrivare da ESASky con l'avviso di ripiego nei Messaggi e il server nel tooltip della riga del survey); conferma di D12-9 e D12-10; test di rete dei mirror (`tests/core/test_hips_mirrors.py`, marcatore `network`) quando la rete lo permette; quando il MocServer torna, verificare quanti `hips_service_url_N` dichiara (oggi se ne chiedono 9); poi versione, build e `.dmg` (proprietario).
 
 **Prossimo (2026-10-29, dopo lo sprint 10a):** il proprietario prova "Go to" con un nome mentre Strasburgo è giù (deve rispondere il mirror di Harvard con l'avviso di ripiego); da verificare con NED se le coordinate dell'ObjectLookup coincidono con quelle del TAP e le unità delle incertezze (`10` §7); poi D60-4 e il resto come sotto.
 
@@ -1325,3 +1332,4 @@ propria iniziativa: la proposta va registrata qui e approvata dal proprietario.
 | 2026-10-25 | Claude Code | **Sprint 60a, specifica:** creato `60-distribuzione-dmg.md` (`bozza`); decise dal proprietario A2 (PyInstaller), A6 per la prima beta (firma ad hoc, nessuna notarizzazione), Python di uv, versione, icona; D41-10 confermata; nuove `A6-b` (rinviata) e `D60-1`; `01`, `02`, `40`, `41`, `decisioni-aperte.md` aggiornati. 17 decisioni aperte. Riepilogo: approvato 24, bozza 6, non esiste 13, totale 43. |
 | 2026-10-25 | Claude Code | **Sprint 60a, codice e costruzione:** `60` approvato; D60-1, D60-2, D60-3 decise; nuova D60-4; `scripts/build_app.py`, `app_bundle.py`, finestra Licenze, `THIRD_PARTY_LICENSES` esteso; costruzione verificata (V1–V9 ok, 248,1 MB, 2,59 s / 1,96 s). 17 decisioni aperte. Riepilogo: approvato 25, bozza 5, non esiste 13, totale 43. |
 | 2026-10-29 | Claude Code | **sprint 10a (FASE: CODICE – SPRINT 10a, 2026-10-29):** SIMBAD di Strasburgo non risponde (e con esso Sesame) → `resolve_name` del `10` con ripiego **Strasburgo → mirror SIMBAD di Harvard → NED (ObjectLookup)**, solo per errori di rete o del servizio e mai per `NAME_NOT_FOUND`; indirizzi verificati con richieste reali e scritti in `10` §7; risultato con `service`, `origin` e avviso `NAME_RESOLVER_FALLBACK`; NED in frame `fk5` equinozio J2000.0 con epoca non dichiarata (la fonte non dice ICRS né epoca); una voce di cache per nome, voci di NED valide 24 ore; timeout dei nomi 5 s / 15 s (decisioni del proprietario del 2026-10-29); se tutti i servizi sono giù `NET_TIMEOUT` suggerisce le coordinate. Nessuna decisione aperta nuova. Test di rete non eseguiti nel commit (`--no-network`). |
+| 2026-10-31 | Claude Code | **sprint 10b (2026-10-31, richiesta del proprietario):** guasto del CDS (Strasburgo e MocServer irraggiungibili) → ripiego automatico dei survey HiPS del `12` sui **mirror**: principale → mirror dichiarati dal MocServer (`hips_service_url_N`) → tabella `MIRROR_FALLBACKS` verificata con richieste reali il 2026-10-31 (ESASky e IRSA per DSS2 a colori e 2MASS a colori, IRSA per DSS2 rosso; nessuna copia fuori da Strasburgo per PanSTARRS, Mellinger, Gaia), prima i mirror fuori da Strasburgo; cambio solo per timeout, connessione, 5xx, 429 o risposta non valida (mai 404); `properties` del mirror confrontato col principale; avvisi `HIPS_MIRROR_FALLBACK` (una volta per survey) e `HIPS_MIRROR_REJECTED`, `NET_TIMEOUT` `hips_servers` con il numero dei server; **D12-9** (cambio subito per il `properties`, dopo 3 tile di fila per i tile) e **D12-10** (chiave della cache dei tile indipendente dall'host) aperte e decise lo stesso giorno; `hips.set_survey` con `server`/`servers` (`05`); il `41` richiede al mirror i tile falliti prima del cambio e mostra il server nel tooltip della riga del survey. 17 decisioni aperte. Test di rete non eseguiti nel commit (`--no-network`). File toccati: `12` (§3 "Ripiego sui mirror", §7, §10, §12 T19, §13 D12-9/D12-10), `05`, `41`, `INDICE`, `riassunto`, `decisioni-aperte`; codice `hips.py`, `commands.py`, `sky_viewer.py`, `main_window.py`, `messages_catalog.py`, `tool_registry.py`, traduzione italiana; test `tests/core/test_hips_mirrors.py` e `test_mirror_fallback_fills_sky`. |

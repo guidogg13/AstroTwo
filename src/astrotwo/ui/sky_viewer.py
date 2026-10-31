@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QHBox
                                QListWidgetItem, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
-from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory
+from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory, _switch_cause
 from astrotwo.ui.message_view import exception_message, shown_text
 from astrotwo.ui.sky_tools import (
     DEFAULT_TOOL_TEXTS, DistanceOptionsBar, DistanceTool, MeasureOverlay, SimbadPointerTool)
@@ -98,7 +98,7 @@ DEFAULT_PANEL_TEXTS = {
     "retrieved": "retrieved %1", "epoch": "epoch %1", "epoch_unknown": "epoch unknown",
     "drawn": "%1 of %2 rows drawn", "propagated": "drawn at epoch %1", "not_propagated": "table positions (not propagated)",
     "order": "drawn at order %1", "by_excess": "drawn at order %1, by excess (MOC order %2)", "cells": "%1 cells",
-    "not_drawn": "not drawn: %1",
+    "not_drawn": "not drawn: %1", "server": "Server: %1",
 }
 #: Tolleranza minima del clic su un simbolo, pixel logici (41 §3.8, scelta minore 5).
 CLICK_TOLERANCE = 4.0
@@ -542,13 +542,13 @@ class _LockedTileMemory(TileMemory):
         super().__init__(limit_bytes)
         self._lock = threading.Lock()
 
-    def get(self, url: str):
+    def get(self, key: str):
         with self._lock:
-            return super().get(url)
+            return super().get(key)
 
-    def put(self, tile) -> None:
+    def put(self, tile, key: str | None = None) -> None:
         with self._lock:
-            super().put(tile)
+            super().put(tile, key)
 
 
 class _Bridge(QObject):
@@ -558,6 +558,7 @@ class _Bridge(QObject):
     tile = Signal(int, object)  # generazione, ViewTile
     failed = Signal(int, str, str, object)  # generazione, codice, testo, params
     done = Signal(int)  # generazione (una richiesta di tile finita, riuscita o no)
+    retry = Signal(int, int, int)  # generazione, tile, cambi di server visti: tile da richiedere dopo un cambio (12 §3)
     cursor = Signal(object)  # CommandResult di una lettura sotto il mouse
     simbad = Signal(object)  # CommandResult di simbad.pointer (puntatore Simbad, 41 §3.12)
     catalog = Signal(object, object)  # chiave, CatalogPoints o ResultMessage (errore del modulo)
@@ -618,6 +619,10 @@ class TilePool:
                         self.bridge.tile.emit(generation, colorize(fill_view(sampling, tile), display))
                 except Exception as exc:  # noqa: BLE001 - errori del 12/04: zona vuota e un messaggio
                     message = exception_message(exc)
+                    servers = getattr(service, "servers", None)
+                    if servers is not None and _switch_cause(message.code, message.params):
+                        # fallito per una causa di rete prima del cambio di server: si richiede al mirror (12 §3)
+                        self.bridge.retry.emit(generation, index, servers.switches)
                     self.bridge.failed.emit(generation, message.code, str(exc), dict(message.params))
             finally:
                 self.bridge.done.emit(generation)
@@ -760,6 +765,7 @@ class SkyViewer(QWidget):
         self.tiles.bridge.tile.connect(self._tile)
         self.tiles.bridge.failed.connect(self._failed)
         self.tiles.bridge.done.connect(self._tile_done)
+        self.tiles.bridge.retry.connect(self._retry)
         self.tiles.bridge.cursor.connect(self._cursor_done)
         self.tiles.bridge.simbad.connect(lambda result: self.simbad_tool.done(result))
         self.tiles.bridge.catalog.connect(self._catalog_done)
@@ -817,6 +823,8 @@ class SkyViewer(QWidget):
         self._stage_sampled = False
         self._stage_geometry_changed = False
         self._reported: set[tuple[str, str]] = set()
+        self._retry_tiles: dict[int, set[int]] = {}  # generazione → tile falliti prima di un cambio di server (12 §3)
+        self._switches_seen = 0  # cambi di server del survey già gestiti
         self._awaiting = 0  # comandi di vista del gesto ancora in coda
         self._submitted: tuple[float, float, float] | None = None
         self._zoomed = self._moved = False
@@ -955,6 +963,9 @@ class SkyViewer(QWidget):
             self.renderer.drop_texture(self.survey_layer)
             self.canvas = None
         self.service = layer.data if layer else None
+        servers = getattr(self.service, "servers", None)
+        self._switches_seen = servers.switches if servers is not None else 0
+        self._retry_tiles = {}
         self.display = layer.display if layer else None
         self.survey_layer = layer.id if layer else None
         self.image_key = image_key
@@ -1113,6 +1124,7 @@ class SkyViewer(QWidget):
     def _failed(self, gen: int, code: str, text: str, params: dict | None = None) -> None:
         if self.tiles.current(gen):
             self._report(code, text, params)
+            self._poll_servers()
             if gen == self._stage and self._stage_sampling and not self._stage_sampled:
                 # campionamento fallito: la base nuova passa senza lo sfondo (zona vuota e un messaggio)
                 self._stage_sampled = True
@@ -1122,9 +1134,45 @@ class SkyViewer(QWidget):
     def _tile_done(self, gen: int) -> None:
         self._in_flight = max(0, self._in_flight - 1)
         self.tiles_changed.emit(self._in_flight)
+        self._poll_servers()
+
+    def _retry(self, gen: int, index: int, switches: int) -> None:
+        """Tile fallito per una causa di rete sul server di prima: si richiede subito se il survey ha già cambiato
+        server, altrimenti al prossimo cambio (12 §3, D12-9)."""
+        servers = getattr(self.service, "servers", None)
+        if not self.tiles.current(gen) or servers is None:
+            return
+        if servers.switches > switches:
+            self._fetch_again(gen, (index,))
+        else:
+            self._retry_tiles.setdefault(gen, set()).add(index)
+
+    def _fetch_again(self, gen: int, indices) -> None:
+        if self.sampling is None or not self.tiles.current(gen):
+            return
+        for index in sorted(indices):
+            self._in_flight += 1
+            self.tiles.fetch(gen, self.service, self.sampling, index, self.display)
+        self.tiles_changed.emit(self._in_flight)
+
+    def _poll_servers(self) -> None:
+        """Avvisi del ripiego sui mirror (una volta per survey) nel pannello Messaggi e, dopo un cambio di server, i
+        tile falliti prima richiesti al server nuovo (12 §3); il pannello dei livelli aggiorna il server in uso."""
+        servers = getattr(self.service, "servers", None)
+        if servers is None:
+            return
+        for note in servers.take_notes():
+            self._report(note[0], note[1], getattr(note, "params", None))
+        if servers.switches != self._switches_seen:
+            self._switches_seen = servers.switches
+            gen = self.tiles.generation
+            self._fetch_again(gen, self._retry_tiles.pop(gen, set()))
+            self.layers_drawn.emit()
 
     def _report(self, code: str, text: str, params: dict | None = None) -> None:
-        key = (self.survey_layer or "", code)
+        # un solo messaggio per survey e codice; "tutti i server giù" ha la sua voce (non coperta da un NET_TIMEOUT)
+        key = (self.survey_layer or "", code) + (("hips_servers",) if (params or {}).get("reason") == "hips_servers"
+                                                 else ())
         if key not in self._reported:  # un solo messaggio per survey e codice, non uno per tile (41 §3.7)
             self._reported.add(key)
             self.message.emit(ResultMessage(code, text, params or {}))
@@ -1807,6 +1855,8 @@ class LayerPanel(QWidget):
             row.down.setEnabled(index < last)
             kind = self.texts.get(layer.kind, layer.kind)
             row.name.setText(f"<b>{html.escape(layer.name)}</b> · {html.escape(kind)}")
+            server = getattr(layer.data, "server", None) if layer.kind == "hips" else None
+            row.name.setToolTip(self.texts.get("server", "Server: %1").replace("%1", server) if server else "")
             row.details.setText(self.details(layer))
             item = self.list.item(index)
             if item is not None:

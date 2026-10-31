@@ -1795,7 +1795,7 @@ class MainWindow(QMainWindow):
             "drawn": self.tr("%1 of %2 rows drawn"), "propagated": self.tr("drawn at epoch %1"),
             "not_propagated": self.tr("table positions (not propagated)"), "order": self.tr("drawn at order %1"),
             "by_excess": self.tr("drawn at order %1, by excess (MOC order %2)"), "cells": self.tr("%1 cells"),
-            "not_drawn": self.tr("not drawn: %1")}
+            "not_drawn": self.tr("not drawn: %1"), "server": self.tr("Server: %1")}
         return panel
 
     def show_layers(self, state) -> None:

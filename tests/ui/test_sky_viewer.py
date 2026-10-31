@@ -204,6 +204,29 @@ def test_tile_errors_one_message_per_survey(qtbot, viewer_window, service):
     assert not np.any(win.sky.canvas[..., 3])  # zone vuote
 
 
+def test_mirror_fallback_fills_sky(qtbot, viewer_window, service, monkeypatch):
+    """Sprint 10b (12 §3, 41 §3.7): server principale con tutti i tile in errore (HTTP 503) → il survey passa al
+    mirror; i tile falliti prima del cambio si richiedono al mirror, il cielo si riempie; un solo avviso
+    HIPS_MIRROR_FALLBACK nei Messaggi; il server in uso nel tooltip della riga del survey."""
+    win = viewer_window
+    payload, _ = image_tile("png")
+    for path in [p for p in service.routes if p.startswith("/png/Norder")]:
+        service.routes[path.replace("/png/", "/mirror/", 1)] = lambda request: (200, "image/png", payload)
+        service.routes[path] = lambda request: (503, "text/plain", "guasto")
+    mirror = serve_properties(service, "/mirror", properties_text(hips_tile_format="png", hips_order="3",
+                                                                  hips_tile_width=str(WIDTH)))
+    monkeypatch.setattr(hips, "MIRROR_FALLBACKS", {"TEST/P/prova/r": (mirror,)})
+    start(qtbot, win)
+    sky = win.sky
+    assert sky.service.server == mirror and sky.service.servers.switches == 1
+    covered = sky.sampling.tile_of_pixel >= 0
+    assert covered.any() and np.all(sky.canvas[..., 3][covered] == 255)  # nessuna zona vuota dopo il cambio
+    codes = [code for _, code, _, _ in win.messages.messages]
+    assert sum("HIPS_MIRROR_FALLBACK" in c for c in codes) == 1, codes
+    layer = win.session.workspace.state.of_kind("hips")[0]
+    qtbot.waitUntil(lambda: mirror in win.layer_panel.rows[layer.id].name.toolTip(), timeout=5000)
+
+
 def test_night_mode_reaches_renderer(qtbot, viewer_window):
     win = viewer_window
     win.act_night.trigger()

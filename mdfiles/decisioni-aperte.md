@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-10-25, con la costruzione dello sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D60-4`: macOS minimo 26.0 per i moduli di collegamento della ruota di PySide6 6.12.0, nel `60` §13; `D60-3` aperta e decisa lo stesso giorno, (b) Qt copiato dalla ruota).
+**Dal 2026-10-31, con lo sprint 10b: 17 aperte** — invariato: `D12-9` (regola del cambio di server dei survey HiPS) e `D12-10` (chiave della cache dei tile indipendente dall'host) aperte e decise lo stesso giorno nel file di origine `12` §13 (scelta delegata dal proprietario nel testo dello sprint 10b, da confermare alla prova a mano).
+
+Prima, **Dal 2026-10-25, con la costruzione dello sprint 60a: 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D60-4`: macOS minimo 26.0 per i moduli di collegamento della ruota di PySide6 6.12.0, nel `60` §13; `D60-3` aperta e decisa lo stesso giorno, (b) Qt copiato dalla ruota).
 
 Prima, **Dal 2026-10-25, con il codice dello sprint 60a: 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D60-1` decisa dal proprietario il 2026-10-25: (a) + (b), repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg`; prima nel file di origine `60` §13; `60` approvato).
 
@@ -418,3 +420,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-25 | Claude Code | **Sprint 60a:** `A2` (PyInstaller) e `A6` (firma ad hoc, nessuna notarizzazione per la prima beta) decise dal proprietario (prima nei file di origine `01` §5 e `60` §13), Gruppo 2 vuoto; nuove `A6-b` (Developer ID e notarizzazione, rinviata) e `D60-1` (sorgente di AstroTwo, blocca il 60b) nel Gruppo 3; `D41-10` confermata. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
 | 2026-10-25 | Claude Code | **`D60-1` decisa** (proprietario, 2026-10-25; prima nel file di origine `60` §13): (a) + (b). Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 16). |
 | 2026-10-25 | Claude Code | **Costruzione dello sprint 60a:** `D60-3` aperta da V5 e decisa (b) dal proprietario; nuova `D60-4` (macOS minimo 26.0, ruota di PySide6) nel Gruppo 3. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
+| 2026-10-31 | Claude Code | **Sprint 10b:** `D12-9` (cambio di server: `properties` subito, tile dopo 3 fallimenti di rete di fila) e `D12-10` (chiave della cache dei tile `tile:<hips_id>/<percorso>`) aperte e decise lo stesso giorno (prima nel file di origine `12` §13; scelta delegata dal proprietario nel testo dello sprint). Conteggi invariati: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |

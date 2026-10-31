@@ -156,6 +156,17 @@ def _temporary_home(tmp_path_factory, monkeypatch):
     return home
 
 
+@pytest.fixture(autouse=True)
+def _no_real_mirrors(request, monkeypatch):
+    """Fuori dai test di rete la tabella dei mirror verificati del 12 (``MIRROR_FALLBACKS``, URL reali) è vuota: un
+    test con un servizio finto che non risponde non deve mai raggiungere ESASky o IRSA (sprint 10b). I test del
+    ripiego scrivono la loro tabella con i server finti."""
+    if request.node.get_closest_marker("network") is None:
+        from astrotwo.core import hips
+
+        monkeypatch.setattr(hips, "MIRROR_FALLBACKS", {})
+
+
 class FakeService:
     """Server HTTP locale: ``routes[path] = funzione(richiesta) -> (stato, content-type, corpo)``."""
 

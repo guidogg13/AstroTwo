@@ -18,7 +18,8 @@ riquadro mostrato.
   a mano; il survey attivo all'avvio è **DSS2 a colori** (D12-3).
 - **Richiesta dei riquadri:** scaricare i tile necessari al campo visualizzato
   mantenendo la risoluzione appropriata, con timeout e ripiego se la rete
-  manca.
+  manca; dal 2026-10-31 (sprint 10b) ripiego automatico sui **mirror** del
+  survey se il server in uso non risponde (§3, "Ripiego sui mirror").
 - **Cache su disco (A7):** i riquadri HiPS si conservano come file nella
   **cache comune di `04-cache.md`** (`~/Library/Caches/AstroTwo/`, un solo
   limite di 5 GB per tutta la cache, timeout 10 s / 60 s), con eliminazione
@@ -471,6 +472,112 @@ qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
   la cache calda) da misurare con il `41`, margine ridotto: misurare e
   riportare.
 
+**Ripiego sui mirror (sprint 10b, 2026-10-31, richiesta del proprietario).**
+Durante il guasto del CDS di fine ottobre 2026 (server di Strasburgo
+irraggiungibili, MocServer compreso) il cielo restava nero: l'identificativo
+si risolveva solo in `hips_service_url` e i tile si scaricavano solo da lì
+(`alasky.cds.unistra.fr`); il record del MocServer usato veniva dalla cache e
+non conteneva mirror. Da questo sprint un survey ha un **elenco ordinato di
+server** e passa al successivo quando quello in uso non risponde.
+
+- **Elenco dei server di un survey, in ordine:**
+  1. `hips_service_url` del MocServer (il **principale**), o l'URL dato
+     dall'utente;
+  2. i **mirror dichiarati dal MocServer**: `hips_service_url_1`,
+     `hips_service_url_2`, … (`_resolve_id` li chiede nei `fields` della
+     richiesta, da `_1` a `_9`; ogni campo può essere una stringa o una
+     lista; **da verificare** quando il MocServer torna raggiungibile se i
+     record ne dichiarano più di 9);
+  3. la tabella interna **`MIRROR_FALLBACKS`** (identificativo → URL),
+     verificata con richieste reali (tabella sotto); vale anche per un survey
+     aggiunto da URL, se il `creator_did` letto è nella tabella.
+
+  Doppioni tolti (stesso URL senza `/` finale). **Tra i mirror (2 e 3) prima
+  quelli fuori da Strasburgo** (host che non finisce in `unistra.fr` né in
+  `u-strasbg.fr`: ESASky, IRSA, …), nell'ordine in cui compaiono (prima il
+  MocServer, poi la tabella), **poi quelli di Strasburgo** (`alaskybis`: stesso
+  centro dati di `alasky`, cade con lui). Il principale resta sempre primo.
+  Se il MocServer non risponde e non c'è un record in cache (nemmeno quello
+  scritto prima di questo sprint, senza i campi dei mirror, che si cerca
+  ancora nella cache), un identificativo presente in `MIRROR_FALLBACKS` si
+  apre dai mirror della tabella (principale non noto, avviso
+  `HIPS_MIRROR_FALLBACK` con `reason = mocserver`); gli altri danno
+  `MOCSERVER_UNAVAILABLE` come prima.
+- **`MIRROR_FALLBACKS`** (verificati il **2026-10-31** con richieste reali:
+  `properties` letto e confrontato, tile `Norder3/Dir0/Npix257` e
+  `Norder9/Dir40000/Npix40000` scaricati; fonti: gli elenchi ufficiali dei
+  due nodi, `https://skies.esac.esa.int/hipslist` (data 2026-09-09) e
+  `https://irsa.ipac.caltech.edu/data/hips/list` (data 2026-03-23), entrambi
+  con `hips_status = public mirror unclonable`):
+
+  | `hips_id` | Mirror (in ordine) | Esito della verifica del 2026-10-31 |
+  |---|---|---|
+  | `CDS/P/DSS2/color` | `https://skies.esac.esa.int/DSSColor` (ESA ESASky); `https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color` (NASA/IPAC IRSA) | `creator_did`, `hips_order` 9, `hips_tile_width` 512, `hips_tile_format` jpeg, `hips_frame` equatorial, `hips_release_date` uguali alla copia del CDS in cache; il tile `Norder3/Npix257.jpg` ha lo **stesso SHA-256** sui due mirror e nella copia scaricata da `alasky` il 2026-10-18 |
+  | `CDS/P/2MASS/color` | `https://skies.esac.esa.int/2MASSColor`; `https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color` | ordine 9, tile 512, jpeg, equatorial su entrambi; i due tile di prova hanno lo stesso SHA-256 sui due mirror; `hips_release_date` diverso (ESASky 2021-02-24, IRSA 2024-10-09): per questo la data **non** entra nel confronto di equivalenza; principale non confrontabile (CDS giù, nessuna copia in cache) |
+  | `CDS/P/DSS2/red` | `https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/red` | ordine 9, tile 512, `jpeg fits`, equatorial; tile JPEG e FITS scaricati (FITS 527 168 byte); IRSA ha chiuso alcune connessioni (`Connection reset by peer`), riuscite al secondo o terzo tentativo; principale non confrontabile |
+
+  **Senza copie fuori da Strasburgo** (cercate negli stessi due elenchi e
+  nell'elenco `hips-sources` di ESASky il 2026-10-31): PanSTARRS DR1 a
+  colori, Mellinger a colori, Gaia DR3 (densità): non entrano nella tabella;
+  per loro valgono solo i mirror dichiarati dal MocServer. `alaskybis` non è
+  nella tabella: il 2026-10-31 non rispondeva (stesso guasto), quindi non è
+  verificato.
+- **Quando si passa al server successivo (cause "di rete"):** timeout o
+  errore di connessione (`NET_TIMEOUT`), HTTP **5xx** o **429**
+  (`SERVICE_ERROR`), **risposta non valida** (`properties` che non è un file
+  `properties`: `HIPS_NOT_A_SERVICE` con `bad_line`, `no_properties`,
+  `not_utf8`, `no_mandatory_keys`; tile ancora corrotto dopo la nuova
+  richiesta: `HIPS_BAD_TILE`; risposta non leggibile). **Mai** per un 404
+  (`HIPS_TILE_MISSING`: un tile assente è normale, e un server che risponde
+  404 è vivo) né per gli altri 4xx.
+- **Regola del cambio (D12-9, sotto):** il cambio vale per **tutto il
+  survey**. (a) `properties`: se quello del principale non si legge per una
+  causa di rete (né dalla rete né dalla cache) si passa **subito** al
+  successivo; (b) tile: si passa al successivo dopo **3 tile consecutivi
+  falliti per cause di rete sul server in uso** (`MIRROR_SWITCH_FAILURES`);
+  un tile riuscito o un 404 azzera il conteggio. Si contano solo i fallimenti
+  sul server in uso: un tile partito verso il server di prima e fallito dopo
+  il cambio si **riprova subito** sul server nuovo. Il survey **resta sul
+  mirror per il resto della sessione** (lo stato vive nell'oggetto
+  `HiPSService`); `refresh=True` o un nuovo `hips.set_survey` (riapertura del
+  survey) costruiscono un servizio nuovo che **riparte dal principale**.
+- **Equivalenza:** prima di usare un mirror se ne legge il `properties`
+  (`read_service`, rete e cache del 14) e lo si confronta con quello di
+  riferimento (il principale; se il principale non si legge, il primo mirror
+  il cui `creator_did` è l'identificativo chiesto): devono essere uguali
+  `creator_did`, `dataproduct_type`, `hips_order`, `hips_tile_width`,
+  `hips_frame`, e il mirror deve offrire il formato suggerito dal
+  riferimento (il primo di `hips_tile_format`) e `fits` se il riferimento lo
+  offre (valore del pixel H27 e limiti di colore). Non si confrontano
+  `hips_release_date` né `hips_status` (diversi tra copie identiche, tabella
+  sopra). Un mirror diverso, o il cui `properties` non si legge, è
+  **scartato** con l'avviso `HIPS_MIRROR_REJECTED` e si passa al successivo.
+- **Se cadono tutti:** con più di un server, `NET_TIMEOUT` con `reason =
+  hips_servers`: identificativo, **numero dei server provati**, i loro URL e
+  l'ultimo errore (messaggio annidato); nel visualizzatore un solo messaggio
+  per survey. Con un solo server (nessun mirror noto) il comportamento è
+  quello di prima (errore del tile o del `properties`).
+- **Avviso `HIPS_MIRROR_FALLBACK`** (`hips_id`, `primary`, `mirror`, `reason`
+  = causa: `network`, `http_status` con `status`, `invalid_response`,
+  `mocserver`): **una sola volta per survey**, al primo cambio (nel risultato
+  di `hips.set_survey` se il cambio avviene lì, altrimenti nel pannello
+  Messaggi del `41`). Il server in uso si legge da **`HiPSService.server`**
+  (nel risultato di `hips.set_survey`: `server` e `servers`, `05`); ogni tile
+  porta l'URL da cui viene (`HiPSTile.url`, `server`).
+- **Cache (D12-10, sotto):** la chiave di un tile nella cache comune e in
+  `TileMemory` è **indipendente dall'host**: `tile:<hips_id>/<percorso dello
+  standard>` (identificativo + ordine + indice + formato, e piano dei cubi);
+  l'origine registrata resta l'URL vero da cui il tile è stato scaricato.
+  Così i tile già in cache restano validi dopo un cambio di server. I tile
+  salvati prima di questo sprint (chiave `tile:<URL del principale>`) si
+  rileggono ancora (solo lettura). Il record del MocServer in cache contiene
+  da ora anche i campi dei mirror.
+- **Ambito:** tile di immagini e cubi (`fetch_tile`, quindi anche
+  `pixel_values`, `view_sampling`/`fill_view` del `41` e i limiti di colore
+  del `05`), `properties` (`set_survey`, `add_hips`) e `Moc.fits`
+  (`service_coverage`, dal server in uso). I cataloghi HiPS progressivi
+  (`catalog_tiles`) restano sul principale.
+
 ## 4. Cosa NON fa
 
 - Non fa le trasformazioni di coordinate (10) né gestisce i file FITS locali (11).
@@ -538,6 +645,12 @@ qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
   (P6, aggiunte il 2026-10-15) — tile necessari per la finestra della
   vista e riempimento dei suoi pixel con i valori del HiPS (campionamento
   al più vicino sulla griglia HEALPix); dettagli in §3, P6.
+- **`MIRROR_FALLBACKS`**, **`MIRROR_SWITCH_FAILURES`** (= 3) e
+  **`HiPSServers`** (sprint 10b) — tabella dei mirror verificati, soglia del
+  cambio e stato dei server di un survey (ordine di prova, server in uso,
+  avvisi da consegnare una volta: `take_notes()`); `HiPSService.servers`
+  (`None` se il survey ha un solo server) e `HiPSService.server` (URL di base
+  in uso); dettagli in §3, "Ripiego sui mirror".
 
 ## 8. Librerie e standard di riferimento
 
@@ -610,6 +723,9 @@ qui, sulla geometria data da `make_view_wcs` del 10 (`ViewGeometry`).
 | `hips_tile_width` assente / `hips_version` diverso da `1.4` | 512 (default dello standard) / lettura secondo HiPS 1.0, dichiarati | avvisi `HIPS_DEFAULT_TILE_WIDTH`, `HIPS_VERSION_UNKNOWN` |
 | Corpo da `hips_body` (WD HiPS 2.0) | corpo usato, dichiarato come bozza IVOA | avviso `HIPS_BODY_DRAFT` |
 | `creator_did` diverso dall'identificativo richiesto | vale quello del servizio | avviso `HIPS_ID_MISMATCH` |
+| Server in uso che non risponde (timeout, connessione, 5xx, 429, risposta non valida; per i tile 3 di fila) | si passa al server successivo dell'elenco, una volta per tutto il survey (D12-9) | avviso `HIPS_MIRROR_FALLBACK` (una volta per survey) |
+| Mirror con `properties` diverso dal riferimento o non leggibile | scartato, si prova il successivo | avviso `HIPS_MIRROR_REJECTED` |
+| Tutti i server del survey (più di uno) giù | nessun tile, errore con il numero dei server provati | `NET_TIMEOUT` (`hips_servers`) |
 
 ### Parametri dei messaggi (D40-3)
 
@@ -700,6 +816,13 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `SERVICE_ERROR` | `unreadable_response` | `url` (string), `detail` (string, esterno) |
 | `HIPS_FORMAT_UNAVAILABLE` | (generale) | `hips_id` (string), `format` (string), `offered` (list) |
 | `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10 e dell'11 |
+| `NET_TIMEOUT` | `hips_servers` (sprint 10b) | `hips_id` (string), `servers` (integer: server provati), `tried` (list: URL di base), `last` (message: ultimo errore del 12 o del 14) |
+| `HIPS_MIRROR_FALLBACK` (avviso, sprint 10b) | `network` | `hips_id` (string), `primary` (string), `mirror` (string) |
+| `HIPS_MIRROR_FALLBACK` | `http_status` | `hips_id` (string), `primary` (string), `mirror` (string), `status` (integer) |
+| `HIPS_MIRROR_FALLBACK` | `invalid_response` | `hips_id` (string), `primary` (string), `mirror` (string) |
+| `HIPS_MIRROR_FALLBACK` | `mocserver` | `hips_id` (string), `mirror` (string) |
+| `HIPS_MIRROR_REJECTED` (avviso, sprint 10b) | `different` | `hips_id` (string), `mirror` (string), `field` (string), `expected` (string, esterno), `found` (string, esterno) |
+| `HIPS_MIRROR_REJECTED` | `unreadable` | `hips_id` (string), `mirror` (string), `cause` (message: errore del 12 o del 14) |
 | `HIPS_TILE_MISSING` | (generale) | `url` (string) |
 | `HIPS_BAD_TILE` | (generale) | — |
 | `HIPS_BAD_TILE` | `tile_corrupt` | `url` (string), `problem` (message: `HIPS_TILE_PROBLEM`) |
@@ -807,6 +930,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | T16 | Errori di `build_hips` | ordine mancante, `flux`, PNG senza parametri, `histeq`, `vmin ≥ vmax`, ordine troppo alto, limite di memoria piccolo, immagine senza WCS, cartella non vuota, valori non validi | `TypeError`, `OPERATION_UNSUPPORTED`, `HIPS_DISPLAY_REQUIRED`, `HIPS_DISPLAY_INVALID`, `HEALPIX_ORDER_INVALID`, `MEMORY_LIMIT_EXCEEDED`, `WCS_MISSING`, `FileExistsError` (file esistente intatto), `ValueError` | test di unità |
 | T12 | Valore del pixel su HiPS (H27) | leggere il valore sotto il cursore su un tile FITS in cache | valore uguale a quello del tile FITS letto con `astropy.io.fits` | confronto diretto |
 | T17 | Campionamento della vista (P6) | survey FITS simulato; finestre `TAN` e `AIT` (`make_view_wcs` del 10) a scale diverse, anche a cavallo di più tile e del bordo dell'`AIT` | per ogni pixel della finestra valore uguale a `pixel_values` nel suo centro (ricalcolo nel test); tile necessari = insieme dei tile di quei pixel; pixel fuori dal cielo "nessun dato"; nessuna fascia vuota tra tile adiacenti | ricalcolo con `pixel_values` e `astropy-healpix` |
+| T19 | Ripiego sui mirror (sprint 10b) | servizi simulati: principale giù → mirror dichiarato dal MocServer; MocServer giù con un record in cache senza mirror (anche quello di prima dello sprint) → `MIRROR_FALLBACKS`; MocServer giù senza cache → mirror della tabella (`reason = mocserver`); mirror con `hips_order` diverso → scartato (`HIPS_MIRROR_REJECTED`) e si usa il successivo; tile 404 → nessun cambio; 2 tile falliti → nessun cambio, il terzo → cambio e tile servito dal mirror; HTTP 503 e 429 → cambio; tutti giù → `NET_TIMEOUT` `hips_servers` con il numero dei server; `refresh=True` → di nuovo il principale; avviso emesso una volta sola; tile in cache dal principale letto dopo il cambio; ordine fuori/dentro Strasburgo | ordine e conteggio delle richieste ai server finti, server in uso, avvisi, chiavi della cache | test di unità con server finti; test di rete (non nel commit) per i mirror di `MIRROR_FALLBACKS` |
 | T18 | Riempimento progressivo e colori (P6) | tile arrivati in ordine diverso; survey JPEG simulato | stesso risultato finale in qualunque ordine; colori uguali a quelli del tile letti con Pillow e capovolti come in `fetch_tile` | confronto diretto |
 
 ## 13. Decisioni aperte
@@ -857,6 +981,32 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
   regolari. Si riapre con una proposta se il 41 ne ha bisogno per la
   velocità (disposizione da ricavare e verificare su un HiPS pubblico,
   validazione e non copia, regola d'oro n. 8).
+- **D12-9 — Regola del cambio di server (sprint 10b): DECISA il
+  2026-10-31** (proposta e scelta nello sprint 10b su richiesta del
+  proprietario, che l'ha delegata nel testo dello sprint; da confermare alla
+  prova a mano). **Esito:** `properties` del principale non leggibile per una
+  causa di rete → cambio **subito**; tile → cambio dopo **3 tile consecutivi**
+  falliti per cause di rete sul server in uso (un tile riuscito o un 404
+  azzera); il cambio vale per tutto il survey fino alla riapertura o a
+  `refresh=True`. **Motivazione:** un singolo timeout può essere un disturbo
+  passeggero e non deve spostare il survey; con 6 thread dei tile (`41`) tre
+  fallimenti di fila arrivano quasi insieme quando il server è davvero giù,
+  quindi il cambio avviene già al primo giro di richieste (un timeout di
+  connessione, 10 s), e i tile falliti prima del cambio si richiedono subito
+  al mirror. Il `properties` invece serve per aprire il survey: senza, non
+  c'è niente da mostrare, quindi non si aspetta.
+- **D12-10 — Chiave della cache dei tile (sprint 10b): DECISA il
+  2026-10-31** (stessa delega). **Esito:** chiave `tile:<hips_id>/<percorso
+  dello standard>`, indipendente dall'host; origine = URL vero; le chiavi di
+  prima (`tile:<URL>`) si rileggono ancora. **Motivazione:** i mirror
+  servono gli **stessi byte** (verifica del 2026-10-31: SHA-256 uguali tra
+  `alasky`, ESASky e IRSA), quindi un tile non dipende dal server; con la
+  chiave per URL i tile già in cache si perderebbero proprio quando il
+  principale cade. Il `creator_did` è per lo standard HiPS 1.0 l'identificativo
+  unico del HiPS; resta il rischio, dichiarato, di due servizi diversi con lo
+  stesso `creator_did` (es. un HiPS generato a mano con l'identificativo di un
+  altro): la chiave contiene anche formato ed estensione, e il controllo
+  della dimensione del tile scarta una copia incompatibile.
 - **D12-5 — Cataloghi HiPS progressivi (H12): DECISA il 2026-10-04.**
   **Dati e computazioni HEALPix nel `16`, servizio dei tile nel `12`** (stesso
   confine scritto in `16-core-moc.md`, D16-5). **Motivazione:** un solo
@@ -893,3 +1043,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 14):** gli errori del 14 incorporati dal testo del 12 (`HIPS_NOT_A_SERVICE` `service_error`, `HIPS_METADATA_INVALID` `metadata_xml_unavailable`, `MOCSERVER_UNAVAILABLE` `resolve` e `index`) passano da parametro esterno `detail` a parametro `message` `cause`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 16):** l'errore del 16 incorporato dal testo del 12 (`MOCSERVER_UNAVAILABLE` `coverage`) passa da parametro esterno `detail` a parametro `message` `cause`; gli errori del 16 rilanciati dal 12 portano i loro `params`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 19):** l'errore `BODY_UNSUPPORTED` del 19 incorporato dall'avviso omonimo del 12 passa da parametro esterno a parametro `message` (`detail`). Nessun comportamento scientifico cambia. |
+| 2026-10-31 | Claude Code | **Sprint 10b (richiesta del proprietario, autorizzazione esplicita a modificare il file approvato):** guasto del CDS di fine ottobre 2026 → **ripiego automatico sui mirror** dei survey HiPS (§3, "Ripiego sui mirror"): elenco principale → mirror del MocServer (`hips_service_url_N`) → `MIRROR_FALLBACKS` verificata con richieste reali il 2026-10-31 (ESASky e IRSA per DSS2 a colori e 2MASS a colori, IRSA per DSS2 rosso; nessuna copia fuori da Strasburgo per PanSTARRS, Mellinger, Gaia), prima i mirror fuori da Strasburgo; cambio solo per cause di rete (mai 404 né altri 4xx); equivalenza del `properties`; avvisi `HIPS_MIRROR_FALLBACK` (una volta per survey) e `HIPS_MIRROR_REJECTED`; `NET_TIMEOUT` `hips_servers` con il numero dei server; **D12-9** (regola del cambio) e **D12-10** (chiave della cache indipendente dall'host) decise (§13); T19 (§12); §7, §10. Stato `approvato` invariato. |

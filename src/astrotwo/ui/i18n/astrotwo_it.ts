@@ -1089,6 +1089,10 @@
         <translation>non disegnato: %1</translation>
     </message>
     <message>
+        <source>Server: %1</source>
+        <translation>Server: %1</translation>
+    </message>
+    <message>
         <source>Zoom out</source>
         <translation>Rimpicciolisci</translation>
     </message>

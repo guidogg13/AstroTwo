@@ -308,9 +308,10 @@ def test_every_module_10_error_matches_the_catalog(monkeypatch, cache):
         monkeypatch.undo()
     from astrotwo.messages_catalog import CATALOG
 
-    # ragioni di WCS_MISSING e NET_TIMEOUT sollevate dal modulo 11 (provate in test_messages_images_fits.py)
+    # ragioni di WCS_MISSING e NET_TIMEOUT sollevate dal modulo 11 (provate in test_messages_images_fits.py) e dal 12
+    # (``hips_servers``, ripiego sui mirror: provata in test_hips_mirrors.py)
     module_13 = {("COORD_UNIT_MISSING", "column_unit_required"), ("COORD_UNIT_MISSING", "column_not_angular")}
-    module_11 = module_13 | MODULE_14_SUBVARIANTS | MODULE_15_SUBVARIANTS | MODULE_16_SUBVARIANTS | MODULE_17_SUBVARIANTS | MODULE_18_SUBVARIANTS | MODULE_05_SUBVARIANTS | MODULE_19_SUBVARIANTS | {("NET_TIMEOUT", "url")} | {("WCS_MISSING", r) for r in CATALOG["WCS_MISSING"].variants
+    module_11 = module_13 | MODULE_14_SUBVARIANTS | MODULE_15_SUBVARIANTS | MODULE_16_SUBVARIANTS | MODULE_17_SUBVARIANTS | MODULE_18_SUBVARIANTS | MODULE_05_SUBVARIANTS | MODULE_19_SUBVARIANTS | {("NET_TIMEOUT", "url"), ("NET_TIMEOUT", "hips_servers")} | {("WCS_MISSING", r) for r in CATALOG["WCS_MISSING"].variants
                                              if r not in ("header_required", "no_celestial_wcs", "not_celestial",
                                                            "wcs_required")}
     required = {c for c in catalog_combinations(MODULE_CODES)

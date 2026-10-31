@@ -42,6 +42,9 @@ __all__ = [
     "MANDATORY_PROPERTIES",
     "HiPSError",
     "HiPSList",
+    "HiPSServers",
+    "MIRROR_FALLBACKS",
+    "MIRROR_SWITCH_FAILURES",
     "HiPSService",
     "HiPSTile",
     "PixelValues",
@@ -184,10 +187,17 @@ class HiPSService:
     from_cache: bool = False
     request: object | None = None  # RequestRecord del 14
     warnings: tuple[tuple[str, str], ...] = field(default=())
+    #: Server del survey e server in uso (ripiego sui mirror, sprint 10b); ``None`` = un solo server, ``base_url``.
+    servers: HiPSServers | None = field(default=None, compare=False, repr=False)
 
     @property
     def properties_url(self) -> str:
         return self.base_url + "/properties"
+
+    @property
+    def server(self) -> str:
+        """URL di base del server che serve ora il survey (il principale, o il mirror dopo un cambio)."""
+        return self.base_url if self.servers is None else self.servers.current
 
     def describe(self) -> str:
         parts = [f"HiPS {self.hips_id} «{self.title}»", f"tipo {self.dataproduct_type}"
@@ -404,39 +414,302 @@ def _replace(service: HiPSService, **changes) -> HiPSService:
     return replace(service, **changes)
 
 
-def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, tuple]:
-    """URL del servizio di un identificativo HiPS dal MocServer (rete del 14)."""
+# --------------------------------------------------------------------------
+# Ripiego sui mirror (sprint 10b; 12 §3 "Ripiego sui mirror", D12-9, D12-10)
+# --------------------------------------------------------------------------
+
+#: Mirror verificati con richieste reali il 2026-10-31 (``properties`` confrontato, due tile scaricati; fonti: gli
+#: elenchi ufficiali https://skies.esac.esa.int/hipslist e https://irsa.ipac.caltech.edu/data/hips/list), nell'ordine
+#: di prova. Solo URL verificati (12 §3): nessuna voce per i survey senza copie fuori da Strasburgo.
+MIRROR_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "CDS/P/DSS2/color": ("https://skies.esac.esa.int/DSSColor",
+                         "https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color"),
+    "CDS/P/2MASS/color": ("https://skies.esac.esa.int/2MASSColor",
+                          "https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"),
+    "CDS/P/DSS2/red": ("https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/red",),
+}
+#: Tile consecutivi falliti per cause di rete sul server in uso prima del cambio (D12-9).
+MIRROR_SWITCH_FAILURES = 3
+#: Domini dei server di Strasburgo: i loro mirror (``alaskybis``) cadono con il principale e si provano per ultimi.
+_STRASBOURG_DOMAINS = ("unistra.fr", "u-strasbg.fr")
+#: Campi dei mirror chiesti al MocServer (``hips_service_url_1`` … ``_9``; quanti ne dichiara: da verificare).
+_MIRROR_FIELDS = tuple(f"hips_service_url_{n}" for n in range(1, 10))
+#: ``fields`` di ``_resolve_id`` prima dello sprint 10b: il record già in cache si cerca ancora con questi.
+_LEGACY_RESOLVE_FIELDS = "ID,hips_service_url,dataproduct_type"
+#: Ragioni di ``HIPS_NOT_A_SERVICE`` che sono una risposta non valida (causa di rete, 12 §3).
+_INVALID_PROPERTIES = ("bad_line", "no_properties", "not_utf8", "no_mandatory_keys")
+
+
+def _strasbourg(url: str) -> bool:
+    import urllib.parse
+
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return any(host == d or host.endswith("." + d) for d in _STRASBOURG_DOMAINS)
+
+
+def _server_order(primary: str | None, mirrors) -> tuple[str, ...]:
+    """Server di un survey: il principale, poi i mirror fuori da Strasburgo nell'ordine dato, poi quelli di
+    Strasburgo; doppioni tolti (stesso URL senza ``/`` finale)."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for url in ([primary] if primary else []) + list(mirrors):
+        if isinstance(url, str) and url.strip():
+            base = url.strip().rstrip("/")
+            if base not in seen:
+                seen.add(base)
+                ordered.append(base)
+    head, rest = (ordered[:1], ordered[1:]) if primary else ([], ordered)
+    return tuple(head + [m for m in rest if not _strasbourg(m)] + [m for m in rest if _strasbourg(m)])
+
+
+def _switch_cause(code, params) -> dict | None:
+    """Causa "di rete" che fa passare al server successivo (12 §3) come ``{"reason": …}`` di
+    ``HIPS_MIRROR_FALLBACK``; ``None`` per gli errori che non la giustificano (404, altri 4xx, metadati, …)."""
+    params = params or {}
+    if code == "NET_TIMEOUT":
+        return {"reason": "network"}
+    if code == "SERVICE_ERROR":
+        status = params.get("status")
+        if isinstance(status, int) and not isinstance(status, bool) and (status >= 500 or status == 429):
+            return {"reason": "http_status", "status": status}
+        return {"reason": "invalid_response"} if params.get("reason") == "unreadable_response" else None
+    if code == "HIPS_NOT_A_SERVICE":
+        if params.get("reason") == "service_error":
+            cause = params.get("cause") or {}
+            return _switch_cause(cause.get("code"), cause.get("params"))
+        return {"reason": "invalid_response"} if params.get("reason") in _INVALID_PROPERTIES else None
+    if code == "HIPS_BAD_TILE":
+        return {"reason": "invalid_response"}
+    return None
+
+
+def _difference(reference: HiPSService, mirror: HiPSService) -> tuple[str, str, str] | None:
+    """Prima differenza (campo, atteso, trovato) tra il riferimento e un mirror (equivalenza, 12 §3)."""
+    for name, expected, found in (
+            ("creator_did", reference.hips_id, mirror.hips_id),
+            ("dataproduct_type", reference.dataproduct_type, mirror.dataproduct_type),
+            ("hips_order", str(reference.order), str(mirror.order)),
+            ("hips_tile_width", str(reference.tile_width), str(mirror.tile_width)),
+            ("hips_frame", reference.frame, mirror.frame)):
+        if expected != found:
+            return name, expected, found
+    needed = reference.tile_formats[:1] + (("fits",) if "fits" in reference.tile_formats else ())
+    if any(f not in mirror.tile_formats for f in needed):
+        return "hips_tile_format", " ".join(reference.tile_formats), " ".join(mirror.tile_formats)
+    return None
+
+
+def _check_mirror(hips_id: str, mirror: str, reference: HiPSService | None, *, cache, refresh: bool, timeouts):
+    """(servizio, avviso, errore) di un mirror: ``properties`` letto e confrontato con il riferimento (senza
+    riferimento: ``creator_did`` uguale all'identificativo). Mirror non leggibile o diverso → servizio ``None`` e
+    ``HIPS_MIRROR_REJECTED``."""
+    try:
+        service = read_service(mirror, cache=cache, refresh=refresh, timeouts=timeouts)
+    except HiPSError as exc:
+        return None, ModuleWarning(
+            "HIPS_MIRROR_REJECTED", f"{hips_id}: mirror {mirror} scartato, properties non leggibile "
+            f"({exc.code}: {exc.message})",
+            {"reason": "unreadable", "hips_id": hips_id, "mirror": mirror, "cause": _message_of(exc)}), exc
+    if reference is None:
+        diff = None if service.hips_id == hips_id else ("creator_did", hips_id, service.hips_id)
+    else:
+        diff = _difference(reference, service)
+    if diff is not None:
+        name, expected, found = diff
+        return None, ModuleWarning(
+            "HIPS_MIRROR_REJECTED", f"{hips_id}: mirror {mirror} scartato, {name} {found!r} invece di {expected!r}",
+            {"reason": "different", "hips_id": hips_id, "mirror": mirror, "field": name, "expected": expected,
+             "found": found}), None
+    return service, None, None
+
+
+def _fallback_note(hips_id: str, failed: str | None, mirror: str, cause: Mapping) -> ModuleWarning:
+    """``HIPS_MIRROR_FALLBACK`` (una volta per survey): server che non ha risposto, mirror in uso, causa."""
+    reason = cause["reason"]
+    if reason == "mocserver":
+        return ModuleWarning(
+            "HIPS_MIRROR_FALLBACK", f"{hips_id}: MocServer non raggiungibile, server principale non noto; survey "
+            f"servito dal mirror {mirror}", {"reason": "mocserver", "hips_id": hips_id, "mirror": mirror})
+    why = {"network": "non raggiungibile", "invalid_response": "risposta non valida"}.get(
+        reason, f"risposta HTTP {cause.get('status')}")
+    params = {"reason": reason, "hips_id": hips_id, "primary": failed, "mirror": mirror}
+    if reason == "http_status":
+        params["status"] = cause["status"]
+    return ModuleWarning("HIPS_MIRROR_FALLBACK", f"{hips_id}: server {failed} {why}; survey servito dal mirror "
+                         f"{mirror}", params)
+
+
+class HiPSServers:
+    """Server di un survey e server in uso (12 §3, "Ripiego sui mirror", D12-9). Condiviso dai thread dei tile del
+    41: il cambio avviene sotto un lucchetto, ``current`` si legge senza. Vive con il ``HiPSService``: un servizio
+    nuovo (``refresh=True``, riapertura del survey) riparte dal principale."""
+
+    def __init__(self, hips_id: str, servers, index: int, reference: HiPSService, *, primary_known: bool = True,
+                 notice_given: bool = False) -> None:
+        import threading
+
+        self.hips_id = hips_id
+        self.servers = tuple(servers)
+        self._index = index
+        self.reference = reference
+        self.primary_known = primary_known
+        self.failures = 0  # tile consecutivi falliti per cause di rete sul server in uso
+        self.switches = 0
+        self.exhausted = False
+        self._notice_given = notice_given
+        self._notes: list = []
+        self._lock = threading.Lock()
+
+    @property
+    def current(self) -> str:
+        return self.servers[self._index]
+
+    @property
+    def primary(self) -> str | None:
+        return self.servers[0] if self.primary_known else None
+
+    def take_notes(self) -> tuple:
+        """Avvisi del cambio (``HIPS_MIRROR_FALLBACK`` una volta per survey, ``HIPS_MIRROR_REJECTED``), consegnati una
+        volta sola."""
+        with self._lock:
+            notes, self._notes = tuple(self._notes), []
+        return notes
+
+    def succeeded(self, server: str) -> None:
+        """Il server ha risposto (tile riuscito o 404): si azzera il conteggio dei fallimenti."""
+        if server == self.current:
+            self.failures = 0
+
+    def failed(self, server: str, cause: Mapping, *, cache, timeouts) -> str | None:
+        """Un tile è fallito su ``server`` per una causa di rete: server su cui riprovarlo subito, o ``None`` (errore
+        al chiamante; ``exhausted`` se non resta nessun server)."""
+        with self._lock:
+            if server != self.current:
+                return self.current  # partito verso il server di prima: si riprova su quello in uso
+            if self.exhausted:
+                return None
+            self.failures += 1
+            if self.failures < MIRROR_SWITCH_FAILURES:
+                return None
+            for index in range(self._index + 1, len(self.servers)):
+                mirror = self.servers[index]
+                service, note, _ = _check_mirror(self.hips_id, mirror, self.reference, cache=cache, refresh=False,
+                                                 timeouts=timeouts)
+                if service is None:
+                    self._notes.append(note)
+                    continue
+                if not self._notice_given:
+                    self._notice_given = True
+                    self._notes.append(_fallback_note(self.hips_id, server, mirror, cause))
+                self._index, self.failures = index, 0
+                self.switches += 1
+                return mirror
+            self.exhausted = True
+            return None
+
+    def all_failed(self, last) -> HiPSError:
+        """``NET_TIMEOUT`` (``hips_servers``) con il numero dei server provati e l'ultimo errore."""
+        n = len(self.servers)
+        return HiPSError("NET_TIMEOUT", f"{self.hips_id}: nessun server del survey risponde (provati {n}: "
+                         f"{', '.join(self.servers)}); ultimo errore {last.code}: {last.message}",
+                         hips_id=self.hips_id,
+                         params={"reason": "hips_servers", "hips_id": self.hips_id, "servers": n,
+                                 "tried": list(self.servers), "last": _message_of(last)})
+
+
+def _open_service(hips_id: str, servers: tuple[str, ...], *, primary_known: bool, cause: Mapping | None = None,
+                  last=None, cache, refresh: bool, timeouts) -> HiPSService:
+    """Legge il ``properties`` del survey dal primo server che risponde (12 §3): il principale, poi i mirror
+    equivalenti. Con un solo server il comportamento è quello di ``read_service``."""
+    notes: list = []
+    for index, base in enumerate(servers):
+        if index == 0 and primary_known:
+            try:
+                service = read_service(base, cache=cache, refresh=refresh, timeouts=timeouts)
+            except HiPSError as exc:
+                cause = _switch_cause(exc.code, exc.params)
+                if cause is None or len(servers) == 1:
+                    raise
+                last = exc
+                continue
+        else:
+            service, note, exc = _check_mirror(hips_id, base, None, cache=cache, refresh=refresh, timeouts=timeouts)
+            if service is None:
+                notes.append(note)
+                last = exc or last
+                continue
+            notes.append(_fallback_note(hips_id, servers[0] if primary_known else None, base, cause))
+        if len(servers) == 1:  # un solo server: nessuno stato del ripiego, solo gli avvisi
+            return _replace(service, warnings=service.warnings + tuple(notes)) if notes else service
+        state = HiPSServers(hips_id, servers, index, service, primary_known=primary_known, notice_given=index > 0)
+        return _replace(service, base_url=servers[0], servers=state, warnings=service.warnings + tuple(notes))
+    if last is None or len(servers) == 1:
+        raise last
+    probe = HiPSServers(hips_id, servers, 0, None, primary_known=primary_known)
+    raise probe.all_failed(last)
+
+
+def _legacy_record(hips_id: str, cache):
+    """Record del MocServer salvato prima dello sprint 10b (``fields`` senza i mirror), solo dalla cache."""
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.cache import SharedCache
+
+    cache = SharedCache() if cache is None else cache
+    params = vo._canonical({"ID": hips_id, "get": "record", "fmt": "json", "fields": _LEGACY_RESOLVE_FIELDS})
+    rows = cache.table(vo._CACHE_MODULE, vo._QUERY_TABLE, vo._QUERY_COLUMNS)
+    cached = rows.get(vo._cache_key("mocserver", "GET", vo.MOCSERVER_URL, params))
+    if cached is None:
+        return None
+    return vo._Response(cached.data["payload"], vo.MOCSERVER_URL, "GET", params, cached.retrieved_at, True,
+                        (ModuleWarning("FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il "
+                                       f"{_iso(cached.retrieved_at)}",
+                                       {"reason": "cached_origin", "origin": cached.origin,
+                                        "retrieved_at": _iso(cached.retrieved_at)}),))
+
+
+def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, tuple[str, ...], tuple]:
+    """URL del servizio di un identificativo HiPS e mirror dichiarati, dal MocServer (rete del 14)."""
     from astrotwo.core import vo_protocols as vo
 
-    params = {"ID": hips_id, "get": "record", "fmt": "json", "fields": "ID,hips_service_url,dataproduct_type"}
+    fields = ",".join(("ID", "hips_service_url") + _MIRROR_FIELDS + ("dataproduct_type",))
+    params = {"ID": hips_id, "get": "record", "fmt": "json", "fields": fields}
     try:
         response = vo._http("mocserver", vo.MOCSERVER_URL, params, cache=cache, refresh=refresh, timeouts=timeouts)
     except vo.VoProtocolsError as exc:
-        if exc.code == "NET_TIMEOUT":
-            raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile per risolvere {hips_id!r}: "
-                            f"{exc.message}", params={"reason": "resolve", "hips_id": hips_id,
-                                                      "cause": _message_of(exc)}) from exc
-        raise _net(exc) from exc
+        legacy = _legacy_record(hips_id, cache) if _switch_cause(exc.code, exc.params) else None
+        if legacy is None:
+            if exc.code == "NET_TIMEOUT":
+                raise HiPSError("MOCSERVER_UNAVAILABLE", f"MocServer non raggiungibile per risolvere {hips_id!r}: "
+                                f"{exc.message}", params={"reason": "resolve", "hips_id": hips_id,
+                                                          "cause": _message_of(exc)}) from exc
+            raise _net(exc) from exc
+        response = legacy
     records = _mocserver_records(response.payload, vo.MOCSERVER_URL)
     match = [r for r in records if r.get("ID") == hips_id]
     if not match:
         raise HiPSError("HIPS_UNKNOWN", f"identificativo {hips_id!r} sconosciuto al MocServer", hips_id=hips_id,
                         params={"reason": "mocserver", "hips_id": hips_id})
-    url = match[0].get("hips_service_url")
-    if isinstance(url, list):  # il MocServer può dare più valori
-        url = url[0] if url else None
-    if not isinstance(url, str) or not url:
+    record = match[0]
+
+    def values(name: str) -> list[str]:  # il MocServer può dare una stringa o una lista
+        value = record.get(name)
+        return [v for v in (value if isinstance(value, list) else [value]) if isinstance(v, str) and v]
+
+    urls = values("hips_service_url")
+    if not urls:
         raise HiPSError("HIPS_NOT_A_SERVICE", f"{hips_id!r}: la collezione non ha un servizio HiPS "
                         "(hips_service_url assente nel MocServer)", hips_id=hips_id,
                         params={"reason": "no_service_url", "hips_id": hips_id})
+    mirrors = tuple(urls[1:]) + tuple(m for name in _MIRROR_FIELDS for m in values(name))
     notes = response.notes + vo._store(response, "mocserver", cache)
-    return url, notes
+    return urls[0], mirrors, notes
 
 
 def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts=None) -> HiPSService:
     """Legge e valida un servizio HiPS da identificativo (es. ``CDS/P/DSS2/color``, risolto con il MocServer) o da
     URL di base (C3). In caso di errore non restituisce nulla (codici del §10). Per registrarlo in un elenco:
-    ``HiPSList.add_hips``."""
+    ``HiPSList.add_hips``. Il servizio porta i suoi server (principale e mirror, 12 §3): se il principale non
+    risponde, il ``properties`` si legge da un mirror equivalente."""
     from astrotwo.core.cache import NETWORK_TIMEOUTS
 
     timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
@@ -444,10 +717,23 @@ def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts
         raise ValueError("serve un identificativo HiPS o un URL di base")
     text = hips_id_or_url.strip()
     if text.lower().startswith(("http://", "https://")):
-        return read_service(text, cache=cache, refresh=refresh, timeouts=timeouts)
+        service = read_service(text, cache=cache, refresh=refresh, timeouts=timeouts)
+        servers = _server_order(service.base_url, MIRROR_FALLBACKS.get(service.hips_id, ()))
+        if len(servers) == 1:
+            return service
+        return _replace(service, servers=HiPSServers(service.hips_id, servers, 0, service))
     hips_id = text[len("ivo://"):] if text.startswith("ivo://") else text
-    url, notes = _resolve_id(hips_id, cache=cache, refresh=refresh, timeouts=timeouts)
-    service = read_service(url, cache=cache, refresh=refresh, timeouts=timeouts)
+    try:
+        url, declared, notes = _resolve_id(hips_id, cache=cache, refresh=refresh, timeouts=timeouts)
+    except HiPSError as exc:
+        if exc.code != "MOCSERVER_UNAVAILABLE" or hips_id not in MIRROR_FALLBACKS:
+            raise
+        service = _open_service(hips_id, _server_order(None, MIRROR_FALLBACKS[hips_id]), primary_known=False,
+                                cause={"reason": "mocserver"}, last=exc, cache=cache, refresh=refresh,
+                                timeouts=timeouts)
+        return service
+    servers = _server_order(url, declared + MIRROR_FALLBACKS.get(hips_id, ()))
+    service = _open_service(hips_id, servers, primary_known=True, cache=cache, refresh=refresh, timeouts=timeouts)
     extra = list(notes)
     if service.hips_id != hips_id:
         extra.append(ModuleWarning(
@@ -696,6 +982,11 @@ class HiPSTile:
     def nbytes(self) -> int:
         return int(self.data.nbytes)
 
+    @property
+    def server(self) -> str:
+        """URL di base del server da cui viene il tile (12 §3, ripiego sui mirror)."""
+        return self.url.split("/Norder", 1)[0]
+
     def provenance(self) -> str:
         state = "copia in cache" if self.from_cache else "scaricato"
         return f"{self.url} ({state} il {self.retrieved_at.isoformat()})"
@@ -718,19 +1009,21 @@ class TileMemory:
     def __len__(self) -> int:
         return len(self._tiles)
 
-    def get(self, url: str) -> HiPSTile | None:
-        tile = self._tiles.get(url)
+    def get(self, key: str) -> HiPSTile | None:
+        """Tile per chiave: quella di ``fetch_tile`` è indipendente dall'host (D12-10); di default l'URL."""
+        tile = self._tiles.get(key)
         if tile is not None:
-            self._tiles.move_to_end(url)
+            self._tiles.move_to_end(key)
         return tile
 
-    def put(self, tile: HiPSTile) -> None:
+    def put(self, tile: HiPSTile, key: str | None = None) -> None:
         if tile.nbytes > self.limit_bytes:
             return  # più grande del limite da solo: non si tiene in memoria
-        old = self._tiles.pop(tile.url, None)
+        key = tile.url if key is None else key
+        old = self._tiles.pop(key, None)
         if old is not None:
             self.total_bytes -= old.nbytes
-        self._tiles[tile.url] = tile
+        self._tiles[key] = tile
         self.total_bytes += tile.nbytes
         while self.total_bytes > self.limit_bytes:
             _, dropped = self._tiles.popitem(last=False)
@@ -777,6 +1070,29 @@ def _decode_tile(payload: bytes, fmt: str, width: int, url: str):
     return (np.ascontiguousarray(array[::-1]), None), None
 
 
+def _download_checked(url: str, fmt: str, width: int, timeouts, attempts: int, notes: list):
+    """(dati decodificati, byte) di un tile da ``url``: una nuova richiesta per un tile corrotto (decisione 5), poi
+    ``HIPS_BAD_TILE``; 404 → ``HIPS_TILE_MISSING``; rete → ``NET_TIMEOUT``; 5xx/4xx → ``SERVICE_ERROR``."""
+    import requests
+
+    problem = None
+    for _ in range(attempts + 1):
+        try:
+            payload = _download_tile(url, timeouts)
+        except requests.exceptions.RequestException as exc:
+            raise _timeout_error(url, timeouts, exc) from exc
+        if payload is None:
+            raise HiPSError("HIPS_TILE_MISSING", f"{url}: tile non fornito dal servizio (HTTP 404; lo standard ammette "
+                            "alberi parziali e ordini bassi omessi)", url=url, params={"url": url})
+        decoded, problem = _decode_tile(payload, fmt, width, url)
+        if decoded is not None:
+            return decoded, payload
+        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem['text']}), scartato",
+                                   {"reason": "tile_corrupt", "url": url, "problem": problem}))
+    raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem['text']})", url=url,
+                    params={"reason": "tile_corrupt", "url": url, "problem": problem})
+
+
 def _download_tile(url: str, timeouts):
     """Scarica tutto o niente; 404 → ``None`` (tile non fornito)."""
     import requests
@@ -799,9 +1115,7 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
     modulo 12, con origine e data), poi la rete. Mai un tile finto: rete assente senza copia → ``NET_TIMEOUT``;
     tile corrotto o di dimensione inattesa → una sola nuova richiesta, poi ``HIPS_BAD_TILE`` (decisione 5);
     tile non fornito dal servizio (HTTP 404) → ``HIPS_TILE_MISSING``; fuori dal MOC ``coverage`` del servizio →
-    ``HIPS_OUT_OF_COVERAGE`` senza richiesta."""
-    import requests
-
+    ``HIPS_OUT_OF_COVERAGE`` senza richiesta. Con più server (``service.servers``) passa al mirror secondo D12-9."""
     from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, SharedCache
 
     if not isinstance(service, HiPSService):
@@ -823,47 +1137,57 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
         raise HiPSError("HIPS_OUT_OF_COVERAGE", f"{service.hips_id}: tile {index} all'ordine {order} fuori dalla "
                         "copertura del servizio; nessun tile", order=order, index=index,
                         params={"reason": "tile", "hips_id": service.hips_id, "index": index, "order": order})
-    url = f"{service.base_url}/{tile_path(order, index, _EXTENSIONS[fmt], plane=plane)}"
+    path = tile_path(order, index, _EXTENSIONS[fmt], plane=plane)
+    key = f"tile:{service.hips_id}/{path}"  # D12-10: chiave indipendente dall'host, origine = URL vero
     if memory is not None and not refresh:
-        held = memory.get(url)
+        held = memory.get(key)
         if held is not None:
             return held
     cache = SharedCache() if cache is None else cache
-    key = f"tile:{url}"
     notes: list[ModuleWarning] = []
-    cached = None if refresh else cache.get(_CACHE_MODULE, key)
+    cached = None
+    if not refresh:
+        cached = cache.get(_CACHE_MODULE, key)
+        if cached is None:  # chiave di prima dello sprint 10b (URL del principale): solo lettura
+            cached = cache.get(_CACHE_MODULE, f"tile:{service.base_url}/{path}")
     attempts = 1  # richieste ammesse dopo un tile corrotto (decisione 5)
     if cached is not None:
-        decoded, problem = _decode_tile(cached.data, fmt, service.tile_width, url)
+        origin = cached.origin
+        decoded, problem = _decode_tile(cached.data, fmt, service.tile_width, origin)
         if decoded is not None:
-            tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], url, cached.retrieved_at,
+            tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], origin, cached.retrieved_at,
                             True, service.body, plane, (ModuleWarning(
-                                "FROM_CACHE", f"copia in cache di {url}, scaricata il {cached.retrieved_at.isoformat()}",
-                                {"reason": "cached_tile", "url": url, "retrieved_at": _iso(cached.retrieved_at)}),))
+                                "FROM_CACHE", f"copia in cache di {origin}, scaricata il {cached.retrieved_at.isoformat()}",
+                                {"reason": "cached_tile", "url": origin, "retrieved_at": _iso(cached.retrieved_at)}),))
             if memory is not None:
-                memory.put(tile)
+                memory.put(tile, key)
             return tile
         notes.append(ModuleWarning(
-            "HIPS_TILE_DISCARDED", f"copia in cache di {url} corrotta ({problem['text']}): scartata, nuova richiesta",
-            {"reason": "cache_corrupt", "url": url, "problem": problem}))
+            "HIPS_TILE_DISCARDED", f"copia in cache di {origin} corrotta ({problem['text']}): scartata, nuova richiesta",
+            {"reason": "cache_corrupt", "url": origin, "problem": problem}))
         attempts = 0
-    problem = None
-    for _ in range(attempts + 1):
+    servers = service.servers
+    server = service.server
+    while True:  # ripiego sui mirror (12 §3, D12-9): il server cambia per tutto il survey
+        url = f"{server}/{path}"
         try:
-            payload = _download_tile(url, timeouts)
-        except requests.exceptions.RequestException as exc:
-            raise _timeout_error(url, timeouts, exc) from exc
-        if payload is None:
-            raise HiPSError("HIPS_TILE_MISSING", f"{url}: tile non fornito dal servizio (HTTP 404; lo standard ammette "
-                            "alberi parziali e ordini bassi omessi)", url=url, params={"url": url})
-        decoded, problem = _decode_tile(payload, fmt, service.tile_width, url)
-        if decoded is not None:
-            break
-        notes.append(ModuleWarning("HIPS_TILE_DISCARDED", f"{url}: tile corrotto ({problem['text']}), scartato",
-                                   {"reason": "tile_corrupt", "url": url, "problem": problem}))
-    else:
-        raise HiPSError("HIPS_BAD_TILE", f"{url}: tile corrotto anche dopo una nuova richiesta ({problem['text']})", url=url,
-                        params={"reason": "tile_corrupt", "url": url, "problem": problem})
+            decoded, payload = _download_checked(url, fmt, service.tile_width, timeouts, attempts, notes)
+        except HiPSError as exc:
+            cause = None if servers is None else _switch_cause(exc.code, exc.params)
+            if cause is None:
+                if servers is not None and exc.code == "HIPS_TILE_MISSING":
+                    servers.succeeded(server)  # un server che risponde 404 è vivo
+                raise
+            retry = servers.failed(server, cause, cache=cache, timeouts=timeouts)
+            if retry is None:
+                if servers.exhausted:
+                    raise servers.all_failed(exc) from exc
+                raise
+            server, attempts = retry, 1
+            continue
+        if servers is not None:
+            servers.succeeded(server)
+        break
     retrieved_at = datetime.now(UTC)
     try:
         cache.put(_CACHE_MODULE, key, payload, origin=url, retrieved_at=retrieved_at)
@@ -872,7 +1196,7 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
     tile = HiPSTile(service.hips_id, order, index, fmt, decoded[0], decoded[1], url, retrieved_at, False,
                     service.body, plane, tuple(notes))
     if memory is not None:
-        memory.put(tile)
+        memory.put(tile, key)
     return tile
 
 
@@ -903,7 +1227,7 @@ def service_coverage(service: HiPSService, *, cache=None, refresh: bool = False,
         raise HiPSError("HIPS_FRAME_UNSUPPORTED", f"{service.hips_id}: corpo {service.body!r}; il MOC IVOA è ICRS, "
                         "copertura dei HiPS planetari con il modulo 19",
                         params={"reason": "moc_planetary", "hips_id": service.hips_id, "body": str(service.body)})
-    url = service.base_url + "/Moc.fits"
+    url = service.server + "/Moc.fits"  # dal server in uso (ripiego sui mirror, 12 §3)
     try:
         return read_moc(url, format="fits", kind="space", cache=cache, refresh=refresh, timeouts=timeouts), ()
     except MocError as exc:

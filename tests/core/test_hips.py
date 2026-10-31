@@ -313,7 +313,7 @@ def test_t4_cache_limit(service, tmp_path):
         route_tile(service, "/hips", 3, index, fits_tile(index))
         fetch_tile(hips, 3, index, cache=small)
         assert small.usage().total_bytes <= 3 * size
-    kept = [i for i in range(6) if small.get("12", f"tile:{hips.base_url}/{tile_path(3, i, 'fits')}") is not None]
+    kept = [i for i in range(6) if small.get("12", f"tile:{hips.hips_id}/{tile_path(3, i, 'fits')}") is not None]
     assert kept == [3, 4, 5]  # tolti i tile usati meno di recente
     small.close()
 
@@ -377,7 +377,7 @@ def test_t6_network_error(service, tmp_path):
     fast = NetworkTimeouts(connect=0.5, read=0.5)
     with pytest.raises(HiPSError) as err:
         fetch_tile(hips, 3, 7, cache=cache, timeouts=fast)
-    assert err.value.code == "NET_TIMEOUT" and cache.get("12", f"tile:{hips.base_url}/{tile_path(3, 7, 'fits')}") is None
+    assert err.value.code == "NET_TIMEOUT" and cache.get("12", f"tile:{hips.hips_id}/{tile_path(3, 7, 'fits')}") is None
     cache.close()
 
 
@@ -404,7 +404,7 @@ def test_bad_and_missing_tiles(service, cache):
         fetch_tile(hips, 3, 12, cache=cache)
     assert err.value.code == "HIPS_TILE_MISSING"
     # Copia in cache corrotta: scartata, una nuova richiesta.
-    key = f"tile:{hips.base_url}/{tile_path(3, 13, 'fits')}"
+    key = f"tile:{hips.hips_id}/{tile_path(3, 13, 'fits')}"
     from datetime import UTC, datetime
 
     cache.put("12", key, b"rovinato", origin="prova", retrieved_at=datetime.now(UTC))

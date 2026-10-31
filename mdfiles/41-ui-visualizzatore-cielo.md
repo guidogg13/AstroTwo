@@ -294,6 +294,17 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
 - Tile mancanti o scartati (`HIPS_TILE_MISSING`, `HIPS_BAD_TILE` del 12):
   zona vuota; un solo messaggio per survey nel pannello Messaggi, non uno
   per tile.
+- **Ripiego sui mirror (sprint 10b, 2026-10-31; `12` §3):** il cambio di
+  server lo decide il 12 (`fetch_tile`, D12-9); il visualizzatore non ha
+  pannelli nuovi. L'avviso `HIPS_MIRROR_FALLBACK` (ed eventuali
+  `HIPS_MIRROR_REJECTED`) va nel pannello Messaggi **una volta per survey**;
+  i tile falliti per una causa di rete **prima** del cambio si richiedono
+  subito al server nuovo (così non restano zone vuote); se cadono tutti i
+  server, un solo messaggio `NET_TIMEOUT` (`hips_servers`) con il numero dei
+  server provati, distinto da un eventuale `NET_TIMEOUT` di un singolo tile.
+  Il server in uso (`HiPSService.server`) è nel **tooltip del nome** della
+  riga del survey nel pannello dei livelli («Server: …»), aggiornato al
+  cambio.
 
 ### 3.8 Cataloghi
 
@@ -1116,3 +1127,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-25 | Claude Code | **Sprint 9:** aperte **D41-9** (B3, "Vai a" fuori dalla proiezione dell'immagine base: causa riprodotta, opzioni) e **D41-10** (E5, campi larghi con migliaia di simboli: opzioni), §13. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b:** D41-9 decisa (b) e D41-10 decisa (d) dal proprietario (§13); nota `CATALOG_DENSE` sopra 2 000 simboli (§3.8, scelta minore da confermare), tabella di §10.1, T28d. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | D41-10: soglia di 2 000 simboli per `CATALOG_DENSE` e 5 000 righe di default **confermate dal proprietario** (§3.8, §13). Stato `approvato` invariato. |
+| 2026-10-31 | Claude Code | **Sprint 10b (ripiego dei survey HiPS sui mirror, `12` §3):** §3.7 — avviso `HIPS_MIRROR_FALLBACK` una volta per survey nel pannello Messaggi, tile falliti prima del cambio richiesti al mirror, messaggio unico `NET_TIMEOUT` `hips_servers` se cadono tutti, server in uso nel tooltip del nome della riga del survey (testo «Server: %1» tradotto); nessun pannello nuovo; test `test_mirror_fallback_fills_sky`. Stato `approvato` invariato. |

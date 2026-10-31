@@ -1064,6 +1064,33 @@ _add("HIPS_ID_MISMATCH",
      "Requested identifier '{requested}', creator_did of the service '{service_id}': the service's one applies.",
      "Identificativo richiesto '{requested}', creator_did del servizio '{service_id}': vale quello del servizio.",
      "requested service_id")
+_add("HIPS_MIRROR_FALLBACK",
+     "{hips_id}: survey served by the mirror {mirror}.", "{hips_id}: survey servito dal mirror {mirror}.",
+     "hips_id mirror",
+     network=("{hips_id}: server {primary} not reachable; survey served by the mirror {mirror}.",
+              "{hips_id}: server {primary} non raggiungibile; survey servito dal mirror {mirror}.",
+              "hips_id primary mirror"),
+     http_status=("{hips_id}: server {primary} answered HTTP {status}; survey served by the mirror {mirror}.",
+                  "{hips_id}: server {primary} ha risposto HTTP {status}; survey servito dal mirror {mirror}.",
+                  "hips_id primary mirror status:int"),
+     invalid_response=("{hips_id}: server {primary} gave an invalid response; survey served by the mirror {mirror}.",
+                       "{hips_id}: server {primary} ha dato una risposta non valida; survey servito dal mirror "
+                       "{mirror}.", "hips_id primary mirror"),
+     mocserver=("{hips_id}: MocServer not reachable, primary server unknown; survey served by the mirror {mirror}.",
+                "{hips_id}: MocServer non raggiungibile, server principale non noto; survey servito dal mirror "
+                "{mirror}.", "hips_id mirror"))
+_add("HIPS_MIRROR_REJECTED",
+     "{hips_id}: mirror {mirror} discarded.", "{hips_id}: mirror {mirror} scartato.", "hips_id mirror",
+     different=("{hips_id}: mirror {mirror} discarded, {field} '{found}' instead of '{expected}'.",
+                "{hips_id}: mirror {mirror} scartato, {field} '{found}' invece di '{expected}'.",
+                "hips_id mirror field expected! found!"),
+     unreadable=("{hips_id}: mirror {mirror} discarded, properties cannot be read ({cause}).",
+                 "{hips_id}: mirror {mirror} scartato, properties non leggibile ({cause}).",
+                 "hips_id mirror cause:msg"))
+_extend("NET_TIMEOUT",
+        hips_servers=("{hips_id}: no server of the survey answers (tried {servers}: {tried}); last error: {last}",
+                      "{hips_id}: nessun server del survey risponde (provati {servers}: {tried}); ultimo errore: "
+                      "{last}", "hips_id servers:int tried:list last:msg"))
 _add("HIPS_ALREADY_LISTED",
      "{hips_id} is already in the list (read from {origin} on {retrieved_at}); refresh=True to read it again.",
      "{hips_id} già in elenco (letto da {origin} il {retrieved_at}); refresh=True per rileggerlo.",

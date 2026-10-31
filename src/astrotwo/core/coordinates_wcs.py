@@ -48,7 +48,7 @@ from astropy.wcs.utils import (
     wcs_to_celestial_frame,
 )
 
-from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts, SharedCache
+from astrotwo.core.cache import NetworkTimeouts, SharedCache
 
 __all__ = [
     "SUPPORTED_PROJECTIONS",
