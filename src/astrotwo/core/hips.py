@@ -375,7 +375,8 @@ def _net(exc) -> HiPSError:
 def read_service(url: str, *, cache=None, refresh: bool = False, timeouts=None) -> HiPSService:
     """Legge e valida il file ``properties`` di un servizio HiPS dato l'URL di base (rete e cache del 14).
 
-    Un URL che non risponde con un file ``properties`` → ``HIPS_NOT_A_SERVICE``; chiavi obbligatorie mancanti o
+    Un URL che non risponde con un file ``properties`` (risposta 2xx non valida, o HTTP 4xx diverso da 429) →
+    ``HIPS_NOT_A_SERVICE``; HTTP 5xx o 429 → ``SERVICE_ERROR`` del 14 (guasto del server, causa del ripiego); chiavi obbligatorie mancanti o
     valori non validi → ``HIPS_METADATA_INVALID``; rete assente senza copia in cache → ``NET_TIMEOUT``. Solo un
     servizio valido va in cache."""
     from astrotwo.core import vo_protocols as vo
@@ -387,7 +388,9 @@ def read_service(url: str, *, cache=None, refresh: bool = False, timeouts=None) 
     try:
         response = vo._http("hips", target, cache=cache, refresh=refresh, timeouts=timeouts)
     except vo.VoProtocolsError as exc:
-        if exc.code == "SERVICE_ERROR":
+        if _switch_cause(exc.code, exc.params) is not None:
+            raise _net(exc) from exc  # HTTP 5xx/429: guasto del server, non "non è un servizio" (12 §3, D12-9)
+        if exc.code == "SERVICE_ERROR":  # altri 4xx (es. 404): all'URL non c'è un file properties
             raise HiPSError("HIPS_NOT_A_SERVICE", f"{target}: {exc.message}; non è un servizio HiPS",
                             url=target, params={"reason": "service_error", "url": target,
                                                 "cause": _message_of(exc)}) from exc
@@ -473,10 +476,7 @@ def _switch_cause(code, params) -> dict | None:
         if isinstance(status, int) and not isinstance(status, bool) and (status >= 500 or status == 429):
             return {"reason": "http_status", "status": status}
         return {"reason": "invalid_response"} if params.get("reason") == "unreadable_response" else None
-    if code == "HIPS_NOT_A_SERVICE":
-        if params.get("reason") == "service_error":
-            cause = params.get("cause") or {}
-            return _switch_cause(cause.get("code"), cause.get("params"))
+    if code == "HIPS_NOT_A_SERVICE":  # ``service_error`` è un 4xx diverso da 429: nessun cambio
         return {"reason": "invalid_response"} if params.get("reason") in _INVALID_PROPERTIES else None
     if code == "HIPS_BAD_TILE":
         return {"reason": "invalid_response"}

@@ -103,6 +103,49 @@ def test_t19_primary_down_mocserver_mirror(service, cache, monkeypatch):
     assert got.servers.take_notes() == ()  # avviso già consegnato nel risultato: una volta sola
 
 
+def test_t19_primary_properties_503_switches_to_mirror(service, cache, monkeypatch):
+    """HTTP 503 al ``properties`` del principale = guasto del server: si passa al mirror con l'avviso (non
+    ``HIPS_NOT_A_SERVICE``, correzione del 2026-10-31)."""
+    mirror = serve(service, "/mirror")
+    service.routes["/hips/properties"] = lambda request: (503, "text/plain", "Service Unavailable")
+    mocserver(service, monkeypatch, {"ID": HIPS_ID, "hips_service_url": service.url + "/hips",
+                                     "hips_service_url_1": mirror})
+    got = add_hips(HIPS_ID, cache=cache, timeouts=FAST)
+    assert got.server == mirror and got.base_url == service.url + "/hips"
+    note = [w for w in got.warnings if w[0] == "HIPS_MIRROR_FALLBACK"]
+    assert len(note) == 1 and note[0].params == {"reason": "http_status", "status": 503, "hips_id": HIPS_ID,
+                                                 "primary": service.url + "/hips", "mirror": mirror}
+
+
+@pytest.mark.parametrize("status", [500, 503, 504, 429])
+def test_t19_properties_5xx_429_is_service_error(service, cache, status):
+    """Un solo server: 5xx/429 al ``properties`` → ``SERVICE_ERROR`` con lo stato; 404 resta ``HIPS_NOT_A_SERVICE``."""
+    service.routes["/guasto/properties"] = lambda request: (status, "text/plain", "guasto")
+    with pytest.raises(HiPSError) as err:
+        hips.read_service(service.url + "/guasto", cache=cache, timeouts=FAST)
+    assert err.value.code == "SERVICE_ERROR" and err.value.params["status"] == status
+    assert err.value.details["status"] == status  # riconosciuto come temporaneo dai test di rete (conftest)
+    with pytest.raises(HiPSError) as err:
+        hips.read_service(service.url + "/assente", cache=cache, timeouts=FAST)
+    assert err.value.code == "HIPS_NOT_A_SERVICE" and err.value.params["reason"] == "service_error"
+
+
+def test_t19_mirror_properties_504_rejected_as_service_error(service, cache, monkeypatch):
+    """Mirror che risponde 504 al ``properties``: scartato con la causa ``SERVICE_ERROR``, si usa il successivo."""
+    primary = serve(service, "/hips", status=503)
+    service.routes["/lento/properties"] = lambda request: (504, "text/plain", "Gateway Timeout")
+    good = serve(service, "/buono")
+    monkeypatch.setattr(hips, "MIRROR_FALLBACKS", {HIPS_ID: (service.url + "/lento", good)})
+    got = add_hips(primary, cache=cache, timeouts=FAST)
+    for index in range(MIRROR_SWITCH_FAILURES - 1):
+        with pytest.raises(HiPSError):
+            fetch_tile(got, 3, index, cache=cache, timeouts=FAST)
+    assert fetch_tile(got, 3, 2, cache=cache, timeouts=FAST).url.startswith(good)
+    rejected = got.servers.take_notes()[0]
+    assert rejected[0] == "HIPS_MIRROR_REJECTED" and rejected.params["cause"]["code"] == "SERVICE_ERROR"
+    assert rejected.params["cause"]["params"]["status"] == 504
+
+
 def test_t19_mocserver_down_cached_record_without_mirrors(service, cache, monkeypatch):
     """Record del MocServer in cache scritto prima dello sprint 10b (senza i campi dei mirror), MocServer giù:
     il principale dal record, i mirror dalla tabella interna."""

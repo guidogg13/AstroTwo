@@ -207,8 +207,11 @@ riquadro mostrato.
 - **`read_service(url, *, cache, refresh, timeouts)`** → **`HiPSService`**:
   legge `URL/properties` con la rete del 14 (protocollo `hips`, cache e
   registro comuni; la risposta va in cache **solo se valida**). Risposta
-  HTTP d'errore (es. 404), non UTF-8, non `properties`, o senza nessuna delle
-  9 chiavi obbligatorie → `HIPS_NOT_A_SERVICE`; una chiave obbligatoria
+  HTTP d'errore 4xx diversa da 429 (es. 404), non UTF-8, non `properties`, o
+  senza nessuna delle 9 chiavi obbligatorie → `HIPS_NOT_A_SERVICE`; **HTTP
+  5xx o 429 → `SERVICE_ERROR` del 14 rilanciato** (guasto del server, non
+  "non è un servizio": causa di rete del ripiego sui mirror, correzione del
+  2026-10-31); una chiave obbligatoria
   mancante o un valore non valido (`dataproduct_type` fuori da `image`,
   `catalog`, `cube` — i tipi del WD 2.0 non si leggono —, formati non
   ammessi per il tipo, `hips_order` non intero o fuori da [0, 29],
@@ -524,7 +527,9 @@ server** e passa al successivo quando quello in uso non risponde.
   verificato.
 - **Quando si passa al server successivo (cause "di rete"):** timeout o
   errore di connessione (`NET_TIMEOUT`), HTTP **5xx** o **429**
-  (`SERVICE_ERROR`), **risposta non valida** (`properties` che non è un file
+  (`SERVICE_ERROR` con `status`, sia sul `properties` sia sui tile; mai
+  `HIPS_NOT_A_SERVICE`, che vale solo per una risposta 2xx che non è un
+  `properties` valido o per un 4xx diverso da 429), **risposta non valida** (`properties` che non è un file
   `properties`: `HIPS_NOT_A_SERVICE` con `bad_line`, `no_properties`,
   `not_utf8`, `no_mandatory_keys`; tile ancora corrotto dopo la nuova
   richiesta: `HIPS_BAD_TILE`; risposta non leggibile). **Mai** per un 404
@@ -765,7 +770,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `HIPS_NOT_A_SERVICE` | (generale) | — |
 | `HIPS_NOT_A_SERVICE` | `bad_line` | `source` (string), `line` (integer), `content` (string, esterno) |
 | `HIPS_NOT_A_SERVICE` | `no_properties` | `source` (string) |
-| `HIPS_NOT_A_SERVICE` | `service_error` | `url` (string), `cause` (message: errore del 14) |
+| `HIPS_NOT_A_SERVICE` | `service_error` | `url` (string), `cause` (message: errore del 14; solo HTTP 4xx diverso da 429 — 5xx e 429 danno `SERVICE_ERROR`) |
 | `HIPS_NOT_A_SERVICE` | `not_utf8` | `url` (string), `detail` (string, esterno) |
 | `HIPS_NOT_A_SERVICE` | `no_mandatory_keys` | `url` (string) |
 | `HIPS_NOT_A_SERVICE` | `no_service_url` | `hips_id` (string) |
@@ -1044,3 +1049,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 16):** l'errore del 16 incorporato dal testo del 12 (`MOCSERVER_UNAVAILABLE` `coverage`) passa da parametro esterno `detail` a parametro `message` `cause`; gli errori del 16 rilanciati dal 12 portano i loro `params`. Nessun comportamento scientifico cambia. |
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 19):** l'errore `BODY_UNSUPPORTED` del 19 incorporato dall'avviso omonimo del 12 passa da parametro esterno a parametro `message` (`detail`). Nessun comportamento scientifico cambia. |
 | 2026-10-31 | Claude Code | **Sprint 10b (richiesta del proprietario, autorizzazione esplicita a modificare il file approvato):** guasto del CDS di fine ottobre 2026 → **ripiego automatico sui mirror** dei survey HiPS (§3, "Ripiego sui mirror"): elenco principale → mirror del MocServer (`hips_service_url_N`) → `MIRROR_FALLBACKS` verificata con richieste reali il 2026-10-31 (ESASky e IRSA per DSS2 a colori e 2MASS a colori, IRSA per DSS2 rosso; nessuna copia fuori da Strasburgo per PanSTARRS, Mellinger, Gaia), prima i mirror fuori da Strasburgo; cambio solo per cause di rete (mai 404 né altri 4xx); equivalenza del `properties`; avvisi `HIPS_MIRROR_FALLBACK` (una volta per survey) e `HIPS_MIRROR_REJECTED`; `NET_TIMEOUT` `hips_servers` con il numero dei server; **D12-9** (regola del cambio) e **D12-10** (chiave della cache indipendente dall'host) decise (§13); T19 (§12); §7, §10. Stato `approvato` invariato. |
+| 2026-10-31 | Claude Code | **Correzione dello sprint 10b (richiesta del proprietario, test di rete: IRSA ha risposto HTTP 504 al `properties`):** `read_service` trasformava ogni `SERVICE_ERROR` del 14, anche 5xx e 429, in `HIPS_NOT_A_SERVICE`; ora HTTP 5xx e 429 sul `properties` rilanciano `SERVICE_ERROR` (guasto del server, causa del ripiego, D12-9) e `HIPS_NOT_A_SERVICE` resta per le risposte 2xx non valide e per i 4xx diversi da 429 (P1, §3 "Ripiego sui mirror", §10); T19 con il `properties` del principale a 503. Stato `approvato` invariato. |
