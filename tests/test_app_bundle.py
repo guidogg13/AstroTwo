@@ -25,8 +25,8 @@ SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d
 
 def test_t1_version_semver_and_pep440_are_the_same():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == "0.1.0b2"
-    assert astrotwo.__version__ == "0.1.0-beta.2" and SEMVER.match(astrotwo.__version__)
+    assert project["project"]["version"] == "0.1.0b3"
+    assert astrotwo.__version__ == "0.1.0-beta.3" and SEMVER.match(astrotwo.__version__)
     assert Version(project["project"]["version"]) == Version(astrotwo.__version__)
     assert isinstance(project["tool"]["astrotwo"]["bundle"]["build"], int)
 
@@ -43,10 +43,10 @@ def test_t5_license_files_in_the_project():
 
 
 def test_t5_sources_text_cites_exact_sources():
-    info = {"version": "0.1.0-beta.2", "build": 1, "commit": "abc123", "dirty": False}
+    info = {"version": "0.1.0-beta.3", "build": 1, "commit": "abc123", "dirty": False}
     text = app_bundle.sources_text(info)
-    assert "AstroTwo 0.1.0-beta.2 (build 1, commit abc123)" in text
-    assert "https://github.com/guidogg13/AstroTwo" in text and "Tag of this version: v0.1.0-beta.2" in text
+    assert "AstroTwo 0.1.0-beta.3 (build 1, commit abc123)" in text
+    assert "https://github.com/guidogg13/AstroTwo" in text and "Tag of this version: v0.1.0-beta.3" in text
     assert "pyside-setup-everywhere-src-6.12.0.zip" in text and app_bundle.PYSIDE_SOURCE[1] in text
     for url, digest in app_bundle.QT_SOURCES:
         assert url in text and digest in text
