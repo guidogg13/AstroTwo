@@ -47,7 +47,7 @@ def test_t5_sources_text_cites_exact_sources():
     text = app_bundle.sources_text(info)
     assert "AstroTwo 0.1.0-beta.3 (build 1, commit abc123)" in text
     assert "https://github.com/guidogg13/AstroTwo" in text and "Tag of this version: v0.1.0-beta.3" in text
-    assert "pyside-setup-everywhere-src-6.12.0.zip" in text and app_bundle.PYSIDE_SOURCE[1] in text
+    assert "pyside-setup-everywhere-src-6.11.3.zip" in text and app_bundle.PYSIDE_SOURCE[1] in text
     for url, digest in app_bundle.QT_SOURCES:
         assert url in text and digest in text
     assert "codesign --force --deep --sign - AstroTwo.app" in text

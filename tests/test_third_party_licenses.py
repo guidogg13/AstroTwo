@@ -46,7 +46,7 @@ def test_t11_app_components_present():
     text = third_party_licenses.OUTPUT.read_text(encoding="utf-8")
     distributed = text.split("Strumenti di sviluppo (test e costruzione", 1)[0]
     for title in ("Python (CPython, python-build-standalone) 3.12.15+20261003",
-                  "Qt 6.12.0, componenti di terze parti (qtbase, qtsvg) 6.12.0",
+                  "Qt 6.11.3, componenti di terze parti (qtbase, qtsvg) 6.11.3",
                   "Bootloader e hook di esecuzione di PyInstaller"):
         assert f"\n{title}" in distributed, title
     # PSF, OpenSSL, avvisi di Qt (PCRE2, FreeType) ed eccezione del bootloader.

@@ -28,7 +28,7 @@ def test_t6_licenses_window_from_the_menu(qtbot, settings_path, cache):
     assert [dialog.tabs.tabText(i) for i in range(4)] == ["AstroTwo", "Third-party", "Sources", "Data credits"]
     assert (ROOT / "LICENSE").read_text(encoding="utf-8") in dialog.tab_text("astrotwo")
     assert dialog.tab_text("third_party") == (ROOT / "THIRD_PARTY_LICENSES").read_text(encoding="utf-8")
-    assert "pyside-setup-everywhere-src-6.12.0.zip" in dialog.tab_text("sources")
+    assert "pyside-setup-everywhere-src-6.11.3.zip" in dialog.tab_text("sources")
     credits = dialog.tab_text("data_credits")
     assert SIMBAD_TEXT in credits and DSS_TEXT in credits and "Acknowledgement text not yet verified." in credits
     assert "This research has made use of ESASky, developed by the ESAC Science Data Centre" in credits

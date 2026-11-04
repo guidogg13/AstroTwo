@@ -1,4 +1,4 @@
---- Vulkan Memory Allocator 3.3.0 ---
+--- Vulkan Memory Allocator 3.2.1 ---
 Qt source: qtbase/src/3rdparty/VulkanMemoryAllocator
 Qt usage: Memory management for the Vulkan backend of QRhi.
 License: MIT License (MIT)
@@ -518,7 +518,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
---- Freetype 2 2.14.3 ---
+--- Freetype 2 2.15.0 ---
 Qt source: qtbase/src/3rdparty/freetype
 Qt usage: Optionally used in Qt GUI and platform plugins. Configure with -no-freetype, or -system-freetype to avoid.
 License: Freetype Project License or GNU General Public License v2.0 only (FTL OR GPL-2.0-only)
@@ -1245,7 +1245,7 @@ Except as contained in this notice, the name of The Open Group shall not be
 used in advertising or otherwise to promote the sale, use or other dealings
 in this Software without prior written authorization from The Open Group.
 
---- HarfBuzz-NG 14.5.0 ---
+--- HarfBuzz-NG 14.6.0 ---
 Qt source: qtbase/src/3rdparty/harfbuzz-ng
 Qt usage: Optionally used in Qt GUI. Configure with -system-harfbuzz to force the use of the system library, or -qt-harfbuzz to link statically to the library that is bundled with your Qt version.
 License: MIT License (MIT)
@@ -1382,7 +1382,7 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
---- LibPNG 1.6.58 ---
+--- LibPNG 1.6.59 ---
 Qt source: qtbase/src/3rdparty/libpng
 Qt usage: Used in the qpng image plugin. Configure with -system-libpng or -no-libpng to avoid.
 License: libpng License and PNG Reference Library version 2 (Libpng AND libpng-2.0)
@@ -1675,17 +1675,17 @@ express Statement of Purpose.
     party to this document and has no duty or obligation with respect to
     this CC0 or use of the Work.
 
---- MD4C 0.5.3 ---
+--- MD4C 0.6.0 ---
 Qt source: qtbase/src/3rdparty/md4c
 Qt usage: Optionally used in QTextDocument if configured with textmarkdownreader.
 License: MIT License (MIT)
 Copyright:
-Copyright © 2016-2024 Martin Mitáš
+Copyright © 2016-2026 Martin Mitáš
 
 
 # The MIT License (MIT)
 
-Copyright © 2016-2024 Martin Mitáš
+Copyright © 2016-2026 Martin Mitáš
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the “Software”),
@@ -1835,7 +1835,7 @@ express Statement of Purpose.
     party to this document and has no duty or obligation with respect to
     this CC0 or use of the Work.
 
---- PCRE2 10.48 ---
+--- PCRE2 10.49 ---
 Qt source: qtbase/src/3rdparty/pcre2
 Qt usage: Used in Qt Core (QRegularExpression).
 License: BSD 3-clause "New" or "Revised" License with PCRE2 binary-like Packages Exception (LicenseRef-BSD-3-Clause-with-PCRE2-Binary-Like-Packages-Exception)
@@ -1949,7 +1949,7 @@ PCRE2, it must respect the condition, but if package B is software that
 includes package A, the condition is not imposed on package B unless it uses
 PCRE2 independently.
 
---- PCRE2 - Stack-less Just-In-Time Compiler 10.48 ---
+--- PCRE2 - Stack-less Just-In-Time Compiler 10.49 ---
 Qt source: qtbase/src/3rdparty/pcre2
 Qt usage: Used in Qt Core (QRegularExpression).
 License: BSD 2-clause "Simplified" License (BSD-2-Clause)
@@ -3660,36 +3660,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
---- XSVG ---
-Qt source: qtbase/src/gui/util
-Qt usage: Used in the Qt GUI library.
-License: Historical Permission Notice and Disclaimer - sell variant (HPND-sell-variant)
-Copyright:
-Copyright 2002 USC/Information Sciences Institute
-
-Copyright  2002 USC/Information Sciences Institute
-
-Permission to use, copy, modify, distribute, and sell this software
-and its documentation for any purpose is hereby granted without
-fee, provided that the above copyright notice appear in all copies
-and that both that copyright notice and this permission notice
-appear in supporting documentation, and that the name of
-Information Sciences Institute not be used in advertising or
-publicity pertaining to distribution of the software without
-specific, written prior permission.  Information Sciences Institute
-makes no representations about the suitability of this software for
-any purpose.  It is provided "as is" without express or implied
-warranty.
-
-INFORMATION SCIENCES INSTITUTE DISCLAIMS ALL WARRANTIES WITH REGARD
-TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL INFORMATION SCIENCES
-INSTITUTE BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL
-DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA
-OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
 
 --- Vulkan API Registry 1.4.308 ---
 Qt source: qtbase/src/gui/vulkan

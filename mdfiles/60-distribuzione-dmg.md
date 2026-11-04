@@ -20,11 +20,12 @@ le librerie dentro, l'utente non installa niente) che rispetta le licenze di Ast
 - **Piattaforma:** macOS su Apple Silicon (`arm64`) soltanto. Nessuna app `x86_64` né `universal2`.
 - **macOS minimo:** non scelto a mano. Lo script lo **legge** dai binari inclusi: è il massimo dei `minos` di
   `LC_BUILD_VERSION`. Lo scrive in `LSMinimumSystemVersion`, nel rapporto della costruzione e nella finestra Licenze.
-  Con le versioni di `uv.lock` del 2026-10-25 vale **26.0** (misurato sull'app costruita il 2026-10-25): le
-  librerie di Qt chiedono 14.4 e numpy e scipy 14.0, ma i moduli di collegamento di PySide6 e shiboken6 6.12.0
-  (`PySide6/*.abi3.so`, `libpyside6`, `libshiboken6`, `shiboken6/Shiboken.abi3.so`) hanno `minos 26.0` e
-  `sdk 26.0` già nella ruota ufficiale, che pure è etichettata `macosx_14_0_universal2`. Si decide con D60-4; se
-  una dipendenza cambia, il rapporto lo dice.
+  Con PySide6 **6.11.3** (D60-4 (b), decisione del proprietario del 2026-11-04) il valore atteso è **15.0**: i
+  moduli di collegamento (`PySide6/*.abi3.so`, `libpyside6`, `libshiboken6`, `shiboken6/Shiboken.abi3.so`) hanno
+  `minos 15.0`, le librerie e i plugin di Qt 13.0, numpy e scipy 14.0 (misurati nell'indagine A1 sulle ruote
+  6.11.3). Con PySide6 6.12.0 valeva 26.0 (misurato il 2026-10-25): quei moduli avevano `minos 26.0` e `sdk 26.0`
+  già nella ruota ufficiale, etichettata `macosx_14_0_universal2` e in contrasto col minimo ufficiale di Qt 6.12
+  (14.4). Il valore esatto si legge sull'app costruita (V-a); se una dipendenza cambia, il rapporto lo dice.
 - **Firma (A6, decisione del proprietario del 2026-10-25):** solo **ad hoc** (`codesign --sign -`), necessaria perché
   macOS su Apple Silicon non avvia codice non firmato. **Nessuna notarizzazione.** Chi scarica l'app dovrà usare
   "Apri comunque" (Impostazioni di Sistema → Privacy e sicurezza): il sito lo spiegherà (60b). La firma con
@@ -175,7 +176,7 @@ Requisiti di `01` §6.1, punti 1–5:
      mpdecimal, expat; l'elenco esatto viene dal file `PYTHON.json` di quel rilascio: **da verificare prima del
      codice**). I testi sono copiati in `scripts/licenses/python/` con fonte, URL e SHA-256, come già per PySide6;
    - **Qt:** avvisi delle componenti di terze parti incluse nei moduli Qt dell'app (elenco "Licenses Used in Qt"),
-     presi dai file `qt_attribution.json` e `LICENSES/` dei sorgenti ufficiali `qtbase` e `qtsvg` 6.12.0, con URL e
+     presi dai file `qt_attribution.json` e `LICENSES/` dei sorgenti ufficiali `qtbase` e `qtsvg` 6.11.3 (6.12.0 fino al 2026-11-03), con URL e
      SHA-256 degli archivi (**da verificare prima del codice**), copiati in `scripts/licenses/qt/`;
    - **PyInstaller:** il bootloader incluso nell'app (GPL-2.0-or-later con l'eccezione che permette di distribuire
      programmi costruiti con PyInstaller), con il suo testo di licenza. Lo strumento PyInstaller **non** si
@@ -186,9 +187,9 @@ Requisiti di `01` §6.1, punti 1–5:
    - versione, build e commit di AstroTwo e il sorgente corrispondente (GPL-3.0 §6, D60-1): repository
      `https://github.com/guidogg13/AstroTwo`, tag `v<versione SemVer>` e commit, e l'archivio del sorgente accanto
      al `.dmg` (60b);
-   - il sorgente esatto di **PySide6 e shiboken6 6.12.0** (`https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.zip`,
-     SHA-256 già registrata in `scripts/third_party_licenses.py`) e di **Qt 6.12.0**
-     (`https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/`, archivi `qtbase` e `qtsvg` con SHA-256);
+   - il sorgente esatto di **PySide6 e shiboken6 6.11.3** (`https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.3-src/pyside-setup-everywhere-src-6.11.3.zip`,
+     SHA-256 già registrata in `scripts/third_party_licenses.py`) e di **Qt 6.11.3**
+     (`https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/`, archivi `qtbase` e `qtsvg` con SHA-256);
      la versione di Qt si legge al momento della costruzione (`QLibraryInfo.version()`), e se non è quella dei link
      la costruzione si ferma;
    - **come sostituire le librerie Qt** (LGPL-3): sono i file `Contents/Frameworks/PySide6/Qt/lib/*.framework`;
@@ -273,7 +274,7 @@ distribuzione pubblica.
 
 - V-a: elenco esatto delle librerie incluse nel Python di python-build-standalone `20261003` per macOS `aarch64`
   (`PYTHON.json`) e i loro testi di licenza; URL e SHA-256 dell'archivio.
-- V-b: URL e SHA-256 degli archivi `qtbase` e `qtsvg` 6.12.0; elenco delle componenti di terze parti dei moduli Qt
+- V-b: URL e SHA-256 degli archivi `qtbase` e `qtsvg` 6.11.3; elenco delle componenti di terze parti dei moduli Qt
   inclusi (da `qt_attribution.json`).
 - V-c: versioni di `pyinstaller` e `pyinstaller-hooks-contrib` per il gruppo `build`: **pyinstaller 6.22.3**
   (2026-09-12) e **pyinstaller-hooks-contrib 2026.8** (2026-09-30), le più recenti con almeno due settimane al
@@ -432,7 +433,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | T2 | Specifica generata | `spec_text` con un progetto finto | contiene i dati di §3.4, le esclusioni di §3.5, `dev.pages.astrotwo`, `CFBundleShortVersionString` `0.1.0`, `CFBundleVersion` `1`, nessun percorso assoluto del progetto nell'`Info.plist` | test |
 | T3 | macOS minimo | `minimum_macos` su una cartella con Mach-O di `minos` noti (copiati da librerie di sistema o della ruota) | il massimo | test |
 | T4 | Riferimenti esterni (V2) | `check_bundle` V2 su una cartella con un Mach-O che punta a `/opt/homebrew` | V2 `failed` con il file e il percorso | test |
-| T5 | Licenze nello sviluppo | `license_files()` nel progetto | i quattro file trovati; `sources_text` contiene gli URL di PySide6 e Qt 6.12.0 e la frase sulla sostituzione di Qt | test |
+| T5 | Licenze nello sviluppo | `license_files()` nel progetto | i quattro file trovati; `sources_text` contiene gli URL di PySide6 e Qt 6.11.3 e la frase sulla sostituzione di Qt | test |
 | T6 | Finestra Licenze | aprire la voce di menu (pytest-qt, `offscreen`), in inglese e in italiano | quattro schede; testo di `LICENSE` uguale al file; la scheda dei crediti contiene i testi di SIMBAD e DSS di `01` §6.1; voce subito dopo About | ispezione dei widget |
 | T7 | File di licenza mancante | `license_files` puntato a una cartella senza `SOURCES.txt` | la scheda mostra `LICENSE_FILE_MISSING` con nome e percorso | test |
 | T8 | About ridotto | aprire About | versione `0.1.0-beta.1`, copyright, pulsante Licenses… che apre la finestra | test |
@@ -456,7 +457,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   Developer ID e notarizzazione: RINVIATE** (voce `A6-b` in `decisioni-aperte.md`, Gruppo 3), da riprendere prima
   di una versione non beta.
 - **Python dell'app: DECISO il 2026-10-25** dal proprietario: CPython 3.12 di python-build-standalone gestito da uv,
-  ambiente separato da `uv.lock`, test eseguiti in quell'ambiente; macOS minimo letto dai binari (14.4 oggi).
+  ambiente separato da `uv.lock`, test eseguiti in quell'ambiente; macOS minimo letto dai binari (15.0 con PySide6 6.11.3).
 - **Versione: DECISA il 2026-10-25** dal proprietario: §3.2.
 - **Icona: DECISA il 2026-10-25** dal proprietario: la fornisce il proprietario, consegnata lo stesso giorno in
   `assets/icon/AstroNew.svg` (§3.6); disegno originale del proprietario, licenza GPL-3.0-or-later.
@@ -476,16 +477,19 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   `LC_ID_DYLIB` e `LC_RPATH` (codice `arm64` identico). Opzione scartata: (a) accettare la modifica e dichiararla in
   `SOURCES.txt`.
 
-- **D60-4 — macOS minimo 26.0 per colpa della ruota di PySide6 6.12.0:** i moduli di collegamento di PySide6 e
-  shiboken6 6.12.0 dichiarano `minos 26.0` (la ruota è etichettata `macosx_14_0`), quindi `LSMinimumSystemVersion`
-  è 26.0 e su macOS 14 e 15 l'app con ogni probabilità non parte (dyld rifiuta librerie costruite per un macOS più
-  nuovo; **da verificare** su un Mac con macOS 14 o 15, non disponibile qui). Vale anche per `uv run astrotwo` con
-  lo stesso `uv.lock`. Opzioni: (a) accettare macOS 26 come minimo della prima beta e scriverlo sul sito;
-  (b) cambiare versione di PySide6 (una con le librerie costruite per macOS 14, da cercare e verificare: è un
-  aggiornamento di dipendenza, solo su richiesta esplicita, con nuovo controllo delle impronte e i test); (c)
-  segnalarlo al progetto Qt for Python e aspettare una ruota corretta. **Raccomandazione: (a) per la prima beta
-  e (c) in parallelo**; (b) solo se servono utenti con macOS 14/15 subito. Da decidere (non blocca il 60a, conta
-  per il 60b).
+- **D60-4 — macOS minimo 26.0 per colpa della ruota di PySide6 6.12.0: DECISA il 2026-11-04** dal proprietario:
+  **(b)** — downgrade a **PySide6 6.11.3** (`pyside6-essentials` e `shiboken6` fissati a `==6.11.3`), che porta il
+  minimo reale a **macOS 15.0**. Motivo: i moduli di collegamento di PySide6 e shiboken6 6.12.0 sono compilati con
+  `minos 26.0` (con ogni probabilità senza `MACOSX_DEPLOYMENT_TARGET`: la ruota è etichettata `macosx_14_0` e Qt 6.12
+  dichiara 14.4), quindi `LSMinimumSystemVersion` era 26.0 e su macOS 14 e 15 dyld rifiuta di caricarli. L'indagine
+  A1 ha misurato con 6.11.3: binding `minos 15.0`, Qt e plugin 13.0, numpy e scipy 14.0; 154 test di `tests/ui` passati
+  in un ambiente isolato. Opzioni scartate: (a) accettare macOS 26 come minimo; (c) aspettare una ruota 6.12 corretta
+  (la segnalazione al progetto Qt for Python resta da fare, a cura del proprietario). Conseguenze: tutti i riferimenti
+  a PySide6/Qt 6.12.0 diventano 6.11.3 (URL e SHA-256 dei sorgenti in §3.7, avvisi di Qt rigenerati da `qtbase`
+  6.11.3: cambiano le versioni di Vulkan Memory Allocator, FreeType, HarfBuzz, libpng, MD4C, PCRE2 e sparisce la voce
+  XSVG); D60-3 riconfermata (Qt copiato dalla ruota senza modifiche, controllo V5). Quando una ruota 6.12.x
+  corretta sarà disponibile si potrà risalire con una nuova decisione. Il minimo 15.0 sul sito lo aggiorna il
+  proprietario dopo la release.
 
 ## 14. Registro modifiche
 
@@ -495,3 +499,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-10-25 | Claude Code | **Approvato dal proprietario** (stato `approvato`). Icona: disegno originale del proprietario, GPL-3.0-or-later (§3.6). D60-1 decisa (a) + (b): repository GitHub pubblico con tag per versione e archivio del sorgente accanto al `.dmg` (§3.7, §10, §13). D60-2 confermata. |
 | 2026-10-25 | Claude Code | Codice dello sprint 60a: verifiche V-a…V-e fatte (§3.7, §3.11); D60-3 aperta dal fallimento di V5 alla prima costruzione e decisa (b) dal proprietario (§3.3 punto 8, §3.7 punto 4, §13); V7 misura fino alla riga `first_view`, `on_first_view` di `main_window.main`, `keep_entry` (§3.8, §7). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Costruzione e verifica dello sprint 60a (commit `3b697a7`, albero pulito, nessuna opzione):** 943 test di default passati in `build/env` (Python 3.12.15 di python-build-standalone); V1–V9 tutti `ok`: firma ad hoc, nessun riferimento esterno, autocontrollo in ambiente vuoto, 14 binari di Qt uguali alla ruota (tolta la firma, D60-3), nessuna scrittura nell'app, avvio, licenze. **Dimensione 248,1 MB** (260 100 096 byte; PySide6 82,7 MB di cui Qt 50,3, scipy 32,8, Pillow 11,5). **Avvio fino alla prima vista: 2,59 s a freddo, 1,96 s a caldo** (eseguibile, ambiente vuoto con HOME temporanea, cache vuota, iMac di sviluppo); lancio con `open` riuscito. Prove a mano: T13 — `.venv` rinominato, `uv` fuori dal `PATH`, app copiata fuori dal progetto e aperta con `open`: scaricati in HTTPS i 12 tile di ordine 0 di DSS2 (cielo intero), `properties` e `Moc.fits`; copia identica prima e dopo (1951 file); T14 — `--self-check-keychain` con il Portachiavi di login: `keychain_roundtrip` ok, nessuna voce rimasta. Controlli V4 e V7 con HOME temporanea (con la HOME vera l'app leggeva la chiave del profilo IA e macOS chiedeva il permesso, §10). Aperta D60-4 (macOS minimo 26.0 per la ruota di PySide6). T17 (ripetibilità) non ancora eseguito. Stato `approvato` invariato. |
+| 2026-11-04 | Claude Code | **Sprint A1b, D60-4 decisa (b):** PySide6/shiboken6 6.12.0 → **6.11.3** per portare il minimo reale a macOS 15.0 (§3.1, §3.7, §13); sorgenti e SHA-256 6.11.3 verificati (MD5 uguali a `md5sums.txt` per `qtbase` e `qtsvg`); avvisi di Qt rigenerati (7 versioni cambiate, XSVG tolta); D60-3 riconfermata. Stato `approvato` invariato. |

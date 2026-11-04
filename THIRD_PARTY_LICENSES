@@ -67,14 +67,14 @@ pydantic            2.14.1                  MIT
 pydantic_core       2.50.1                  MIT
 pyerfa              2.0.1.5                 BSD 3-Clause License
 pyparsing           3.3.3                   MIT
-PySide6_Essentials  6.12.0                  LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+PySide6_Essentials  6.11.3                  LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 python-dateutil     2.9.0.post0             Dual License
 pyvo                1.9.1                   BSD-3-Clause
 PyYAML              6.0.3                   MIT
 reproject           0.21.0                  BSD 3-Clause
 requests            2.34.2                  Apache-2.0
 scipy               1.18.1                  BSD License (classificatori)
-shiboken6           6.12.0                  LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+shiboken6           6.11.3                  LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 six                 1.17.0                  MIT
 slicerator          1.1.0                   BSD
 sniffio             1.3.1                   MIT OR Apache-2.0
@@ -92,7 +92,7 @@ zarr                3.4.1                   MIT
 pck00011.tpc (kernel PCK generico della NAIF)  2022-12-27              regole d'uso della NAIF (ridistribuzione ammessa solo senza modifiche)
 Lucide (icone SVG dell'interfaccia)  lucide-static 1.59.0    ISC; MIT (progetto Feather) per le icone derivate elencate nel testo
 Python (CPython, python-build-standalone)  3.12.15+20261003        PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; mpdecimal BSD-2-Clause; libuuid BSD-3-Clause
-Qt 6.12.0, componenti di terze parti (qtbase, qtsvg)  6.12.0                  licenze delle singole componenti, elencate sotto (Licenses Used in Qt)
+Qt 6.11.3, componenti di terze parti (qtbase, qtsvg)  6.11.3                  licenze delle singole componenti, elencate sotto (Licenses Used in Qt)
 Bootloader e hook di esecuzione di PyInstaller  pyinstaller 6.22.3, hooks-contrib 2026.8  GPL-2.0-or-later con eccezione del bootloader; hook di esecuzione Apache-2.0
 
 
@@ -9054,13 +9054,13 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-PySide6_Essentials 6.12.0
+PySide6_Essentials 6.11.3
 ==============================================================================
 Licenza: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 Sito: https://pyside.org
 Nota: PySide6 (Qt for Python) e le librerie Qt incluse nella ruota: AstroTwo le usa con la LGPL-3.0 (licenza scelta tra LGPL-3.0-only, GPL-2.0-only e GPL-3.0-only; registrata il 2026-10-15 per A11 e per il modulo 60). La ruota non contiene i testi: LGPL-3.0 e GPL-3.0 (a cui la LGPL rimanda) sono presi dal sorgente ufficiale, sotto. Obblighi LGPL nel .dmg (librerie sostituibili dall'utente, avvisi) e avvisi delle componenti di terze parti incluse nelle librerie Qt (elenco "Licenses Used in Qt" della documentazione di Qt): da completare con il modulo 60.
 
---- testo di licenza (fonte: cartella LICENSES/ del sorgente ufficiale https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.zip (SHA-256 15b25c9e06f3acb8930c318192f3c20aee162f4b8d01bf4b4c60193c924cd847), copiata in scripts/licenses/; letto il 2026-10-16) ---
+--- testo di licenza (fonte: cartella LICENSES/ del sorgente ufficiale https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.3-src/pyside-setup-everywhere-src-6.11.3.zip (SHA-256 32d9a76cbf85b27916c8b1594b77ff50bc195ab7df09abad725b1be2cba21065), copiata in scripts/licenses/; letto il 2026-10-16, ricontrollato il 2026-11-04 su 6.11.3: i due testi sono identici) ---
 
 --- LGPL-3.0-only.txt ---
 
@@ -11211,13 +11211,13 @@ License: LGPL-2.1-or-later
     https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 
 ==============================================================================
-shiboken6 6.12.0
+shiboken6 6.11.3
 ==============================================================================
 Licenza: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 Sito: https://pyside.org
 Nota: Generatore e runtime dei binding di PySide6: stessa licenza e stessi testi di pyside6-essentials.
 
---- testo di licenza (fonte: cartella LICENSES/ del sorgente ufficiale https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.zip (SHA-256 15b25c9e06f3acb8930c318192f3c20aee162f4b8d01bf4b4c60193c924cd847), copiata in scripts/licenses/; letto il 2026-10-16) ---
+--- testo di licenza (fonte: cartella LICENSES/ del sorgente ufficiale https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.3-src/pyside-setup-everywhere-src-6.11.3.zip (SHA-256 32d9a76cbf85b27916c8b1594b77ff50bc195ab7df09abad725b1be2cba21065), copiata in scripts/licenses/; letto il 2026-10-16, ricontrollato il 2026-11-04 su 6.11.3: i due testi sono identici) ---
 
 --- LGPL-3.0-only.txt ---
 
@@ -14297,12 +14297,12 @@ USE OF THIS SOFTWARE, EVEN IF NOT ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGE.
 
 ==============================================================================
-Qt 6.12.0, componenti di terze parti (qtbase, qtsvg) 6.12.0
+Qt 6.11.3, componenti di terze parti (qtbase, qtsvg) 6.11.3
 ==============================================================================
 Licenza: licenze delle singole componenti, elencate sotto (Licenses Used in Qt)
-Fonte: qt_attribution.json e LICENSES/ dei sorgenti ufficiali qtbase e qtsvg 6.12.0 (https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/); criterio e SHA-256 in scripts/licenses/qt/README.md
+Fonte: qt_attribution.json e LICENSES/ dei sorgenti ufficiali qtbase e qtsvg 6.11.3 (https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/); criterio e SHA-256 in scripts/licenses/qt/README.md
 
---- Vulkan Memory Allocator 3.3.0 ---
+--- Vulkan Memory Allocator 3.2.1 ---
 Qt source: qtbase/src/3rdparty/VulkanMemoryAllocator
 Qt usage: Memory management for the Vulkan backend of QRhi.
 License: MIT License (MIT)
@@ -14822,7 +14822,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
---- Freetype 2 2.14.3 ---
+--- Freetype 2 2.15.0 ---
 Qt source: qtbase/src/3rdparty/freetype
 Qt usage: Optionally used in Qt GUI and platform plugins. Configure with -no-freetype, or -system-freetype to avoid.
 License: Freetype Project License or GNU General Public License v2.0 only (FTL OR GPL-2.0-only)
@@ -15549,7 +15549,7 @@ Except as contained in this notice, the name of The Open Group shall not be
 used in advertising or otherwise to promote the sale, use or other dealings
 in this Software without prior written authorization from The Open Group.
 
---- HarfBuzz-NG 14.5.0 ---
+--- HarfBuzz-NG 14.6.0 ---
 Qt source: qtbase/src/3rdparty/harfbuzz-ng
 Qt usage: Optionally used in Qt GUI. Configure with -system-harfbuzz to force the use of the system library, or -qt-harfbuzz to link statically to the library that is bundled with your Qt version.
 License: MIT License (MIT)
@@ -15686,7 +15686,7 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
---- LibPNG 1.6.58 ---
+--- LibPNG 1.6.59 ---
 Qt source: qtbase/src/3rdparty/libpng
 Qt usage: Used in the qpng image plugin. Configure with -system-libpng or -no-libpng to avoid.
 License: libpng License and PNG Reference Library version 2 (Libpng AND libpng-2.0)
@@ -15979,17 +15979,17 @@ express Statement of Purpose.
     party to this document and has no duty or obligation with respect to
     this CC0 or use of the Work.
 
---- MD4C 0.5.3 ---
+--- MD4C 0.6.0 ---
 Qt source: qtbase/src/3rdparty/md4c
 Qt usage: Optionally used in QTextDocument if configured with textmarkdownreader.
 License: MIT License (MIT)
 Copyright:
-Copyright © 2016-2024 Martin Mitáš
+Copyright © 2016-2026 Martin Mitáš
 
 
 # The MIT License (MIT)
 
-Copyright © 2016-2024 Martin Mitáš
+Copyright © 2016-2026 Martin Mitáš
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the “Software”),
@@ -16139,7 +16139,7 @@ express Statement of Purpose.
     party to this document and has no duty or obligation with respect to
     this CC0 or use of the Work.
 
---- PCRE2 10.48 ---
+--- PCRE2 10.49 ---
 Qt source: qtbase/src/3rdparty/pcre2
 Qt usage: Used in Qt Core (QRegularExpression).
 License: BSD 3-clause "New" or "Revised" License with PCRE2 binary-like Packages Exception (LicenseRef-BSD-3-Clause-with-PCRE2-Binary-Like-Packages-Exception)
@@ -16253,7 +16253,7 @@ PCRE2, it must respect the condition, but if package B is software that
 includes package A, the condition is not imposed on package B unless it uses
 PCRE2 independently.
 
---- PCRE2 - Stack-less Just-In-Time Compiler 10.48 ---
+--- PCRE2 - Stack-less Just-In-Time Compiler 10.49 ---
 Qt source: qtbase/src/3rdparty/pcre2
 Qt usage: Used in Qt Core (QRegularExpression).
 License: BSD 2-clause "Simplified" License (BSD-2-Clause)
@@ -17964,36 +17964,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
---- XSVG ---
-Qt source: qtbase/src/gui/util
-Qt usage: Used in the Qt GUI library.
-License: Historical Permission Notice and Disclaimer - sell variant (HPND-sell-variant)
-Copyright:
-Copyright 2002 USC/Information Sciences Institute
-
-Copyright  2002 USC/Information Sciences Institute
-
-Permission to use, copy, modify, distribute, and sell this software
-and its documentation for any purpose is hereby granted without
-fee, provided that the above copyright notice appear in all copies
-and that both that copyright notice and this permission notice
-appear in supporting documentation, and that the name of
-Information Sciences Institute not be used in advertising or
-publicity pertaining to distribution of the software without
-specific, written prior permission.  Information Sciences Institute
-makes no representations about the suitability of this software for
-any purpose.  It is provided "as is" without express or implied
-warranty.
-
-INFORMATION SCIENCES INSTITUTE DISCLAIMS ALL WARRANTIES WITH REGARD
-TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL INFORMATION SCIENCES
-INSTITUTE BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL
-DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA
-OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
 
 --- Vulkan API Registry 1.4.308 ---
 Qt source: qtbase/src/gui/vulkan

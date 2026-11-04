@@ -118,9 +118,9 @@ Acknowledgement: AstroTwo uses NASA's SPICE system (NAIF, JPL) for planetary bod
 
 _PYSIDE_SOURCE = (
     "cartella LICENSES/ del sorgente ufficiale https://download.qt.io/official_releases/QtForPython/pyside6/"
-    "PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.zip (SHA-256 "
-    "15b25c9e06f3acb8930c318192f3c20aee162f4b8d01bf4b4c60193c924cd847), copiata in scripts/licenses/; letto il "
-    "2026-10-16")
+    "PySide6-6.11.3-src/pyside-setup-everywhere-src-6.11.3.zip (SHA-256 "
+    "32d9a76cbf85b27916c8b1594b77ff50bc195ab7df09abad725b1be2cba21065), copiata in scripts/licenses/; letto il "
+    "2026-10-16, ricontrollato il 2026-11-04 su 6.11.3: i due testi sono identici")
 _LICENSES_DIR = Path(__file__).resolve().parent / "licenses"
 
 
@@ -242,11 +242,11 @@ def app_components() -> tuple[Component, ...]:
             license_text=_texts(_LICENSES_DIR / "python", _PYTHON_LICENSES),
         ),
         Component(
-            name="Qt 6.12.0, componenti di terze parti (qtbase, qtsvg)",
-            version="6.12.0",
+            name="Qt 6.11.3, componenti di terze parti (qtbase, qtsvg)",
+            version="6.11.3",
             license="licenze delle singole componenti, elencate sotto (Licenses Used in Qt)",
-            source=("qt_attribution.json e LICENSES/ dei sorgenti ufficiali qtbase e qtsvg 6.12.0 "
-                    "(https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/); criterio e SHA-256 in "
+            source=("qt_attribution.json e LICENSES/ dei sorgenti ufficiali qtbase e qtsvg 6.11.3 "
+                    "(https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/); criterio e SHA-256 in "
                     "scripts/licenses/qt/README.md"),
             license_text=(_LICENSES_DIR / "qt" / "QT_THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8"),
         ),

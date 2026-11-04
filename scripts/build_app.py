@@ -105,7 +105,7 @@ ICONSET_SIZES = {f"icon_{s}x{s}{suffix}.png": s * scale for s in (16, 32, 128, 2
                  for suffix, scale in (("", 1), ("@2x", 2))}
 
 #: Sezioni attese in THIRD_PARTY_LICENSES dentro l'app (V8).
-LICENSE_SECTIONS = ("\nPython (CPython, python-build-standalone)", "\nQt 6.12.0, componenti di terze parti",
+LICENSE_SECTIONS = ("\nPython (CPython, python-build-standalone)", "\nQt 6.11.3, componenti di terze parti",
                     "\nBootloader e hook di esecuzione di PyInstaller")
 
 #: Percorsi permessi nei comandi di caricamento dei Mach-O (V2).

@@ -68,9 +68,9 @@ def test_t3_minimum_macos_is_the_maximum(tmp_path):
     shutil.copy(CSPICE, tmp_path / "libcspice.dylib")
     assert build_app.minimum_macos(tmp_path) == "11.0"  # minos di libcspice nella ruota di spiceypy 8.3.0
     shutil.copy(QTCORE, tmp_path / "QtCore")
-    assert build_app.minimum_macos(tmp_path) == "14.4"  # QtCore della ruota di PySide6 6.12.0, slice arm64
+    assert build_app.minimum_macos(tmp_path) == "13.0"  # QtCore della ruota di PySide6 6.11.3, slice arm64
     (tmp_path / "notes.txt").write_text("non è un Mach-O")
-    assert build_app.minimum_macos(tmp_path) == "14.4"
+    assert build_app.minimum_macos(tmp_path) == "13.0"
 
 
 @pytest.mark.skipif(not CSPICE.is_file() or shutil.which("install_name_tool") is None,

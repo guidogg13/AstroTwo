@@ -32,18 +32,18 @@ SELF_CHECK_SERVICE = "dev.pages.astrotwo.selfcheck"
 REPOSITORY = "https://github.com/guidogg13/AstroTwo"
 
 #: Sorgenti esatti di PySide6/shiboken6 e Qt delle librerie incluse (01 §6.1 punto 3, 60 §3.7; SHA-256 verificate il
-#: 2026-10-16 per PySide6 e il 2026-10-25 per Qt, V-b).
-PYSIDE_VERSION = "6.12.0"
-PYSIDE_SOURCE = ("https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.12.0-src/"
-                 "pyside-setup-everywhere-src-6.12.0.zip",
-                 "15b25c9e06f3acb8930c318192f3c20aee162f4b8d01bf4b4c60193c924cd847")
-QT_VERSION = "6.12.0"
-QT_SOURCES_URL = "https://download.qt.io/official_releases/qt/6.12/6.12.0/"
+#: 2026-10-16 per PySide6 e il 2026-10-25 per Qt 6.12.0 e il 2026-11-04 per PySide6 e Qt 6.11.3, V-b).
+PYSIDE_VERSION = "6.11.3"
+PYSIDE_SOURCE = ("https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.3-src/"
+                 "pyside-setup-everywhere-src-6.11.3.zip",
+                 "32d9a76cbf85b27916c8b1594b77ff50bc195ab7df09abad725b1be2cba21065")
+QT_VERSION = "6.11.3"
+QT_SOURCES_URL = "https://download.qt.io/official_releases/qt/6.11/6.11.3/"
 QT_SOURCES = (
-    ("https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtbase-everywhere-src-6.12.0.tar.xz",
-     "a951bd163c7b80fc6b8c88d7668fb56abf91c152373e13c10666763238131307"),
-    ("https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtsvg-everywhere-src-6.12.0.tar.xz",
-     "e4ab39534ec97987b1b9b60ef7f4d3253d5912a69f8c713a01753174a4029331"),
+    ("https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/qtbase-everywhere-src-6.11.3.tar.xz",
+     "46de0710b594945a5d446ae44354daa386141c6903c53781b2ca547bc62f8f8f"),
+    ("https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/qtsvg-everywhere-src-6.11.3.tar.xz",
+     "9bdf6fa4b5a2d91c3eaa2edd12263fdff0ae19d0ac25d3c99946cd4189a07123"),
 )
 
 #: File di licenza dell'app, nell'ordine della finestra Licenze (§3.9).
