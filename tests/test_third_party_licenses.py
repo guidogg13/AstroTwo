@@ -45,7 +45,7 @@ def test_t11_app_components_present():
     """60 §3.7 punto 2 (T11): Python dell'app, avvisi di Qt e bootloader di PyInstaller nella parte distribuita."""
     text = third_party_licenses.OUTPUT.read_text(encoding="utf-8")
     distributed = text.split("Strumenti di sviluppo (test e costruzione", 1)[0]
-    for title in ("Python (CPython, python-build-standalone) 3.12.15+20261003",
+    for title in ("Python (CPython, python-build-standalone) 3.12.16+20261026",
                   "Qt 6.11.3, componenti di terze parti (qtbase, qtsvg) 6.11.3",
                   "Bootloader e hook di esecuzione di PyInstaller"):
         assert f"\n{title}" in distributed, title

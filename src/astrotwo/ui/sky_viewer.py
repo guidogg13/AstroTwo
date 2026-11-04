@@ -1682,7 +1682,9 @@ class SkyViewer(QWidget):
         self._place_buttons()
         if not self._shown:
             self._shown = True
-            QTimer.singleShot(0, self.first_shown.emit)
+            # con l'oggetto come contesto il timer si annulla se il visualizzatore viene distrutto prima che scatti
+            # (chiusura rapida): un `first_shown.emit` legato darebbe «Signal source has been deleted»
+            QTimer.singleShot(0, self, self.first_shown.emit)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)

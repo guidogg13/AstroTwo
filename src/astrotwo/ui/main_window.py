@@ -1804,7 +1804,7 @@ class MainWindow(QMainWindow):
         self.layer_stack.setCurrentIndex(1 if state.layers else 0)
 
     def _schedule_headers(self, *_) -> None:
-        QTimer.singleShot(0, self._refresh_headers)
+        QTimer.singleShot(0, self, self._refresh_headers)  # contesto = finestra: annullato se distrutta
 
     def _refresh_headers(self) -> None:
         """Intestazione propria per i pannelli soli; per i pannelli a schede fanno da intestazione le schede."""

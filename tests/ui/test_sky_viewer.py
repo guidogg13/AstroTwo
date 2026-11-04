@@ -670,3 +670,51 @@ def test_t8_value_with_order_never_cut_while_command_runs(qtbot, viewer_window, 
     assert metrics.horizontalAdvance(text) <= bar.value_label.width()  # per intero dentro il suo campo
     assert bar.value_label.width() == bar.value_label.minimumWidth() == bar.value_label.maximumWidth()
     assert bar.cursor_label.text().startswith("ICRS ")
+
+
+def test_a3_close_with_tiles_in_flight_raises_nothing(qtbot, viewer_window, monkeypatch):
+    """A3: chiusura con tile in volo: la finestra aspetta i thread dei tile e nessun segnale parte da un oggetto
+    distrutto (RuntimeError «Signal source has been deleted»), né durante la chiusura né dopo."""
+    import time
+
+    win = viewer_window
+    real = hips.fetch_tile
+
+    def slow(*args, **kwargs):
+        time.sleep(0.6)  # tile ancora in volo alla chiusura
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(hips, "fetch_tile", slow)
+    win.submit("hips.set_survey", {"survey": win.survey_url})
+    win.sky.start_view()
+    qtbot.waitUntil(lambda: win.sky._in_flight > 0, timeout=20000)
+    with qtbot.capture_exceptions() as caught:
+        win.close()
+        qtbot.wait(300)
+    assert caught == []
+    assert win.sky.tiles.pool.activeThreadCount() == 0  # nessun thread dei tile ancora attivo
+
+
+def test_a3_first_shown_timer_after_destruction(qtbot, settings_path, cache):
+    """A3: i timer a 0 ms (prima vista, intestazioni dei pannelli) non emettono né chiamano nulla se la finestra è
+    stata distrutta prima che scattino: il vecchio codice dava RuntimeError."""
+    import shiboken6
+    from PySide6.QtCore import QSettings
+
+    from astrotwo.core.commands import default_registry
+    from astrotwo.ui.main_window import MainWindow, ThreadCache
+
+    settings = QSettings(settings_path, QSettings.Format.IniFormat)
+    win = MainWindow(registry=default_registry(cache=ThreadCache(root=cache.root)), settings=settings,
+                     startup_commands=False)
+    win.resize(1000, 700)
+    win.show()  # in coda: first_shown e _refresh_headers
+    shown = []
+    win.sky.first_shown.connect(lambda: shown.append(1))
+    with qtbot.capture_exceptions() as caught:
+        win.close()
+        shiboken6.delete(win)  # distruzione immediata, prima che gli eventi in coda siano elaborati
+        QApplication.processEvents()
+        qtbot.wait(100)
+    assert caught == []
+    assert shown == []

@@ -37,6 +37,8 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
+**Dal 2026-11-04 (sprint A1c): D60-5 (pin di python-build-standalone `20261026`) aperta e decisa dal proprietario lo stesso giorno, `60` §13: 16 aperte invariate.**
+
 **Dal 2026-11-04, con lo sprint A1b: 16 aperte** — `D60-4` decisa dal proprietario: (b) downgrade a PySide6 6.11.3, minimo reale macOS 15.0 (`60` §13). Gruppo 3 = 16.
 
 Prima, **Dal 2026-10-31, con lo sprint 10b: 17 aperte** — invariato: `D12-9` (regola del cambio di server dei survey HiPS) e `D12-10` (chiave della cache dei tile indipendente dall'host) aperte e decise lo stesso giorno nel file di origine `12` §13 (scelta delegata dal proprietario nel testo dello sprint 10b, da confermare alla prova a mano).
@@ -424,3 +426,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-10-25 | Claude Code | **Costruzione dello sprint 60a:** `D60-3` aperta da V5 e decisa (b) dal proprietario; nuova `D60-4` (macOS minimo 26.0, ruota di PySide6) nel Gruppo 3. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
 | 2026-10-31 | Claude Code | **Sprint 10b:** `D12-9` (cambio di server: `properties` subito, tile dopo 3 fallimenti di rete di fila) e `D12-10` (chiave della cache dei tile `tile:<hips_id>/<percorso>`) aperte e decise lo stesso giorno (prima nel file di origine `12` §13; scelta delegata dal proprietario nel testo dello sprint). Conteggi invariati: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
 | 2026-11-04 | Claude Code | **`D60-4` decisa** (proprietario, 2026-11-04; prima nel file di origine `60` §13): (b) PySide6 6.11.3, minimo macOS 15.0. Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 16). |
+| 2026-11-04 | Claude Code | **`D60-5` aperta e decisa** (proprietario, 2026-11-04; nel `60` §13): pin di python-build-standalone `20261026` (CPython 3.12.16), perché la `20261003` non è più offerta da uv. Conteggi invariati: aperte **16**. |

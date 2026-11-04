@@ -69,9 +69,9 @@ primo errore con un messaggio che dice il passo e il motivo:
 1. **Controlli iniziali.** macOS su `arm64`; `uv`, `codesign`, `iconutil`, `otool`, `ditto` presenti (strumenti del
    sistema e di Xcode Command Line Tools). Stato di git: il commit corrente si registra. Se ci sono modifiche non
    salvate, la costruzione si ferma, a meno di `--allow-dirty`, che il rapporto e `BUILD_INFO.json` dichiarano.
-2. **Python.** `uv python install 3.12.15`, versione fissata in una costante dello script (`PYTHON_VERSION`): è
-   CPython di **python-build-standalone** gestito da uv (rilascio `20261003`, decisione del proprietario del
-   2026-10-25: **non** il Python di Homebrew del `.venv`, costruito per macOS 26 e legato alle librerie di
+2. **Python.** `uv python install 3.12.16`, versione fissata in una costante dello script (`PYTHON_VERSION`): è
+   CPython di **python-build-standalone** gestito da uv (rilascio `20261026`, D60-5; prima `20261003`, decisione del
+   proprietario del 2026-10-25: **non** il Python di Homebrew del `.venv`, costruito per macOS 26 e legato alle librerie di
    Homebrew). Un aggiornamento si fa solo su richiesta esplicita, come per `uv.lock` (`01` §6).
 3. **Ambiente separato** `build/env/`, creato da zero a ogni costruzione con
    `uv sync --frozen --python <Python del passo 2> --group dev --group build` e `UV_PROJECT_ENVIRONMENT=build/env`.
@@ -272,7 +272,7 @@ distribuzione pubblica.
 
 ### 3.11 Verifiche da fare prima del codice
 
-- V-a: elenco esatto delle librerie incluse nel Python di python-build-standalone `20261003` per macOS `aarch64`
+- V-a: elenco esatto delle librerie incluse nel Python di python-build-standalone `20261026` per macOS `aarch64`
   (`PYTHON.json`) e i loro testi di licenza; URL e SHA-256 dell'archivio.
 - V-b: URL e SHA-256 degli archivi `qtbase` e `qtsvg` 6.11.3; elenco delle componenti di terze parti dei moduli Qt
   inclusi (da `qt_attribution.json`).
@@ -365,7 +365,7 @@ distribuzione pubblica.
 | Libreria / standard | Uso nel modulo | Motivazione |
 |---|---|---|
 | PyInstaller 6.22.3 + pyinstaller-hooks-contrib 2026.8 (gruppo `build`) | costruzione dell'`.app` (`onedir` + `BUNDLE`) | A2: stesso ambiente di `uv.lock`, ricostruzione senza rete, Qt in `.framework` separati, hook pronti per PySide6 e per le librerie scientifiche; bootloader con eccezione di licenza per distribuire |
-| uv (`uv python install`, `uv sync --frozen`) | Python 3.12.15 di python-build-standalone e ambiente bloccato | A4; Python costruito per una versione di macOS più vecchia di quella minima delle ruote (da verificare con V-a), senza librerie di Homebrew |
+| uv (`uv python install`, `uv sync --frozen`) | Python 3.12.16 di python-build-standalone e ambiente bloccato | A4; Python costruito per una versione di macOS più vecchia di quella minima delle ruote (da verificare con V-a), senza librerie di Homebrew |
 | `codesign`, `iconutil`, `sips`, `otool`, `ditto` (macOS) | firma ad hoc, icona, controlli Mach-O, copie | strumenti di sistema, nessuna dipendenza in più |
 | `packaging` | confronto delle due forme della versione | già dipendenza di sviluppo |
 | Info.plist (Apple, Bundle Programming Guide) | chiavi di §3.2 | standard del sistema |
@@ -404,7 +404,7 @@ messaggi dell'app); l'app costruita usa il catalogo (`40` §3.7.1).
 | `uv`, `codesign` o `iconutil` mancanti | si ferma dicendo quale strumento manca e come installarlo, uscita 2 | `BUILD_TOOL_MISSING` (script) |
 | Modifiche non salvate in git | si ferma, salvo `--allow-dirty` (dichiarato in `BUILD_INFO.json`) | `BUILD_DIRTY_TREE` (script) |
 | `uv.lock` non aggiornato rispetto a `pyproject.toml` | `uv sync --frozen` fallisce: si ferma | `BUILD_LOCK_MISMATCH` (script) |
-| Python 3.12.15 non scaricabile (rete assente, primo uso) | si ferma; con il Python già installato da uv la costruzione non usa la rete | `BUILD_PYTHON_UNAVAILABLE` (script) |
+| Python 3.12.16 non scaricabile (rete assente, primo uso) | si ferma; con il Python già installato da uv la costruzione non usa la rete | `BUILD_PYTHON_UNAVAILABLE` (script) |
 | Un test fallisce in `build/env/` | si ferma, uscita 1 | `BUILD_TESTS_FAILED` (script) |
 | `THIRD_PARTY_LICENSES` non aggiornato | si ferma, uscita 1 | `BUILD_LICENSES_OUTDATED` (script) |
 | Qt di versione diversa da quella dei link di `SOURCES.txt` | si ferma, uscita 1 | `BUILD_QT_VERSION_MISMATCH` (script) |
@@ -477,6 +477,17 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   `LC_ID_DYLIB` e `LC_RPATH` (codice `arm64` identico). Opzione scartata: (a) accettare la modifica e dichiararla in
   `SOURCES.txt`.
 
+- **D60-5 — Pin di python-build-standalone aggiornato: DECISA il 2026-11-04** dal proprietario: Python dell'app
+  **CPython 3.12.16, python-build-standalone `20261026`** (archivio `install_only_stripped`, SHA-256
+  `353d5f1b4fd2715e7053f12f068435d5bbad16b91e057006b5d01e0925709a7e`; archivio `pgo+lto-full` delle licenze
+  `016758f4881e5f71d63eddfbcdd53f25c5a9152435a863e4dc0770758eae32c3`, uguali a `SHA256SUMS` del rilascio). Motivo: la
+  release `20261003` (Python 3.12.15) non è più offerta da uv, che installa oggi per Python 3.12 la `20261026`
+  (3.12.16): il controllo `BUILD_PYTHON_UNAVAILABLE` fermava la costruzione e il workaround (download a mano, file
+  `BUILD` scritto a mano, `UV_PYTHON_INSTALL_DIR`) non era riproducibile. Con il pin sulla release che uv installa, la
+  costruzione parte con il solo `uv run python scripts/build_app.py`. Verificato: i nove testi di licenza della cartella
+  `python/licenses/` sono identici a quelli già in `scripts/licenses/python/`, e `libpython` è sempre condivisa con le
+  stesse componenti; nessun avviso di licenza cambia tranne la versione. Un nuovo aggiornamento si fa solo su richiesta
+  esplicita.
 - **D60-4 — macOS minimo 26.0 per colpa della ruota di PySide6 6.12.0: DECISA il 2026-11-04** dal proprietario:
   **(b)** — downgrade a **PySide6 6.11.3** (`pyside6-essentials` e `shiboken6` fissati a `==6.11.3`), che porta il
   minimo reale a **macOS 15.0**. Motivo: i moduli di collegamento di PySide6 e shiboken6 6.12.0 sono compilati con
@@ -500,3 +511,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-10-25 | Claude Code | Codice dello sprint 60a: verifiche V-a…V-e fatte (§3.7, §3.11); D60-3 aperta dal fallimento di V5 alla prima costruzione e decisa (b) dal proprietario (§3.3 punto 8, §3.7 punto 4, §13); V7 misura fino alla riga `first_view`, `on_first_view` di `main_window.main`, `keep_entry` (§3.8, §7). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Costruzione e verifica dello sprint 60a (commit `3b697a7`, albero pulito, nessuna opzione):** 943 test di default passati in `build/env` (Python 3.12.15 di python-build-standalone); V1–V9 tutti `ok`: firma ad hoc, nessun riferimento esterno, autocontrollo in ambiente vuoto, 14 binari di Qt uguali alla ruota (tolta la firma, D60-3), nessuna scrittura nell'app, avvio, licenze. **Dimensione 248,1 MB** (260 100 096 byte; PySide6 82,7 MB di cui Qt 50,3, scipy 32,8, Pillow 11,5). **Avvio fino alla prima vista: 2,59 s a freddo, 1,96 s a caldo** (eseguibile, ambiente vuoto con HOME temporanea, cache vuota, iMac di sviluppo); lancio con `open` riuscito. Prove a mano: T13 — `.venv` rinominato, `uv` fuori dal `PATH`, app copiata fuori dal progetto e aperta con `open`: scaricati in HTTPS i 12 tile di ordine 0 di DSS2 (cielo intero), `properties` e `Moc.fits`; copia identica prima e dopo (1951 file); T14 — `--self-check-keychain` con il Portachiavi di login: `keychain_roundtrip` ok, nessuna voce rimasta. Controlli V4 e V7 con HOME temporanea (con la HOME vera l'app leggeva la chiave del profilo IA e macOS chiedeva il permesso, §10). Aperta D60-4 (macOS minimo 26.0 per la ruota di PySide6). T17 (ripetibilità) non ancora eseguito. Stato `approvato` invariato. |
 | 2026-11-04 | Claude Code | **Sprint A1b, D60-4 decisa (b):** PySide6/shiboken6 6.12.0 → **6.11.3** per portare il minimo reale a macOS 15.0 (§3.1, §3.7, §13); sorgenti e SHA-256 6.11.3 verificati (MD5 uguali a `md5sums.txt` per `qtbase` e `qtsvg`); avvisi di Qt rigenerati (7 versioni cambiate, XSVG tolta); D60-3 riconfermata. Stato `approvato` invariato. |
+| 2026-11-04 | Claude Code | **Sprint A1c, D60-5 decisa:** pin di python-build-standalone da `20261003` (3.12.15) a `20261026` (3.12.16), la release che uv installa oggi per Python 3.12; SHA-256 verificati sull'archivio ufficiale; testi di licenza identici; eliminato il workaround (`UV_PYTHON_INSTALL_DIR`, `BUILD` a mano). §3.3, §3.11, §9, §13 aggiornati. Stato `approvato` invariato. |

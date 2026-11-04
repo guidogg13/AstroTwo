@@ -91,7 +91,7 @@ webencodings        0.6.1                   BSD License (classificatori)
 zarr                3.4.1                   MIT
 pck00011.tpc (kernel PCK generico della NAIF)  2022-12-27              regole d'uso della NAIF (ridistribuzione ammessa solo senza modifiche)
 Lucide (icone SVG dell'interfaccia)  lucide-static 1.59.0    ISC; MIT (progetto Feather) per le icone derivate elencate nel testo
-Python (CPython, python-build-standalone)  3.12.15+20261003        PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; mpdecimal BSD-2-Clause; libuuid BSD-3-Clause
+Python (CPython, python-build-standalone)  3.12.16+20261026        PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; mpdecimal BSD-2-Clause; libuuid BSD-3-Clause
 Qt 6.11.3, componenti di terze parti (qtbase, qtsvg)  6.11.3                  licenze delle singole componenti, elencate sotto (Licenses Used in Qt)
 Bootloader e hook di esecuzione di PyInstaller  pyinstaller 6.22.3, hooks-contrib 2026.8  GPL-2.0-or-later con eccezione del bootloader; hook di esecuzione Apache-2.0
 
@@ -13150,10 +13150,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-Python (CPython, python-build-standalone) 3.12.15+20261003
+Python (CPython, python-build-standalone) 3.12.16+20261026
 ==============================================================================
 Licenza: PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; mpdecimal BSD-2-Clause; libuuid BSD-3-Clause
-Fonte: interprete di AstroTwo.app (60 §3.3): archivio cpython-3.12.15+20261003-aarch64-apple-darwin di https://github.com/astral-sh/python-build-standalone/releases/tag/20261003; testi in scripts/licenses/python/ (provenienza e SHA-256 nel README.md di quella cartella)
+Fonte: interprete di AstroTwo.app (60 §3.3): archivio cpython-3.12.16+20261026-aarch64-apple-darwin di https://github.com/astral-sh/python-build-standalone/releases/tag/20261026; testi in scripts/licenses/python/ (provenienza e SHA-256 nel README.md di quella cartella)
 
 --- LICENSE.cpython.txt ---
 

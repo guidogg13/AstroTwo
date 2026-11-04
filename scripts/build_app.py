@@ -3,7 +3,7 @@
 """Costruzione di ``dist/AstroTwo.app`` per macOS su Apple Silicon (60-distribuzione-dmg.md, parte A, sprint 60a).
 
 Uso: ``uv run python scripts/build_app.py`` (opzioni ``--allow-dirty``, ``--skip-tests``, ``--keep-build``,
-``--check-only dist/AstroTwo.app``). Passi (§3.3): controlli iniziali, Python 3.12.15 di python-build-standalone
+``--check-only dist/AstroTwo.app``). Passi (§3.3): controlli iniziali, Python 3.12.16 di python-build-standalone
 gestito da uv, ambiente ``build/env`` da ``uv.lock`` (``uv sync --frozen``), test di default e controllo di
 ``THIRD_PARTY_LICENSES`` in quell'ambiente, icona, PyInstaller (``onedir`` + ``BUNDLE``, specifica generata in
 ``build/AstroTwo.spec``), firma ad hoc (A6), controlli V1–V9 (§3.8), rapporto in ``dist/build-report.json``.
@@ -54,9 +54,9 @@ FAILED_APP = DIST / f"{APP_NAME}-FAILED.app"
 REPORT = DIST / "build-report.json"
 ICON_SVG = ROOT / "assets" / "icon" / "AstroNew.svg"
 
-#: Python dell'app (decisione del proprietario del 2026-10-25, §3.3 punto 2): aggiornarlo solo su richiesta esplicita.
-PYTHON_VERSION = "3.12.15"
-PBS_RELEASE = "20261003"
+#: Python dell'app (D60-5, decisione del proprietario del 2026-11-04, §3.3 punto 2): aggiornarlo solo su richiesta esplicita.
+PYTHON_VERSION = "3.12.16"
+PBS_RELEASE = "20261026"
 
 #: Esclusioni (§3.5): modulo → motivo. Solo cose che il codice di AstroTwo non importa (V4 lo controlla).
 EXCLUDES: dict[str, str] = {

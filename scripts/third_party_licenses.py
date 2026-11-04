@@ -233,11 +233,11 @@ def app_components() -> tuple[Component, ...]:
     return (
         Component(
             name="Python (CPython, python-build-standalone)",
-            version="3.12.15+20261003",
+            version="3.12.16+20261026",
             license="PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; "
                     "mpdecimal BSD-2-Clause; libuuid BSD-3-Clause",
-            source=("interprete di AstroTwo.app (60 §3.3): archivio cpython-3.12.15+20261003-aarch64-apple-darwin di "
-                    "https://github.com/astral-sh/python-build-standalone/releases/tag/20261003; testi in "
+            source=("interprete di AstroTwo.app (60 §3.3): archivio cpython-3.12.16+20261026-aarch64-apple-darwin di "
+                    "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026; testi in "
                     "scripts/licenses/python/ (provenienza e SHA-256 nel README.md di quella cartella)"),
             license_text=_texts(_LICENSES_DIR / "python", _PYTHON_LICENSES),
         ),
