@@ -51,6 +51,22 @@ def _no_real_keychain(monkeypatch):
         monkeypatch.setattr(sys.modules["astrotwo.ui.main_window"], "default_keychain", FakeKeychain)
 
 
+@pytest.fixture(autouse=True)
+def _interface_language_english(monkeypatch):
+    """La lingua ``system`` vale inglese nei test, qualunque sia la lingua del Mac (i test non dipendono dal sistema).
+
+    Il codice dell'app resta quello vero (``system`` segue ``QLocale.system()``); i test che verificano l'italiano
+    lo impostano esplicitamente (``language = it``).
+    """
+    import sys
+
+    if "astrotwo.ui.main_window" in sys.modules:
+        mw = sys.modules["astrotwo.ui.main_window"]
+        real = mw.load_translations
+        monkeypatch.setattr(mw, "load_translations",
+                            lambda language, app=None: real("en" if language == "system" else language, app))
+
+
 #: Errori dei moduli già in codice + ``params`` (D40-3): ogni istanza creata in un test viene controllata contro il
 #: catalogo dei messaggi (voce, ``reason``, nomi e tipi dei parametri, JSON, testi senza segnaposto rimasti).
 CONVERTED_ERROR_CLASSES = (
