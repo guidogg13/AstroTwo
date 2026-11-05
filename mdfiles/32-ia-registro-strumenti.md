@@ -54,6 +54,7 @@ esterno, §3.6).
 | `catalog__describe` | `catalog.describe` (nuovo, `05`) | session; sola lettura | no | colonne, unità, UCD, descrizioni, righe, provenienza |
 | `catalog__rows` | `catalog.rows` (nuovo, `05`) | session; sola lettura | no | **al più 50 righe** per chiamata |
 | `layer__list` | `layer.list` (nuovo, `05`) | session; sola lettura | no | livelli con tipo, nome, visibilità, opacità, ordine, sorgente |
+| `catalog__crossmatch` | `catalog.crossmatch` (nuovo, `05`, sprint B2, D15-10 (e) del `15`, 2026-11-05) | session; rete (solo `method = cds`), lungo | sì (rete, lungo) | incrocio per posizione di due cataloghi già aperti: l'IA **sceglie** modalità (`best`/`all`/`none`) e soglia (`max_sep` con unità; default 2″ del `05`) e spiega il risultato; **il calcolo è del 15** (astropy o CDS XMatch); crea un nuovo livello catalogo; numeri del risultato (coppie, separazioni, conteggi) verificabili dal `34` come ogni risultato |
 
 ### 3.3 Comandi non esposti
 
@@ -197,7 +198,10 @@ elementi di un elenco) con due elenchi chiusi scritti nel codice
   dal file o dal servizio); titolo, identificativo, frame e formati dei
   tile e unità `BUNIT` di un survey (`hips.set_survey`); identificativo
   principale e bibcode di SIMBAD (`coords.resolve_name`, `view.go_to`);
-  nomi dei livelli, colonne e unità in `layer.list`.
+  nomi dei livelli, colonne e unità in `layer.list`; in `catalog.crossmatch`
+  (sprint B2) i nomi dei due livelli, le colonne e le posizioni della tabella
+  unita, tutto il report (`report.*`: origini, sistemi, epoche, rinomine) e
+  `report_text`.
 - `ASTROTWO_FIELDS`, per comando o comuni: i campi scritti dal codice di
   AstroTwo (identificativi `L<n>`, frame normalizzati, unità dei valori
   calcolati, metodi, note dei moduli, date ISO, URL dei servizi
@@ -389,6 +393,7 @@ provider (richieste di strumenti scritte nei test).
 | T1 | Elenco chiuso | `tools()` | esattamente gli strumenti di §3.2; nessun comando di §3.3 | confronto con la tabella |
 | T2 | Nomi tradotti | per ogni strumento, nome → comando → nome | corrispondenza biunivoca; nomi validi per i due provider (regex `^[A-Za-z0-9_-]{1,64}$`) | test di unità |
 | T3 | Schema dal `05` | confronto tra `tools()` ed `export_schema()`; descrizione di `catalog` di `catalog__load_region` | stessi parametri, tipi, intervalli, elenchi chiusi; unità nella descrizione; nessun parametro aggiunto; la descrizione di `catalog` contiene tutti gli `id` di `FIXED_COLLECTIONS` (2026-10-23) | confronto diretto |
+| T13 | `catalog__crossmatch` (sprint B2) | argomenti validi (L2 con sé stesso, 1″); poi raggio senza unità, unità `m`, modalità e metodo fuori elenco, livello inesistente, livello immagine; raggio 181″ con `cds` | conferma richiesta (`network`, `long`); comando in cronologia con origine `ai`, metodo `local` e `icrs` di default, numeri pieni nel risultato ridotto; errori `COMMAND_PARAMETER_INVALID` con il parametro o `LAYER_UNKNOWN` senza cronologia; `MAX_SEP_INVALID` del 15 riportato al modello | test di unità (T12 copre la classificazione delle stringhe del risultato) |
 | T4 | Validazione come l'utente | raggio senza unità; unità `m`; livello `L9` inesistente; JSON rotto | errori `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`, `TOOL_ARGUMENTS_INVALID` come risultato al modello; nome sconosciuto (`catalog_search`, `catalog.search`, `image__open`) → `TOOL_NOT_EXPOSED` con `valid_tools` uguale a `tools()` (2026-10-23); nessun comando in cronologia | test di unità |
 | T5 | Stessa coda, `requested_by` | un comando dall'utente e uno dall'IA | eseguiti in ordine di arrivo; il secondo in cronologia con `requested_by = ai`, conversazione, turno, chiamata, profilo, modello | ispezione della cronologia |
 | T6 | Conferme | `catalog.load_region`, `layer.set_opacity`, `view.set_center`, `catalog.rows` | conferma chiesta per i primi due, non per gli altri; Annulla → `TOOL_NOT_CONFIRMED`, nessuna esecuzione | test di unità |
@@ -467,3 +472,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-24 | Claude Code | **D40-7 (sprint 8c-bis):** `warnings` ed `error` rendono anche i messaggi annidati (tipo `message`) in inglese, con i parametri esterni marcati come testo esterno (§3.7). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `ToolRegistryError` porta `params`; gli errori della chiamata vanno al modello con il testo inglese del catalogo e i parametri esterni marcati; nuova §10.1 con la tabella scritta prima del codice. Test `tests/ai/test_messages_assistant.py`. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9:** registrata **D32-3** (risultati più leggeri verso l'IA per i provider con limiti bassi di token), rinviata a dopo la v1, §13. Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B2 — `catalog__crossmatch`** (decisione del proprietario del 2026-11-05, D15-10 (e) del `15`: esposto perché il registro lo permette con lavoro contenuto, una riga di §3.2 e la classificazione dei campi del risultato): §3.2 nuova riga (conferma sì: rete e lungo), §3.6 testi esterni del risultato, T13 (§12). Strumenti esposti: 23. Stato `approvato` invariato. |

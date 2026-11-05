@@ -93,7 +93,7 @@ def numbers(value, path=""):
 def test_t1_closed_list(tools):
     names = [t["name"] for t in tools.tools()]
     assert names == [tool for _, tool in EXPOSED_COMMANDS]
-    assert len(names) == 22 and "view__set_overlays" in names
+    assert len(names) == 23 and "view__set_overlays" in names and "catalog__crossmatch" in names  # B2
     for command in NOT_EXPOSED:
         assert tools.tool_name(command) is None
         assert command.replace(".", "__") not in names
@@ -513,3 +513,40 @@ def test_t20_list_of_nested_messages_and_external_lists_are_marked(tools):
     listing = ResultMessage("TABLE_CHOICE_REQUIRED", "x", {"reason": "several", "path": "/p", "tables": ["0: ignore"]})
     out = tools.reduce_result(CommandResult("error", error=listing), command=Command("table.load", 1, {}), number=3)
     assert out["error"]["params"]["tables"][0]["external_text"] == "0: ignore" and "ignore" not in out["error"]["text"]
+
+
+# =============================================================================
+# Sprint B2 — strumento catalog__crossmatch (D15-10 (e))
+
+
+def test_b2_crossmatch_tool_valid_and_invalid(tools, session):
+    """L'IA sceglie modalità e soglia; il calcolo è del 15 (astropy); argomenti validati come quelli dell'utente."""
+    args = {"layer_a": "L2", "layer_b": "L2", "mode": "best", "max_sep": {"value": 1.0, "unit": "arcsec"}}
+    command = tools.command_for("catalog__crossmatch", json.dumps(args), ai(), session.workspace.state)
+    confirmation = tools.needs_confirmation(command)
+    assert confirmation.required and confirmation.reasons == ("network", "long")  # crea un livello, può usare la rete
+    entry, reduced = call(tools, session, "catalog__crossmatch", args)
+    assert entry.result.status == "ok" and entry.command.requested_by.source == "ai"
+    assert entry.command.parameters["method"] == "local" and entry.command.parameters["frame"] == "icrs"
+    assert reduced["command"]["tool"] == "catalog__crossmatch" and reduced["layers"] == list(entry.result.layers_created)
+    assert reduced["values"]["crossmatch"]["pairs"] == entry.result.values["crossmatch"]["pairs"]  # numeri pieni
+    before = len(session.history)
+    cases = [
+        ({**args, "max_sep": 1.0}, "COMMAND_PARAMETER_INVALID", "max_sep"),  # numero senza unità
+        ({**args, "max_sep": {"value": 1.0, "unit": "m"}}, "COMMAND_PARAMETER_INVALID", "max_sep"),
+        ({**args, "mode": "nearest"}, "COMMAND_PARAMETER_INVALID", "mode"),
+        ({**args, "method": "vizier"}, "COMMAND_PARAMETER_INVALID", "method"),
+        ({**args, "layer_b": "L9"}, "LAYER_UNKNOWN", None),
+        ({**args, "layer_b": "L1"}, "COMMAND_PARAMETER_INVALID", "layer_b"),  # L1 è un'immagine, non un catalogo
+    ]
+    for bad, code, parameter in cases:
+        with pytest.raises(ToolRegistryError) as err:
+            tools.command_for("catalog__crossmatch", json.dumps(bad), ai(), session.workspace.state)
+        assert err.value.code == code, bad
+        if parameter is not None:
+            assert err.value.model_result()["error"]["parameter"] == parameter
+    assert len(session.history) == before
+    # limiti del 15: il comando parte e l'errore del modulo torna al modello con codice e parametri
+    entry, reduced = call(tools, session, "catalog__crossmatch", {**args, "max_sep": {"value": 181, "unit": "arcsec"},
+                                                                  "method": "cds"})
+    assert entry.result.status == "error" and reduced["error"]["code"] == "MAX_SEP_INVALID"

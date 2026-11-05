@@ -1804,7 +1804,11 @@ _add("SAMP_NO_PEER",
      rejected=("{recipient} did not accept {mtype}: {detail}", "{recipient} non ha accettato {mtype}: {detail}",
                "recipient! mtype detail!"),
      no_reply=("{recipient} did not answer {mtype} within {seconds} s.",
-               "{recipient} non ha risposto a {mtype} entro {seconds} s.", "recipient! mtype seconds:num"))
+               "{recipient} non ha risposto a {mtype} entro {seconds} s.", "recipient! mtype seconds:num"),
+     no_reply_table=("{recipient} did not answer {mtype} within {seconds} s: the table may still arrive (large "
+                     "tables take longer to load).",
+                     "{recipient} non ha risposto a {mtype} entro {seconds} s: la tabella potrebbe arrivare comunque "
+                     "(le tabelle grandi richiedono più tempo per caricarsi).", "recipient! mtype seconds:num"))
 _add("ROW_LIMIT_EXCEEDED",
      "The result exceeds the row limit.", "Il risultato supera il limite di righe.",
      cut=("Received {received} rows, the first {max_rows} returned (max_rows = {max_rows}).",
@@ -2845,8 +2849,28 @@ _add("COMMAND_PARAMETER_INVALID",
      box_size_required=("{parameter}: snapping to the centroid needs box_size (odd integer ≥ 3).",
                         "{parameter}: con l'aggancio al centroide serve box_size (intero dispari ≥ 3).",
                         "parameter"),
+     crossmatch_cds_frame=("{parameter}: the CDS XMatch service compares ICRS positions: {frame} is not accepted, "
+                           "use icrs.",
+                           "{parameter}: il servizio CDS XMatch confronta posizioni ICRS: {frame} non è ammesso, "
+                           "usare icrs.", "parameter frame"),
      **_range_variants)
 del _range_variants, _RANGE, _reason, _en, _it
+_add("CROSSMATCH_SERVICE_FAILED",
+     "The CDS XMatch service failed: run the cross-match with the local method if you wish (results may differ "
+     "slightly; there is no automatic fallback).",
+     "Il servizio CDS XMatch non ha funzionato: se vuoi rifai l'incrocio con il metodo locale (i risultati possono "
+     "differire di poco; nessun ripiego automatico).", "url cause:msg",
+     unreachable=("The CDS XMatch service ({url}) cannot be reached: {cause} Choose the local method to run the "
+                  "cross-match on this computer (results may differ slightly; there is no automatic fallback).",
+                  "Il servizio CDS XMatch ({url}) non è raggiungibile: {cause} Scegli il metodo locale per fare "
+                  "l'incrocio su questo computer (i risultati possono differire di poco; nessun ripiego "
+                  "automatico).", "url cause:msg"),
+     service_error=("The CDS XMatch service ({url}) answered with an error: {cause} Choose the local method to run "
+                    "the cross-match on this computer (results may differ slightly; there is no automatic "
+                    "fallback).",
+                    "Il servizio CDS XMatch ({url}) ha risposto con un errore: {cause} Scegli il metodo locale per "
+                    "fare l'incrocio su questo computer (i risultati possono differire di poco; nessun ripiego "
+                    "automatico).", "url cause:msg"))
 _add("LAYER_UNKNOWN", "Layer {layer} does not exist or was removed.", "Il livello {layer} non esiste o è stato rimosso.",
      "layer",
      in_parameter=("{parameter}: layer {layer} does not exist or was removed.",

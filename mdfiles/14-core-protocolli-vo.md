@@ -177,12 +177,17 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   TOPCAT 4.10-8, hub JSAMP):** (7) **invio con risposta:** ogni messaggio
   si manda con una **chiamata sincrona** (`callAndWait` dell'hub) a ogni
   destinatario, in parallelo, con un tempo massimo di risposta per
-  destinatario (`timeout`, quello del `40`, 10 s); `SampSendResult.recipients`
+  destinatario (`timeout`, quello del `40`: 10 s; **60 s per
+  `table.load.votable`** dal 2026-11-05, D40-9 (7) decisa dal proprietario
+  nello sprint B2, costante `SAMP_TABLE_REPLY_TIMEOUT`, default di
+  `send_table`); `SampSendResult.recipients`
   = destinatari che hanno risposto `samp.ok`, `SampSendResult.failures` =
   uno `SampFailure` (`id`, `reason` = `rejected` o `no_reply`, `detail` =
   testo del destinatario o dell'hub, testo esterno) per ogni altro; nessun
   destinatario riuscito → `SAMP_NO_PEER` (`rejected` o `no_reply`, del
-  primo destinatario fallito). **Motivo:** con la sola notifica i rifiuti
+  primo destinatario fallito; per `table.load.votable` la sotto-voce è
+  `no_reply_table`, il cui testo dice che **la tabella potrebbe arrivare
+  comunque**: TOPCAT risponde a caricamento finito; sprint B2). **Motivo:** con la sola notifica i rifiuti
   erano muti (TOPCAT rifiuta un `table.load.votable` con un `table-id` già
   ricevuto: "Duplicate table-id … has already been received"; e una
   selezione per una tabella che non ha: "No table with table-id=… is
@@ -645,6 +650,7 @@ sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalog
 | `SAMP_NO_PEER` | `none` | `mtype` (string) |
 | `SAMP_NO_PEER` | `rejected` (dal 2026-11-05, sprint B1b) | `recipient` (string, esterno: nome dichiarato o identificativo), `mtype` (string), `detail` (string, esterno: risposta del destinatario) |
 | `SAMP_NO_PEER` | `no_reply` (dal 2026-11-05, sprint B1b) | `recipient` (string, esterno), `mtype` (string), `seconds` (number) |
+| `SAMP_NO_PEER` | `no_reply_table` (dal 2026-11-05, sprint B2: `table.load.votable`, "la tabella potrebbe arrivare comunque") | `recipient` (string, esterno), `mtype` (string), `seconds` (number) |
 | `SAMP_UNAVAILABLE` | `timeout` (dal 2026-11-05, sollevata dal `40`) | `operation` (string: `connect`, `disconnect`, `send`, `clients`), `seconds` (number) |
 | `SAMP_UNAVAILABLE` | `hub_shutdown` (dal 2026-11-05, avviso del `40`) | — |
 | `SAMP_TABLE_UNKNOWN` | `unknown` (dal 2026-11-05, sollevata dal `40`) | `table_id` (string, esterno), `url` (string, esterno), `sender` (string, esterno) |
@@ -901,3 +907,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message` per gli errori del 13 incorporati; suggerimento dell'asincrona come sotto-voce); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. `AdqlCheck` ha in più `reason` e `quote` (per scegliere la sotto-voce). Nessun comportamento scientifico cambia. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8 del `40`; autorizzazione esplicita del proprietario ad aggiornare il 14 "se cambia qualcosa"): §3 e §7 — interfaccia nel `40` §3.12 con `41`/`42`; aggiunte a `SampHub` per l'interfaccia (`on_table_reference`, `save_votable`, `client_name`, `on_hub_event` con i quattro eventi amministrativi dell'hub, `SampSendResult.params`); **corretto: `pyvo.samp` iscriveva AstroTwo anche a `client.env.get` (variabili d'ambiente a chi le chiede), ora tolta prima della registrazione**; §10 — nuove sotto-voci `SAMP_UNAVAILABLE` `timeout` e `hub_shutdown`, nuovi codici `SAMP_TABLE_UNKNOWN` e `SAMP_TABLE_FETCH_FAILED`; §12 — nuovo T22. I tipi di messaggio di dati restano i tre di D14-9 punto 10; le immagini restano un'estensione prevista (D14-2). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1b — correzioni dalla prova con TOPCAT vero** (incarico del proprietario del 2026-11-05: "spec prima se cambia un comportamento descritto"): §3 punti (7) invio con chiamata sincrona e `failures`, (8) `clients()` senza l'hub per `samp.hub-id`, (9) iscrizioni dichiarate una volta; §6 firme; §10 errori e codici `SAMP_NO_PEER` (`rejected`, `no_reply`); nuovo T24. Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B2 — rifiniture SAMP** (decisione del proprietario del 2026-11-05, D40-9 (7)): tempo di risposta di **60 s per `table.load.votable`** (`SAMP_TABLE_REPLY_TIMEOUT`, default di `SampHub.send_table`), 10 s per gli altri tipi; nuova sotto-voce `SAMP_NO_PEER` `no_reply_table` (la tabella potrebbe arrivare comunque) per `table.load.votable`. Stato `approvato` invariato. |

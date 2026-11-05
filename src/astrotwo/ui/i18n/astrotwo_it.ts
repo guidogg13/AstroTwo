@@ -486,6 +486,160 @@
     </message>
 </context>
 <context>
+    <name>CrossmatchDialog</name>
+    <message>
+        <source>Cross-match catalogs</source>
+        <translation>Incrocia cataloghi</translation>
+    </message>
+    <message>
+        <source>Best match (nearest)</source>
+        <translation>Migliore (la più vicina)</translation>
+    </message>
+    <message>
+        <source>All pairs</source>
+        <translation>Tutte le coppie</translation>
+    </message>
+    <message>
+        <source>Rows of A without a match</source>
+        <translation>Righe di A senza corrispondenza</translation>
+    </message>
+    <message>
+        <source>Local (astropy, on this computer)</source>
+        <translation>Locale (astropy, su questo computer)</translation>
+    </message>
+    <message>
+        <source>CDS XMatch service (network, at most 180 arcsec)</source>
+        <translation>Servizio CDS XMatch (rete, al massimo 180 arcsec)</translation>
+    </message>
+    <message>
+        <source>Galactic</source>
+        <translation>Galattico</translation>
+    </message>
+    <message>
+        <source>Cross-match</source>
+        <translation>Incrocia</translation>
+    </message>
+    <message>
+        <source>Catalog A</source>
+        <translation>Catalogo A</translation>
+    </message>
+    <message>
+        <source>Catalog B</source>
+        <translation>Catalogo B</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation>Modalità</translation>
+    </message>
+    <message>
+        <source>Maximum separation</source>
+        <translation>Separazione massima</translation>
+    </message>
+    <message>
+        <source>Method</source>
+        <translation>Metodo</translation>
+    </message>
+    <message>
+        <source>Comparison frame</source>
+        <translation>Sistema di confronto</translation>
+    </message>
+    <message>
+        <source>For each row of A, the nearest row of B within the maximum separation. A row of B can serve several rows of A; ties go to the lowest row of B.</source>
+        <translation>Per ogni riga di A, la riga di B più vicina entro la separazione massima. Una riga di B può servire più righe di A; a pari distanza vince la riga di B con l&apos;indice più basso.</translation>
+    </message>
+    <message>
+        <source>Every pair within the maximum separation: a row of A or B can appear more than once.</source>
+        <translation>Tutte le coppie entro la separazione massima: una riga di A o di B può comparire più volte.</translation>
+    </message>
+    <message>
+        <source>Only the rows of A with no row of B within the maximum separation (rows without a position are left out and counted).</source>
+        <translation>Solo le righe di A senza righe di B entro la separazione massima (le righe senza posizione sono escluse e contate).</translation>
+    </message>
+    <message>
+        <source>Catalog %1 has no confirmed position columns: confirm them with Columns… in the Table panel first.</source>
+        <translation>Il catalogo %1 non ha colonne di posizione confermate: confermale prima con Colonne… nel pannello Tabella.</translation>
+    </message>
+    <message>
+        <source>Epoch of the positions of %1: %2</source>
+        <translation>Epoca delle posizioni di %1: %2</translation>
+    </message>
+    <message>
+        <source>not declared</source>
+        <translation>non dichiarata</translation>
+    </message>
+    <message>
+        <source>The epochs differ: positions are compared as they are, without propagation (the result will carry EPOCH_DIFFERS).</source>
+        <translation>Le epoche sono diverse: le posizioni si confrontano come sono, senza propagazione (il risultato avrà EPOCH_DIFFERS).</translation>
+    </message>
+</context>
+<context>
+    <name>CrossmatchReportDialog</name>
+    <message>
+        <source>Cross-match report</source>
+        <translation>Report dell&apos;incrocio</translation>
+    </message>
+    <message>
+        <source>not declared</source>
+        <translation>non dichiarata</translation>
+    </message>
+    <message>
+        <source>New catalog: %1 (%2 rows)</source>
+        <translation>Nuovo catalogo: %1 (%2 righe)</translation>
+    </message>
+    <message>
+        <source>A: %1 · %2</source>
+        <translation>A: %1 · %2</translation>
+    </message>
+    <message>
+        <source>B: %1 · %2</source>
+        <translation>B: %1 · %2</translation>
+    </message>
+    <message>
+        <source>Method: %1</source>
+        <translation>Metodo: %1</translation>
+    </message>
+    <message>
+        <source>Mode: %1; maximum separation: %2 %3</source>
+        <translation>Modalità: %1; separazione massima: %2 %3</translation>
+    </message>
+    <message>
+        <source>Comparison frame: %1; A in %2, B in %3</source>
+        <translation>Sistema di confronto: %1; A in %2, B in %3</translation>
+    </message>
+    <message>
+        <source>Epochs of the positions: A %1, B %2 (no automatic propagation)</source>
+        <translation>Epoche delle posizioni: A %1, B %2 (nessuna propagazione automatica)</translation>
+    </message>
+    <message>
+        <source>Rows: A %1 (%2 without position), B %3 (%4 without position)</source>
+        <translation>Righe: A %1 (%2 senza posizione), B %3 (%4 senza posizione)</translation>
+    </message>
+    <message>
+        <source>Rows of A without a match: %1</source>
+        <translation>Righe di A senza corrispondenza: %1</translation>
+    </message>
+    <message>
+        <source>Pairs: %1</source>
+        <translation>Coppie: %1</translation>
+    </message>
+    <message>
+        <source>Separation column: %1 (%2)</source>
+        <translation>Colonna della separazione: %1 (%2)</translation>
+    </message>
+    <message>
+        <source>Bodies: A %1, B %2 — overlay FORCED</source>
+        <translation>Corpi: A %1, B %2 — sovrapposizione FORZATA</translation>
+    </message>
+    <message>
+        <source>Warnings:</source>
+        <translation>Avvisi:</translation>
+    </message>
+    <message>
+        <source>Report of the cross-match module (text of the module):</source>
+        <translation>Report del modulo dell&apos;incrocio (testo del modulo):</translation>
+    </message>
+</context>
+<context>
     <name>GoToField</name>
     <message>
         <source>Galactic</source>
@@ -1117,6 +1271,10 @@
         <translation>Catalogo nel campo…</translation>
     </message>
     <message>
+        <source>Cross-match catalogs…</source>
+        <translation>Incrocia cataloghi…</translation>
+    </message>
+    <message>
         <source>Distance</source>
         <translation>Distanza</translation>
     </message>
@@ -1181,6 +1339,10 @@
         <translation>Il file non si può aprire</translation>
     </message>
     <message>
+        <source>The cross-match was not run</source>
+        <translation>L&apos;incrocio non è stato eseguito</translation>
+    </message>
+    <message>
         <source>All applications</source>
         <translation>Tutti i programmi</translation>
     </message>
@@ -1197,12 +1359,20 @@
         <translation>Nessun programma</translation>
     </message>
     <message>
-        <source>Send catalog</source>
-        <translation>Manda il catalogo</translation>
+        <source>Send whole table</source>
+        <translation>Manda tutta la tabella</translation>
     </message>
     <message>
-        <source>Send selected rows</source>
-        <translation>Manda le righe selezionate</translation>
+        <source>Send only the selected rows (%1)</source>
+        <translation>Manda solo le righe selezionate (%1)</translation>
+    </message>
+    <message>
+        <source>Send whole table via SAMP</source>
+        <translation>Manda tutta la tabella via SAMP</translation>
+    </message>
+    <message>
+        <source>Send only the selected rows (%1) via SAMP</source>
+        <translation>Manda solo le righe selezionate (%1) via SAMP</translation>
     </message>
     <message>
         <source>Point at view center</source>
@@ -1225,16 +1395,16 @@
         <translation>Fai puntare i programmi SAMP alla sorgente selezionata</translation>
     </message>
     <message>
-        <source>Send table via SAMP</source>
-        <translation>Manda la tabella via SAMP</translation>
-    </message>
-    <message>
-        <source>Send selected rows via SAMP</source>
-        <translation>Manda le righe selezionate via SAMP</translation>
-    </message>
-    <message>
         <source>Point SAMP applications at this source</source>
         <translation>Fai puntare i programmi SAMP a questa sorgente</translation>
+    </message>
+    <message>
+        <source>Cross-match with another catalog…</source>
+        <translation>Incrocia con un altro catalogo…</translation>
+    </message>
+    <message>
+        <source>Show cross-match report</source>
+        <translation>Mostra il report dell&apos;incrocio</translation>
     </message>
     <message>
         <source>field %1</source>
@@ -1287,6 +1457,14 @@
     <message>
         <source>The view has no centre, scale or size yet: centre it first (Go to…).</source>
         <translation>La vista non ha ancora centro, scala o dimensioni: prima centrala (Vai a…).</translation>
+    </message>
+    <message>
+        <source>Cross-match catalogs</source>
+        <translation>Incrocia cataloghi</translation>
+    </message>
+    <message>
+        <source>Open at least two catalogs first (File → Open catalog… or Data → Catalog in view…).</source>
+        <translation>Apri prima almeno due cataloghi (File → Apri catalogo… oppure Dati → Catalogo nel campo…).</translation>
     </message>
     <message>
         <source>Build {build}, commit {commit}</source>

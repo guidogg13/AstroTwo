@@ -2244,6 +2244,82 @@ def _exec_layer_list(ctx: ExecutionContext, p: Mapping) -> Outcome:
     return Outcome(values={"layers": out})
 
 
+#: Metodi di ``catalog.crossmatch`` (sprint B2, D15-10): incrocio locale del 15 o servizio CDS XMatch (14).
+CROSSMATCH_METHODS = ("local", "cds")
+#: Raggio proposto da ``catalog.crossmatch`` (D15-10 (a), decisione del proprietario del 2026-11-05): risolto alla
+#: registrazione, quindi scritto sempre nel comando registrato e nel report; il 15 resta senza default.
+CROSSMATCH_DEFAULT_MAX_SEP = {"value": 2.0, "unit": "arcsec"}
+
+
+def _crossmatch_service_error(exc: BaseException, url: str) -> CommandError:
+    """CDS XMatch che non risponde o risponde con un errore: errore che propone il metodo locale, **senza ripiego
+    automatico** (D15-10 (d): i risultati possono differire, sceglie l'utente). L'errore del 14 resta annidato."""
+    unreachable = getattr(exc, "code", None) == "NET_TIMEOUT"
+    cause = _nested(str(exc.code), str(exc.message), getattr(exc, "params", None))
+    return CommandError("CROSSMATCH_SERVICE_FAILED",
+                        f"servizio CDS XMatch {'non raggiungibile' if unreachable else 'in errore'} ({url}): "
+                        f"{exc.message}; si può rifare l'incrocio con il metodo locale (method = local), i risultati "
+                        "possono differire di poco: nessun ripiego automatico",
+                        params={"reason": "unreachable" if unreachable else "service_error", "url": url,
+                                "cause": cause})
+
+
+def _exec_catalog_crossmatch(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    """Incrocio per posizione di due cataloghi (15 ``crossmatch`` o ``crossmatch_cds``) → nuovo livello catalogo con
+    la tabella unita (``joined`` del 15) e il report; tabelle d'ingresso invariate (D13-5)."""
+    from astrotwo.core import vo_protocols as vo
+    from astrotwo.core.crossmatch import crossmatch, crossmatch_cds
+
+    layer_a, layer_b = ctx.state.layer(p["layer_a"]), ctx.state.layer(p["layer_b"])
+    max_sep = _q(p["max_sep"])
+    if p["method"] == "cds" and p["frame"] != "icrs":
+        raise _invalid("frame", "crossmatch_cds_frame", "il servizio CDS XMatch confronta posizioni ICRS: frame = "
+                       "icrs", frame=p["frame"])
+    ctx.step("crossmatch")
+    if p["method"] == "local":
+        result = crossmatch(layer_a.data, layer_b.data, p["mode"], max_sep, frame=p["frame"],
+                            force_body=p["force_body"])
+    else:
+        try:
+            result = crossmatch_cds(layer_a.data, layer_b.data, p["mode"], max_sep, frame=p["frame"],
+                                    force_body=p["force_body"], cache=ctx.cache)
+        except Exception as exc:  # noqa: BLE001 - solo rete e servizio diventano l'errore con la proposta del locale
+            if getattr(exc, "code", None) in ("NET_TIMEOUT", "SERVICE_ERROR"):
+                raise _crossmatch_service_error(exc, vo.XMATCH_URL) from exc
+            raise
+    ctx.step("joined")
+    table = result.joined()
+    ctx.step("check_overlay")
+    warnings = _overlay(ctx.state, table, p["force_body"]) if table.body is not None else []
+    style, derived, state = _initial_style(ctx.state, table)
+    name = f"{layer_a.name} × {layer_b.name} · {p['mode']}"
+    layer_id, state = _add_layer(state, "catalog", name, table, source="crossmatch", force_body=p["force_body"],
+                                 style=style, derived=derived)
+    report = result.report
+    sep_column = "xmatch_sep" if p["mode"] != "none" else None  # colonna del 15, mai rinominata (le altre sì)
+    values = _catalog_values(layer_id, table)
+    values["style"] = style
+    values["crossmatch"] = {
+        "layer_a": layer_a.id, "layer_b": layer_b.id, "name_a": layer_a.name, "name_b": layer_b.name,
+        "method": p["method"], "mode": p["mode"], "max_sep": p["max_sep"], "frame": p["frame"],
+        "pairs": int(report.pairs), "unmatched": None if report.unmatched is None else int(report.unmatched),
+        "rows": len(table.table), "separation_column": sep_column,
+        "separation_unit": None if sep_column is None else "arcsec",
+        "report": _jsonable(report.as_dict()), "report_text": report.describe()}
+    pairs_sha = _table_digest(result.pairs)[0]
+    if p["method"] == "local":
+        provenance = [_source(table.origin, report.created_at, None, library=report.method)]
+        fingerprint: list[dict] = []
+    else:
+        request = report.request
+        retrieved, from_cache = (None, None) if request is None else (request.retrieved_at, request.from_cache)
+        provenance = [_source(vo.XMATCH_URL, retrieved, from_cache, library=report.method)]
+        fingerprint = [_fingerprint(pairs_sha, vo.XMATCH_URL, retrieved, from_cache, len(result.pairs))]
+    return Outcome(values=values, state=state, layers_created=[layer_id],
+                   warnings=_unique_messages(warnings + _module_warnings(table.warnings)), provenance=provenance,
+                   network_fingerprint=fingerprint)
+
+
 def _exec_cache_clear(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.cache import SharedCache
 
@@ -2746,6 +2822,37 @@ def default_registry(*, cache=None) -> CommandRegistry:
                     "session", _exec_catalog_rows, read_only=True),
         CommandSpec("layer.list", 1, "List the layers of the workspace.", "Elenca i livelli.", (), (),
                     "session", _exec_layer_list, read_only=True),
+        # Incrocio per posizione (sprint B2, D15-10): nuovo livello catalogo con la tabella unita e il report
+        CommandSpec("catalog.crossmatch", 1,
+                    "Cross-match two catalog layers by position (astropy locally or the CDS XMatch service); the "
+                    "result is a new catalog layer with the separation in arcsec and the criteria report.",
+                    "Incrocia per posizione due cataloghi (astropy in locale o il servizio CDS XMatch); il risultato "
+                    "è un nuovo catalogo con la separazione in arcsec e il report dei criteri.",
+                    ("15 crossmatch", "15 crossmatch_cds", "15 CrossMatchResult.joined", "19 check_overlay"), (
+                        P("layer_a", "layer_ref", "Catalog A (L<n>): every result row starts from a row of A.",
+                          "Catalogo A (L<n>): ogni riga del risultato parte da una riga di A.",
+                          layer_kinds=_LAYER_CATALOG),
+                        P("layer_b", "layer_ref", "Catalog B (L<n>).", "Catalogo B (L<n>).",
+                          layer_kinds=_LAYER_CATALOG),
+                        P("mode", "enum", "best: for each row of A the nearest row of B within max_sep; all: every "
+                          "pair within max_sep; none: rows of A with no row of B within max_sep.",
+                          "best: per ogni riga di A la riga di B più vicina entro max_sep; all: tutte le coppie "
+                          "entro max_sep; none: le righe di A senza righe di B entro max_sep.",
+                          default="best", choices=("best", "all", "none")),
+                        P("max_sep", "quantity", "Maximum separation: (0, 180 deg] locally, at most 180 arcsec with "
+                          "the CDS service; choose it from the astrometric accuracy of the two catalogs.",
+                          "Separazione massima: (0, 180 deg] in locale, al più 180 arcsec con il servizio CDS; si "
+                          "sceglie dalla precisione astrometrica dei due cataloghi.",
+                          default=dict(CROSSMATCH_DEFAULT_MAX_SEP), **angle),
+                        P("method", "enum", "local: astropy on this computer; cds: CDS XMatch service (network). No "
+                          "automatic fallback between the two.",
+                          "local: astropy su questo computer; cds: servizio CDS XMatch (rete). Nessun ripiego "
+                          "automatico tra i due.", default="local", choices=CROSSMATCH_METHODS),
+                        P("frame", "enum", "Comparison frame (icrs only with the CDS service).",
+                          "Sistema di confronto (solo icrs con il servizio CDS).", default="icrs",
+                          choices=_FRAMES_VIEW),
+                        _force_body()),
+                    "session", _exec_catalog_crossmatch, network=True, long=True, confirm=True, steps=3),
         # SAMP (sprint B1, D05-5): esecutori del 40, classe application, mai rieseguiti, non esposti all'IA (32)
         CommandSpec("samp.connect", 1, "Connect to the SAMP hub (the running one, otherwise AstroTwo's own).",
                     "Collega all'hub SAMP (quello attivo, altrimenti quello di AstroTwo).",

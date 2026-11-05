@@ -24,7 +24,8 @@ catalogo è poco usabile).
   etichette (D5), colonne calcolate, sottoinsiemi, istogrammi e grafici
   x-y (H8), DataLink, esportazione delle tabelle. **L'invio con SAMP (G3)
   è entrato il 2026-11-05 (sprint B1, decisioni del proprietario, D40-8 del
-  `40`): §3.6.**
+  `40`): §3.6. L'incrocio per posizione (E3) è entrato il 2026-11-05
+  (sprint B2, D15-10 del `15`): §3.7.**
 
 ### 3.2 Tabella
 
@@ -96,8 +97,11 @@ risultato di `catalog.select`.
 Decisioni del proprietario del 2026-11-05 (D40-8); collegamento, thread e ricezione nel `40` §3.12, protocollo nel
 14.
 
-- **Menu contestuale della tabella** (clic destro su una scheda): **Send table via SAMP** (`samp.send_table`),
-  **Send selected rows via SAMP** (`samp.send_selection`) e, con una sola riga selezionata che ha una posizione,
+- **Menu contestuale della tabella** (clic destro su una scheda): **Send whole table via SAMP** / **Manda tutta
+  la tabella via SAMP** (`samp.send_table`), **Send only the selected rows (N) via SAMP** / **Manda solo le righe
+  selezionate (N) via SAMP** (`samp.send_selection`; N = righe selezionate, voce spenta con N = 0; testi dello
+  sprint B2, prima "Send table via SAMP" e "Send selected rows via SAMP", che si confondevano) e, con una sola riga
+  selezionata che ha una posizione,
   **Point SAMP applications at this source** (`samp.point_at`); ogni voce apre l'elenco dei destinatari ("All
   applications" o un client). Spente se AstroTwo non è collegato (con la voce **Connect to SAMP hub**). Le stesse
   azioni sono nel menu Tools → SAMP per la scheda in primo piano.
@@ -109,6 +113,53 @@ Decisioni del proprietario del 2026-11-05 (D40-8); collegamento, thread e ricezi
   quindi stessa evidenza e stesso record di §3.3–§3.4; il pannello non la rimanda indietro.
 - Il pannello non parla con l'hub: emette la richiesta del menu (segnale `context_menu_requested` con il livello e
   il punto sullo schermo) e la finestra (`40`) costruisce il menu e mette in coda i comandi.
+
+### 3.7 Incrocio per posizione: dialogo e report (sprint B2, 2026-11-05)
+
+Decisioni del proprietario del 2026-11-05 (D15-10 del `15`); comando `catalog.crossmatch` del `05` §7; motore del
+15. Codice: `src/astrotwo/ui/crossmatch_dialog.py` (`CrossmatchDialog`, `CrossmatchReportDialog`) e la finestra.
+
+- **Dove:** Data → **Cross-match catalogs…** / **Incrocia cataloghi…** (`40` §3.3) e, nel menu contestuale di una
+  scheda della tabella, **Cross-match with another catalog…** / **Incrocia con un altro catalogo…** (A = il
+  catalogo della scheda; spenta con meno di due cataloghi). Dal menu Data con meno di due cataloghi una finestra
+  dice di aprirne prima almeno due.
+- **Dialogo** (i campi diventano i parametri del comando, senza conversioni):
+  - **Catalogo A** e **Catalogo B**: elenco dei cataloghi caricati («`L<n>` · nome»); B propone il primo diverso
+    da A.
+  - **Modalità** con una spiegazione breve sotto: *Migliore (la più vicina)* = `best` (per ogni riga di A la riga
+    di B più vicina entro la separazione; una riga di B può servire più righe di A; a pari distanza l'indice più
+    basso di B), *Tutte le coppie* = `all`, *Righe di A senza corrispondenza* = `none` (le righe senza posizione
+    sono escluse e contate).
+  - **Separazione massima**: numero (punto decimale sempre) e **unità** scelta tra `mas`, `arcsec`, `arcmin`,
+    `deg`; proposta **2 arcsec** (D15-10 (a)). Il dialogo non taglia i valori: i limiti li controlla il 15
+    (`MAX_SEP_INVALID`), così il messaggio è quello del modulo.
+  - **Metodo**: *Locale (astropy, su questo computer)* (default) o *Servizio CDS XMatch (rete, al massimo 180
+    arcsec)*.
+  - **Sistema di confronto**: ICRS (default) o Galattico; con il servizio CDS bloccato su ICRS.
+  - **Epoche**: riga informativa con l'epoca delle posizioni di A e di B **come la dichiara il 13** («non
+    dichiarata» se manca, mai assunta) o la nota che un catalogo non ha colonne di posizione confermate (con
+    l'indicazione di "Colonne…", §3.5); se le epoche sono dichiarate e diverse, la nota che le posizioni si
+    confrontano senza propagazione e che il risultato avrà `EPOCH_DIFFERS`.
+  - Pulsante **Incrocia** (OK) e Annulla.
+  - **Incrocio per campo (P3) ed ellissi d'errore (P4):** non compaiono nel dialogo, nemmeno come "in arrivo"
+    (scelta di Claude Code, D42-1): il motore li ha già, entreranno con un dialogo proprio (scelta delle colonne
+    chiave o delle tre colonne dell'ellisse con `axes`, soglia in sigma senza default) quando il proprietario lo
+    chiederà; una voce spenta non aiuterebbe l'utente.
+- **Risultato:** nuovo livello catalogo nel cielo e nuova scheda nel pannello Tabella come per un file aperto
+  (stile iniziale del `05`): `best`/`all` = tabella unita con `xmatch_sep` (arcsec) e i suffissi `_tab1`/`_tab2`
+  del 15 sui nomi in conflitto, `none` = le righe di A senza corrispondenza. Si può ordinare, selezionare e
+  **mandare via SAMP** come ogni catalogo (§3.6).
+- **Report** (D42-1): finestra non modale **Cross-match report** / **Report dell'incrocio** aperta da sola alla
+  fine di un incrocio chiesto dall'utente in questa finestra (menu, mouse, Riesegui; non per l'IA né alla
+  riapertura di una sessione) e riapribile dal menu contestuale della scheda del nuovo catalogo (**Show cross-match
+  report** / **Mostra il report dell'incrocio**). Contiene: riepilogo con etichette nella lingua
+  dell'interfaccia e valori del 15 così come sono (cataloghi A e B, metodo, modalità e separazione con unità,
+  sistema di confronto e sistemi delle tabelle, epoche, righe ed escluse, coppie o non appaiati, colonna della
+  separazione, forzatura del corpo), gli **avvisi** dal catalogo dei messaggi e il **testo del modulo**
+  (`MatchReport.describe()`, in italiano come gli altri testi originali dei moduli). Il report resta anche nei
+  dettagli del comando nel pannello Comandi (`values.crossmatch.report` e `report_text`).
+- **Errori:** finestra "The cross-match was not run" / "L'incrocio non è stato eseguito" con il messaggio del
+  modulo (`40` §10), oltre al pannello Messaggi; corpi diversi: offerta di forzatura (D19-4).
 
 ## 4. Cosa NON fa
 
@@ -209,6 +260,7 @@ Con **pytest-qt** e piattaforma `offscreen`, in `tests/ui/`.
 | T5 | Valori mostrati | colonne di posizione ICRS e galattiche, magnitudini (UCD `phot.mag;em.opt.V`), colonne con formato dichiarato, senza formato, mancanti | posizioni identiche ai testi di `format_coordinates` del 10 sugli stessi valori; magnitudini con 3 decimali; altre colonne secondo §3.2; suggerimento e copia con il valore pieno identico al `float64` della tabella; punto decimale anche in italiano | confronto diretto con il 10 e con la tabella |
 | T6 | Un milione di righe | tabella sintetica di 1 000 000 di righe | apertura senza copia dei dati; memoria aggiuntiva e tempo di ordinamento misurati e riportati (`perf`) | misura |
 | T7 | Colonne all'apertura | CSV senza UCD; scelta delle colonne di moto proprio | `confirm_position_columns` chiamata con le colonne confermate; `catalog.set_columns` registrato | ispezione |
+| T9 | Incrocio (§3.7, sprint B2) | vedi T22 del `40`: dialogo dal menu Data e dal menu contestuale, report, errori, Riesegui, testi italiani; catalogo incrociato mandato via SAMP (T21c del `40`) | come T22 e T21c del `40` | test in `tests/ui/test_crossmatch_ui.py` e `tests/ui/test_samp.py` |
 | T8 | SAMP (§3.6, sprint B1) | tabella ordinata per una colonna; selezionare righe e mandarle con il menu contestuale a un client simulato; ricevere una selezione | indici inviati nell'ordine della tabella (non mostrato); selezione ricevuta evidenziata con il record; voci spente da scollegati | test in `tests/ui/test_samp.py` |
 
 ## 13. Decisioni aperte
@@ -282,6 +334,21 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   nelle colonne numeriche, spaziature di 4 punti, accento unico per la
   selezione, modalità notte rossa).
 
+- **D42-1 — Scelte minori dell'incrocio nell'interfaccia (sprint B2):
+  PROPOSTE da Claude Code il 2026-11-05, da confermare (Gruppo 3).** (1)
+  posizione: Data → Cross-match catalogs… (menu dei dati e dei cataloghi,
+  nessun menu nuovo) più il menu contestuale della scheda; (2) report in una
+  **finestra non modale** aperta alla fine dell'incrocio chiesto
+  dall'utente e riapribile dal menu contestuale, più i dettagli del comando
+  (alternativa scartata: scheda fissa nel pannello Tabella, che occupa
+  spazio per un testo letto una volta); (3) nessuna voce "in arrivo" per
+  incrocio per campo ed ellissi; (4) unità proposte `mas`, `arcsec`,
+  `arcmin`, `deg`; (5) sistemi di confronto ICRS e Galattico (quelli della
+  vista, `_FRAMES_VIEW` del `05`); (6) nome del nuovo livello
+  «A × B · modalità»; (7) un incrocio senza coppie crea comunque il
+  livello (vuoto) con `NO_MATCH`, così la riesecuzione dà gli stessi
+  livelli.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -295,3 +362,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22 (ripresa della parte 6):** confermate le scelte minori dello sprint 5b (§13, tolto "da confermare"). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1: il pannello non ha messaggi propri (solo `TABLE_SORT_UNSUPPORTED` del `05`). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): l'invio con SAMP esce da "fuori dalla v1" (§3.1); nuova §3.6 (menu contestuale della tabella, indici nell'ordine della tabella, tabella e selezione ricevute); §4 aggiornato; T8 (§12). Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione e voci SAMP** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): §3.1; nuova §3.7 (dialogo "Cross-match catalogs…" dal menu Data e dal menu contestuale, report in finestra, nuovo catalogo come gli altri, errori); §3.6 voci «Send whole table via SAMP» e «Send only the selected rows (N) via SAMP», spenta con N = 0; T9 (§12); nuova **D42-1** (scelte minori, da confermare). Stato `approvato` invariato. |

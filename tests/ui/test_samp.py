@@ -156,7 +156,7 @@ def test_t21_external_hub_send_and_receive(qtbot, window, peer, tmp_path):
     # righe selezionate di una tabella mai mandata: prima la tabella, poi la selezione (D40-9)
     win.submit("catalog.select", {"layer": layer, "rows": [0, 2]})
     wait_idle(qtbot, win)
-    send(qtbot, win, "Send selected rows", PEER)
+    send(qtbot, win, "Send only the selected rows (2)", PEER)
     entry = last(win, "samp.send_selection")
     assert entry.result.status == "ok" and entry.result.values["table_sent"] is True
     assert entry.result.values["recipients"] == [peer.get_public_id()]
@@ -166,7 +166,7 @@ def test_t21_external_hub_send_and_receive(qtbot, window, peer, tmp_path):
     assert selection == {"table-id": loaded["table-id"], "url": loaded["url"], "row-list": ["0", "2"]}
 
     # catalogo: colonne, unità, UCD ed epoca del COOSYS come nella tabella del 13
-    send(qtbot, win, "Send catalog")
+    send(qtbot, win, "Send whole table")
     assert last(win, "samp.send_table").result.status == "ok"
     qtbot.waitUntil(lambda: len(by_type(peer, "table.load.votable")) == 2, timeout=5000)
     params = by_type(peer, "table.load.votable")[1]
@@ -357,7 +357,7 @@ def test_context_menus(qtbot, window, peer, tmp_path):
     assert not submenu(menu, "Point SAMP applications at view center").isEnabled()
     layer = open_catalog(qtbot, win, tmp_path)
     menu = win._table_context_menu(layer, None)
-    assert not submenu(menu, "Send table via SAMP").isEnabled()
+    assert not submenu(menu, "Send whole table via SAMP").isEnabled()
     menu.actions()[0].trigger()  # Connect to SAMP hub
     wait_idle(qtbot, win)
     assert win.samp.connected and last(win, "samp.connect").command.requested_by.source == "mouse"
@@ -381,7 +381,7 @@ def test_context_menus(qtbot, window, peer, tmp_path):
     wait_idle(qtbot, win)
     menu = win._table_context_menu(layer, None)
     assert not submenu(menu, "Point SAMP applications at this source").isEnabled()  # due righe
-    recipient(submenu(menu, "Send selected rows via SAMP"), "All applications").trigger()
+    recipient(submenu(menu, "Send only the selected rows (2) via SAMP"), "All applications").trigger()
     wait_idle(qtbot, win)
     qtbot.waitUntil(lambda: bool(by_type(peer, "table.select.rowList")), timeout=5000)
     assert by_type(peer, "table.select.rowList")[0]["row-list"] == ["0", "2"]
@@ -482,7 +482,7 @@ def test_t21b_hub_is_not_counted(qtbot, window, topcat):
     assert "Hub of another application." in tip and "Hub: PyVO SAMP Hub." in tip and "Connected: topcat" in tip
     win._fill_samp_menu()
     assert [a.text() for a in submenu(win.samp_menu, "Connected applications").actions()] == ["topcat"]
-    who = [a.text() for a in submenu(win.samp_menu, "Send catalog").actions() if a.text()]
+    who = [a.text() for a in submenu(win.samp_menu, "Send whole table").actions() if a.text()]
     assert who == ["All applications", "topcat"]  # l'hub non è un destinatario
 
 
@@ -496,7 +496,7 @@ def test_t21b_selection_after_catalog_two_launches(qtbot, settings_path, cache, 
         try:
             connect(qtbot, win)
             layer = open_catalog(qtbot, win, tmp_path, name=f"c{launch}.xml")
-            send(qtbot, win, "Send catalog", "topcat")
+            send(qtbot, win, "Send whole table", "topcat")
             entry = last(win, "samp.send_table")
             assert entry.result.status == "ok" and entry.result.values.get("rejected", []) == []
             ids.append(entry.result.values["table_id"])
@@ -505,7 +505,8 @@ def test_t21b_selection_after_catalog_two_launches(qtbot, settings_path, cache, 
             wait_idle(qtbot, win)
             assert last(win, "table.sort").result.status == "ok"  # righe mostrate in un altro ordine
             click_rows(qtbot, win, layer, rows)
-            recipient(submenu(win._table_context_menu(layer, None), "Send selected rows via SAMP"),
+            recipient(submenu(win._table_context_menu(layer, None),
+                                    f"Send only the selected rows ({len(rows)}) via SAMP"),
                       "All applications").trigger()
             wait_idle(qtbot, win)
             entry = last(win, "samp.send_selection")
@@ -530,40 +531,126 @@ def test_t21b_selection_of_a_table_never_sent(qtbot, window, topcat, tmp_path):
     connect(qtbot, win)
     layer = open_catalog(qtbot, win, tmp_path)
     click_rows(qtbot, win, layer, [1, 2])
-    send(qtbot, win, "Send selected rows")
+    send(qtbot, win, "Send only the selected rows (2)")
     entry = last(win, "samp.send_selection")
     assert entry.result.status == "ok" and entry.result.values["table_sent"] is True
     assert entry.result.values["recipients"] == [topcat.id] and entry.result.values.get("rejected", []) == []
     assert len(topcat.tables) == 1 and topcat.tables[0]["subsets"] == {"AstroTwo": [1, 2]}
     assert topcat.errors == []
-    send(qtbot, win, "Send selected rows")  # già passata da SAMP: mai rimandata
+    send(qtbot, win, "Send only the selected rows (2)")  # già passata da SAMP: mai rimandata
     assert last(win, "samp.send_selection").result.values["table_sent"] is False and len(topcat.tables) == 1
 
 
 def test_t21b_rejections_are_reported(qtbot, window, topcat, tmp_path):
     """Chi rifiuta o non risponde va in ``rejected`` e nel pannello Messaggi; gli altri sono raggiunti."""
     win = window
-    win.samp.timeout = 1.0
+    win.samp.timeout = win.samp.table_timeout = 1.0
     dead = dead_client()
     try:
         connect(qtbot, win)
         layer = open_catalog(qtbot, win, tmp_path)
-        send(qtbot, win, "Send catalog")
+        send(qtbot, win, "Send whole table")
         entry = last(win, "samp.send_table")
         assert entry.result.status == "ok" and entry.result.values["recipients"] == [topcat.id]
         assert [r["id"] for r in entry.result.values["rejected"]] == [dead.get_public_id()]
         assert [w.code for w in entry.result.warnings] == ["SAMP_NO_PEER"]
         assert entry.result.warnings[0].params["recipient"] == "morto"
-        assert entry.result.warnings[0].params["reason"] in ("rejected", "no_reply")
+        assert entry.result.warnings[0].params["reason"] in ("rejected", "no_reply_table")  # tabella: può arrivare
         assert any(m[1] == "SAMP_NO_PEER" for m in win.messages.messages)
         assert len(topcat.tables) == 1
         # selezione di una tabella che TOPCAT non ha più (TOPCAT riavviato): errore con il testo di TOPCAT
         topcat.tables.clear()
         topcat.by_id.clear()
         click_rows(qtbot, win, layer, [0])
-        send(qtbot, win, "Send selected rows", "topcat")
+        send(qtbot, win, "Send only the selected rows (1)", "topcat")
         entry = last(win, "samp.send_selection")
         assert entry.result.status == "error" and entry.result.error.code == "SAMP_NO_PEER"
         assert entry.result.error.params["reason"] == "rejected" and "No table with" in entry.result.error.params["detail"]
     finally:
         dead.client.hub.disconnect()
+
+
+# =============================================================================
+# Sprint B2 — rifiniture SAMP (D40-9 (7)) e catalogo incrociato mandato via SAMP
+
+
+def test_b2_reply_timeout_by_type_and_no_reply_text(qtbot, window):
+    """60 s per ``table.load.votable``, 10 s per gli altri tipi; per le tabelle l'avviso dice che può arrivare."""
+    from astrotwo.messages_catalog import message_text
+    from astrotwo.ui.samp_link import DEFAULT_TABLE_TIMEOUT, DEFAULT_TIMEOUT
+
+    link = SampLink(Path("unused"))
+    assert (DEFAULT_TIMEOUT, DEFAULT_TABLE_TIMEOUT) == (10.0, 60.0)
+    assert link.reply_timeout("table.load.votable") == 60.0
+    assert link.reply_timeout("table.select.rowList") == link.reply_timeout("coord.pointAt.sky") == 10.0
+    win = window
+    warnings = win._samp_rejected({"rejected": [
+        {"id": "c1", "name": "topcat", "reason": "no_reply", "detail": "", "mtype": "table.load.votable"},
+        {"id": "c1", "name": "topcat", "reason": "no_reply", "detail": "", "mtype": "table.select.rowList"}]})
+    assert [(w.params["reason"], w.params["seconds"]) for w in warnings] == [("no_reply_table", 60.0),
+                                                                             ("no_reply", 5.0)]
+    assert "may still arrive" in message_text("SAMP_NO_PEER", warnings[0].params, "en")
+    assert "potrebbe arrivare comunque" in message_text("SAMP_NO_PEER", warnings[0].params, "it")
+    assert "arrive" not in message_text("SAMP_NO_PEER", warnings[1].params, "en")
+
+
+def test_b2_send_table_waits_for_the_table_timeout(qtbot, window, peer, tmp_path, monkeypatch):
+    """L'invio della tabella passa al 14 il tempo delle tabelle; selezione e puntamento quello degli altri tipi."""
+    from astrotwo.core.vo_protocols import SampHub
+
+    win = window
+    connect(qtbot, win)
+    seen = []
+    original = SampHub.send_message
+
+    def spy(self, mtype, params, recipient=None, *, among=None, timeout=10.0):
+        seen.append((mtype, timeout))
+        return original(self, mtype, params, recipient, among=among, timeout=timeout)
+
+    monkeypatch.setattr(SampHub, "send_message", spy)
+    layer = open_catalog(qtbot, win, tmp_path)
+    click_rows(qtbot, win, layer, [0])
+    send(qtbot, win, "Send only the selected rows (1)")  # tabella mai mandata: prima la tabella
+    assert seen == [("table.load.votable", 60.0), ("table.select.rowList", 5.0)]
+
+
+def test_b2_menu_texts_with_selected_rows(qtbot, window, peer, tmp_path):
+    win = window
+    connect(qtbot, win)
+    layer = open_catalog(qtbot, win, tmp_path)
+    win._fill_samp_menu()
+    titles = [a.text() for a in win.samp_menu.actions()]
+    assert "Send whole table" in titles and "Send only the selected rows (0)" in titles
+    assert not submenu(win.samp_menu, "Send only the selected rows (0)").isEnabled()  # nessuna riga: spenta
+    assert submenu(win.samp_menu, "Send whole table").isEnabled()
+    menu = win._table_context_menu(layer, None)
+    assert not submenu(menu, "Send only the selected rows (0) via SAMP").isEnabled()
+    click_rows(qtbot, win, layer, [0, 1, 2])
+    win._fill_samp_menu()
+    assert submenu(win.samp_menu, "Send only the selected rows (3)").isEnabled()
+    assert submenu(win._table_context_menu(layer, None), "Send only the selected rows (3) via SAMP").isEnabled()
+
+
+def test_b2_crossmatch_catalog_via_samp(qtbot, window, peer, tmp_path):
+    """Il catalogo nato da ``catalog.crossmatch`` si manda come gli altri, con la colonna della separazione."""
+    win = window
+    connect(qtbot, win)
+    open_catalog(qtbot, win, tmp_path, name="a.xml")
+    open_catalog(qtbot, win, tmp_path, name="b.xml")
+    win.submit("catalog.crossmatch", {"layer_a": "L1", "layer_b": "L2", "mode": "best",
+                                      "max_sep": {"value": 1.0, "unit": "arcsec"}})
+    wait_idle(qtbot, win)
+    entry = last(win, "catalog.crossmatch")
+    assert entry.result.status == "ok", entry.result.error
+    new = entry.result.layers_created[0]
+    win.catalog_panel.tabs.setCurrentIndex(win.catalog_panel.tabs.indexOf(win.catalog_panel.pages[new]))
+    send(qtbot, win, "Send whole table")
+    sent = last(win, "samp.send_table")
+    assert sent.result.status == "ok" and sent.result.values["layer"] == new
+    qtbot.waitUntil(lambda: bool(by_type(peer, "table.load.votable")), timeout=5000)
+    params = by_type(peer, "table.load.votable")[-1]
+    votable = parse_votable(urllib.parse.unquote(urllib.parse.urlsplit(params["url"]).path))
+    got = votable.get_first_table()
+    assert "xmatch_sep" in [f.name for f in got.fields]
+    assert next(f for f in got.fields if f.name == "xmatch_sep").unit == u.arcsec
+    assert len(got.array) == len(win.session.workspace.state.layer(new).data.table) == len(ROWS)

@@ -1929,6 +1929,8 @@ class MainWindow(QMainWindow):
                            name="night")  # ⌃⌘N (D40-4)
         self.act_hips = a(self.tr("HiPS survey…"), self.hips_dialog, name="hipsSurvey")
         self.act_catalog_view = a(self.tr("Catalog in view…"), self.catalog_dialog, name="catalogInView")
+        self.act_crossmatch = a(self.tr("Cross-match catalogs…"), lambda: self.crossmatch_dialog(),
+                                name="crossmatch")  # sprint B2: incrocio per posizione (42 §3.7)
         self.tool_group = QActionGroup(self)
         self.tool_group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
         self.act_distance = a(self.tr("Distance"), lambda c: self._tool("distance", c), checkable=True,
@@ -1988,6 +1990,8 @@ class MainWindow(QMainWindow):
         m = bar.addMenu(self.tr("Data"))
         m.addAction(self.act_hips)
         m.addAction(self.act_catalog_view)
+        m.addSeparator()
+        m.addAction(self.act_crossmatch)
         m = bar.addMenu(self.tr("Tools"))
         m.addAction(self.act_distance)
         m.addAction(self.act_simbad)
@@ -2085,6 +2089,8 @@ class MainWindow(QMainWindow):
             network = self.registry.spec(command.name).network
         except CommandError:
             network = False
+        if command.name == "catalog.crossmatch":  # rete solo con il servizio CDS (sprint B2)
+            network = command.parameters.get("method") == "cds"
         job = CommandJob(next(self._ids), command, cancel if cancel is not None else CancelToken(), network=network)
         self._jobs[job.id] = job
         self._update_network()
@@ -2167,6 +2173,8 @@ class MainWindow(QMainWindow):
                 self._offer_force(done.registered, result.error)
             elif done.registered.name in ("image.open", "catalog.open_file", "moc.open"):
                 self.show_modal(self.tr("The file cannot be opened"), shown_line(result.error))
+            elif done.registered.name == "catalog.crossmatch" and self._asked_here(done.registered):
+                self.show_modal(self.tr("The cross-match was not run"), shown_line(result.error))
         elif result.status == "ok":
             self._apply_effect(done.registered, result)
         self.sky.command_finished(done.registered.name, result.status, result.values,
@@ -2179,6 +2187,9 @@ class MainWindow(QMainWindow):
             self.columns_dialogs(result.values["layer"])
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
+        if (done.registered.name == "catalog.crossmatch" and result.status == "ok"
+                and self._asked_here(done.registered)):
+            self.show_crossmatch_report(result.values["layer"])  # report visibile subito (42 §3.7)
 
     def _exec_export_png(self, ctx, p: Mapping) -> Outcome:
         """Controlli e testi di ``view.export_png`` nel thread di lavoro (41 §3.14); il file lo scrive ``_apply_effect``."""
@@ -2269,10 +2280,16 @@ class MainWindow(QMainWindow):
         out = []
         for item in values.get("rejected", ()):
             who = item["name"] or item["id"]
-            if item["reason"] == "no_reply":
-                out.append(ResultMessage("SAMP_NO_PEER", f"{who} non ha risposto a {item['mtype']}",
+            seconds = float(self.samp.reply_timeout(item["mtype"]))
+            if item["reason"] == "no_reply" and item["mtype"] == "table.load.votable":  # D40-9 (7)
+                out.append(ResultMessage("SAMP_NO_PEER", f"{who} non ha risposto a {item['mtype']} entro {seconds:g} s:"
+                                         " la tabella potrebbe arrivare comunque",
+                                         {"reason": "no_reply_table", "recipient": who, "mtype": item["mtype"],
+                                          "seconds": seconds}))
+            elif item["reason"] == "no_reply":
+                out.append(ResultMessage("SAMP_NO_PEER", f"{who} non ha risposto a {item['mtype']} entro {seconds:g} s",
                                          {"reason": "no_reply", "recipient": who, "mtype": item["mtype"],
-                                          "seconds": float(self.samp.timeout)}))
+                                          "seconds": seconds}))
             else:
                 out.append(ResultMessage("SAMP_NO_PEER", f"{who} non ha accettato {item['mtype']}: {item['detail']}",
                                          {"reason": "rejected", "recipient": who, "mtype": item["mtype"],
@@ -2395,8 +2412,10 @@ class MainWindow(QMainWindow):
         catalog = None if layer is None else {"layer": layer.id}
         source = self.selected_source_position(layer)
         center = self._view_center()
-        self._recipients_menu(m, self.tr("Send catalog"), "samp.send_table", catalog, status.connected)
-        self._recipients_menu(m, self.tr("Send selected rows"), "samp.send_selection", catalog, status.connected)
+        selected = 0 if layer is None else len(layer.selection)  # N righe selezionate: voce spenta se N = 0 (B2)
+        self._recipients_menu(m, self.tr("Send whole table"), "samp.send_table", catalog, status.connected)
+        self._recipients_menu(m, self.tr("Send only the selected rows (%1)").replace("%1", str(selected)),
+                              "samp.send_selection", catalog, status.connected and selected > 0)
         self._recipients_menu(m, self.tr("Point at view center"), "samp.point_at",
                               None if center is None else {"position": center}, status.connected)
         self._recipients_menu(m, self.tr("Point at selected source"), "samp.point_at",
@@ -2435,10 +2454,19 @@ class MainWindow(QMainWindow):
         layer = self.session.workspace.state.find(layer_id)
         catalog = None if layer is None else {"layer": layer_id}
         source = self.selected_source_position(layer)
-        self._recipients_menu(menu, self.tr("Send table via SAMP"), "samp.send_table", catalog, connected)
-        self._recipients_menu(menu, self.tr("Send selected rows via SAMP"), "samp.send_selection", catalog, connected)
+        selected = 0 if layer is None else len(layer.selection)  # N righe selezionate: voce spenta se N = 0 (B2)
+        self._recipients_menu(menu, self.tr("Send whole table via SAMP"), "samp.send_table", catalog, connected)
+        self._recipients_menu(menu, self.tr("Send only the selected rows (%1) via SAMP").replace("%1", str(selected)),
+                              "samp.send_selection", catalog, connected and selected > 0)
         self._recipients_menu(menu, self.tr("Point SAMP applications at this source"), "samp.point_at",
                               None if source is None else {"position": source}, connected)
+        menu.addSeparator()  # incrocio (sprint B2, 42 §3.7)
+        xmatch = menu.addAction(self.tr("Cross-match with another catalog…"))
+        xmatch.setEnabled(len(self.session.workspace.state.of_kind("catalog")) >= 2)
+        xmatch.triggered.connect(lambda checked=False: self.crossmatch_dialog(layer_id, source="mouse"))
+        if self.crossmatch_entry(layer_id) is not None:
+            menu.addAction(self.tr("Show cross-match report")).triggered.connect(
+                lambda checked=False: self.show_crossmatch_report(layer_id))
         self.last_context_menu = menu
         if global_pos is not None:
             menu.popup(global_pos)
@@ -2551,6 +2579,46 @@ class MainWindow(QMainWindow):
 
         dialog.accepted.connect(accepted)
         dialog.open()
+        return dialog
+
+    @staticmethod
+    def _asked_here(command: Command) -> bool:
+        """Comando chiesto dall'utente in questa finestra (menu, tastiera, mouse, Riesegui): non dall'IA né da SAMP."""
+        return command.requested_by.source in ("menu", "keyboard", "mouse", "history")
+
+    def crossmatch_dialog(self, preset_a: str | None = None, *, source: str = "menu"):
+        """Data → Cross-match catalogs… (42 §3.7): A e B tra i cataloghi caricati; OK → ``catalog.crossmatch``."""
+        from astrotwo.ui.crossmatch_dialog import CrossmatchDialog
+
+        catalogs = self.session.workspace.state.of_kind("catalog")
+        if len(catalogs) < 2:
+            self.show_modal(self.tr("Cross-match catalogs"), self.tr(
+                "Open at least two catalogs first (File → Open catalog… or Data → Catalog in view…)."))
+            return None
+        dialog = CrossmatchDialog(catalogs, preset_a, self)
+        dialog.accepted.connect(lambda: self.submit("catalog.crossmatch", dialog.params(), source=source))
+        self.last_crossmatch_dialog = dialog
+        dialog.open()
+        return dialog
+
+    def crossmatch_entry(self, layer_id: str) -> HistoryEntry | None:
+        """Voce della cronologia del ``catalog.crossmatch`` che ha creato ``layer_id`` (report salvato nel risultato)."""
+        for entry in reversed(self.session.history.entries):
+            if (entry.command.name == "catalog.crossmatch" and entry.result.status == "ok"
+                    and layer_id in entry.result.layers_created):
+                return entry
+        return None
+
+    def show_crossmatch_report(self, layer_id: str):
+        """Finestra non modale con il report dell'incrocio (riepilogo tradotto, avvisi, ``describe()`` del 15)."""
+        from astrotwo.ui.crossmatch_dialog import CrossmatchReportDialog
+
+        entry = self.crossmatch_entry(layer_id)
+        if entry is None:
+            return None
+        dialog = CrossmatchReportDialog(entry.number, entry.result.values, entry.result.warnings, self)
+        self.last_crossmatch_report = dialog
+        dialog.show()
         return dialog
 
     def preferences_dialog(self) -> PreferencesDialog:

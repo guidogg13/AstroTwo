@@ -300,7 +300,8 @@ Il disegno durante il gesto è del `41`.
   2026-10-15).
 - **Dipende da:** `04-cache.md`; le funzioni pubbliche dei moduli che i
   comandi chiamano — nella prima versione `10`, `11`, `12`, `13`, `14`,
-  `16`, `17`, `18`, `19` (solo `check_overlay`).
+  `16`, `17`, `18`, `19` (solo `check_overlay`) e, dal 2026-11-05 (sprint
+  B2), `15` (`catalog.crossmatch`).
 - **Usato da:** `40-ui-finestra-principale.md` (coda, cronologia, sessione),
   `41-ui-visualizzatore-cielo.md`, `42-ui-pannello-cataloghi.md`;
   `18-core-calcolatrici.md` (formato dei comandi, solo come dato);
@@ -377,6 +378,7 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.describe` (livello) — nuovo | metadati della tabella del 13 (colonne con nome, tipo, unità, UCD, descrizione; righe; colonne di posizione; epoca; sorgente con origine e data) | session | sola lettura |
 | `catalog.rows` (livello, prima riga, numero di righe ≤ 50, colonne facoltative, ordine della tabella o mostrato) — nuovo | 13 `record_view` per ogni riga | session | sola lettura |
 | `layer.list` — nuovo | — (stato dello spazio di lavoro: livelli con identificativo, tipo, nome, visibilità, opacità, ordine, sorgente, righe) | session | sola lettura |
+| `catalog.crossmatch` (`layer_a`, `layer_b`, `mode`, `max_sep`, `method`, `frame`, `force_body`) — nuovo, 2026-11-05 (sprint B2, D15-10 del 15) | 15 `crossmatch` (`method = local`) o `crossmatch_cds` (`method = cds`, rete del 14), `CrossMatchResult.joined`; 19 `check_overlay` | session | rete (solo con `cds`), lungo, `confirm`; nuovo livello catalogo con la tabella unita; dettagli sotto |
 | `samp.connect` — nuovo, 2026-11-05 (sprint B1) | 14 `SampHub.connect` (hub attivo, altrimenti hub proprio con profilo web spento), `clients` | application | esecutore del `40` (§3.12); risultato `hub` (`external` o `own`), `web_profile` (`false`), `clients` (identificativo e nome); già collegato: stesso risultato, nessun nuovo collegamento |
 | `samp.disconnect` — nuovo | 14 `SampHub.disconnect` | application | esecutore del `40`; risultato `was_connected`, `own_hub_stopped`; non collegato: esito `ok` con `was_connected = false` |
 | `samp.send_table` (livello di catalogo, `recipient` facoltativo) — nuovo | 14 `SampHub.send_table` (`table.load.votable`: VOTable con colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13, mai assunta) | application | esecutore del `40`; risultato `layer`, `table_id`, `url`, `rows`, `recipients` (destinatari che hanno accettato), `rejected` (dal 2026-11-05: destinatari che hanno rifiutato o non hanno risposto, con `id`, `reason`, `detail`; ognuno anche come avviso `SAMP_NO_PEER`) |
@@ -449,6 +451,55 @@ catalogo non hanno lo stesso colore), riempimento `fill` = 0,25 (frazione
 dell'opacità del livello), contorno con l'opacità del livello. Nessun comando
 per cambiarlo nella v1.
 
+**Incrocio per posizione (sprint B2, decisioni del proprietario del
+2026-11-05, D15-10 del `15`).** `catalog.crossmatch`, versione 1, classe
+`session` (rieseguito alla riapertura e dalla cronologia come gli altri
+comandi di analisi):
+
+- **Parametri:** `layer_a`, `layer_b` (`layer_ref` di tipo catalogo; ogni
+  riga del risultato parte da una riga di A); `mode` (`enum` `best`, `all`,
+  `none`, default `best`, D15-1); `max_sep` (`quantity` angolare, **default
+  2 arcsec** per decisione del proprietario, unità scelta dall'utente;
+  nessun intervallo nella definizione: i limiti (0, 180°] in locale e
+  ≤ 180″ con il servizio li controlla **solo il 15**, che risponde
+  `MAX_SEP_INVALID`; un'unità non angolare è `COMMAND_PARAMETER_INVALID`
+  del 05); `method` (`enum` `local` (default) o `cds`); `frame` (`enum`
+  `icrs` (default) o `galactic`, sistema di confronto; con `cds` solo
+  `icrs`, altrimenti `COMMAND_PARAMETER_INVALID` con ragione
+  `crossmatch_cds_frame`); `force_body` (booleano, D19-4). Il default di
+  `max_sep` si risolve alla registrazione: il comando registrato e il
+  report portano sempre il valore usato, e il 15 resta senza default.
+- **Esecuzione:** `crossmatch` o `crossmatch_cds` del 15 sulle tabelle dei
+  due livelli (con le colonne di posizione confermate, l'epoca del 13, mai
+  propagata), poi `joined()` con i default del 15 (tutte le colonne,
+  suffissi `_tab1`/`_tab2` sui nomi in conflitto, `xmatch_sep` in arcsec,
+  posizioni e corpo di A; in `none` solo le colonne di A delle righe senza
+  corrispondenza), `check_overlay` del 19 e **nuovo livello catalogo**
+  (nome `<nome di A> × <nome di B> · <modalità>`, sorgente `crossmatch`,
+  stile iniziale come gli altri cataloghi). Le tabelle d'ingresso non
+  cambiano (D13-5). Un risultato senza coppie crea comunque il livello
+  (vuoto) con l'avviso `NO_MATCH`.
+- **Risultato:** i valori di un catalogo caricato (`layer`, `rows`,
+  `columns`, `positions`, `body`, `style`, …) più `crossmatch`:
+  `layer_a`, `layer_b`, `name_a`, `name_b`, `method`, `mode`, `max_sep`,
+  `frame`, `pairs`, `unmatched` (solo `none`), `rows`,
+  `separation_column` (`xmatch_sep`, `null` in `none`) e
+  `separation_unit` (`arcsec`), `report` (`MatchReport.as_dict()` del 15,
+  con la richiesta registrata del 14 per il servizio) e `report_text`
+  (`MatchReport.describe()`, testo del modulo). Avvisi del 15 (e del 19)
+  invariati. Provenienza: in locale la libreria (metodo del report); con
+  il servizio URL, data e "dalla cache sì/no" della richiesta, più
+  l'**impronta dei risultati di rete** (SHA-256 delle coppie, D05-2).
+- **Servizio CDS che non risponde o risponde con un errore** (`NET_TIMEOUT`
+  o `SERVICE_ERROR` del 14/15): errore **`CROSSMATCH_SERVICE_FAILED`**
+  (ragioni `unreachable`, `service_error`) con l'errore del modulo
+  annidato (`cause`, D40-7) e il testo che propone il **metodo locale**;
+  **nessun ripiego automatico** (D15-10 (d): i risultati possono differire
+  di poco, lo decide l'utente). Gli altri errori del 15 passano invariati.
+- **Indicatori:** `network` e `long` dichiarati (con `cds` usa la rete; la
+  barra di stato del `40` conta il comando come di rete solo con `cds`),
+  `confirm` sì (rete, lungo, nuovo livello).
+
 **SAMP nell'interfaccia (sprint B1, decisioni del proprietario del
 2026-11-05, D40-8 del `40`, D05-5).**
 
@@ -477,7 +528,8 @@ per cambiarlo nella v1.
 `image.open`, `catalog.open_file`, `catalog.load_region`, `hips.set_survey`,
 `view.go_to` (rete o lungo), `image.set_display`, `catalog.set_columns`,
 `catalog.set_style`, `layer.set_visible`, `layer.set_opacity`, `layer.move`,
-`layer.remove` (modificano un livello esistente); **no** per tutti gli altri,
+`layer.remove` (modificano un livello esistente), `catalog.crossmatch` (rete
+e lungo, dal 2026-11-05); **no** per tutti gli altri,
 compresi i comandi di sola lettura (anche `coords.resolve_name`, che usa la
 rete). L'indicatore vale solo quando il comando lo chiede l'IA; quali
 comandi l'IA può chiedere è nel `32`.
@@ -595,12 +647,14 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `columns_unknown` | `columns` (list, ext) | colonne non nella tabella (`catalog.rows`) |
 | `position_beyond` | `position` (int), `count` (int) | `layer.move` oltre l'ultimo livello |
 | `distance_form`, `sky_form_incomplete`, `snap_needs_pixels`, `pixel_form_incomplete`, `box_size_required` | — | combinazioni di parametri di `measure.distance` non ammesse |
+| `crossmatch_cds_frame` | `frame` | `catalog.crossmatch` con `method = cds` e un sistema di confronto diverso da `icrs` (sprint B2) |
 
 **Altri codici del `05`:**
 
 | Codice | `reason` | Parametri | Note |
 |---|---|---|---|
 | `LAYER_UNKNOWN` | — / `in_parameter` | `layer` / `parameter`, `layer` | livello inesistente o rimosso |
+| `CROSSMATCH_SERVICE_FAILED` | `unreachable` / `service_error` | `url`, `cause` (messaggio annidato del 14/15) | `catalog.crossmatch` con il servizio CDS: propone il metodo locale, nessun ripiego automatico (sprint B2) |
 | `COMMAND_UNKNOWN` | — / `not_bound` / `in_session` | `command` / `command`, `module` / `number` (int), `command` | non registrato, esecuzione dell'interfaccia non collegata, riapertura |
 | `COMMAND_VERSION_UNSUPPORTED` | — / `in_session` | `command`, `version` (testo), `registered` (int) [+ `number` (int)] | |
 | `COMMAND_CANCELLED` | `before_start`, `discarded`, `replay` | — | |
@@ -669,6 +723,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T20 | Indicatore `confirm` nello schema | `export_schema()` | `confirm` come nell'elenco di §7; `read_only` per i comandi nuovi | test di unità |
 | T22 | Tipo `record` e forme JSON (D05-4) | comando con un `record` valido, con un campo in più, con un campo mancante senza default, con un campo `quantity` in unità non convertibile; forma JSON di ogni tipo scritta e riletta; `export_schema()` | il primo valido (default dei campi risolti); gli altri `COMMAND_PARAMETER_INVALID` con il nome del campo (`parametro.campo`); forme di §3.1 identiche dopo la rilettura; nello schema `object` con `properties`, `required`, `additionalProperties: false` | test di unità |
 | T21 | Conversazioni nella sessione | sessione con e senza il blocco `conversations`; riapertura con un provider simulato che fallisce se chiamato | blocco presente solo se chiesto, senza cartelle nei nomi dei file; riesecuzione identica nei due casi, nessuna chiamata al provider | test di unità |
+| T25 | `catalog.crossmatch` (sprint B2, D15-10) | due cataloghi VOTable (8 stelle e copie spostate di 0,5″ e 1,5″ costruite con astropy); `best`/`all`/`none` con il raggio di default; raggio in arcsec, arcmin, mas; epoche J2016/J2000; coordinate mancanti; tabella senza colonne di posizione; raggio 0, 200°, 181″ con `cds`, unità `m`; tetto abbassato; `cds` con `galactic`; sistema galattico; Riesegui e sessione salvata e riaperta; CDS XMatch simulato (risposta, eco sbagliata, porta chiusa) | coppie e righe uguali a quelle del 15 chiamato direttamente; `max_sep` 2″ scritto nel comando registrato; `xmatch_sep` in arcsec; nuovo livello `L3`, tabelle d'ingresso invariate; `EPOCH_DIFFERS` con le epoche e stesse coppie; `COORD_MISSING`; `NO_COORD_COLUMNS` (non `BODY_UNKNOWN`); `MAX_SEP_INVALID` con `range_local`/`range_cds`; `TABLE_TOO_LARGE`; `crossmatch_cds_frame`; riesecuzioni con righe identiche; CDS entro 1 mas dal locale con impronta di rete; `CROSSMATCH_SERVICE_FAILED` `service_error`/`unreachable` che propone il locale (en/it), nessun livello creato | test di unità (`tests/core/test_commands_crossmatch.py`) |
 | T23 | Origine `samp` e comandi `samp.*` (D05-5, sprint B1) | comandi con `requested_by = samp` (con e senza nome del client), forma senza `client_id` o con campi dell'IA; salvare e riaprire una sessione con un `catalog.open_file` di origine `samp`; registro con i cinque `samp.*` | forma JSON di §3.1 scritta e riletta; forme non valide rifiutate; comando `samp` rieseguito alla riapertura con la stessa origine; i `samp.*` sono `application`, `bound_by = "40"`, assenti dallo schema per l'IA (`32`) | test di unità |
 
 ## 13. Decisioni aperte
@@ -883,3 +938,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-31 | Claude Code | **Sprint 10b (ripiego dei survey HiPS sui mirror, `12` §3):** `hips.set_survey` porta nel risultato `server` e `servers` e, se il survey è servito da un mirror, l'avviso `HIPS_MIRROR_FALLBACK` (anche quando il cambio avviene mentre si leggono i limiti di colore); nuovi codici del 12 `HIPS_MIRROR_FALLBACK`, `HIPS_MIRROR_REJECTED` e `NET_TIMEOUT` `hips_servers` nel catalogo dei messaggi (en/it, D40-5, D40-6). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia (decisioni del proprietario del 2026-11-05; D05-5 decisa):** nuova origine `samp` di `requested_by` con `client_id` e `client` (§3.1); nuovi comandi `samp.connect`, `samp.disconnect`, `samp.send_table`, `samp.send_selection`, `samp.point_at` (classe `application`, esecutori del `40`, non esposti all'IA) e messaggi ricevuti come `catalog.open_file`/`catalog.select`/`view.set_center` con origine `samp` (§7); codici SAMP del 14 riportati invariati (§10.1); nuovo T23 (§12). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1b (correzioni SAMP dalla prova con TOPCAT vero):** risultato di `samp.send_table`, `samp.send_selection` e `samp.point_at` con `rejected` (destinatari che rifiutano o non rispondono, anche come avvisi `SAMP_NO_PEER`); con `table_sent = true` la selezione va solo a chi ha accettato la tabella (§7). Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): nuovo comando `catalog.crossmatch` (§7: parametri con `max_sep` default 2″ risolto alla registrazione, metodo `local`/`cds`, sistema `icrs`/`galactic`; nuovo livello catalogo con la tabella unita del 15; report `as_dict()` e `describe()` nel risultato; `CROSSMATCH_SERVICE_FAILED` senza ripiego automatico; `confirm`); §5 dipende dal 15; §10.1 `CROSSMATCH_SERVICE_FAILED` e ragione `crossmatch_cds_frame`; T25 (§12). Stato `approvato` invariato. |

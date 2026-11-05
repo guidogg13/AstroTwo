@@ -31,10 +31,18 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
 from astrotwo.core.cache import NETWORK_TIMEOUTS
-from astrotwo.core.vo_protocols import SampClient, SampHub, SampSelection, VoProtocolsError
+from astrotwo.core.vo_protocols import (
+    SAMP_TABLE_REPLY_TIMEOUT,
+    SampClient,
+    SampHub,
+    SampSelection,
+    VoProtocolsError,
+)
 
-#: Tempo massimo di una chiamata all'hub (D40-9, proposta): il tempo di connessione del 04.
+#: Tempo massimo di una chiamata all'hub e della risposta dei destinatari (D40-9 (2)): il tempo di connessione del 04.
 DEFAULT_TIMEOUT = float(NETWORK_TIMEOUTS.connect)
+#: Tempo di risposta per ``table.load.votable`` (D40-9 (7), decisa dal proprietario il 2026-11-05).
+DEFAULT_TABLE_TIMEOUT = float(SAMP_TABLE_REPLY_TIMEOUT)
 
 
 def default_received_dir() -> Path:
@@ -87,10 +95,12 @@ class SampLink(QObject):
     notice = Signal(object, bool)  # eccezione con codice e params, errore sì/no (pannello Messaggi)
 
     def __init__(self, received_dir: Path | None = None, *, timeout: float = DEFAULT_TIMEOUT,
-                 hub_factory: Callable[..., SampHub] = SampHub, parent: QObject | None = None) -> None:
+                 table_timeout: float = DEFAULT_TABLE_TIMEOUT, hub_factory: Callable[..., SampHub] = SampHub,
+                 parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.received_dir = Path(received_dir) if received_dir is not None else default_received_dir()
         self.timeout = float(timeout)
+        self.table_timeout = float(table_timeout)
         self.hub_factory = hub_factory
         self._hub: SampHub | None = None
         self._lock = threading.RLock()
@@ -126,11 +136,17 @@ class SampLink(QObject):
                                    params={"reason": "not_connected"})
         return hub
 
-    def _timed(self, operation: str, function: Callable, margin: float = 0.0):
+    def reply_timeout(self, mtype: str) -> float:
+        """Tempo di risposta di ogni destinatario per ``mtype`` (D40-9 (7)): 60 s per le tabelle, 10 s per il resto."""
+        return self.table_timeout if mtype == "table.load.votable" else self.timeout
+
+    def _timed(self, operation: str, function: Callable, margin: float = 0.0, wait: float | None = None):
         """``function()`` in un thread proprio; oltre ``timeout`` s ``SAMP_UNAVAILABLE`` (``timeout``), mai un'attesa
-        senza fine: chi chiama (thread dei comandi) torna libero e l'interfaccia non aspetta mai l'hub. ``margin``: per
-        gli invii, che aspettano già al più ``timeout`` s la risposta di ogni destinatario (14 §3 punto 7)."""
-        limit = self.timeout + margin
+        senza fine: chi chiama (thread dei comandi) torna libero e l'interfaccia non aspetta mai l'hub. ``wait`` e
+        ``margin``: per gli invii, che aspettano già al più ``wait`` s la risposta di ogni destinatario (14 §3 punto 7;
+        ``wait`` = ``reply_timeout`` del tipo di messaggio)."""
+        seconds = self.timeout if wait is None else wait
+        limit = seconds + margin
         box: dict[str, object] = {}
         done = threading.Event()
 
@@ -144,9 +160,9 @@ class SampLink(QObject):
 
         threading.Thread(target=run, name=f"astrotwo-samp-{operation}", daemon=True).start()
         if not done.wait(limit):
-            raise VoProtocolsError("SAMP_UNAVAILABLE", f"l'hub SAMP non ha risposto entro {self.timeout:g} s "
+            raise VoProtocolsError("SAMP_UNAVAILABLE", f"l'hub SAMP non ha risposto entro {seconds:g} s "
                                    f"({operation}): operazione abbandonata",
-                                   params={"reason": "timeout", "operation": operation, "seconds": self.timeout})
+                                   params={"reason": "timeout", "operation": operation, "seconds": seconds})
         if "error" in box:
             raise box["error"]  # type: ignore[misc]
         return box.get("value")
@@ -251,9 +267,10 @@ class SampLink(QObject):
     def send_table(self, layer, recipient: str | None = None) -> dict:
         hub = self._require()
         table_id = f"astrotwo-{self.launch}-{layer.id}-{next(self._tables)}"
+        wait = self.reply_timeout("table.load.votable")
         sent = self._timed("send", lambda: hub.send_table(layer.data, table_id=table_id, name=layer.name,
-                                                          recipient=recipient, timeout=self.timeout),
-                           margin=2.0)
+                                                          recipient=recipient, timeout=wait),
+                           margin=2.0, wait=wait)
         url = str(sent.params["url"])
         with self._lock:
             self._known[table_id] = self._known[url] = layer.id

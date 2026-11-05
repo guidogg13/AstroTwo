@@ -81,6 +81,7 @@ EXPOSED_COMMANDS: tuple[tuple[str, str], ...] = (
     ("catalog.describe", "catalog__describe"),
     ("catalog.rows", "catalog__rows"),
     ("layer.list", "layer__list"),
+    ("catalog.crossmatch", "catalog__crossmatch"),  # sprint B2, D15-10 (e): l'IA sceglie modalità e soglia
 )
 
 #: Nomi accettati da entrambi i provider (§3.4 punto 1).
@@ -130,6 +131,9 @@ EXTERNAL_FIELDS: dict[str, tuple[str, ...]] = {
     "catalog.rows": ("values.sort.column", *(f"values.rows[].values[].{f}" for f in _RECORD)),
     "layer.list": ("values.layers[].name", "values.layers[].columns.*", "values.layers[].sort.column",
                    "values.layers[].display.unit"),
+    # nomi dei livelli, origini, epoche, sistemi e rinomine vengono dai file o dai servizi; il testo del report li cita
+    "catalog.crossmatch": (*_CATALOG_EXTERNAL, "values.crossmatch.name_a", "values.crossmatch.name_b",
+                           "values.crossmatch.report.*", "values.crossmatch.report_text"),
 }
 
 #: Campi comuni a tutti i comandi: provenienza scritta dai moduli (origine = URL configurato o nome del file).
@@ -167,6 +171,10 @@ ASTROTWO_FIELDS: dict[str, tuple[str, ...]] = {
     "layer.list": ("values.layers[].id", "values.layers[].kind", "values.layers[].source",
                    "values.layers[].display.limits_source", "values.layers[].display.palette",
                    "values.layers[].display.stretch", "values.layers[].style.*", "values.layers[].sort.direction"),
+    "catalog.crossmatch": (*_CATALOG_ASTROTWO, "values.crossmatch.layer_a", "values.crossmatch.layer_b",
+                           "values.crossmatch.method", "values.crossmatch.mode", "values.crossmatch.frame",
+                           "values.crossmatch.max_sep.unit", "values.crossmatch.separation_column",
+                           "values.crossmatch.separation_unit"),
 }
 
 #: Codici di avvisi ed errori il cui testo è scritto solo da AstroTwo (05 e moduli, senza testo di terzi); gli altri

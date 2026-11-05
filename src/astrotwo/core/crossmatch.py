@@ -216,6 +216,17 @@ def _check_max_sep(max_sep, limit=180 * u.deg, what: str = "in locale") -> u.Qua
     return max_sep
 
 
+def _check_positions(a: CatalogTable, b: CatalogTable) -> None:
+    """Prima del corpo (sprint B2): senza colonne di posizione il corpo non è ricavabile, e il messaggio utile è
+    ``NO_COORD_COLUMNS`` (colonne da confermare), non ``BODY_UNKNOWN``."""
+    for which, table in (("A", a), ("B", b)):
+        if table.positions is None:
+            raise CrossmatchError("NO_COORD_COLUMNS", f"tabella {which} ({table.origin}): nessuna colonna di "
+                                  "posizione da UCD o confermata (modulo 13)",
+                                  params={"reason": "crossmatch_no_positions", "which": which,
+                                          "origin": table.origin})
+
+
 def _system_text(table: CatalogTable) -> str:
     pos = table.positions
     if pos is None:
@@ -318,6 +329,7 @@ def crossmatch(table_a: CatalogTable, table_b: CatalogTable, mode: str = "best",
         raise ValueError(f"mode {mode!r}: ammesse {', '.join(CROSSMATCH_MODES)}")
     max_sep = _check_max_sep(max_sep)
     a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
+    _check_positions(a, b)
     notes = _check_bodies(a, b, force_body)
     valid_a, coords_a, excl_a = _coordinates(a, "A", frame)
     valid_b, coords_b, excl_b = _coordinates(b, "B", frame)
@@ -655,6 +667,7 @@ def crossmatch_ellipses(table_a: CatalogTable, table_b: CatalogTable, ellipse_a,
         raise CrossmatchError("ERROR_ELLIPSE_INVALID", f"axes {axes!r}: obbligatorio, 'semi' (semiassi a 1σ) o "
                               "'full' (assi interi)", params={"reason": "axes", "axes": repr(axes)})
     a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
+    _check_positions(a, b)
     notes = _check_bodies(a, b, force_body)
     rows_a, coords_a, excl_a = _coordinates(a, "A", frame)
     rows_b, coords_b, excl_b = _coordinates(b, "B", frame)
@@ -758,6 +771,7 @@ def crossmatch_cds(table_a: CatalogTable, table_b: CatalogTable, mode: str = "be
         raise ValueError("il servizio CDS confronta le posizioni caricate: si caricano in ICRS (frame='icrs')")
     max_sep = _check_max_sep(max_sep, vo.XMATCH_MAX_DISTANCE, "per il servizio CDS XMatch")
     a, b = _check_table(table_a, "A"), _check_table(table_b, "B")
+    _check_positions(a, b)
     notes = _check_bodies(a, b, force_body)
     valid_a, coords_a, excl_a = _coordinates(a, "A", "icrs")
     valid_b, coords_b, excl_b = _coordinates(b, "B", "icrs")

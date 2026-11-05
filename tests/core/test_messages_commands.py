@@ -167,6 +167,8 @@ def test_validation_errors_cover_every_reason(registry, files):
         ("measure.distance", {"sky1": sky(1.0, 1.0), "sky2": sky(2.0, 2.0), "snap": True}),  # snap_needs_pixels
         ("measure.distance", {"layer": "L1", "p1": pix(1, 1)}),  # pixel_form_incomplete
         ("measure.distance", {"layer": "L1", "p1": pix(1, 1), "p2": pix(2, 2), "snap": True}),  # box_size_required
+        ("catalog.crossmatch", {"layer_a": "L2", "layer_b": "L2", "method": "cds",
+                                "frame": "galactic"}),  # crossmatch_cds_frame (sprint B2)
     ]:
         bad(name, **parameters)
     # parametri che non sono un oggetto, grandezza sotto il minimo, lista troppo lunga, indirizzo non http(s)

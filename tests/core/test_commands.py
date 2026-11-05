@@ -197,7 +197,7 @@ def test_t3_schema(registry):
 
 CONFIRM = {"image.open", "catalog.open_file", "catalog.load_region", "hips.set_survey", "view.go_to",
            "image.set_display", "catalog.set_columns", "catalog.set_style", "layer.set_visible", "layer.set_opacity",
-           "layer.move", "layer.remove"}
+           "layer.move", "layer.remove", "catalog.crossmatch"}  # catalog.crossmatch: rete e lungo (sprint B2)
 READ_ONLY_NEW = {"coords.resolve_name", "catalog.search", "catalog.describe", "catalog.rows", "layer.list"}
 
 

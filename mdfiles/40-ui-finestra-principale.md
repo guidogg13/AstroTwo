@@ -73,15 +73,24 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   `max_rows` con il default **5 000** della finestra (D41-10, decisione del proprietario del 2026-10-25, valore
   confermato il 2026-10-25; prima 100 000 di D14-5, che resta il default del comando e del 14; il troncamento si
   dichiara con `PARTIAL_CATALOG`/`ROW_LIMIT_EXCEEDED` del 13); centro e raggio sono quelli
-  della vista calcolati dal 10: `catalog.load_region`).
+  della vista calcolati dal 10: `catalog.load_region`). **Dal 2026-11-05
+  (sprint B2, D15-10):** dopo un separatore **Cross-match catalogs…** /
+  **Incrocia cataloghi…** (dialogo del `42` §3.7: `catalog.crossmatch`);
+  con meno di due cataloghi aperti una finestra lo dice ("Apri prima almeno
+  due cataloghi"). Il menu Data è quello dei dati e dei cataloghi: nessun
+  menu nuovo nella barra.
 - **Tools:** Distance (strumento di misura del `41`); Simbad pointer
   (puntatore del `41`). L'attivazione è `ui.set_tool`. **Dal 2026-11-05
   (sprint B1):** sottomenu **SAMP** (§3.12): Connect (`samp.connect`),
   Disconnect (`samp.disconnect`), Connected applications (elenco in sola
-  lettura), Send catalog (`samp.send_table`), Send selected rows
-  (`samp.send_selection`), Point at view center e Point at selected source
-  (`samp.point_at`); le voci di invio aprono l'elenco dei destinatari
-  ("All applications" o un client).
+  lettura), **Send whole table** / **Manda tutta la tabella**
+  (`samp.send_table`), **Send only the selected rows (N)** / **Manda solo
+  le righe selezionate (N)** (`samp.send_selection`, N = righe selezionate
+  della scheda in primo piano, voce spenta con N = 0; testi resi
+  distinguibili nello sprint B2 su richiesta del proprietario, prima "Send
+  catalog" e "Send selected rows"), Point at view center e Point at
+  selected source (`samp.point_at`); le voci di invio aprono l'elenco dei
+  destinatari ("All applications" o un client).
 - **Window:** mostra o nasconde i pannelli.
 - **Help:** About AstroTwo (versione SemVer, DC4, build, copyright, una riga
   di licenza e il pulsante Licenses…; su macOS la voce va nel menu dell'app).
@@ -434,21 +443,26 @@ punto 10); comandi `samp.*` e origine `samp` del `05` (D05-5). Codice: `src/astr
   bloccare l'interfaccia.
 - **Invio** (Tools → SAMP, menu contestuale della tabella del `42` §3.6 e del cielo del `41` §3.20); ogni voce apre
   l'elenco dei destinatari: **All applications** (tutti i client iscritti a quel tipo di messaggio) o un client:
-  - *Send catalog* (`samp.send_table`): catalogo della scheda in primo piano nel pannello Tabella; VOTable con
+  - *Send whole table* (`samp.send_table`): catalogo della scheda in primo piano nel pannello Tabella (anche un
+    catalogo nato da `catalog.crossmatch`, sprint B2); VOTable con
     colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13 (mai assunta; senza colonne confermate nessun
     `COOSYS`).
-  - *Send selected rows* (`samp.send_selection`): righe selezionate di quel catalogo, indici nell'ordine della
+  - *Send only the selected rows (N)* (`samp.send_selection`): righe selezionate di quel catalogo (N nel testo
+    della voce, spenta con N = 0 dal 2026-11-05), indici nell'ordine della
     tabella (non nell'ordine mostrato), da 0; se la tabella non è ancora passata da SAMP la si manda prima nello
     stesso comando (`table_sent = true`, D40-9) e la selezione parte **dopo** che i destinatari hanno risposto di
     averla caricata, solo verso quelli che l'hanno accettata. Una tabella già passata da SAMP (mandata o ricevuta)
     **non si rimanda mai** con le righe selezionate: si manda solo la selezione con il `table-id` e l'URL del primo
-    invio. Nessuna riga selezionata = selezione vuota inviata.
+    invio. Nessuna riga selezionata: la voce è spenta (sprint B2; prima partiva una selezione vuota).
   - **Identificativo delle tabelle inviate** (sprint B1b): `astrotwo-<avvio>-<livello>-<n>`, dove `<avvio>` è un
     codice esadecimale casuale di 8 cifre scelto a ogni avvio del collegamento SAMP della finestra: i numeri
     `<livello>-<n>` ripartono a ogni avvio di AstroTwo e TOPCAT rifiuta un `table-id` già ricevuto, così dopo un
     riavvio la tabella non arrivava e la selezione finiva sulla tabella del lancio precedente.
   - **Esito dei destinatari** (sprint B1b; `14` §3 punto 7): ogni invio aspetta la risposta di ogni destinatario
-    (tempo massimo di 10 s ciascuno, in parallelo). Chi rifiuta (es. TOPCAT: "Duplicate table-id", "No table with
+    (in parallelo) con un tempo massimo di **60 s per `table.load.votable`** e **10 s per gli altri tipi**
+    (D40-9 (7), decisa dal proprietario il 2026-11-05: TOPCAT risponde a caricamento finito). Per una tabella
+    l'avviso di mancata risposta è `SAMP_NO_PEER` `no_reply_table`, che dice che **la tabella potrebbe arrivare
+    comunque**. Chi rifiuta (es. TOPCAT: "Duplicate table-id", "No table with
     table-id") o non risponde finisce in `rejected` del risultato e nel pannello Messaggi come avviso
     `SAMP_NO_PEER` (`rejected`, `no_reply`) con il testo del destinatario; se nessuno accetta, il comando dà errore.
   - *Point at view center* e *Point at selected source* (`samp.point_at`): centro della vista (`ViewState`) o
@@ -475,7 +489,8 @@ punto 10); comandi `samp.*` e origine `samp` del `05` (D05-5). Codice: `src/astr
   server XML-RPC: non toccano mai Qt, emettono segnali di `SampLink` che arrivano al thread principale in coda, e il
   thread principale mette in coda i comandi. Collegamento, scollegamento, elenco e invio girano fuori dal thread
   principale (esecutori dei comandi `samp.*` nel thread di lavoro, §3.8) e ogni chiamata all'hub ha un **tempo
-  massimo di 10 s** (D40-9; le chiamate XML-RPC di `pyvo` non hanno un timeout proprio): oltre, `SAMP_UNAVAILABLE`
+  massimo di 10 s** (D40-9; 60 s più 2 di margine per l'invio di una tabella, D40-9 (7); le chiamate XML-RPC di
+  `pyvo` non hanno un timeout proprio): oltre, `SAMP_UNAVAILABLE`
   (`timeout`) e l'operazione si abbandona (un collegamento arrivato in ritardo si chiude). L'interfaccia non
   aspetta mai l'hub.
 - **IA:** l'assistente non usa SAMP (nessuno strumento nel `32`, decisione (f) del 2026-11-05).
@@ -574,6 +589,7 @@ Nomi proposti, descrizione in parole. File Python
 | Uscita con comandi in corso | conferma; annullamento e attesa del ritorno entro i timeout di rete | — |
 | Sessione fermata dal `05` (file cambiato o mancante) | finestra modale con il messaggio del `05`; stato fino all'ultimo comando rieseguito | `SESSION_FILE_CHANGED`, `SESSION_FILE_MISSING` |
 | File da aprire illeggibile | finestra modale con il messaggio del modulo | codice del modulo (es. dell'11) |
+| Incrocio chiesto dall'utente non eseguito (sprint B2) | finestra modale "The cross-match was not run" con il messaggio del modulo o del `05`; nessun livello nuovo; corpi diversi: offerta di forzatura come per gli altri comandi con `force_body` | codice del 15 o del `05` (es. `MAX_SEP_INVALID`, `NO_COORD_COLUMNS`, `CROSSMATCH_SERVICE_FAILED`) |
 | Rete assente | errore del modulo nel pannello Messaggi; l'interfaccia resta usabile | `NET_TIMEOUT` (del modulo) |
 | Cache non disponibile | avviso nel pannello Messaggi; si continua senza cache | `CACHE_UNAVAILABLE` |
 | File di traduzione mancante | interfaccia in inglese, avviso | `UI_TRANSLATION_MISSING` |
@@ -648,6 +664,8 @@ simulati, in `tests/ui/`.
 | T11 | Vai a | nome noto (SIMBAD simulato), coordinate sessagesimali, testo non valido | vista centrata con fonte dichiarata; errore del 10 per il testo non valido | ispezione |
 | T12 | Avvio (`perf`) | avvio senza rete sul Mac di riferimento | finestra pronta in ≤ 3 s | misura (marcatore `perf`, D41-4) |
 | T13 | Aspetto | sistema in modalità scura e chiara (simulata); poi modalità notte | tema che segue il sistema; in modalità notte nessun colore dei widget con componente verde o blu sopra una soglia bassa dichiarata nel test; comando `ui.set_appearance` di classe `application` | lettura della tavolozza dei widget |
+| T22 | Incrocio per posizione (sprint B2, D15-10) | Data → Cross-match catalogs… con meno di due cataloghi; due cataloghi VOTable aperti: dialogo con i default, OK; menu contestuale di una scheda ("Cross-match with another catalog…") con epoche diverse, `none`, arcmin, poi CDS (sistema bloccato su ICRS); raggio 0 e 4 arcmin con CDS; interfaccia in italiano | finestra "apri almeno due cataloghi"; `catalog.crossmatch` in cronologia con i parametri del dialogo e origine `menu`/`mouse`; nuovo catalogo nel cielo e nel pannello Tabella con `xmatch_sep`; finestra del report subito (e dal menu contestuale "Show cross-match report"); Riesegui con righe identiche; `EPOCH_DIFFERS` nel dialogo, nel pannello Messaggi e nel report; finestra "The cross-match was not run" con `MAX_SEP_INVALID` (`range_local`, `range_cds`), nessun livello nuovo; testi italiani | test in `tests/ui/test_crossmatch_ui.py` |
+| T21c | Rifiniture SAMP (sprint B2) | tempo di risposta per tipo; avviso di mancata risposta per tabella e selezione; Tools → SAMP e menu contestuale con 0 e 3 righe selezionate; catalogo incrociato mandato a un client simulato | 60 s per `table.load.votable`, 10 s (o il tempo della finestra) per gli altri, anche quando la selezione manda prima la tabella; `no_reply_table` con "may still arrive"/"potrebbe arrivare comunque" in en/it; voci «Send whole table», «Send only the selected rows (N)» con N giusto, spente con N = 0; VOTable ricevuto con `xmatch_sep` in arcsec | test in `tests/ui/test_samp.py` |
 | T21b | SAMP con un destinatario come TOPCAT (§3.12, sprint B1b, 2026-11-05) | hub con identificativo `hub` (come JSAMP) e client simulato che si comporta come TOPCAT 4.10-8 (carica in differita e risponde a caricamento finito, rifiuta `table-id` già ricevuti e selezioni per tabelle che non ha); due finestre una dopo l'altra (due avvii); catalogo mandato, poi righe selezionate con clic, ordinamento e conferma delle colonne, poi "Send selected rows" a tutti; righe selezionate di una tabella mai mandata; client morto ancora registrato | «SAMP: 1 apps» con hub e un programma, hub nel suggerimento e non tra i destinatari; una sola tabella per avvio nel client, selezione applicata alla tabella giusta con le righe giuste (`table_sent` falso dopo un invio); `table-id` diversi tra i due avvii; client morto in `rejected` con avviso, gli altri raggiunti; un solo avviso di iscrizioni dell'hub al collegamento | test con hub e client simulati, più prova con TOPCAT vero |
 | T21 | SAMP (§3.12, sprint B1) | hub e client simulati di `pyvo.samp` nella cartella home temporanea dei test (porta casuale, mai il `~/.samp` vero): Connect con un hub già attivo e senza hub; invio di catalogo, righe selezionate, centro della vista e sorgente selezionata a tutti e a un client; ricezione dei tre tipi; tipo non supportato; tabella sconosciuta; uscita del client e spegnimento dell'hub esterno; Disconnect e chiusura della finestra con hub proprio; hub che non risponde | hub esterno usato (nessun hub proprio) o hub proprio con profilo web spento; contenuti ricevuti dal client uguali a quelli della tabella (colonne, unità, UCD, epoca del `COOSYS`), righe e gradi ICRS ricalcolati con astropy; nuovo catalogo, selezione e centro della vista con comandi in cronologia di origine `samp` e il nome del client; tipo non supportato rifiutato senza azione; `SAMP_TABLE_UNKNOWN`; elenco e stato aggiornati; file di blocco rimosso alla chiusura; con l'hub muto `SAMP_UNAVAILABLE` (`timeout`) e thread principale sempre libero (sonda di latenza) | test con hub e client simulati |
 
@@ -779,13 +797,14 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `SAMP_TABLE_FETCH_FAILED`, sotto-voci `timeout` e `hub_shutdown`).
   Applicata in §3.3, §3.5, §3.10, §3.12, §10.1, §12 (T21). Le immagini
   restano fuori (D14-2).
-- **D40-9 — Scelte minori di SAMP: PROPOSTE da Claude Code il 2026-11-05;
-  (1)–(5) (lettere a–e) CONFERMATE dal proprietario il 2026-11-05 (sprint
-  B1b); (6) ancora da confermare (Gruppo 3). Nello stesso sprint B1b il
-  formato di (5) è stato esteso con un segmento di avvio,
-  `astrotwo-<avvio>-<livello>-<n>` (§3.12), perché senza i numeri si
-  ripetevano tra un avvio e l'altro e TOPCAT scartava la tabella: questa
-  estensione è da confermare.** (1) posizione del menu: sottomenu **Tools → SAMP** (Tools raccoglie
+- **D40-9 — Scelte minori di SAMP: DECISA (chiusa) il 2026-11-05.**
+  Proposte da Claude Code il 2026-11-05; (1)–(5) (lettere a–e) confermate
+  dal proprietario nello sprint B1b; **(6) e l'estensione di (5)**
+  (`astrotwo-<avvio>-<livello>-<n>`, §3.12) **confermate dal proprietario
+  nello sprint B2**; **(7) decisa dal proprietario nello sprint B2: 60 s
+  di risposta per `table.load.votable`, 10 s per gli altri tipi; l'avviso
+  di mancata risposta per una tabella dice che può arrivare comunque**
+  (`SAMP_NO_PEER` `no_reply_table`). (1) posizione del menu: sottomenu **Tools → SAMP** (Tools raccoglie
   già gli strumenti che lavorano con altri servizi; nessun menu nuovo nella
   barra); (2) tempo massimo di ogni chiamata all'hub **10 s**, lo stesso
   del tempo di connessione del `04` (un hub locale risponde in
@@ -800,8 +819,9 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   tempo massimo di risposta di 10 s per destinatario vale anche per
   `table.load.votable`; TOPCAT risponde a caricamento finito, quindi con una
   tabella molto grande la risposta può arrivare oltre i 10 s: AstroTwo
-  segnala `no_reply` anche se la tabella poi arriva (da verificare con
-  tabelle grandi; eventuale tempo più lungo per le tabelle da decidere).
+  segnala `no_reply` anche se la tabella poi arriva. **Esito (decisione del
+  proprietario dello sprint B2):** 60 s per le tabelle, avviso
+  `no_reply_table`.
 - **D40-10 — Pulizia delle tabelle SAMP ricevute: APERTA il 2026-11-05 dal
   proprietario (voce futura, Gruppo 3).** Le copie dei VOTable ricevuti via
   SAMP si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/`
@@ -842,3 +862,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-25 | Claude Code | D41-10: 5 000 righe di default confermate dal proprietario (§3.3). §3.3: About ridotto e nuova voce Licenses… (finestra specificata nel `60` §3.9, sprint 60a). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05): nuovo §3.12 (collegamento, hub, elenco dei client, invio, ricezione come comandi con origine `samp`, thread e tempo massimo, chiusura); sottomenu Tools → SAMP (§3.3), stato nella barra (§3.5), preferenza "Connetti SAMP all'avvio" (§3.10); codici SAMP in §10.1; T21 (§12); **D40-8** decisa, **D40-9** (scelte minori) proposta e da confermare. Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1b — correzioni SAMP dalla prova del proprietario con TOPCAT vero:** §3.5 (N conta solo i programmi, hub a parte nel suggerimento), §3.12 (hub fuori dall'elenco e dai destinatari; tabella già passata da SAMP mai rimandata con la selezione, selezione dopo la risposta di caricamento e solo a chi ha accettato; identificativo `astrotwo-<avvio>-<livello>-<n>`; esito dei destinatari con `rejected` e avvisi `SAMP_NO_PEER`), §10.1, nuovo T21b; D40-9 (1)–(5) confermate dal proprietario, (6) e l'estensione del formato di (5) da confermare. Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B2 — incrocio nell'interfaccia e rifiniture SAMP** (decisioni del proprietario del 2026-11-05): §3.3 Data → Cross-match catalogs… (D15-10 del `15`, dialogo nel `42` §3.7) e voci SAMP distinguibili («Send whole table», «Send only the selected rows (N)», spenta con N = 0); §3.12 tempi di risposta 60 s per le tabelle e 10 s per il resto, avviso `no_reply_table`, catalogo incrociato mandabile; **D40-9 chiusa** ((6) e l'estensione di (5) confermate, (7) decisa); nuovi T22 e T21c (§12). Stato `approvato` invariato. |

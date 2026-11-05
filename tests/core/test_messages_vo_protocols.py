@@ -358,9 +358,11 @@ def test_services_p4_to_p6(service, cache, catalog, tmp_path, monkeypatch, simba
         mute = pyvo_samp.SAMPIntegratedClient(name="muto")  # risponde mai → no_reply
         mute.connect()
         mute.bind_receive_call("coord.pointAt.sky", lambda *args: None)
+        mute.bind_receive_call("table.load.votable", lambda *args: None)  # sprint B2: no_reply_table
         try:
             seen.error(samp.send_selection, SampSelection("nessuna", "file:///x.xml", (0,)), topcat.id, timeout=1)
             seen.error(samp.send_point, SkyCoord(1 * u.deg, 2 * u.deg), mute.get_public_id(), timeout=1)
+            seen.error(samp.send_table, catalog, table_id="t2", recipient=mute.get_public_id(), timeout=1)
         finally:
             topcat.disconnect()
             mute.disconnect()

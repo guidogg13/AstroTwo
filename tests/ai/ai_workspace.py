@@ -90,6 +90,8 @@ def exposed_calls(session, service):
         ("catalog__describe", {"layer": "L2"}),
         ("catalog__rows", {"layer": "L2"}),
         ("layer__list", {}),
+        ("catalog__crossmatch", {"layer_a": "L2", "layer_b": "L2", "mode": "all",  # sprint B2
+                                 "max_sep": {"value": 1.0, "unit": "arcsec"}}),
     ]
     calls += [(name.replace(".", "__"), params) for name, params in calc_args.items()]
     return [(tool, json.dumps(args)) for tool, args in calls]

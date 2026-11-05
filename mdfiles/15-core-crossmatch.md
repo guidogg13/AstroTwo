@@ -33,6 +33,13 @@ accettate):**
   l'epoca delle posizioni di ciascuna tabella (o "non dichiarata") e, se
   entrambe sono dichiarate e diverse, l'avviso `EPOCH_DIFFERS`; chi vuole
   propagare usa prima `propagate` del 13.
+- **Ordine dei controlli (precisazione dello sprint B2, 2026-11-05):** prima
+  le colonne di posizione (`NO_COORD_COLUMNS`), poi il corpo: il corpo di
+  una tabella senza posizioni non è ricavabile e il messaggio utile per
+  l'utente è "colonne da confermare", non `BODY_UNKNOWN` (caso tipico: un
+  CSV aperto senza aver ancora confermato le colonne). Vale per
+  `crossmatch`, `crossmatch_ellipses` e `crossmatch_cds`; il resto non
+  cambia.
 - **Coordinate mancanti** (valori mascherati o non finiti in una delle due
   colonne): righe **escluse** dall'incrocio e **contate a parte** nel report
   (avviso `COORD_MISSING` con i conteggi per tabella); in modalità `none`
@@ -166,6 +173,20 @@ accettate):**
   **perdono la parola `meta.main`** dall'UCD (scritto nel report), così le
   posizioni del risultato sono univoche.
 
+- **Nell'interfaccia e per l'IA (sprint B2, D15-10, decisioni del
+  proprietario del 2026-11-05):** l'incrocio **per posizione** (locale e
+  CDS XMatch) è il comando `catalog.crossmatch` del `05`, dal dialogo
+  "Cross-match catalogs…" del `42` §3.7 e dallo strumento
+  `catalog__crossmatch` del `32`. Il comando chiama `crossmatch` o
+  `crossmatch_cds` e poi `CrossMatchResult.joined()` con i default (tutte
+  le colonne, suffissi `_tab1`/`_tab2`, tabella principale A) e crea un
+  nuovo livello catalogo; il report (`as_dict()` e `describe()`) è salvato
+  nel risultato del comando. **Raggio proposto 2″** nel comando (default
+  del `05`, risolto alla registrazione e quindi sempre scritto nel comando
+  registrato e nel report): il motore resta **senza default** (§9). La
+  correlazione per campo (P3) e con ellissi (P4) e la scelta delle colonne
+  da tenere restano nel motore, non ancora nell'interfaccia (`42` §3.7).
+
 ## 4. Cosa NON fa
 
 - Non scarica i cataloghi: il download è di `14-core-protocolli-vo.md`.
@@ -182,7 +203,9 @@ accettate):**
 - **Dipende da:** `10-core-coordinate-wcs.md` (separazioni angolari, frame),
   `13-core-cataloghi.md` (tabelle in ingresso), `14-core-protocolli-vo.md`
   (servizio CDS, registrazione dei parametri).
-- **Usato da:** `42-ui-pannello-cataloghi.md`, `50-avanzate-transienti.md`,
+- **Usato da:** `05-comandi-sessione.md` (`catalog.crossmatch`, sprint B2),
+  `42-ui-pannello-cataloghi.md`, `32-ia-registro-strumenti.md` (strumento
+  `catalog__crossmatch`), `50-avanzate-transienti.md`,
   `20-analisi-fotometria.md` (associazione delle sorgenti).
 
 ## 6. Input e output
@@ -370,6 +393,15 @@ aggiunge il prefisso e resta nel campo `text`). Gli **avvisi dei moduli sotto** 
 L'IA sceglie la modalità e la soglia e spiega il risultato; non produce le
 coppie né le separazioni.
 
+**Dal 2026-11-05 (sprint B2, D15-10 (e)):** `crossmatch` e
+`crossmatch_cds` sono esposti come **un solo strumento**,
+`catalog__crossmatch` del `32` (comando `catalog.crossmatch` del `05`,
+parametro `method` = `local` o `cds`), con conferma dell'utente (crea un
+livello, può usare la rete); `describe_match_report` è il campo
+`report_text` del risultato (testo di `describe()`). I numeri del risultato
+(coppie, separazioni, conteggi) sono verificabili dal `34` come quelli di
+ogni comando.
+
 ## 12. Test di accettazione
 
 | # | Descrizione | Passi | Atteso | Verifica |
@@ -462,6 +494,26 @@ coppie né le separazioni.
   il pari merito si giudica su quel valore, dichiarato nel report.
   Applicata in §3, §12 (T21).
 
+- **D15-10 — Incrocio per posizione nell'interfaccia e per l'IA: DECISA il
+  2026-11-05 (decisioni del proprietario, sprint B2).** (a) comando nuovo
+  `catalog.crossmatch` nel `05`: due cataloghi caricati, modalità
+  `best`/`all`/`none`, `max_sep` con unità (default **2 arcsec**, unità
+  scelta dall'utente), metodo locale (default) o CDS XMatch, sistema di
+  confronto ICRS di default, rieseguibile dalla cronologia; (b) dialogo
+  "Incrocia cataloghi…" nel menu dei cataloghi e nel menu contestuale della
+  tabella, con tutte le regole del 15 (nessuna propagazione automatica,
+  `EPOCH_DIFFERS`, `COORD_MISSING`, `BODY_MISMATCH`, `MAX_SEP_INVALID`,
+  `TABLE_TOO_LARGE`) e messaggi en/it; (c) risultato = nuovo catalogo nel
+  cielo e nel pannello Tabella (`best`/`all`: tabella unita con
+  `xmatch_sep` in arcsec e i suffissi; `none`: le righe di A senza
+  corrispondenza), report visibile e salvato nel risultato, catalogo
+  mandabile via SAMP; (d) CDS XMatch che non risponde: errore chiaro che
+  suggerisce il metodo locale, **nessun ripiego automatico**; (e) strumento
+  per l'IA se il registro lo permette con lavoro contenuto (sì:
+  `catalog__crossmatch`). Il motore non cambia, salvo l'ordine dei
+  controlli di §3. Applicata in §3, §5, §11; dettagli nel `05` §7, `40`
+  §3.3, `42` §3.7, `32` §3.2.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -480,3 +532,4 @@ coppie né le separazioni.
 | 2026-10-11 | Claude Code | **P5 scritta — modulo 15 completo tranne i pezzi fermi D15-8 e D15-9** (`crossmatch_cds`, rete con `cds_xmatch` del 14; test T21 con un XMatch simulato e T4 di rete, locale contro CDS entro 1 mas in `all`, `best`, `none`): verifiche dei limiti (100 MB, 180″), controllo dell'eco di RA e Dec per ogni indice, `none` da `all`. Nuova decisione aperta **D15-9** (`best` con il servizio, Gruppo 3). Stato `approvato` invariato. |
 | 2026-10-11 | Claude Code | **D15-8 e D15-9 decise e applicate** (decisioni del proprietario del 2026-10-11, autorizzazione esplicita a modificare il file approvato): nella correlazione per campo il corpo si controlla solo se entrambe le tabelle ne hanno uno (avviso `BODY_NOT_CHECKED`); con il servizio CDS sempre `selection=all`, `best` in locale con la nostra regola dei pari merito. T10 e T21 estesi. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso; il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. Nessun comportamento scientifico cambia. |
+| 2026-11-05 | Claude Code | **Sprint B2 — incrocio nell'interfaccia** (decisioni del proprietario del 2026-11-05, **D15-10** decisa): §3 (uso dal comando `catalog.crossmatch` del `05`, dal dialogo del `42` e dallo strumento del `32`; raggio proposto 2″ solo nel comando, motore senza default; per campo ed ellissi non ancora nell'interfaccia) e **ordine dei controlli** (colonne di posizione prima del corpo: `NO_COORD_COLUMNS` invece di `BODY_UNKNOWN` per una tabella senza posizioni, codice `_check_positions`); §5, §11 (un solo strumento `catalog__crossmatch`, `report_text` = `describe()`), §13. Stato `approvato` invariato. |

@@ -1965,6 +1965,9 @@ class SampSendResult:
 
 #: Tempo massimo di risposta di ogni destinatario (s), lo stesso del ``40`` (D40-9 (2)).
 SAMP_REPLY_TIMEOUT = 10.0
+#: Tempo di risposta per ``table.load.votable`` (D40-9 (7), decisa dal proprietario il 2026-11-05): TOPCAT risponde a
+#: caricamento finito, con tabelle grandi oltre i 10 s degli altri tipi.
+SAMP_TABLE_REPLY_TIMEOUT = 60.0
 
 
 @dataclass(frozen=True)
@@ -2153,6 +2156,11 @@ class SampHub:
         if not accepted:
             first = failures[0]
             name = self._name_or_id(first.id)
+            if first.reason == "no_reply" and mtype == "table.load.votable":  # D40-9 (7): può arrivare comunque
+                raise VoProtocolsError("SAMP_NO_PEER", f"{name} non ha risposto a {mtype} entro {timeout:g} s: la "
+                                       "tabella potrebbe arrivare comunque",
+                                       params={"reason": "no_reply_table", "recipient": name, "mtype": mtype,
+                                               "seconds": float(timeout)})
             if first.reason == "no_reply":
                 raise VoProtocolsError("SAMP_NO_PEER", f"{name} non ha risposto a {mtype} entro {timeout:g} s",
                                        params={"reason": "no_reply", "recipient": name, "mtype": mtype,
@@ -2208,7 +2216,7 @@ class SampHub:
         return None if name is None else str(name)
 
     def send_table(self, table: CatalogTable, *, table_id: str, name: str | None = None,
-                   recipient: str | None = None, timeout: float = SAMP_REPLY_TIMEOUT) -> SampSendResult:
+                   recipient: str | None = None, timeout: float = SAMP_TABLE_REPLY_TIMEOUT) -> SampSendResult:
         """``table.load.votable``: la tabella si scrive in un VOTable temporaneo con provenienza (P1)."""
         self._require()
         if self._tmpdir is None:
