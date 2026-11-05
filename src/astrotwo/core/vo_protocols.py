@@ -26,7 +26,7 @@ import tempfile
 import time
 import warnings
 from dataclasses import dataclass, field
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -66,6 +66,7 @@ __all__ = [
     "AdqlCheck",
     "SAMP_MTYPES",
     "SampClient",
+    "SampFailure",
     "SampHub",
     "SampSelection",
     "SampSendResult",
@@ -1943,12 +1944,27 @@ SAMP_HUB_EVENTS: tuple[str, ...] = ("samp.hub.event.register", "samp.hub.event.u
 
 
 @dataclass(frozen=True)
+class SampFailure:
+    """Destinatario che non ha accettato un messaggio (sprint B1b): ``rejected`` (risposta ``samp.error`` o errore
+    dell'hub) o ``no_reply`` (nessuna risposta entro il tempo massimo); ``detail`` è testo esterno."""
+
+    id: str
+    reason: str
+    detail: str
+
+
+@dataclass(frozen=True)
 class SampSendResult:
-    """Esito di un invio: tipo di messaggio, destinatari raggiunti e parametri inviati."""
+    """Esito di un invio: tipo di messaggio, destinatari che hanno accettato, parametri inviati, destinatari falliti."""
 
     mtype: str
     recipients: tuple[str, ...]
     params: Mapping[str, object] = field(default_factory=dict)
+    failures: tuple[SampFailure, ...] = ()
+
+
+#: Tempo massimo di risposta di ogni destinatario (s), lo stesso del ``40`` (D40-9 (2)).
+SAMP_REPLY_TIMEOUT = 10.0
 
 
 @dataclass(frozen=True)
@@ -1976,17 +1992,34 @@ def _restricted_client_class():
     chiede): AstroTwo riceve solo i tre tipi di ``SAMP_MTYPES`` (D14-9 punto 10) più ``samp.app.ping`` (risposta
     vuota, nessun dato). Il collegamento è quello di ``SAMPIntegratedClient.connect`` con una sola differenza: la voce si
     toglie (``unbind_receive_call`` pubblica, senza dichiarazione) **prima** della registrazione all'hub, così non c'è
-    mai un istante in cui AstroTwo è iscritto."""
+    mai un istante in cui AstroTwo è iscritto.
+
+    Sprint B1b: anche i gestori di ``bindings`` (``(mtype, funzione, chiamata sì/no)``) si legano **prima** della
+    registrazione, senza dichiarazione: ``register()`` dichiara iscrizioni e metadati una volta sola (prima ogni legame
+    ridichiarava l'elenco: 12 avvisi ``samp.hub.event.subscriptions`` a tutti i client a ogni collegamento)."""
     from pyvo.samp import SAMPIntegratedClient
     from pyvo.samp.client import SAMPClient
 
     class RestrictedSampClient(SAMPIntegratedClient):
-        def connect(self, hub=None, hub_params=None, pool_size=20):
+        def connect(self, hub=None, hub_params=None, pool_size=20, bindings=()):
             self.hub.connect(hub, hub_params, pool_size)
             self.client = SAMPClient(self.hub, **self.client_arguments)
             self.client.unbind_receive_call("client.env.get", declare=False)
+            for mtype, function, call in bindings:
+                if call:
+                    self.client.bind_receive_call(mtype, function, declare=False)
+                else:
+                    self.client.bind_receive_notification(mtype, function, declare=False)
             self.client.start()
             self.client.register()
+
+        @property
+        def hub_id(self) -> str | None:
+            """Identificativo che l'hub dà a sé stesso alla registrazione (``samp.hub-id``): ``cli#hub`` per l'hub di
+            ``pyvo``, ``hub`` per quello di TOPCAT (JSAMP). ``pyvo`` lo conserva senza un metodo pubblico."""
+            client = getattr(self, "client", None)
+            hub_id = getattr(client, "_hub_id", None)
+            return None if hub_id is None else str(hub_id)
 
     return RestrictedSampClient
 
@@ -2023,26 +2056,26 @@ class SampHub:
             return self
         client = _restricted_client_class()(name=self.name, description=f"AstroTwo {astrotwo.__version__}",
                                             metadata={"samp.name": self.name})
+        bindings = []  # legati prima della registrazione: una sola dichiarazione delle iscrizioni (sprint B1b)
+        for mtype, function in (("table.load.votable", self._receive_table),
+                                ("table.select.rowList", self._receive_selection),
+                                ("coord.pointAt.sky", self._receive_point)):
+            bindings += [(mtype, function, False), (mtype, function, True)]
+        for mtype in SAMP_HUB_EVENTS:  # solo elenco dei client e stato del collegamento (sprint B1)
+            bindings.append((mtype, self._receive_hub_event, False))
         try:
-            client.connect()
+            client.connect(bindings=bindings)
         except (SAMPHubError, OSError):
             try:
                 hub = SAMPHubServer(web_profile=self.web_profile, label=self.name)
                 hub.start(wait=False)
-                client.connect()
+                client.connect(bindings=bindings)
             except Exception as exc:
                 raise VoProtocolsError("SAMP_UNAVAILABLE", f"nessun hub SAMP attivo e avvio del proprio non riuscito "
                                        f"({exc}); le altre funzioni VO restano disponibili",
                                        params={"reason": "no_hub", "detail": str(exc)}) from exc
             self._hub, self.own_hub = hub, True
         self._client = client
-        for mtype, function in (("table.load.votable", self._receive_table),
-                                ("table.select.rowList", self._receive_selection),
-                                ("coord.pointAt.sky", self._receive_point)):
-            client.bind_receive_notification(mtype, function)
-            client.bind_receive_call(mtype, function)
-        for mtype in SAMP_HUB_EVENTS:  # solo elenco dei client e stato del collegamento (sprint B1)
-            client.bind_receive_notification(mtype, self._receive_hub_event)
         return self
 
     def disconnect(self) -> None:
@@ -2068,12 +2101,19 @@ class SampHub:
                                    params={"reason": "not_connected"})
         return self._client
 
+    @property
+    def hub_id(self) -> str | None:
+        """Identificativo dell'hub (``samp.hub-id`` della registrazione), ``None`` se non collegato."""
+        return None if self._client is None else self._client.hub_id
+
     def clients(self) -> tuple[SampClient, ...]:
-        """Programmi collegati (escluso AstroTwo e l'hub)."""
+        """Programmi collegati, esclusi AstroTwo e l'hub (riconosciuto da ``samp.hub-id``, sprint B1b: l'hub di TOPCAT
+        si chiama ``hub``, quello di ``pyvo`` ``cli#hub``)."""
         client = self._require()
+        hub_id = client.hub_id
         out = []
         for cid in client.get_registered_clients():
-            if cid == "cli#hub":
+            if cid == hub_id:
                 continue
             name = client.get_metadata(cid).get("samp.name")
             out.append(SampClient(id=cid, name=None if name is None else str(name)))
@@ -2081,28 +2121,86 @@ class SampHub:
 
     # -- invio ----------------------------------------------------------------
 
-    def send_message(self, mtype: str, params: dict, recipient: str | None = None) -> SampSendResult:
-        """Invia uno dei tipi supportati; altri tipi → ``SAMP_UNSUPPORTED_TYPE``; nessun destinatario → ``SAMP_NO_PEER``."""
+    def send_message(self, mtype: str, params: dict, recipient: str | None = None, *,
+                     among: Iterable[str] | None = None, timeout: float = SAMP_REPLY_TIMEOUT) -> SampSendResult:
+        """Invia uno dei tipi supportati con **chiamata sincrona** a ogni destinatario, in parallelo (sprint B1b).
+
+        Destinatari: ``recipient``, oppure tutti gli iscritti al tipo (escluso AstroTwo), ristretti ad ``among`` se dato.
+        Ogni destinatario ha ``timeout`` secondi per rispondere; ``samp.ok`` (o ``samp.warning``) → accettato,
+        ``samp.error`` o errore dell'hub → ``SampFailure`` ``rejected``, nessuna risposta → ``no_reply``. Nessun
+        accettato → ``SAMP_NO_PEER`` (``rejected``/``no_reply`` del primo fallito). Altri tipi →
+        ``SAMP_UNSUPPORTED_TYPE``; nessun destinatario → ``SAMP_NO_PEER`` (``recipient``/``none``)."""
         if mtype not in SAMP_MTYPES:
             raise VoProtocolsError("SAMP_UNSUPPORTED_TYPE",
                                    f"tipo {mtype!r} non supportato; supportati: {', '.join(SAMP_MTYPES)}",
                                    params={"reason": "type", "mtype": str(mtype), "supported": list(SAMP_MTYPES)})
         client = self._require()
-        subscribed = set(client.get_subscribed_clients(mtype)) - {client.get_public_id()}
+        subscribed = set(client.get_subscribed_clients(mtype)) - {client.get_public_id(), client.hub_id}
         if recipient is not None:
             if recipient not in subscribed:
                 raise VoProtocolsError("SAMP_NO_PEER", f"{recipient!r} non è collegato o non accetta {mtype}",
                                        params={"reason": "recipient", "recipient": recipient, "mtype": mtype})
             targets = [recipient]
         else:
-            targets = sorted(subscribed)
+            targets = sorted(subscribed if among is None else subscribed & set(among))
         if not targets:
             raise VoProtocolsError("SAMP_NO_PEER", f"nessun programma collegato accetta {mtype}",
                                    params={"reason": "none", "mtype": mtype})
         sent = {k: v for k, v in params.items()}
-        for target in targets:
-            client.notify(target, {"samp.mtype": mtype, "samp.params": dict(sent)})
-        return SampSendResult(mtype=mtype, recipients=tuple(targets), params=sent)
+        outcomes = self._call_all(client, targets, {"samp.mtype": mtype, "samp.params": dict(sent)}, timeout)
+        accepted = tuple(t for t in targets if outcomes[t] is None)
+        failures = tuple(outcomes[t] for t in targets if outcomes[t] is not None)
+        if not accepted:
+            first = failures[0]
+            name = self._name_or_id(first.id)
+            if first.reason == "no_reply":
+                raise VoProtocolsError("SAMP_NO_PEER", f"{name} non ha risposto a {mtype} entro {timeout:g} s",
+                                       params={"reason": "no_reply", "recipient": name, "mtype": mtype,
+                                               "seconds": float(timeout)})
+            raise VoProtocolsError("SAMP_NO_PEER", f"{name} non ha accettato {mtype}: {first.detail}",
+                                   params={"reason": "rejected", "recipient": name, "mtype": mtype,
+                                           "detail": first.detail})
+        return SampSendResult(mtype=mtype, recipients=accepted, params=sent, failures=failures)
+
+    def _name_or_id(self, client_id: str) -> str:
+        try:
+            return self.client_name(client_id) or client_id
+        except Exception:  # noqa: BLE001 - client già uscito: resta l'identificativo
+            return client_id
+
+    @staticmethod
+    def _call_all(client, targets: list[str], message: dict, timeout: float) -> dict[str, SampFailure | None]:
+        """``callAndWait`` verso ogni destinatario in un thread proprio; oltre ``timeout`` (+1 s di margine per gli hub
+        che non rispettano il proprio) → ``no_reply``. ``None`` = accettato."""
+        import math
+        from concurrent.futures import ThreadPoolExecutor, wait
+
+        seconds = str(max(1, math.ceil(timeout)))
+
+        def one(target: str) -> SampFailure | None:
+            start = time.monotonic()
+            try:
+                response = client.call_and_wait(target, message, seconds)
+            except Exception as exc:  # noqa: BLE001 - errore dell'hub (client morto, tempo scaduto): esito del singolo
+                if time.monotonic() - start >= timeout:
+                    return SampFailure(target, "no_reply", str(exc))
+                return SampFailure(target, "rejected", str(exc))
+            status = str((response or {}).get("samp.status", ""))
+            if status in ("samp.ok", "samp.warning"):
+                return None
+            error = (response or {}).get("samp.error") or {}
+            detail = error.get("samp.errortxt") if isinstance(error, Mapping) else None
+            return SampFailure(target, "rejected", str(detail or status or "risposta vuota"))
+
+        pool = ThreadPoolExecutor(max_workers=len(targets), thread_name_prefix="astrotwo-samp-call")
+        try:
+            futures = {target: pool.submit(one, target) for target in targets}
+            wait(futures.values(), timeout=timeout + 1.0)
+            return {target: (future.result() if future.done() else
+                             SampFailure(target, "no_reply", f"nessuna risposta entro {timeout:g} s"))
+                    for target, future in futures.items()}
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     def client_name(self, client_id: str) -> str | None:
         """Nome dichiarato (``samp.name``) di un client, ``None`` se non lo dichiara."""
@@ -2110,7 +2208,7 @@ class SampHub:
         return None if name is None else str(name)
 
     def send_table(self, table: CatalogTable, *, table_id: str, name: str | None = None,
-                   recipient: str | None = None) -> SampSendResult:
+                   recipient: str | None = None, timeout: float = SAMP_REPLY_TIMEOUT) -> SampSendResult:
         """``table.load.votable``: la tabella si scrive in un VOTable temporaneo con provenienza (P1)."""
         self._require()
         if self._tmpdir is None:
@@ -2118,18 +2216,20 @@ class SampHub:
         path = export_table(table, Path(self._tmpdir.name) / f"{len(os.listdir(self._tmpdir.name))}.xml",
                             "votable").path
         params = {"url": path.resolve().as_uri(), "table-id": table_id, "name": name or table_id}
-        return self.send_message("table.load.votable", params, recipient)
+        return self.send_message("table.load.votable", params, recipient, timeout=timeout)
 
-    def send_selection(self, selection: SampSelection, recipient: str | None = None) -> SampSendResult:
+    def send_selection(self, selection: SampSelection, recipient: str | None = None, *,
+                       among: Iterable[str] | None = None, timeout: float = SAMP_REPLY_TIMEOUT) -> SampSendResult:
         """``table.select.rowList``: righe con indice da 0, come chiede il messaggio SAMP."""
         rows = [str(int(k)) for k in selection.rows]
         params = {"table-id": selection.table_id, "url": selection.url, "row-list": rows}
-        return self.send_message("table.select.rowList", params, recipient)
+        return self.send_message("table.select.rowList", params, recipient, among=among, timeout=timeout)
 
-    def send_point(self, center, recipient: str | None = None) -> SampSendResult:
+    def send_point(self, center, recipient: str | None = None, *,
+                   timeout: float = SAMP_REPLY_TIMEOUT) -> SampSendResult:
         """``coord.pointAt.sky``: posizione in gradi ICRS (conversione del modulo 10)."""
         ra, dec = _icrs_degrees(center)
-        return self.send_message("coord.pointAt.sky", {"ra": repr(ra), "dec": repr(dec)}, recipient)
+        return self.send_message("coord.pointAt.sky", {"ra": repr(ra), "dec": repr(dec)}, recipient, timeout=timeout)
 
     # -- ricezione ------------------------------------------------------------
 

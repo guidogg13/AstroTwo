@@ -26,6 +26,7 @@ from astrotwo.core.cache import NetworkTimeouts
 from astrotwo.core.catalogs import read_table
 from astrotwo.core.coordinates_wcs import ModuleWarning
 from astrotwo.core.vo_protocols import (
+    SampSelection,
     DataLinkClient,
     SampHub,
     ServerRegistry,
@@ -65,6 +66,7 @@ from tests.core.test_vo_protocols import (  # noqa: F401  (fixture e servizi sim
     votable_text,
 )
 from tests.message_helpers import MODULE_15_SUBVARIANTS, MODULE_19_SUBVARIANTS, catalog_combinations, check_error, check_message, nested_pairs
+from tests.core.samp_fakes import TopcatLike
 
 #: Codici che solo il modulo 14 solleva o restituisce (le sotto-voci aggiunte a voci condivise sono in ``SHARED``).
 OWN_CODES = (
@@ -352,6 +354,16 @@ def test_services_p4_to_p6(service, cache, catalog, tmp_path, monkeypatch, simba
         seen.error(samp.send_table, catalog, table_id="t1")  # none
         seen.error(samp.send_message, "image.load.fits", {"url": "file:///x.fits"})  # type
         seen.error(samp.send_message, "coord.pointAt.sky", {"ra": "1", "dec": "2"}, recipient="x")  # recipient
+        topcat = TopcatLike()  # sprint B1b: rifiuta la selezione di una tabella che non ha → rejected
+        mute = pyvo_samp.SAMPIntegratedClient(name="muto")  # risponde mai → no_reply
+        mute.connect()
+        mute.bind_receive_call("coord.pointAt.sky", lambda *args: None)
+        try:
+            seen.error(samp.send_selection, SampSelection("nessuna", "file:///x.xml", (0,)), topcat.id, timeout=1)
+            seen.error(samp.send_point, SkyCoord(1 * u.deg, 2 * u.deg), mute.get_public_id(), timeout=1)
+        finally:
+            topcat.disconnect()
+            mute.disconnect()
         replies = []
         monkeypatch.setattr(samp, "_reply", lambda msg_id, error: replies.append(error))
         samp._dispatch("nessun.tipo", "id", lambda: ())

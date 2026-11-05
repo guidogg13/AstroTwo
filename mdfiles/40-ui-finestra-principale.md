@@ -119,8 +119,10 @@ proiezione dell'immagine base dà `VIEW_CENTER_OUTSIDE_IMAGE` del `05` con il fr
   pulsante **Annulla** per ogni comando lungo (regola del proprietario del
   2026-10-15).
 - **SAMP (dal 2026-11-05, §3.12):** «SAMP: off», «SAMP: N apps» oppure
-  «SAMP: N apps (own hub)»; il suggerimento dice se l'hub è di un altro
-  programma o di AstroTwo e dà i nomi dei client collegati.
+  «SAMP: N apps (own hub)»; **N conta solo i programmi collegati, mai
+  l'hub** (sprint B1b, 2026-11-05: con l'hub di TOPCAT l'hub veniva
+  contato); il suggerimento dice a parte l'hub (di un altro programma o di
+  AstroTwo, con il nome che dichiara) e dà i nomi dei programmi collegati.
 
 ### 3.6 Pannello Comandi (cronologia visibile)
 
@@ -427,7 +429,8 @@ punto 10); comandi `samp.*` e origine `samp` del `05` (D05-5). Codice: `src/astr
   AstroTwo si scollega e basta. Se l'hub di un altro programma si spegne, AstroTwo passa a «SAMP: off» con
   l'avviso `SAMP_UNAVAILABLE` (`hub_shutdown`) nel pannello Messaggi.
 - **Elenco dei client:** Tools → SAMP → Connected applications (nomi dichiarati, `samp.name`, o l'identificativo
-  se il nome manca); si aggiorna con gli eventi dell'hub (`14` §3: registrazione, uscita, metadati) senza mai
+  se il nome manca; **l'hub non è nell'elenco né tra i destinatari**, si riconosce dall'identificativo che dichiara
+  alla registrazione, `14` §3 punto 8); si aggiorna con gli eventi dell'hub (`14` §3: registrazione, uscita, metadati) senza mai
   bloccare l'interfaccia.
 - **Invio** (Tools → SAMP, menu contestuale della tabella del `42` §3.6 e del cielo del `41` §3.20); ogni voce apre
   l'elenco dei destinatari: **All applications** (tutti i client iscritti a quel tipo di messaggio) o un client:
@@ -436,7 +439,18 @@ punto 10); comandi `samp.*` e origine `samp` del `05` (D05-5). Codice: `src/astr
     `COOSYS`).
   - *Send selected rows* (`samp.send_selection`): righe selezionate di quel catalogo, indici nell'ordine della
     tabella (non nell'ordine mostrato), da 0; se la tabella non è ancora passata da SAMP la si manda prima nello
-    stesso comando (`table_sent = true`, D40-9). Nessuna riga selezionata = selezione vuota inviata.
+    stesso comando (`table_sent = true`, D40-9) e la selezione parte **dopo** che i destinatari hanno risposto di
+    averla caricata, solo verso quelli che l'hanno accettata. Una tabella già passata da SAMP (mandata o ricevuta)
+    **non si rimanda mai** con le righe selezionate: si manda solo la selezione con il `table-id` e l'URL del primo
+    invio. Nessuna riga selezionata = selezione vuota inviata.
+  - **Identificativo delle tabelle inviate** (sprint B1b): `astrotwo-<avvio>-<livello>-<n>`, dove `<avvio>` è un
+    codice esadecimale casuale di 8 cifre scelto a ogni avvio del collegamento SAMP della finestra: i numeri
+    `<livello>-<n>` ripartono a ogni avvio di AstroTwo e TOPCAT rifiuta un `table-id` già ricevuto, così dopo un
+    riavvio la tabella non arrivava e la selezione finiva sulla tabella del lancio precedente.
+  - **Esito dei destinatari** (sprint B1b; `14` §3 punto 7): ogni invio aspetta la risposta di ogni destinatario
+    (tempo massimo di 10 s ciascuno, in parallelo). Chi rifiuta (es. TOPCAT: "Duplicate table-id", "No table with
+    table-id") o non risponde finisce in `rejected` del risultato e nel pannello Messaggi come avviso
+    `SAMP_NO_PEER` (`rejected`, `no_reply`) con il testo del destinatario; se nessuno accetta, il comando dà errore.
   - *Point at view center* e *Point at selected source* (`samp.point_at`): centro della vista (`ViewState`) o
     posizione della sorgente selezionata (una riga, posizione del 13 con l'epoca del catalogo); il 14 la converte
     in gradi ICRS.
@@ -601,6 +615,8 @@ controllate dalla finestra e dal pannello dell'assistente sollevano `ValueProble
 | `SAMP_UNAVAILABLE` (del 14, dal 2026-11-05) | `timeout` | `operation`, `seconds` |
 | | `hub_shutdown` | — |
 | `SAMP_TABLE_UNKNOWN` (del 14, dal 2026-11-05) | `unknown` | `table_id` (ext), `url` (ext), `sender` (ext) |
+| `SAMP_NO_PEER` (del 14, dal 2026-11-05, sprint B1b) | `rejected` | `recipient` (ext), `mtype`, `detail` (ext) |
+| | `no_reply` | `recipient` (ext), `mtype`, `seconds` |
 
 ## 11. Esposizione all'IA
 
@@ -632,6 +648,7 @@ simulati, in `tests/ui/`.
 | T11 | Vai a | nome noto (SIMBAD simulato), coordinate sessagesimali, testo non valido | vista centrata con fonte dichiarata; errore del 10 per il testo non valido | ispezione |
 | T12 | Avvio (`perf`) | avvio senza rete sul Mac di riferimento | finestra pronta in ≤ 3 s | misura (marcatore `perf`, D41-4) |
 | T13 | Aspetto | sistema in modalità scura e chiara (simulata); poi modalità notte | tema che segue il sistema; in modalità notte nessun colore dei widget con componente verde o blu sopra una soglia bassa dichiarata nel test; comando `ui.set_appearance` di classe `application` | lettura della tavolozza dei widget |
+| T21b | SAMP con un destinatario come TOPCAT (§3.12, sprint B1b, 2026-11-05) | hub con identificativo `hub` (come JSAMP) e client simulato che si comporta come TOPCAT 4.10-8 (carica in differita e risponde a caricamento finito, rifiuta `table-id` già ricevuti e selezioni per tabelle che non ha); due finestre una dopo l'altra (due avvii); catalogo mandato, poi righe selezionate con clic, ordinamento e conferma delle colonne, poi "Send selected rows" a tutti; righe selezionate di una tabella mai mandata; client morto ancora registrato | «SAMP: 1 apps» con hub e un programma, hub nel suggerimento e non tra i destinatari; una sola tabella per avvio nel client, selezione applicata alla tabella giusta con le righe giuste (`table_sent` falso dopo un invio); `table-id` diversi tra i due avvii; client morto in `rejected` con avviso, gli altri raggiunti; un solo avviso di iscrizioni dell'hub al collegamento | test con hub e client simulati, più prova con TOPCAT vero |
 | T21 | SAMP (§3.12, sprint B1) | hub e client simulati di `pyvo.samp` nella cartella home temporanea dei test (porta casuale, mai il `~/.samp` vero): Connect con un hub già attivo e senza hub; invio di catalogo, righe selezionate, centro della vista e sorgente selezionata a tutti e a un client; ricezione dei tre tipi; tipo non supportato; tabella sconosciuta; uscita del client e spegnimento dell'hub esterno; Disconnect e chiusura della finestra con hub proprio; hub che non risponde | hub esterno usato (nessun hub proprio) o hub proprio con profilo web spento; contenuti ricevuti dal client uguali a quelli della tabella (colonne, unità, UCD, epoca del `COOSYS`), righe e gradi ICRS ricalcolati con astropy; nuovo catalogo, selezione e centro della vista con comandi in cronologia di origine `samp` e il nome del client; tipo non supportato rifiutato senza azione; `SAMP_TABLE_UNKNOWN`; elenco e stato aggiornati; file di blocco rimosso alla chiusura; con l'hub muto `SAMP_UNAVAILABLE` (`timeout`) e thread principale sempre libero (sonda di latenza) | test con hub e client simulati |
 
 ## 13. Decisioni aperte
@@ -762,9 +779,13 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `SAMP_TABLE_FETCH_FAILED`, sotto-voci `timeout` e `hub_shutdown`).
   Applicata in §3.3, §3.5, §3.10, §3.12, §10.1, §12 (T21). Le immagini
   restano fuori (D14-2).
-- **D40-9 — Scelte minori di SAMP: PROPOSTE da Claude Code il 2026-11-05,
-  da confermare dal proprietario (implementate come raccomandate, Gruppo
-  3).** (1) posizione del menu: sottomenu **Tools → SAMP** (Tools raccoglie
+- **D40-9 — Scelte minori di SAMP: PROPOSTE da Claude Code il 2026-11-05;
+  (1)–(5) (lettere a–e) CONFERMATE dal proprietario il 2026-11-05 (sprint
+  B1b); (6) ancora da confermare (Gruppo 3). Nello stesso sprint B1b il
+  formato di (5) è stato esteso con un segmento di avvio,
+  `astrotwo-<avvio>-<livello>-<n>` (§3.12), perché senza i numeri si
+  ripetevano tra un avvio e l'altro e TOPCAT scartava la tabella: questa
+  estensione è da confermare.** (1) posizione del menu: sottomenu **Tools → SAMP** (Tools raccoglie
   già gli strumenti che lavorano con altri servizi; nessun menu nuovo nella
   barra); (2) tempo massimo di ogni chiamata all'hub **10 s**, lo stesso
   del tempo di connessione del `04` (un hub locale risponde in
@@ -775,7 +796,20 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   passata da SAMP la manda prima nello stesso comando; (5) identificativo
   delle tabelle inviate `astrotwo-<livello>-<n>`; (6) nel pannello Comandi
   la colonna "chi" scrive «SAMP · <nome del client>» e il filtro ha la voce
-  SAMP.
+  SAMP. **Aggiunta dello sprint B1b, da verificare e confermare:** (7) il
+  tempo massimo di risposta di 10 s per destinatario vale anche per
+  `table.load.votable`; TOPCAT risponde a caricamento finito, quindi con una
+  tabella molto grande la risposta può arrivare oltre i 10 s: AstroTwo
+  segnala `no_reply` anche se la tabella poi arriva (da verificare con
+  tabelle grandi; eventuale tempo più lungo per le tabelle da decidere).
+- **D40-10 — Pulizia delle tabelle SAMP ricevute: APERTA il 2026-11-05 dal
+  proprietario (voce futura, Gruppo 3).** Le copie dei VOTable ricevuti via
+  SAMP si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/`
+  (D40-9 (3): AstroTwo non le cancella mai, servono a riaprire le sessioni).
+  Proposta del proprietario: per esempio un pulsante nelle Impostazioni che
+  mostra lo spazio occupato e svuota la cartella. Da decidere: dove sta il
+  comando, cosa succede alle sessioni che citano file cancellati (oggi
+  `catalog.open_file` darebbe file mancante), se serve una conferma.
 
 ## 14. Registro modifiche
 
@@ -807,3 +841,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-25 | Claude Code | **Sprint 9b (D41-9 e D41-10 decise dal proprietario):** frame di lettura nel testo d'aiuto del campo "Vai a" (§3.4); righe massime di default 5 000 nella finestra Catalog in view (§3.3, valore da confermare). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | D41-10: 5 000 righe di default confermate dal proprietario (§3.3). §3.3: About ridotto e nuova voce Licenses… (finestra specificata nel `60` §3.9, sprint 60a). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05): nuovo §3.12 (collegamento, hub, elenco dei client, invio, ricezione come comandi con origine `samp`, thread e tempo massimo, chiusura); sottomenu Tools → SAMP (§3.3), stato nella barra (§3.5), preferenza "Connetti SAMP all'avvio" (§3.10); codici SAMP in §10.1; T21 (§12); **D40-8** decisa, **D40-9** (scelte minori) proposta e da confermare. Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B1b — correzioni SAMP dalla prova del proprietario con TOPCAT vero:** §3.5 (N conta solo i programmi, hub a parte nel suggerimento), §3.12 (hub fuori dall'elenco e dai destinatari; tabella già passata da SAMP mai rimandata con la selezione, selezione dopo la risposta di caricamento e solo a chi ha accettato; identificativo `astrotwo-<avvio>-<livello>-<n>`; esito dei destinatari con `rejected` e avvisi `SAMP_NO_PEER`), §10.1, nuovo T21b; D40-9 (1)–(5) confermate dal proprietario, (6) e l'estensione del formato di (5) da confermare. Stato `approvato` invariato. |

@@ -57,6 +57,7 @@ from astrotwo.core.vo_protocols import (
     validate_adql,
     write_votable,
 )
+from tests.core.samp_fakes import JsampLikeHub, TopcatLike, bind_recorder, dead_client
 
 # =============================================================================
 # P1 — Lettura/scrittura VOTable ed esportazione (T1, T5)
@@ -1102,8 +1103,7 @@ def peer(local_hub):
     client = pyvo_samp.SAMPIntegratedClient(name="Simulato")
     client.connect()
     received = []
-    for mtype in ("table.load.votable", "table.select.rowList", "coord.pointAt.sky"):
-        client.bind_receive_notification(mtype, lambda *args: received.append(args))
+    bind_recorder(client, received)  # risponde alle chiamate come un programma vero (sprint B1b)
     client.received = received
     yield client
     client.disconnect()
@@ -1234,3 +1234,79 @@ def test_t22_samp_for_the_interface(peer, tmp_path):
         with pytest.raises(Exception):
             peer.call_and_wait(me, {"samp.mtype": "client.env.get", "samp.params": {"name": "HOME"}}, "5")
 
+
+
+# T24 — SAMP con un destinatario come TOPCAT 4.10-8 (sprint B1b, 2026-11-05; tests/core/samp_fakes.py)
+
+
+@pytest.fixture
+def jsamp_hub(samp_home):
+    """Hub "di TOPCAT": identificativo ``hub`` come JSAMP (l'hub di pyvo si chiama ``cli#hub``)."""
+    hub = JsampLikeHub(web_profile=False)
+    hub.start(wait=False)
+    yield hub
+    hub.stop()
+
+
+@pytest.fixture
+def topcat(jsamp_hub):
+    peer = TopcatLike()
+    yield peer
+    peer.disconnect()
+
+
+def test_t24_hub_not_a_client_and_one_subscription_notice(topcat):
+    monitor = pyvo_samp.SAMPIntegratedClient(name="monitor")
+    monitor.connect()
+    notices = []
+    monitor.bind_receive_notification("samp.hub.event.subscriptions", lambda *args: notices.append(args[4]["id"]))
+    try:
+        with SampHub() as samp:
+            me = samp._client.get_public_id()
+            assert samp.hub_id == "hub"
+            assert {c.name for c in samp.clients()} == {"topcat", "monitor"}  # l'hub non è un programma
+            _time.sleep(1.0)
+            # iscrizioni dichiarate una volta sola (prima: una dichiarazione per ogni legame, 12 avvisi)
+            assert notices.count(me) == 1
+            assert set(monitor.get_subscriptions(me)) == set(SAMP_MTYPES) | set(SAMP_HUB_EVENTS) | {"samp.app.ping"}
+            # registrazione stabile durante gli invii: nessuna uscita e rientro
+            samp.send_point(SkyCoord(10 * u.deg, 20 * u.deg), timeout=5)
+            assert me in monitor.get_registered_clients() and notices.count(me) == 1
+    finally:
+        monitor.disconnect()
+
+
+def test_t24_table_then_selection_and_rejections(topcat, catalog):
+    with SampHub() as samp:
+        # tabella e selezione subito dopo: la selezione parte dopo la risposta di caricamento e la trova
+        sent = samp.send_table(catalog, table_id="t1", name="stelle", timeout=5)
+        assert sent.recipients == (topcat.id,) and sent.failures == ()
+        selection = samp.send_selection(SampSelection("t1", sent.params["url"], (0, 2)), timeout=5)
+        assert selection.recipients == (topcat.id,)
+        assert [t["table_id"] for t in topcat.tables] == ["t1"]
+        assert topcat.tables[0]["subsets"] == {"AstroTwo": [0, 2]}
+        # table-id già ricevuto: il rifiuto di TOPCAT torna come errore con il suo testo
+        with pytest.raises(VoProtocolsError) as err:
+            samp.send_table(catalog, table_id="t1", timeout=5)
+        assert (err.value.code, err.value.params["reason"]) == ("SAMP_NO_PEER", "rejected")
+        assert err.value.params["recipient"] == "topcat" and err.value.params["mtype"] == "table.load.votable"
+        assert "Duplicate table-id" in err.value.params["detail"]
+        # selezione per una tabella che TOPCAT non ha
+        with pytest.raises(VoProtocolsError) as err:
+            samp.send_selection(SampSelection("nessuna", "file:///nessuna.xml", (1,)), timeout=5)
+        assert err.value.params["reason"] == "rejected" and "No table with" in err.value.params["detail"]
+        assert len(topcat.tables) == 1 and topcat.tables[0]["subsets"] == {"AstroTwo": [0, 2]}
+
+
+def test_t24_dead_client_is_a_failure_not_a_crash(topcat):
+    dead = dead_client()
+    try:
+        with SampHub() as samp:
+            sent = samp.send_point(SkyCoord(10 * u.deg, 20 * u.deg), timeout=1)
+            assert sent.recipients == (topcat.id,) and len(topcat.points) == 1
+            assert [(f.id, f.reason in ("rejected", "no_reply")) for f in sent.failures] == [(dead.get_public_id(), True)]
+            with pytest.raises(VoProtocolsError) as err:  # solo il client morto: nessuno accetta → errore
+                samp.send_point(SkyCoord(10 * u.deg, 20 * u.deg), dead.get_public_id(), timeout=1)
+            assert err.value.code == "SAMP_NO_PEER" and err.value.params["reason"] in ("rejected", "no_reply")
+    finally:
+        dead.client.hub.disconnect()

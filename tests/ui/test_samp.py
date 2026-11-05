@@ -28,6 +28,7 @@ from astrotwo.core.commands import RequestedBy
 from astrotwo.core.vo_protocols import SAMP_HUB_EVENTS, SAMP_MTYPES
 from astrotwo.ui.samp_link import SampLink
 from tests.core.test_commands_catalog_sky import ROWS, write_catalog
+from tests.core.samp_fakes import JsampLikeHub, TopcatLike, bind_recorder, dead_client
 from tests.ui.test_main_window import make_window, wait_idle
 
 PEER = "TOPCAT simulato"
@@ -63,8 +64,7 @@ def make_peer(name=PEER):
     client = pyvo_samp.SAMPIntegratedClient(name=name)
     client.connect()
     received = []
-    for mtype in SAMP_MTYPES:
-        client.bind_receive_notification(mtype, lambda *args: received.append(args))
+    bind_recorder(client, received)  # risponde alle chiamate come un programma vero (sprint B1b)
     client.received = received
     return client
 
@@ -170,7 +170,7 @@ def test_t21_external_hub_send_and_receive(qtbot, window, peer, tmp_path):
     assert last(win, "samp.send_table").result.status == "ok"
     qtbot.waitUntil(lambda: len(by_type(peer, "table.load.votable")) == 2, timeout=5000)
     params = by_type(peer, "table.load.votable")[1]
-    assert params["table-id"] != loaded["table-id"] and params["table-id"].startswith(f"astrotwo-{layer}-")
+    assert params["table-id"] != loaded["table-id"] and params["table-id"].startswith(f"astrotwo-{win.samp.launch}-{layer}-")
     votable = parse_votable(urllib.parse.unquote(urllib.parse.urlsplit(params["url"]).path))
     got = votable.get_first_table()
     for name in data.table.colnames:
@@ -435,3 +435,135 @@ def mw_window(settings, cache, tmp_path):
                      startup_commands=True, samp_link=SampLink(tmp_path / "received2", timeout=5.0))
     win.auto_column_dialogs = False
     return win
+
+
+# =============================================================================
+# T21b — un destinatario come TOPCAT 4.10-8 (sprint B1b, 2026-11-05; tests/core/samp_fakes.py)
+
+
+@pytest.fixture
+def jsamp_hub():
+    """Hub "di TOPCAT": identificativo ``hub`` come JSAMP (l'hub di pyvo si chiama ``cli#hub``)."""
+    server = JsampLikeHub(web_profile=False)
+    server.start(wait=False)
+    yield server
+    if server.is_running:
+        server.stop()
+
+
+@pytest.fixture
+def topcat(jsamp_hub):
+    peer = TopcatLike()
+    yield peer
+    peer.disconnect()
+
+
+def click_rows(qtbot, win, layer, rows):
+    """Righe selezionate con il mouse nella vista tabella (42): ``catalog.select`` dopo la pausa di fine gesto."""
+    from PySide6.QtCore import QItemSelectionModel
+
+    page = win.catalog_panel.pages[layer]
+    model = page.view.selectionModel()
+    model.clearSelection()
+    flags = QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows
+    for row in rows:
+        model.select(page.model.index(page.model.shown_row(row), 0), flags)
+    qtbot.waitUntil(lambda: set(win.session.workspace.state.layer(layer).selection) == set(rows), timeout=5000)
+    wait_idle(qtbot, win)
+
+
+def test_t21b_hub_is_not_counted(qtbot, window, topcat):
+    """Problema A: con l'hub di TOPCAT la barra diceva «SAMP: 2 apps» con il solo TOPCAT collegato."""
+    win = window
+    values = connect(qtbot, win)
+    assert values["clients"] == [{"id": topcat.id, "name": "topcat"}]
+    assert win.status.samp_label.text() == "SAMP: 1 apps"
+    tip = win.status.samp_label.toolTip()
+    assert "Hub of another application." in tip and "Hub: PyVO SAMP Hub." in tip and "Connected: topcat" in tip
+    win._fill_samp_menu()
+    assert [a.text() for a in submenu(win.samp_menu, "Connected applications").actions()] == ["topcat"]
+    who = [a.text() for a in submenu(win.samp_menu, "Send catalog").actions() if a.text()]
+    assert who == ["All applications", "topcat"]  # l'hub non è un destinatario
+
+
+def test_t21b_selection_after_catalog_two_launches(qtbot, settings_path, cache, tmp_path, topcat):
+    """Problemi B e C: dopo "Send catalog" le righe selezionate non rimandano la tabella e arrivano sulla tabella giusta
+    con le righe giuste, anche al secondo avvio di AstroTwo (prima: stesso ``table-id``, tabella scartata da TOPCAT
+    in silenzio e selezione sulla tabella del lancio precedente)."""
+    ids = []
+    for launch, rows in enumerate(([0, 2], [1])):
+        win = samp_window(qtbot, settings_path, cache, tmp_path / f"avvio{launch}")
+        try:
+            connect(qtbot, win)
+            layer = open_catalog(qtbot, win, tmp_path, name=f"c{launch}.xml")
+            send(qtbot, win, "Send catalog", "topcat")
+            entry = last(win, "samp.send_table")
+            assert entry.result.status == "ok" and entry.result.values.get("rejected", []) == []
+            ids.append(entry.result.values["table_id"])
+            qtbot.waitUntil(lambda n=launch + 1: len(topcat.tables) == n, timeout=3000)  # caricata in TOPCAT
+            win.submit("table.sort", {"layer": layer, "column": "RA_ICRS", "direction": "descending"})
+            wait_idle(qtbot, win)
+            assert last(win, "table.sort").result.status == "ok"  # righe mostrate in un altro ordine
+            click_rows(qtbot, win, layer, rows)
+            recipient(submenu(win._table_context_menu(layer, None), "Send selected rows via SAMP"),
+                      "All applications").trigger()
+            wait_idle(qtbot, win)
+            entry = last(win, "samp.send_selection")
+            assert entry.result.status == "ok", entry.result.error
+            assert entry.result.values["table_sent"] is False and entry.result.values["table_id"] == ids[-1]
+            assert entry.result.values["rows"] == sorted(rows)  # ordine della tabella, non quello mostrato
+            assert entry.result.values["recipients"] == [topcat.id]
+            assert len(topcat.tables) == launch + 1  # una sola tabella per avvio
+            assert topcat.tables[launch]["table_id"] == ids[-1]
+            assert topcat.tables[launch]["subsets"] == {"AstroTwo": sorted(rows)}
+        finally:
+            win.confirm = lambda title, text: True
+            win.close()
+    assert ids[0] != ids[1] and topcat.errors == []
+    assert topcat.tables[0]["subsets"] == {"AstroTwo": [0, 2]}  # la tabella del primo avvio non è toccata
+
+
+def test_t21b_selection_of_a_table_never_sent(qtbot, window, topcat, tmp_path):
+    """D40-9 (4): tabella mandata nello stesso comando; la selezione parte dopo la risposta di caricamento (prima:
+    arrivava a TOPCAT prima della tabella ed era scartata in silenzio)."""
+    win = window
+    connect(qtbot, win)
+    layer = open_catalog(qtbot, win, tmp_path)
+    click_rows(qtbot, win, layer, [1, 2])
+    send(qtbot, win, "Send selected rows")
+    entry = last(win, "samp.send_selection")
+    assert entry.result.status == "ok" and entry.result.values["table_sent"] is True
+    assert entry.result.values["recipients"] == [topcat.id] and entry.result.values.get("rejected", []) == []
+    assert len(topcat.tables) == 1 and topcat.tables[0]["subsets"] == {"AstroTwo": [1, 2]}
+    assert topcat.errors == []
+    send(qtbot, win, "Send selected rows")  # già passata da SAMP: mai rimandata
+    assert last(win, "samp.send_selection").result.values["table_sent"] is False and len(topcat.tables) == 1
+
+
+def test_t21b_rejections_are_reported(qtbot, window, topcat, tmp_path):
+    """Chi rifiuta o non risponde va in ``rejected`` e nel pannello Messaggi; gli altri sono raggiunti."""
+    win = window
+    win.samp.timeout = 1.0
+    dead = dead_client()
+    try:
+        connect(qtbot, win)
+        layer = open_catalog(qtbot, win, tmp_path)
+        send(qtbot, win, "Send catalog")
+        entry = last(win, "samp.send_table")
+        assert entry.result.status == "ok" and entry.result.values["recipients"] == [topcat.id]
+        assert [r["id"] for r in entry.result.values["rejected"]] == [dead.get_public_id()]
+        assert [w.code for w in entry.result.warnings] == ["SAMP_NO_PEER"]
+        assert entry.result.warnings[0].params["recipient"] == "morto"
+        assert entry.result.warnings[0].params["reason"] in ("rejected", "no_reply")
+        assert any(m[1] == "SAMP_NO_PEER" for m in win.messages.messages)
+        assert len(topcat.tables) == 1
+        # selezione di una tabella che TOPCAT non ha più (TOPCAT riavviato): errore con il testo di TOPCAT
+        topcat.tables.clear()
+        topcat.by_id.clear()
+        click_rows(qtbot, win, layer, [0])
+        send(qtbot, win, "Send selected rows", "topcat")
+        entry = last(win, "samp.send_selection")
+        assert entry.result.status == "error" and entry.result.error.code == "SAMP_NO_PEER"
+        assert entry.result.error.params["reason"] == "rejected" and "No table with" in entry.result.error.params["detail"]
+    finally:
+        dead.client.hub.disconnect()

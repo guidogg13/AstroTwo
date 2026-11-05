@@ -1565,6 +1565,10 @@
         <translation>Hub di un altro programma.</translation>
     </message>
     <message>
+        <source>Hub: %1.</source>
+        <translation>Hub: %1.</translation>
+    </message>
+    <message>
         <source>no applications</source>
         <translation>nessun programma</translation>
     </message>

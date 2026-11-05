@@ -1047,6 +1047,8 @@ class StatusBar(QStatusBar):
             text += " " + self.tr("(own hub)")
         self.samp_label.setText(text)
         hub = self.tr("Hub started by AstroTwo.") if status.own_hub else self.tr("Hub of another application.")
+        if status.hub_name:  # l'hub è a parte, mai contato tra i programmi (§3.5, sprint B1b)
+            hub += " " + self.tr("Hub: %1.").replace("%1", status.hub_name)
         names = ", ".join(c.name or c.id for c in status.clients) or self.tr("no applications")
         connected = self.tr("Connected: %1").replace("%1", names)  # fuori dalla f-string: lupdate la vede
         self.samp_label.setToolTip(f"{hub} {connected}")
@@ -2261,15 +2263,33 @@ class MainWindow(QMainWindow):
     def _exec_samp_disconnect(self, ctx, p: Mapping) -> Outcome:
         return Outcome(values=self.samp.disconnect())
 
+    def _samp_rejected(self, values: Mapping) -> list[ResultMessage]:
+        """Un avviso ``SAMP_NO_PEER`` (``rejected``/``no_reply``, 14 §10) per ogni destinatario che non ha accettato
+        (sprint B1b): nome o identificativo e testo del destinatario sono testo esterno."""
+        out = []
+        for item in values.get("rejected", ()):
+            who = item["name"] or item["id"]
+            if item["reason"] == "no_reply":
+                out.append(ResultMessage("SAMP_NO_PEER", f"{who} non ha risposto a {item['mtype']}",
+                                         {"reason": "no_reply", "recipient": who, "mtype": item["mtype"],
+                                          "seconds": float(self.samp.timeout)}))
+            else:
+                out.append(ResultMessage("SAMP_NO_PEER", f"{who} non ha accettato {item['mtype']}: {item['detail']}",
+                                         {"reason": "rejected", "recipient": who, "mtype": item["mtype"],
+                                          "detail": item["detail"]}))
+        return out
+
     def _exec_samp_send_table(self, ctx, p: Mapping) -> Outcome:
-        return Outcome(values=self.samp.send_table(ctx.state.layer(p["layer"]), p["recipient"]))
+        values = self.samp.send_table(ctx.state.layer(p["layer"]), p["recipient"])
+        return Outcome(values=values, warnings=self._samp_rejected(values))
 
     def _exec_samp_send_selection(self, ctx, p: Mapping) -> Outcome:
-        return Outcome(values=self.samp.send_selection(ctx.state.layer(p["layer"]), p["recipient"]))
+        values = self.samp.send_selection(ctx.state.layer(p["layer"]), p["recipient"])
+        return Outcome(values=values, warnings=self._samp_rejected(values))
 
     def _exec_samp_point_at(self, ctx, p: Mapping) -> Outcome:
         values = self.samp.point_at(sky_from_json(p["position"]), p["recipient"])
-        return Outcome(values={**values, "position": p["position"]})
+        return Outcome(values={**values, "position": p["position"]}, warnings=self._samp_rejected(values))
 
     @staticmethod
     def _samp_origin(sender_id: str, sender: str | None) -> RequestedBy:

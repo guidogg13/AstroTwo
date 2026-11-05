@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-04 (sprint A1c): D60-5 (pin di python-build-standalone `20261026`) aperta e decisa dal proprietario lo stesso giorno, `60` §13: 16 aperte invariate.**
+**Dal 2026-11-05 (sprint B1b): 18 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **18** (sprint B1: nuova `D40-9`, scelte minori di SAMP, → 17; sprint B1b: `D40-9` (1)–(5) confermate dal proprietario, restano aperte (6), l'estensione di (5) e la nuova (7); nuova `D40-10`, pulizia delle tabelle SAMP ricevute, voce futura del proprietario, → 18; nei file di origine `40` §13).
+
+Prima, **Dal 2026-11-04 (sprint A1c): D60-5 (pin di python-build-standalone `20261026`) aperta e decisa dal proprietario lo stesso giorno, `60` §13: 16 aperte invariate.**
 
 **Dal 2026-11-04, con lo sprint A1b: 16 aperte** — `D60-4` decisa dal proprietario: (b) downgrade a PySide6 6.11.3, minimo reale macOS 15.0 (`60` §13). Gruppo 3 = 16.
 
@@ -311,11 +313,12 @@ gruppi successivi, A8 dopo il livello 1).
 |---|---|---|
 | — | Nessuna: `A2` e `A6` decise dal proprietario il 2026-10-25 (`60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (17)
+## 5. GRUPPO 3 — rimandabili al momento del codice (18)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `D40-9` | Scelte minori di SAMP (sprint B1), **proposte da Claude Code il 2026-11-05 e implementate come raccomandate, da confermare**: (1) sottomenu Tools → SAMP; (2) tempo massimo 10 s per chiamata all'hub (= connessione del 04); (3) VOTable ricevuti in `~/Library/Application Support/AstroTwo/SAMP/received/`, mai cancellati da AstroTwo (servono alle sessioni); (4) "Send selected rows" manda prima la tabella se non è mai passata da SAMP; (5) identificativo `astrotwo-<livello>-<n>` delle tabelle inviate; (6) colonna "chi" «SAMP · nome» e filtro SAMP | `40-ui-finestra-principale.md` §13, §3.12 |
+| `D40-9` | Scelte minori di SAMP (sprint B1): **(1)–(5) (lettere a–e) confermate dal proprietario il 2026-11-05** (sottomenu Tools → SAMP; 10 s per chiamata all'hub; VOTable ricevuti in `~/Library/Application Support/AstroTwo/SAMP/received/`, mai cancellati; "Send selected rows" manda prima la tabella solo se non è mai passata da SAMP; identificativo delle tabelle). **Restano da confermare:** (6) colonna "chi" «SAMP · nome» e filtro SAMP; l'**estensione di (5)** dello sprint B1b, `astrotwo-<avvio>-<livello>-<n>` (senza `<avvio>` TOPCAT scartava la tabella dopo un riavvio di AstroTwo); (7) 10 s di risposta anche per `table.load.votable` (con tabelle grandi possibile `no_reply` anche se la tabella arriva, da verificare) | `40-ui-finestra-principale.md` §13, §3.12 |
+| `D40-10` | **Voce futura (proprietario, 2026-11-05):** pulizia delle tabelle SAMP ricevute, che oggi si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/` (D40-9 (3)); per esempio un pulsante nelle Impostazioni con lo spazio occupato. Da decidere: posizione del comando, sessioni che citano file cancellati, conferma | `40-ui-finestra-principale.md` §13 |
 | `D60-4` | **DECISA il 2026-11-04 (b): PySide6 6.11.3, minimo macOS 15.0.** (Prima:) macOS minimo dell'app 26.0: i moduli di collegamento della ruota di PySide6/shiboken6 6.12.0 hanno `minos 26.0` (ruota etichettata `macosx_14_0`); su macOS 14/15 l'app con ogni probabilità non parte (da verificare). Opzioni: (a) macOS 26 minimo per la beta, (b) altra versione di PySide6 (aggiornamento di dipendenza su richiesta), (c) segnalazione a Qt for Python; raccomandazione (a) + (c). Non blocca il 60a, conta per il 60b | `60-distribuzione-dmg.md` §3.1, §13 |
 | `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **rinviate** (decisione del proprietario del 2026-10-25: la prima beta è firmata solo ad hoc); da riprendere prima di una versione non beta | `60-distribuzione-dmg.md` §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
@@ -429,3 +432,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-04 | Claude Code | **`D60-4` decisa** (proprietario, 2026-11-04; prima nel file di origine `60` §13): (b) PySide6 6.11.3, minimo macOS 15.0. Conteggi: aperte **16** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 16). |
 | 2026-11-04 | Claude Code | **`D60-5` aperta e decisa** (proprietario, 2026-11-04; nel `60` §13): pin di python-build-standalone `20261026` (CPython 3.12.16), perché la `20261003` non è più offerta da uv. Conteggi invariati: aperte **16**. |
 | 2026-11-05 | Claude Code | **Sprint B1 (SAMP nell'interfaccia):** `D05-5` (origine `samp`) e `D40-8` (SAMP nell'interfaccia) aperte e decise lo stesso giorno dal proprietario (nei file di origine `05` §13 e `40` §13); nuova **`D40-9`** (scelte minori, proposte e da confermare) nel Gruppo 3. Conteggi: aperte **17** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 17). |
+| 2026-11-05 | Claude Code | **Sprint B1b (correzioni SAMP dalla prova con TOPCAT vero):** `D40-9` (1)–(5) confermate dal proprietario; restano aperte (6), l'estensione di (5) (`astrotwo-<avvio>-<livello>-<n>`) e la nuova (7) (10 s di risposta per le tabelle grandi, da verificare); nuova **`D40-10`** (pulizia delle tabelle SAMP ricevute, voce futura del proprietario) nel Gruppo 3, prima nel `40` §13. Conteggi: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 18). |

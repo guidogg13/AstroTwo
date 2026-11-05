@@ -9,7 +9,11 @@ Il protocollo è del 14 (``SampHub`` con ``pyvo.samp``); qui ci sono soltanto:
 - **ricezione portata al thread principale**: le funzioni di ricezione girano nei thread del server XML-RPC di
   ``pyvo``, non toccano mai Qt ed emettono segnali (consegnati in coda al thread principale, dove vive l'oggetto);
 - **tabelle note** (mandate da AstroTwo o ricevute via SAMP) → livello, per le selezioni ricevute;
-- copia locale dei VOTable ricevuti (``save_votable`` del 14), che la finestra apre con ``catalog.open_file``.
+- copia locale dei VOTable ricevuti (``save_votable`` del 14), che la finestra apre con ``catalog.open_file``;
+- **identificativo delle tabelle inviate** ``astrotwo-<avvio>-<livello>-<n>`` (sprint B1b): ``<avvio>`` è casuale per
+  ogni ``SampLink`` (ogni avvio della finestra), perché TOPCAT rifiuta un ``table-id`` già ricevuto e ``<livello>-<n>``
+  ripartono a ogni avvio;
+- **esito di ogni destinatario** (14 §3 punto 7): chi rifiuta o non risponde va in ``rejected`` del risultato.
 
 Nessun calcolo: le posizioni le converte il 14 (con il 10), le tabelle le scrive e le legge il 13/14.
 """
@@ -17,6 +21,7 @@ Nessun calcolo: le posizioni le converte il 14 (con il 10), le tabelle le scrive
 from __future__ import annotations
 
 import itertools
+import secrets
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -41,7 +46,8 @@ def default_received_dir() -> Path:
 class SampStatus:
     connected: bool
     own_hub: bool
-    clients: tuple[SampClient, ...] = ()
+    clients: tuple[SampClient, ...] = ()  # solo i programmi: mai l'hub né AstroTwo (sprint B1b)
+    hub_name: str | None = None  # nome dichiarato dall'hub, mostrato a parte nel suggerimento
 
 
 @dataclass(frozen=True)
@@ -89,6 +95,8 @@ class SampLink(QObject):
         self._hub: SampHub | None = None
         self._lock = threading.RLock()
         self._clients: tuple[SampClient, ...] = ()
+        self._hub_name: str | None = None
+        self.launch = secrets.token_hex(4)  # <avvio> degli identificativi delle tabelle inviate (sprint B1b)
         self._known: dict[str, str] = {}  # table-id o URL → livello
         self._sent: dict[str, tuple[str, str]] = {}  # livello → (table-id, URL) da usare per le selezioni
         self._tables = itertools.count(1)
@@ -100,7 +108,8 @@ class SampLink(QObject):
     def status(self) -> SampStatus:
         with self._lock:
             hub = self._hub
-            return SampStatus(hub is not None, bool(hub is not None and hub.own_hub), self._clients)
+            return SampStatus(hub is not None, bool(hub is not None and hub.own_hub), self._clients,
+                              self._hub_name if hub is not None else None)
 
     @property
     def connected(self) -> bool:
@@ -117,9 +126,11 @@ class SampLink(QObject):
                                    params={"reason": "not_connected"})
         return hub
 
-    def _timed(self, operation: str, function: Callable):
+    def _timed(self, operation: str, function: Callable, margin: float = 0.0):
         """``function()`` in un thread proprio; oltre ``timeout`` s ``SAMP_UNAVAILABLE`` (``timeout``), mai un'attesa
-        senza fine: chi chiama (thread dei comandi) torna libero e l'interfaccia non aspetta mai l'hub."""
+        senza fine: chi chiama (thread dei comandi) torna libero e l'interfaccia non aspetta mai l'hub. ``margin``: per
+        gli invii, che aspettano già al più ``timeout`` s la risposta di ogni destinatario (14 §3 punto 7)."""
+        limit = self.timeout + margin
         box: dict[str, object] = {}
         done = threading.Event()
 
@@ -132,7 +143,7 @@ class SampLink(QObject):
                 done.set()
 
         threading.Thread(target=run, name=f"astrotwo-samp-{operation}", daemon=True).start()
-        if not done.wait(self.timeout):
+        if not done.wait(limit):
             raise VoProtocolsError("SAMP_UNAVAILABLE", f"l'hub SAMP non ha risposto entro {self.timeout:g} s "
                                    f"({operation}): operazione abbandonata",
                                    params={"reason": "timeout", "operation": operation, "seconds": self.timeout})
@@ -160,18 +171,25 @@ class SampLink(QObject):
             if abandoned.is_set():  # arrivato dopo il tempo massimo: si chiude subito
                 hub.disconnect()
                 return None
-            return hub.clients()
+            return hub.clients(), self._read_hub_name(hub)
 
         try:
-            clients = self._timed("connect", attempt)
+            clients, hub_name = self._timed("connect", attempt)
         except VoProtocolsError as exc:
             if exc.params.get("reason") == "timeout":
                 abandoned.set()
             raise
         with self._lock:
-            self._hub, self._clients = hub, tuple(clients)
+            self._hub, self._clients, self._hub_name = hub, tuple(clients), hub_name
         self._emit_status()
         return self._connect_values(hub)
+
+    @staticmethod
+    def _read_hub_name(hub: SampHub) -> str | None:
+        try:
+            return None if hub.hub_id is None else hub.client_name(hub.hub_id)
+        except Exception:  # noqa: BLE001 - nome facoltativo
+            return None
 
     def _connect_values(self, hub: SampHub) -> dict:
         return {"hub": "own" if hub.own_hub else "external", "web_profile": bool(hub.web_profile),
@@ -180,7 +198,7 @@ class SampLink(QObject):
     def disconnect(self) -> dict:
         """Scollega; l'hub di AstroTwo si spegne (file di blocco tolto), con un hub altrui ci si scollega e basta."""
         with self._lock:
-            hub, self._hub, self._clients = self._hub, None, ()
+            hub, self._hub, self._clients, self._hub_name = self._hub, None, (), None
             self._sent.clear()
         if hub is None:
             return {"was_connected": False, "own_hub_stopped": False}
@@ -205,50 +223,70 @@ class SampLink(QObject):
 
         def run() -> None:
             try:
-                clients = self._timed("clients", hub.clients)
+                clients, hub_name = self._timed("clients", lambda: (hub.clients(), self._read_hub_name(hub)))
             except Exception:  # noqa: BLE001 - l'elenco resta quello di prima
                 return
             with self._lock:
                 if self._hub is not hub:
                     return
-                self._clients = tuple(clients)
+                self._clients, self._hub_name = tuple(clients), hub_name
             self._emit_status()
 
         threading.Thread(target=run, name="astrotwo-samp-refresh", daemon=True).start()
 
     # --- invio (thread dei comandi) ----------------------------------------------------------------------------
 
+    def _rejected(self, sent) -> list[dict]:
+        """Destinatari falliti del 14 in forma JSON, con il nome dichiarato (testo esterno) quando c'è."""
+        out = []
+        for failure in sent.failures:
+            name = None
+            for client in self.status.clients:
+                if client.id == failure.id:
+                    name = client.name
+            out.append({"id": failure.id, "name": name, "reason": failure.reason, "detail": failure.detail,
+                        "mtype": sent.mtype})
+        return out
+
     def send_table(self, layer, recipient: str | None = None) -> dict:
         hub = self._require()
-        table_id = f"astrotwo-{layer.id}-{next(self._tables)}"
+        table_id = f"astrotwo-{self.launch}-{layer.id}-{next(self._tables)}"
         sent = self._timed("send", lambda: hub.send_table(layer.data, table_id=table_id, name=layer.name,
-                                                          recipient=recipient))
+                                                          recipient=recipient, timeout=self.timeout),
+                           margin=2.0)
         url = str(sent.params["url"])
         with self._lock:
             self._known[table_id] = self._known[url] = layer.id
             self._sent[layer.id] = (table_id, url)
         return {"layer": layer.id, "table_id": table_id, "url": url, "name": layer.name,
-                "rows": len(layer.data.table), "recipients": list(sent.recipients)}
+                "rows": len(layer.data.table), "recipients": list(sent.recipients),
+                "rejected": self._rejected(sent)}
 
     def send_selection(self, layer, recipient: str | None = None) -> dict:
+        """Righe selezionate; tabella mai passata da SAMP → prima la tabella (D40-9 (4)) e la selezione solo a chi ha
+        risposto di averla caricata. Una tabella già passata da SAMP non si rimanda mai (sprint B1b)."""
         hub = self._require()
         with self._lock:
             ref = self._sent.get(layer.id)
         table_sent = ref is None
-        if ref is None:  # tabella mai passata da SAMP: prima la tabella, nello stesso comando (D40-9)
+        rejected: list[dict] = []
+        among = None
+        if ref is None:
             values = self.send_table(layer, recipient)
             ref = (values["table_id"], values["url"])
-        rows = tuple(int(r) for r in layer.selection)
-        sent = self._timed("send", lambda: hub.send_selection(SampSelection(ref[0], ref[1], rows), recipient))
+            rejected, among = list(values["rejected"]), values["recipients"]
+        rows = tuple(sorted(int(r) for r in layer.selection))  # ordine della tabella, non quello mostrato (§3.12)
+        sent = self._timed("send", lambda: hub.send_selection(SampSelection(ref[0], ref[1], rows), recipient,
+                                                              among=among, timeout=self.timeout), margin=2.0)
         return {"layer": layer.id, "table_id": ref[0], "url": ref[1], "rows": list(rows), "table_sent": table_sent,
-                "recipients": list(sent.recipients)}
+                "recipients": list(sent.recipients), "rejected": rejected + self._rejected(sent)}
 
     def point_at(self, position, recipient: str | None = None) -> dict:
         hub = self._require()
-        sent = self._timed("send", lambda: hub.send_point(position, recipient))
+        sent = self._timed("send", lambda: hub.send_point(position, recipient, timeout=self.timeout), margin=2.0)
         return {"ra": {"value": float(sent.params["ra"]), "unit": "deg"},
                 "dec": {"value": float(sent.params["dec"]), "unit": "deg"}, "frame": "icrs",
-                "recipients": list(sent.recipients)}
+                "recipients": list(sent.recipients), "rejected": self._rejected(sent)}
 
     # --- tabelle note ------------------------------------------------------------------------------------------
 
@@ -323,7 +361,7 @@ class SampLink(QObject):
             return
         if mtype == "samp.hub.event.shutdown":
             with self._lock:
-                self._hub, self._clients = None, ()
+                self._hub, self._clients, self._hub_name = None, (), None
                 self._sent.clear()
             self._emit_status()
             self.notice.emit(VoProtocolsError("SAMP_UNAVAILABLE", "l'hub SAMP si è spento: AstroTwo non è più "

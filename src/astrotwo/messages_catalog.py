@@ -1800,7 +1800,11 @@ _add("SAMP_NO_PEER",
      "No SAMP client is connected.", "Nessun client SAMP collegato.",
      recipient=("'{recipient}' is not connected or does not accept {mtype}.",
                 "'{recipient}' non è collegato o non accetta {mtype}.", "recipient mtype"),
-     none=("No connected program accepts {mtype}.", "Nessun programma collegato accetta {mtype}.", "mtype"))
+     none=("No connected program accepts {mtype}.", "Nessun programma collegato accetta {mtype}.", "mtype"),
+     rejected=("{recipient} did not accept {mtype}: {detail}", "{recipient} non ha accettato {mtype}: {detail}",
+               "recipient! mtype detail!"),
+     no_reply=("{recipient} did not answer {mtype} within {seconds} s.",
+               "{recipient} non ha risposto a {mtype} entro {seconds} s.", "recipient! mtype seconds:num"))
 _add("ROW_LIMIT_EXCEEDED",
      "The result exceeds the row limit.", "Il risultato supera il limite di righe.",
      cut=("Received {received} rows, the first {max_rows} returned (max_rows = {max_rows}).",
