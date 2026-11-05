@@ -75,7 +75,13 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   dichiara con `PARTIAL_CATALOG`/`ROW_LIMIT_EXCEEDED` del 13); centro e raggio sono quelli
   della vista calcolati dal 10: `catalog.load_region`).
 - **Tools:** Distance (strumento di misura del `41`); Simbad pointer
-  (puntatore del `41`). L'attivazione è `ui.set_tool`.
+  (puntatore del `41`). L'attivazione è `ui.set_tool`. **Dal 2026-11-05
+  (sprint B1):** sottomenu **SAMP** (§3.12): Connect (`samp.connect`),
+  Disconnect (`samp.disconnect`), Connected applications (elenco in sola
+  lettura), Send catalog (`samp.send_table`), Send selected rows
+  (`samp.send_selection`), Point at view center e Point at selected source
+  (`samp.point_at`); le voci di invio aprono l'elenco dei destinatari
+  ("All applications" o un client).
 - **Window:** mostra o nasconde i pannelli.
 - **Help:** About AstroTwo (versione SemVer, DC4, build, copyright, una riga
   di licenza e il pulsante Licenses…; su macOS la voce va nel menu dell'app).
@@ -112,6 +118,9 @@ proiezione dell'immagine base dà `VIEW_CENTER_OUTSIDE_IMAGE` del `05` con il fr
 - **Comando in corso:** nome, avanzamento (passo n di m o indeterminato) e
   pulsante **Annulla** per ogni comando lungo (regola del proprietario del
   2026-10-15).
+- **SAMP (dal 2026-11-05, §3.12):** «SAMP: off», «SAMP: N apps» oppure
+  «SAMP: N apps (own hub)»; il suggerimento dice se l'hub è di un altro
+  programma o di AstroTwo e dà i nomi dei client collegati.
 
 ### 3.6 Pannello Comandi (cronologia visibile)
 
@@ -324,7 +333,7 @@ Architettura approvata dal proprietario il 2026-10-15:
 
 ### 3.10 Preferenze essenziali
 
-Finestra delle preferenze con cinque voci e, dal 2026-10-16, la sezione
+Finestra delle preferenze con cinque voci (sei dal 2026-11-05: SAMP all'avvio, §3.12) e, dal 2026-10-16, la sezione
 **Assistant** (profili, modello, modalità rigorosa, limiti, prezzo
 facoltativo: tabella del `44` §3.6; la chiave va **solo** nel Portachiavi
 tramite il `31`, mai in `QSettings`); ogni modifica è un comando
@@ -342,6 +351,7 @@ stesso `prefs.set`.
 | Sistema di coordinate mostrato | ICRS sessagesimale, ICRS decimale, galattico | valore iniziale di `view.set_coordinate_display` |
 | Survey HiPS predefinito | identificativo HiPS; default `CDS/P/DSS2/color` (D12-3) | survey attivato all'avvio con `hips.set_survey` |
 | Aspetto | sistema (default), scuro, chiaro, notte rossa | §3.11; cambia subito, senza riavvio |
+| Connetti SAMP all'avvio (dal 2026-11-05) | sì / no, default **no** (decisione del proprietario del 2026-11-05) | all'avvio `samp.connect` (§3.12); chiave `samp/connect_at_startup` |
 
 ### 3.11 Linee guida visive
 
@@ -402,6 +412,60 @@ aperta.
   scuro) e `mdfiles/mockup/finestra-principale-notte.html` (modalità notte
   rossa): pagine HTML statiche con valori fittizi, solo immagine di
   riferimento, non codice dell'app.
+
+### 3.12 SAMP: AstroTwo parla con TOPCAT, DS9 e gli altri (sprint B1, 2026-11-05)
+
+Decisioni del proprietario del 2026-11-05 (D40-8); protocollo e messaggi del `14` (`SampHub`, D14-2, D14-9
+punto 10); comandi `samp.*` e origine `samp` del `05` (D05-5). Codice: `src/astrotwo/ui/samp_link.py` (classe
+`SampLink`) e la finestra (`main_window.py`).
+
+- **Collegamento manuale:** Tools → SAMP → Connect / Disconnect (`samp.connect`, `samp.disconnect`). Preferenza
+  "Connetti SAMP all'avvio" (§3.10), **spenta di default**. Stato sempre visibile nella barra (§3.5).
+- **Hub:** si usa quello già attivo (es. di TOPCAT, trovato con il file di blocco SAMP standard); se non c'è,
+  AstroTwo avvia il suo con il **profilo web spento**. Alla chiusura di AstroTwo l'hub proprio si spegne in modo
+  pulito (il file di blocco sparisce, i client ricevono l'avviso di chiusura); se l'hub era di un altro programma,
+  AstroTwo si scollega e basta. Se l'hub di un altro programma si spegne, AstroTwo passa a «SAMP: off» con
+  l'avviso `SAMP_UNAVAILABLE` (`hub_shutdown`) nel pannello Messaggi.
+- **Elenco dei client:** Tools → SAMP → Connected applications (nomi dichiarati, `samp.name`, o l'identificativo
+  se il nome manca); si aggiorna con gli eventi dell'hub (`14` §3: registrazione, uscita, metadati) senza mai
+  bloccare l'interfaccia.
+- **Invio** (Tools → SAMP, menu contestuale della tabella del `42` §3.6 e del cielo del `41` §3.20); ogni voce apre
+  l'elenco dei destinatari: **All applications** (tutti i client iscritti a quel tipo di messaggio) o un client:
+  - *Send catalog* (`samp.send_table`): catalogo della scheda in primo piano nel pannello Tabella; VOTable con
+    colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13 (mai assunta; senza colonne confermate nessun
+    `COOSYS`).
+  - *Send selected rows* (`samp.send_selection`): righe selezionate di quel catalogo, indici nell'ordine della
+    tabella (non nell'ordine mostrato), da 0; se la tabella non è ancora passata da SAMP la si manda prima nello
+    stesso comando (`table_sent = true`, D40-9). Nessuna riga selezionata = selezione vuota inviata.
+  - *Point at view center* e *Point at selected source* (`samp.point_at`): centro della vista (`ViewState`) o
+    posizione della sorgente selezionata (una riga, posizione del 13 con l'epoca del catalogo); il 14 la converte
+    in gradi ICRS.
+  Voci di invio spente quando AstroTwo non è collegato o manca ciò che serve (catalogo, sorgente).
+- **Ricezione** (solo i tre tipi di `SAMP_MTYPES`; ogni messaggio diventa un comando registrato del `05` con
+  `requested_by = samp` e il client mittente, D05-5):
+  - `table.load.votable` → copia locale del VOTable (`save_votable` del 14) nella cartella
+    `~/Library/Application Support/AstroTwo/SAMP/received/` (D40-9), poi `catalog.open_file` su quel file: stessi
+    controlli dei file locali del 13 (colonne di posizione suggerite e da confermare con i dialoghi del `42`
+    §3.5, epoca dai metadati, nessuna assunzione). Riuscita l'apertura, la tabella (`table-id` e URL del mittente)
+    è **nota** e legata al nuovo livello.
+  - `table.select.rowList` → se la tabella è nota (mandata da AstroTwo o ricevuta via SAMP), `catalog.select` sul
+    suo livello con le righe ricevute; altrimenti nessuna selezione, risposta d'errore al mittente e messaggio
+    `SAMP_TABLE_UNKNOWN` nel pannello Messaggi (anche se il livello è stato rimosso).
+  - `coord.pointAt.sky` → `view.set_center` in ICRS con epoca `null` e il motivo ("SAMP non dichiara l'epoca"),
+    zoom invariato; con un'immagine come base un punto fuori dalla proiezione dà `VIEW_CENTER_OUTSIDE_IMAGE`.
+  - Qualunque altro tipo: AstroTwo non vi è iscritto (l'hub lo rifiuta); se arriva lo stesso, risposta d'errore
+    `SAMP_UNSUPPORTED_TYPE` (14) e nessuna azione.
+  Le tabelle note non entrano nella sessione: dopo una riapertura una selezione per quelle tabelle dà
+  `SAMP_TABLE_UNKNOWN` finché la tabella non viene rimandata.
+- **Thread (decisione (e) del 2026-11-05):** le funzioni di ricezione di `pyvo.samp` girano nei thread del suo
+  server XML-RPC: non toccano mai Qt, emettono segnali di `SampLink` che arrivano al thread principale in coda, e il
+  thread principale mette in coda i comandi. Collegamento, scollegamento, elenco e invio girano fuori dal thread
+  principale (esecutori dei comandi `samp.*` nel thread di lavoro, §3.8) e ogni chiamata all'hub ha un **tempo
+  massimo di 10 s** (D40-9; le chiamate XML-RPC di `pyvo` non hanno un timeout proprio): oltre, `SAMP_UNAVAILABLE`
+  (`timeout`) e l'operazione si abbandona (un collegamento arrivato in ritardo si chiude). L'interfaccia non
+  aspetta mai l'hub.
+- **IA:** l'assistente non usa SAMP (nessuno strumento nel `32`, decisione (f) del 2026-11-05).
+- **Le immagini** (`image.load.fits`) restano un'estensione prevista (D14-2).
 
 ## 4. Cosa NON fa
 
@@ -534,6 +598,9 @@ controllate dalla finestra e dal pannello dell'assistente sollevano `ValueProble
 | | `qt` | `folder` (ext) |
 | `COMMAND_CANCELLED` (condiviso con 05) | `window_closed`, `replay` | — |
 | `COMMAND_PARAMETER_INVALID` (condiviso con 05) | `choice` | `parameter`, `given`, `allowed` (list) |
+| `SAMP_UNAVAILABLE` (del 14, dal 2026-11-05) | `timeout` | `operation`, `seconds` |
+| | `hub_shutdown` | — |
+| `SAMP_TABLE_UNKNOWN` (del 14, dal 2026-11-05) | `unknown` | `table_id` (ext), `url` (ext), `sender` (ext) |
 
 ## 11. Esposizione all'IA
 
@@ -565,6 +632,7 @@ simulati, in `tests/ui/`.
 | T11 | Vai a | nome noto (SIMBAD simulato), coordinate sessagesimali, testo non valido | vista centrata con fonte dichiarata; errore del 10 per il testo non valido | ispezione |
 | T12 | Avvio (`perf`) | avvio senza rete sul Mac di riferimento | finestra pronta in ≤ 3 s | misura (marcatore `perf`, D41-4) |
 | T13 | Aspetto | sistema in modalità scura e chiara (simulata); poi modalità notte | tema che segue il sistema; in modalità notte nessun colore dei widget con componente verde o blu sopra una soglia bassa dichiarata nel test; comando `ui.set_appearance` di classe `application` | lettura della tavolozza dei widget |
+| T21 | SAMP (§3.12, sprint B1) | hub e client simulati di `pyvo.samp` nella cartella home temporanea dei test (porta casuale, mai il `~/.samp` vero): Connect con un hub già attivo e senza hub; invio di catalogo, righe selezionate, centro della vista e sorgente selezionata a tutti e a un client; ricezione dei tre tipi; tipo non supportato; tabella sconosciuta; uscita del client e spegnimento dell'hub esterno; Disconnect e chiusura della finestra con hub proprio; hub che non risponde | hub esterno usato (nessun hub proprio) o hub proprio con profilo web spento; contenuti ricevuti dal client uguali a quelli della tabella (colonne, unità, UCD, epoca del `COOSYS`), righe e gradi ICRS ricalcolati con astropy; nuovo catalogo, selezione e centro della vista con comandi in cronologia di origine `samp` e il nome del client; tipo non supportato rifiutato senza azione; `SAMP_TABLE_UNKNOWN`; elenco e stato aggiornati; file di blocco rimosso alla chiusura; con l'hub muto `SAMP_UNAVAILABLE` (`timeout`) e thread principale sempre libero (sonda di latenza) | test con hub e client simulati |
 
 ## 13. Decisioni aperte
 
@@ -676,6 +744,39 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   né dalle scorciatoie standard di macOS per le app). La voce resta anche
   nel menu View e nel pulsante con la luna nella barra degli strumenti.
 
+- **D40-8 — SAMP nell'interfaccia: DECISA il 2026-11-05 (decisioni del
+  proprietario, sprint B1).** (a) collegamento manuale da menu con
+  Connect/Disconnect, elenco dei client e stato visibile; preferenza
+  "connetti all'avvio" spenta di default; (b) hub già attivo se c'è,
+  altrimenti hub proprio con profilo web spento; alla chiusura l'hub proprio
+  si spegne pulito, con un hub altrui ci si scollega e basta; (c) invio di
+  catalogo (VOTable con colonne, unità, UCD, epoca dichiarata), righe
+  selezionate e puntamento (centro della vista o oggetto selezionato) a tutti
+  o a un client, dal menu, dal pannello cataloghi e dai menu contestuali;
+  (d) ricezione dei tre tipi come comandi registrati con origine `samp`
+  (D05-5), stessi controlli dei file locali per le tabelle, selezione solo
+  per le tabelle note, mai altri tipi (`SAMP_UNSUPPORTED_TYPE`); (e) le
+  funzioni di `pyvo.samp` non toccano Qt, collegamento e invio in background
+  con tempo massimo; (f) l'assistente non usa SAMP; (g) codici SAMP del 14
+  con voci en/it, voci nuove solo dove servono (`SAMP_TABLE_UNKNOWN`,
+  `SAMP_TABLE_FETCH_FAILED`, sotto-voci `timeout` e `hub_shutdown`).
+  Applicata in §3.3, §3.5, §3.10, §3.12, §10.1, §12 (T21). Le immagini
+  restano fuori (D14-2).
+- **D40-9 — Scelte minori di SAMP: PROPOSTE da Claude Code il 2026-11-05,
+  da confermare dal proprietario (implementate come raccomandate, Gruppo
+  3).** (1) posizione del menu: sottomenu **Tools → SAMP** (Tools raccoglie
+  già gli strumenti che lavorano con altri servizi; nessun menu nuovo nella
+  barra); (2) tempo massimo di ogni chiamata all'hub **10 s**, lo stesso
+  del tempo di connessione del `04` (un hub locale risponde in
+  millisecondi); (3) VOTable ricevuti copiati in
+  `~/Library/Application Support/AstroTwo/SAMP/received/` e **mai
+  cancellati da AstroTwo** (servono per riaprire le sessioni; non nella
+  cache, che si può svuotare); (4) "Send selected rows" su una tabella mai
+  passata da SAMP la manda prima nello stesso comando; (5) identificativo
+  delle tabelle inviate `astrotwo-<livello>-<n>`; (6) nel pannello Comandi
+  la colonna "chi" scrive «SAMP · <nome del client>» e il filtro ha la voce
+  SAMP.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -705,3 +806,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-25 | Claude Code | **Sprint 8e, ultimo della traduzione (D40-3):** nuova §10.1 con la tabella dei messaggi scritti dalla finestra (`PREFERENCE_INVALID`, `PREFERENCE_VALUE_INVALID` con `ValueProblem`, `UI_COMMAND_FAILED`, `SESSION_SAVE_FAILED`, `UI_TRANSLATION_MISSING`) scritta prima del codice; §3.7.1 e T18 estese a tutto `src/astrotwo`; **D40-3 chiusa**. Test `tests/ui/test_messages_ui.py`. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b (D41-9 e D41-10 decise dal proprietario):** frame di lettura nel testo d'aiuto del campo "Vai a" (§3.4); righe massime di default 5 000 nella finestra Catalog in view (§3.3, valore da confermare). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | D41-10: 5 000 righe di default confermate dal proprietario (§3.3). §3.3: About ridotto e nuova voce Licenses… (finestra specificata nel `60` §3.9, sprint 60a). Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05): nuovo §3.12 (collegamento, hub, elenco dei client, invio, ricezione come comandi con origine `samp`, thread e tempo massimo, chiusura); sottomenu Tools → SAMP (§3.3), stato nella barra (§3.5), preferenza "Connetti SAMP all'avvio" (§3.10); codici SAMP in §10.1; T21 (§12); **D40-8** decisa, **D40-9** (scelte minori) proposta e da confermare. Stato `approvato` invariato. |

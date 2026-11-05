@@ -388,6 +388,9 @@ class CatalogTab(QWidget):
         header.setHighlightSections(False)
         header.sectionClicked.connect(self._header_clicked)
         self.view.selectionModel().selectionChanged.connect(self._selection_changed)
+        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # menu SAMP della finestra (§3.6)
+        self.view.customContextMenuRequested.connect(
+            lambda point: panel.context_menu_requested.emit(self.layer_id, self.view.viewport().mapToGlobal(point)))
         self.record_title = QLabel(self)
         self.record_title.setObjectName("recordTitle")
         self.record_title.setWordWrap(True)
@@ -576,6 +579,7 @@ class CatalogPanel(QWidget):
     """Pannello in basso (42): una scheda per livello di catalogo del 41; senza cataloghi lo stato vuoto del 40."""
 
     columns_requested = Signal(str)  # "Colonne…" di una scheda: la finestra apre i dialoghi di §3.5
+    context_menu_requested = Signal(str, object)  # livello e punto sullo schermo: menu SAMP della finestra (§3.6)
 
     def __init__(self, submit: Callable[..., int], viewer=None, empty: QWidget | None = None, parent=None) -> None:
         super().__init__(parent)

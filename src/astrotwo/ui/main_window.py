@@ -77,6 +77,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QStackedWidget,
     QPlainTextEdit,
@@ -113,13 +114,17 @@ from astrotwo.core.commands import (
     Session,
     SESSION_EXTENSION,
     CancelToken,
+    catalog_positions,
     default_registry,
+    sky_from_json,
+    sky_json,
     time_text,
 )
-from astrotwo.core.coordinates_wcs import format_coordinates
+from astrotwo.core.coordinates_wcs import SkyFrame, format_coordinates
 from astrotwo.app_bundle import build_info
 from astrotwo.ui.ai_panel import PANEL_WIDTH
 from astrotwo.ui.licenses_dialog import LicensesDialog
+from astrotwo.ui.samp_link import SampLink, SampStatus
 from astrotwo.ui.message_view import (
     ValueProblem,
     exception_message,
@@ -208,6 +213,7 @@ PREFERENCES: dict[str, Preference] = {p.key: p for p in (
     Preference("view/coordinates", "icrs_sexagesimal", _choice(tuple(COORDINATE_DISPLAYS))),
     Preference("hips/default_survey", DEFAULT_SURVEY, _survey),
     Preference("appearance", "system", _choice(APPEARANCES)),
+    Preference("samp/connect_at_startup", "false", _choice(("true", "false"))),  # 40 §3.12, D40-8 (a)
 )}
 
 
@@ -757,6 +763,8 @@ def _who(requested_by: RequestedBy) -> str:
         return QCoreApplication.translate("HistoryPanel", "AI")
     if requested_by.source == "session":
         return QCoreApplication.translate("HistoryPanel", "Session")
+    if requested_by.source == "samp":  # D05-5: programma mittente (nome dichiarato, altrimenti identificativo)
+        return f"SAMP · {requested_by.client or requested_by.client_id}"
     return QCoreApplication.translate("HistoryPanel", "User")
 
 
@@ -887,8 +895,10 @@ class StatusBar(QStatusBar):
         self.cursor_label = QLabel(self.tr("No data"))  # coordinate (o "Nessun dato" / "Fuori dal cielo")
         self.value_label = QLabel()  # "valore unità · ordine N (≈ X″/px)" e pixel FITS: mai tagliato
         self.network_label = QLabel()
+        self.samp_label = QLabel()  # stato SAMP (§3.5, §3.12)
+        self.samp_label.setObjectName("sampStatus")
         self.command_label = QLabel()
-        for label in (self.cursor_label, self.value_label, self.network_label, self.command_label):
+        for label in (self.cursor_label, self.value_label, self.network_label, self.samp_label, self.command_label):
             label.setFont(font)
         # Il testo sotto il mouse cambia a ogni movimento: non deve mai cambiare la larghezza minima della finestra
         # (il cielo si ridimensionerebbe e registrerebbe una nuova finestra, 41 §3.1). Due campi: il valore ha
@@ -915,12 +925,13 @@ class StatusBar(QStatusBar):
         self.cancel_button.clicked.connect(self.cancelRequested)
         self.addWidget(self.cursor_label, 1)
         self.addWidget(self.value_label)
-        for w in (self.network_label, self.command_label, self.progress_bar, self.cancel_button):
+        for w in (self.samp_label, self.network_label, self.command_label, self.progress_bar, self.cancel_button):
             self.addPermanentWidget(w)
         # Altezza fissa del mockup (26 px): mostrare Annulla e l'avanzamento non ridimensiona il cielo (41), che
         # a ogni nuova dimensione registra la nuova finestra.
         self.setFixedHeight(26)
         self.show_network(0, 0)
+        self.show_samp(SampStatus(False, False))
         self.show_idle()
 
     def show_cursor(self, result: CommandResult | None) -> None:
@@ -1025,6 +1036,21 @@ class StatusBar(QStatusBar):
         self.network_label.setText(self.tr("Network: %1 commands, %2 tiles").replace("%1", str(commands))
                                    .replace("%2", str(tiles)))
 
+    def show_samp(self, status: SampStatus) -> None:
+        """«SAMP: off», «SAMP: N apps» o «SAMP: N apps (own hub)»; nel suggerimento hub e nomi dei client (§3.12)."""
+        if not status.connected:
+            self.samp_label.setText(self.tr("SAMP: off"))
+            self.samp_label.setToolTip(self.tr("Not connected to a SAMP hub (Tools → SAMP → Connect)."))
+            return
+        text = self.tr("SAMP: %1 apps").replace("%1", str(len(status.clients)))
+        if status.own_hub:
+            text += " " + self.tr("(own hub)")
+        self.samp_label.setText(text)
+        hub = self.tr("Hub started by AstroTwo.") if status.own_hub else self.tr("Hub of another application.")
+        names = ", ".join(c.name or c.id for c in status.clients) or self.tr("no applications")
+        connected = self.tr("Connected: %1").replace("%1", names)  # fuori dalla f-string: lupdate la vede
+        self.samp_label.setToolTip(f"{hub} {connected}")
+
     def show_running(self, name: str, report: ProgressReport | None = None) -> None:
         if report is not None and report.total:
             self.progress_bar.setRange(0, report.total)
@@ -1068,7 +1094,7 @@ class HistoryPanel(QWidget):
         self.who_filter = QComboBox()
         self.who_filter.setObjectName("whoFilter")
         for key, text in (("all", self.tr("Everyone")), ("user", self.tr("User")), ("ai", self.tr("AI")),
-                          ("session", self.tr("Session"))):
+                          ("session", self.tr("Session")), ("samp", "SAMP")):
             self.who_filter.addItem(text, key)
         self.rerun_button = QPushButton(self.tr("Rerun"))
         self.copy_button = QPushButton(self.tr("Copy as JSON"))
@@ -1138,7 +1164,7 @@ class HistoryPanel(QWidget):
         if cls != "all" and entry.command_class != cls:
             return False
         source = entry.command.requested_by.source
-        group = "ai" if source == "ai" else "session" if source == "session" else "user"
+        group = source if source in ("ai", "session", "samp") else "user"
         return who == "all" or who == group
 
     def refresh(self) -> None:
@@ -1414,6 +1440,8 @@ class PreferencesDialog(QDialog):
         for key, text in (("system", self.tr("System")), ("dark", self.tr("Dark")), ("light", self.tr("Light")),
                           ("night", self.tr("Red night mode"))):
             self.appearance.addItem(text, key)
+        self.samp_startup = QCheckBox(self.tr("Connect to SAMP at startup"))
+        self.samp_startup.setObjectName("prefSampStartup")
         assistant = QPushButton(self.tr("Assistant settings…"))
         assistant.setObjectName("prefAssistant")
         assistant.setToolTip(self.tr("Profiles, model, strict mode, limits, price. API keys are kept only in the "
@@ -1436,6 +1464,7 @@ class PreferencesDialog(QDialog):
         form.addRow(self.tr("Coordinates shown"), self.coordinates)
         form.addRow(self.tr("Default HiPS survey"), self.survey)
         form.addRow(self.tr("Appearance"), self.appearance)
+        form.addRow("SAMP", self.samp_startup)
         form.addRow(self.tr("Assistant"), assistant)
         form.addRow(buttons)
         self._load()
@@ -1447,6 +1476,7 @@ class PreferencesDialog(QDialog):
         self.coordinates.setCurrentIndex(self.coordinates.findData(w.preference("view/coordinates")))
         self.survey.setText(w.preference("hips/default_survey"))
         self.appearance.setCurrentIndex(self.appearance.findData(w.preference("appearance")))
+        self.samp_startup.setChecked(w.preference("samp/connect_at_startup") == "true")
         self.show_usage()
 
     def show_usage(self) -> None:
@@ -1463,7 +1493,8 @@ class PreferencesDialog(QDialog):
     def values(self) -> dict[str, str]:
         return {"language": self.language.currentData(), "cache/limit_bytes": self.cache_limit.text().strip(),
                 "view/coordinates": self.coordinates.currentData(), "hips/default_survey": self.survey.text(),
-                "appearance": self.appearance.currentData()}
+                "appearance": self.appearance.currentData(),
+                "samp/connect_at_startup": "true" if self.samp_startup.isChecked() else "false"}
 
     def _apply(self) -> None:
         for key, value in self.values().items():
@@ -1509,7 +1540,8 @@ class MainWindow(QMainWindow):
     _assistant_submit = Signal(object, object, object)  # comando, CancelToken, _AssistantTicket (dal thread del 35)
 
     def __init__(self, registry: CommandRegistry | None = None, settings: QSettings | None = None, *,
-                 startup_commands: bool = True, keychain=None, ai_adapter_factory: Callable | None = None) -> None:
+                 startup_commands: bool = True, keychain=None, ai_adapter_factory: Callable | None = None,
+                 samp_link: SampLink | None = None) -> None:
         super().__init__()
         self.settings = settings if settings is not None else QSettings()
         QLocale.setDefault(QLocale.c())  # punto decimale per tutti i numeri in ogni lingua (§3.9)
@@ -1525,6 +1557,18 @@ class MainWindow(QMainWindow):
                 registry.bind(name, executor)
         if "view.export_png" in {s.name for s in registry.specs()}:
             registry.bind("view.export_png", self._exec_export_png)  # legge la modalità notte della finestra (41 §3.14)
+        # SAMP (§3.12): collegamento del 14 con tempo massimo; esecutori nel thread dei comandi, ricezione in segnali
+        self.samp = samp_link if samp_link is not None else SampLink(parent=self)
+        if self.samp.parent() is None:
+            self.samp.setParent(self)
+        for name, executor in (("samp.connect", self._exec_samp_connect),
+                               ("samp.disconnect", self._exec_samp_disconnect),
+                               ("samp.send_table", self._exec_samp_send_table),
+                               ("samp.send_selection", self._exec_samp_send_selection),
+                               ("samp.point_at", self._exec_samp_point_at)):
+            if name in {s.name for s in registry.specs()}:
+                registry.bind(name, executor)
+        self._samp_tables: dict[int, object] = {}  # lavoro di catalog.open_file → ReceivedTable (tabelle note)
         self.registry = registry
         self.session = Session(registry)
         self.saved_count = 0
@@ -1556,6 +1600,13 @@ class MainWindow(QMainWindow):
         self.status.cancelRequested.connect(self.cancel_running)
         self.sky.cursor_read.connect(self.status.show_cursor)
         self.setStatusBar(self.status)
+        self.samp.status_changed.connect(self._samp_status)
+        self.samp.table_received.connect(self._samp_table_received)
+        self.samp.selection_received.connect(self._samp_selection_received)
+        self.samp.point_received.connect(self._samp_point_received)
+        self.samp.notice.connect(self._samp_notice)
+        self.sky.context_menu_requested.connect(self._sky_context_menu)
+        self.catalog_panel.context_menu_requested.connect(self._table_context_menu)
         self._start_runner()
         self.apply_appearance(self.preference("appearance"))
         QApplication.styleHints().colorSchemeChanged.connect(self._system_scheme_changed)
@@ -1572,6 +1623,8 @@ class MainWindow(QMainWindow):
             frame, fmt = COORDINATE_DISPLAYS[self.preference("view/coordinates")]
             self.submit("view.set_coordinate_display", {"frame": frame, "format": fmt})
             self.submit("hips.set_survey", {"survey": self.preference("hips/default_survey")})
+            if self.preference("samp/connect_at_startup") == "true":  # spenta di default (D40-8 (a))
+                self.submit("samp.connect", {})
 
     # --- costruzione -------------------------------------------------------------------
 
@@ -1802,6 +1855,7 @@ class MainWindow(QMainWindow):
         """Pannello dei livelli dallo stato; senza livelli lo stato vuoto del 40."""
         self.layer_panel.show_state(state)
         self.layer_stack.setCurrentIndex(1 if state.layers else 0)
+        self.samp.keep_layers(layer.id for layer in state.layers)  # tabelle SAMP dei livelli rimossi dimenticate
 
     def _schedule_headers(self, *_) -> None:
         QTimer.singleShot(0, self, self._refresh_headers)  # contesto = finestra: annullato se distrutta
@@ -1881,6 +1935,10 @@ class MainWindow(QMainWindow):
                             name="toolSimbad")
         for act in (self.act_distance, self.act_simbad):
             self.tool_group.addAction(act)
+        # SAMP (§3.12): Tools → SAMP; le voci di invio aprono l'elenco dei destinatari
+        self.act_samp_connect = a(self.tr("Connect"), lambda: self.submit("samp.connect", {}), name="sampConnect")
+        self.act_samp_disconnect = a(self.tr("Disconnect"), lambda: self.submit("samp.disconnect", {}),
+                                     name="sampDisconnect")
         self.panel_actions: dict[str, QAction] = {}
         for key, dock in self.docks.items():
             act = a(dock.windowTitle(), lambda c, k=key: self.submit("ui.set_panel", {"panel": k, "visible": c}),
@@ -1931,6 +1989,11 @@ class MainWindow(QMainWindow):
         m = bar.addMenu(self.tr("Tools"))
         m.addAction(self.act_distance)
         m.addAction(self.act_simbad)
+        m.addSeparator()
+        self.samp_menu = m.addMenu("SAMP")
+        self.samp_menu.setObjectName("sampMenu")
+        self.samp_menu.aboutToShow.connect(self._fill_samp_menu)
+        self._fill_samp_menu()
         m = bar.addMenu(self.tr("Window"))
         for act in self.panel_actions.values():
             m.addAction(act)
@@ -2086,6 +2149,9 @@ class MainWindow(QMainWindow):
     def _show_finished(self, done: CommandDone) -> None:
         self._job_done(done.job_id)
         result = done.result
+        received = self._samp_tables.pop(done.job_id, None)
+        if received is not None and result.status == "ok":  # tabella ricevuta via SAMP: ora è nota (§3.12)
+            self.samp.remember(result.values["layer"], received.table_id, received.url)
         number = None if done.entry is None else done.entry.number
         if done.entry is not None:
             self.history.add(done.entry)
@@ -2183,6 +2249,180 @@ class MainWindow(QMainWindow):
                     self.coordinate_actions[key].setChecked(True)
             self.status.coordinate_style = p["format"]
             self.go_to_field.set_frame(p["frame"])
+
+    # --- SAMP (§3.12, sprint B1) ---------------------------------------------------------
+    # Esecutori dei comandi samp.* nel thread di lavoro (mai nel thread principale): ogni chiamata all'hub ha il tempo
+    # massimo di ``SampLink``. Le ricezioni arrivano come segnali nel thread principale e diventano comandi del 05 con
+    # ``requested_by = samp`` e il client mittente (D05-5).
+
+    def _exec_samp_connect(self, ctx, p: Mapping) -> Outcome:
+        return Outcome(values=self.samp.connect())
+
+    def _exec_samp_disconnect(self, ctx, p: Mapping) -> Outcome:
+        return Outcome(values=self.samp.disconnect())
+
+    def _exec_samp_send_table(self, ctx, p: Mapping) -> Outcome:
+        return Outcome(values=self.samp.send_table(ctx.state.layer(p["layer"]), p["recipient"]))
+
+    def _exec_samp_send_selection(self, ctx, p: Mapping) -> Outcome:
+        return Outcome(values=self.samp.send_selection(ctx.state.layer(p["layer"]), p["recipient"]))
+
+    def _exec_samp_point_at(self, ctx, p: Mapping) -> Outcome:
+        values = self.samp.point_at(sky_from_json(p["position"]), p["recipient"])
+        return Outcome(values={**values, "position": p["position"]})
+
+    @staticmethod
+    def _samp_origin(sender_id: str, sender: str | None) -> RequestedBy:
+        return RequestedBy("samp", client=sender, client_id=sender_id)
+
+    def _submit_from_samp(self, name: str, params: Mapping[str, object], sender_id: str, sender: str | None) -> int:
+        return self.submit_command(Command(name, self.registry.spec(name).version, dict(params),
+                                           self._samp_origin(sender_id, sender)))
+
+    @Slot(object)
+    def _samp_status(self, status: SampStatus) -> None:
+        self.status.show_samp(status)
+        self._fill_samp_menu()
+
+    @Slot(object, bool)
+    def _samp_notice(self, exc, error: bool) -> None:
+        self.messages.add(None, exception_message(exc), error=error)
+
+    @Slot(object)
+    def _samp_table_received(self, received) -> None:
+        """``table.load.votable``: la copia locale si apre con ``catalog.open_file`` (stessi controlli dei file)."""
+        job = self._submit_from_samp("catalog.open_file", {"file": {"path": str(received.path)}},
+                                     received.sender_id, received.sender)
+        self._samp_tables[job] = received
+
+    @Slot(object)
+    def _samp_selection_received(self, received) -> None:
+        if self.session.workspace.state.find(received.layer) is None:  # livello rimosso nel frattempo
+            self.messages.add(None, ResultMessage(
+                "SAMP_TABLE_UNKNOWN", f"selezione per la tabella {received.table_id!r}: livello rimosso",
+                {"reason": "unknown", "table_id": received.table_id, "url": "",
+                 "sender": received.sender or received.sender_id}), error=True)
+            return
+        self._submit_from_samp("catalog.select", {"layer": received.layer, "rows": list(received.rows)},
+                               received.sender_id, received.sender)
+
+    @Slot(object)
+    def _samp_point_received(self, received) -> None:
+        """``coord.pointAt.sky``: centro in ICRS, epoca non dichiarata da SAMP (mai assunta), zoom invariato."""
+        position = {"lon": {"value": received.ra_deg, "unit": "deg"}, "lat": {"value": received.dec_deg, "unit": "deg"},
+                    "frame": "icrs", "equinox": None, "obstime": None, "epoch": None,
+                    "epoch_reason": "coord.pointAt.sky: SAMP non dichiara l'epoca (non assunta)"}
+        self._submit_from_samp("view.set_center", {"position": position, "window": self.view_window()},
+                               received.sender_id, received.sender)
+
+    def current_catalog(self):
+        """Livello di catalogo della scheda in primo piano nel pannello Tabella (42), o ``None``."""
+        page = self.catalog_panel.tabs.currentWidget()
+        if page is None or self.catalog_panel.stack.currentIndex() != 1:
+            return None
+        return self.session.workspace.state.find(page.layer_id)
+
+    @staticmethod
+    def selected_source_position(layer) -> dict | None:
+        """Posizione della sola riga selezionata (colonne del 13, epoca del catalogo), o ``None``."""
+        if layer is None or len(layer.selection) != 1:
+            return None
+        coords, _ = catalog_positions(layer.data, [layer.selection[0]])
+        if coords is None:
+            return None
+        return sky_json(SkyFrame(coord=coords.coord[0], epoch=coords.epoch))
+
+    def _view_center(self) -> dict | None:
+        center = self.session.workspace.state.view.center
+        return None if center is None else sky_json(center)
+
+    def _recipients_menu(self, parent: QMenu, title: str, name: str, params: Mapping | None, enabled: bool) -> QMenu:
+        """Sottomenu dei destinatari: tutti i client o uno (identificativo nel suggerimento)."""
+        sub = parent.addMenu(title)
+        sub.setEnabled(bool(enabled and params is not None))
+        params = dict(params or {})
+        every = sub.addAction(self.tr("All applications"))
+        every.triggered.connect(lambda checked=False: self.submit(name, {**params, "recipient": None}))
+        clients = self.samp.status.clients
+        if clients:
+            sub.addSeparator()
+        for client in clients:
+            act = sub.addAction(client.name or client.id)
+            act.setToolTip(client.id)
+            act.triggered.connect(lambda checked=False, cid=client.id: self.submit(name, {**params, "recipient": cid}))
+        return sub
+
+    def _fill_samp_menu(self) -> None:
+        """Tools → SAMP (§3.12), rifatto a ogni apertura e a ogni cambio di stato."""
+        m = self.samp_menu
+        m.clear()
+        status = self.samp.status
+        self.act_samp_connect.setEnabled(not status.connected)
+        self.act_samp_disconnect.setEnabled(status.connected)
+        m.addAction(self.act_samp_connect)
+        m.addAction(self.act_samp_disconnect)
+        apps = m.addMenu(self.tr("Connected applications"))
+        if not status.connected:
+            apps.addAction(self.tr("Not connected")).setEnabled(False)
+        elif not status.clients:
+            apps.addAction(self.tr("No applications")).setEnabled(False)
+        for client in status.clients:
+            act = apps.addAction(client.name or client.id)
+            act.setToolTip(client.id)
+            act.setEnabled(False)  # elenco in sola lettura
+        m.addSeparator()
+        layer = self.current_catalog()
+        catalog = None if layer is None else {"layer": layer.id}
+        source = self.selected_source_position(layer)
+        center = self._view_center()
+        self._recipients_menu(m, self.tr("Send catalog"), "samp.send_table", catalog, status.connected)
+        self._recipients_menu(m, self.tr("Send selected rows"), "samp.send_selection", catalog, status.connected)
+        self._recipients_menu(m, self.tr("Point at view center"), "samp.point_at",
+                              None if center is None else {"position": center}, status.connected)
+        self._recipients_menu(m, self.tr("Point at selected source"), "samp.point_at",
+                              None if source is None else {"position": source}, status.connected)
+
+    def _connect_entry(self, menu: QMenu, connected: bool) -> None:
+        if not connected:
+            menu.addAction(self.tr("Connect to SAMP hub")).triggered.connect(
+                lambda checked=False: self.submit("samp.connect", {}, source="mouse"))
+            menu.addSeparator()
+
+    def _sky_context_menu(self, global_pos) -> QMenu:
+        """Menu contestuale del cielo (41 §3.20): puntamenti SAMP del centro della vista e della sorgente selezionata."""
+        menu = QMenu(self)
+        connected = self.samp.connected
+        self._connect_entry(menu, connected)
+        center = self._view_center()
+        layer = self.current_catalog()
+        if layer is None or len(layer.selection) != 1:
+            layer = next((c for c in self.session.workspace.state.of_kind("catalog") if len(c.selection) == 1), None)
+        source = self.selected_source_position(layer)
+        self._recipients_menu(menu, self.tr("Point SAMP applications at view center"), "samp.point_at",
+                              None if center is None else {"position": center}, connected)
+        self._recipients_menu(menu, self.tr("Point SAMP applications at selected source"), "samp.point_at",
+                              None if source is None else {"position": source}, connected)
+        self.last_context_menu = menu
+        if global_pos is not None:
+            menu.popup(global_pos)
+        return menu
+
+    def _table_context_menu(self, layer_id: str, global_pos) -> QMenu:
+        """Menu contestuale di una scheda del 42 (§3.6): tabella, righe selezionate, sorgente."""
+        menu = QMenu(self)
+        connected = self.samp.connected
+        self._connect_entry(menu, connected)
+        layer = self.session.workspace.state.find(layer_id)
+        catalog = None if layer is None else {"layer": layer_id}
+        source = self.selected_source_position(layer)
+        self._recipients_menu(menu, self.tr("Send table via SAMP"), "samp.send_table", catalog, connected)
+        self._recipients_menu(menu, self.tr("Send selected rows via SAMP"), "samp.send_selection", catalog, connected)
+        self._recipients_menu(menu, self.tr("Point SAMP applications at this source"), "samp.point_at",
+                              None if source is None else {"position": source}, connected)
+        self.last_context_menu = menu
+        if global_pos is not None:
+            menu.popup(global_pos)
+        return menu
 
     # --- azioni dei menu ----------------------------------------------------------------
 
@@ -2491,6 +2731,7 @@ class MainWindow(QMainWindow):
             job.cancel.cancel()
         for job_id in list(self._assistant_waiters):
             self._release_assistant(job_id, None)
+        self.samp.shutdown()  # hub proprio spento pulito, hub altrui: solo scollegamento (§3.12), al più il tempo massimo
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/state", self.saveState())
         self.settings.sync()

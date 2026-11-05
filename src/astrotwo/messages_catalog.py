@@ -1772,7 +1772,25 @@ _add("SAMP_UNAVAILABLE",
              "Nessun hub SAMP attivo e avvio del proprio non riuscito ({detail}); le altre funzioni VO restano "
              "disponibili.", "detail!"),
      not_connected=("Not connected to a SAMP hub: call connect().",
-                    "Non collegato a un hub SAMP: chiamare connect().", ""))
+                    "Non collegato a un hub SAMP: chiamare connect().", ""),
+     timeout=("The SAMP hub did not answer within {seconds} s ({operation}): operation abandoned, AstroTwo stays "
+              "usable.",
+              "L'hub SAMP non ha risposto entro {seconds} s ({operation}): operazione abbandonata, AstroTwo resta "
+              "utilizzabile.", "operation seconds:num"),
+     hub_shutdown=("The SAMP hub has shut down: AstroTwo is no longer connected.",
+                   "L'hub SAMP si è spento: AstroTwo non è più collegato.", ""))
+_add("SAMP_TABLE_UNKNOWN",
+     "The SAMP selection refers to a table AstroTwo does not know.",
+     "La selezione SAMP riguarda una tabella che AstroTwo non conosce.",
+     unknown=("Selection from {sender} for table '{table_id}' ({url}): AstroTwo does not know this table (it was not "
+              "sent or received via SAMP, or its layer was removed); no rows selected.",
+              "Selezione da {sender} per la tabella '{table_id}' ({url}): AstroTwo non conosce questa tabella (non è "
+              "passata da SAMP, o il suo livello è stato rimosso); nessuna riga selezionata.", "table_id! url! sender!"))
+_add("SAMP_TABLE_FETCH_FAILED",
+     "The table received via SAMP cannot be copied.", "La tabella ricevuta via SAMP non si può copiare.",
+     file=("{url}: copy failed ({detail}).", "{url}: copia non riuscita ({detail}).", "url! detail!"),
+     scheme=("{url}: URL scheme not allowed (file, http, https).",
+             "{url}: schema dell'URL non ammesso (file, http, https).", "url!"))
 _add("SAMP_UNSUPPORTED_TYPE",
      "The SAMP message type is not supported.", "Il tipo di messaggio SAMP non è supportato.",
      type=("Type '{mtype}' is not supported; supported: {supported}.",

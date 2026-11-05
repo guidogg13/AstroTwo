@@ -782,3 +782,43 @@ def test_name_fallback_to_ned_is_declared_in_commands(registry, monkeypatch):
     assert moved.status == "ok", moved.error
     assert moved.values["resolved"]["service"] == "ned"
     assert [w.code for w in moved.warnings] == ["NAME_RESOLVER_FALLBACK"]
+
+
+# =============================================================================
+# T23 — origine samp e comandi samp.* (D05-5, sprint B1)
+
+
+def test_t23_samp_origin_and_commands(cache, tmp_path):
+    from astrotwo.ai.tool_registry import EXPOSED_COMMANDS
+    from tests.core.test_commands_catalog_sky import write_catalog
+
+    origin = RequestedBy("samp", client="topcat", client_id="cli#2")
+    assert origin.to_json() == {"source": "samp", "client": "topcat", "client_id": "cli#2"}
+    assert RequestedBy.from_json(origin.to_json()) == origin
+    assert RequestedBy("samp", client_id="c3").to_json() == {"source": "samp", "client": None, "client_id": "c3"}
+    for bad in ({"source": "samp"}, {"source": "samp", "client_id": ""},
+                {"source": "samp", "client_id": "c", "model": "m"}, {"source": "menu", "client_id": "c"},
+                {"source": "ai", "conversation": "c", "turn": 1, "call": "x", "profile": "p", "model": "m",
+                 "client": "topcat"}):
+        with pytest.raises(ValueError):
+            RequestedBy.from_json(bad)
+    registry = default_registry(cache=cache)
+    names = ("samp.connect", "samp.disconnect", "samp.send_table", "samp.send_selection", "samp.point_at")
+    for name in names:
+        spec = registry.spec(name)
+        assert (spec.command_class, spec.bound_by, spec.version) == ("application", "40", 1)
+    assert not {n for n, _ in EXPOSED_COMMANDS} & set(names)  # l'assistente non usa SAMP (D40-8 (f))
+    # comando ricevuto via SAMP: in cronologia con l'origine, salvato e rieseguito alla riapertura
+    session = Session(registry)
+    path = write_catalog(tmp_path / "ricevuto.xml")
+    result = session.run(Command("catalog.open_file", 1, {"file": {"path": path}}, origin))
+    assert result.status == "ok"
+    target = tmp_path / "s.astrotwo.json"
+    session.save(target, app_version="0.1.0")
+    assert json.loads(target.read_text(encoding="utf-8"))["commands"][0]["command"]["requested_by"] == origin.to_json()
+    reopened = Session.load(target, registry)
+    report = reopened.replay()
+    assert report.status == "ok" and report.stop is None
+    assert reopened.history.entries[0].command.requested_by == origin
+    assert reopened.workspace.state.state_json() == session.workspace.state.state_json()
+

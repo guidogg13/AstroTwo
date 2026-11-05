@@ -379,6 +379,8 @@ def test_t8_preferences(qtbot, settings_path, cache):
     dialog.coordinates.setCurrentIndex(dialog.coordinates.findData("galactic"))
     dialog.survey.setText("CDS/P/2MASS/color")
     dialog.appearance.setCurrentIndex(dialog.appearance.findData("light"))
+    assert not dialog.samp_startup.isChecked()  # SAMP all'avvio spento di default (§3.12, D40-8 (a))
+    dialog.samp_startup.setChecked(True)
     assert "byte" in dialog.cache_usage.text().lower() or "Used" in dialog.cache_usage.text()
     dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok).click()
     wait_idle(qtbot, win)
@@ -393,7 +395,7 @@ def test_t8_preferences(qtbot, settings_path, cache):
     again = make_window(qtbot, settings_path, cache)
     assert {k: again.preference(k) for k in mw.PREFERENCES} == {
         "language": "en", "cache/limit_bytes": "123456789", "view/coordinates": "galactic",
-        "hips/default_survey": "CDS/P/2MASS/color", "appearance": "light"}
+        "hips/default_survey": "CDS/P/2MASS/color", "appearance": "light", "samp/connect_at_startup": "true"}
     assert again.coordinate_actions["galactic"].isChecked()
     again.close()
 

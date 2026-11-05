@@ -42,7 +42,8 @@ from tests.core.test_commands_catalog_sky import write_catalog
 NOT_EXPOSED = ("cursor.read", "simbad.pointer", "prefs.set", "cache.clear", "ui.set_tool", "ui.set_panel",
                "ui.set_fullscreen", "ui.set_appearance", "view.export_png", "image.open", "catalog.open_file",
                "moc.open", "layer.remove", "layer.move", "image.set_display", "catalog.set_columns", "table.sort",
-               "view.set_coordinate_display")
+               "view.set_coordinate_display", "samp.connect", "samp.disconnect", "samp.send_table",
+               "samp.send_selection", "samp.point_at")  # SAMP: nessuno strumento per l'IA (40 D40-8 (f))
 KEPT = {"type", "properties", "required", "enum", "minimum", "maximum", "items", "description", "default"}
 
 

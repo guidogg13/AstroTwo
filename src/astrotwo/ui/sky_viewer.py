@@ -739,6 +739,7 @@ class SkyViewer(QWidget):
     first_shown = Signal()  # la finestra ha la sua dimensione vera: si può chiedere la vista iniziale
     cursor_read = Signal(object)  # CommandResult di cursor.read, o None se il mouse esce dal cielo
     layers_drawn = Signal()  # posizioni di un catalogo o celle di un MOC pronte (dettagli del pannello dei livelli)
+    context_menu_requested = Signal(object)  # punto sullo schermo del clic destro: menu SAMP della finestra (§3.20)
 
     def __init__(self, submit: Callable[..., int], cache=None, renderer: SkyRenderer | None = None,
                  parent=None, passive: Callable[..., object] | None = None) -> None:
@@ -1555,6 +1556,11 @@ class SkyViewer(QWidget):
             event.accept()
             return True
         return super().event(event)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - nome di Qt
+        """Clic destro (o ⌃-clic): la finestra costruisce il menu con i puntamenti SAMP (§3.20); nessun calcolo qui."""
+        self.context_menu_requested.emit(event.globalPos())
+        event.accept()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:

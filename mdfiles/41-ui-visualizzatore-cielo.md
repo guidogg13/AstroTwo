@@ -754,6 +754,16 @@ opzioni stanno in una barra sul cielo. Il resto è scelta minore (§13).
 - **Modalità notte e lingue:** barra, etichette e riquadro usano i rossi di
   §3.11 del `40`; i testi sono inglesi con traduzione italiana (`40`, `.ts`).
 
+### 3.20 Menu contestuale del cielo: SAMP (sprint B1, 2026-11-05)
+
+Decisione del proprietario del 2026-11-05 (D40-8 (c)). Clic destro (o ⌃-clic) sul cielo → menu con
+**Point SAMP applications at view center** e **Point SAMP applications at selected source** (sottomenu dei
+destinatari: "All applications" o un client) → `samp.point_at` del `05` (`40` §3.12); se AstroTwo non è collegato,
+la voce **Connect to SAMP hub** (`samp.connect`) e le altre spente. Il visualizzatore emette soltanto la richiesta
+del menu (segnale `context_menu_requested` con il punto sullo schermo); il menu, i testi tradotti e i comandi sono
+della finestra (`40`). Un puntamento **ricevuto** (`coord.pointAt.sky`) arriva come `view.set_center` con origine
+`samp` e si disegna come ogni cambio di centro (zoom invariato). Nessun calcolo nuovo nel visualizzatore.
+
 ## 4. Cosa NON fa
 
 - Non calcola proiezioni, coordinate, distanze, valori, epoche né scale da
@@ -964,6 +974,7 @@ mai abbassare in silenzio".
 | T36 | Distanza (sprint 4g) | immagine base con WCS e poi solo HiPS; trascinamento e due clic; opzioni; punto fuori dal cielo | forma pixel o cielo scelta dalla base; distanza = `angular_distance` del 17 ricalcolata nel test; unità e aggancio dalle opzioni; nessuno spostamento della vista; segmento ed etichetta disegnati, rossi in notte | ricalcolo con 10, 11, 17 |
 | T37 | Puntatore Simbad (sprint 4g) | servizio simulato; mouse fermo 500 ms, clic, risposta lenta con secondo arresto, nessun oggetto, errore | una richiesta con il raggio di T9; riquadro con i campi del 14 e il collegamento; ultima richiesta sola dopo l'attesa; messaggi di errore; chiusura con Esc | servizio simulato |
 | T30 | Qualche migliaio di sorgenti (sprint 4e) | 5000 sorgenti, gesti | un solo caricamento dei punti per base; durante il gesto solo la trasformazione; tempo del calcolo per base misurato e riportato | test (tempo riportato) |
+| T38 | Menu contestuale SAMP (§3.20, sprint B1) | clic destro sul cielo collegato e non collegato | voci attive o spente secondo lo stato; "Point SAMP applications at view center" registra `samp.point_at` con il centro della vista | test in `tests/ui/test_samp.py` |
 | TP1–TP7 | Prestazioni (`perf`) | condizioni di §3.15 sul Mac di riferimento | obiettivi P1–P6 rispettati; P7 misurato e riportato | misura; risultati riportati, mai obiettivi abbassati |
 
 ## 13. Decisioni aperte
@@ -1129,3 +1140,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-25 | Claude Code | D41-10: soglia di 2 000 simboli per `CATALOG_DENSE` e 5 000 righe di default **confermate dal proprietario** (§3.8, §13). Stato `approvato` invariato. |
 | 2026-10-31 | Claude Code | **Sprint 10b (ripiego dei survey HiPS sui mirror, `12` §3):** §3.7 — avviso `HIPS_MIRROR_FALLBACK` una volta per survey nel pannello Messaggi, tile falliti prima del cambio richiesti al mirror, messaggio unico `NET_TIMEOUT` `hips_servers` se cadono tutti, server in uso nel tooltip del nome della riga del survey (testo «Server: %1» tradotto); nessun pannello nuovo; test `test_mirror_fallback_fills_sky`. Stato `approvato` invariato. |
 | 2026-11-04 | Claude Code | Sprint A3: corretto l'errore alla chiusura rapida (`RuntimeError: Signal source has been deleted`): il timer a 0 ms della prima vista ha il visualizzatore come contesto e non scatta se è già distrutto. Comportamento invariato; stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): nuova §3.20 (menu contestuale del cielo con i puntamenti SAMP; puntamento ricevuto = `view.set_center` di origine `samp`); T38 (§12). Stato `approvato` invariato. |

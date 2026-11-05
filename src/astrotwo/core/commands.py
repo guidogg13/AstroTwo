@@ -36,6 +36,7 @@ __all__ = [
     "PARAMETER_TYPES",
     "COMMAND_CLASSES",
     "REQUESTED_BY_SOURCES",
+    "sky_from_json",
     "SESSION_SCHEMA_VERSION",
     "SESSION_EXTENSION",
     "CommandError",
@@ -67,7 +68,7 @@ PARAMETER_TYPES = ("quantity", "sky_position", "pixel_position", "time", "file",
 #: Classi dei comandi (D05-1).
 COMMAND_CLASSES = ("session", "passive", "application")
 #: Valori di ``requested_by`` (scelta minore 1 del 2026-10-16).
-REQUESTED_BY_SOURCES = ("menu", "keyboard", "mouse", "history", "session", "ai")
+REQUESTED_BY_SOURCES = ("menu", "keyboard", "mouse", "history", "session", "ai", "samp")  # samp: D05-5
 #: Versione dello schema del file di sessione (§3.4).
 SESSION_SCHEMA_VERSION = 1
 #: Estensione del file di sessione (scelta minore 1 del 2026-10-15).
@@ -609,6 +610,8 @@ class RequestedBy:
     call: str | None = None
     profile: str | None = None
     model: str | None = None
+    client: str | None = None  # samp: nome dichiarato dal mittente (samp.name), testo esterno (D05-5)
+    client_id: str | None = None  # samp: identificativo pubblico del mittente nell'hub
 
     def __post_init__(self) -> None:
         if self.source not in REQUESTED_BY_SOURCES:
@@ -619,12 +622,21 @@ class RequestedBy:
                 raise ValueError("requested_by ai: servono conversazione, turno, chiamata, profilo e modello")
         elif any(v is not None for v in extra):
             raise ValueError("conversazione, turno, chiamata, profilo e modello solo per requested_by ai")
+        if self.source == "samp":
+            if not isinstance(self.client_id, str) or not self.client_id:
+                raise ValueError("requested_by samp: serve client_id (identificativo del mittente nell'hub)")
+            if self.client is not None and not isinstance(self.client, str):
+                raise ValueError("requested_by samp: client è il nome dichiarato (testo) o null")
+        elif self.client is not None or self.client_id is not None:
+            raise ValueError("client e client_id solo per requested_by samp")
 
     def to_json(self) -> dict:
         out = {"source": self.source}
         if self.source == "ai":
             out.update(conversation=self.conversation, turn=self.turn, call=self.call, profile=self.profile,
                        model=self.model)
+        elif self.source == "samp":
+            out.update(client=self.client, client_id=self.client_id)
         return out
 
     @classmethod
@@ -1112,6 +1124,11 @@ def _sky(value: Mapping | None):
     return SkyFrame.from_lonlat(_q(value["lon"]), _q(value["lat"]), value["frame"],
                                 equinox=_time_value(value.get("equinox")), obstime=_time_value(value.get("obstime")),
                                 epoch=_time_value(value.get("epoch")))
+
+
+def sky_from_json(value: Mapping | None):
+    """``SkyFrame`` del 10 dalla forma JSON validata di ``sky_position`` (per gli esecutori dell'interfaccia)."""
+    return _sky(value)
 
 
 def _iso(when) -> str | None:
@@ -2322,6 +2339,11 @@ def _layer_param(kinds: tuple[str, ...] = ()) -> ParameterSpec:
 
 
 
+def _samp_recipient() -> ParameterSpec:
+    return P("recipient", "string", "Public id of one SAMP client (null: all subscribed clients).",
+             "Identificativo pubblico di un client SAMP (null: tutti i client iscritti).", default=None)
+
+
 def _calc_specs() -> list[CommandSpec]:
     from astrotwo.core.calculators import EQUIVALENCIES, TIME_FORMATS, TIME_SCALES
     from astrotwo.core.images_fits import STRETCHES
@@ -2724,6 +2746,24 @@ def default_registry(*, cache=None) -> CommandRegistry:
                     "session", _exec_catalog_rows, read_only=True),
         CommandSpec("layer.list", 1, "List the layers of the workspace.", "Elenca i livelli.", (), (),
                     "session", _exec_layer_list, read_only=True),
+        # SAMP (sprint B1, D05-5): esecutori del 40, classe application, mai rieseguiti, non esposti all'IA (32)
+        CommandSpec("samp.connect", 1, "Connect to the SAMP hub (the running one, otherwise AstroTwo's own).",
+                    "Collega all'hub SAMP (quello attivo, altrimenti quello di AstroTwo).",
+                    ("14 SampHub.connect", "14 SampHub.clients"), (), "application", bound_by="40"),
+        CommandSpec("samp.disconnect", 1, "Disconnect from the SAMP hub (AstroTwo's own hub is stopped).",
+                    "Scollega dall'hub SAMP (l'hub di AstroTwo si spegne).", ("14 SampHub.disconnect",), (),
+                    "application", bound_by="40"),
+        CommandSpec("samp.send_table", 1, "Send a catalog to SAMP applications (table.load.votable).",
+                    "Manda un catalogo ai programmi SAMP (table.load.votable).", ("14 SampHub.send_table",), (
+                        _layer_param(_LAYER_CATALOG), _samp_recipient()), "application", bound_by="40"),
+        CommandSpec("samp.send_selection", 1, "Send the selected rows of a catalog via SAMP (table.select.rowList).",
+                    "Manda le righe selezionate di un catalogo via SAMP (table.select.rowList).",
+                    ("14 SampHub.send_table", "14 SampHub.send_selection"), (
+                        _layer_param(_LAYER_CATALOG), _samp_recipient()), "application", bound_by="40"),
+        CommandSpec("samp.point_at", 1, "Point SAMP applications at a sky position (coord.pointAt.sky).",
+                    "Fa puntare i programmi SAMP su una posizione (coord.pointAt.sky).", ("14 SampHub.send_point",), (
+                        P("position", "sky_position", "Position.", "Posizione."), _samp_recipient()),
+                    "application", bound_by="40"),
     ]
     for spec in specs:
         reg.register(spec)

@@ -142,8 +142,37 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   **Profilo web disattivato** di default nell'hub avviato da AstroTwo, per
   sicurezza (accesso dai browser solo con opzione esplicita).
   **L'interfaccia utente** (es. comando "invia la
-  selezione") **vive in `42-ui-pannello-cataloghi.md`**, che chiama
-  `SampHub`.
+  selezione") **vive in `40-ui-finestra-principale.md` §3.12** (menu,
+  stato, preferenza, thread, ricezione), con i menu contestuali di
+  `41-ui-visualizzatore-cielo.md` e `42-ui-pannello-cataloghi.md` e i
+  comandi `samp.*` del `05` (sprint B1, decisioni del proprietario del
+  2026-11-05, D40-8); l'interfaccia chiama `SampHub`.
+  **Aggiunte per l'interfaccia (sprint B1, 2026-11-05):** (1) ricezione di
+  una tabella **senza leggerla** (`on_table_reference`: URL, `table-id`,
+  nome e mittente), così l'interfaccia ne fa una copia locale con
+  `save_votable` e la apre con `catalog.open_file` del `05` (stessi
+  controlli dei file locali del 13); (2) `save_votable(url, path)`: copia
+  un VOTable da un URL `file:` o lo scarica da `http(s):` con i timeout del
+  04, senza leggerlo e senza cache (sono dati di un altro programma, non di
+  un servizio); altri schemi → `SAMP_TABLE_FETCH_FAILED`; (3)
+  `client_name(id)`: nome dichiarato (`samp.name`) di un client; (4)
+  **eventi dell'hub** (`on_hub_event`): AstroTwo si iscrive anche a
+  `samp.hub.event.register`, `samp.hub.event.unregister`,
+  `samp.hub.event.metadata` e `samp.hub.event.shutdown`, avvisi
+  amministrativi dell'hub usati **solo** per aggiornare l'elenco dei client
+  e lo stato del collegamento: non portano dati e non eseguono nulla; (5)
+  `SampSendResult.params`: parametri effettivamente inviati (per il
+  risultato del comando e per i test). I messaggi di dati restano solo i
+  tre tipi di `SAMP_MTYPES`; (6) **niente `client.env.get`:** `pyvo.samp`
+  iscrive di default ogni client a `client.env.get`, che restituisce le
+  variabili d'ambiente del processo a qualunque programma le chieda;
+  AstroTwo toglie la voce **prima** di registrarsi all'hub (sottoclasse di
+  `SAMPIntegratedClient` con la stessa `connect` più
+  `unbind_receive_call("client.env.get", declare=False)`, API pubblica di
+  `pyvo`), così non è mai iscritto. Resta solo `samp.app.ping` (risposta
+  vuota, nessun dato), che gli hub usano per sapere se un client è vivo.
+  Iscrizioni di AstroTwo = i tre tipi + i quattro avvisi dell'hub +
+  `samp.app.ping` (verificato in T22).
 - **Spettri SSA (E4):** ricerca e caricamento di spettri dai servizi VO con
   il protocollo **SSA** (Simple Spectral Access): interrogare il servizio con
   posizione/oggetto e raggio (con unità), selezionare lo spettro richeriesto e
@@ -403,7 +432,14 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   `send_table`, `send_selection`, `send_point`, ricezione degli stessi tre
   tipi con funzioni dell'utente, `clients()` e stato dei collegamenti; **le
   immagini sono un'estensione prevista** fuori dal primo perimetro;
-  l'interfaccia utente è in `42-ui-pannello-cataloghi.md`.
+  l'interfaccia utente è nel `40` §3.12 (con `41` e `42`). **Dal
+  2026-11-05 (sprint B1):** `on_table_reference(function)` —
+  `function(reference: SampTableReference, sender)` con `url`, `table_id`,
+  `name`; se registrata sostituisce `on_table` (la tabella non si legge);
+  `save_votable(url, path) -> Path`; `client_name(client_id) -> str |
+  None`; `on_hub_event(function)` — `function(mtype, params)` per i quattro
+  eventi dell'hub di §3; `SampSendResult.params` (dizionario dei parametri
+  inviati).
 - **Cache:** nessuna classe propria (CA4): le risposte si salvano nella
   tabella SQLite del modulo dentro `SharedCache` di `04-cache.md`.
 
@@ -463,6 +499,10 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Nessun hub SAMP disponibile (né attivo, né avviabile) | funzioni VO non-SAMP operative, avviso | `SAMP_UNAVAILABLE` |
 | Nessun client SAMP connesso | azione rifiutata con messaggio chiaro | `SAMP_NO_PEER` |
 | Tipo di messaggio SAMP non supportato | rifiuto con l'elenco dei tipi supportati | `SAMP_UNSUPPORTED_TYPE` |
+| Hub che non risponde entro il tempo massimo (interfaccia, `40` §3.12) | operazione abbandonata, interfaccia libera | `SAMP_UNAVAILABLE` (`timeout`) |
+| Hub spento mentre AstroTwo è collegato | collegamento chiuso, stato aggiornato, avviso | `SAMP_UNAVAILABLE` (`hub_shutdown`) |
+| Selezione ricevuta per una tabella che AstroTwo non conosce (`40` §3.12) | nessuna selezione, risposta d'errore al mittente e messaggio | `SAMP_TABLE_UNKNOWN` |
+| VOTable ricevuto non copiabile (file assente, schema dell'URL non ammesso) | nessun catalogo aperto, risposta d'errore al mittente e messaggio | `SAMP_TABLE_FETCH_FAILED` |
 | Servizio SSA non raggiungibile / timeout | nessun elenco di spettri, errore esplicito | `NET_TIMEOUT` |
 | Nessuno spettro per i criteri dati | esito vuoto con avviso, non è un errore | `SSA_NO_RESULT` |
 | Spettro SSA malformato o senza assi/unità | nessun dato mostrato come valido, errore con la posizione del problema | `SSA_INVALID` |
@@ -569,6 +609,11 @@ sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalog
 | `SAMP_NO_PEER` | (generale) | — |
 | `SAMP_NO_PEER` | `recipient` | `recipient` (string), `mtype` (string) |
 | `SAMP_NO_PEER` | `none` | `mtype` (string) |
+| `SAMP_UNAVAILABLE` | `timeout` (dal 2026-11-05, sollevata dal `40`) | `operation` (string: `connect`, `disconnect`, `send`, `clients`), `seconds` (number) |
+| `SAMP_UNAVAILABLE` | `hub_shutdown` (dal 2026-11-05, avviso del `40`) | — |
+| `SAMP_TABLE_UNKNOWN` | `unknown` (dal 2026-11-05, sollevata dal `40`) | `table_id` (string, esterno), `url` (string, esterno), `sender` (string, esterno) |
+| `SAMP_TABLE_FETCH_FAILED` | `file` | `url` (string, esterno), `detail` (string, esterno) |
+| `SAMP_TABLE_FETCH_FAILED` | `scheme` | `url` (string, esterno) |
 | `ROW_LIMIT_EXCEEDED` (avviso) | (generale) | — |
 | `ROW_LIMIT_EXCEEDED` | `cut` | `received` (integer), `max_rows` (integer) |
 | `ROW_LIMIT_EXCEEDED` | `service_overflow` | `received` (integer), `max_rows` (integer) |
@@ -620,6 +665,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T6 | Riproducibilità | eseguire una query, poi rilesare i parametri registrati | la seconda esecuzione usa gli stessi URL, parametri e restituisce lo stesso schema | confronto dei metadati registrati |
 | T7 | SAMP | avviare l'hub, collegare un client simulato, inviare una tabella | il client riceve lo stesso contenuto | test con client simulato |
 | T8 | SAMP selezione e puntamento (G3) | inviare al client simulato una selezione e un puntamento, poi riceverne uno | contenuti identici a quelli inviati, tipi supportati | test con client simulato |
+| T22 | SAMP per l'interfaccia (sprint B1, 2026-11-05) | con hub e client simulati: tabella ricevuta con `on_table_reference` e copiata con `save_votable` (file e URL `http` di un server locale); schema `ftp:` e file assente; eventi dell'hub alla registrazione e all'uscita del client simulato; `client_name`; `SampSendResult.params` di `send_point`; iscrizioni di AstroTwo e chiamata `client.env.get` | copia identica byte per byte; `SAMP_TABLE_FETCH_FAILED` (`scheme`, `file`); eventi `register`/`unregister` ricevuti; nome dichiarato; parametri uguali a quelli ricevuti dal client; iscrizioni = tre tipi + quattro avvisi + `samp.app.ping`, `client.env.get` rifiutata dall'hub | test con client simulato |
 | T9 | Ricerca e caricamento SSA (E4) | eseguire ricerca e caricamento su servizio SSA simulato | elenco candidati e spettro con assi, unità e provenienza corretti | confronto con il servizio simulato |
 | T10 | Spettro SSA non valido (E4) | servire uno spettro senza assi/unità | `SSA_INVALID`, nessun dato mostrato come valido | test con servizio simulato |
 | T11 | SIA (H23, D14-11) | ricerca SIA su un servizio simulato; `sia_calibration` su righe complete, senza equinozio (FK5), con sistema `ECL`, con dimensioni diverse dall'immagine; immagine FITS senza WCS servita dal servizio e caricata dall'11 con `calibration` | lista con URL, formato, campo e provenienza; intestazione con `CTYPE`, `CRPIX`, `CRVAL`, `CD`, `RADESYS` della riga; immagine con il WCS uguale ad `astropy.wcs` costruito nel test e `EXTERNAL_CALIBRATION_USED`; righe incomplete senza calibrazione con il motivo; dimensioni diverse → `WCS_MISSING`; immagine con WCS proprio → `EXTERNAL_CALIBRATION_IGNORED` | servizio simulato (test di rete separato) |
@@ -816,3 +862,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-10-12 | Claude Code | **Allineamento specifica–codice** (decisione del proprietario del 2026-10-12, autorizzazione esplicita a modificare il file approvato; regola: le specifiche si aggiornano sempre insieme al codice): §3 e §7 — risposte del MocServer dichiarate ISO-8859-1 e lette secondo la codifica dichiarata (`MOCSERVER_CHARSET`, usata anche da 12 e 16), regola già applicata nel codice con il modulo 12. Stato `approvato` invariato. |
 | 2026-10-14 | Claude Code | **D14-13 aperta (Gruppo 3)** (indicazione del proprietario del 2026-10-14, autorizzazione esplicita a modificare il file approvato): servizi dell'ESO in http con reindirizzamento a https che codifica due volte l'URL (richiesta SIA rifiutata, immagine non scaricata); la demo usa https direttamente; nessuna modifica al codice. Stato `approvato` invariato. |
 | 2026-10-24 | Claude Code | **D40-3 e D40-7, sprint 8d:** §10 — nuova sezione "Parametri dei messaggi" con codice, `reason` e `params` di ogni errore e avviso (messaggi annidati di tipo `message` per gli errori del 13 incorporati; suggerimento dell'asincrona come sotto-voce); il codice li restituisce (testo italiano invariato); le traduzioni sono nel catalogo del `40`. `AdqlCheck` ha in più `reason` e `quote` (per scegliere la sotto-voce). Nessun comportamento scientifico cambia. |
+| 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8 del `40`; autorizzazione esplicita del proprietario ad aggiornare il 14 "se cambia qualcosa"): §3 e §7 — interfaccia nel `40` §3.12 con `41`/`42`; aggiunte a `SampHub` per l'interfaccia (`on_table_reference`, `save_votable`, `client_name`, `on_hub_event` con i quattro eventi amministrativi dell'hub, `SampSendResult.params`); **corretto: `pyvo.samp` iscriveva AstroTwo anche a `client.env.get` (variabili d'ambiente a chi le chiede), ora tolta prima della registrazione**; §10 — nuove sotto-voci `SAMP_UNAVAILABLE` `timeout` e `hub_shutdown`, nuovi codici `SAMP_TABLE_UNKNOWN` e `SAMP_TABLE_FETCH_FAILED`; §12 — nuovo T22. I tipi di messaggio di dati restano i tre di D14-9 punto 10; le immagini restano un'estensione prevista (D14-2). Stato `approvato` invariato. |

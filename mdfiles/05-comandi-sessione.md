@@ -99,6 +99,12 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   strumenti), `history` (Riesegui del `40`), `session` (riapertura) oppure
   `ai` con identificativo della conversazione, numero del turno,
   identificativo della chiamata, profilo e modello (`30`, `35`).
+  **Dal 2026-11-05 (D05-5, decisione del proprietario, sprint B1):**
+  origine `samp` per i comandi nati da un messaggio SAMP ricevuto (`40`
+  §3.12), con `client_id` (identificativo pubblico del mittente nell'hub,
+  obbligatorio) e `client` (nome dichiarato dal mittente, `samp.name`,
+  oppure `null` se non lo dichiara; testo esterno). Forma JSON:
+  `{"source": "samp", "client": "topcat", "client_id": "cli#2"}`.
   `requested_by` è un dato descrittivo: **non cambia** validazione,
   esecuzione né risultato.
 - **Risultato strutturato** (`CommandResult`): esito (`ok`, `error`,
@@ -371,6 +377,11 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.describe` (livello) — nuovo | metadati della tabella del 13 (colonne con nome, tipo, unità, UCD, descrizione; righe; colonne di posizione; epoca; sorgente con origine e data) | session | sola lettura |
 | `catalog.rows` (livello, prima riga, numero di righe ≤ 50, colonne facoltative, ordine della tabella o mostrato) — nuovo | 13 `record_view` per ogni riga | session | sola lettura |
 | `layer.list` — nuovo | — (stato dello spazio di lavoro: livelli con identificativo, tipo, nome, visibilità, opacità, ordine, sorgente, righe) | session | sola lettura |
+| `samp.connect` — nuovo, 2026-11-05 (sprint B1) | 14 `SampHub.connect` (hub attivo, altrimenti hub proprio con profilo web spento), `clients` | application | esecutore del `40` (§3.12); risultato `hub` (`external` o `own`), `web_profile` (`false`), `clients` (identificativo e nome); già collegato: stesso risultato, nessun nuovo collegamento |
+| `samp.disconnect` — nuovo | 14 `SampHub.disconnect` | application | esecutore del `40`; risultato `was_connected`, `own_hub_stopped`; non collegato: esito `ok` con `was_connected = false` |
+| `samp.send_table` (livello di catalogo, `recipient` facoltativo) — nuovo | 14 `SampHub.send_table` (`table.load.votable`: VOTable con colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13, mai assunta) | application | esecutore del `40`; risultato `layer`, `table_id`, `url`, `rows`, `recipients` |
+| `samp.send_selection` (livello di catalogo, `recipient` facoltativo) — nuovo | 14 `SampHub.send_selection` (`table.select.rowList`, righe nell'ordine della tabella, da 0); se la tabella non è mai passata da SAMP, prima `send_table` nello stesso comando | application | esecutore del `40`; risultato `layer`, `table_id`, `rows`, `table_sent`, `recipients` |
+| `samp.point_at` (posizione, `recipient` facoltativo) — nuovo | 14 `SampHub.send_point` (`coord.pointAt.sky`, gradi ICRS; conversione del 10) | application | esecutore del `40`; risultato `ra`, `dec` (gradi ICRS inviati, come nel messaggio), `position` (quella del parametro, con l'epoca dichiarata), `recipients` |
 
 **Cataloghi sul cielo (sprint 4e del `41`, decisioni del proprietario del
 2026-10-21).**
@@ -437,6 +448,30 @@ nero **in ordine inverso** (`#CC79A7`, `#D55E00`, `#0072B2`, `#F0E442`,
 catalogo non hanno lo stesso colore), riempimento `fill` = 0,25 (frazione
 dell'opacità del livello), contorno con l'opacità del livello. Nessun comando
 per cambiarlo nella v1.
+
+**SAMP nell'interfaccia (sprint B1, decisioni del proprietario del
+2026-11-05, D40-8 del `40`, D05-5).**
+
+- **Comandi `samp.*`** (tabella sopra): classe `application` (in
+  cronologia, **mai rieseguiti** alla riapertura di una sessione: mandare
+  messaggi ad altri programmi non fa parte dello stato), esecutori legati
+  dal `40` (`bound_by = "40"`), nessun indicatore `confirm`, **non esposti
+  all'IA** (nessuno strumento nuovo nel `32`, decisione (f) del 2026-11-05).
+  `recipient` = identificativo pubblico di un client nell'hub (`null`: tutti
+  i client iscritti al tipo di messaggio). Errori del 14 riportati invariati
+  (`SAMP_UNAVAILABLE`, `SAMP_NO_PEER`, `SAMP_UNSUPPORTED_TYPE`); un hub che
+  non risponde entro il tempo massimo del `40` dà `SAMP_UNAVAILABLE` con
+  `reason = timeout`.
+- **Messaggi ricevuti = comandi registrati già esistenti** con
+  `requested_by = samp` (D05-5) e il mittente: `table.load.votable` →
+  `catalog.open_file` sulla **copia locale** del VOTable fatta dal `40`
+  (stessi controlli dei file locali del 13: colonne di posizione, epoca,
+  nessuna assunzione; la copia resta su disco, così la sessione si riapre
+  con l'impronta SHA-256 come ogni file); `table.select.rowList` →
+  `catalog.select` sul livello della tabella nota; `coord.pointAt.sky` →
+  `view.set_center` con la posizione in ICRS ed epoca `null` con il motivo
+  ("SAMP non dichiara l'epoca", mai assunta). Questi comandi sono di classe
+  `session` come quando li chiede l'utente e si rieseguono alla riapertura.
 
 **Indicatore `confirm`** (dal 2026-10-16, regola del `32` §3.5): **sì** per
 `image.open`, `catalog.open_file`, `catalog.load_region`, `hips.set_survey`,
@@ -590,6 +625,12 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `VIEW_CENTER_OUTSIDE_IMAGE` | — / `typed` | `layer`, `name` (ext) / `layer`, `name` (ext), `frame` | centro fuori dalla proiezione dell'immagine base (D41-9, sprint 9b) |
 | `MODULE_NOTE` | — | `note` (ext) | avviso di un modulo non convertito, solo testo |
 
+**Comandi `samp.*` (sprint B1, 2026-11-05):** nessun codice nuovo del `05`; riportano invariati i codici SAMP del 14
+(`SAMP_UNAVAILABLE` con le sotto-voci `no_hub`, `not_connected`, `timeout`; `SAMP_NO_PEER`; `SAMP_UNSUPPORTED_TYPE`);
+`SAMP_TABLE_UNKNOWN`, `SAMP_TABLE_FETCH_FAILED` e la sotto-voce `hub_shutdown` sono messaggi della ricezione mostrati
+dal `40` (14 §10). Un `requested_by` di origine `samp` senza `client_id`, o con i campi dell'IA, è rifiutato alla
+lettura come le altre forme non valide (eccezione di `RequestedBy`, sessione non leggibile).
+
 Gli errori e gli avvisi **dei moduli 10–19** non cambiano: il `05` li riporta con codice, testo e `params` invariati
 (`§3.2`); l'avviso di `cursor.read` per un'epoca mancante porta i `params` dell'errore del 10 e lo stesso codice
 (il testo del `05` aggiunge che le coordinate sono nel frame dell'immagine, ma in catalogo vale il testo del 10).
@@ -628,6 +669,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T20 | Indicatore `confirm` nello schema | `export_schema()` | `confirm` come nell'elenco di §7; `read_only` per i comandi nuovi | test di unità |
 | T22 | Tipo `record` e forme JSON (D05-4) | comando con un `record` valido, con un campo in più, con un campo mancante senza default, con un campo `quantity` in unità non convertibile; forma JSON di ogni tipo scritta e riletta; `export_schema()` | il primo valido (default dei campi risolti); gli altri `COMMAND_PARAMETER_INVALID` con il nome del campo (`parametro.campo`); forme di §3.1 identiche dopo la rilettura; nello schema `object` con `properties`, `required`, `additionalProperties: false` | test di unità |
 | T21 | Conversazioni nella sessione | sessione con e senza il blocco `conversations`; riapertura con un provider simulato che fallisce se chiamato | blocco presente solo se chiesto, senza cartelle nei nomi dei file; riesecuzione identica nei due casi, nessuna chiamata al provider | test di unità |
+| T23 | Origine `samp` e comandi `samp.*` (D05-5, sprint B1) | comandi con `requested_by = samp` (con e senza nome del client), forma senza `client_id` o con campi dell'IA; salvare e riaprire una sessione con un `catalog.open_file` di origine `samp`; registro con i cinque `samp.*` | forma JSON di §3.1 scritta e riletta; forme non valide rifiutate; comando `samp` rieseguito alla riapertura con la stessa origine; i `samp.*` sono `application`, `bound_by = "40"`, assenti dallo schema per l'IA (`32`) | test di unità |
 
 ## 13. Decisioni aperte
 
@@ -701,6 +743,13 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   identificativi dei livelli `L<n>`; (4) gesto che cambia centro e scala
   registrato come `view.set_zoom` seguito da `view.set_center`; (5) un
   comando annullato resta in cronologia con l'esito `cancelled`.
+- **D05-5 — Origine `samp` di `requested_by` e comandi `samp.*`: DECISA
+  il 2026-11-05 (decisione del proprietario, sprint B1).** Ogni messaggio
+  SAMP ricevuto diventa un comando registrato con `requested_by = samp` e
+  il client mittente (`client_id`, `client`); invio, collegamento e
+  scollegamento sono i comandi `samp.*` di classe `application`. Applicata
+  in §3.1, §7, §10.1, §12 (T23). **Motivazione:** riproducibilità (regola
+  d'oro n. 6): chi apre la sessione vede quale programma ha chiesto cosa.
 - **Proposta della fase 1 sull'IA, approvata dal proprietario il
   2026-10-16:** campo `requested_by`, indicatore `confirm`, cinque comandi
   di sola lettura per l'assistente (`coords.resolve_name`,
@@ -832,3 +881,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-b):** la scheda della sorgente di `catalog.select` porta `position_reason_code` (§7), così il motivo della posizione mancante si mostra nella lingua dell'interfaccia. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b (D41-9 decisa dal proprietario, opzione (b)):** con un'immagine come base, un centro fuori dalla sua proiezione dà `VIEW_CENTER_OUTSIDE_IMAGE` (sotto-voce `typed` con il frame di lettura per `view.go_to`) invece di `VIEW_PARAMETERS_INVALID` (§3.6 punto 7, §10.1). Stato `approvato` invariato. |
 | 2026-10-31 | Claude Code | **Sprint 10b (ripiego dei survey HiPS sui mirror, `12` §3):** `hips.set_survey` porta nel risultato `server` e `servers` e, se il survey è servito da un mirror, l'avviso `HIPS_MIRROR_FALLBACK` (anche quando il cambio avviene mentre si leggono i limiti di colore); nuovi codici del 12 `HIPS_MIRROR_FALLBACK`, `HIPS_MIRROR_REJECTED` e `NET_TIMEOUT` `hips_servers` nel catalogo dei messaggi (en/it, D40-5, D40-6). Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia (decisioni del proprietario del 2026-11-05; D05-5 decisa):** nuova origine `samp` di `requested_by` con `client_id` e `client` (§3.1); nuovi comandi `samp.connect`, `samp.disconnect`, `samp.send_table`, `samp.send_selection`, `samp.point_at` (classe `application`, esecutori del `40`, non esposti all'IA) e messaggi ricevuti come `catalog.open_file`/`catalog.select`/`view.set_center` con origine `samp` (§7); codici SAMP del 14 riportati invariati (§10.1); nuovo T23 (§12). Stato `approvato` invariato. |

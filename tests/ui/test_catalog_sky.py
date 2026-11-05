@@ -430,9 +430,10 @@ def test_t28c_no_italian_literals_shown_by_the_interface():
                        r"propagat[aeio])\b", re.I)
     # Testi di ripiego dei messaggi con codice, errori di programmazione (ValueError) e log diagnostico.
     fallback_calls = {"ResultMessage", "ValueProblem", "HiPSError", "CommandError", "_report", "_unavailable",
-                      "with_layer", "ValueError", "RuntimeError", "debug_input", "print"}
+                      "with_layer", "ValueError", "RuntimeError", "debug_input", "print", "VoProtocolsError"}
     # Valori di sessione scritti dal 05 e non mostrati (motivo dell'epoca della vista iniziale).
-    allowed = {"epoca delle posizioni non nota (non assunta)"}
+    allowed = {"epoca delle posizioni non nota (non assunta)",
+               "coord.pointAt.sky: SAMP non dichiara l'epoca (non assunta)"}  # puntamento SAMP ricevuto (40 §3.12)
     found = []
     for path in sorted(pathlib.Path(astrotwo.ui.__file__).parent.glob("*.py")):
         tree = ast.parse(path.read_text())

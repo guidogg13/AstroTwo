@@ -69,6 +69,8 @@ __all__ = [
     "SampHub",
     "SampSelection",
     "SampSendResult",
+    "SampTableReference",
+    "SAMP_HUB_EVENTS",
     "SIMBAD_COORDINATES_NOTE",
     "SimbadObject",
     "SimbadMagnitude",
@@ -1935,12 +1937,27 @@ class SampClient:
     name: str | None
 
 
+#: Avvisi amministrativi dell'hub (sprint B1): solo per l'elenco dei client e lo stato, non portano dati.
+SAMP_HUB_EVENTS: tuple[str, ...] = ("samp.hub.event.register", "samp.hub.event.unregister",
+                                    "samp.hub.event.metadata", "samp.hub.event.shutdown")
+
+
 @dataclass(frozen=True)
 class SampSendResult:
-    """Esito di un invio: tipo di messaggio e destinatari raggiunti."""
+    """Esito di un invio: tipo di messaggio, destinatari raggiunti e parametri inviati."""
 
     mtype: str
     recipients: tuple[str, ...]
+    params: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SampTableReference:
+    """Tabella annunciata da ``table.load.votable`` senza leggerla (sprint B1): URL, identificativo e nome."""
+
+    url: str
+    table_id: str
+    name: str | None
 
 
 @dataclass(frozen=True)
@@ -1950,6 +1967,28 @@ class SampSelection:
     table_id: str
     url: str
     rows: tuple[int, ...]
+
+
+def _restricted_client_class():
+    """Client SAMP di ``pyvo`` che **non** si iscrive a ``client.env.get`` (sprint B1, 2026-11-05).
+
+    ``pyvo.samp.SAMPClient`` risponde di default a ``client.env.get`` (variabili d'ambiente del processo a chi le
+    chiede): AstroTwo riceve solo i tre tipi di ``SAMP_MTYPES`` (D14-9 punto 10) più ``samp.app.ping`` (risposta
+    vuota, nessun dato). Il collegamento è quello di ``SAMPIntegratedClient.connect`` con una sola differenza: la voce si
+    toglie (``unbind_receive_call`` pubblica, senza dichiarazione) **prima** della registrazione all'hub, così non c'è
+    mai un istante in cui AstroTwo è iscritto."""
+    from pyvo.samp import SAMPIntegratedClient
+    from pyvo.samp.client import SAMPClient
+
+    class RestrictedSampClient(SAMPIntegratedClient):
+        def connect(self, hub=None, hub_params=None, pool_size=20):
+            self.hub.connect(hub, hub_params, pool_size)
+            self.client = SAMPClient(self.hub, **self.client_arguments)
+            self.client.unbind_receive_call("client.env.get", declare=False)
+            self.client.start()
+            self.client.register()
+
+    return RestrictedSampClient
 
 
 class SampHub:
@@ -1967,6 +2006,8 @@ class SampHub:
         self._client = None
         self._tmpdir: tempfile.TemporaryDirectory | None = None
         self._handlers: dict[str, object] = {}
+        self._table_reference = None
+        self._hub_event = None
 
     # -- collegamento ---------------------------------------------------------
 
@@ -1976,12 +2017,12 @@ class SampHub:
 
     def connect(self) -> SampHub:
         """Si collega all'hub attivo; se non c'è ne avvia uno proprio; altrimenti ``SAMP_UNAVAILABLE``."""
-        from pyvo.samp import SAMPHubError, SAMPHubServer, SAMPIntegratedClient
+        from pyvo.samp import SAMPHubError, SAMPHubServer
 
         if self.connected:
             return self
-        client = SAMPIntegratedClient(name=self.name, description=f"AstroTwo {astrotwo.__version__}",
-                                      metadata={"samp.name": self.name})
+        client = _restricted_client_class()(name=self.name, description=f"AstroTwo {astrotwo.__version__}",
+                                            metadata={"samp.name": self.name})
         try:
             client.connect()
         except (SAMPHubError, OSError):
@@ -2000,6 +2041,8 @@ class SampHub:
                                 ("coord.pointAt.sky", self._receive_point)):
             client.bind_receive_notification(mtype, function)
             client.bind_receive_call(mtype, function)
+        for mtype in SAMP_HUB_EVENTS:  # solo elenco dei client e stato del collegamento (sprint B1)
+            client.bind_receive_notification(mtype, self._receive_hub_event)
         return self
 
     def disconnect(self) -> None:
@@ -2056,10 +2099,15 @@ class SampHub:
         if not targets:
             raise VoProtocolsError("SAMP_NO_PEER", f"nessun programma collegato accetta {mtype}",
                                    params={"reason": "none", "mtype": mtype})
-        message = {"samp.mtype": mtype, "samp.params": {k: v for k, v in params.items()}}
+        sent = {k: v for k, v in params.items()}
         for target in targets:
-            client.notify(target, message)
-        return SampSendResult(mtype=mtype, recipients=tuple(targets))
+            client.notify(target, {"samp.mtype": mtype, "samp.params": dict(sent)})
+        return SampSendResult(mtype=mtype, recipients=tuple(targets), params=sent)
+
+    def client_name(self, client_id: str) -> str | None:
+        """Nome dichiarato (``samp.name``) di un client, ``None`` se non lo dichiara."""
+        name = self._require().get_metadata(client_id).get("samp.name")
+        return None if name is None else str(name)
 
     def send_table(self, table: CatalogTable, *, table_id: str, name: str | None = None,
                    recipient: str | None = None) -> SampSendResult:
@@ -2097,6 +2145,60 @@ class SampHub:
         """``function(position: SkyFrame, sender)`` per ogni puntamento ricevuto (ICRS, epoca non dichiarata)."""
         self._handlers["coord.pointAt.sky"] = function
 
+    def on_table_reference(self, function) -> None:
+        """``function(reference: SampTableReference, sender)``: tabella ricevuta **senza leggerla** (sprint B1).
+
+        Se registrata sostituisce ``on_table``; chi la riceve ne fa una copia con ``save_votable``."""
+        self._table_reference = function
+
+    def on_hub_event(self, function) -> None:
+        """``function(mtype, params)`` per gli avvisi dell'hub di ``SAMP_HUB_EVENTS`` (elenco dei client, stato)."""
+        self._hub_event = function
+
+    @staticmethod
+    def save_votable(url: str, path, *, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> Path:
+        """Copia il VOTable annunciato da un client: ``file:`` copiato, ``http(s):`` scaricato con i timeout del 04.
+
+        Nessuna lettura e nessuna cache (dati di un altro programma); altri schemi o file assente →
+        ``SAMP_TABLE_FETCH_FAILED``; errori di rete come per le altre richieste (``NET_TIMEOUT``, ``SERVICE_ERROR``)."""
+        import shutil
+        from urllib.parse import unquote, urlsplit
+
+        target = Path(os.fspath(path))
+        parts = urlsplit(str(url))
+        if parts.scheme == "file":
+            source = Path(unquote(parts.path))
+            try:
+                shutil.copyfile(source, target)
+            except OSError as exc:
+                raise VoProtocolsError("SAMP_TABLE_FETCH_FAILED", f"{url}: copia non riuscita ({exc})",
+                                       params={"reason": "file", "url": str(url), "detail": str(exc)}) from exc
+            return target
+        if parts.scheme not in ("http", "https"):
+            raise VoProtocolsError("SAMP_TABLE_FETCH_FAILED", f"{url}: schema non ammesso (file, http, https)",
+                                   params={"reason": "scheme", "url": str(url)})
+        try:
+            with _Session(timeouts) as session:
+                response = session.get(str(url))
+                payload = response.content
+        except requests.exceptions.RequestException as exc:
+            raise _net_error(str(url), exc, timeouts) from exc
+        _check_http(response, str(url))
+        if not response.ok:
+            raise VoProtocolsError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
+                                   url=str(url), status=response.status_code,
+                                   params={"reason": "http_status", "url": str(url), "status": response.status_code,
+                                           "status_text": str(response.reason)})
+        target.write_bytes(payload)
+        return target
+
+    def _receive_hub_event(self, private_key, sender_id, msg_id, mtype, params, extra) -> None:
+        if self._hub_event is not None:
+            try:
+                self._hub_event(str(mtype), dict(params or {}))
+            except Exception:  # noqa: BLE001 - un avviso dell'hub non deve mai fermare il collegamento
+                pass
+
     def _reply(self, msg_id, error: Exception | None) -> None:
         if msg_id is None or self._client is None:
             return
@@ -2121,6 +2223,19 @@ class SampHub:
         self._reply(msg_id, None)
 
     def _receive_table(self, private_key, sender_id, msg_id, mtype, params, extra) -> None:
+        if self._table_reference is not None:
+            def run(function=self._table_reference):
+                name = params.get("name")
+                function(SampTableReference(str(params["url"]), str(params.get("table-id", "")),
+                                            None if name is None else str(name)), sender_id)
+            try:
+                run()
+            except Exception as exc:  # l'errore torna al mittente
+                self._reply(msg_id, exc)
+                return
+            self._reply(msg_id, None)
+            return
+
         def build():
             url = str(params["url"])
             if url.startswith("file:"):

@@ -22,7 +22,9 @@ catalogo è poco usabile).
 - **Fuori dalla v1:** ricerca per espressione (`search`, D6) e ricerca in
   tabella (D8, parte ricerca), editor delle regole di disegno (D4),
   etichette (D5), colonne calcolate, sottoinsiemi, istogrammi e grafici
-  x-y (H8), DataLink, esportazione delle tabelle, invio con SAMP (G3).
+  x-y (H8), DataLink, esportazione delle tabelle. **L'invio con SAMP (G3)
+  è entrato il 2026-11-05 (sprint B1, decisioni del proprietario, D40-8 del
+  `40`): §3.6.**
 
 ### 3.2 Tabella
 
@@ -89,6 +91,25 @@ risultato di `catalog.select`.
   `41` (posizioni della tabella, "non propagato"). Le colonne scelte sono
   parametri di `catalog.set_columns` del `05`.
 
+### 3.6 SAMP: tabelle e selezioni con altri programmi (sprint B1, 2026-11-05)
+
+Decisioni del proprietario del 2026-11-05 (D40-8); collegamento, thread e ricezione nel `40` §3.12, protocollo nel
+14.
+
+- **Menu contestuale della tabella** (clic destro su una scheda): **Send table via SAMP** (`samp.send_table`),
+  **Send selected rows via SAMP** (`samp.send_selection`) e, con una sola riga selezionata che ha una posizione,
+  **Point SAMP applications at this source** (`samp.point_at`); ogni voce apre l'elenco dei destinatari ("All
+  applications" o un client). Spente se AstroTwo non è collegato (con la voce **Connect to SAMP hub**). Le stesse
+  azioni sono nel menu Tools → SAMP per la scheda in primo piano.
+- **Indici delle righe:** nell'ordine della tabella del 13 (quello del VOTable inviato), da 0, **non** nell'ordine
+  mostrato dopo un `table.sort`.
+- **Tabella ricevuta** (`table.load.votable`): una nuova scheda come per un file aperto (`catalog.open_file` con
+  origine `samp`), con i dialoghi delle colonne di §3.5 se il 13 non ricava le posizioni.
+- **Selezione ricevuta** (`table.select.rowList`) per una tabella nota: `catalog.select` con origine `samp`,
+  quindi stessa evidenza e stesso record di §3.3–§3.4; il pannello non la rimanda indietro.
+- Il pannello non parla con l'hub: emette la richiesta del menu (segnale `context_menu_requested` con il livello e
+  il punto sullo schermo) e la finestra (`40`) costruisce il menu e mette in coda i comandi.
+
 ## 4. Cosa NON fa
 
 - Non modifica le tabelle (sola lettura, D13-5) e non calcola valori,
@@ -96,7 +117,7 @@ risultato di `catalog.select`.
 - Non converte unità né frame; le coordinate delle colonne di posizione le
   scrive il 10 (`format_coordinates`), non questo modulo.
 - Non disegna le sorgenti (`41`) e non interroga servizi (13, 14).
-- Non salva sottoinsiemi né esporta tabelle (fuori dalla v1).
+- Non salva sottoinsiemi né esporta tabelle su file (fuori dalla v1); l'invio a un altro programma è SAMP (§3.6).
 
 ## 5. Livello e dipendenze
 
@@ -188,6 +209,7 @@ Con **pytest-qt** e piattaforma `offscreen`, in `tests/ui/`.
 | T5 | Valori mostrati | colonne di posizione ICRS e galattiche, magnitudini (UCD `phot.mag;em.opt.V`), colonne con formato dichiarato, senza formato, mancanti | posizioni identiche ai testi di `format_coordinates` del 10 sugli stessi valori; magnitudini con 3 decimali; altre colonne secondo §3.2; suggerimento e copia con il valore pieno identico al `float64` della tabella; punto decimale anche in italiano | confronto diretto con il 10 e con la tabella |
 | T6 | Un milione di righe | tabella sintetica di 1 000 000 di righe | apertura senza copia dei dati; memoria aggiuntiva e tempo di ordinamento misurati e riportati (`perf`) | misura |
 | T7 | Colonne all'apertura | CSV senza UCD; scelta delle colonne di moto proprio | `confirm_position_columns` chiamata con le colonne confermate; `catalog.set_columns` registrato | ispezione |
+| T8 | SAMP (§3.6, sprint B1) | tabella ordinata per una colonna; selezionare righe e mandarle con il menu contestuale a un client simulato; ricevere una selezione | indici inviati nell'ordine della tabella (non mostrato); selezione ricevuta evidenziata con il record; voci spente da scollegati | test in `tests/ui/test_samp.py` |
 
 ## 13. Decisioni aperte
 
@@ -272,3 +294,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-22 | Claude Code | **Sprint 5b** ("FASE: CODICE – interfaccia v1", parte 5): `PositionColumnsDialog` e `ProperMotionColumnsDialog` in `src/astrotwo/ui/catalog_panel.py`, aperti dalla finestra principale dopo `catalog.open_file`/`catalog.load_region` e dal pulsante "Colonne…" della scheda; un solo `catalog.set_columns` per apertura, nulla assunto (sistema, unità, equinozio e cos δ sempre dichiarati dall'utente; ipotesi dai nomi marcate; moto preselezionato solo dagli UCD). Test T7 e correlati in `tests/ui/test_column_dialogs.py`; traduzioni italiane. **Decisione del proprietario del 2026-10-22:** le 8 scelte di presentazione dello sprint 5a (a–h) sono confermate (tolto "da confermare"). Scelte minori dello sprint 5b da confermare in §13. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22 (ripresa della parte 6):** confermate le scelte minori dello sprint 5b (§13, tolto "da confermare"). Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1: il pannello non ha messaggi propri (solo `TABLE_SORT_UNSUPPORTED` del `05`). Stato `approvato` invariato. |
+| 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): l'invio con SAMP esce da "fuori dalla v1" (§3.1); nuova §3.6 (menu contestuale della tabella, indici nell'ordine della tabella, tabella e selezione ricevute); §4 aggiornato; T8 (§12). Stato `approvato` invariato. |

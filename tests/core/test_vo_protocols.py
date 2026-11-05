@@ -33,11 +33,14 @@ from astrotwo.core.cache import NetworkTimeouts
 from astrotwo.core.catalogs import CatalogsError, read_table
 from astrotwo.core.vo_protocols import (
     DEFAULT_MAX_ROWS,
+    SAMP_MTYPES,
     VOTABLE_VERSION,
     BUILTIN_SERVERS,
     DataLinkClient,
+    SAMP_HUB_EVENTS,
     SampHub,
     SampSelection,
+    SampTableReference,
     ServerRegistry,
     VoProtocolsError,
     cone_search,
@@ -1178,3 +1181,56 @@ def test_samp_own_hub_and_errors(samp_home, catalog, monkeypatch):
     with pytest.raises(VoProtocolsError) as err:
         SampHub().connect()
     assert err.value.code == "SAMP_UNAVAILABLE"
+
+
+def test_t22_samp_for_the_interface(peer, tmp_path):
+    """Aggiunte dello sprint B1 (14 §3, §7): riferimento della tabella senza leggerla, copia locale, nomi, eventi."""
+    import functools
+    import http.server
+    import threading
+
+    events, refs = [], []
+    with SampHub() as samp:
+        samp.on_hub_event(lambda mtype, params: events.append(mtype))
+        samp.on_table_reference(lambda ref, sender: refs.append((ref, sender)))
+        assert samp.client_name(peer.get_public_id()) == "Simulato"
+        me = [c for c in peer.get_registered_clients() if c not in ("cli#hub", peer.get_public_id())][0]
+        source = tmp_path / "dal_client.xml"
+        source.write_text(votable_text(2), encoding="utf-8")
+        peer.notify(me, {"samp.mtype": "table.load.votable",
+                         "samp.params": {"url": source.as_uri(), "table-id": "x1", "name": "dal client"}})
+        assert wait_for(lambda: refs)
+        assert refs[0] == (SampTableReference(source.as_uri(), "x1", "dal client"), peer.get_public_id())
+        copy = SampHub.save_votable(refs[0][0].url, tmp_path / "copia.xml")
+        assert copy.read_bytes() == source.read_bytes()  # copia identica, nessuna lettura
+        # URL http da un server locale (porta casuale)
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp_path))
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}/dal_client.xml"
+            assert SampHub.save_votable(url, tmp_path / "da_http.xml").read_bytes() == source.read_bytes()
+        finally:
+            server.shutdown()
+            server.server_close()
+        with pytest.raises(VoProtocolsError) as err:
+            SampHub.save_votable("ftp://example.invalid/t.xml", tmp_path / "x.xml")
+        assert (err.value.code, err.value.params["reason"]) == ("SAMP_TABLE_FETCH_FAILED", "scheme")
+        with pytest.raises(VoProtocolsError) as err:
+            SampHub.save_votable((tmp_path / "manca.xml").as_uri(), tmp_path / "y.xml")
+        assert (err.value.code, err.value.params["reason"]) == ("SAMP_TABLE_FETCH_FAILED", "file")
+        # parametri inviati = parametri ricevuti dal client
+        sent = samp.send_point(SkyCoord(10 * u.deg, 20 * u.deg))
+        assert wait_for(lambda: peer.received)
+        assert sent.params == peer.received[-1][4] and float(sent.params["ra"]) == pytest.approx(10.0, abs=1e-9)
+        # eventi dell'hub: un altro client entra ed esce
+        other = pyvo_samp.SAMPIntegratedClient(name="Altro")
+        other.connect()
+        other.disconnect()
+        assert wait_for(lambda: {"samp.hub.event.register", "samp.hub.event.unregister"} <= set(events))
+        assert set(events) <= set(SAMP_HUB_EVENTS)
+        # mai client.env.get (pyvo lo offre di default): solo i tre tipi, gli avvisi dell'hub e il ping
+        assert set(peer.get_subscriptions(me)) == set(SAMP_MTYPES) | set(SAMP_HUB_EVENTS) | {"samp.app.ping"}
+        with pytest.raises(Exception):
+            peer.call_and_wait(me, {"samp.mtype": "client.env.get", "samp.params": {"name": "HOME"}}, "5")
+

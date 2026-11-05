@@ -72,8 +72,10 @@ OWN_CODES = (
     "MAX_SEP_INVALID", "SERVER_UNKNOWN", "SIA_INVALID", "SSA_INVALID", "IDHA_UNREADABLE", "SAMP_UNAVAILABLE",
     "SAMP_UNSUPPORTED_TYPE", "SAMP_NO_PEER", "ROW_LIMIT_EXCEEDED", "CSV_UNITS_NOT_SAVED", "SIA_NO_RESULT",
     "SSA_NO_RESULT", "ASTRORES_LINK_SOURCE", "SIMBAD_NO_OBJECT", "SIMBAD_SYSTEM_UNKNOWN", "SIMBAD_SYSTEM_UNDECLARED",
-    "SIMBAD_NBREF_MISSING", "SIMBAD_TIE", "SIMBAD_NO_MAGNITUDE",
+    "SIMBAD_NBREF_MISSING", "SIMBAD_TIE", "SIMBAD_NO_MAGNITUDE", "SAMP_TABLE_FETCH_FAILED",
 )
+#: Sotto-voci del 14 sollevate dall'interfaccia (40 §3.12, ``samp_link.py``): provocate in ``tests/ui/test_samp.py``.
+UI_SAMP_SUBVARIANTS = {("SAMP_UNAVAILABLE", "timeout"), ("SAMP_UNAVAILABLE", "hub_shutdown")}
 SHARED = {
     ("FILE_EXISTS", None), ("XML_UNSAFE", None), ("TABLE_TOO_LARGE", "upload"),
     ("NET_TIMEOUT", "url"), ("NET_TIMEOUT", "url_sync_tap"), ("NET_TIMEOUT", "async_deadline"),
@@ -362,6 +364,8 @@ def test_services_p4_to_p6(service, cache, catalog, tmp_path, monkeypatch, simba
 
     monkeypatch.setattr(pyvo_samp.SAMPHubServer, "start", fail)
     seen.error(SampHub().connect)  # no_hub
+    seen.error(SampHub.save_votable, "ftp://example.invalid/t.xml", tmp_path / "t.xml")  # scheme
+    seen.error(SampHub.save_votable, (tmp_path / "manca.xml").as_uri(), tmp_path / "t.xml")  # file
 
 
 
@@ -369,7 +373,8 @@ def test_every_code_and_reason_of_the_module_is_provoked():
     """Tutte le coppie (codice, ragione) del modulo (14 §10) sono state provocate dai due test precedenti."""
     if not SEEN.pairs:
         pytest.skip("si esegue dopo i due test che provocano i messaggi")
-    missing = required_combinations() - SEEN.pairs - MODULE_15_SUBVARIANTS - MODULE_19_SUBVARIANTS
+    missing = (required_combinations() - SEEN.pairs - MODULE_15_SUBVARIANTS - MODULE_19_SUBVARIANTS
+               - UI_SAMP_SUBVARIANTS)
     assert not missing, f"coppie (codice, ragione) non provocate: {sorted(missing, key=str)}"
 
 

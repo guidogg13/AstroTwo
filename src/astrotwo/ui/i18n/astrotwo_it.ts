@@ -1125,6 +1125,14 @@
         <translation>Puntatore Simbad</translation>
     </message>
     <message>
+        <source>Connect</source>
+        <translation>Collega</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Scollega</translation>
+    </message>
+    <message>
         <source>About AstroTwo</source>
         <translation>Informazioni su AstroTwo</translation>
     </message>
@@ -1171,6 +1179,62 @@
     <message>
         <source>The file cannot be opened</source>
         <translation>Il file non si può aprire</translation>
+    </message>
+    <message>
+        <source>All applications</source>
+        <translation>Tutti i programmi</translation>
+    </message>
+    <message>
+        <source>Connected applications</source>
+        <translation>Programmi collegati</translation>
+    </message>
+    <message>
+        <source>Not connected</source>
+        <translation>Non collegato</translation>
+    </message>
+    <message>
+        <source>No applications</source>
+        <translation>Nessun programma</translation>
+    </message>
+    <message>
+        <source>Send catalog</source>
+        <translation>Manda il catalogo</translation>
+    </message>
+    <message>
+        <source>Send selected rows</source>
+        <translation>Manda le righe selezionate</translation>
+    </message>
+    <message>
+        <source>Point at view center</source>
+        <translation>Punta al centro della vista</translation>
+    </message>
+    <message>
+        <source>Point at selected source</source>
+        <translation>Punta alla sorgente selezionata</translation>
+    </message>
+    <message>
+        <source>Connect to SAMP hub</source>
+        <translation>Collega all&apos;hub SAMP</translation>
+    </message>
+    <message>
+        <source>Point SAMP applications at view center</source>
+        <translation>Fai puntare i programmi SAMP al centro della vista</translation>
+    </message>
+    <message>
+        <source>Point SAMP applications at selected source</source>
+        <translation>Fai puntare i programmi SAMP alla sorgente selezionata</translation>
+    </message>
+    <message>
+        <source>Send table via SAMP</source>
+        <translation>Manda la tabella via SAMP</translation>
+    </message>
+    <message>
+        <source>Send selected rows via SAMP</source>
+        <translation>Manda le righe selezionate via SAMP</translation>
+    </message>
+    <message>
+        <source>Point SAMP applications at this source</source>
+        <translation>Fai puntare i programmi SAMP a questa sorgente</translation>
     </message>
     <message>
         <source>field %1</source>
@@ -1347,6 +1411,10 @@
         <translation>Notte rossa</translation>
     </message>
     <message>
+        <source>Connect to SAMP at startup</source>
+        <translation>Collega SAMP all&apos;avvio</translation>
+    </message>
+    <message>
         <source>Assistant settings…</source>
         <translation>Impostazioni dell&apos;assistente…</translation>
     </message>
@@ -1471,6 +1539,38 @@
     <message>
         <source>Network: %1 commands, %2 tiles</source>
         <translation>Rete: %1 comandi, %2 tile</translation>
+    </message>
+    <message>
+        <source>SAMP: off</source>
+        <translation>SAMP: spento</translation>
+    </message>
+    <message>
+        <source>Not connected to a SAMP hub (Tools → SAMP → Connect).</source>
+        <translation>Non collegato a un hub SAMP (Strumenti → SAMP → Collega).</translation>
+    </message>
+    <message>
+        <source>SAMP: %1 apps</source>
+        <translation>SAMP: %1 programmi</translation>
+    </message>
+    <message>
+        <source>(own hub)</source>
+        <translation>(hub proprio)</translation>
+    </message>
+    <message>
+        <source>Hub started by AstroTwo.</source>
+        <translation>Hub avviato da AstroTwo.</translation>
+    </message>
+    <message>
+        <source>Hub of another application.</source>
+        <translation>Hub di un altro programma.</translation>
+    </message>
+    <message>
+        <source>no applications</source>
+        <translation>nessun programma</translation>
+    </message>
+    <message>
+        <source>Connected: %1</source>
+        <translation>Collegati: %1</translation>
     </message>
     <message>
         <source>step %1 of %2</source>

@@ -48,6 +48,7 @@ CONVERTED = {
     "ui/main_window.py": "CommandError",
     "ui/message_view.py": "CommandError",
     "ui/ai_panel.py": "ValueProblem",
+    "ui/samp_link.py": "VoProtocolsError",  # SAMP nell'interfaccia (40 §3.12, sprint B1)
     "app_bundle.py": "CommandError",  # LICENSE_FILE_MISSING della finestra Licenze (60 §3.9)
 }
 
