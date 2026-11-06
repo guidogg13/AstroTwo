@@ -25,7 +25,8 @@ catalogo è poco usabile).
   x-y (H8), DataLink, esportazione delle tabelle. **L'invio con SAMP (G3)
   è entrato il 2026-11-05 (sprint B1, decisioni del proprietario, D40-8 del
   `40`): §3.6. L'incrocio per posizione (E3) è entrato il 2026-11-05
-  (sprint B2, D15-10 del `15`): §3.7.**
+  (sprint B2, D15-10 del `15`): §3.7. Cone search (E1) e query ADQL (E2)
+  sono entrate il 2026-11-06 (sprint B3): §3.8.**
 
 ### 3.2 Tabella
 
@@ -161,6 +162,64 @@ Decisioni del proprietario del 2026-11-05 (D15-10 del `15`); comando `catalog.cr
 - **Errori:** finestra "The cross-match was not run" / "L'incrocio non è stato eseguito" con il messaggio del
   modulo (`40` §10), oltre al pannello Messaggi; corpi diversi: offerta di forzatura (D19-4).
 
+### 3.8 Cone search e query ADQL: dialoghi (sprint B3, 2026-11-06)
+
+Decisioni del proprietario del 2026-11-06; comandi `catalog.cone_search`, `catalog.tap_query`, `vo.add_server`,
+`vo.remove_server` del `05` §7; protocolli del 14. Codice: `src/astrotwo/ui/vo_query_dialogs.py`
+(`ConeSearchDialog`, `AdqlQueryDialog`, esempi `ADQL_EXAMPLES`) e la finestra. Nessun calcolo nei dialoghi: i
+campi diventano i parametri dei comandi; i controlli (unità, intervalli, `MAX_ROWS_INVALID`, `SERVER_UNKNOWN`,
+`ADQL_INVALID`) sono del `05` e del 14 e arrivano come messaggi. "Catalog in view…" non cambia.
+
+- **Dove:** menu Data del `40` §3.3: **Cone search…** / **Cone search…** e **ADQL query…** / **Query ADQL…**,
+  dopo "Catalog in view…" e prima del separatore di "Cross-match catalogs…" (D42-2 (1)).
+- **Servizio (entrambi):** elenco a discesa con le voci del 14 del protocollo giusto (`ServerRegistry.find`:
+  `scs` per la cone search, `tap` per la query), voci nostre «nome (ente)» e poi i **miei server** «nome (mio
+  server)», più l'ultima voce **URL scritto a mano…** / **URL scritto a mano…** che abilita un campo per l'URL
+  http(s). Accanto: **Salva tra i miei server…** (attivo con un URL scritto; chiede il nome, proposto l'host
+  dell'URL → `vo.add_server`) e **Togli dai miei server** (attivo con un mio server scelto → `vo.remove_server`).
+  Nessuna altra gestione (decisione (e)). La voce scelta va nel parametro `service` (identificativo), un URL
+  scritto va in `service` così com'è; `url` resta `null` (lo risolve il `05`).
+- **Cone search** (`ConeSearchDialog`):
+  - **Centro**, tre scelte: **Centro della vista** (default; `ViewState.center` con l'epoca come la scrive il
+    `05`, `null` con il motivo); **Sorgente selezionata** (attiva se nella scheda in primo piano del pannello
+    Tabella è selezionata una sola riga con una posizione: posizione della tabella con l'epoca dichiarata dal 13,
+    senza propagazione, come la scheda della sorgente); **Coordinate scritte**: testo letto come nel campo "Vai a"
+    (coppia decimale in gradi o sessagesimale, `parse_sexagesimal` del 10), **sistema** (ICRS, FK5 con equinozio
+    J2000.0, Galattico) ed **epoca** (`J…`/`B…`; vuota = epoca non dichiarata, `null` con il motivo, mai
+    assunta). Coordinate non leggibili: messaggio nel dialogo, nessun comando.
+  - **Raggio** con **unità** (`arcsec`, `arcmin`, `deg`): proposto il raggio del campo della vista
+    (`ViewGeometry.field_radius` del 10) in arcmin; il dialogo non taglia i valori (limiti del `05`).
+  - **Righe massime**: default **100 000** (D14-5).
+  - Pulsante **Cerca** (OK) e Annulla. Senza vista definita il centro della vista è spento.
+- **Query ADQL** (`AdqlQueryDialog`):
+  - **Editor** a larghezza fissa (`QFontDatabase.FixedFont`), con il testo dell'ultima query della sessione.
+  - **Esempi** (menu a discesa): gli esempi del servizio scelto (`ADQL_EXAMPLES`, scritti da Claude Code e provati
+    sui servizi veri raggiungibili, §12); sceglierne uno sostituisce il testo (annullabile con ⌘Z). Nessuna
+    generazione automatica di query oltre agli esempi (decisione (d)).
+  - **Inserisci centro e raggio della vista** / **Insert view centre and radius**: valori numerici del centro della
+    vista convertito in ICRS dal 10 e del raggio del campo (`field_radius`) in gradi, con 10 cifre significative;
+    se nel testo c'è una `CIRCLE('ICRS', a, b, c)` sostituisce i tre numeri della prima, altrimenti inserisce
+    `CIRCLE('ICRS', ra, dec, r)` al cursore; poi scrive in fondo la riga di commento `-- CIRCLE: view centre and
+    radius, ICRS, degrees; epoch of the centre: <epoca o "not known (not assumed)">` (la sostituisce se c'è). Il
+    commento non arriva al servizio: il 14 toglie i commenti prima dell'invio (14 §3).
+  - **Modalità**: **Sincrona** (default) o **Asincrona** con l'**attesa massima** in secondi (default 600, D14-9);
+    il lavoro si annulla con il pulsante di annullamento della barra di stato (`40` §3.5).
+  - **Righe massime** (`MAXREC`): default **100 000** (D14-5).
+  - **Controllo** (anche al clic su **Esegui**): `validate_adql` del 14 prima di mandare il comando; con un errore
+    il dialogo resta aperto, il carattere alla posizione si evidenzia nell'editor (sfondo del colore d'errore,
+    cursore lì) e sotto compare il messaggio del catalogo (`ADQL_INVALID`, riga e colonna). Nessuna richiesta al
+    servizio.
+  - Pulsanti **Esegui** (OK) e Annulla.
+- **Risultato** (entrambi): nuovo livello catalogo nel cielo e nuova scheda nel pannello Tabella (stile iniziale del
+  `05`), con la provenienza nei dettagli del comando (`values.query`: servizio, URL, parametri o query inviata,
+  data, righe, troncamento). `ROW_LIMIT_EXCEEDED` nel pannello Messaggi. Colonne di posizione da UCD e `COOSYS`;
+  se il 13 non le determina con il sistema, si apre il **dialogo delle colonne** come per i file (§3.5). Si può
+  incrociare (§3.7) e mandare via SAMP (§3.6) come ogni catalogo.
+- **Errori:** per un comando chiesto in questa finestra (menu, Riesegui) una finestra **The query was not run** /
+  **La query non è stata eseguita** con il messaggio; se il servizio ha rifiutato la query, sotto il messaggio,
+  dopo una riga vuota e l'etichetta **Message of the service (as received):** / **Messaggio del servizio (tale e
+  quale):**, il **testo del servizio tale e quale** (testo esterno). Il messaggio va anche nel pannello Messaggi.
+
 ## 4. Cosa NON fa
 
 - Non modifica le tabelle (sola lettura, D13-5) e non calcola valori,
@@ -262,6 +321,8 @@ Con **pytest-qt** e piattaforma `offscreen`, in `tests/ui/`.
 | T7 | Colonne all'apertura | CSV senza UCD; scelta delle colonne di moto proprio | `confirm_position_columns` chiamata con le colonne confermate; `catalog.set_columns` registrato | ispezione |
 | T9 | Incrocio (§3.7, sprint B2) | vedi T22 del `40`: dialogo dal menu Data e dal menu contestuale, report, errori, Riesegui, testi italiani; catalogo incrociato mandato via SAMP (T21c del `40`) | come T22 e T21c del `40` | test in `tests/ui/test_crossmatch_ui.py` e `tests/ui/test_samp.py` |
 | T8 | SAMP (§3.6, sprint B1) | tabella ordinata per una colonna; selezionare righe e mandarle con il menu contestuale a un client simulato; ricevere una selezione | indici inviati nell'ordine della tabella (non mostrato); selezione ricevuta evidenziata con il record; voci spente da scollegati | test in `tests/ui/test_samp.py` |
+| T10 | Cone search (§3.8, sprint B3) | vedi T23 del `40`: centro dalla vista, dalla sorgente selezionata e scritto; troncamento; colonne da UCD e dialogo delle colonne; server personale salvato e tolto | come T23 del `40` | `tests/ui/test_vo_queries_ui.py` |
+| T11 | Query ADQL (§3.8, sprint B3) | vedi T23 del `40`: query non valida, servizio che rifiuta, sincrona e asincrona, inserimento di centro e raggio, esempi | come T23 del `40`; esempi validati offline con `validate_adql` (test di unità) e eseguiti sui servizi veri (test di rete, marcatore `network`) | `tests/ui/test_vo_queries_ui.py`, `tests/ui/test_adql_examples.py` |
 
 ## 13. Decisioni aperte
 
@@ -348,6 +409,30 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   «A × B · modalità»; (7) un incrocio senza coppie crea comunque il
   livello (vuoto) con `NO_MATCH`, così la riesecuzione dà gli stessi
   livelli.
+- **D42-2 — Scelte minori della cone search e della query ADQL (sprint B3):
+  PROPOSTE da Claude Code il 2026-11-06, da confermare (Gruppo 3).** (1)
+  ordine del menu Data: HiPS survey…, Catalog in view…, Cone search…, ADQL
+  query…, separatore, Cross-match catalogs… (prima i modi per portare un
+  catalogo, dal più semplice al più esperto, poi le operazioni sui
+  cataloghi caricati); (2) commenti `--` tolti prima dell'invio dal 14
+  (necessario: Gaia ESA, IRSA e HEASARC rifiutano una query con un
+  commento, provato il 2026-11-06) e contati come spazio da `validate_adql`;
+  (3) raggio proposto = raggio del campo della vista in arcmin; (4) nomi dei
+  livelli «<nome della voce o host> · cone search» e «… · ADQL»; (5)
+  identificativi dei miei server `my-<protocollo>-<n>`, nome chiesto con una
+  finestra (proposto l'host), elenco salvato in `QSettings`
+  (`vo/personal_servers`, JSON); (6) la riesecuzione legge prima la cache
+  del 14 (stessa richiesta, `FROM_CACHE` dichiarato; per interrogare di nuovo
+  il servizio si svuota la cache del 14 dalle Impostazioni); (7) esempi:
+  uno per servizio TAP dell'elenco, senza `TOP` (così decide `max_rows` e il
+  troncamento è dichiarato), centrati sulle Pleiadi (M45); (8) valori di
+  "Inserisci centro e raggio della vista" con 10 cifre significative, prima
+  `CIRCLE('ICRS', …)` del testo o inserimento al cursore, commento in
+  inglese (lingua della query) in fondo; (9) sistemi delle coordinate
+  scritte ICRS, FK5 J2000.0, Galattico, epoca facoltativa (`null` con il
+  motivo); (10) la finestra dell'errore ripete il testo del servizio sotto il
+  messaggio, con la sua etichetta; (11) la query si riapre con l'ultimo testo e servizio
+  della sessione.
 
 ## 14. Registro modifiche
 
@@ -363,3 +448,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** nuova §10.1: il pannello non ha messaggi propri (solo `TABLE_SORT_UNSUPPORTED` del `05`). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): l'invio con SAMP esce da "fuori dalla v1" (§3.1); nuova §3.6 (menu contestuale della tabella, indici nell'ordine della tabella, tabella e selezione ricevute); §4 aggiornato; T8 (§12). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione e voci SAMP** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): §3.1; nuova §3.7 (dialogo "Cross-match catalogs…" dal menu Data e dal menu contestuale, report in finestra, nuovo catalogo come gli altri, errori); §3.6 voci «Send whole table via SAMP» e «Send only the selected rows (N) via SAMP», spenta con N = 0; T9 (§12); nuova **D42-1** (scelte minori, da confermare). Stato `approvato` invariato. |
+| 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL** (decisioni del proprietario del 2026-11-06): nuovo §3.8 (dialoghi "Cone search…" e "Query ADQL…" del menu Data: servizio dall'elenco del 14 o URL scritto, miei server con `vo.add_server`/`vo.remove_server`, centro della vista/sorgente selezionata/coordinate scritte con sistema ed epoca, raggio con unità, editor a larghezza fissa, esempi, inserimento di centro e raggio della vista, `validate_adql` con la posizione evidenziata, sincrona/asincrona, testo del servizio tale e quale); nuovi T10, T11 (§12); nuova **D42-2** (scelte minori, da confermare). Stato `approvato` invariato. |

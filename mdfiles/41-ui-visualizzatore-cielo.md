@@ -332,7 +332,10 @@ velocità della rotella impostata nel sistema: da verificare su altri Mac.
   mostra il record con `record_view` del 13. Selezioni fatte nel `42` si
   evidenziano qui (D7).
 - **Catalogo nel campo** (menu Data del `40`): centro e raggio della
-  finestra da `ViewGeometry` del 10.
+  finestra da `ViewGeometry` del 10. **Dal 2026-11-06 (sprint B3):** gli
+  stessi valori sono il centro e il raggio proposti da Cone search… e quelli
+  scritti da "Inserisci centro e raggio della vista" della query ADQL
+  (`42` §3.8); Catalog in view… non cambia.
 - **Sprint 4e (decisioni del proprietario del 2026-10-21):**
   - **Dove si calcola:** posizioni (`display_positions` del 13 se il livello ha le colonne di moto proprio
     scelte con `catalog.set_columns`, altrimenti le posizioni della tabella, scelta minore 3) e pixel della base
@@ -1141,3 +1144,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-10-31 | Claude Code | **Sprint 10b (ripiego dei survey HiPS sui mirror, `12` §3):** §3.7 — avviso `HIPS_MIRROR_FALLBACK` una volta per survey nel pannello Messaggi, tile falliti prima del cambio richiesti al mirror, messaggio unico `NET_TIMEOUT` `hips_servers` se cadono tutti, server in uso nel tooltip del nome della riga del survey (testo «Server: %1» tradotto); nessun pannello nuovo; test `test_mirror_fallback_fills_sky`. Stato `approvato` invariato. |
 | 2026-11-04 | Claude Code | Sprint A3: corretto l'errore alla chiusura rapida (`RuntimeError: Signal source has been deleted`): il timer a 0 ms della prima vista ha il visualizzatore come contesto e non scatta se è già distrutto. Comportamento invariato; stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): nuova §3.20 (menu contestuale del cielo con i puntamenti SAMP; puntamento ricevuto = `view.set_center` di origine `samp`); T38 (§12). Stato `approvato` invariato. |
+| 2026-11-06 | Claude Code | **Sprint B3:** §3 "Catalogo nel campo" — centro e raggio della vista della `ViewGeometry` del 10 usati anche da Cone search… (centro e raggio proposti) e da "Inserisci centro e raggio della vista" della query ADQL (`42` §3.8); "Catalog in view…" invariato (D41-10). Stato `approvato` invariato. |

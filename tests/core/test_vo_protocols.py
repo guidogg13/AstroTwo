@@ -512,6 +512,40 @@ def test_t20_validate_adql():
         assert (check.valid, check.position) == (valid, position), adql
 
 
+
+def test_t26_adql_comments_validation_and_sending(service, cache):
+    # validate_adql: i commenti contano come spazio (anche prima di SELECT), posizioni del testo scritto
+    assert validate_adql("SELECT a FROM t -- it's fine").valid
+    assert validate_adql("-- intro\n  SELECT a FROM t").valid
+    assert validate_adql("-- solo un commento").reason == "empty"
+    check = validate_adql("-- it's\nSELECT a FROM t WHERE b = 'x")
+    assert (check.reason, check.position) == ("unclosed_quote", 34)
+    assert validate_adql("SELECT a FROM t WHERE b = '--' AND c = 1").valid  # dentro le virgolette: testo
+    # adql_to_send: commenti e righe rimaste vuote tolti, il resto invariato
+    assert vo.adql_to_send("SELECT a FROM t") == "SELECT a FROM t"
+    assert vo.adql_to_send("-- intro\nSELECT a -- x\nFROM t WHERE b = '--no'\n  -- end") == \
+        "SELECT a\nFROM t WHERE b = '--no'"
+    service.routes["/tap/sync"] = tap_sync_route(3)
+    adql = "SELECT * FROM stelle\n-- CIRCLE: view centre, epoch: not known"
+    result = tap_query(service.url + "/tap", adql, cache=cache)
+    assert service.requests[-1]["params"]["QUERY"] == "SELECT * FROM stelle"
+    assert result.request.arguments["adql"] == adql and result.table.rows == 3
+
+
+def test_t26_tap_async_cancel(service, cache):
+    state = uws_service(service, ["EXECUTING"])
+    flag = {"stop": False}
+    threading_timer = __import__("threading").Timer(0.3, lambda: flag.update(stop=True))
+    threading_timer.start()
+    started = _time.monotonic()
+    with pytest.raises(VoProtocolsError) as err:
+        tap_query(service.url + "/tap", "SELECT * FROM stelle", mode="async", cache=cache,
+                  cancel=lambda: flag["stop"])
+    assert _time.monotonic() - started < 1.3  # entro 1 s dall'annullamento
+    assert err.value.code == "QUERY_CANCELLED" and err.value.params["reason"] == "async_aborted"
+    assert state["posted"] == ["RUN", "ABORT"] and any(r["method"] == "DELETE" for r in service.requests)
+
+
 @pytest.mark.network
 def test_t2_cone_search_network(cache):
     # Servizio SCS pubblico (IRSA, AllWISE); atteso ricalcolato con pyvo contro lo stesso servizio.

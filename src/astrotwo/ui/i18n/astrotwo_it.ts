@@ -2,6 +2,93 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="it_IT">
 <context>
+    <name>AdqlQueryDialog</name>
+    <message>
+        <source>ADQL query</source>
+        <translation>Query ADQL</translation>
+    </message>
+    <message>
+        <source>Insert view centre and radius</source>
+        <translation>Inserisci centro e raggio della vista</translation>
+    </message>
+    <message>
+        <source>Synchronous</source>
+        <translation>Sincrona</translation>
+    </message>
+    <message>
+        <source>Asynchronous</source>
+        <translation>Asincrona</translation>
+    </message>
+    <message>
+        <source>Run</source>
+        <translation>Esegui</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Controlla</translation>
+    </message>
+    <message>
+        <source>maximum wait</source>
+        <translation>attesa massima</translation>
+    </message>
+    <message>
+        <source>Service</source>
+        <translation>Servizio</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation>Modalità</translation>
+    </message>
+    <message>
+        <source>Maximum rows (MAXREC)</source>
+        <translation>Righe massime (MAXREC)</translation>
+    </message>
+    <message>
+        <source>Gaia DR3: stars brighter than G = 15 in a circle (if the synchronous query times out, use asynchronous)</source>
+        <translation>Gaia DR3: stelle più brillanti di G = 15 in un cerchio (se la sincrona va in timeout, usare l&apos;asincrona)</translation>
+    </message>
+    <message>
+        <source>SIMBAD: objects of type star (and subtypes) in a circle</source>
+        <translation>SIMBAD: oggetti di tipo stella (e sottotipi) in un cerchio</translation>
+    </message>
+    <message>
+        <source>VizieR: 2MASS point sources (II/246/out) in a circle</source>
+        <translation>VizieR: sorgenti puntiformi 2MASS (II/246/out) in un cerchio</translation>
+    </message>
+    <message>
+        <source>IRSA: AllWISE sources in a circle</source>
+        <translation>IRSA: sorgenti AllWISE in un cerchio</translation>
+    </message>
+    <message>
+        <source>HEASARC: ROSAT All-Sky Survey bright sources in a circle</source>
+        <translation>HEASARC: sorgenti brillanti della ROSAT All-Sky Survey in un cerchio</translation>
+    </message>
+    <message>
+        <source>MAST: observations (ObsCore) in a circle</source>
+        <translation>MAST: osservazioni (ObsCore) in un cerchio</translation>
+    </message>
+    <message>
+        <source>Examples…</source>
+        <translation>Esempi…</translation>
+    </message>
+    <message>
+        <source>No examples for this service</source>
+        <translation>Nessun esempio per questo servizio</translation>
+    </message>
+    <message>
+        <source>Minimal checks passed (the service validates the query).</source>
+        <translation>Controlli minimi superati (la query la valida il servizio).</translation>
+    </message>
+    <message>
+        <source>line %1, column %2</source>
+        <translation>riga %1, colonna %2</translation>
+    </message>
+    <message>
+        <source>Write an http:// or https:// address of the service.</source>
+        <translation>Scrivi un indirizzo http:// o https:// del servizio.</translation>
+    </message>
+</context>
+<context>
     <name>AiPanel</name>
     <message>
         <source>running…</source>
@@ -420,6 +507,77 @@
     <message>
         <source>Maximum rows</source>
         <translation>Righe massime</translation>
+    </message>
+</context>
+<context>
+    <name>ConeSearchDialog</name>
+    <message>
+        <source>Cone search</source>
+        <translation>Cone search</translation>
+    </message>
+    <message>
+        <source>Centre of the view</source>
+        <translation>Centro della vista</translation>
+    </message>
+    <message>
+        <source>Selected source</source>
+        <translation>Sorgente selezionata</translation>
+    </message>
+    <message>
+        <source>Coordinates written here</source>
+        <translation>Coordinate scritte qui</translation>
+    </message>
+    <message>
+        <source>Selected source: %1</source>
+        <translation>Sorgente selezionata: %1</translation>
+    </message>
+    <message>
+        <source>e.g. 56.75 24.1167 or 03:47:00 +24:07:00</source>
+        <translation>es. 56.75 24.1167 o 03:47:00 +24:07:00</translation>
+    </message>
+    <message>
+        <source>Galactic</source>
+        <translation>Galattico</translation>
+    </message>
+    <message>
+        <source>epoch, e.g. J2000.0 (empty: not declared)</source>
+        <translation>epoca, es. J2000.0 (vuota: non dichiarata)</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Cerca</translation>
+    </message>
+    <message>
+        <source>Service</source>
+        <translation>Servizio</translation>
+    </message>
+    <message>
+        <source>Centre</source>
+        <translation>Centro</translation>
+    </message>
+    <message>
+        <source>Radius</source>
+        <translation>Raggio</translation>
+    </message>
+    <message>
+        <source>Maximum rows</source>
+        <translation>Righe massime</translation>
+    </message>
+    <message>
+        <source>Epoch: write J… or B… (for example J2000.0), or leave it empty.</source>
+        <translation>Epoca: scrivi J… o B… (per esempio J2000.0), oppure lasciala vuota.</translation>
+    </message>
+    <message>
+        <source>Coordinates not readable: write a decimal pair in degrees or a sexagesimal pair (right ascension in hours).</source>
+        <translation>Coordinate non leggibili: scrivi una coppia decimale in gradi o una coppia sessagesimale (ascensione retta in ore).</translation>
+    </message>
+    <message>
+        <source>Write an http:// or https:// address of the service.</source>
+        <translation>Scrivi un indirizzo http:// o https:// del servizio.</translation>
+    </message>
+    <message>
+        <source>Choose a centre.</source>
+        <translation>Scegli un centro.</translation>
     </message>
 </context>
 <context>
@@ -1271,6 +1429,14 @@
         <translation>Catalogo nel campo…</translation>
     </message>
     <message>
+        <source>Cone search…</source>
+        <translation>Cone search…</translation>
+    </message>
+    <message>
+        <source>ADQL query…</source>
+        <translation>Query ADQL…</translation>
+    </message>
+    <message>
         <source>Cross-match catalogs…</source>
         <translation>Incrocia cataloghi…</translation>
     </message>
@@ -1465,6 +1631,18 @@
     <message>
         <source>Open at least two catalogs first (File → Open catalog… or Data → Catalog in view…).</source>
         <translation>Apri prima almeno due cataloghi (File → Apri catalogo… oppure Dati → Catalogo nel campo…).</translation>
+    </message>
+    <message>
+        <source>%1 · %2 · row %3</source>
+        <translation>%1 · %2 · riga %3</translation>
+    </message>
+    <message>
+        <source>Message of the service (as received):</source>
+        <translation>Messaggio del servizio (tale e quale):</translation>
+    </message>
+    <message>
+        <source>The query was not run</source>
+        <translation>La query non è stata eseguita</translation>
     </message>
     <message>
         <source>Build {build}, commit {commit}</source>
@@ -1757,6 +1935,33 @@
     <message>
         <source>step %1 of %2</source>
         <translation>passo %1 di %2</translation>
+    </message>
+</context>
+<context>
+    <name>_ServiceChooser</name>
+    <message>
+        <source>Save to my servers…</source>
+        <translation>Salva tra i miei server…</translation>
+    </message>
+    <message>
+        <source>Remove from my servers</source>
+        <translation>Togli dai miei server</translation>
+    </message>
+    <message>
+        <source>%1 (my server)</source>
+        <translation>%1 (mio server)</translation>
+    </message>
+    <message>
+        <source>URL written by hand…</source>
+        <translation>URL scritto a mano…</translation>
+    </message>
+    <message>
+        <source>Save to my servers</source>
+        <translation>Salva tra i miei server</translation>
+    </message>
+    <message>
+        <source>Name of the server:</source>
+        <translation>Nome del server:</translation>
     </message>
 </context>
 <context>

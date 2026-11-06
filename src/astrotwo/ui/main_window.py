@@ -206,6 +206,9 @@ class Preference:
     check: Callable[[str], str]
 
 
+# Miei server VO (§3.10, sprint B3): elenco JSON scritto dopo vo.add_server/vo.remove_server, fuori dalla finestra.
+PERSONAL_SERVERS_KEY = "vo/personal_servers"
+
 #: Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo.
 PREFERENCES: dict[str, Preference] = {p.key: p for p in (
     Preference("language", "system", _choice(LANGUAGES)),
@@ -1572,6 +1575,10 @@ class MainWindow(QMainWindow):
                 registry.bind(name, executor)
         self._samp_tables: dict[int, object] = {}  # lavoro di catalog.open_file → ReceivedTable (tabelle note)
         self.registry = registry
+        server_warnings = self._load_personal_servers()  # miei server VO (sprint B3, §3.10)
+        self.last_cone_dialog = None
+        self.last_adql_dialog = None
+        self._last_adql: dict | None = None  # ultimo testo e servizio della query ADQL nella sessione (D42-2 (11))
         self.session = Session(registry)
         self.saved_count = 0
         self.saved_path: str | None = None
@@ -1618,7 +1625,7 @@ class MainWindow(QMainWindow):
         state = self.settings.value("window/state")
         if isinstance(state, QByteArray):
             self.restoreState(state)
-        for message in translation_warnings:
+        for message in translation_warnings + server_warnings:
             self.messages.add(None, message, error=False)
         self._startup_view = startup_commands
         if startup_commands:
@@ -1929,6 +1936,9 @@ class MainWindow(QMainWindow):
                            name="night")  # ⌃⌘N (D40-4)
         self.act_hips = a(self.tr("HiPS survey…"), self.hips_dialog, name="hipsSurvey")
         self.act_catalog_view = a(self.tr("Catalog in view…"), self.catalog_dialog, name="catalogInView")
+        self.act_cone_search = a(self.tr("Cone search…"), lambda: self.cone_search_dialog(),
+                                 name="coneSearch")  # sprint B3 (42 §3.8)
+        self.act_adql = a(self.tr("ADQL query…"), lambda: self.adql_dialog(), name="adqlQuery")
         self.act_crossmatch = a(self.tr("Cross-match catalogs…"), lambda: self.crossmatch_dialog(),
                                 name="crossmatch")  # sprint B2: incrocio per posizione (42 §3.7)
         self.tool_group = QActionGroup(self)
@@ -1990,6 +2000,8 @@ class MainWindow(QMainWindow):
         m = bar.addMenu(self.tr("Data"))
         m.addAction(self.act_hips)
         m.addAction(self.act_catalog_view)
+        m.addAction(self.act_cone_search)  # D42-2 (1): prima i modi per portare un catalogo, poi le operazioni
+        m.addAction(self.act_adql)
         m.addSeparator()
         m.addAction(self.act_crossmatch)
         m = bar.addMenu(self.tr("Tools"))
@@ -2175,6 +2187,9 @@ class MainWindow(QMainWindow):
                 self.show_modal(self.tr("The file cannot be opened"), shown_line(result.error))
             elif done.registered.name == "catalog.crossmatch" and self._asked_here(done.registered):
                 self.show_modal(self.tr("The cross-match was not run"), shown_line(result.error))
+            elif (done.registered.name in ("catalog.cone_search", "catalog.tap_query", "vo.add_server",
+                                           "vo.remove_server") and self._asked_here(done.registered)):
+                self._query_failed(result.error)
         elif result.status == "ok":
             self._apply_effect(done.registered, result)
         self.sky.command_finished(done.registered.name, result.status, result.values,
@@ -2183,10 +2198,13 @@ class MainWindow(QMainWindow):
         self.catalog_panel.command_finished(done.registered.name, result.status, result.values,
                                             self.session.workspace.state)
         if (self.auto_column_dialogs and result.status == "ok"
-                and done.registered.name in ("catalog.open_file", "catalog.load_region")):
+                and done.registered.name in ("catalog.open_file", "catalog.load_region", "catalog.cone_search",
+                                             "catalog.tap_query")):
             self.columns_dialogs(result.values["layer"])
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
+        if done.registered.name in ("vo.add_server", "vo.remove_server") and result.status == "ok":
+            self._servers_changed(result.values)
         if (done.registered.name == "catalog.crossmatch" and result.status == "ok"
                 and self._asked_here(done.registered)):
             self.show_crossmatch_report(result.values["layer"])  # report visibile subito (42 §3.7)
@@ -2620,6 +2638,110 @@ class MainWindow(QMainWindow):
         self.last_crossmatch_report = dialog
         dialog.show()
         return dialog
+
+    # --- cone search e query ADQL (sprint B3, 42 §3.8) -------------------------------------------------------
+
+    def _load_personal_servers(self) -> list[ResultMessage]:
+        """Miei server VO salvati (§3.10, ``vo/personal_servers``) nel ``ServerRegistry`` del registro dei comandi;
+        una voce non valida si salta con un avviso."""
+        from astrotwo.core.vo_protocols import ServerRegistry
+
+        servers = ServerRegistry()
+        problems: list[ResultMessage] = []
+        raw = self.settings.value(PERSONAL_SERVERS_KEY, "")
+        try:
+            items = json.loads(raw) if raw else []
+        except (TypeError, ValueError) as exc:
+            items = []
+            problems.append(ResultMessage("PREFERENCE_VALUE_INVALID", f"vo/personal_servers non leggibile: {exc}",
+                                          {"reason": "personal_server", "detail": str(exc)}))
+        for item in items if isinstance(items, list) else ():
+            try:
+                servers.add_personal(item["id"], item["name"], item["protocol"], item["url"])
+            except (KeyError, TypeError, ValueError) as exc:
+                problems.append(ResultMessage("PREFERENCE_VALUE_INVALID", f"vo/personal_servers: voce saltata ({exc})",
+                                              {"reason": "personal_server", "detail": str(exc)}))
+        self.registry.servers = servers
+        return problems
+
+    def _servers(self):
+        from astrotwo.core.vo_protocols import ServerRegistry
+
+        if self.registry.servers is None:
+            self.registry.servers = ServerRegistry()
+        return self.registry.servers
+
+    def _connect_chooser(self, chooser) -> None:
+        chooser.saveRequested.connect(lambda name, protocol, url: self.submit(
+            "vo.add_server", {"name": name, "protocol": protocol, "url": url}))
+        chooser.removeRequested.connect(lambda server: self.submit("vo.remove_server", {"server": server}))
+
+    def selected_source(self) -> tuple[str, dict] | None:
+        """Sorgente selezionata nella scheda in primo piano del pannello Tabella (una sola riga con posizione): posizione
+        della tabella con l'epoca del catalogo dichiarata dal 13, senza propagazione (05 ``catalog_positions``)."""
+        page = self.catalog_panel.tabs.currentWidget()
+        layer_id = getattr(page, "layer_id", None)
+        layer = None if layer_id is None else self.session.workspace.state.find(layer_id)
+        if layer is None or layer.kind != "catalog" or len(layer.selection) != 1:
+            return None
+        row = int(layer.selection[0])
+        coords, valid = catalog_positions(layer.data, [row])
+        if coords is None or not valid.all():
+            return None
+        point = SkyFrame(coord=coords.coord[0], epoch=coords.epoch)
+        label = self.tr("%1 · %2 · row %3").replace("%1", layer.id).replace("%2", layer.name).replace("%3", str(row))
+        return label, sky_json(point)
+
+    def cone_search_dialog(self):
+        """Data → Cone search… (42 §3.8): OK → ``catalog.cone_search``."""
+        from astrotwo.ui.vo_query_dialogs import ConeSearchDialog
+
+        view = self.session.workspace.state.view
+        center = None if view.center is None else sky_json(view.center)
+        radius = None if view.geometry is None else view.geometry.field_radius
+        dialog = ConeSearchDialog(self._servers(), center, radius, self.selected_source(), self)
+        self._connect_chooser(dialog.chooser)
+        dialog.accepted.connect(lambda: self.submit("catalog.cone_search", dialog.params()))
+        self.last_cone_dialog = dialog
+        dialog.open()
+        return dialog
+
+    def adql_dialog(self):
+        """Data → ADQL query… (42 §3.8): ultimo testo e servizio della sessione; OK → ``catalog.tap_query``."""
+        from astrotwo.ui.vo_query_dialogs import AdqlQueryDialog, view_values
+
+        dialog = AdqlQueryDialog(self._servers(), view_values(self.session.workspace.state.view), self._last_adql,
+                                 self)
+        self._connect_chooser(dialog.chooser)
+
+        def accepted() -> None:
+            params = dialog.params()
+            if params is not None:
+                self._last_adql = params
+                self.submit("catalog.tap_query", params)
+
+        dialog.accepted.connect(accepted)
+        self.last_adql_dialog = dialog
+        dialog.open()
+        return dialog
+
+    def _servers_changed(self, values: Mapping) -> None:
+        """Dopo ``vo.add_server``/``vo.remove_server`` riusciti: elenco salvato (§3.10) e dialoghi aperti aggiornati."""
+        self.settings.setValue(PERSONAL_SERVERS_KEY, json.dumps(values["personal_servers"], ensure_ascii=False))
+        self.settings.sync()
+        added = values.get("url") is not None
+        for dialog in (self.last_cone_dialog, self.last_adql_dialog):
+            if dialog is not None:
+                dialog.chooser.refresh(select=values["server"] if added else None)
+
+    def _query_failed(self, error: ResultMessage) -> None:
+        """Finestra "The query was not run" con il messaggio e, se il servizio ha rifiutato, il suo testo tale e
+        quale (testo esterno, 42 §3.8)."""
+        text = shown_line(error)
+        detail = error.params.get("detail") if error.code == "ADQL_INVALID" else None
+        if isinstance(detail, str) and str(error.params.get("reason", "")).startswith("service_rejected"):
+            text += "\n\n" + self.tr("Message of the service (as received):") + "\n" + detail
+        self.show_modal(self.tr("The query was not run"), text)
 
     def preferences_dialog(self) -> PreferencesDialog:
         dialog = PreferencesDialog(self)

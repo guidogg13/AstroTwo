@@ -82,6 +82,7 @@ EXPOSED_COMMANDS: tuple[tuple[str, str], ...] = (
     ("catalog.rows", "catalog__rows"),
     ("layer.list", "layer__list"),
     ("catalog.crossmatch", "catalog__crossmatch"),  # sprint B2, D15-10 (e): l'IA sceglie modalità e soglia
+    ("catalog.cone_search", "catalog__cone_search"),  # sprint B3: solo la cone search (catalog.tap_query = 33)
 )
 
 #: Nomi accettati da entrambi i provider (§3.4 punto 1).
@@ -134,6 +135,8 @@ EXTERNAL_FIELDS: dict[str, tuple[str, ...]] = {
     # nomi dei livelli, origini, epoche, sistemi e rinomine vengono dai file o dai servizi; il testo del report li cita
     "catalog.crossmatch": (*_CATALOG_EXTERNAL, "values.crossmatch.name_a", "values.crossmatch.name_b",
                            "values.crossmatch.report.*", "values.crossmatch.report_text"),
+    # colonne e posizioni vengono dal servizio; servizio, URL e parametri inviati sono di AstroTwo (sprint B3)
+    "catalog.cone_search": (*_CATALOG_EXTERNAL, "values.suggestions[].lon", "values.suggestions[].lat"),
 }
 
 #: Campi comuni a tutti i comandi: provenienza scritta dai moduli (origine = URL configurato o nome del file).
@@ -175,6 +178,8 @@ ASTROTWO_FIELDS: dict[str, tuple[str, ...]] = {
                            "values.crossmatch.method", "values.crossmatch.mode", "values.crossmatch.frame",
                            "values.crossmatch.max_sep.unit", "values.crossmatch.separation_column",
                            "values.crossmatch.separation_unit"),
+    "catalog.cone_search": (*_CATALOG_ASTROTWO, "values.query.*", "values.suggestions[].frame_hint",
+                            "values.suggestions[].reason", "values.suggestions[].kind"),
 }
 
 #: Codici di avvisi ed errori il cui testo è scritto solo da AstroTwo (05 e moduli, senza testo di terzi); gli altri

@@ -111,6 +111,8 @@ __all__ = [
     "download_table",
     "tap_query",
     "validate_adql",
+    "adql_to_send",
+    "service_url",
     "VOTABLE_VERSION",
     "VoProtocolsError",
     "export_table",
@@ -600,9 +602,63 @@ class AdqlCheck:
     quote: str | None = None  # la virgoletta non chiusa (``reason == "unclosed_quote"``)
 
 
+def _adql_comments(adql: str) -> list[tuple[int, int]]:
+    """Intervalli ``[inizio, fine)`` dei commenti ``--`` fuori dalle virgolette, fino a fine riga esclusa (ADQL 2.1).
+
+    Le virgolette dentro un commento non contano; ``--`` dentro una stringa o un identificatore tra virgolette non è
+    un commento (sprint B3, 14 §3)."""
+    spans, quote, k = [], None, 0
+    while k < len(adql):
+        ch = adql[k]
+        if quote is not None:
+            if ch == quote:
+                if adql[k + 1:k + 2] == quote:  # virgoletta raddoppiata dentro il testo
+                    k += 2
+                    continue
+                quote = None
+        elif ch in ("'", '"'):
+            quote = ch
+        elif adql.startswith("--", k):
+            end = adql.find("\n", k)
+            end = len(adql) if end < 0 else end
+            spans.append((k, end))
+            k = end
+            continue
+        k += 1
+    return spans
+
+
+def adql_to_send(adql: str) -> str:
+    """Testo ADQL senza i commenti ``--`` (fuori dalle virgolette) e senza le righe rimaste vuote (14 §3, sprint B3).
+
+    Provato il 2026-11-06: Gaia (ESA), IRSA e HEASARC rifiutano una query con una riga di commento, MAST la
+    accetta. Senza commenti il testo torna invariato; il resto del testo non cambia mai."""
+    spans = _adql_comments(adql)
+    if not spans:
+        return adql
+    text = adql
+    for start, end in reversed(spans):
+        line_start = text.rfind("\n", 0, start) + 1
+        before = text[line_start:start]
+        if before.strip():  # codice prima del commento: si toglie il commento con gli spazi che lo precedono
+            text = text[:line_start] + before.rstrip() + text[end:]
+        elif end < len(text):  # riga di solo commento: si toglie con il suo a capo
+            text = text[:line_start] + text[end + 1:]
+        else:  # ultima riga di solo commento: si toglie con l'a capo che la precede
+            text = text[:max(line_start - 1, 0)]
+    return text
+
+
 def validate_adql(adql: str) -> AdqlCheck:
-    """Controlli minimi: non vuota, inizia con SELECT, virgolette chiuse, parentesi bilanciate."""
-    if not isinstance(adql, str) or not adql.strip():
+    """Controlli minimi: non vuota, inizia con SELECT, virgolette chiuse, parentesi bilanciate.
+
+    I commenti ``--`` (fuori dalle virgolette) contano come spazio, anche prima di ``SELECT``; le posizioni sono
+    quelle del testo scritto (sprint B3)."""
+    if not isinstance(adql, str):
+        return AdqlCheck(False, "ADQL vuota", 0, "empty")
+    for start, end in _adql_comments(adql):
+        adql = adql[:start] + " " * (end - start) + adql[end:]
+    if not adql.strip():
         return AdqlCheck(False, "ADQL vuota", 0, "empty")
     start = len(adql) - len(adql.lstrip())
     if not re.match(r"select\b", adql[start:], re.IGNORECASE):
@@ -651,7 +707,7 @@ def _check_max_rows(max_rows, limits: TableLimits | None) -> TableLimits:
     return limits
 
 
-def _service_url(service: str, protocol: str, servers: ServerRegistry | None = None) -> str:
+def service_url(service: str, protocol: str, servers: ServerRegistry | None = None) -> str:
     """URL esplicito, oppure voce dell'elenco dei server con il protocollo richiesto (D14-9 punto 6)."""
     if isinstance(service, str) and service.startswith(("http://", "https://")):
         return service.rstrip("/") if protocol == "tap" else service
@@ -756,7 +812,7 @@ def cone_search(center, radius, catalog: str, *, max_rows: int = DEFAULT_MAX_ROW
                 timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
     """Cone search (SCS): ``catalog`` è una voce dell'elenco dei server o un URL SCS (D14-9 punto 6)."""
     limits = _check_max_rows(max_rows, limits)
-    url = _service_url(catalog, "scs", servers)
+    url = service_url(catalog, "scs", servers)
     ra, dec = _icrs_degrees(center)
     sr = _radius_degrees(radius)
     query = pyvo.dal.scs.SCSQuery(url, (ra, dec), sr)
@@ -772,8 +828,12 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
               async_timeout: float = DEFAULT_ASYNC_TIMEOUT, servers: ServerRegistry | None = None,
               limits: TableLimits | None = None,
               cache: SharedCache | None = None, refresh: bool = False,
-              timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
-    """Esegue ADQL su un servizio TAP: sincrona di default, asincrona su richiesta (D14-9 punto 8)."""
+              timeouts: NetworkTimeouts = NETWORK_TIMEOUTS, cancel=None) -> VoResult:
+    """Esegue ADQL su un servizio TAP: sincrona di default, asincrona su richiesta (D14-9 punto 8).
+
+    I commenti ``--`` si tolgono prima dell'invio (``adql_to_send``): ``adql`` scritto negli argomenti registrati,
+    testo inviato nella ``QUERY``. ``cancel`` (funzione senza argomenti, vera se chi chiama ha annullato) vale solo
+    in asincrona: lavoro interrotto ed eliminato, ``QUERY_CANCELLED`` (sprint B3)."""
     check = validate_adql(adql)
     if not check.valid:  # nessuna chiamata di rete inutile (T4)
         raise VoProtocolsError("ADQL_INVALID", f"{check.message} (carattere {check.position})",
@@ -783,22 +843,40 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
         raise ValueError("mode deve essere 'sync' o 'async'")
     if not (isinstance(async_timeout, (int, float)) and async_timeout > 0):
         raise ValueError("async_timeout deve essere un numero di secondi positivo")
-    base = _service_url(url, "tap", servers)
+    base = service_url(url, "tap", servers)
     arguments = {"url": url, "adql": adql, "max_rows": max_rows, "mode": mode}
+    sent = adql_to_send(adql)
     if mode == "sync":
-        query = pyvo.dal.tap.TAPQuery(base, adql, mode="sync", maxrec=max_rows)
+        query = pyvo.dal.tap.TAPQuery(base, sent, mode="sync", maxrec=max_rows)
         response = _http("tap", query.queryurl, dict(query), method="POST", cache=cache, refresh=refresh,
                          timeouts=timeouts, accept_error_body=True, hint=_ASYNC_HINT)
     else:
         arguments["async_timeout"] = async_timeout
-        response = _tap_async(base, adql, max_rows, async_timeout, cache=cache, refresh=refresh, timeouts=timeouts)
+        response = _tap_async(base, sent, max_rows, async_timeout, cache=cache, refresh=refresh, timeouts=timeouts,
+                              cancel=cancel)
     results = _parse_results(response, pyvo.dal.TAPResults, hint=_ASYNC_HINT if mode == "sync" else "")
     return _finish("tap", "tap_query", arguments, response, results, max_rows=max_rows, limits=limits, cache=cache)
 
 
+#: Intervallo massimo tra due controlli dell'annullamento durante l'attesa di un lavoro asincrono (s, sprint B3).
+_CANCEL_POLL = 0.25
+
+
+def _cancelled_job(job, url: str, phase) -> VoProtocolsError:
+    """Lavoro annullato da chi chiama: ``ABORT`` (l'eliminazione è nel ``finally`` di ``_tap_async``)."""
+    try:
+        job.abort()
+    except (pyvo.dal.DALServiceError, requests.exceptions.RequestException):
+        pass  # l'eliminazione che segue basta: il servizio non deve tenere il lavoro
+    return VoProtocolsError("QUERY_CANCELLED", f"{url}: lavoro annullato (fase {phase}); interrotto ed eliminato",
+                            url=url, params={"reason": "async_aborted", "url": url, "phase": str(phase)})
+
+
 def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cache, refresh,
-               timeouts: NetworkTimeouts) -> _Response:
-    """Lavoro UWS con ``pyvo``: attesa massima complessiva ``async_timeout`` s, poi interruzione."""
+               timeouts: NetworkTimeouts, cancel=None) -> _Response:
+    """Lavoro UWS con ``pyvo``: attesa massima complessiva ``async_timeout`` s, poi interruzione; ``cancel``
+    controllato almeno ogni ``_CANCEL_POLL`` s (sprint B3)."""
+    stopped = (lambda: False) if cancel is None else cancel
     params = dict(pyvo.dal.tap.TAPQuery(base, adql, mode="async", maxrec=max_rows))
     url = f"{base}/async"
     canonical = _canonical(params)
@@ -816,9 +894,13 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
     try:
         job = pyvo.dal.AsyncTAPJob.create(base, adql, maxrec=max_rows, session=session)
         try:
+            if stopped():
+                raise _cancelled_job(job, url, job.phase)
             job.run()
             interval = 0.2
             while (phase := job.phase) not in ("COMPLETED", "ERROR", "ABORTED"):
+                if stopped():
+                    raise _cancelled_job(job, url, phase)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     job.abort()
@@ -826,7 +908,9 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
                                            f"(fase {phase}); lavoro interrotto", url=url,
                                            params={"reason": "async_deadline", "url": url,
                                                    "timeout": _q(async_timeout, "s"), "phase": str(phase)})
-                time.sleep(min(interval, remaining))
+                wake = time.monotonic() + min(interval, remaining)
+                while (left := wake - time.monotonic()) > 0 and not stopped():
+                    time.sleep(min(left, _CANCEL_POLL))
                 interval = min(interval * 1.5, 10.0)
             if phase != "COMPLETED":
                 try:
@@ -1250,7 +1334,7 @@ def sia_search(center, radius, *, version: int, service: str, band=None, time=No
         raise ValueError("band e time sono parametri di SIA2 (version=2)")
     limits = _check_max_rows(max_rows, limits)
     protocol = "sia" if version == 1 else "sia2"
-    url = _service_url(service, protocol, servers)
+    url = service_url(service, protocol, servers)
     ra, dec = _icrs_degrees(center)
     r = _radius_degrees(radius)
     arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"},
@@ -1414,7 +1498,7 @@ def ssa_search(center, radius, *, service: str, max_rows: int = DEFAULT_MAX_ROWS
                timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> VoResult:
     """Ricerca di spettri SSA 1.1 con ``pyvo`` (``SIZE`` = diametro = 2 × raggio); vuota → ``SSA_NO_RESULT``."""
     limits = _check_max_rows(max_rows, limits)
-    url = _service_url(service, "ssa", servers)
+    url = service_url(service, "ssa", servers)
     ra, dec = _icrs_degrees(center)
     r = _radius_degrees(radius)
     query = pyvo.dal.ssa.SSAQuery(url, (ra, dec), diameter=2 * r * u.deg)

@@ -302,6 +302,9 @@ Il disegno durante il gesto è del `41`.
   comandi chiamano — nella prima versione `10`, `11`, `12`, `13`, `14`,
   `16`, `17`, `18`, `19` (solo `check_overlay`) e, dal 2026-11-05 (sprint
   B2), `15` (`catalog.crossmatch`).
+  Il `14` dà anche `cone_search`, `tap_query`, `validate_adql` e
+  `ServerRegistry` a `catalog.cone_search`, `catalog.tap_query` e
+  `vo.*` (sprint B3, 2026-11-06).
 - **Usato da:** `40-ui-finestra-principale.md` (coda, cronologia, sessione),
   `41-ui-visualizzatore-cielo.md`, `42-ui-pannello-cataloghi.md`;
   `18-core-calcolatrici.md` (formato dei comandi, solo come dato);
@@ -379,6 +382,10 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.rows` (livello, prima riga, numero di righe ≤ 50, colonne facoltative, ordine della tabella o mostrato) — nuovo | 13 `record_view` per ogni riga | session | sola lettura |
 | `layer.list` — nuovo | — (stato dello spazio di lavoro: livelli con identificativo, tipo, nome, visibilità, opacità, ordine, sorgente, righe) | session | sola lettura |
 | `catalog.crossmatch` (`layer_a`, `layer_b`, `mode`, `max_sep`, `method`, `frame`, `force_body`) — nuovo, 2026-11-05 (sprint B2, D15-10 del 15) | 15 `crossmatch` (`method = local`) o `crossmatch_cds` (`method = cds`, rete del 14), `CrossMatchResult.joined`; 19 `check_overlay` | session | rete (solo con `cds`), lungo, `confirm`; nuovo livello catalogo con la tabella unita; dettagli sotto |
+| `catalog.cone_search` (`service`, `url`, `center`, `radius`, `max_rows`, `force_body`) — nuovo, 2026-11-06 (sprint B3) | 14 `cone_search` (voce SCS dell'elenco dei server o URL; tabella letta da `read_table` del 13); 19 `check_overlay` | session | rete, lungo, `confirm`; nuovo livello catalogo; dettagli sotto |
+| `catalog.tap_query` (`service`, `url`, `adql`, `max_rows`, `mode`, `async_timeout`, `force_body`) — nuovo, 2026-11-06 (sprint B3) | 14 `validate_adql`, `tap_query` (sincrona o asincrona; tabella letta da `read_table` del 13); 19 `check_overlay` | session | rete, lungo, `confirm`; nuovo livello catalogo; **non esposto all'IA** (`33` rimandato); dettagli sotto |
+| `vo.add_server` (`name`, `protocol`, `url`) — nuovo, 2026-11-06 (sprint B3) | 14 `ServerRegistry.add_personal` | application | eseguito dal 05 sull'elenco del registro; elenco salvato nelle preferenze dal `40`; dettagli sotto |
+| `vo.remove_server` (`server`) — nuovo, 2026-11-06 (sprint B3) | 14 `ServerRegistry.remove_personal` | application | idem |
 | `samp.connect` — nuovo, 2026-11-05 (sprint B1) | 14 `SampHub.connect` (hub attivo, altrimenti hub proprio con profilo web spento), `clients` | application | esecutore del `40` (§3.12); risultato `hub` (`external` o `own`), `web_profile` (`false`), `clients` (identificativo e nome); già collegato: stesso risultato, nessun nuovo collegamento |
 | `samp.disconnect` — nuovo | 14 `SampHub.disconnect` | application | esecutore del `40`; risultato `was_connected`, `own_hub_stopped`; non collegato: esito `ok` con `was_connected = false` |
 | `samp.send_table` (livello di catalogo, `recipient` facoltativo) — nuovo | 14 `SampHub.send_table` (`table.load.votable`: VOTable con colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13, mai assunta) | application | esecutore del `40`; risultato `layer`, `table_id`, `url`, `rows`, `recipients` (destinatari che hanno accettato), `rejected` (dal 2026-11-05: destinatari che hanno rifiutato o non hanno risposto, con `id`, `reason`, `detail`; ognuno anche come avviso `SAMP_NO_PEER`) |
@@ -500,6 +507,93 @@ comandi di analisi):
   barra di stato del `40` conta il comando come di rete solo con `cds`),
   `confirm` sì (rete, lungo, nuovo livello).
 
+**Cone search e query ADQL (sprint B3, decisioni del proprietario del
+2026-11-06).** `catalog.cone_search` e `catalog.tap_query`, versione 1,
+classe `session` (rieseguiti alla riapertura e dalla cronologia):
+
+- **Servizio:** `service` = identificativo di una voce dell'elenco dei
+  server del 14 (`ServerRegistry`: voci nostre verificate e server
+  personali) con il protocollo del comando (`scs` per la cone search,
+  `tap` per la query ADQL), **oppure** l'URL http(s) del servizio. La
+  descrizione di `service` (quindi anche lo schema per l'IA) elenca gli
+  identificativi delle voci nostre di quel protocollo, letti da
+  `BUILTIN_SERVERS` del 14 e non copiati a mano. `url` (tipo `url`, default
+  `null`) = URL effettivo della richiesta: con `null` l'esecutore lo
+  risolve dall'elenco (`SERVER_UNKNOWN` del 14 se la voce manca o è di un
+  altro protocollo) e lo **scrive nel comando registrato**; se è dato si usa
+  così com'è (anche se la voce nel frattempo è cambiata o è stata tolta).
+  Così la riesecuzione (Riesegui, riapertura di una sessione) **rifà la
+  stessa richiesta, con lo stesso URL e gli stessi parametri**: prima la
+  cache delle interrogazioni del 14 (come `catalog.load_region`, D05-2),
+  dichiarata con `FROM_CACHE`; l'impronta dei risultati di rete confronta
+  i dati. Il registro dei comandi porta l'elenco dei server
+  (`CommandRegistry.servers`, un `ServerRegistry` del 14; il `40` vi carica
+  i server personali salvati).
+- **`catalog.cone_search`:** `center` (`sky_position` con frame ed epoca
+  dichiarati; la conversione in ICRS è del 10 dentro il 14; il protocollo
+  SCS non ha un parametro di epoca, che resta nel comando registrato),
+  `radius` (`quantity` angolare in (0, 180°]), `max_rows` (default 100 000
+  di D14-5, da 1 al tetto del 13: `MAX_ROWS_INVALID` del 14),
+  `force_body`. Esecuzione: `cone_search` del 14 sull'URL, `check_overlay`
+  del 19 (con un corpo noto), nuovo livello.
+- **`catalog.tap_query`:** `adql` (testo, obbligatorio), `max_rows`
+  (default 100 000, inviato come `MAXREC`), `mode` (`sync` di default o
+  `async`), `async_timeout` (`quantity` di tempo > 0, default **600 s** di
+  D14-9 punto 8, risolto alla registrazione; usato solo con `async`),
+  `force_body`. Esecuzione: `validate_adql` del 14 **prima di ogni chiamata
+  di rete** (`ADQL_INVALID` con la posizione, nessuna richiesta); le righe
+  di commento `--` si tolgono prima dell'invio (14 §3, dal 2026-11-06);
+  poi `tap_query`. Un servizio che rifiuta la query dà `ADQL_INVALID`
+  `service_rejected` con il messaggio del servizio (testo esterno, tale e
+  quale); un errore HTTP 5xx `SERVICE_ERROR`; la durata `NET_TIMEOUT` (in
+  sincrona con il suggerimento dell'asincrona; in asincrona `async_deadline`
+  dopo `async_timeout`, lavoro interrotto).
+- **Annullamento** (comandi lunghi, `CancelToken`): in asincrona il 14
+  riceve la funzione di annullamento (`cancel`), interrompe il lavoro UWS
+  (`ABORT`), lo elimina e risponde `QUERY_CANCELLED`, che il 05 rende
+  `COMMAND_CANCELLED` `discarded` (stato invariato); in sincrona e nella
+  cone search la richiesta HTTP non si interrompe: la risposta, quando
+  arriva (al più dopo il timeout di lettura del `04`), si scarta con lo
+  stesso esito.
+- **Risultato (entrambi):** **nuovo livello catalogo** con la tabella letta
+  da `read_table` del 13 (un solo lettore, D14-9), nome `<nome della voce
+  o host dell'URL> · cone search` oppure `… · ADQL`, sorgente = URL, stile
+  iniziale come gli altri cataloghi; valori di un catalogo caricato
+  (`layer`, `rows`, `columns`, `positions`, `body`, `style`, `suggestions`
+  come `catalog.open_file`) più `query`: `protocol` (`scs`/`tap`),
+  `service`, `service_name` (nome della voce, `null` per un URL scritto),
+  `url`, `method`, `params` (parametri inviati, come testo, dal
+  `RequestRecord` del 14: per la TAP anche la `QUERY` inviata), `adql` e
+  `mode` (solo TAP: il testo scritto e la modalità), `retrieved_at`,
+  `from_cache`, `rows`, `max_rows`, `truncated`. Avvisi del 14 invariati:
+  **`ROW_LIMIT_EXCEEDED`** (righe ricevute e restituite, o troncamento
+  `OVERFLOW` del servizio; `truncated = true`), `FROM_CACHE`. Colonne di
+  posizione da UCD e `COOSYS` (13); se il 13 non determina colonne **e**
+  sistema, avviso `POSITION_COLUMNS_REQUIRED` come per i file e il `40`
+  apre il dialogo delle colonne (42 §3.5): **mai assunzioni su sistema ed
+  epoca**. Provenienza: URL, data, "dalla cache sì/no"; impronta dei
+  risultati di rete (SHA-256 della tabella e righe, D05-2). Il nuovo
+  catalogo si incrocia (`catalog.crossmatch`) e si manda via SAMP come gli
+  altri.
+- **Indicatori:** `network`, `long`, `confirm` (rete, lungo, nuovo
+  livello). **IA (`32`):** solo `catalog.cone_search` è esposto;
+  `catalog.tap_query` **no** (ADQL dall'IA = `33`, rimandato).
+- **Server personali (`vo.add_server`, `vo.remove_server`):** classe
+  `application` (in cronologia, **mai rieseguiti** alla riapertura),
+  eseguiti dal 05 sull'elenco del registro (`CommandRegistry.servers`:
+  nessun bisogno dell'interfaccia), non esposti all'IA.
+  `vo.add_server`: `name` (testo non vuoto), `protocol` (`scs` o `tap`),
+  `url` (http(s)); identificativo `my-<protocollo>-<n>` (primo `n` libero)
+  scelto dall'esecutore e scritto nel risultato (`server`, `name`,
+  `protocol`, `url`, più `personal_servers`: l'elenco completo dei miei
+  server dopo il comando, che il `40` salva); un URL già in elenco con lo stesso protocollo dà
+  `COMMAND_PARAMETER_INVALID` `server_already_listed` con la voce; gli
+  errori di `add_personal` del 14 passano invariati. `vo.remove_server`:
+  `server` (identificativo), solo server personali (`SERVER_UNKNOWN`
+  `not_personal` del 14); risultato `server` e `personal_servers`. Dopo l'esito `ok` il `40` salva l'elenco nelle
+  preferenze (`vo/personal_servers`, 40 §3.10). Un comando registrato con
+  un server personale poi tolto si riesegue comunque, perché porta `url`.
+
 **SAMP nell'interfaccia (sprint B1, decisioni del proprietario del
 2026-11-05, D40-8 del `40`, D05-5).**
 
@@ -529,7 +623,8 @@ comandi di analisi):
 `view.go_to` (rete o lungo), `image.set_display`, `catalog.set_columns`,
 `catalog.set_style`, `layer.set_visible`, `layer.set_opacity`, `layer.move`,
 `layer.remove` (modificano un livello esistente), `catalog.crossmatch` (rete
-e lungo, dal 2026-11-05); **no** per tutti gli altri,
+e lungo, dal 2026-11-05), `catalog.cone_search` e `catalog.tap_query` (rete
+e lungo, dal 2026-11-06); **no** per tutti gli altri,
 compresi i comandi di sola lettura (anche `coords.resolve_name`, che usa la
 rete). L'indicatore vale solo quando il comando lo chiede l'IA; quali
 comandi l'IA può chiedere è nel `32`.
@@ -648,6 +743,7 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `position_beyond` | `position` (int), `count` (int) | `layer.move` oltre l'ultimo livello |
 | `distance_form`, `sky_form_incomplete`, `snap_needs_pixels`, `pixel_form_incomplete`, `box_size_required` | — | combinazioni di parametri di `measure.distance` non ammesse |
 | `crossmatch_cds_frame` | `frame` | `catalog.crossmatch` con `method = cds` e un sistema di confronto diverso da `icrs` (sprint B2) |
+| `server_already_listed` | `server`, `url` | `vo.add_server` con un URL già in elenco con lo stesso protocollo (sprint B3) |
 
 **Altri codici del `05`:**
 
@@ -657,7 +753,7 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `CROSSMATCH_SERVICE_FAILED` | `unreachable` / `service_error` | `url`, `cause` (messaggio annidato del 14/15) | `catalog.crossmatch` con il servizio CDS: propone il metodo locale, nessun ripiego automatico (sprint B2) |
 | `COMMAND_UNKNOWN` | — / `not_bound` / `in_session` | `command` / `command`, `module` / `number` (int), `command` | non registrato, esecuzione dell'interfaccia non collegata, riapertura |
 | `COMMAND_VERSION_UNSUPPORTED` | — / `in_session` | `command`, `version` (testo), `registered` (int) [+ `number` (int)] | |
-| `COMMAND_CANCELLED` | `before_start`, `discarded`, `replay` | — | |
+| `COMMAND_CANCELLED` | `before_start`, `discarded`, `replay` | — | `QUERY_CANCELLED` del 14 (TAP asincrona annullata, sprint B3) diventa `discarded` |
 | `SESSION_INVALID` | `unreadable`, `structure`, `command` | `detail` (ext) per `unreadable` e `command` | |
 | `SESSION_SCHEMA_UNSUPPORTED` | — | `schema_version` (int), `app_version` (int) | |
 | `SESSION_FILE_MISSING` | — | `number` (int), `command`, `path` (ext) | |
@@ -724,6 +820,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T22 | Tipo `record` e forme JSON (D05-4) | comando con un `record` valido, con un campo in più, con un campo mancante senza default, con un campo `quantity` in unità non convertibile; forma JSON di ogni tipo scritta e riletta; `export_schema()` | il primo valido (default dei campi risolti); gli altri `COMMAND_PARAMETER_INVALID` con il nome del campo (`parametro.campo`); forme di §3.1 identiche dopo la rilettura; nello schema `object` con `properties`, `required`, `additionalProperties: false` | test di unità |
 | T21 | Conversazioni nella sessione | sessione con e senza il blocco `conversations`; riapertura con un provider simulato che fallisce se chiamato | blocco presente solo se chiesto, senza cartelle nei nomi dei file; riesecuzione identica nei due casi, nessuna chiamata al provider | test di unità |
 | T25 | `catalog.crossmatch` (sprint B2, D15-10) | due cataloghi VOTable (8 stelle e copie spostate di 0,5″ e 1,5″ costruite con astropy); `best`/`all`/`none` con il raggio di default; raggio in arcsec, arcmin, mas; epoche J2016/J2000; coordinate mancanti; tabella senza colonne di posizione; raggio 0, 200°, 181″ con `cds`, unità `m`; tetto abbassato; `cds` con `galactic`; sistema galattico; Riesegui e sessione salvata e riaperta; CDS XMatch simulato (risposta, eco sbagliata, porta chiusa) | coppie e righe uguali a quelle del 15 chiamato direttamente; `max_sep` 2″ scritto nel comando registrato; `xmatch_sep` in arcsec; nuovo livello `L3`, tabelle d'ingresso invariate; `EPOCH_DIFFERS` con le epoche e stesse coppie; `COORD_MISSING`; `NO_COORD_COLUMNS` (non `BODY_UNKNOWN`); `MAX_SEP_INVALID` con `range_local`/`range_cds`; `TABLE_TOO_LARGE`; `crossmatch_cds_frame`; riesecuzioni con righe identiche; CDS entro 1 mas dal locale con impronta di rete; `CROSSMATCH_SERVICE_FAILED` `service_error`/`unreachable` che propone il locale (en/it), nessun livello creato | test di unità (`tests/core/test_commands_crossmatch.py`) |
+| T26 | `catalog.cone_search` e `catalog.tap_query`, server personali (sprint B3) | servizi SCS e TAP simulati (server HTTP locale, VOTable con e senza `COOSYS`); cone search con voce dell'elenco simulata e con URL, centro galattico con epoca e ICRS senza epoca; `max_rows` sotto le righe del servizio; ADQL vuota, senza SELECT, virgoletta aperta; servizio che rifiuta la query (VOTable `ERROR`); sincrona, asincrona (UWS simulato), asincrona oltre `async_timeout`, asincrona annullata; righe di commento; Riesegui e sessione salvata e riaperta; `vo.add_server`/`vo.remove_server` | parametri SCS ricalcolati con astropy; `url` risolto e scritto nel comando registrato, `async_timeout` 600 s nel comando; nuovo livello catalogo con `query` e provenienza; `ROW_LIMIT_EXCEEDED` con `truncated`; `ADQL_INVALID` con la posizione e nessuna richiesta al servizio; messaggio del servizio invariato nell'errore; `NET_TIMEOUT` `async_deadline`; `COMMAND_CANCELLED` con `ABORT` e lavoro eliminato; `QUERY` inviata senza commenti; riesecuzioni con stesso URL, stessi parametri e righe identiche; `POSITION_COLUMNS_REQUIRED` senza `COOSYS`; `server_already_listed`, `not_personal` | test di unità (`tests/core/test_commands_vo_queries.py`) |
 | T23 | Origine `samp` e comandi `samp.*` (D05-5, sprint B1) | comandi con `requested_by = samp` (con e senza nome del client), forma senza `client_id` o con campi dell'IA; salvare e riaprire una sessione con un `catalog.open_file` di origine `samp`; registro con i cinque `samp.*` | forma JSON di §3.1 scritta e riletta; forme non valide rifiutate; comando `samp` rieseguito alla riapertura con la stessa origine; i `samp.*` sono `application`, `bound_by = "40"`, assenti dallo schema per l'IA (`32`) | test di unità |
 
 ## 13. Decisioni aperte
@@ -939,3 +1036,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia (decisioni del proprietario del 2026-11-05; D05-5 decisa):** nuova origine `samp` di `requested_by` con `client_id` e `client` (§3.1); nuovi comandi `samp.connect`, `samp.disconnect`, `samp.send_table`, `samp.send_selection`, `samp.point_at` (classe `application`, esecutori del `40`, non esposti all'IA) e messaggi ricevuti come `catalog.open_file`/`catalog.select`/`view.set_center` con origine `samp` (§7); codici SAMP del 14 riportati invariati (§10.1); nuovo T23 (§12). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1b (correzioni SAMP dalla prova con TOPCAT vero):** risultato di `samp.send_table`, `samp.send_selection` e `samp.point_at` con `rejected` (destinatari che rifiutano o non rispondono, anche come avvisi `SAMP_NO_PEER`); con `table_sent = true` la selezione va solo a chi ha accettato la tabella (§7). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): nuovo comando `catalog.crossmatch` (§7: parametri con `max_sep` default 2″ risolto alla registrazione, metodo `local`/`cds`, sistema `icrs`/`galactic`; nuovo livello catalogo con la tabella unita del 15; report `as_dict()` e `describe()` nel risultato; `CROSSMATCH_SERVICE_FAILED` senza ripiego automatico; `confirm`); §5 dipende dal 15; §10.1 `CROSSMATCH_SERVICE_FAILED` e ragione `crossmatch_cds_frame`; T25 (§12). Stato `approvato` invariato. |
+| 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL** (decisioni del proprietario del 2026-11-06): nuovi comandi `catalog.cone_search` e `catalog.tap_query` (§7: `service` voce dell'elenco o URL, `url` risolto e scritto nel comando registrato così la riesecuzione rifà la stessa richiesta, `validate_adql` prima della rete, `async_timeout` 600 s risolto alla registrazione, annullamento, nuovo livello catalogo con `query` e provenienza, `POSITION_COLUMNS_REQUIRED` senza colonne determinate; `confirm`; solo la cone search per l'IA) e `vo.add_server`/`vo.remove_server` (classe `application`, esecutori del `40`); `CommandRegistry.servers`; §10.1 ragione `server_already_listed` e `QUERY_CANCELLED` del 14 reso `COMMAND_CANCELLED`; nuovo T26 (§12). Stato `approvato` invariato. |

@@ -76,11 +76,26 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   sincrona per durata, l'errore suggerisce la modalità asincrona.
   `max_rows` va al servizio come `MAXREC`; il troncamento dichiarato dal
   servizio (`OVERFLOW`) dà `ROW_LIMIT_EXCEEDED`.
+  **Commenti e annullamento (sprint B3, 2026-11-06):** i commenti ADQL
+  (`--` fuori dalle virgolette fino a fine riga, come in ADQL 2.1) si
+  **tolgono prima dell'invio** (`adql_to_send`): provati il 2026-11-06,
+  l'archivio Gaia dell'ESA (HTTP 500), IRSA (`BAD_REQUEST`) e HEASARC
+  ("Unsupported syntax") rifiutano una query con una riga di commento, MAST
+  la accetta. Il testo scritto resta negli argomenti registrati (`adql`),
+  quello inviato nei parametri (`QUERY`); le righe rimaste vuote si
+  tolgono, nient'altro cambia. In asincrona `tap_query` accetta `cancel`
+  (funzione senza argomenti che dice se l'utente ha annullato): controllata
+  almeno ogni 0,25 s durante l'attesa, interrompe il lavoro (`ABORT`), lo
+  elimina e dà `QUERY_CANCELLED`; in sincrona non si usa (la richiesta HTTP
+  non si interrompe: chi chiama scarta la risposta).
 - **`validate_adql` (D14-9):** solo **controlli minimi** lato client —
   testo non vuoto, inizia con `SELECT` (maiuscole o minuscole), virgolette
   semplici e doppie chiuse, parentesi bilanciate (fuori dalle virgolette);
   altrimenti `ADQL_INVALID` con la posizione, senza chiamate di rete. La
-  validazione vera è quella del servizio, che prevale.
+  validazione vera è quella del servizio, che prevale. Dal 2026-11-06
+  (sprint B3) i commenti `--` fuori dalle virgolette contano come spazio
+  (anche prima di `SELECT`): un apostrofo in un commento non è una
+  virgoletta aperta; le posizioni restano quelle del testo scritto.
 - **Download tabelle (D3) ed export (D13):** scaricare tabelle da URL e
   salvare tabelle in CSV, VOTable e FITS con intestazione che riporta origine,
   data e versione dello schema. **Provenienza nei file esportati (D14-9):**
@@ -409,9 +424,18 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   ICRS dal 10), `radius` angolo con unità, `catalog` voce dell'elenco dei
   server o URL SCS; restituisce `VoResult`.
 - **`tap_query(url, adql, *, max_rows=100_000, mode="sync",
-  async_timeout=600 s, ...)`** (P3) — esecuzione ADQL; restituisce
+  async_timeout=600 s, cancel=None, ...)`** (P3) — esecuzione ADQL; restituisce
   `VoResult` o errore con il messaggio del servizio; `url` è un URL TAP o
-  una voce TAP dell'elenco dei server.
+  una voce TAP dell'elenco dei server; `cancel` solo in asincrona (§3,
+  sprint B3).
+- **`service_url(service, protocol, servers=None)`** (P3, sprint B3) — URL
+  del servizio: un URL http(s) così com'è (TAP senza `/` finale), altrimenti
+  la voce dell'elenco con quel protocollo (`SERVER_UNKNOWN` `not_listed` o
+  `wrong_protocol`); la usano i comandi del `05` per scrivere l'URL nel
+  comando registrato.
+- **`adql_to_send(adql)`** (P3, sprint B3) — il testo ADQL senza i
+  commenti `--` (fuori dalle virgolette) e senza le righe rimaste vuote; lo
+  usa `tap_query` per la `QUERY`.
 - **`validate_adql(adql)`** (P3) — controlli minimi di §3; restituisce
   l'esito (valido, messaggio, posizione); `tap_query` lo chiama prima
   dell'invio.
@@ -531,6 +555,7 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | VOTable malformato | nessun dato letto, errore con posizione del problema | `VOTABLE_INVALID` |
 | ADQL sintatticamente errata | rifiuto lato client con il messaggio, o errore del servizio riportato | `ADQL_INVALID` |
 | Servizio TAP non raggiungibile / timeout | errore di rete, nessun risultato parziale mostrato come valido | `NET_TIMEOUT` |
+| TAP asincrona annullata da chi chiama (`cancel`, sprint B3) | lavoro interrotto (`ABORT`) ed eliminato, nessun risultato | `QUERY_CANCELLED` |
 | Query che supera il limite di righe | risultato troncato con avviso e conteggio dichiarato (avviso, non errore) | `ROW_LIMIT_EXCEEDED` |
 | Formato di esportazione non supportato | elenco dei formati | `EXPORT_FORMAT_UNSUPPORTED` |
 | Esportazione in CSV semplice di una tabella con unità | file scritto senza unità; si suggerisce `ecsv` (D14-10) | avviso `CSV_UNITS_NOT_SAVED` |
@@ -600,6 +625,7 @@ sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalog
 | `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10, 11, 12 |
 | `NET_TIMEOUT` | `url_sync_tap` | come `url`, con il suggerimento dell'asincrona |
 | `NET_TIMEOUT` | `async_deadline` | `url` (string), `timeout` (quantity, s), `phase` (string) |
+| `QUERY_CANCELLED` | `async_aborted` | `url` (string), `phase` (string) — sprint B3 |
 | `AUTH_REQUIRED` | (generale) | `url` (string), `status` (integer) |
 | `SERVICE_ERROR` | `http_status` | `url` (string), `status` (integer), `status_text` (string, esterno) — voce già del 12 |
 | `SERVICE_ERROR` | `unreadable_response` | `url` (string), `detail` (string, esterno) — voce già del 12 |
@@ -687,13 +713,18 @@ non è tra i moduli convertiti dello sprint 8, quindi finché non lo è si mostr
 
 Non applicabile in questo file: gli strumenti per l'IA si dichiarano in
 `32-ia-registro-strumenti.md` (`01-architettura.md` §7, decisione del
-proprietario del 2026-10-10, D14-9 punto 16). Finché il 32 non esiste,
-l'elenco da riportarvi (nomi provvisori: `cone_search`, `tap_query`,
-`validate_adql`, `describe_services` su `ServerRegistry`, `ssa_search`,
-`ssa_load`) è annotato nella riga del 32 in `panoramica.md` §4. Vale sempre
-la regola d'oro n. 1: l'IA compone i parametri e spiega l'esito, il
-contenuto delle tabelle viene solo dai servizi e dal codice di questo
-modulo ed è verificato da `34-ia-verifica-risultati.md`.
+proprietario del 2026-10-10, D14-9 punto 16) e passano sempre da un comando
+del `05`. **Dal 2026-11-06 (sprint B3, decisione del proprietario):**
+`cone_search` è esposta come `catalog__cone_search` (comando
+`catalog.cone_search` del `05`, con conferma come gli altri comandi di
+rete); **`tap_query` e `validate_adql` non sono esposte**: l'ADQL scritto
+dall'IA è il `33-ia-query-adql.md`, rimandato dal proprietario (la query
+ADQL resta all'utente, comando `catalog.tap_query` non esposto).
+`describe_services` su `ServerRegistry`, `ssa_search`, `ssa_load` restano
+fuori finché non diventano comandi del `05`. Vale sempre la regola d'oro
+n. 1: l'IA compone i parametri e spiega l'esito, il contenuto delle tabelle
+viene solo dai servizi e dal codice di questo modulo ed è verificato da
+`34-ia-verifica-risultati.md`.
 
 ## 12. Test di accettazione
 
@@ -722,6 +753,7 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | T19 | DataLink (H8, D14-3) | `links` su un documento DataLink simulato con un descrittore di servizio; `call_service` | link con semantica, URL e content-type; chiamata con i parametri del descrittore | servizio simulato |
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
+| T26 | Commenti ADQL e annullamento (sprint B3, 2026-11-06) | `validate_adql` con commenti `--` (con apostrofo, prima di `SELECT`, dentro una stringa); `tap_query` sincrona con commenti su un servizio simulato; asincrona su un lavoro UWS simulato che non finisce, con `cancel` che diventa vero | posizioni del testo scritto; `--` dentro le virgolette non è un commento; `QUERY` inviata senza commenti e senza righe vuote, `adql` scritto negli argomenti registrati; `QUERY_CANCELLED` entro 1 s, `ABORT` inviato e lavoro eliminato | test di unità |
 
 **Test di rete:** regola delle ripetizioni in `02-convenzioni.md` §8, punto 8
 (implementazione in `tests/conftest.py`, test in `tests/test_network_retries.py`).
@@ -908,3 +940,4 @@ modulo ed è verificato da `34-ia-verifica-risultati.md`.
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8 del `40`; autorizzazione esplicita del proprietario ad aggiornare il 14 "se cambia qualcosa"): §3 e §7 — interfaccia nel `40` §3.12 con `41`/`42`; aggiunte a `SampHub` per l'interfaccia (`on_table_reference`, `save_votable`, `client_name`, `on_hub_event` con i quattro eventi amministrativi dell'hub, `SampSendResult.params`); **corretto: `pyvo.samp` iscriveva AstroTwo anche a `client.env.get` (variabili d'ambiente a chi le chiede), ora tolta prima della registrazione**; §10 — nuove sotto-voci `SAMP_UNAVAILABLE` `timeout` e `hub_shutdown`, nuovi codici `SAMP_TABLE_UNKNOWN` e `SAMP_TABLE_FETCH_FAILED`; §12 — nuovo T22. I tipi di messaggio di dati restano i tre di D14-9 punto 10; le immagini restano un'estensione prevista (D14-2). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1b — correzioni dalla prova con TOPCAT vero** (incarico del proprietario del 2026-11-05: "spec prima se cambia un comportamento descritto"): §3 punti (7) invio con chiamata sincrona e `failures`, (8) `clients()` senza l'hub per `samp.hub-id`, (9) iscrizioni dichiarate una volta; §6 firme; §10 errori e codici `SAMP_NO_PEER` (`rejected`, `no_reply`); nuovo T24. Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — rifiniture SAMP** (decisione del proprietario del 2026-11-05, D40-9 (7)): tempo di risposta di **60 s per `table.load.votable`** (`SAMP_TABLE_REPLY_TIMEOUT`, default di `SampHub.send_table`), 10 s per gli altri tipi; nuova sotto-voce `SAMP_NO_PEER` `no_reply_table` (la tabella potrebbe arrivare comunque) per `table.load.votable`. Stato `approvato` invariato. |
+| 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL nell'interfaccia** (decisioni del proprietario del 2026-11-06; autorizzazione esplicita ad aggiornare il 14 "se cambia qualcosa"): §3 — commenti `--` tolti prima dell'invio (`adql_to_send`; provato il 2026-11-06: Gaia ESA, IRSA e HEASARC rifiutano una query con un commento, MAST la accetta) e contati come spazio da `validate_adql`; annullamento della TAP asincrona (`cancel`, `QUERY_CANCELLED`); §7 firme; §10 `QUERY_CANCELLED`; §11 riscritto: solo `cone_search` esposta all'IA (come `catalog.cone_search` del `05`), `tap_query`/`validate_adql` no (`33` rimandato); §12 nuovo T26. Server personali salvati dal `40` (`vo/personal_servers`). Stato `approvato` invariato. |

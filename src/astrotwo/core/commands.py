@@ -947,6 +947,7 @@ class CommandRegistry:
         self._specs: dict[str, CommandSpec] = {}
         self._bound: dict[str, Callable] = {}
         self.cache = cache  # SharedCache del 04 passata ai moduli (None: quella di default dei moduli)
+        self.servers = None  # ServerRegistry del 14 (sprint B3; None: elenco nostro, creato al primo uso)
 
     def register(self, spec: CommandSpec) -> None:
         if spec.name in self._specs:
@@ -1877,6 +1878,14 @@ def _parse_go_to(text: str, frame: str):
     return SkyFrame.from_lonlat(lon, lat, frame), how
 
 
+
+def parse_typed_position(text: str, frame: str):
+    """Coordinate scritte come nel campo "Vai a" (coppia decimale in gradi o sessagesimale, ``parse_sexagesimal`` del
+    10; longitudine in ore nei frame equatoriali) come ``SkyFrame`` del 10 nel frame dato, epoca non nota; ``None`` se
+    il testo non è una coppia di coordinate. Per i dialoghi della cone search (42 §3.8, sprint B3); errori del 10
+    invariati."""
+    return _parse_go_to(text, frame)[0]
+
 def _exec_view_go_to(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.coordinates_wcs import convert_coordinates, resolve_name
 
@@ -2320,6 +2329,133 @@ def _exec_catalog_crossmatch(ctx: ExecutionContext, p: Mapping) -> Outcome:
                    network_fingerprint=fingerprint)
 
 
+# --------------------------------------------------------------------------
+# Cone search e query ADQL (sprint B3, decisioni del proprietario del 2026-11-06): 14 cone_search, tap_query
+# --------------------------------------------------------------------------
+
+#: Attesa massima della TAP asincrona proposta da ``catalog.tap_query`` (D14-9 punto 8), risolta alla registrazione.
+TAP_DEFAULT_ASYNC_TIMEOUT = {"value": 600.0, "unit": "s"}
+TAP_MODES = ("sync", "async")
+#: Protocolli dei miei server gestiti dall'interfaccia (dialoghi della cone search e della query ADQL, 42 §3.8).
+PERSONAL_PROTOCOLS = ("scs", "tap")
+
+
+def _servers(ctx: ExecutionContext):
+    """Elenco dei server del registro dei comandi (``CommandRegistry.servers``, ``ServerRegistry`` del 14)."""
+    from astrotwo.core.vo_protocols import ServerRegistry
+
+    if ctx.registry.servers is None:
+        ctx.registry.servers = ServerRegistry()
+    return ctx.registry.servers
+
+
+def _vo_service(ctx: ExecutionContext, p: Mapping, protocol: str) -> tuple[str, str | None, str]:
+    """(URL effettivo, nome della voce o ``None``, etichetta del livello): ``url`` registrato se c'è, altrimenti la
+    voce dell'elenco o l'URL scritto, risolti da ``service_url`` del 14 (``SERVER_UNKNOWN`` invariato)."""
+    from urllib.parse import urlparse
+
+    from astrotwo.core.vo_protocols import service_url
+
+    service = p["service"]
+    servers = _servers(ctx)
+    url = p["url"] if p["url"] is not None else service_url(service, protocol, servers)
+    name = None
+    if not service.startswith(("http://", "https://")):
+        name = next((e.name for e in servers.entries() if e.id == service), None)
+    return url, name, name or urlparse(url).netloc or url
+
+
+def _query_outcome(ctx: ExecutionContext, p: Mapping, result, url: str, name: str | None, label: str,
+                   kind: str, extra: Mapping) -> Outcome:
+    """Nuovo livello catalogo dal ``VoResult`` del 14 con ``query`` (provenienza completa) e impronta di rete."""
+    from astrotwo.core.catalogs import suggest_position_columns
+
+    table = result.table
+    warnings = _overlay(ctx.state, table, p["force_body"]) if table.body is not None else []
+    if table.positions is None or table.positions.frame is None:
+        warnings.append(ResultMessage("POSITION_COLUMNS_REQUIRED", "colonne di posizione da confermare con "
+                                      "catalog.set_columns (mai dai nomi)"))
+    suggestions = suggest_position_columns(table) if table.positions is None else ()
+    style, derived, state = _initial_style(ctx.state, table)
+    layer_id, state = _add_layer(state, "catalog", f"{label} · {kind}", table, source=url,
+                                 force_body=p["force_body"], style=style, derived=derived)
+    record = result.request
+    values = _catalog_values(layer_id, table)
+    values["style"] = style
+    values["suggestions"] = [{"lon": s.lon, "lat": s.lat, "frame_hint": s.frame_hint, "reason": s.reason,
+                              "kind": s.kind} for s in suggestions]
+    values["query"] = {"protocol": record.protocol, "service": p["service"], "service_name": name, "url": url,
+                       "method": record.method, "params": {k: v for k, v in record.params},
+                       **extra, "retrieved_at": _iso(record.retrieved_at), "from_cache": record.from_cache,
+                       "rows": len(table.table), "max_rows": result.max_rows, "truncated": bool(result.truncated)}
+    sha, rows = _table_digest(table.table)
+    return Outcome(values=values, state=state, layers_created=[layer_id],
+                   warnings=_unique_messages(warnings + _module_warnings(result.warnings)
+                                             + _module_warnings(table.warnings)),
+                   provenance=[_source(url, record.retrieved_at, record.from_cache)],
+                   network_fingerprint=[_fingerprint(sha, url, record.retrieved_at, record.from_cache, rows)],
+                   resolved={"url": url})
+
+
+def _exec_catalog_cone_search(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    """Cone search (E1) con ``cone_search`` del 14 → nuovo livello catalogo (05 §7, sprint B3)."""
+    from astrotwo.core.vo_protocols import cone_search
+
+    url, name, label = _vo_service(ctx, p, "scs")
+    center, radius = _sky(p["center"]), _q(p["radius"])
+    ctx.step("cone_search")
+    result = cone_search(center, radius, url, max_rows=p["max_rows"], cache=ctx.cache)
+    ctx.step("check_overlay")
+    return _query_outcome(ctx, p, result, url, name, label, "cone search", {})
+
+
+def _exec_catalog_tap_query(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    """Query ADQL (E2) con ``validate_adql`` (prima della rete) e ``tap_query`` del 14 → nuovo livello catalogo."""
+    from astrotwo.core.vo_protocols import tap_query
+
+    url, name, label = _vo_service(ctx, p, "tap")
+    ctx.step("tap_query")
+    try:
+        result = tap_query(url, p["adql"], max_rows=p["max_rows"], mode=p["mode"],
+                           async_timeout=float(_q(p["async_timeout"]).to_value(u.s)), cache=ctx.cache,
+                           cancel=lambda: ctx.cancel.cancelled)
+    except Exception as exc:
+        if getattr(exc, "code", None) == "QUERY_CANCELLED":  # lavoro asincrono interrotto ed eliminato dal 14
+            raise _Cancelled() from exc
+        raise
+    ctx.step("check_overlay")
+    return _query_outcome(ctx, p, result, url, name, label, "ADQL", {"adql": p["adql"], "mode": p["mode"]})
+
+
+def _personal_json(servers) -> list[dict]:
+    return [{"id": e.id, "name": e.name, "protocol": e.protocol, "url": e.url} for e in servers.personal_servers()]
+
+
+def _exec_vo_add_server(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    """Mio server (14 ``add_personal``): identificativo ``my-<protocollo>-<n>``, URL già in elenco rifiutato."""
+    servers = _servers(ctx)
+    name = p["name"].strip()
+    if not name:
+        raise _invalid("name", "required", "parametro obbligatorio mancante")
+    listed = next((e for e in servers.entries() if e.protocol == p["protocol"] and e.url == p["url"]), None)
+    if listed is not None:
+        raise _invalid("url", "server_already_listed", f"{p['url']} è già in elenco come {listed.id!r}",
+                       server=listed.id, url=p["url"])
+    ids = {e.id for e in servers.entries()}
+    n = 1
+    while f"my-{p['protocol']}-{n}" in ids:
+        n += 1
+    entry = servers.add_personal(f"my-{p['protocol']}-{n}", name, p["protocol"], p["url"])
+    return Outcome(values={"server": entry.id, "name": entry.name, "protocol": entry.protocol, "url": entry.url,
+                           "personal_servers": _personal_json(servers)})
+
+
+def _exec_vo_remove_server(ctx: ExecutionContext, p: Mapping) -> Outcome:
+    servers = _servers(ctx)
+    servers.remove_personal(p["server"])
+    return Outcome(values={"server": p["server"], "personal_servers": _personal_json(servers)})
+
+
 def _exec_cache_clear(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.cache import SharedCache
 
@@ -2395,6 +2531,29 @@ _LAYER_IMAGE = ("image",)
 _LAYER_CATALOG = ("catalog",)
 _ANGLE = "angle"
 _FRAMES_VIEW = ("icrs", "galactic")
+
+
+def _url_param() -> ParameterSpec:
+    return P("url", "url", "Effective service URL: null = resolved from service and written in the registered "
+             "command, so a re-run repeats the same request.",
+             "URL effettivo del servizio: null = risolto da service e scritto nel comando registrato, così la "
+             "riesecuzione rifà la stessa richiesta.", default=None)
+
+
+def _service_help_en(protocol: str) -> str:
+    from astrotwo.core.vo_protocols import BUILTIN_SERVERS
+
+    ids = ", ".join(f'"{e.id}"' for e in BUILTIN_SERVERS if e.protocol == protocol)
+    return (f"Identifier of a {protocol.upper()} entry of the server list (built-in: {ids}; or a personal server) "
+            "or the http(s) URL of the service.")
+
+
+def _service_help_it(protocol: str) -> str:
+    from astrotwo.core.vo_protocols import BUILTIN_SERVERS
+
+    ids = ", ".join(f'"{e.id}"' for e in BUILTIN_SERVERS if e.protocol == protocol)
+    return (f"Identificativo di una voce {protocol.upper()} dell'elenco dei server (nostre: {ids}; o un mio server) "
+            "oppure l'URL http(s) del servizio.")
 
 
 def _window_param() -> ParameterSpec:
@@ -2853,6 +3012,55 @@ def default_registry(*, cache=None) -> CommandRegistry:
                           choices=_FRAMES_VIEW),
                         _force_body()),
                     "session", _exec_catalog_crossmatch, network=True, long=True, confirm=True, steps=3),
+        # Cone search e query ADQL (sprint B3, 2026-11-06): nuovo livello catalogo; solo la cone search per l'IA (32)
+        CommandSpec("catalog.cone_search", 1,
+                    "Cone search (SCS): the rows of a catalog service within a radius of a sky position; the result "
+                    "is a new catalog layer with the request (service, URL, parameters, date, rows).",
+                    "Cone search (SCS): le righe di un servizio di catalogo entro un raggio da una posizione; il "
+                    "risultato è un nuovo catalogo con la richiesta (servizio, URL, parametri, data, righe).",
+                    ("14 service_url", "14 cone_search", "19 check_overlay"), (
+                        P("service", "string", _service_help_en("scs"), _service_help_it("scs")),
+                        _url_param(),
+                        P("center", "sky_position", "Center of the cone (frame and epoch declared).",
+                          "Centro del cono (frame ed epoca dichiarati)."),
+                        P("radius", "quantity", "Radius.", "Raggio.", minimum=0.0, exclusive_minimum=True,
+                          maximum=180.0, range_unit="deg", **angle),
+                        P("max_rows", "integer", "Maximum rows (more rows are cut and declared).",
+                          "Righe massime (le righe in più si tagliano e si dichiarano).", default=DEFAULT_MAX_ROWS,
+                          minimum=1),
+                        _force_body()),
+                    "session", _exec_catalog_cone_search, network=True, long=True, confirm=True, steps=2),
+        CommandSpec("catalog.tap_query", 1,
+                    "Run an ADQL query on a TAP service; the result is a new catalog layer with the query and the "
+                    "request.",
+                    "Esegue una query ADQL su un servizio TAP; il risultato è un nuovo catalogo con la query e la "
+                    "richiesta.",
+                    ("14 service_url", "14 validate_adql", "14 tap_query", "19 check_overlay"), (
+                        P("service", "string", _service_help_en("tap"), _service_help_it("tap")),
+                        _url_param(),
+                        P("adql", "string", "ADQL query (checked before any request; -- comments are not sent).",
+                          "Query ADQL (controllata prima di ogni richiesta; i commenti -- non si inviano)."),
+                        P("max_rows", "integer", "Maximum rows, sent as MAXREC.", "Righe massime, inviate come MAXREC.",
+                          default=DEFAULT_MAX_ROWS, minimum=1),
+                        P("mode", "enum", "sync (default) or async (UWS job).", "sync (default) o async (lavoro UWS).",
+                          default="sync", choices=TAP_MODES),
+                        P("async_timeout", "quantity", "Maximum overall wait of an async query.",
+                          "Attesa massima complessiva della query asincrona.",
+                          default=dict(TAP_DEFAULT_ASYNC_TIMEOUT), physical_type="time", minimum=0.0,
+                          exclusive_minimum=True, range_unit="s"),
+                        _force_body()),
+                    "session", _exec_catalog_tap_query, network=True, long=True, confirm=True, steps=2),
+        CommandSpec("vo.add_server", 1, "Add a personal server (SCS or TAP) to the server list.",
+                    "Aggiunge un mio server (SCS o TAP) all'elenco dei server.", ("14 ServerRegistry.add_personal",), (
+                        P("name", "string", "Name shown in the list.", "Nome mostrato nell'elenco."),
+                        P("protocol", "enum", "Protocol.", "Protocollo.", choices=PERSONAL_PROTOCOLS),
+                        P("url", "url", "Service URL.", "URL del servizio.")),
+                    "application", _exec_vo_add_server),
+        CommandSpec("vo.remove_server", 1, "Remove a personal server from the server list.",
+                    "Toglie un mio server dall'elenco dei server.", ("14 ServerRegistry.remove_personal",), (
+                        P("server", "string", "Identifier of the personal server.",
+                          "Identificativo del mio server."),),
+                    "application", _exec_vo_remove_server),
         # SAMP (sprint B1, D05-5): esecutori del 40, classe application, mai rieseguiti, non esposti all'IA (32)
         CommandSpec("samp.connect", 1, "Connect to the SAMP hub (the running one, otherwise AstroTwo's own).",
                     "Collega all'hub SAMP (quello attivo, altrimenti quello di AstroTwo).",

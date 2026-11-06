@@ -55,6 +55,7 @@ esterno, §3.6).
 | `catalog__rows` | `catalog.rows` (nuovo, `05`) | session; sola lettura | no | **al più 50 righe** per chiamata |
 | `layer__list` | `layer.list` (nuovo, `05`) | session; sola lettura | no | livelli con tipo, nome, visibilità, opacità, ordine, sorgente |
 | `catalog__crossmatch` | `catalog.crossmatch` (nuovo, `05`, sprint B2, D15-10 (e) del `15`, 2026-11-05) | session; rete (solo `method = cds`), lungo | sì (rete, lungo) | incrocio per posizione di due cataloghi già aperti: l'IA **sceglie** modalità (`best`/`all`/`none`) e soglia (`max_sep` con unità; default 2″ del `05`) e spiega il risultato; **il calcolo è del 15** (astropy o CDS XMatch); crea un nuovo livello catalogo; numeri del risultato (coppie, separazioni, conteggi) verificabili dal `34` come ogni risultato |
+| `catalog__cone_search` | `catalog.cone_search` (nuovo, `05`, sprint B3, decisione del proprietario del 2026-11-06) | session; rete, lungo | sì (rete, lungo) | cone search su una voce SCS dell'elenco dei server del 14 (gli identificativi sono nella descrizione di `service`) o su un URL SCS: l'IA **sceglie** servizio, centro (con frame ed epoca dichiarati) e raggio con unità; la tabella viene dal servizio, crea un nuovo livello catalogo; `ROW_LIMIT_EXCEEDED` riportato |
 
 ### 3.3 Comandi non esposti
 
@@ -62,6 +63,8 @@ esterno, §3.6).
 |---|---|
 | classi `passive` (`cursor.read`, `simbad.pointer`) | letture del mouse, non richieste dell'utente |
 | classe `application` (`prefs.set`, `cache.clear`, `ui.*`, `view.export_png`) | preferenze, cache, pannelli e file PNG sono scelte dell'utente, non dell'assistente |
+| `catalog.tap_query` (sprint B3) | **ADQL scritto dall'IA = `33`, rimandato dal proprietario** (decisione del 2026-11-06): la query ADQL resta all'utente (Data → Query ADQL…) |
+| `vo.add_server`, `vo.remove_server` (classe `application`, sprint B3) | l'elenco dei miei server è una scelta dell'utente |
 | apertura di file da disco (`image.open`, `catalog.open_file`, `moc.open`) | l'IA lavora sui livelli che l'utente ha già aperto: non sceglie file sul disco |
 | sessioni (salva, apri) | non sono comandi (`05` §3.4) |
 | `layer.remove`, `layer.move` | rimuovere o riordinare livelli dell'utente resta all'utente nella v1 |
@@ -73,10 +76,12 @@ esterno, §3.6).
 `image_operation`, `cutout`, `describe_table`, `search`,
 `get_column_statistics`, `propagate`, `cone_search`, `tap_query`,
 `validate_adql`, `describe_services`, `ssa_search`, `ssa_load`): nella v1
-entrano solo `describe_table` (come `catalog.describe`) e `search` (come
-`catalog.search`); gli altri **non sono comandi del `05`** e restano fuori
-dalla v1. Entreranno quando diventano comandi del `05` (regola §3.1); per
-`tap_query` e `validate_adql` dopo il `33`.
+entrano `describe_table` (come `catalog.describe`), `search` (come
+`catalog.search`) e, dal 2026-11-06 (sprint B3), `cone_search` (come
+`catalog.cone_search`); gli altri **non sono comandi del `05`** esposti e
+restano fuori dalla v1. Entreranno quando diventano comandi del `05` (regola
+§3.1); **`tap_query` e `validate_adql` solo con il `33`**, rimandato: il
+comando `catalog.tap_query` esiste ma non è esposto.
 
 ### 3.4 Dallo schema del `05` allo strumento del provider
 
@@ -394,6 +399,7 @@ provider (richieste di strumenti scritte nei test).
 | T2 | Nomi tradotti | per ogni strumento, nome → comando → nome | corrispondenza biunivoca; nomi validi per i due provider (regex `^[A-Za-z0-9_-]{1,64}$`) | test di unità |
 | T3 | Schema dal `05` | confronto tra `tools()` ed `export_schema()`; descrizione di `catalog` di `catalog__load_region` | stessi parametri, tipi, intervalli, elenchi chiusi; unità nella descrizione; nessun parametro aggiunto; la descrizione di `catalog` contiene tutti gli `id` di `FIXED_COLLECTIONS` (2026-10-23) | confronto diretto |
 | T13 | `catalog__crossmatch` (sprint B2) | argomenti validi (L2 con sé stesso, 1″); poi raggio senza unità, unità `m`, modalità e metodo fuori elenco, livello inesistente, livello immagine; raggio 181″ con `cds` | conferma richiesta (`network`, `long`); comando in cronologia con origine `ai`, metodo `local` e `icrs` di default, numeri pieni nel risultato ridotto; errori `COMMAND_PARAMETER_INVALID` con il parametro o `LAYER_UNKNOWN` senza cronologia; `MAX_SEP_INVALID` del 15 riportato al modello | test di unità (T12 copre la classificazione delle stringhe del risultato) |
+| T14 | `catalog__cone_search` e nessuno strumento per l'ADQL (sprint B3) | argomenti validi (voce SCS, centro ICRS con epoca `null` e motivo, 2 arcmin); poi raggio senza unità, unità `m`, raggio 0, `max_rows` 0, voce di un altro protocollo, URL non http; elenco degli strumenti | conferma richiesta (`network`, `long`); comando in cronologia con origine `ai` e `url` risolto; testi del risultato classificati (T12); errori `COMMAND_PARAMETER_INVALID` con il parametro o `SERVER_UNKNOWN`/`MAX_ROWS_INVALID` riportati al modello; nessuno strumento per `catalog.tap_query`, `vo.add_server`, `vo.remove_server`; 24 strumenti | test di unità (`tests/ai/test_tool_registry.py`) |
 | T4 | Validazione come l'utente | raggio senza unità; unità `m`; livello `L9` inesistente; JSON rotto | errori `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`, `TOOL_ARGUMENTS_INVALID` come risultato al modello; nome sconosciuto (`catalog_search`, `catalog.search`, `image__open`) → `TOOL_NOT_EXPOSED` con `valid_tools` uguale a `tools()` (2026-10-23); nessun comando in cronologia | test di unità |
 | T5 | Stessa coda, `requested_by` | un comando dall'utente e uno dall'IA | eseguiti in ordine di arrivo; il secondo in cronologia con `requested_by = ai`, conversazione, turno, chiamata, profilo, modello | ispezione della cronologia |
 | T6 | Conferme | `catalog.load_region`, `layer.set_opacity`, `view.set_center`, `catalog.rows` | conferma chiesta per i primi due, non per gli altri; Annulla → `TOOL_NOT_CONFIRMED`, nessuna esecuzione | test di unità |
@@ -473,3 +479,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `ToolRegistryError` porta `params`; gli errori della chiamata vanno al modello con il testo inglese del catalogo e i parametri esterni marcati; nuova §10.1 con la tabella scritta prima del codice. Test `tests/ai/test_messages_assistant.py`. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9:** registrata **D32-3** (risultati più leggeri verso l'IA per i provider con limiti bassi di token), rinviata a dopo la v1, §13. Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — `catalog__crossmatch`** (decisione del proprietario del 2026-11-05, D15-10 (e) del `15`: esposto perché il registro lo permette con lavoro contenuto, una riga di §3.2 e la classificazione dei campi del risultato): §3.2 nuova riga (conferma sì: rete e lungo), §3.6 testi esterni del risultato, T13 (§12). Strumenti esposti: 23. Stato `approvato` invariato. |
+| 2026-11-06 | Claude Code | **Sprint B3 — `catalog__cone_search`** (decisione del proprietario del 2026-11-06: esporre solo la cone search, con conferma come gli altri comandi di rete): §3.2 nuova riga; §3.3 `catalog.tap_query` non esposto (ADQL = `33`, rimandato) e `vo.*` non esposti; nota sugli strumenti annotati dal 14 aggiornata; testi esterni del risultato (§3.6: colonne e posizioni come `catalog.load_region`; servizio, URL e parametri inviati sono di AstroTwo); nuovo T14 (§12). Strumenti esposti: 24. Stato `approvato` invariato. |

@@ -171,6 +171,8 @@ def test_validation_errors_cover_every_reason(registry, files):
                                 "frame": "galactic"}),  # crossmatch_cds_frame (sprint B2)
     ]:
         bad(name, **parameters)
+    seen.error(s, "vo.add_server", {"name": "Gaia", "protocol": "tap",  # server_already_listed (sprint B3)
+                                    "url": "https://gea.esac.esa.int/tap-server/tap"})
     # parametri che non sono un oggetto, grandezza sotto il minimo, lista troppo lunga, indirizzo non http(s)
     seen.raised(registry.validate, Command("layer.list", 1, 5))  # parameters_form
     seen.raised(custom.validate, Command("test.quantity", 1, {"angle": {"value": 0.5, "unit": "deg"}}))

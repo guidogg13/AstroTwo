@@ -43,7 +43,8 @@ NOT_EXPOSED = ("cursor.read", "simbad.pointer", "prefs.set", "cache.clear", "ui.
                "ui.set_fullscreen", "ui.set_appearance", "view.export_png", "image.open", "catalog.open_file",
                "moc.open", "layer.remove", "layer.move", "image.set_display", "catalog.set_columns", "table.sort",
                "view.set_coordinate_display", "samp.connect", "samp.disconnect", "samp.send_table",
-               "samp.send_selection", "samp.point_at")  # SAMP: nessuno strumento per l'IA (40 D40-8 (f))
+               "samp.send_selection", "samp.point_at",  # SAMP: nessuno strumento per l'IA (40 D40-8 (f))
+               "catalog.tap_query", "vo.add_server", "vo.remove_server")  # sprint B3: ADQL = 33, rimandato
 KEPT = {"type", "properties", "required", "enum", "minimum", "maximum", "items", "description", "default"}
 
 
@@ -93,7 +94,8 @@ def numbers(value, path=""):
 def test_t1_closed_list(tools):
     names = [t["name"] for t in tools.tools()]
     assert names == [tool for _, tool in EXPOSED_COMMANDS]
-    assert len(names) == 23 and "view__set_overlays" in names and "catalog__crossmatch" in names  # B2
+    assert len(names) == 24 and "view__set_overlays" in names and "catalog__crossmatch" in names  # B2
+    assert "catalog__cone_search" in names and "catalog__tap_query" not in names  # B3: ADQL = 33, rimandato
     for command in NOT_EXPOSED:
         assert tools.tool_name(command) is None
         assert command.replace(".", "__") not in names
@@ -550,3 +552,52 @@ def test_b2_crossmatch_tool_valid_and_invalid(tools, session):
     entry, reduced = call(tools, session, "catalog__crossmatch", {**args, "max_sep": {"value": 181, "unit": "arcsec"},
                                                                   "method": "cds"})
     assert entry.result.status == "error" and reduced["error"]["code"] == "MAX_SEP_INVALID"
+
+
+# =============================================================================
+# T14 (32) — catalog__cone_search e nessuno strumento per l'ADQL (sprint B3, 2026-11-06)
+
+
+def test_t14_cone_search_tool_valid_and_invalid(tools, session, offline):
+    """L'IA sceglie servizio, centro e raggio; la tabella viene dal servizio (simulato); validazione come l'utente."""
+    args = {"service": "nasa-irsa-allwise-scs", "center": sky(10.0, -3.0),
+            "radius": {"value": 2.0, "unit": "arcmin"}}
+    command = tools.command_for("catalog__cone_search", json.dumps(args), ai(), session.workspace.state)
+    confirmation = tools.needs_confirmation(command)
+    assert confirmation.required and confirmation.reasons == ("network", "long")
+    entry, reduced = call(tools, session, "catalog__cone_search", args)
+    assert entry.result.status == "ok", entry.result.error
+    assert entry.command.requested_by.source == "ai"
+    assert entry.command.parameters["url"] == offline.url + "/scs?table=t"  # URL risolto e registrato
+    assert entry.command.parameters["max_rows"] == 100_000
+    assert reduced["values"]["query"]["rows"] == entry.result.values["query"]["rows"] == 4
+    assert tools.unclassified("catalog.cone_search", entry.result) == []
+    before = len(session.history)
+    cases = [
+        ({**args, "radius": 2.0}, "COMMAND_PARAMETER_INVALID", "radius"),  # numero senza unità
+        ({**args, "radius": {"value": 2.0, "unit": "m"}}, "COMMAND_PARAMETER_INVALID", "radius"),
+        ({**args, "radius": {"value": 0.0, "unit": "deg"}}, "COMMAND_PARAMETER_INVALID", "radius"),
+        ({**args, "max_rows": 0}, "COMMAND_PARAMETER_INVALID", "max_rows"),
+        ({**args, "url": "ftp://x"}, "COMMAND_PARAMETER_INVALID", "url"),
+        ({**args, "center": {**args["center"], "epoch": None, "epoch_reason": None}}, "COMMAND_PARAMETER_INVALID",
+         "center.epoch"),
+    ]
+    for bad, code, parameter in cases:
+        with pytest.raises(ToolRegistryError) as err:
+            tools.command_for("catalog__cone_search", json.dumps(bad), ai(), session.workspace.state)
+        assert err.value.code == code, bad
+        assert err.value.model_result()["error"]["parameter"] == parameter, bad
+    assert len(session.history) == before
+    # voce di un altro protocollo: errore del 14 riportato al modello, nessun livello nuovo
+    layers = len(session.workspace.state.layers)
+    entry, reduced = call(tools, session, "catalog__cone_search", {**args, "service": "esa-gaia-tap"})
+    assert entry.result.status == "error" and reduced["error"]["code"] == "SERVER_UNKNOWN"
+    assert len(session.workspace.state.layers) == layers
+
+
+def test_t14_no_tool_for_adql_or_personal_servers(tools):
+    names = {t["name"] for t in tools.tools()}
+    for command in ("catalog.tap_query", "vo.add_server", "vo.remove_server"):
+        assert tools.tool_name(command) is None and command.replace(".", "__") not in names
+    description = next(t for t in tools.tools() if t["name"] == "catalog__cone_search")
+    assert "nasa-irsa-allwise-scs" in json.dumps(description)  # identificativi SCS nella descrizione di service

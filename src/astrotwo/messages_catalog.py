@@ -1686,6 +1686,10 @@ _extend("NET_TIMEOUT",
         async_deadline=("{url}: maximum wait of {timeout} exceeded (phase {phase}); job aborted",
                         "{url}: attesa massima di {timeout} superata (fase {phase}); lavoro interrotto",
                         "url timeout:qty phase"))
+_add("QUERY_CANCELLED",
+     "The query was cancelled.", "La query è stata annullata.",
+     async_aborted=("{url}: job cancelled (phase {phase}); aborted and deleted",
+                    "{url}: lavoro annullato (fase {phase}); interrotto ed eliminato", "url phase"))
 _add("AUTH_REQUIRED",
      "{url}: the service asks for authentication (HTTP {status}); at level 1 only public services.",
      "{url}: il servizio chiede autenticazione (HTTP {status}); nel livello 1 solo servizi pubblici.",
@@ -2853,6 +2857,8 @@ _add("COMMAND_PARAMETER_INVALID",
                            "use icrs.",
                            "{parameter}: il servizio CDS XMatch confronta posizioni ICRS: {frame} non è ammesso, "
                            "usare icrs.", "parameter frame"),
+     server_already_listed=("{parameter}: {url} is already in the list as '{server}'.",
+                            "{parameter}: {url} è già in elenco come '{server}'.", "parameter server url"),
      **_range_variants)
 del _range_variants, _RANGE, _reason, _en, _it
 _add("CROSSMATCH_SERVICE_FAILED",
@@ -3168,6 +3174,8 @@ _add("PREFERENCE_VALUE_INVALID", "The value is not valid.", "Il valore non è va
      cache_not_positive=("Cache limit of {value} bytes: a positive integer is required.",
                          "Limite della cache di {value} byte: serve un intero positivo.", "value:int"),
      survey_empty=("The survey identifier is empty.", "Identificativo del survey vuoto.", ""),
+     personal_server=("My VO servers: an entry was skipped ({detail}).",
+                      "Miei server VO: una voce saltata ({detail}).", "detail!"),
      box_not_integer=("{value} is not an integer.", "{value} non è un intero.", "value"),
      box_range=("{value} is not an odd integer between {low} and {high}.",
                 "{value} non è un intero dispari tra {low} e {high}.", "value:int low:int high:int"),
