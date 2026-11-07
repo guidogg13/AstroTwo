@@ -1948,8 +1948,11 @@ def _simbad_magnitudes(main_id: str, *, cache, refresh: bool, timeouts: NetworkT
         return None if np.ma.is_masked(value) or not str(value).strip() else str(value).strip()
 
     def number(row, name):
+        """``float32`` del VOTable (colonne ``flux``, ``flux_err``) al decimale scritto da SIMBAD, come ``_cell``."""
         value = row[name]
-        return None if np.ma.is_masked(value) or not np.isfinite(float(value)) else float(value)
+        if np.ma.is_masked(value) or not np.isfinite(float(value)):
+            return None
+        return float(str(value)) if isinstance(value, np.float32) else float(value)
 
     magnitudes, notes = [], []
     for row in data:

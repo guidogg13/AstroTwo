@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Messaggi del profilo (25 §10) e di ``simbad_object`` del 14 con codice + ``params`` (D40-3, ``40`` §3.7.1).
+"""Messaggi del profilo (25 §10), della SED (20 §10) e di ``simbad_object`` del 14 con codice + ``params`` (D40-3).
 
 Provoca ogni errore e ogni avviso del 25 (più le due sotto-voci di ``NAME_NOT_FOUND`` del 14); ogni istanza è
 controllata contro il catalogo alla creazione (``tests/conftest.py``) e qui si verifica la copertura di tutte le coppie
@@ -27,10 +27,13 @@ from tests.message_helpers import catalog_combinations, check_error, check_messa
 
 OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_IDENTIFIERS", "PROFILE_POSITIONAL_MATCH",
              "PROFILE_NO_PROPER_MOTION", "PROFILE_NO_GAIA", "PROFILE_GAIA_TWO_PARAMETER", "PROFILE_IDENTIFIER_CONFLICT",
-             "PROFILE_NO_DISTANCE", "PROFILE_TARGET_CHANGED")
+             "PROFILE_NO_DISTANCE", "PROFILE_TARGET_CHANGED", "PROFILE_PLANETS_EXCLUDED", "PROFILE_NO_PHOTOMETRY",
+             "SED_NO_ZERO_POINT", "SED_NO_SYSTEM", "SED_NO_ERROR", "SED_LOW_QUALITY", "SED_UPPER_LIMIT", "SED_DUPLICATE",
+             "SED_HIGH_PROPER_MOTION")
 FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects")}
 VEGA = (279.234734787025, 38.783688956244)
 PEG = (344.36658535524, 20.768832511140005)
+ETA_TAU = (56.871152303749994, 24.105135651944444)
 GAIA_CONE = [("source_id", "long", None), ("ra", "double", "deg"), ("dec", "double", "deg"),
              ("phot_g_mean_mag", "float", "mag")]
 
@@ -54,6 +57,17 @@ class Seen:
             self.notes(c.warnings)
         for s in prof.sections:
             self.notes(s.warnings)
+
+    def sed(self, sed) -> None:
+        for point in sed.points:
+            self.notes(point.notes)
+
+    def points(self, prof) -> None:
+        """Motivi dei punti nella forma JSON del risultato (``details["points"]`` della sezione fotometria)."""
+        section = next(s for s in prof.sections if s.name == "photometry")
+        for point in section.details["points"]:
+            for n in point["notes"]:
+                self.pairs.add(check_message(n["code"], n["params"], n["text"]))
 
     def error(self, exc) -> None:
         self.pairs.add(check_error(exc))
@@ -99,10 +113,23 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
     layer = opened.layers_created[0]
     for params in ({"row": 1}, {"layer": layer, "row": 5}, {"layer": layer, "row": 1}):
         seen.result(registry.run(Command("object.profile", 1, params, RequestedBy("menu")), workspace)[1])
-    # PROFILE_AMBIGUOUS_TARGET (51 Peg e 51 Peg b alla stessa posizione, risposta vera)
+    # PROFILE_AMBIGUOUS_TARGET (eta Tau e la nebulosa GN 03.44.2, risposta vera)
     with pytest.raises(ObjectProfileError) as info:
-        build(ProfileTarget(position=at(*PEG)), cache=cache)
+        build(ProfileTarget(position=at(*ETA_TAU)), cache=cache)
     seen.error(info.value)
+    # PROFILE_PLANETS_EXCLUDED (51 Peg b alla posizione di 51 Peg, risposta vera)
+    seen.profile(build(ProfileTarget(position=at(*PEG)), sections=("identity",), cache=cache))
+    # SED: tutti i motivi dei punti e SED_HIGH_PROPER_MOTION (51 Peg, Vega, TRAPPIST-1: risposte vere)
+    for name in ("51 Peg", "Vega", "TRAPPIST-1"):
+        prof = build(ProfileTarget(name=name), sections=("photometry",), cache=cache)
+        seen.profile(prof)
+        seen.sed(op.build_sed(op.sed_points_from(prof.resolved.simbad.magnitudes, "simbad", provenance={})))
+        seen.points(prof)
+    # PROFILE_NO_PHOTOMETRY: identificativo 2MASS senza righe nel catalogo (risposta sintetica vuota)
+    services.overrides[("irsa", "designation = '22572795+2046077'")] = lambda q: votable(
+        [("designation", "char", None)], [])
+    seen.profile(build(ProfileTarget(name="51 Peg"), sections=("photometry",), cache=cache, refresh=True))
+    services.overrides.clear()
     # PROFILE_POSITIONAL_MATCH simbad_candidate; PROFILE_NO_GAIA no_counterpart (Vega)
     seen.profile(build(ProfileTarget(position=at(*VEGA)), cache=cache))
     # catalog_match (Vega con 36″) e several_candidates (risposta sintetica con due sorgenti)

@@ -244,7 +244,19 @@ negli sprint C3–C4.
    SIMBAD è portato **all'epoca del bersaglio** con `propagate_position` del 10
    (`proper_motion_only=True`, dichiarato); senza moto proprio resta a J2000
    (dichiarato nel candidato). Entrano i candidati con separazione ≤
-   `match_radius` (Astropy), in ordine di separazione e poi di `main_id`. Uno
+   `match_radius` (Astropy), in ordine di separazione e poi di `main_id`.
+   **Pianeti esclusi (D25-13 (8), decisione del proprietario del
+   2026-11-07):** gli oggetti della famiglia «Planet» della gerarchia
+   ufficiale dei tipi di SIMBAD — tipi il cui percorso `otypedef.path`
+   contiene il nodo `Pl` (verificato il 2026-11-07 sul mirror di Harvard:
+   `Pl` «Extra-solar Planet» e `Pl?` «Extra-solar Planet Candidate», entrambi
+   con percorso `* > Pl`; `PN` ha percorso `* > Ev* > PN` e non è un pianeta)
+   — sono tolti dai candidati **in modo dichiarato**: avviso
+   `PROFILE_PLANETS_EXCLUDED` con il numero e i nomi degli esclusi. Il
+   percorso si legge nella stessa richiesta dei candidati (`LEFT OUTER JOIN
+   otypedef`), mai da un elenco scritto nel codice. L'ambiguità tra oggetti
+   non pianeti resta (`PROFILE_AMBIGUOUS_TARGET`, es. eta Tau con la nebulosa
+   `GN 03.44.2`). Uno
    → usato, con la separazione nel risultato; più di uno →
    `PROFILE_AMBIGUOUS_TARGET` con l'elenco (`main_id`, `otype`, separazione,
    `nbref`), nessuna scelta; nessuno → profilo per posizione. Epoca del
@@ -340,6 +352,88 @@ il comando termina `ok`; solo un bersaglio non risolvibile
 (`NAME_NOT_FOUND`, `PROFILE_AMBIGUOUS_TARGET`, `PROFILE_TARGET_INVALID`) fa
 terminare il comando in errore.
 
+### 3.11 Precisazioni dello sprint C3 (fotometria e SED, 2026-11-07)
+
+Scritte prima del codice dello sprint C3; le scelte minori sono raccolte in
+D25-14 (da confermare). La sezione **`photometry`** si aggiunge a `sections`
+(D25-13 (5): l'elenco si allarga senza cambiare versione del comando). I punti,
+le conversioni, la qualità, i duplicati e il grafico sono del `20` (parte SED,
+§3 e §7 del `20`); il `25` sceglie le sorgenti e fa le richieste.
+
+**Richieste per identificativo.**
+- **Gaia DR3** (solo con un `source_id` della catena): `SELECT source_id,
+  phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag,
+  phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag,
+  phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag,
+  phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = N`
+  (archivio Gaia ESA). Una soluzione astrometrica a 2 parametri ha comunque la
+  fotometria (Alcyone).
+- **2MASS** (IRSA `fp_psc`) e **AllWISE** (IRSA `allwise_p3as_psd`), servizio
+  `nasa-irsa-tap` del 14: `designation = '…'` **dentro un cerchio di
+  `DESIGNATION_RADIUS` = 2″ attorno alla posizione scritta nella designazione**
+  (2MASS `hhmmssss±ddmmsss`, AllWISE `Jhhmmss.ss±ddmmss.s`: posizione del
+  catalogo troncata, formati verificati il 2026-11-07). Il cerchio viene
+  dall'identificativo, non dal bersaglio; serve perché la sola condizione sulla
+  designazione non usa l'indice spaziale (AllWISE: timeout a 90 s il
+  2026-11-07; con il cerchio risposta in meno di 2 s). Colonne: 2MASS
+  `designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom,
+  ph_qual, rd_flg, cc_flg, jdate`; AllWISE `designation, ra, dec, w1mpro,
+  w1sigmpro, …, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg`. Nessuna riga
+  → avviso `PROFILE_NO_PHOTOMETRY` (`not_in_catalog`) con l'identificativo.
+- **SIMBAD:** magnitudini della tabella `flux` già lette da `simbad_object`
+  (nessuna nuova richiesta), con `system`, `qual`, `bibcode`.
+
+**Passo per posizione di 2MASS e AllWISE** (D25-13 (4)), nella catena
+(`cross_identify`, quindi visibile anche nella sezione Identità), **solo se**
+né SIMBAD né l'incrocio ufficiale di Gaia danno l'identificativo (mai per
+superare un `PROFILE_IDENTIFIER_CONFLICT`):
+- **AllWISE:** posizione del bersaglio portata all'epoca **MJD 55400,0 UTC
+  (2010,5589)** con `propagate_position` (come per Gaia, §3.10). Fonte: AllWISE
+  Explanatory Supplement §II.1 (letto il 2026-11-07): è l'epoca delle
+  posizioni «motion-fit» ed «è vicina al punto medio delle osservazioni», per
+  cui le posizioni stazionarie `ra`/`dec` «dovrebbero essere molto simili».
+  Cerchio di `crossmatch_radius` su `ra`, `dec`.
+- **2MASS:** le posizioni sono all'epoca di ciascuna misura (`jdate`, giorno
+  giuliano «±30 s»; il servizio non dichiara la scala: trattata come UTC,
+  dichiarato nel risultato; la differenza con TT, circa un minuto, è
+  trascurabile per il moto proprio). Cerchio di ricerca centrato sulla
+  posizione del bersaglio con raggio `crossmatch_radius + |μ| · Δt_max`, dove
+  Δt_max è la distanza in anni dall'epoca del bersaglio all'estremo più
+  lontano delle osservazioni 2MASS (**1997-06-01 – 2001-03-01**: «giugno 1997
+  – febbraio 2001», 2MASS Explanatory Supplement §I.1, letto il 2026-11-07);
+  poi ogni riga si confronta con il bersaglio portato al suo `jdate` ed entra
+  se la separazione è ≤ `crossmatch_radius`.
+- Esito come per Gaia: una sorgente → usata con `PROFILE_POSITIONAL_MATCH`
+  (raggio, separazione, epoche); più sorgenti → nessuna scelta, elenco e
+  `PROFILE_POSITIONAL_MATCH` (`several_candidates`); nessuna → «nessuna
+  sorgente entro il raggio». Senza moto proprio: nessuna propagazione,
+  `PROFILE_NO_PROPER_MOTION`.
+
+**Serie VizieR** (D20-5): `vizier_photometry` del 14 con centro = posizione
+del bersaglio **a J2000** (la posizione SIMBAD; coordinate scritte a un'altra
+epoca portate a J2000 con il moto proprio SIMBAD se noto, altrimenti lasciate
+dove sono con `PROFILE_NO_PROPER_MOTION`) e raggio **`VIZIER_SED_RADIUS` =
+2″**. Avviso `SED_HIGH_PROPER_MOTION` quando |μ| · 16 anni (J2000 → J2016,
+epoca di Gaia) ≥ raggio: i punti di cataloghi con epoche lontane da J2000
+possono mancare. CDS giù → l'errore del 14 resta **nella sola sezione**
+(stato `partial`), il resto della fotometria è presente.
+
+**Risultato della sezione.** `values`: per ogni punto una `ProfileValue`
+letta (magnitudine o flusso come dato dal catalogo, con errore, banda,
+sistema, qualità) e, se convertita, una calcolata (`flux_nu`, metodo
+`computed` con formula, punto zero e fonte del `20`). `details`: `points`
+(tabella del `20`, una riga per punto con provenienza, motivi di esclusione
+dal grafico), `vizier` (serie separata, così come data da VizieR),
+`zero_points` (voci di `ZERO_POINTS` usate), `plot_png` (grafico Fν–λ del
+`20` come immagine PNG in base64, **esclusa dall'impronta di rete** come i
+tempi: è disegnata dai valori, che restano nell'impronta). Stato: `done`;
+`partial` se un servizio non ha risposto e ci sono punti; `error` se nessun
+punto ed errori; `not_applicable` senza punti né errori.
+
+**Codice** (`object_profile.py`): `profile_photometry`, `designation_position`,
+`is_planet_path`; costanti `ALLWISE_EPOCH`, `TMASS_OBSERVATIONS`,
+`DESIGNATION_RADIUS`; la SED è di `astrotwo.analysis.photometry` (20 §7).
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -382,7 +476,7 @@ terminare il comando in errore.
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
 | in | `target` | testo, oppure coordinate, oppure riferimento a una riga | nome; coordinate con sistema ed epoca (DC2); `layer_id` + riga | uno solo dei tre |
-| in | `sections` | elenco | `identity`, `astrometry` (C2); `images`, `photometry`, `planets` aggiunti da C3–C4 | default tutte quelle scritte |
+| in | `sections` | elenco | `identity`, `astrometry` (C2), `photometry` (C3); `images`, `planets` aggiunti da C4 | default tutte quelle scritte |
 | in | `match_radius` | angolo | arcsec, con unità | default 10″ (D25-9): candidati SIMBAD da coordinate |
 | in | `crossmatch_radius` | angolo | arcsec, con unità | default 2″ (D25-9): incroci per posizione dopo la propagazione (§3.10) |
 | in | `simbad_id` | testo | identificativo SIMBAD | facoltativo; scritto dal comando dopo la risoluzione (§3.10) |
@@ -468,6 +562,9 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Nome sconosciuto a SIMBAD (server raggiungibile) | profilo non creato, suggerimento coordinate | `NAME_NOT_FOUND` (10/14) |
 | SIMBAD giù su tutti i server | nome da `resolve_name` (NED), sezione Identità in errore, resto per posizione | `NET_TIMEOUT` `service_servers` + `PROFILE_NO_IDENTIFIERS` |
 | Più candidati per coordinate | elenco da scegliere; da script errore | `PROFILE_AMBIGUOUS_TARGET` |
+| Pianeti tra i candidati per coordinate (famiglia `Pl` di SIMBAD) | esclusi, avviso con numero e nomi (D25-13 (8)) | `PROFILE_PLANETS_EXCLUDED` |
+| 2MASS o AllWISE: identificativo senza riga nel catalogo | punti assenti, avviso con l'identificativo (§3.11) | `PROFILE_NO_PHOTOMETRY` (`not_in_catalog`) |
+| Moto proprio elevato per la serie VizieR | serie presente, avviso | `SED_HIGH_PROPER_MOTION` (20) |
 | Identificativo SIMBAD e incrocio ufficiale in disaccordo | entrambi mostrati, nessuna scelta | `PROFILE_IDENTIFIER_CONFLICT` |
 | Oggetto non in Gaia DR3 (Vega) | astrometria da SIMBAD con fonte | `PROFILE_NO_GAIA` |
 | Soluzione Gaia a 2 parametri (Alcyone) | niente parallasse/moto proprio da Gaia | `PROFILE_GAIA_TWO_PARAMETER` |
@@ -512,12 +609,15 @@ cambiano).
 | T4 | Vega senza Gaia | identificativi SIMBAD senza `Gaia DR3`; cerchio Gaia registrato (3 stelle a 30–36″, G 15,8–17,3) | nessuna sorgente Gaia attribuita, `PROFILE_NO_GAIA`; con `match_radius` 10″ nessun candidato | nessuna scelta silenziosa |
 | T5 | Distanza Bailer-Jones | `distance_from` per 51 Peg con `external.gaiaedr3_distance` registrata | `r_med_geo` 15,514698 pc [15,494703; 15,533528], metodo e riferimento 2021AJ....161..147B | lettura, nessun calcolo |
 | T6 | Soglia 1/ϖ | parallassi simulate con ϖ/σ = 9,9 e 10,0 e ϖ < 0 | nessuna distanza (`low_snr`), distanza, nessuna distanza (`negative_parallax`) | confronto |
-| T7 | AllWISE per posizione con propagazione | Vega: posizione SIMBAD J2000 + moto proprio SIMBAD, epoca AllWISE (da verificare), cerchio registrato con `J183656.51+384704.4` a ≈ 3,8″ dalla posizione J2000 | candidato trovato solo dopo la propagazione, `PROFILE_POSITIONAL_MATCH` con raggio, separazione ed epoche | separazione ricalcolata con Astropy |
+| T7 | AllWISE per posizione con propagazione | Vega: posizione SIMBAD J2000 + moto proprio SIMBAD, epoca AllWISE MJD 55400,0 (verificata il 2026-11-07, §3.11), cerchio registrato con `J183656.51+384704.4` a ≈ 3,8″ dalla posizione J2000 | candidato trovato solo dopo la propagazione, `PROFILE_POSITIONAL_MATCH` con raggio, separazione ed epoche | separazione ricalcolata con Astropy |
 | T8 | Pianeti TRAPPIST-1 | sezione pianeti con `pscomppars` registrata | 7 pianeti b–h, ognuno con periodo, massa ed errori e riferimento (Agol et al. 2021) | confronto |
 | T9 | Nessun pianeta | Vega, eta Tau | sezione `done`, «nessun pianeta» | stato |
 | T10 | Sezioni indipendenti | archivio Gaia simulato giù (503 ripetuti), CDS giù | astrometria in errore, identità/fotometria (2MASS, AllWISE)/pianeti presenti | stati delle sezioni |
 | T11 | Arrivo progressivo | servizi simulati con ritardi diversi | `on_section` chiamato nell'ordine dei tempi, ogni sezione una volta | ordine |
 | T12 | Più candidati | coordinate tra due oggetti SIMBAD entro il raggio | `TargetCandidates` con 2 voci; da script `PROFILE_AMBIGUOUS_TARGET` | nessuna scelta |
+| T18 | Pianeti esclusi dai candidati (D25-13 (8)) | coordinate di 51 Peg e di TRAPPIST-1 (risposte registrate con `otypedef.path`); coordinate di eta Tau | 51 Peg e TRAPPIST-1: un solo candidato (la stella), `PROFILE_PLANETS_EXCLUDED` con 1 e 8 nomi; eta Tau: `PROFILE_AMBIGUOUS_TARGET` con la stella e `GN 03.44.2` | nessuna scelta tra non pianeti |
+| T19 | Sezione fotometria | 51 Peg, Vega, eta Tau, TRAPPIST-1 con risposte registrate (archivio Gaia, IRSA, SIMBAD) e CDS giù | punti Gaia/2MASS/AllWISE/SIMBAD con banda, sistema, errore, qualità e provenienza; eta Tau 2MASS J e Ks (`ph_qual` `D`, saturate) fuori dal grafico con il motivo; Vega 2MASS saturata ma con `ph_qual` `CBC`: nel grafico per la regola D20-4, `rd_flg` mostrato; AllWISE `U` (Vega W1–W2, TRAPPIST-1 W4) limiti superiori fuori dal grafico; serie VizieR in errore nella sola sezione (`partial`); grafico PNG presente | confronto con le risposte registrate |
+| T20 | Passo per posizione di 2MASS | 2MASS senza identificativo da SIMBAD né dall'incrocio ufficiale, risposta registrata con `jdate` | sorgente trovata confrontando il bersaglio portato al `jdate` della riga, `PROFILE_POSITIONAL_MATCH` | separazione ricalcolata con Astropy |
 | T13 | Conflitto di identificativi | SIMBAD dà 2MASS X, l'incrocio Gaia dà 2MASS Y | entrambi, `PROFILE_IDENTIFIER_CONFLICT` | |
 | T14 | Riproducibilità | `object.profile` registrato, rieseguito dalla sessione, poi con `refresh` | stesse richieste e stessi valori dalla cache; con `refresh` nuove richieste e `DATA_REFRESHED` | sessione del 05 |
 | T15 | Esportazione | `export_profile` ECSV | una riga per valore con tutte le colonne di provenienza; rilettura con `astropy.table` | ECSV valido |
@@ -526,10 +626,10 @@ cambiano).
 
 ## 13. Decisioni aperte
 
-Tutte le decisioni D25-1…D25-12 sono state **prese dal proprietario il
-2026-11-07** (dopo il report dello sprint C1). Restano qui come registro;
-nessuna è aperta. Le scelte minori dello sprint C2 da confermare sono in
-**D25-13** (sotto).
+Tutte le decisioni D25-1…D25-13 sono state **prese dal proprietario il
+2026-11-07** (D25-1…D25-12 dopo il report dello sprint C1, D25-13 dopo lo
+sprint C2). Restano qui come registro. Le scelte minori dello sprint C3 da
+confermare sono in **D25-14** (sotto).
 
 - **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
   `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
@@ -584,30 +684,42 @@ nessuna è aperta. Le scelte minori dello sprint C2 da confermare sono in
   le modifiche ai file approvati 03, 05, 12, 14, 32, 34, 40, 41, 42
   limitatamente a quanto serve agli sprint C2–C6, con annotazione nel registro
   di ciascun file.»
-- **D25-13 — Scelte minori dello sprint C2 — da confermare (proprietario).**
-  Scritte in §3.10: (1) parametri `crossmatch_radius` e `simbad_id` del
-  comando; (2) raggio di ricerca dei candidati allargato dal moto proprio
-  massimo noto (`PM_SEARCH_MAX`); (3) una riga di catalogo come bersaglio vale
-  per posizione in C2 (riconoscimento degli identificativi delle righe con
-  l'interfaccia, C5); (4) passo «posizione» della catena solo per Gaia DR3 in
-  C2 (2MASS e AllWISE nello sprint C3, con la fotometria); (5) l'elenco
-  `sections` del comando contiene solo le sezioni già scritte, allargato negli
-  sprint successivi senza cambiare versione; (6) registrazione dei comandi dei
-  livelli 2–4 da parte di chi costruisce il registro (05 §3.2); (7) astrometria
-  di SIMBAD mostrata anche quando Gaia ha una soluzione a 2 parametri; (8)
-  **da decidere — candidati da coordinate e pianeti:** SIMBAD registra i
-  pianeti alla posizione della stella, quindi le coordinate di una stella con
-  pianeti danno sempre più candidati (verificato il 2026-11-07: 51 Peg → `*
-  51 Peg` e `* 51 Peg b`; TRAPPIST-1 → la stella e 8 oggetti `TRAPPIST-1b…i`;
-  eta Tau → la stella e la nebulosa `GN 03.44.2`). Oggi `PROFILE_AMBIGUOUS_TARGET`
-  con l'elenco (regola a). Proposta: lasciare la regola com'è e, nello sprint
-  C5, mostrare l'elenco con la stella in cima quando gli altri candidati sono
-  suoi pianeti (tipo `Pl`), senza scelta automatica; alternativa: escludere i
-  pianeti dai candidati dichiarandolo. **Decisione del proprietario.**
+- **D25-13 — Scelte minori dello sprint C2 — DECISA (proprietario, 2026-11-07).**
+  Punti (1)–(7) **confermati** come scritti in §3.10: (1) parametri
+  `crossmatch_radius` e `simbad_id` del comando; (2) raggio di ricerca dei
+  candidati allargato dal moto proprio massimo noto (`PM_SEARCH_MAX`); (3) una
+  riga di catalogo come bersaglio vale per posizione in C2 (riconoscimento
+  degli identificativi delle righe con l'interfaccia, C5); (4) passo
+  «posizione» della catena solo per Gaia DR3 in C2 (2MASS e AllWISE nello
+  sprint C3, §3.11); (5) l'elenco `sections` del comando contiene solo le
+  sezioni già scritte, allargato negli sprint successivi senza cambiare
+  versione; (6) registrazione dei comandi dei livelli 2–4 da parte di chi
+  costruisce il registro (05 §3.2); (7) astrometria di SIMBAD mostrata anche
+  quando Gaia ha una soluzione a 2 parametri. (8) **Candidati da coordinate e
+  pianeti — deciso:** per un bersaglio dato per coordinate gli oggetti SIMBAD
+  della famiglia «Planet» (verificata sulla gerarchia ufficiale dei tipi di
+  SIMBAD, `otypedef.path`) sono **esclusi** dai candidati in modo dichiarato,
+  con avviso del numero e dei nomi degli esclusi (`PROFILE_PLANETS_EXCLUDED`);
+  l'ambiguità tra oggetti non pianeti resta e si ferma con l'elenco
+  (`PROFILE_AMBIGUOUS_TARGET`). Scritto in §3.10, test T12 e T18.
+- **D25-14 — Scelte minori dello sprint C3 — da confermare (proprietario).**
+  Scritte in §3.11: (1) 2MASS e AllWISE per designazione con il cerchio di 2″
+  attorno alla posizione scritta nella designazione (`DESIGNATION_RADIUS`);
+  (2) epoca AllWISE MJD 55400,0 UTC per le posizioni stazionarie `ra`/`dec`
+  (il supplemento la dà per le posizioni «motion-fit» e dice le stazionarie
+  «molto simili»); (3) 2MASS confrontato al `jdate` di ogni riga, scala
+  trattata come UTC e dichiarata, raggio di ricerca allargato con il periodo
+  delle osservazioni 2MASS; (4) passo per posizione di 2MASS e AllWISE dentro
+  `cross_identify`, quindi mostrato anche nella sezione Identità; (5) centro
+  della serie VizieR a J2000 e avviso `SED_HIGH_PROPER_MOTION` con |μ| · 16
+  anni ≥ 2″; (6) grafico come PNG in base64 nel risultato, fuori
+  dall'impronta di rete; (7) senza riga nel catalogo per un identificativo
+  noto: avviso `PROFILE_NO_PHOTOMETRY`, nessun passo per posizione.
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C3 (decisioni del proprietario del 2026-11-07):** D25-13 decisa: punti (1)–(7) confermati, punto (8) deciso (pianeti della famiglia `Pl` di SIMBAD esclusi dai candidati da coordinate, dichiarati con `PROFILE_PLANETS_EXCLUDED`; §3.10, T12, nuovo T18); RUWE resta senza soglia (D25-11). Nuovo §3.11 (sezione `photometry`: richieste per identificativo a Gaia, IRSA 2MASS e AllWISE con il cerchio della designazione, passo per posizione di 2MASS e AllWISE con le epoche verificate — AllWISE MJD 55400,0, 2MASS `jdate` e periodo 1997-06/2001-02 —, serie VizieR a J2000 con raggio 2″, grafico PNG fuori dall'impronta); §6 `sections`; §10 `PROFILE_PLANETS_EXCLUDED`, `PROFILE_NO_PHOTOMETRY`, `SED_HIGH_PROPER_MOTION`; §12 T7 con l'epoca verificata, nuovi T18–T20; nuova D25-14 (scelte minori di C3, da confermare). |
 | 2026-11-07 | Claude Code | **Sprint C2 (decisioni del proprietario del 2026-11-07):** file `approvato` dal proprietario (D25-12, formula in §13); D25-1…D25-12 scritte come decise (D25-5 con la condizione su AllWISE colore, D25-11 con la soglia RUWE solo da fonte ufficiale: verifica senza esito, RUWE senza soglia); nuovo §3.10 (precisazioni del motore: nome con `simbad_object`, candidati da coordinate con `PM_SEARCH_MAX`, `simbad_id`, catena di C2, identità, astrometria, distanza, provenienza, esecuzione); §6 con `crossmatch_radius` e `simbad_id`; §10 con `PROFILE_TARGET_INVALID` e `PROFILE_NO_GAIA` con sotto-voci; nuova D25-13 (scelte minori, da confermare). |
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1 (Fase C, decisione del proprietario del 2026-11-07): regole a–d scritte come decise; verifiche dal vivo su Alcyone, Vega, 51 Peg, TRAPPIST-1 (SIMBAD Harvard, archivio Gaia ESA con `external.gaiaedr3_distance` e incroci ufficiali, IRSA 2MASS/AllWISE, NASA Exoplanet Archive; CDS giù); interfaccia proposta in §3.9; decisioni aperte D25-1…D25-12. |

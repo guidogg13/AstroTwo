@@ -69,23 +69,24 @@ def test_t28_t14_name_profile_registered_replayed_and_refreshed(services, cache)
     assert registered.parameters["simbad_id"] == "*  51 Peg"  # scritto nel comando registrato
     assert registered.parameters["match_radius"] == {"value": 10.0, "unit": "arcsec"}
     assert registered.parameters["crossmatch_radius"] == {"value": 2.0, "unit": "arcsec"}
-    assert registered.parameters["sections"] == ["identity", "astrometry"]
+    assert registered.parameters["sections"] == ["identity", "astrometry", "photometry"]
     assert workspace.state is before and result.layers_created == ()  # sola lettura
     direct = build_profile(ProfileTarget(name="51 Peg"), cache=cache)
     assert content(result.values)["sections"] == content(direct.as_dict())["sections"]
-    assert {p["origin"].rsplit("/", 2)[-2] for p in result.provenance} == {"simbad", "gaia", "exoplanet"}
-    assert len(result.network_fingerprint) == 2
-    # riesecuzione: stesse richieste dalla cache, nessuna nuova richiesta ai servizi, stessi valori
-    asked = services.count()
+    assert {p["origin"].rsplit("/", 2)[-2] for p in result.provenance} == {"simbad", "gaia", "exoplanet", "irsa"}
+    assert len(result.network_fingerprint) == 3
+    # riesecuzione: stesse richieste dalla cache, nessuna nuova richiesta ai servizi, stessi valori; solo la SED di
+    # VizieR (CDS giù, nessuna risposta in cache) si chiede di nuovo e resta un errore della sezione
+    asked = services.count() - services.count("vizier")
     _, again = registry.run(registered, workspace)
-    assert again.status == "ok" and services.count() == asked
+    assert again.status == "ok" and services.count() - services.count("vizier") == asked
     assert content(again.values) == content(result.values)
     assert [f["sha256"] for f in again.network_fingerprint] == [f["sha256"] for f in result.network_fingerprint]
     assert all(p["from_cache"] for p in again.provenance)
     # con refresh: di nuovo dalla rete, DATA_REFRESHED fresh
     refreshed = Command(registered.name, 1, registered.parameters, RequestedBy("history"), True)
     _, fresh = registry.run(refreshed, workspace)
-    assert fresh.status == "ok" and services.count() > asked
+    assert fresh.status == "ok" and services.count() - services.count("vizier") > asked
     assert fresh.warnings[-1].code == "DATA_REFRESHED" and fresh.warnings[-1].params == {"reason": "fresh"}
     assert content(fresh.values) == content(result.values)
 
@@ -152,14 +153,14 @@ def test_t28_invalid_targets_are_errors(cache, params, reason):
 
 def test_t28_ambiguous_target_is_an_error_with_the_list(services, cache):
     registry = registry_with_profile(cache)
-    peg = SkyFrame.from_lonlat(344.36658535524 * u.deg, 20.768832511140005 * u.deg, "icrs", epoch=Time("J2000.0"))
-    _, result = run(registry, Workspace(), {"position": sky_json(peg)})
+    eta = SkyFrame.from_lonlat(56.871152303749994 * u.deg, 24.105135651944444 * u.deg, "icrs", epoch=Time("J2000.0"))
+    _, result = run(registry, Workspace(), {"position": sky_json(eta)})
     assert result.status == "error" and result.error.code == "PROFILE_AMBIGUOUS_TARGET"
-    assert [" ".join(c["main_id"].split()) for c in result.error.params["candidates"]] == ["* 51 Peg", "* 51 Peg b"]
+    assert [" ".join(c["main_id"].split()) for c in result.error.params["candidates"]] == ["* eta Tau", "GN 03.44.2"]
     # l'utente sceglie: lo stesso comando con simbad_id parte da quell'oggetto (risposta registrata per il nome)
-    services.overrides[("simbad", "WHERE i.id = '*  51 Peg'")] = lambda q: recorded(
-        "simbad", recorded_query("simbad", "WHERE i.id = '51 Peg'"))
-    _, chosen = run(registry, Workspace(), {"position": sky_json(peg), "simbad_id": "*  51 Peg",
+    services.overrides[("simbad", "WHERE i.id = '* eta Tau'")] = lambda q: recorded(
+        "simbad", recorded_query("simbad", "WHERE i.id = 'eta Tau'"))
+    _, chosen = run(registry, Workspace(), {"position": sky_json(eta), "simbad_id": "* eta Tau",
                                             "sections": ["identity"]})
     assert chosen.status == "ok", chosen.error
-    assert chosen.values["resolved"]["main_id"] == "*  51 Peg"
+    assert chosen.values["resolved"]["main_id"] == "* eta Tau"

@@ -430,9 +430,9 @@ di default) è scritto dal comando dopo la risoluzione (`main_id` SIMBAD): con
 un nome la riesecuzione risolve di nuovo il nome (stessa richiesta, dalla
 cache) e controlla `simbad_id` (`PROFILE_TARGET_CHANGED` se SIMBAD dà un
 altro oggetto); con coordinate o una riga `simbad_id` decide l'oggetto. `sections` (elenco di
-`enum`, default tutte quelle scritte: in C2 `identity` e `astrometry`; gli
-sprint C3–C4 allargano l'elenco senza cambiare versione, i comandi registrati
-restano validi), `match_radius` (angolo, default 10″) e `crossmatch_radius`
+`enum`, default tutte quelle scritte: in C2 `identity` e `astrometry`, dallo
+sprint C3 anche `photometry` (25 §3.11); lo sprint C4 allarga ancora l'elenco
+senza cambiare versione, i comandi registrati restano validi), `match_radius` (angolo, default 10″) e `crossmatch_radius`
 (angolo, default 2″) risolti alla registrazione. Risultato: `values` = il
 profilo (bersaglio risolto, sezioni con stato, valori con provenienza, avvisi
 ed errori per sezione, 25 §3.10); `provenance` = una voce per richiesta di
@@ -1077,6 +1077,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** `object.profile` con la sezione `photometry` (25 §3.11) nell'elenco `sections`, senza cambiare versione (D25-13 (5), confermata). |
 | 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** `ResultMessage` e `CommandError` portano `params` (valori JSON dei parametri del messaggio) accanto a codice e testo del modulo; il testo originale resta invariato; la lingua si sceglie nel catalogo dei messaggi del `40` §3.7.1. Nessun codice scritto. |
 | 2026-11-07 | Claude Code | **Sprint C2 (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6):** §3.2 regola dei comandi dei livelli 2–4 (definiti nel loro modulo, `command_specs()`, aggiunti con `register` dal `40`; il 05 non li importa), §7 nuovo `object.profile` con i dettagli, §9 livelli precisati, §12 T28. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario del 2026-10-15 (AM1 accettata: modulo generale di livello 1, codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; registro senza Qt con annullamento cooperativo e avanzamento; spazio di lavoro immutabile; gesti registrati a fine gesto dopo 300 ms fermo; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore. Verifica della cache del 04 da più thread prima del codice. Nuove decisioni D05-1, D05-2, D05-3. |

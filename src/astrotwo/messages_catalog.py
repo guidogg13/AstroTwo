@@ -3467,3 +3467,38 @@ _add("PROFILE_TARGET_CHANGED",
      "'{name}': SIMBAD now gives {found}, the recorded command {recorded}; profile of today's object.",
      "'{name}': SIMBAD indica oggi {found}, il comando registrato {recorded}; profilo dell'oggetto di oggi.",
      "name recorded! found!")
+_add("PROFILE_PLANETS_EXCLUDED",
+     "{count} SIMBAD objects of the Planet family excluded from the candidates: {names}.",
+     "{count} oggetti SIMBAD della famiglia dei pianeti esclusi dai candidati: {names}.",
+     "count:int names:list!")
+_add("PROFILE_NO_PHOTOMETRY",
+     "No photometry.", "Nessuna fotometria.", "",
+     not_in_catalog=("{catalog}: {identifier} has no row in {table}.",
+                     "{catalog}: {identifier} non ha righe in {table}.", "catalog identifier! table"))
+
+# Fotometria, parte SED (20 §10, sprint C3)
+_add("SED_NO_ZERO_POINT",
+     "{catalog} {band}: no official zero point in the table, kept in magnitudes.",
+     "{catalog} {band}: nessun punto zero ufficiale in tabella, resta in magnitudini.", "catalog band!")
+_add("SED_NO_SYSTEM",
+     "{catalog} {band}: photometric system not declared, kept in magnitudes.",
+     "{catalog} {band}: sistema fotometrico non dichiarato, resta in magnitudini.", "catalog band!")
+_add("SED_NO_ERROR",
+     "{catalog} {band}: no error, point without error bar.",
+     "{catalog} {band}: senza errore, punto senza barra.", "catalog band!")
+_add("SED_LOW_QUALITY",
+     "{catalog} {band}: quality {quality} (ph_qual), out of the plot.",
+     "{catalog} {band}: qualità {quality} (ph_qual), fuori dal grafico.", "catalog band! quality!")
+_add("SED_UPPER_LIMIT",
+     "{catalog} {band}: upper limit (ph_qual U), out of the plot.",
+     "{catalog} {band}: limite superiore (ph_qual U), fuori dal grafico.", "catalog band!")
+_add("SED_DUPLICATE",
+     "SIMBAD {band} ({reference}): same data as {duplicate_of}, plotted once.",
+     "SIMBAD {band} ({reference}): stesso dato di {duplicate_of}, una sola volta nel grafico.",
+     "band! reference! duplicate_of")
+_add("SED_HIGH_PROPER_MOTION",
+     "Proper motion {proper_motion}: in 16 years the position moves by {shift}, beyond the radius {radius} of the "
+     "VizieR series; points of catalogues at other epochs may be missing.",
+     "Moto proprio {proper_motion}: in 16 anni la posizione si sposta di {shift}, oltre il raggio {radius} della "
+     "serie VizieR; possono mancare punti di cataloghi a epoche diverse.",
+     "proper_motion:qty shift:qty radius:qty")

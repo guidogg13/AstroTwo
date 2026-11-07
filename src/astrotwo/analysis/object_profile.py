@@ -9,13 +9,17 @@ Nessun numero nasce qui fuori da codice deterministico (regola d'oro n. 1): i va
 ``astropy.units.parallax``), con il metodo scritto nel valore. Ogni valore porta la sua provenienza (servizio, server
 che ha risposto, tabella, interrogazione ADQL, identificativo usato, tipo di incrocio, data, cache).
 
-Le sezioni sono indipendenti (regola c): l'errore di un servizio resta nella sua sezione. In C2 le sezioni girano una
-dopo l'altra (parallelismo nello sprint C4). Il comando ``object.profile`` è definito qui (comando del livello 2,
+Le sezioni sono indipendenti (regola c): l'errore di un servizio resta nella sua sezione. Le sezioni girano una dopo
+l'altra (parallelismo nello sprint C4). Sprint C3 (25 §3.11): sezione ``photometry`` con i punti e la SED del ``20``
+(``astrotwo.analysis.photometry``), passo per posizione di 2MASS e AllWISE nella catena, pianeti esclusi dai
+candidati da coordinate (D25-13 (8)). Il comando ``object.profile`` è definito qui (comando del livello 2,
 05 §3.2): il 05 non importa questo modulo, lo riceve con ``register`` da chi costruisce il registro (``40``).
 """
 
 from __future__ import annotations
 
+import dataclasses
+import re
 import time
 import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
@@ -27,19 +31,38 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 
+from astrotwo.analysis.photometry import (
+    VIZIER_SED_RADIUS,
+    Sed,
+    VizierSeries,
+    build_sed,
+    high_proper_motion,
+    sed_png,
+    sed_points_from,
+)
 from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts, SharedCache
 from astrotwo.core.coordinates_wcs import ModuleWarning, SkyFrame, propagate_position, resolve_name
-from astrotwo.core.vo_protocols import RequestRecord, SimbadRecord, VoProtocolsError, simbad_object, tap_query
+from astrotwo.core.vo_protocols import (
+    RequestRecord,
+    SimbadRecord,
+    VoProtocolsError,
+    simbad_object,
+    tap_query,
+    vizier_photometry,
+)
 
 __all__ = [
+    "ALLWISE_EPOCH",
     "BAILER_JONES_REFERENCE",
     "CATALOGS",
     "DEFAULT_CROSSMATCH_RADIUS",
     "DEFAULT_MATCH_RADIUS",
+    "DESIGNATION_RADIUS",
     "GAIA_DR3_EPOCH",
     "PARALLAX_SNR_MIN",
     "PM_SEARCH_MAX",
     "SECTIONS",
+    "TMASS_OBSERVATIONS",
     "CrossIdentification",
     "ObjectProfile",
     "ObjectProfileError",
@@ -56,11 +79,12 @@ __all__ = [
     "profile_astrometry",
     "profile_content",
     "profile_identity",
+    "profile_photometry",
     "resolve_target",
 ]
 
-#: Sezioni scritte nello sprint C2 (25 §3.10); immagini, fotometria e pianeti arrivano negli sprint C3–C4.
-SECTIONS: tuple[str, ...] = ("identity", "astrometry")
+#: Sezioni scritte (25 §3.10, §3.11): C2 identità e astrometria, C3 fotometria; immagini e pianeti nello sprint C4.
+SECTIONS: tuple[str, ...] = ("identity", "astrometry", "photometry")
 #: Cataloghi della catena degli identificativi (25 §3.2).
 CATALOGS: tuple[str, ...] = ("gaia_dr3", "2mass", "allwise", "exoplanet")
 #: Raggio dei candidati SIMBAD da coordinate (D25-9).
@@ -77,12 +101,27 @@ GAIA_DR3_EPOCH = Time(2016.0, format="jyear", scale="tcb")
 #: Distanze di Bailer-Jones et al. (2021, AJ 161, 147) da Gaia EDR3 (D25-2).
 BAILER_JONES_REFERENCE = "2021AJ....161..147B"
 _SIMBAD_EPOCH = Time("J2000.0")
+#: Epoca delle posizioni AllWISE: MJD 55400,0 UTC (2010,5589), AllWISE Explanatory Supplement §II.1 (25 §3.11).
+ALLWISE_EPOCH = Time(55400.0, format="mjd", scale="utc")
+#: Periodo delle osservazioni 2MASS (giugno 1997 – febbraio 2001, 2MASS Explanatory Supplement §I.1; 25 §3.11).
+TMASS_OBSERVATIONS = (Time("1997-06-01", scale="utc"), Time("2001-03-01", scale="utc"))
+#: Raggio attorno alla posizione scritta nella designazione 2MASS/AllWISE (posizione troncata; 25 §3.11).
+DESIGNATION_RADIUS = 2.0 * u.arcsec
 
 _SIMBAD_TAP = "cds-simbad-tap"
 _GAIA_TAP = "esa-gaia-tap"
 _EXOPLANET_TAP = "nasa-exoplanet-tap"
 _GAIA_SOURCE = "gaiadr3.gaia_source"
 _BJ_TABLE = "external.gaiaedr3_distance"
+_IRSA_TAP = "nasa-irsa-tap"
+_IRSA_TABLE = {"2mass": "fp_psc", "allwise": "allwise_p3as_psd"}
+_IRSA_COLUMNS = {
+    "2mass": "designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate",
+    "allwise": "designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, "
+               "ph_qual, cc_flags, ext_flg"}
+_GAIA_PHOT_COLUMNS = ("source_id", "phot_g_mean_mag", "phot_g_mean_flux", "phot_g_mean_flux_error", "phot_bp_mean_mag",
+                      "phot_bp_mean_flux", "phot_bp_mean_flux_error", "phot_rp_mean_mag", "phot_rp_mean_flux",
+                      "phot_rp_mean_flux_error", "phot_variable_flag", "phot_bp_rp_excess_factor")
 _OFFICIAL = {"2mass": "gaiadr3.tmass_psc_xsc_best_neighbour", "allwise": "gaiadr3.allwise_best_neighbour"}
 _SIMBAD_PREFIX = {"gaia_dr3": "Gaia DR3 ", "2mass": "2MASS J", "allwise": "WISEA "}
 _NAME_PREFIXES = ("NAME ", "V* ", "** ", "* ")
@@ -194,6 +233,10 @@ def _service_name(url: str) -> str:
         return "Archivio Gaia (ESA)"
     if "exoplanetarchive" in host:
         return "NASA Exoplanet Archive"
+    if "irsa" in host:
+        return "IRSA (NASA/IPAC)"
+    if "vizier" in host:
+        return "VizieR (CDS)"
     return host
 
 
@@ -249,6 +292,7 @@ class TargetCandidates:
     radius: u.Quantity
     candidates: tuple[dict, ...]  # main_id, otype, separation (arcsec, forma JSON), nbref, propagated
     requests: tuple[RequestRecord, ...] = ()
+    warnings: tuple[ModuleWarning, ...] = ()  # es. PROFILE_PLANETS_EXCLUDED
 
 
 def _column(table, name: str) -> str:
@@ -308,11 +352,12 @@ def _simbad_candidates(position: SkyFrame, radius: u.Quantity, *, cache, refresh
     epoch = position.epoch
     dt = abs(_years_between(epoch, _SIMBAD_EPOCH)) if epoch is not None else 0.0
     search = (radius + (PM_SEARCH_MAX * dt * u.yr)).to(u.deg)
-    adql = ("SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), "
+    adql = ("SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b "
+            "LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), "
             f"CIRCLE('ICRS', {ra0!r}, {dec0!r}, {float(search.value)!r})) = 1")
     result = tap_query(_SIMBAD_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
     target = SkyCoord(ra0 * u.deg, dec0 * u.deg, frame="icrs")
-    found = []
+    found, planets = [], []
     for row in result.table.table:
         ra, dec = _value(row, "ra"), _value(row, "dec")
         if ra is None or dec is None:
@@ -326,11 +371,27 @@ def _simbad_candidates(position: SkyFrame, radius: u.Quantity, *, cache, refresh
             propagated = True
         sep = here.coord.separation(target).to(u.arcsec)
         if sep <= radius:
-            found.append({"main_id": _value(row, "main_id"), "otype": _value(row, "otype"),
-                          "separation": _qj(sep, "arcsec"), "nbref": _value(row, "nbref"),
-                          "propagated": propagated})
-    found.sort(key=lambda c: (c["separation"]["value"], c["main_id"] or ""))
-    return tuple(found), result.request, tuple(result.warnings)
+            item = {"main_id": _value(row, "main_id"), "otype": _value(row, "otype"),
+                    "separation": _qj(sep, "arcsec"), "nbref": _value(row, "nbref"), "propagated": propagated}
+            (planets if is_planet_path(_value(row, "path")) else found).append(item)
+    def order(c):
+        return (c["separation"]["value"], c["main_id"] or "")
+
+    found.sort(key=order)
+    planets.sort(key=order)
+    notes = tuple(result.warnings)
+    if planets:
+        names = [" ".join(str(c["main_id"]).split()) for c in planets]
+        notes += (ModuleWarning("PROFILE_PLANETS_EXCLUDED", f"{len(planets)} oggetti SIMBAD della famiglia dei "
+                                f"pianeti esclusi dai candidati: {', '.join(names)}",
+                                {"count": len(planets), "names": names}),)
+    return tuple(found), result.request, notes
+
+
+def is_planet_path(path: str | None) -> bool:
+    """Vero se il percorso della gerarchia dei tipi di SIMBAD (``otypedef.path``, es. ``* > Pl``) contiene il nodo
+    ``Pl`` (famiglia «Planet»: ``Pl`` e ``Pl?``, verificati il 2026-11-07; D25-13 (8))."""
+    return path is not None and "Pl" in [part.strip() for part in str(path).split(">")]
 
 
 def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_MATCH_RADIUS,
@@ -386,12 +447,13 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
                              {"reason": "simbad_unreachable_position", "cause": _message(exc)})
         return ResolvedTarget(target, None, position, "coordinate scritte", "position", simbad_error=_message(exc),
                               warnings=notes + (note,))
+    excluded = tuple(w for w in cand_notes if w[0] == "PROFILE_PLANETS_EXCLUDED")
     if len(candidates) > 1:
-        return TargetCandidates(target, match_radius, candidates, (request,))
+        return TargetCandidates(target, match_radius, candidates, (request,), excluded)
     if not candidates:
         return ResolvedTarget(target, None, position, "coordinate scritte (nessun oggetto SIMBAD entro "
                               f"{float(match_radius.to_value(u.arcsec)):g} arcsec)", "position",
-                              warnings=notes + _network_notes(cand_notes), requests=(request,))
+                              warnings=notes + _network_notes(cand_notes) + excluded, requests=(request,))
     chosen = candidates[0]
     record = simbad_object(chosen["main_id"], cache=cache, refresh=refresh, timeouts=timeouts)
     sep = chosen["separation"]["value"] * u.arcsec
@@ -401,7 +463,7 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
                           "radius": _qj(match_radius, "arcsec"),
                           "epoch": "—" if position.epoch is None else str(position.epoch.jyear_str)})
     return ResolvedTarget(target, record, record.coords, f"{record.source}, ICRS J2000", "simbad_candidate",
-                          separation=sep, warnings=notes + _network_notes(cand_notes) + (note,)
+                          separation=sep, warnings=notes + _network_notes(cand_notes) + excluded + (note,)
                           + _network_notes(record.warnings),
                           requests=(request,) + record.requests)
 
@@ -609,9 +671,104 @@ def cross_identify(resolved: ResolvedTarget, catalog: str, *, gaia: CrossIdentif
         prefix = "2MASS J" if catalog == "2mass" else "WISEA "
         return CrossIdentification(catalog, prefix + str(official["designation"]).strip(), "official_crossmatch",
                                    separation=official["angular_distance"], warnings=notes, **common)
-    return CrossIdentification(catalog, None, None, warnings=notes,
-                               note="nessun identificativo da SIMBAD né dall'incrocio ufficiale; il passo per "
-                                    "posizione arriva con la fotometria (sprint C3)", **common)
+    found = _catalog_by_position(resolved, catalog, crossmatch_radius, cache=cache, refresh=refresh,
+                                 timeouts=timeouts)
+    return dataclasses.replace(found, official=official, error=error, warnings=notes + found.warnings,
+                               requests=requests + found.requests, queries=queries + found.queries)
+
+
+def _propagated(resolved: ResolvedTarget, epoch: Time, catalog: str) -> tuple[SkyFrame, tuple]:
+    """Posizione del bersaglio portata a ``epoch`` con il moto proprio (e la parallasse) di SIMBAD, come per Gaia
+    (25 §3.10); senza moto proprio o senza epoca: nessuna propagazione e ``PROFILE_NO_PROPER_MOTION``."""
+    position = resolved.position
+    pmra, pmdec, plx = _simbad_motion(resolved)
+    if position.epoch is None or pmra is None or pmdec is None:
+        return position, (ModuleWarning("PROFILE_NO_PROPER_MOTION", "moto proprio del bersaglio non noto: posizione "
+                                        f"confrontata con {catalog} senza propagazione",
+                                        {"reason": "target_pm_unknown", "catalog": catalog}),)
+    full = isinstance(plx, u.Quantity) and plx.value > 0
+    moved = propagate_position(position, pm_ra_cosdec=pmra, pm_dec=pmdec, parallax=plx if full else None,
+                               target_epoch=epoch, proper_motion_only=not full)
+    return moved.position, ()
+
+
+def _icrs_deg(position: SkyFrame) -> tuple[float, float]:
+    icrs = position if position.frame_name == "icrs" else position.to("icrs")
+    return float(icrs.lon.to_value(u.deg)), float(icrs.lat.to_value(u.deg))
+
+
+def _circle(ra: float, dec: float, radius: u.Quantity) -> str:
+    return (f"CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {ra!r}, {dec!r}, "
+            f"{float(radius.to_value(u.deg))!r})) = 1")
+
+
+def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quantity, *, cache, refresh,
+                         timeouts) -> CrossIdentification:
+    """Passo per posizione di 2MASS o AllWISE (25 §3.11): AllWISE all'epoca MJD 55400,0; 2MASS al ``jdate`` di ogni
+    riga, con il cerchio di ricerca allargato dal moto proprio sul periodo delle osservazioni."""
+    label = {"2mass": "2MASS", "allwise": "AllWISE"}[catalog]
+    table = _IRSA_TABLE[catalog]
+    notes: tuple = ()
+    pmra, pmdec, _ = _simbad_motion(resolved)
+    source_epoch = resolved.position.epoch
+    if catalog == "allwise":
+        center, notes = _propagated(resolved, ALLWISE_EPOCH, label)
+        search = radius
+        target_epoch = f"MJD 55400.0 UTC ({ALLWISE_EPOCH.utc.jyear_str})"
+    else:
+        center = resolved.position
+        search = radius
+        if source_epoch is not None and pmra is not None and pmdec is not None:
+            span = max(abs(_years_between(t, source_epoch)) for t in TMASS_OBSERVATIONS) * u.yr
+            search = (radius + (np.hypot(pmra.to(u.mas / u.yr), pmdec.to(u.mas / u.yr)) * span)).to(u.arcsec)
+        else:
+            notes = _propagated(resolved, TMASS_OBSERVATIONS[0], label)[1]
+        target_epoch = "jdate della riga (UTC)"
+    ra0, dec0 = _icrs_deg(center)
+    adql = f"SELECT {_IRSA_COLUMNS[catalog]} FROM {table} WHERE {_circle(ra0, dec0, search)}"
+    result = tap_query(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    found = []
+    for row in result.table.table:
+        ra, dec = _value(row, "ra"), _value(row, "dec")
+        if ra is None or dec is None:
+            continue
+        here = center
+        if catalog == "2mass" and not notes:
+            jd = _value(row, "jdate")
+            if jd is not None:
+                jd_value = float(jd.to_value(u.d)) if isinstance(jd, u.Quantity) else float(jd)
+                here, _ = _propagated(resolved, Time(jd_value, format="jd", scale="utc"), label)
+        hx, hy = _icrs_deg(here)
+        sep = SkyCoord(ra, dec, frame="icrs").separation(SkyCoord(hx * u.deg, hy * u.deg, frame="icrs")).to(u.arcsec)
+        if sep <= radius:
+            prefix = "2MASS J" if catalog == "2mass" else "WISEA "
+            found.append({"identifier": prefix + str(_value(row, "designation")).strip(),
+                          "separation": _qj(sep, "arcsec")})
+    found.sort(key=lambda c: (c["separation"]["value"], c["identifier"]))
+    epochs = {"source": None if source_epoch is None else source_epoch.jyear_str, "target": target_epoch}
+    common = dict(epochs=epochs, requests=(result.request,), queries=(adql,))
+    warnings = notes + _network_notes(result.warnings)
+    r_arcsec = float(radius.to_value(u.arcsec))
+    if not found:
+        return CrossIdentification(catalog, None, None, warnings=warnings,
+                                   note=f"nessuna sorgente {label} entro {r_arcsec!r} arcsec dalla posizione propagata",
+                                   **common)
+    if len(found) > 1:
+        note = ModuleWarning("PROFILE_POSITIONAL_MATCH", f"{len(found)} sorgenti {label} entro {r_arcsec!r} arcsec: "
+                             "nessuna scelta", {"reason": "several_candidates", "catalog": label,
+                                                 "count": len(found), "radius": _qj(radius, "arcsec")})
+        return CrossIdentification(catalog, None, None, candidates=tuple(found), warnings=warnings + (note,),
+                                   **common)
+    best = found[0]
+    sep = best["separation"]["value"] * u.arcsec
+    note = ModuleWarning("PROFILE_POSITIONAL_MATCH", f"{label} per posizione: {best['identifier']} a "
+                         f"{float(sep.value)!r} arcsec (raggio {r_arcsec!r} arcsec, epoche {epochs['source']} → "
+                         f"{target_epoch})",
+                         {"reason": "catalog_match", "catalog": label, "identifier": best["identifier"],
+                          "separation": _qj(sep), "radius": _qj(radius, "arcsec"),
+                          "source_epoch": epochs["source"] or "", "target_epoch": target_epoch})
+    return CrossIdentification(catalog, best["identifier"], "position", separation=sep, candidates=tuple(found),
+                               warnings=warnings + (note,), **common)
 
 
 def _exoplanet_host(resolved: ResolvedTarget, gaia: CrossIdentification, *, cache, refresh, timeouts):
@@ -922,6 +1079,170 @@ def distance_from(bailer_jones, parallax: ProfileValue | None) -> tuple[tuple[Pr
 
 
 # --------------------------------------------------------------------------
+# Fotometria e SED (25 §3.4.5, §3.11; punti e conversioni del 20)
+# --------------------------------------------------------------------------
+
+_DESIGNATION = {
+    "2mass": re.compile(r"^(\d{2})(\d{2})(\d{2})(\d{2})([+-])(\d{2})(\d{2})(\d{2})(\d)$"),
+    "allwise": re.compile(r"^J(\d{2})(\d{2})(\d{2}\.\d{2})([+-])(\d{2})(\d{2})(\d{2}\.\d)$"),
+}
+
+
+def designation_position(catalog: str, designation: str) -> tuple[float, float] | None:
+    """Posizione (gradi ICRS) scritta in una designazione 2MASS (``hhmmssss±ddmmsss``) o AllWISE
+    (``Jhhmmss.ss±ddmmss.s``): posizione del catalogo troncata (formati verificati il 2026-11-07, 25 §3.11)."""
+    match = _DESIGNATION[catalog].match(designation.strip())
+    if match is None:
+        return None
+    g = match.groups()
+    if catalog == "2mass":
+        hours = int(g[0]) + int(g[1]) / 60 + (int(g[2]) + int(g[3]) / 100) / 3600
+        sign, dd, dm, ds = g[4], int(g[5]), int(g[6]), int(g[7]) + int(g[8]) / 10
+    else:
+        hours = int(g[0]) + int(g[1]) / 60 + float(g[2]) / 3600
+        sign, dd, dm, ds = g[3], int(g[4]), int(g[5]), float(g[6])
+    dec = dd + dm / 60 + ds / 3600
+    return hours * 15.0, -dec if sign == "-" else dec
+
+
+def _irsa_by_designation(catalog: str, identifier: str, *, cache, refresh, timeouts):
+    """Riga di 2MASS o AllWISE per designazione, dentro il cerchio della posizione scritta nella designazione."""
+    designation = _designation(catalog, identifier) if catalog == "2mass" else identifier.removeprefix("WISEA ").strip()
+    where = None
+    position = designation_position(catalog, designation)
+    if position is not None:
+        where = _circle(position[0], position[1], DESIGNATION_RADIUS) + " AND "
+    adql = (f"SELECT {_IRSA_COLUMNS[catalog]} FROM {_IRSA_TABLE[catalog]} WHERE {where or ''}"
+            f"designation = {_adql_text(designation)}")
+    return tap_query(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts), adql
+
+
+def _vizier_center(resolved: ResolvedTarget) -> tuple[SkyFrame, tuple]:
+    """Centro della serie VizieR: posizione del bersaglio a J2000 (25 §3.11)."""
+    position = resolved.position
+    if position.epoch is not None and abs(_years_between(position.epoch, _SIMBAD_EPOCH)) < 1e-9:
+        return position, ()
+    return _propagated(resolved, _SIMBAD_EPOCH, "VizieR")
+
+
+def _point_values(point, prov: Provenance) -> list[ProfileValue]:
+    """Valori della sezione per un punto: letto (magnitudine, flusso in e⁻/s) e calcolato (Fν), con provenienza."""
+    out = []
+    note = "; ".join(n[1] for n in point.notes) or None
+    if point.magnitude is not None:
+        out.append(ProfileValue(f"{point.label} magnitude", point.magnitude, prov, error=point.magnitude_error,
+                                reference=point.reference,
+                                note=f"sistema {point.system or 'non dichiarato'}; qualità {point.quality or '—'}"))
+    if point.count_rate is not None:
+        out.append(ProfileValue(f"{point.label} count_rate", point.count_rate, prov, error=point.count_rate_error,
+                                reference=point.reference))
+    if point.flux is not None:
+        zp = point.conversion["zero_point"]
+        out.append(ProfileValue(f"{point.label} flux_nu", point.flux, prov, error=point.flux_error, method="computed",
+                                formula=point.conversion["formula"], reference=zp["reference"],
+                                note=f"punto zero {zp['key']} ({zp['source']}); λ {zp['wavelength_kind']} "
+                                     f"{zp['wavelength']['value']!r} {zp['wavelength']['unit']}"
+                                     + (f"; {note}" if note else "")))
+    return out
+
+
+def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossIdentification], *,
+                       cache: SharedCache | None = None, refresh: bool = False,
+                       timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+                       cancel: Callable[[], bool] | None = None) -> tuple[ProfileSection, Sed]:
+    """Sezione Fotometria e SED (25 §3.11): punti Gaia DR3, 2MASS, AllWISE, SIMBAD per gli identificativi della
+    catena, serie VizieR separata; conversioni, qualità, duplicati e grafico dal ``20``."""
+    section = ProfileSection("photometry")
+    points, provs = [], []
+
+    def add(new_points, prov: Provenance) -> None:
+        points.extend(new_points)
+        provs.extend([prov] * len(new_points))
+
+    gaia = cross_ids.get("gaia_dr3")
+    if gaia is not None and gaia.source_id is not None:
+        adql = f"SELECT {', '.join(_GAIA_PHOT_COLUMNS)} FROM {_GAIA_SOURCE} WHERE source_id = {gaia.source_id}"
+        try:
+            result = tap_query(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+        except VoProtocolsError as exc:
+            section.errors.append({**_message(exc), "catalog": "Gaia DR3"})
+        else:
+            section.requests.append(result.request)
+            section.warnings.extend(_network_notes(result.warnings))
+            prov = _provenance(result.request, _service_name(result.request.url), _GAIA_SOURCE, adql,
+                               gaia.identifier, gaia.method)
+            add(sed_points_from(result.table.table, "gaia_dr3", identifier=gaia.identifier, match=gaia.method,
+                                provenance=prov.as_dict(), epoch="J2016.0 (ref_epoch)"), prov)
+    for catalog in ("2mass", "allwise"):
+        _check(cancel)
+        found = cross_ids.get(catalog)
+        if found is None or found.identifier is None:
+            continue
+        try:
+            result, adql = _irsa_by_designation(catalog, found.identifier, cache=cache, refresh=refresh,
+                                                timeouts=timeouts)
+        except VoProtocolsError as exc:
+            section.errors.append({**_message(exc), "catalog": catalog})
+            continue
+        section.requests.append(result.request)
+        section.warnings.extend(_network_notes(result.warnings))
+        if len(result.table.table) == 0:
+            section.warnings.append(ModuleWarning(
+                "PROFILE_NO_PHOTOMETRY", f"{found.identifier} non ha righe in {_IRSA_TABLE[catalog]}",
+                {"reason": "not_in_catalog", "catalog": {"2mass": "2MASS", "allwise": "AllWISE"}[catalog],
+                 "identifier": found.identifier, "table": _IRSA_TABLE[catalog]}))
+            continue
+        prov = _provenance(result.request, _service_name(result.request.url), _IRSA_TABLE[catalog], adql,
+                           found.identifier, found.method)
+        epoch = "MJD 55400.0 UTC (AllWISE Explanatory Supplement §II.1)" if catalog == "allwise" else None
+        add(sed_points_from(result.table.table[:1], catalog, identifier=found.identifier, match=found.method,
+                            provenance=prov.as_dict(), epoch=epoch), prov)
+    record = resolved.simbad
+    if record is not None and len(record.requests) > 2:
+        req = record.requests[2]
+        prov = _provenance(req, record.source, "flux", req.arguments.get("adql"), record.main_id, "simbad_identifier")
+        add(sed_points_from(record.magnitudes, "simbad", identifier=record.main_id, match="simbad_identifier",
+                            provenance=prov.as_dict()), prov)
+        section.requests.append(req)
+    _check(cancel)
+    vizier = None
+    center, center_notes = _vizier_center(resolved)
+    section.warnings.extend(center_notes)
+    try:
+        result = vizier_photometry(center, VIZIER_SED_RADIUS, cache=cache, refresh=refresh, timeouts=timeouts)
+    except VoProtocolsError as exc:
+        section.errors.append({**_message(exc), "catalog": "vizier_sed"})
+    else:
+        section.requests.append(result.request)
+        section.warnings.extend(_network_notes(result.warnings))
+        prov = _provenance(result.request, _service_name(result.request.url), "VizieR SED", None, None, "position")
+        vizier = VizierSeries(result.table.table, prov.as_dict())
+    pmra, pmdec, _ = _simbad_motion(resolved)
+    fast = high_proper_motion(pmra, pmdec)
+    if fast is not None:
+        section.warnings.append(fast)
+    sed = build_sed(points, vizier)
+    for point, prov in zip(sed.points, provs, strict=True):
+        section.values.extend(_point_values(point, prov))
+    name = resolved.simbad.main_id if resolved.simbad is not None else None
+    title = None if name is None else " ".join(name.split())
+    cra, cdec = _icrs_deg(center)
+    section.details = {**sed.as_dict(), "vizier_center": {"ra": {"value": cra, "unit": "deg"},
+                                                          "dec": {"value": cdec, "unit": "deg"},
+                                                          "epoch": None if center.epoch is None else
+                                                          center.epoch.jyear_str,
+                                                          "radius": _qj(VIZIER_SED_RADIUS, "arcsec")},
+                       "plot_png": {"format": "image/png", "encoding": "base64", "quantity": "fnu",
+                                    "data": sed_png(sed, title=title, encoded=True)} if sed.plotted or vizier
+                       else None}
+    if not points and not (vizier and len(vizier.table)):
+        section.status = "error" if section.errors else "not_applicable"
+    else:
+        section.status = "partial" if section.errors else "done"
+    return section, sed
+
+
+# --------------------------------------------------------------------------
 # Profilo completo (25 §7.1)
 # --------------------------------------------------------------------------
 
@@ -1035,6 +1356,30 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                     section.warnings.extend(notes)
                 section.status = "partial" if section.values else "error"
             finish(section, started)
+        if "photometry" in sections:
+            _check(cancel)
+            started = time.monotonic()
+            have = {c.catalog for c in cross_ids}
+            for catalog in ("gaia_dr3", "2mass", "allwise"):
+                if catalog in have:
+                    continue
+                gaia = next((c for c in cross_ids if c.catalog == "gaia_dr3"), None)
+                try:
+                    found = cross_identify(resolved, catalog, gaia=gaia, crossmatch_radius=crossmatch_radius,
+                                           cache=cache, refresh=refresh, timeouts=timeouts)
+                except VoProtocolsError as exc:
+                    found = CrossIdentification(catalog, None, None, note="incrocio non riuscito",
+                                                error=_message(exc))
+                cross_ids.append(found)
+            section, _sed = profile_photometry(resolved, {c.catalog: c for c in cross_ids}, cache=cache,
+                                               refresh=refresh, timeouts=timeouts, cancel=cancel)
+            if "identity" not in sections:
+                section.details["cross_identifications"] = [c.as_dict() for c in cross_ids]
+                for c in cross_ids:
+                    section.warnings.extend(w for w in c.warnings if w[0] in ("PROFILE_POSITIONAL_MATCH",
+                                                                              "PROFILE_IDENTIFIER_CONFLICT"))
+                    section.requests.extend(c.requests)
+            finish(section, started)
     except _Cancelled:
         return None
     options = {"sections": list(sections), "match_radius": _qj(match_radius, "arcsec"),
@@ -1049,7 +1394,7 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
 # --------------------------------------------------------------------------
 
 
-_RUN_KEYS = ("retrieved_at", "from_cache", "elapsed")
+_RUN_KEYS = ("retrieved_at", "from_cache", "elapsed", "plot_png")  # plot_png: disegnato dai valori (25 §3.11)
 _RUN_CODES = ("FROM_CACHE", "SERVICE_MIRROR_FALLBACK", "DATA_REFRESHED")
 
 
@@ -1150,11 +1495,12 @@ def command_specs() -> list:
     return [
         CommandSpec(
             "object.profile", 1, "Build the profile of an object: identity (SIMBAD), Gaia DR3 astrometry and "
-            "distance with a declared method; every value with its source.",
+            "distance with a declared method, photometry and SED with official zero points; every value with its "
+            "source.",
             "Costruisce il profilo di un oggetto: identità (SIMBAD), astrometria Gaia DR3 e distanza con metodo "
-            "dichiarato; ogni valore con la sua fonte.",
-            ("25 resolve_target", "25 build_profile", "14 simbad_object", "14 tap_query", "10 resolve_name",
-             "10 propagate_position"), (
+            "dichiarato, fotometria e SED con punti zero ufficiali; ogni valore con la sua fonte.",
+            ("25 resolve_target", "25 build_profile", "14 simbad_object", "14 tap_query", "14 vizier_photometry",
+             "20 build_sed", "10 resolve_name", "10 propagate_position"), (
                 P("name", "string", "Object name or identifier (one target only).",
                   "Nome o identificativo dell'oggetto (un solo bersaglio).", default=None),
                 P("position", "sky_position", "Sky position with frame and epoch (one target only).",

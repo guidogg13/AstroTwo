@@ -54,6 +54,21 @@
   "retrieved_at": "2026-11-07T10:30:54.877443+00:00",
   "server": "https://gea.esac.esa.int/tap-server/tap/sync"
  },
+ "gaia|SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 2635476908753563008": {
+  "file": "gaia-77ebb61fc99a.xml",
+  "retrieved_at": "2026-11-07T16:48:33.420528+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 2835207319109249920": {
+  "file": "gaia-e6b43411f881.xml",
+  "retrieved_at": "2026-11-07T16:52:30.477381+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 66714384142368256": {
+  "file": "gaia-14433d97cf8b.xml",
+  "retrieved_at": "2026-11-07T16:48:18.162497+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
  "gaia|SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 2097893856820155008": {
   "file": "gaia-057e682cb723.xml",
   "retrieved_at": "2026-11-07T10:35:00.502482+00:00",
@@ -103,6 +118,96 @@
   "file": "gaia-2024bb28fce4.xml",
   "retrieved_at": "2026-11-07T10:31:13.478295+00:00",
   "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "irsa|SELECT designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate FROM fp_psc WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.23470833333334, 38.78366666666666, 0.0005555555555555556)) = 1 AND designation = '18365633+3847012'": {
+  "file": "irsa-929f4f6bed06.xml",
+  "retrieved_at": "2026-11-07T16:43:44.546812+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate FROM fp_psc WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.0005555555555555556)) = 1": {
+  "file": "irsa-571e23aca1d8.xml",
+  "retrieved_at": "2026-11-07T16:50:34.691164+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate FROM fp_psc WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.0008067616190477293)) = 1": {
+  "file": "irsa-c53c3f81171b.xml",
+  "retrieved_at": "2026-11-07T16:49:02.641996+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate FROM fp_psc WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 344.3664583333333, 20.768805555555556, 0.0005555555555555556)) = 1 AND designation = '22572795+2046077'": {
+  "file": "irsa-b75b76cf3478.xml",
+  "retrieved_at": "2026-11-07T16:43:09.328233+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate FROM fp_psc WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 346.622, -5.04125, 0.0005555555555555556)) = 1 AND designation = '23062928-0502285'": {
+  "file": "irsa-c542b9fad062.xml",
+  "retrieved_at": "2026-11-07T16:46:52.700267+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate FROM fp_psc WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 56.87116666666667, 24.105111111111114, 0.0005555555555555556)) = 1 AND designation = '03472908+2406184'": {
+  "file": "irsa-b098fcf58578.xml",
+  "retrieved_at": "2026-11-07T16:45:33.311389+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.0005555555555555556)) = 1": {
+  "file": "irsa-9d7feb1fb477.xml",
+  "retrieved_at": "2026-11-07T16:50:48.794017+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.2354583333333, 38.784555555555556, 0.0005555555555555556)) = 1 AND designation = 'J183656.51+384704.4'": {
+  "file": "irsa-c4b4f7e68ab8.xml",
+  "retrieved_at": "2026-11-07T16:43:52.635799+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.2354906348513, 38.784528226746126, 0.0005555555555555556)) = 1": {
+  "file": "irsa-18b54677b8fb.xml",
+  "retrieved_at": "2026-11-07T16:43:40.349101+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 344.36716666666666, 20.769055555555553, 0.0005555555555555556)) = 1 AND designation = 'J225728.12+204608.6'": {
+  "file": "irsa-228fc9e7ce7d.xml",
+  "retrieved_at": "2026-11-07T16:43:21.765594+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 344.36723552421523, 20.769011852717775, 0.0005555555555555556)) = 1": {
+  "file": "irsa-02f67dc484ee.xml",
+  "retrieved_at": "2026-11-07T16:50:26.538175+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 346.62508333333335, -5.042805555555556, 0.0005555555555555556)) = 1 AND designation = 'J230630.02-050234.1'": {
+  "file": "irsa-76a39b6c50b4.xml",
+  "retrieved_at": "2026-11-07T16:46:54.846440+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "irsa|SELECT designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, ph_qual, cc_flags, ext_flg FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 56.87121442921137, 24.105007604385722, 0.0005555555555555556)) = 1": {
+  "file": "irsa-ed669e358bad.xml",
+  "retrieved_at": "2026-11-07T16:44:16.904890+00:00",
+  "server": "https://irsa.ipac.caltech.edu/TAP/sync"
+ },
+ "simbad|SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.002777777777777778)) = 1": {
+  "file": "simbad-f089b37c038d.xml",
+  "retrieved_at": "2026-11-07T16:47:16.224069+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), CIRCLE('ICRS', 344.36658535524, 20.768832511140005, 0.002777777777777778)) = 1": {
+  "file": "simbad-8b7d245220f6.xml",
+  "retrieved_at": "2026-11-07T16:47:15.425772+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), CIRCLE('ICRS', 346.62236872857875, -5.041399250518334, 0.002777777777777778)) = 1": {
+  "file": "simbad-f9c475991f57.xml",
+  "retrieved_at": "2026-11-07T16:47:16.740085+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), CIRCLE('ICRS', 56.871152303749994, 24.105135651944444, 0.002777777777777778)) = 1": {
+  "file": "simbad-d35db5dea9f3.xml",
+  "retrieved_at": "2026-11-07T16:47:17.643197+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '*  51 Peg'": {
+  "file": "simbad-6ec034117cc9.xml",
+  "retrieved_at": "2026-11-07T16:47:15.818074+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
  },
  "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '* alf Lyr'": {
   "file": "simbad-0e6f2c20ab28.xml",
@@ -172,21 +277,6 @@
  "simbad|SELECT id FROM ident WHERE oidref = 676410": {
   "file": "simbad-ea48a1fe6695.xml",
   "retrieved_at": "2026-11-07T10:30:47.463890+00:00",
-  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
- },
- "simbad|SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.002777777777777778)) = 1": {
-  "file": "simbad-5609fd17b504.xml",
-  "retrieved_at": "2026-11-07T10:32:06.149092+00:00",
-  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
- },
- "simbad|SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 344.36658535524, 20.768832511140005, 0.002777777777777778)) = 1": {
-  "file": "simbad-5dd58a4e7c0b.xml",
-  "retrieved_at": "2026-11-07T10:31:55.241240+00:00",
-  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
- },
- "simbad|SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 346.62236872857875, -5.041399250518334, 0.002777777777777778)) = 1": {
-  "file": "simbad-1c4d3921b3d4.xml",
-  "retrieved_at": "2026-11-07T10:32:00.650715+00:00",
   "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
  }
 }

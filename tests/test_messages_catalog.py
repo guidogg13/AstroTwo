@@ -51,6 +51,7 @@ CONVERTED = {
     "ui/samp_link.py": "VoProtocolsError",  # SAMP nell'interfaccia (40 §3.12, sprint B1)
     "app_bundle.py": "CommandError",  # LICENSE_FILE_MISSING della finestra Licenze (60 §3.9)
     "analysis/object_profile.py": "ObjectProfileError",  # profilo di un oggetto (25 §10, sprint C2)
+    "analysis/photometry.py": "ObjectProfileError",  # SED (20 §10, sprint C3): solo avvisi, nessun errore proprio
 }
 
 #: Funzioni di appoggio che costruiscono un errore o un avviso: nome → (codice, posizione dell'argomento ``reason``).
@@ -94,7 +95,8 @@ WARNING_BUILDERS = {"core/cache.py": ("CacheWarning",), "ui/sky_viewer.py": ("Mo
                     "app_bundle.py": ("ResultMessage",),
                     "core/commands.py": ("ModuleWarning", "ResultMessage", "stopped", "_nested"),
                     "ai/provider_adapter.py": ("ModuleWarning", "ProviderNotice"),
-                    "ai/chat_assistant.py": ("note", "Availability", "_not_executed")}
+                    "ai/chat_assistant.py": ("note", "Availability", "_not_executed"),
+                    "analysis/photometry.py": ("ModuleWarning", "_note")}
 
 #: Costruttori il cui codice e i cui ``params`` non stanno nelle posizioni 0 e 2: nome → (codice, params).
 BUILDER_POSITIONS = {"Availability": (1, 3), "_not_executed": (1, 3)}

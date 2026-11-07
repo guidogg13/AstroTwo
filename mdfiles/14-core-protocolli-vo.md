@@ -428,7 +428,9 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   Strasburgo e che gli identificativi scritti restano utilizzabili (Gaia DR3
   e 2MASS con il ripiego del `13`). Nessun mirror inventato.
   **Fotometria senza copia:** `vizier_photometry` resta sul solo CDS
-  (`NET_TIMEOUT` come prima); oggi nessuna funzione dell'interfaccia la usa.
+  (`NET_TIMEOUT` come prima); dallo sprint C3 la usa la sezione fotometria
+  del profilo (25 §3.11, serie separata del `20`), dove un CDS giù resta un
+  errore della sola sezione.
 - **Equivalente di VOApp/VOObserver (H19):** per i programmi non Python lo
   scambio passa da SAMP (questo modulo); per i programmi Python dall'API del
   24; nessuna interfaccia nuova (decisione del 2026-10-08).
@@ -1098,6 +1100,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nota «Fotometria senza copia» aggiornata: `vizier_photometry` usata dalla sezione fotometria del profilo (25 §3.11); IRSA `nasa-irsa-tap` e `vizier_photometry` già esistenti; correzione: le magnitudini SIMBAD (`flux`, `flux_err`, colonne `float32`) tornano al decimale scritto da SIMBAD come le altre celle (es. 6,16 e non 6,159999847…), regola di `simbad_object` (sprint C2) estesa a `_simbad_magnitudes`. |
 | 2026-10-04 | agente di sviluppo | Creazione del file (stato: bozza). |
 | 2026-10-04 | agente di sviluppo | **G3 (SAMP) ed E4 (SSA) incluse per decisione del proprietario:** SAMP = invio/ricezione di tabelle, selezioni e puntamenti da e verso altri programmi, interfaccia in `42-ui-pannello-cataloghi.md` (§3/§7); SSA = ricerca e caricamento di spettri dai servizi VO, analisi in `21-analisi-spettroscopia.md` (§3/§7); nuovi errori `SAMP_UNSUPPORTED_TYPE`, `NET_TIMEOUT`/`SSA_NO_RESULT`/`SSA_INVALID` (§10); strumenti IA `ssa_search`/`ssa_load` (§11); test T8–T10 (§12); D14-2 perimetro deciso e nuova D14-6 (§13). Righe G3 ed E4 in `03-parita-aladin.md` passate a `inclusa (decisione del proprietario)`. |
 | 2026-10-04 | agente di sviluppo | **D14-2 RIAPERTA (solo scelta tecnica):** restano due scelte non decise — (a) tipi di messaggio SAMP per primo (fuori dal perimetro: immagini, estensione coordinate), (b) hub interno su libreria consolidata vs libreria esterna; l'inclusione della funzione resta decisa. |

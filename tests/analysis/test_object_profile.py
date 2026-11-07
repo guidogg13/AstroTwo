@@ -39,6 +39,8 @@ from tests.analysis.profile_fakes import recorded, recorded_query, services, vot
 J2000 = Time("J2000.0")
 VEGA_J2000 = (279.234734787025, 38.783688956244)
 PEG_J2000 = (344.36658535524, 20.768832511140005)
+ETA_TAU_J2000 = (56.871152303749994, 24.105135651944444)
+TRAPPIST_J2000 = (346.62236872857875, -5.041399250518334)
 
 
 def at(ra: float, dec: float, epoch=J2000) -> SkyFrame:
@@ -232,14 +234,40 @@ def test_t10_gaia_down_keeps_the_other_sections(services, cache):
 
 
 def test_t12_several_candidates_are_never_chosen(services, cache):
-    target = ProfileTarget(position=at(*PEG_J2000))
+    """eta Tau: la stella e la nebulosa GN 03.44.2 (nessuna dei due è un pianeta, D25-13 (8)): nessuna scelta."""
+    target = ProfileTarget(position=at(*ETA_TAU_J2000))
     found = resolve_target(target, cache=cache)
-    assert isinstance(found, TargetCandidates)
-    assert [" ".join(c["main_id"].split()) for c in found.candidates] == ["* 51 Peg", "* 51 Peg b"]
+    assert isinstance(found, TargetCandidates) and found.warnings == ()
+    assert [" ".join(c["main_id"].split()) for c in found.candidates] == ["* eta Tau", "GN 03.44.2"]
     with pytest.raises(ObjectProfileError) as info:
         build_profile(target, cache=cache)
     assert info.value.code == "PROFILE_AMBIGUOUS_TARGET" and info.value.params["count"] == 2
     assert info.value.params["radius"] == {"value": 10.0, "unit": "arcsec"}
+
+
+# =============================================================================
+# T18 — pianeti esclusi dai candidati da coordinate (D25-13 (8))
+
+
+@pytest.mark.parametrize("coords, star, planets", [
+    (PEG_J2000, "* 51 Peg", ["* 51 Peg b"]),
+    (TRAPPIST_J2000, "TRAPPIST-1", [f"TRAPPIST-1{x}" for x in "bcdefghi"])])
+def test_t18_planets_are_excluded_from_the_candidates(services, cache, coords, star, planets):
+    prof = build_profile(ProfileTarget(position=at(*coords)), sections=("identity",), cache=cache)
+    assert prof.resolved.method == "simbad_candidate" and " ".join(prof.resolved.simbad.main_id.split()) == star
+    note = next(w for w in prof.warnings if w[0] == "PROFILE_PLANETS_EXCLUDED")
+    assert note.params["count"] == len(planets) and sorted(note.params["names"]) == sorted(planets)
+    # il tipo viene dalla gerarchia di SIMBAD letta nella stessa risposta (otypedef.path), mai da un elenco
+    query = recorded_query("simbad", f"CIRCLE('ICRS', {coords[0]!r}")
+    table = table_of("simbad", f"CIRCLE('ICRS', {coords[0]!r}")
+    assert "LEFT OUTER JOIN otypedef" in query
+    assert {str(r["path"]) for r in table if str(r["main_id"]).replace(" ", "") in
+            {p.replace(" ", "") for p in planets}} == {"* > Pl"}
+
+
+def test_planet_family_comes_from_the_otype_path():
+    assert op.is_planet_path("* > Pl") and not op.is_planet_path("* > Ev* > PN")
+    assert not op.is_planet_path(None) and not op.is_planet_path("ISM > Cld > GNe > RNe")
 
 
 def test_single_candidate_is_used_with_its_separation(services, cache):
@@ -253,10 +281,10 @@ def test_single_candidate_is_used_with_its_separation(services, cache):
 
 def test_candidates_are_propagated_to_the_epoch_of_the_target(services, cache):
     """Bersaglio a J2016.0: la ricerca si allarga di 10,5″/anno × 16 anni e i candidati si portano a J2016."""
-    services.overrides[("simbad", "FROM basic WHERE CONTAINS")] = lambda q: votable(
+    services.overrides[("simbad", "ON d.otype = b.otype WHERE CONTAINS")] = lambda q: votable(
         [("main_id", "char", None), ("otype", "char", None), ("ra", "double", "deg"), ("dec", "double", "deg"),
-         ("pmra", "double", "mas/yr"), ("pmdec", "double", "mas/yr"), ("nbref", "int", None)],
-        [["fast", "PM*", 10.0, 0.0, 0.0, 1000.0, 3], ["slow", "*", 10.0, 0.0, None, None, 5]])
+         ("pmra", "double", "mas/yr"), ("pmdec", "double", "mas/yr"), ("nbref", "int", None), ("path", "char", None)],
+        [["fast", "PM*", 10.0, 0.0, 0.0, 1000.0, 3, "* > PM*"], ["slow", "*", 10.0, 0.0, None, None, 5, "*"]])
     target = at(10.0, 16.0 / 3600.0, Time(2016.0, format="jyear", scale="tt"))
     found, _, _ = op._simbad_candidates(target, 10 * u.arcsec, cache=cache, refresh=False,
                                         timeouts=op.NETWORK_TIMEOUTS)
@@ -327,7 +355,7 @@ def test_simbad_down_falls_back_to_the_name_resolver_by_position(services, cache
 def test_sections_arrive_once_in_order_and_cancel_returns_none(services, cache):
     seen = []
     prof = profile("TRAPPIST-1", cache, on_section=lambda s: seen.append((s.name, s.status)))
-    assert seen == [("identity", "done"), ("astrometry", "done")]
+    assert seen == [("identity", "done"), ("astrometry", "done"), ("photometry", "partial")]  # VizieR (CDS) giù
     assert [c.identifier for c in prof.cross_ids] == ["Gaia DR3 2635476908753563008", "2MASS J23062928-0502285",
                                                        "WISEA J230630.02-050234.1", "TRAPPIST-1"]
     assert values(section(prof, "astrometry"))["distance_geo"].value == 12.454126 * u.pc

@@ -3,8 +3,8 @@
 <RESOURCE type="results">
 <INFO name="QUERY_STATUS" value="OK"/>
 <INFO name="PROVIDER" value="CDS">SIMBAD TAP Service</INFO>
-<INFO name="QUERY" value="SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.002777777777777778)) = 1"/>
-<TABLE name="result_S1794047526087">
+<INFO name="QUERY" value="SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.002777777777777778)) = 1"/>
+<TABLE name="result_S1794070036159">
 <FIELD arraysize="*" datatype="char" name="main_id" ucd="meta.id;meta.main" utype="mango:MangoObject.identifier">
 <DESCRIPTION>Main identifier for an object</DESCRIPTION>
 </FIELD>
@@ -27,11 +27,14 @@
 <DESCRIPTION>number of references</DESCRIPTION>
 <VALUES null='-2147483648'/>
 </FIELD>
+<FIELD arraysize="*" datatype="char" name="path">
+<DESCRIPTION>Otype path in the hierarchical classification</DESCRIPTION>
+</FIELD>
 <DATA>
 <BINARY>
 <STREAM encoding='base64'>
 AAAACSogYWxmIEx5cgAAAANkUypAcXPBeUOYGEBDZE/rcqb1QGkeFHrhR65AceOu
-FHrhSAAACwE=
+FHrhSAAACwEAAAANKiA+IE1TKiA+IGRTKg==
 </STREAM>
 </BINARY>
 </DATA>
