@@ -23,10 +23,11 @@ import json
 import os
 import re
 import tempfile
+import threading
 import time
 import warnings
 from dataclasses import dataclass, field
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -113,6 +114,13 @@ __all__ = [
     "validate_adql",
     "adql_to_send",
     "service_url",
+    "SERVICE_MIRRORS",
+    "ServiceMirrors",
+    "SIMBAD_SERVERS",
+    "current_server",
+    "is_failover_error",
+    "reset_mirror_state",
+    "service_servers",
     "VOTABLE_VERSION",
     "VoProtocolsError",
     "export_table",
@@ -465,11 +473,12 @@ def _check_http(response: requests.Response, url: str) -> None:
 
 def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: SharedCache | None,
           refresh: bool, timeouts: NetworkTimeouts, accept_error_body: bool = False,
-          hint: str = "") -> _Response:
+          hint: str = "", use_stale: bool = True) -> _Response:
     """Richiesta con prima la cache (``refresh=True`` la rifà); salva in cache solo le risposte riuscite.
 
     ``accept_error_body``: una risposta HTTP di errore con un corpo (es. VOTable con ``QUERY_STATUS``
     ``ERROR``) si restituisce al chiamante, che ne legge il messaggio; non va mai in cache.
+    ``use_stale=False``: con la rete giù la copia in cache non si restituisce (ripiego sui mirror, sprint B4).
     """
     canonical = _canonical(params)
     cache = SharedCache() if cache is None else cache
@@ -490,7 +499,7 @@ def _http(protocol: str, url: str, params=None, *, method: str = "GET", cache: S
                 response = session.get(url, params=list(canonical))
             payload = response.content
     except requests.exceptions.RequestException as exc:
-        if cached is not None:
+        if cached is not None and use_stale:
             return _Response(cached.data["payload"], url, method, canonical, cached.retrieved_at, True,
                              (_network_cached(exc, cached),))
         raise _net_error(url, exc, timeouts, hint) from exc
@@ -753,7 +762,7 @@ def _parse_results(response: _Response, results_class, *, hint: str = ""):
     except pyvo.dal.DALQueryError as exc:
         message = str(exc)
         extra = hint if hint and _DURATION_WORDS.search(message) else ""
-        if http_status is not None and http_status.startswith("5"):
+        if http_status is not None and (http_status.startswith("5") or http_status == "429"):
             raise VoProtocolsError("SERVICE_ERROR", f"{response.url}: HTTP {http_status}: {message}{extra}",
                                    url=response.url,
                                    params={"reason": "http_message_async_hint" if extra else "http_message",
@@ -828,12 +837,16 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
               async_timeout: float = DEFAULT_ASYNC_TIMEOUT, servers: ServerRegistry | None = None,
               limits: TableLimits | None = None,
               cache: SharedCache | None = None, refresh: bool = False,
-              timeouts: NetworkTimeouts = NETWORK_TIMEOUTS, cancel=None) -> VoResult:
+              timeouts: NetworkTimeouts = NETWORK_TIMEOUTS, cancel=None, use_stale_cache: bool = True) -> VoResult:
     """Esegue ADQL su un servizio TAP: sincrona di default, asincrona su richiesta (D14-9 punto 8).
 
     I commenti ``--`` si tolgono prima dell'invio (``adql_to_send``): ``adql`` scritto negli argomenti registrati,
     testo inviato nella ``QUERY``. ``cancel`` (funzione senza argomenti, vera se chi chiama ha annullato) vale solo
-    in asincrona: lavoro interrotto ed eliminato, ``QUERY_CANCELLED`` (sprint B3)."""
+    in asincrona: lavoro interrotto ed eliminato, ``QUERY_CANCELLED`` (sprint B3).
+
+    Una voce dell'elenco con mirror verificati (``SERVICE_MIRRORS``) passa al mirror per le cause di
+    ``is_failover_error`` (14 §3, sprint B4); ``RequestRecord.url`` è il server che ha risposto. Con
+    ``use_stale_cache=False`` un servizio giù non restituisce la sua copia vecchia in cache."""
     check = validate_adql(adql)
     if not check.valid:  # nessuna chiamata di rete inutile (T4)
         raise VoProtocolsError("ADQL_INVALID", f"{check.message} (carattere {check.position})",
@@ -843,19 +856,41 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
         raise ValueError("mode deve essere 'sync' o 'async'")
     if not (isinstance(async_timeout, (int, float)) and async_timeout > 0):
         raise ValueError("async_timeout deve essere un numero di secondi positivo")
-    base = service_url(url, "tap", servers)
+    bases = service_servers(url, servers)
     arguments = {"url": url, "adql": adql, "max_rows": max_rows, "mode": mode}
-    sent = adql_to_send(adql)
-    if mode == "sync":
-        query = pyvo.dal.tap.TAPQuery(base, sent, mode="sync", maxrec=max_rows)
-        response = _http("tap", query.queryurl, dict(query), method="POST", cache=cache, refresh=refresh,
-                         timeouts=timeouts, accept_error_body=True, hint=_ASYNC_HINT)
-    else:
+    if mode == "async":
         arguments["async_timeout"] = async_timeout
-        response = _tap_async(base, sent, max_rows, async_timeout, cache=cache, refresh=refresh, timeouts=timeouts,
-                              cancel=cancel)
-    results = _parse_results(response, pyvo.dal.TAPResults, hint=_ASYNC_HINT if mode == "sync" else "")
-    return _finish("tap", "tap_query", arguments, response, results, max_rows=max_rows, limits=limits, cache=cache)
+    sent = adql_to_send(adql)
+    hint = _ASYNC_HINT if mode == "sync" else ""
+
+    def request_key(base: str) -> tuple[str, dict]:
+        query = pyvo.dal.tap.TAPQuery(base, sent, mode=mode, maxrec=max_rows)
+        return (query.queryurl if mode == "sync" else f"{base}/async"), dict(query)
+
+    def attempt(base: str, fresh: bool, stale: bool):
+        if mode == "sync":
+            target, params = request_key(base)
+            response = _http("tap", target, params, method="POST", cache=cache, refresh=fresh,
+                             timeouts=timeouts, accept_error_body=True, hint=_ASYNC_HINT, use_stale=stale)
+        else:
+            response = _tap_async(base, sent, max_rows, async_timeout, cache=cache, refresh=fresh,
+                                  timeouts=timeouts, cancel=cancel, use_stale=stale)
+        return response, _parse_results(response, pyvo.dal.TAPResults, hint=hint)
+
+    mirrors = SERVICE_MIRRORS.get(url) if not _is_url(url) else None
+    if mirrors is None or len(bases) == 1:
+        response, parsed = attempt(bases[0], refresh, use_stale_cache)
+        notes: tuple = ()
+    else:
+        def cached(base: str, exc=None):
+            target, params = request_key(base)
+            response = _cached_response("tap", "POST", target, params, cache, exc)
+            return None if response is None else (response, _parse_results(response, pyvo.dal.TAPResults))
+
+        (response, parsed), notes = _with_mirrors(mirrors, bases, attempt, cached, refresh=refresh,
+                                                  use_stale_cache=use_stale_cache)
+    result = _finish("tap", "tap_query", arguments, response, parsed, max_rows=max_rows, limits=limits, cache=cache)
+    return dataclasses.replace(result, warnings=tuple(notes) + result.warnings) if notes else result
 
 
 #: Intervallo massimo tra due controlli dell'annullamento durante l'attesa di un lavoro asincrono (s, sprint B3).
@@ -873,7 +908,7 @@ def _cancelled_job(job, url: str, phase) -> VoProtocolsError:
 
 
 def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cache, refresh,
-               timeouts: NetworkTimeouts, cancel=None) -> _Response:
+               timeouts: NetworkTimeouts, cancel=None, use_stale: bool = True) -> _Response:
     """Lavoro UWS con ``pyvo``: attesa massima complessiva ``async_timeout`` s, poi interruzione; ``cancel``
     controllato almeno ogni ``_CANCEL_POLL`` s (sprint B3)."""
     stopped = (lambda: False) if cancel is None else cancel
@@ -935,13 +970,197 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
             except (pyvo.dal.DALServiceError, requests.exceptions.RequestException):
                 pass  # il servizio elimina comunque i lavori scaduti
     except (requests.exceptions.RequestException, pyvo.dal.DALServiceError) as exc:
-        if cached is not None:
+        if cached is not None and use_stale:
             return _Response(cached.data["payload"], url, "POST", canonical, cached.retrieved_at, True,
                              (_network_cached(exc, cached),))
         raise _net_error(url, exc, timeouts) from exc
     finally:
         session.close()
     return _Response(payload, url, "POST", canonical, datetime.now(UTC), False)
+
+
+# --------------------------------------------------------------------------
+# Ripiego sui mirror dei servizi del CDS (sprint B4, 14 §3, D14-14, D14-15)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ServiceMirrors:
+    """Mirror verificati di un servizio del CDS: chiave dello stato, nome mostrato, URL dei mirror in ordine."""
+
+    service: str  # chiave dello stato di sessione (stessa per le funzioni che usano lo stesso servizio)
+    label: str
+    mirrors: tuple[str, ...]
+
+
+#: Mirror verificati con richieste reali il 2026-11-07 (14 §3, tabella dei mirror). TAPVizieR, fotometria di
+#: VizieR, MocServer e XMatch non hanno copie verificate: non sono qui.
+SERVICE_MIRRORS: dict[str, ServiceMirrors] = {
+    "cds-simbad-tap": ServiceMirrors("simbad", "SIMBAD", ("https://simbad.harvard.edu/simbad/sim-tap",)),
+}
+#: Server di ``astroquery.simbad`` per la regione del puntatore, nello stesso ordine della voce ``cds-simbad-tap``.
+SIMBAD_SERVERS: tuple[str, ...] = ("simbad.cds.unistra.fr", "simbad.harvard.edu")
+_SIMBAD_STATE = SERVICE_MIRRORS["cds-simbad-tap"]
+
+_MIRROR_LOCK = threading.Lock()
+_MIRROR_IN_USE: dict[str, int] = {}  # servizio → indice del server in uso (sessione dell'app)
+_MIRROR_ANNOUNCED: set[str] = set()  # servizi per cui SERVICE_MIRROR_FALLBACK è già stato emesso
+
+
+def _is_url(service: object) -> bool:
+    return isinstance(service, str) and service.startswith(("http://", "https://"))
+
+
+def _in_strasbourg(url: str) -> bool:
+    host = requests.utils.urlparse(url).hostname or ""
+    return host.endswith(("unistra.fr", "u-strasbg.fr"))
+
+
+def service_servers(service: str, servers: ServerRegistry | None = None) -> tuple[str, ...]:
+    """Server TAP di una voce in ordine: il principale, poi i mirror verificati (prima quelli fuori da Strasburgo,
+    D14-14 c). Un URL o una voce senza mirror: solo quello."""
+    principal = service_url(service, "tap", servers)
+    entry = None if _is_url(service) else SERVICE_MIRRORS.get(service)
+    if entry is None:
+        return (principal,)
+    ordered = sorted(entry.mirrors, key=_in_strasbourg)  # stabile: fuori da Strasburgo prima
+    out = [principal]
+    for url in ordered:
+        if url.rstrip("/") not in {u.rstrip("/") for u in out}:
+            out.append(url.rstrip("/"))
+    return tuple(out)
+
+
+def current_server(service: str) -> int:
+    """Indice del server in uso del servizio (chiave di ``ServiceMirrors.service``) nella sessione: 0 = principale."""
+    with _MIRROR_LOCK:
+        return _MIRROR_IN_USE.get(service, 0)
+
+
+def reset_mirror_state() -> None:
+    """Riporta tutti i servizi sul principale e riemette l'avviso al prossimo cambio (test, nuova sessione)."""
+    with _MIRROR_LOCK:
+        _MIRROR_IN_USE.clear()
+        _MIRROR_ANNOUNCED.clear()
+
+
+def _http_status_of(exc) -> int | None:
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    return status if isinstance(status, int) else None
+
+
+def is_failover_error(exc: BaseException) -> bool:
+    """Vero per le cause del cambio di server (D14-14 a): timeout o connessione, HTTP 5xx o 429, risposta non
+    valida. Mai per 404 o altri 4xx, ADQL rifiutata, nessun risultato o errori di chi chiama."""
+    if isinstance(exc, VoProtocolsError):
+        params = exc.params or {}
+        reason, status = params.get("reason"), params.get("status")
+        if exc.code == "NET_TIMEOUT":
+            return reason != "async_deadline"
+        if exc.code == "SERVICE_ERROR":
+            return isinstance(status, int) and (status >= 500 or status == 429)
+        if exc.code == "VOTABLE_INVALID":
+            return reason == "unreadable_response"
+        return False
+    if isinstance(exc, requests.exceptions.HTTPError):
+        status = _http_status_of(exc)
+        return status is None or status >= 500 or status == 429
+    if isinstance(exc, pyvo.dal.DALServiceError):
+        status = getattr(exc, "code", None)
+        return not isinstance(status, int) or status >= 500 or status == 429
+    return isinstance(exc, (requests.exceptions.RequestException, OSError))
+
+
+def _fallback_reason(exc) -> dict:
+    """Sotto-voce di ``SERVICE_MIRROR_FALLBACK`` dalla causa del guasto del principale."""
+    status = (exc.params or {}).get("status") if isinstance(exc, VoProtocolsError) else _http_status_of(exc)
+    if isinstance(exc, pyvo.dal.DALServiceError) and isinstance(getattr(exc, "code", None), int):
+        status = exc.code
+    if isinstance(status, int):
+        return {"reason": "http_status", "status": status}
+    if isinstance(exc, VoProtocolsError) and exc.code == "VOTABLE_INVALID":
+        return {"reason": "invalid_response"}
+    return {"reason": "network"}
+
+
+def _fallback_warning(entry: ServiceMirrors, primary: str, mirror: str, cause) -> ModuleWarning:
+    params = {"service": entry.label, "primary": primary, "mirror": mirror, **_fallback_reason(cause)}
+    why = {"network": "non raggiungibile", "invalid_response": "risposta non valida"}.get(
+        params["reason"], f"HTTP {params.get('status')}")
+    return ModuleWarning("SERVICE_MIRROR_FALLBACK", f"{entry.label}: server {primary} {why}; risponde il mirror "
+                         f"{mirror} (per il resto della sessione)", params)
+
+
+def _all_servers_down(entry: ServiceMirrors, tried: Sequence[str], last: VoProtocolsError) -> VoProtocolsError:
+    """``NET_TIMEOUT`` (``service_servers``) con il numero dei server provati e l'ultimo errore (D14-14 e)."""
+    return VoProtocolsError("NET_TIMEOUT", f"{entry.label}: nessun server risponde (provati {len(tried)}: "
+                            f"{', '.join(tried)}); ultimo errore {last.code}: {last.message}",
+                            params={"reason": "service_servers", "service": entry.label, "servers": len(tried),
+                                    "tried": list(tried), "last": _message_of(last)})
+
+
+def _with_mirrors(entry: ServiceMirrors, servers: Sequence[str], attempt, cached, *, refresh: bool,
+                  use_stale_cache: bool = True, as_error=None):
+    """Prova i server di un servizio con le regole del 14 §3: prima la cache di tutti (senza ``refresh``), poi la
+    rete dal server in uso (dal principale con ``refresh``) senza copie vecchie, poi la prima copia in cache.
+
+    ``attempt(server, refresh, stale)`` → risultato o eccezione; ``cached(server, exc)`` → risultato dalla cache o
+    ``None``; ``as_error(server, exc)`` → ``VoProtocolsError`` per gli errori che non lo sono già.
+    Restituisce ``(risultato, avvisi)``; gli errori che non sono cause di cambio salgono subito."""
+    if not refresh and cached is not None:
+        for server in servers:
+            hit = cached(server, None)
+            if hit is not None:
+                return hit, ()
+    start = 0 if refresh else current_server(entry.service)
+    failures: list[tuple[str, BaseException]] = []
+    for index in range(start, len(servers)):
+        try:
+            result = attempt(servers[index], refresh, False)
+        except Exception as exc:  # noqa: BLE001 - solo le cause di cambio passano oltre
+            if not is_failover_error(exc):
+                raise
+            failures.append((servers[index], exc))
+            continue
+        notes: tuple = ()
+        with _MIRROR_LOCK:
+            _MIRROR_IN_USE[entry.service] = index
+            announce = index > 0 and entry.service not in _MIRROR_ANNOUNCED
+            if announce:
+                _MIRROR_ANNOUNCED.add(entry.service)
+        if announce:
+            cause = failures[0][1] if failures else None
+            notes = (_fallback_warning(entry, servers[0], servers[index], cause),)
+        return result, notes
+    last = failures[-1][1]
+    if use_stale_cache and cached is not None:
+        for server in servers:
+            hit = cached(server, last)
+            if hit is not None:
+                return hit, ()
+    if not isinstance(last, VoProtocolsError):
+        last = as_error(failures[-1][0], last) if as_error is not None else _net_error(
+            failures[-1][0], last, NETWORK_TIMEOUTS)
+    tried = [server for server, _ in failures]
+    if start > 0:  # server saltati perché già caduti in questa sessione: contano tra i provati
+        tried = list(servers[:start]) + tried
+    raise _all_servers_down(entry, tried, last) from failures[-1][1]
+
+
+def _cached_response(protocol: str, method: str, url: str, params, cache: SharedCache | None,
+                     exc: BaseException | None = None) -> _Response | None:
+    """Risposta in cache di una richiesta (senza rete), con ``FROM_CACHE`` (``network_cached`` se ``exc``)."""
+    canonical = _canonical(params)
+    cache = SharedCache() if cache is None else cache
+    rows = cache.table(_CACHE_MODULE, _QUERY_TABLE, _QUERY_COLUMNS)
+    cached = rows.get(_cache_key(protocol, method, url, canonical))
+    if cached is None:
+        return None
+    note = _network_cached(exc, cached) if exc is not None else ModuleWarning(
+        "FROM_CACHE", f"copia in cache di {cached.origin}, scaricata il {_iso(cached.retrieved_at)}",
+        {"reason": "cached_origin", "origin": cached.origin, "retrieved_at": _iso(cached.retrieved_at)})
+    return _Response(cached.data["payload"], url, method, canonical, cached.retrieved_at, True, (note,))
 
 
 # --------------------------------------------------------------------------
@@ -1747,11 +1966,14 @@ def _simbad_magnitudes(main_id: str, *, cache, refresh: bool, timeouts: NetworkT
     return tuple(magnitudes), result, tuple(notes)
 
 
-def _query_simbad_region(ra: float, dec: float, radius_deg: float, timeouts: NetworkTimeouts) -> tuple[Table, str]:
-    """Interroga SIMBAD con ``astroquery`` (sessione con i timeout comuni del modulo 10); (tabella, URL TAP)."""
+def _query_simbad_region(ra: float, dec: float, radius_deg: float, timeouts: NetworkTimeouts,
+                         server: str = SIMBAD_SERVERS[0]) -> tuple[Table, str]:
+    """Interroga SIMBAD con ``astroquery`` (sessione con i timeout comuni del modulo 10) sul server indicato
+    (nome di ``astroquery.simbad``, sprint B4); (tabella, URL TAP)."""
     from astrotwo.core.coordinates_wcs import _simbad_with_timeouts  # unico punto con il campo interno di astroquery
 
     simbad = _simbad_with_timeouts(timeouts)
+    simbad.server = server
     simbad.add_votable_fields(*_SIMBAD_FIELDS)
     center = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
     return simbad.query_region(center, radius=radius_deg * u.deg), simbad.tap.baseurl
@@ -1765,6 +1987,23 @@ def _table_bytes(table: Table) -> bytes:
         warnings.simplefilter("ignore")
         from_table(table).to_xml(buffer)
     return buffer.getvalue()
+
+
+def _simbad_label(url: str) -> str:
+    """Nome del server SIMBAD che ha risposto (provenienza, sprint B4)."""
+    return "SIMBAD (mirror di Harvard)" if "harvard" in (url or "") else "SIMBAD (CDS)"
+
+
+def _simbad_region_error(url: str, exc: BaseException, timeouts: NetworkTimeouts) -> VoProtocolsError:
+    """Errore di ``astroquery`` della regione del puntatore come ``VoProtocolsError`` (rete o stato HTTP)."""
+    status = _http_status_of(exc)
+    if isinstance(exc, pyvo.dal.DALServiceError) and isinstance(getattr(exc, "code", None), int):
+        status = exc.code
+    if isinstance(status, int):
+        return VoProtocolsError("SERVICE_ERROR", f"{url}: risposta HTTP {status}", url=url, status=status,
+                                params={"reason": "http_status", "url": url, "status": status,
+                                        "status_text": " ".join(str(exc).split())[:200]})
+    return _net_error(url, exc, timeouts)
 
 
 def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh: bool = False,
@@ -1789,15 +2028,26 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
         response = _Response(cached.data["payload"], cached.data["url"], "astroquery", canonical,
                              cached.retrieved_at, True, (_cached_since(cached),))
     else:
+        servers = service_servers(_SIMBAD_TAP)  # principale e mirror verificati (14 §3, sprint B4)
+
+        def attempt(url: str, fresh: bool, stale: bool):
+            host = requests.utils.urlparse(url).netloc  # nome del server per astroquery (porta solo nei test)
+            try:
+                return _query_simbad_region(ra, dec, r, timeouts, host)
+            except (requests.exceptions.RequestException, pyvo.dal.DALServiceError, OSError) as exc:
+                raise _simbad_region_error(url, exc, timeouts) from exc
+
         try:
-            table, url = _query_simbad_region(ra, dec, r, timeouts)
-        except (requests.exceptions.RequestException, pyvo.dal.DALServiceError, OSError) as exc:
-            if cached is None:
-                raise _net_error("SIMBAD", exc, timeouts) from exc
+            (table, url), mirror_notes = _with_mirrors(_SIMBAD_STATE, servers, attempt, None, refresh=refresh,
+                                                       use_stale_cache=False)
+        except VoProtocolsError as exc:
+            if cached is None or not is_failover_error(exc):
+                raise
             response = _Response(cached.data["payload"], cached.data["url"], "astroquery", canonical,
                                  cached.retrieved_at, True,
                                  (_network_unavailable(exc),))
         else:
+            notes += tuple(mirror_notes)
             response = _Response(_table_bytes(table), url, "astroquery", canonical, datetime.now(UTC), False)
             try:
                 rows.put(key, {"protocol": "simbad", "url": url, "params": json.dumps(canonical),
@@ -1808,7 +2058,7 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
     notes = response.notes + notes
     arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"}}
     record = _record("simbad", "simbad_pointer", arguments, response, len(found))
-    source = f"SIMBAD (CDS) via astroquery; {SIMBAD_COORDINATES_NOTE}"
+    source = f"{_simbad_label(response.url)} via astroquery; {SIMBAD_COORDINATES_NOTE}"
     if len(found) == 0:
         return SimbadPointer(None, 0, source, record,
                              notes + (ModuleWarning("SIMBAD_NO_OBJECT", f"nessun oggetto SIMBAD entro {r * 3600:g} arcsec",
@@ -1846,7 +2096,7 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
     otype = None if np.ma.is_masked(row["otype"]) else str(row["otype"])
     magnitudes, mag_result, mag_notes = _simbad_magnitudes(str(row["main_id"]), cache=cache, refresh=refresh,
                                                            timeouts=timeouts)
-    notes += tuple(w for w in mag_result.warnings if w[0] == "FROM_CACHE") + mag_notes
+    notes += tuple(w for w in mag_result.warnings if w[0] in ("FROM_CACHE", "SERVICE_MIRROR_FALLBACK")) + mag_notes
     if not magnitudes:
         notes += (ModuleWarning("SIMBAD_NO_MAGNITUDE", f"nessuna magnitudine in SIMBAD per {row['main_id']}",
                                 {"main_id": str(row["main_id"])}),)
@@ -1878,7 +2128,18 @@ def vizier_collections(*, cache: SharedCache | None = None, refresh: bool = Fals
     """Collezioni di cataloghi del CDS dal MocServer (ID, titolo, ``vizier_popularity``), per l'albero del 13."""
     params = {"expr": "ID=CDS/* && dataproduct_type=catalog", "get": "record", "fmt": "json",
               "fields": _MOCSERVER_FIELDS}
-    response = _http("mocserver", MOCSERVER_URL, params, cache=cache, refresh=refresh, timeouts=timeouts)
+    try:
+        response = _http("mocserver", MOCSERVER_URL, params, cache=cache, refresh=refresh, timeouts=timeouts)
+    except VoProtocolsError as exc:
+        if not is_failover_error(exc):
+            raise
+        # Nessuna copia del MocServer fuori da Strasburgo (14 §3, sprint B4): messaggio chiaro, nessun mirror.
+        raise VoProtocolsError("NET_TIMEOUT", f"MocServer del CDS ({MOCSERVER_URL}) non raggiungibile e nessuna "
+                               "copia locale dell'elenco delle collezioni; il MocServer non ha copie fuori da "
+                               "Strasburgo. Gli identificativi scritti restano utilizzabili (Gaia DR3 e 2MASS "
+                               f"con il ripiego sugli archivi originali): {exc.message}", url=MOCSERVER_URL,
+                               params={"reason": "mocserver_no_mirror", "url": MOCSERVER_URL,
+                                       "cause": _message_of(exc)}) from exc
     try:
         records = json.loads(response.payload.decode(MOCSERVER_CHARSET))
         if not isinstance(records, list) or not all(isinstance(r, dict) and isinstance(r.get("ID"), str)

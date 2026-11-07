@@ -44,6 +44,8 @@ SIMBAD_STOP_MS = 500
 SIMBAD_RADIUS_PIXELS = 12.0
 #: Si apre solo una pagina di Simbad (41 §3.19).
 SIMBAD_LINK_PREFIX = "https://simbad.cds.unistra.fr/"
+#: Pagine del mirror di Harvard (sprint B4, 41 §3.19): collegamento al server che ha risposto.
+SIMBAD_MIRROR_LINK_PREFIX = "https://simbad.harvard.edu/"
 #: Magnitudini scritte nel riquadro (le altre restano nel risultato del comando, 41 §3.19).
 SIMBAD_MAX_MAGNITUDES = 8
 #: Cifre significative dell'etichetta di una misura (41 §3.19, scelta minore).
@@ -76,9 +78,10 @@ def distance_text(value: u.Quantity) -> str:
     return f"{number}{DISTANCE_UNITS.get(name, ' ' + name)}"
 
 
-def simbad_url(main_id: str) -> str:
-    """Pagina di Simbad dell'oggetto (solo l'indirizzo, nessun dato)."""
-    return f"{SIMBAD_LINK_PREFIX}simbad/sim-id?Ident={urllib.parse.quote(main_id)}"
+def simbad_url(main_id: str, origin: str | None = None) -> str:
+    """Pagina di Simbad dell'oggetto (solo l'indirizzo, nessun dato), sul server che ha risposto (sprint B4)."""
+    prefix = SIMBAD_MIRROR_LINK_PREFIX if origin and origin.startswith(SIMBAD_MIRROR_LINK_PREFIX) else SIMBAD_LINK_PREFIX
+    return f"{prefix}simbad/sim-id?Ident={urllib.parse.quote(main_id)}"
 
 
 class MeasureOverlay(QWidget):
@@ -412,8 +415,8 @@ class SimbadPointerTool:
 
     @staticmethod
     def open_link(url: str) -> None:
-        """Solo pagine di Simbad (41 §3.19)."""
-        if url.startswith(SIMBAD_LINK_PREFIX):
+        """Solo pagine di Simbad, del CDS o del mirror di Harvard (41 §3.19)."""
+        if url.startswith((SIMBAD_LINK_PREFIX, SIMBAD_MIRROR_LINK_PREFIX)):
             QDesktopServices.openUrl(QUrl(url))
 
     def card_html(self, result) -> str:
@@ -455,7 +458,8 @@ class SimbadPointerTool:
             hidden = len(obj.get("magnitudes", [])) - len(shown)
             if hidden > 0:
                 lines.append(esc(t["simbad_more"].replace("%1", str(hidden))))
-            url = simbad_url(obj["main_id"])
+            origin = next((str(src["origin"]) for src in result.provenance if src.get("origin")), None)
+            url = simbad_url(obj["main_id"], origin)
             lines.append(f'<a href="{esc(url, quote=True)}">{esc(t["simbad_link"])}</a>')
         for message in result.warnings:
             lines.append(f"⚠ {esc(shown_text(message))}")

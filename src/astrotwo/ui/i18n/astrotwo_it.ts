@@ -867,6 +867,14 @@
         <translation>Riesegui</translation>
     </message>
     <message>
+        <source>Rerun with fresh data</source>
+        <translation>Riesegui con dati aggiornati</translation>
+    </message>
+    <message>
+        <source>Only for commands that use the network</source>
+        <translation>Solo per i comandi che usano la rete</translation>
+    </message>
+    <message>
         <source>Copy as JSON</source>
         <translation>Copia come JSON</translation>
     </message>

@@ -177,10 +177,22 @@ def _no_real_mirrors(request, monkeypatch):
     """Fuori dai test di rete la tabella dei mirror verificati del 12 (``MIRROR_FALLBACKS``, URL reali) è vuota: un
     test con un servizio finto che non risponde non deve mai raggiungere ESASky o IRSA (sprint 10b). I test del
     ripiego scrivono la loro tabella con i server finti."""
+    import dataclasses
+
+    from astrotwo.core import catalogs, vo_protocols
+
+    vo_protocols.reset_mirror_state()  # stato dei mirror di sessione del 14 (sprint B4): ogni test parte dal principale
     if request.node.get_closest_marker("network") is None:
         from astrotwo.core import hips
 
         monkeypatch.setattr(hips, "MIRROR_FALLBACKS", {})
+        # Sprint B4: nessun mirror reale del 14 (Harvard) né archivio originale reale del 13 (ESA, IRSA) nei test con
+        # servizi finti; i test del ripiego scrivono i loro server finti.
+        monkeypatch.setattr(vo_protocols, "SERVICE_MIRRORS", {})
+        monkeypatch.setattr(catalogs, "FIXED_COLLECTIONS", tuple(
+            dataclasses.replace(c, archive=None) for c in catalogs.FIXED_COLLECTIONS))
+    yield
+    vo_protocols.reset_mirror_state()
 
 
 class FakeService:

@@ -336,6 +336,99 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
   limiti verificati sulla documentazione delle chiamate API il 2026-10-11:
   `distMaxArcsec` ≤ 180 (`MAX_SEP_INVALID`), tabelle caricate ≤ 100 MB
   (`TABLE_TOO_LARGE`); servizio che rifiuta → `SERVICE_ERROR`.
+  **Nessun mirror** (sprint B4, verificato il 2026-11-07: nessuna copia di
+  XMatch fuori da Strasburgo nell'elenco dei mirror del CDS né nel registro
+  VO): con il servizio giù resta l'errore `CROSSMATCH_SERVICE_FAILED` del
+  `05`, che propone il metodo locale (testo controllato nello sprint B4).
+- **Ripiego sui mirror dei servizi del CDS (sprint B4, regole decise dal
+  proprietario il 2026-11-07, D14-14; modello: survey HiPS del `12`, sprint
+  10b, e nomi del `10` §7, sprint 10a).** A fine ottobre 2026 il CDS di
+  Strasburgo è stato irraggiungibile per giorni, ed è ancora instabile (il
+  2026-11-07 tutti gli host `*.cds.unistra.fr` non rispondono in 15 s). Da
+  questo sprint un servizio del CDS che ha una **copia verificata** ha un
+  **elenco ordinato di server** e passa al successivo quando quello in uso
+  non risponde.
+  - **Quando si passa al server successivo (D14-14 a):** solo per timeout o
+    errore di connessione (`NET_TIMEOUT`, tranne `async_deadline`: una query
+    asincrona lunga non è un server giù), HTTP **5xx** o **429**
+    (`SERVICE_ERROR` con `status`, anche quando il corpo è un VOTable
+    d'errore) o **risposta non valida** (una risposta 2xx che non è un
+    VOTable: `VOTABLE_INVALID` `unreadable_response`; una risposta HTTP di
+    errore senza VOTable con stato 5xx o 429). **Mai** per un 404 o un altro
+    4xx (`SERVICE_ERROR` con stato 4xx, `AUTH_REQUIRED`), **mai** per un
+    errore dell'ADQL (`ADQL_INVALID`, anche quando è il servizio a
+    rifiutarla), **mai** per "nessun risultato" (una risposta valida senza
+    righe è un risultato), né per `QUERY_CANCELLED`, `MAX_ROWS_INVALID` e gli
+    altri errori di chi chiama. Funzione pubblica **`is_failover_error(exc)`**
+    (usata anche dal `13` per il ripiego di Gaia DR3 e 2MASS). Per le
+    richieste di `astroquery` (regione del puntatore): errori di `requests`
+    (connessione, timeout) e `DALServiceError` senza codice HTTP o con codice
+    5xx/429; un `DALServiceError` con codice 4xx non fa cambiare server.
+  - **Solo mirror verificati (D14-14 b):** con richieste reali, URL, data e
+    fonte ufficiale scritti nella tabella sotto; un mirror non verificabile
+    oggi non entra.
+  - **Ordine (D14-14 c):** il principale (CDS) resta primo; tra i mirror
+    prima quelli fuori da Strasburgo (oggi l'unico mirror è a Harvard).
+  - **Avviso `SERVICE_MIRROR_FALLBACK` (D14-14 d):** `service` (nome del
+    servizio, es. `SIMBAD`), `primary` (URL del principale), `mirror` (URL
+    del server che ha risposto), `reason` = causa (`network`, `http_status`
+    con `status`, `invalid_response`; stessa forma di
+    `HIPS_MIRROR_FALLBACK` e di `NAME_RESOLVER_FALLBACK`): **una sola volta
+    per servizio e per sessione dell'app** (processo; lo stato vive nel
+    modulo, `reset_mirror_state()` lo azzera per i test). La **provenienza**
+    di ogni risultato riporta sempre il server che ha davvero risposto:
+    `RequestRecord.url` (e quindi `CatalogTable.origin`) è l'URL del mirror;
+    `SimbadPointer.source` dice "SIMBAD (mirror di Harvard)".
+  - **Servizio in uso per la sessione (D14-15 (1), da confermare):** dopo
+    un cambio il servizio **resta sul mirror per il resto della sessione**
+    (come i survey del `12`, D12-9): le richieste successive vanno subito al
+    mirror, senza aspettare di nuovo il timeout del principale; il puntatore
+    SIMBAD (regione e magnitudini) e il catalogo `simbad` condividono lo
+    stesso stato (servizio `simbad`). **`refresh=True` riparte dal
+    principale** (e, se risponde, il servizio torna sul principale).
+  - **Cache (D14-15 (2), da confermare):** chiave di ogni risposta TAP =
+    URL del server che ha risposto (come prima: nessuna chiave nuova).
+    Senza `refresh` si cerca prima nella cache di **tutti** i server
+    dell'elenco, nell'ordine (una risposta già scaricata da un mirror vale
+    anche quando il principale torna); poi la rete, server per server,
+    **senza** usare copie vecchie; solo se nessun server risponde si usa la
+    prima copia in cache nell'ordine dei server (principale prima),
+    dichiarata con `FROM_CACHE` (`network_cached`). La regione del puntatore SIMBAD ha
+    già una chiave indipendente dal server (`simbad:query_region`).
+  - **Ambito (D14-15 (3), da confermare):** il ripiego vale quando il
+    servizio è indicato con la **voce dell'elenco** (`cds-simbad-tap`), come
+    fanno il puntatore, le magnitudini e il catalogo `simbad` del `13`; un
+    **URL scritto** (query ADQL del `05` con l'URL nel comando registrato,
+    sprint B3) va solo a quell'URL, così la riesecuzione rifà la stessa
+    richiesta.
+  - **Se cadono tutti (D14-14 e):** con più di un server, `NET_TIMEOUT`
+    con `reason = service_servers`: servizio, **numero dei server provati**,
+    i loro URL e l'ultimo errore (messaggio annidato); con un solo server
+    (nessun mirror) l'errore di prima.
+
+  **Mirror verificati il 2026-11-07** (fonte dell'elenco dei mirror VizieR:
+  pagina del mirror ufficiale `https://vizier.cfa.harvard.edu/viz-bin/VizieR`,
+  che riporta l'elenco del CDS: CfA Harvard, NAOJ Giappone, IUCAA India,
+  China-VO, IDIA Sudafrica, INASAN Russia, CADC Canada; il sito del CDS non
+  rispondeva; ricerca dei servizi TAP con "vizier" o "simbad" nell'URL nel
+  registro VO RegTAP `https://dc.g-vo.org/tap`):
+
+  | Servizio | Mirror | Esito del 2026-11-07 | Entra? |
+  |---|---|---|---|
+  | SIMBAD TAP | `https://simbad.harvard.edu/simbad/sim-tap` (CfA Harvard; fonte: `10` §7 e l'elenco dei server di `astroquery.simbad`, `simbad.harvard.edu`) | `availability` e `capabilities` 200; `SELECT TOP 0 ra, dec FROM basic`: `utype` MANGO ICRS epoca J2000 come il principale (D13-20); M 31 = 10,684708333°, +41,268750000°, 13 836 citazioni, `AGN` (coordinate uguali a quelle di SIMBAD in `10` §7); Vega: 8 magnitudini in `flux` (B, V, U 0,03 … sistema `V`); `* eta Tau` → `Gaia DR3 66714384142368256`, `2MASS J03472908+2406184` (uguali agli archivi originali, sotto) | **sì**, secondo server di SIMBAD |
+  | TAPVizieR | nessuno: i 7 mirror ufficiali rispondono 404 o non rispondono a `/TAPVizieR/tap`, `/tap`, `/viz-bin/tap` (CfA e IDIA 404; NAOJ, IUCAA, CADC senza risposta; China-VO 404 in http; INASAN irraggiungibile); il registro VO elenca per VizieR solo `tapvizier.cds.unistra.fr` e `cdsarc.cds.unistra.fr` (Strasburgo) | — | **no**: per Gaia DR3 e 2MASS ripiego sugli archivi originali (`13`); gli altri identificativi danno un errore chiaro |
+  | Fotometria (SED) di VizieR | `https://vizier.cfa.harvard.edu/viz-bin/sed`, `https://vizier.idia.ac.za/viz-bin/sed` | rispondono, ma **parziali e diversi tra loro**: per Vega (raggio 5″) CfA 377 righe con 114 errori `NOT AVAILABLE YET` / `(pipe) Request has been interrupted` (sotto-richieste ai cataloghi non disponibili sul mirror; `pyvo` legge gli `INFO name="Error"` come rifiuto); IDIA prima 263 righe senza errori, poi 402 righe con 17 errori e una volta oltre 60 s; principale non confrontabile | **no**: non verificabile (risposte incomplete e diverse); resta solo il CDS |
+  | MocServer | nessuno fuori da Strasburgo (`alaskybis` è nello stesso centro dati e non rispondeva) | — | **no**: copia in cache e messaggio chiaro (sotto) |
+  | CDS XMatch | nessuno | — | **no**: errore che propone il metodo locale |
+
+  **MocServer senza copia (sprint B4):** `vizier_collections` con il
+  MocServer giù usa la copia in cache, dichiarata (`FROM_CACHE`
+  `network_cached`, con la data); senza copia `NET_TIMEOUT` con `reason =
+  mocserver_no_mirror`, che dice che il MocServer non ha copie fuori da
+  Strasburgo e che gli identificativi scritti restano utilizzabili (Gaia DR3
+  e 2MASS con il ripiego del `13`). Nessun mirror inventato.
+  **Fotometria senza copia:** `vizier_photometry` resta sul solo CDS
+  (`NET_TIMEOUT` come prima); oggi nessuna funzione dell'interfaccia la usa.
 - **Equivalente di VOApp/VOObserver (H19):** per i programmi non Python lo
   scambio passa da SAMP (questo modulo); per i programmi Python dall'API del
   24; nessuna interfaccia nuova (decisione del 2026-10-08).
@@ -483,6 +576,23 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   (coppie con `angDist`, `idx`, `idx2`, richiesta registrata).
 - **`vizier_photometry(center, radius, ...)`** (P6, H17) — misure di flusso
   dal servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
+- **Ripiego sui mirror (sprint B4, §3):** **`SERVICE_MIRRORS`** (voce
+  dell'elenco dei server → servizio, nome e URL dei mirror verificati, in
+  ordine: oggi `cds-simbad-tap` → `simbad`, "SIMBAD",
+  `https://simbad.harvard.edu/simbad/sim-tap`); **`service_servers(service)`**
+  — elenco ordinato dei server di una voce (principale + mirror; una voce
+  senza mirror o un URL: solo quello); **`is_failover_error(exc)`** — vero
+  per le cause di cambio di §3 (D14-14 a); **`current_server(service)`** —
+  server in uso del servizio nella sessione (il principale finché non c'è
+  stato un cambio); **`reset_mirror_state()`** — torna al principale e
+  riemette l'avviso (test, nuova sessione). `tap_query` con una voce che ha
+  mirror li usa da sé (§3); argomento nuovo **`use_stale_cache`** (default
+  `True`): con `False` un server che non risponde non restituisce la sua
+  copia vecchia (lo usa il ripiego, anche quello del `13`).
+  `simbad_pointer` usa per la regione i server di `SIMBAD_SERVERS`
+  (`simbad.cds.unistra.fr`, `simbad.harvard.edu`, i nomi di
+  `astroquery.simbad`) con le stesse regole e lo stesso stato del servizio
+  `simbad`.
 - **`SampHub`** (classe, P7) — hub SAMP (H14, G3, D14-2 decisa) con
   `pyvo.samp`: **si collega a un hub già attivo se presente, altrimenti
   avvia il proprio** (profilo web disattivato salvo opzione esplicita);
@@ -587,6 +697,10 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Servizio raggiungibile che risponde con un errore (HTTP o `QUERY_STATUS = ERROR` non dovuto all'ADQL) | nessun risultato, messaggio del servizio riportato | `SERVICE_ERROR` |
 | Voce dell'elenco dei server inesistente o con protocollo diverso da quello richiesto | rifiuto con le voci ammesse | `SERVER_UNKNOWN` |
 | Spettro, immagine o risultato servito dalla cache | dato restituito con origine e data della copia | avviso `FROM_CACHE` |
+| Servizio del CDS con mirror che non risponde (timeout, connessione, 5xx, 429, risposta non valida; sprint B4) | si passa al mirror successivo; il servizio resta sul mirror per la sessione | avviso `SERVICE_MIRROR_FALLBACK` (una volta per servizio e sessione) |
+| Servizio con mirror: risposta 404 o altro 4xx, ADQL rifiutata, nessun risultato | nessun cambio di server: errore o risultato del server in uso | codice del caso (`SERVICE_ERROR`, `ADQL_INVALID`, …) |
+| Tutti i server di un servizio giù (sprint B4) | nessun risultato; copia in cache se c'è (dichiarata) | `NET_TIMEOUT` (`service_servers`) |
+| MocServer giù senza copia in cache (sprint B4) | nessun elenco; il messaggio dice che non ci sono copie fuori da Strasburgo | `NET_TIMEOUT` (`mocserver_no_mirror`) |
 
 ### Parametri dei messaggi (D40-3)
 
@@ -704,6 +818,11 @@ sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalog
 | `SIMBAD_TIE` (avviso) | (generale) | `count` (integer), `nbref` (integer), `main_id` (string, esterno), `separation` (quantity, arcsec) |
 | `SIMBAD_TIE` | `nbref_missing` | `count` (integer), `main_id` (string, esterno), `separation` (quantity, arcsec) |
 | `SIMBAD_NO_MAGNITUDE` (avviso) | (generale) | `main_id` (string, esterno) |
+| `SERVICE_MIRROR_FALLBACK` (avviso, sprint B4) | `network` | `service` (string), `primary` (string), `mirror` (string) |
+| `SERVICE_MIRROR_FALLBACK` | `http_status` | `service` (string), `primary` (string), `mirror` (string), `status` (integer) |
+| `SERVICE_MIRROR_FALLBACK` | `invalid_response` | `service` (string), `primary` (string), `mirror` (string) |
+| `NET_TIMEOUT` | `service_servers` (sprint B4) | `service` (string), `servers` (integer), `tried` (list), `last` (message) |
+| `NET_TIMEOUT` | `mocserver_no_mirror` (sprint B4) | `url` (string), `cause` (message) |
 
 `CACHE_FULL` (avviso della cache comune, `04`) passa tale e quale con il codice, il testo e i `params` che ha: il `04`
 non è tra i moduli convertiti dello sprint 8, quindi finché non lo è si mostra come in §3.7.2 del `40`.
@@ -753,6 +872,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | T19 | DataLink (H8, D14-3) | `links` su un documento DataLink simulato con un descrittore di servizio; `call_service` | link con semantica, URL e content-type; chiamata con i parametri del descrittore | servizio simulato |
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
+| T27 | Ripiego sui mirror (sprint B4, 2026-11-07) | servizi simulati: SIMBAD principale giù (connessione, HTTP 503, 429, risposta 2xx non VOTable) → mirror per `tap_query("cds-simbad-tap")` e per `simbad_pointer` (regione e magnitudini); 404, ADQL rifiutata e risposta senza righe → nessun cambio; principale e mirror giù → `NET_TIMEOUT` `service_servers` con 2 server; copia vecchia in cache e tutti giù → copia dichiarata; avviso dopo il primo cambio, non al secondo; richiesta successiva subito al mirror; `refresh=True` → di nuovo il principale; URL scritto → nessun ripiego; MocServer giù con e senza copia in cache | ordine e conteggio delle richieste ai server finti; `RequestRecord.url` e `source` = server che ha risposto; avvisi; codici | test di unità con server finti; test di rete (marcatore `network`, non nel commit) per il mirror di SIMBAD |
 | T26 | Commenti ADQL e annullamento (sprint B3, 2026-11-06) | `validate_adql` con commenti `--` (con apostrofo, prima di `SELECT`, dentro una stringa); `tap_query` sincrona con commenti su un servizio simulato; asincrona su un lavoro UWS simulato che non finisce, con `cancel` che diventa vero | posizioni del testo scritto; `--` dentro le virgolette non è un commento; `QUERY` inviata senza commenti e senza righe vuote, `adql` scritto negli argomenti registrati; `QUERY_CANCELLED` entro 1 s, `ABORT` inviato e lavoro eliminato | test di unità |
 
 **Test di rete:** regola delle ripetizioni in `02-convenzioni.md` §8, punto 8
@@ -897,6 +1017,47 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
   esempio provare https per un URL http dello stesso host, oppure non seguire un reindirizzamento che
   cambia la richiesta e segnalarlo con un errore dedicato), sempre dichiarato nel risultato.
 
+- **D14-14 — Ripiego dei servizi del CDS sui mirror (sprint B4): DECISA il
+  2026-11-07 dal proprietario** (testo dello sprint B4, aperta e decisa lo
+  stesso giorno). **Esito:** (a) si passa al server successivo solo per
+  timeout, errore di connessione, HTTP 5xx, HTTP 429 o risposta non valida;
+  mai per 404 o altri 4xx, mai per un errore di sintassi ADQL, mai per
+  "nessun risultato"; (b) solo mirror verificati con richieste reali, con
+  URL, data e fonte ufficiale scritti nella spec; un mirror non verificabile
+  oggi non entra; (c) prima le copie fuori da Strasburgo; (d) avviso a ogni
+  cambio, una volta per servizio e per sessione, voci en/it, provenienza =
+  server che ha davvero risposto; (e) tutti giù: errore che dice quanti
+  server sono stati provati e, dove ha senso, suggerisce un'alternativa.
+  Per Gaia DR3 e 2MASS, se nessun mirror VizieR risponde, ripiego sugli
+  archivi originali (`13`, D14-15 (5)–(7)). Applicata in §3, §7, §10, §12.
+- **D14-15 — Scelte minori del ripiego sui mirror e di "Riesegui con dati
+  aggiornati" (sprint B4): PROPOSTE da Claude Code il 2026-11-07, da
+  confermare (Gruppo 3).** (1) dopo un cambio il servizio resta sul mirror
+  per tutta la sessione (come D12-9), `refresh=True` riparte dal principale;
+  (2) cache: prima la cache di tutti i server dell'elenco, poi la rete senza
+  copie vecchie, poi la prima copia in cache nell'ordine dei server
+  (principale prima), dichiarata; (3) ripiego solo per le voci dell'elenco, non per un URL
+  scritto (la query ADQL del B3 rifà la stessa richiesta); (4) codice nuovo
+  `SERVICE_MIRROR_FALLBACK` (stesse sotto-voci di `HIPS_MIRROR_FALLBACK`) e
+  `NET_TIMEOUT` `service_servers` (come `hips_servers`); (5) Gaia DR3 e
+  2MASS dagli archivi originali **senza rinominare** le colonne: i nomi
+  restano quelli dell'archivio (es. `ra`, `dec`, `phot_g_mean_mag` invece di
+  `RA_ICRS`, `DE_ICRS`, `Gmag`), dichiarato nell'avviso
+  `CATALOG_ORIGINAL_ARCHIVE` e nella storia della tabella; (6) 2MASS
+  dall'IRSA: l'IRSA non collega le colonne a un `COOSYS` (descrizione
+  "right ascension (J2000 decimal deg)", verificato il 2026-11-07), quindi
+  la regione si chiede con `CIRCLE('ICRS', …)` e centro in ICRS
+  (dichiarato), le posizioni restano senza sistema e si confermano con il
+  dialogo delle colonne (`POSITION_COLUMNS_REQUIRED`); (7) identificativi
+  VizieR diversi da Gaia DR3 e 2MASS con TAPVizieR giù: errore
+  `NET_TIMEOUT` `vizier_no_mirror` che suggerisce Gaia DR3/2MASS e la query
+  ADQL sull'archivio originale; (8) "Riesegui con dati aggiornati" del `40`:
+  campo `refresh` del comando del `05` (scritto solo quando vale `true`),
+  pulsante attivo solo se tutti i comandi scelti usano la rete, avviso
+  `DATA_REFRESHED` (`fresh` o `cache_used`) nel risultato; non esposto
+  all'IA. (9) riquadro del puntatore SIMBAD (`41` §3.19): collegamento alla
+  pagina SIMBAD del server che ha risposto (CDS o Harvard).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -941,3 +1102,4 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | 2026-11-05 | Claude Code | **Sprint B1b — correzioni dalla prova con TOPCAT vero** (incarico del proprietario del 2026-11-05: "spec prima se cambia un comportamento descritto"): §3 punti (7) invio con chiamata sincrona e `failures`, (8) `clients()` senza l'hub per `samp.hub-id`, (9) iscrizioni dichiarate una volta; §6 firme; §10 errori e codici `SAMP_NO_PEER` (`rejected`, `no_reply`); nuovo T24. Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — rifiniture SAMP** (decisione del proprietario del 2026-11-05, D40-9 (7)): tempo di risposta di **60 s per `table.load.votable`** (`SAMP_TABLE_REPLY_TIMEOUT`, default di `SampHub.send_table`), 10 s per gli altri tipi; nuova sotto-voce `SAMP_NO_PEER` `no_reply_table` (la tabella potrebbe arrivare comunque) per `table.load.votable`. Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL nell'interfaccia** (decisioni del proprietario del 2026-11-06; autorizzazione esplicita ad aggiornare il 14 "se cambia qualcosa"): §3 — commenti `--` tolti prima dell'invio (`adql_to_send`; provato il 2026-11-06: Gaia ESA, IRSA e HEASARC rifiutano una query con un commento, MAST la accetta) e contati come spazio da `validate_adql`; annullamento della TAP asincrona (`cancel`, `QUERY_CANCELLED`); §7 firme; §10 `QUERY_CANCELLED`; §11 riscritto: solo `cone_search` esposta all'IA (come `catalog.cone_search` del `05`), `tap_query`/`validate_adql` no (`33` rimandato); §12 nuovo T26. Server personali salvati dal `40` (`vo/personal_servers`). Stato `approvato` invariato. |
+| 2026-11-07 | Claude Code | **Sprint B4 — ripiego sui mirror per SIMBAD e VizieR** (regole decise dal proprietario il 2026-11-07, D14-14; autorizzazione esplicita ad aggiornare il 14): §3 — nuova voce "Ripiego sui mirror dei servizi del CDS" (cause del cambio, ordine, avviso `SERVICE_MIRROR_FALLBACK` una volta per servizio e sessione, provenienza = server reale, servizio in uso per la sessione, cache, ambito, tutti giù → `NET_TIMEOUT` `service_servers`); **mirror verificati il 2026-11-07** con richieste reali (CDS irraggiungibile): SIMBAD TAP di Harvard **entra**; nessun TAPVizieR fuori da Strasburgo (7 mirror ufficiali e registro VO); SED di VizieR su CfA e IDIA parziale e incoerente → **non entra**; MocServer e XMatch senza copie; MocServer giù senza cache → `NET_TIMEOUT` `mocserver_no_mirror`. §7 (`SERVICE_MIRRORS`, `service_servers`, `is_failover_error`, `current_server`, `reset_mirror_state`, `use_stale_cache` di `tap_query`, `SIMBAD_SERVERS`), §10, T27 (§12), D14-14 decisa e D14-15 proposta (§13). Stato `approvato` invariato. |

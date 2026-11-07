@@ -1084,6 +1084,7 @@ class HistoryPanel(QWidget):
     """Pannello Comandi (§3.6): cronologia con chi, esito, dettagli, Riesegui e Copia come JSON."""
 
     rerunRequested = Signal(list)  # list[HistoryEntry]
+    rerunFreshRequested = Signal(list)  # list[HistoryEntry]: Riesegui con dati aggiornati (sprint B4, §3.6)
 
     COLUMNS = ("#", "Time (UTC)", "Who", "Command", "Parameters", "Result", "Warnings")
 
@@ -1102,6 +1103,10 @@ class HistoryPanel(QWidget):
                           ("session", self.tr("Session")), ("samp", "SAMP")):
             self.who_filter.addItem(text, key)
         self.rerun_button = QPushButton(self.tr("Rerun"))
+        self.rerun_fresh_button = QPushButton(self.tr("Rerun with fresh data"))
+        self.rerun_fresh_button.setObjectName("rerunFreshButton")
+        self.rerun_fresh_button.setEnabled(False)
+        self.is_network = lambda name: False  # indicatore network del 05, collegato dalla finestra
         self.copy_button = QPushButton(self.tr("Copy as JSON"))
         self.table = QTableWidget(0, len(self.COLUMNS))
         self.table.setObjectName("historyTable")
@@ -1127,6 +1132,7 @@ class HistoryPanel(QWidget):
             bar.addWidget(w)
         bar.addStretch(1)
         bar.addWidget(self.rerun_button)
+        bar.addWidget(self.rerun_fresh_button)
         bar.addWidget(self.copy_button)
         split = QSplitter(Qt.Orientation.Horizontal)
         split.addWidget(self.table)
@@ -1148,6 +1154,7 @@ class HistoryPanel(QWidget):
         self.who_filter.currentIndexChanged.connect(self.refresh)
         self.table.itemSelectionChanged.connect(self._show_detail)
         self.rerun_button.clicked.connect(lambda: self.rerunRequested.emit(self.selected()))
+        self.rerun_fresh_button.clicked.connect(lambda: self.rerunFreshRequested.emit(self.selected()))
         self.copy_button.clicked.connect(self.copy_json)
 
     def set_entries(self, entries) -> None:
@@ -1210,8 +1217,16 @@ class HistoryPanel(QWidget):
                 return True
         return False
 
+    def _update_fresh(self, chosen: list[HistoryEntry]) -> None:
+        """«Riesegui con dati aggiornati» attivo solo se tutti i comandi scelti usano la rete (§3.6, sprint B4)."""
+        network = bool(chosen) and all(self.is_network(e.command.name) for e in chosen)
+        self.rerun_fresh_button.setEnabled(network)
+        self.rerun_fresh_button.setToolTip("" if network or not chosen
+                                           else self.tr("Only for commands that use the network"))
+
     def _show_detail(self) -> None:
         chosen = self.selected()
+        self._update_fresh(chosen)
         if not chosen:
             self.detail.clear()
             return
@@ -1682,6 +1697,8 @@ class MainWindow(QMainWindow):
     def _build_docks(self) -> None:
         self.history = HistoryPanel()
         self.history.rerunRequested.connect(self.rerun)
+        self.history.rerunFreshRequested.connect(lambda entries: self.rerun(entries, refresh=True))
+        self.history.is_network = self._is_network_command
         self.messages = MessagesPanel()
         self.empty_states = {
             "layers": EmptyState("layers", self.tr("No layers yet"), self.tr(
@@ -2780,10 +2797,19 @@ class MainWindow(QMainWindow):
 
     # --- cronologia ---------------------------------------------------------------------
 
-    def rerun(self, entries: list[HistoryEntry]) -> list[int]:
-        """Riesegui (§3.6): nuovi comandi in coda, con nuovi numeri, chiesti da ``history``."""
+    def rerun(self, entries: list[HistoryEntry], refresh: bool = False) -> list[int]:
+        """Riesegui (§3.6): nuovi comandi in coda, con nuovi numeri, chiesti da ``history``; con ``refresh`` i comandi
+        di rete portano ``refresh: true`` del 05 (Riesegui con dati aggiornati, sprint B4)."""
         return [self.submit_command(Command(e.command.name, e.command.version, dict(e.command.parameters),
-                                            RequestedBy("history"))) for e in entries]
+                                            RequestedBy("history"),
+                                            refresh=refresh and self._is_network_command(e.command.name)))
+                for e in entries]
+
+    def _is_network_command(self, name: str) -> bool:
+        try:
+            return self.registry.spec(name).network
+        except CommandError:
+            return False
 
     def unsaved(self) -> bool:
         return len(self.session.history) > self.saved_count

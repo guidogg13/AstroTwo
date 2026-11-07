@@ -64,12 +64,13 @@ OWN_CODES = (
     "XML_UNSAFE", "ASTRORES_UNREADABLE", "ASTRORES_LINK_PROBLEM", "ASTRORES_LINK", "ASTRORES_TYPE_MISMATCH",
     "UCD1_TRANSLATED", "ASTRORES_NONCONFORMING_REF", "UCD1_NOT_TRANSLATED", "CATALOG_UNKNOWN", "REGION_REQUIRED",
     "REGION_TOO_LARGE", "REGION", "PARTIAL_CATALOG", "COLLECTION_SKIPPED", "POPULARITY_INVALID",
-    "POPULARITY_MISSING",
+    "POPULARITY_MISSING", "CATALOG_ORIGINAL_ARCHIVE",
 )
 SHARED = {("FORMAT_UNSUPPORTED", r) for r in ("url_via_vo", "format_not_text", "xml_root", "binary", "no_table")} | {
     ("MEMORY_LIMIT_EXCEEDED", r) for r in ("read_file", "loaded_table", "linked_data", "subset", "calculated_column")
 } | {("REGION_INVALID", "radius_not_angle"), ("REGION_INVALID", "radius_range"), ("BODY_UNKNOWN", "table_body"),
-     ("COORD_UNIT_MISSING", "column_unit_required"), ("COORD_UNIT_MISSING", "column_not_angular")}
+     ("COORD_UNIT_MISSING", "column_unit_required"), ("COORD_UNIT_MISSING", "column_not_angular"),
+     ("NET_TIMEOUT", "vizier_no_mirror"), ("NET_TIMEOUT", "catalog_servers")}  # ripiego sugli archivi (sprint B4)
 
 
 def required_combinations() -> set[tuple[str, str | None]]:
@@ -450,6 +451,33 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(tmp_path, ser
     with monkeypatch.context() as patch:
         patch.setattr(vo, "vizier_collections", lambda **k: fetched)
         seen.notes(collection_tree().warnings)
+
+    # --- ripiego sugli archivi originali (sprint B4) -----------------------------------------------------------------------------
+    from astropy.coordinates import SkyCoord
+
+    from tests.conftest import FakeService
+    from tests.core.test_cds_mirrors import FAST, GAIA_COOSYS, archive_tap, status
+
+    vizier, gaia, irsa = FakeService(), FakeService(), FakeService()
+    try:
+        urls = {"cds-vizier-tap": vizier.url + "/viz", "esa-gaia-tap": gaia.url + "/tap",
+                "nasa-irsa-tap": irsa.url + "/TAP"}
+        with monkeypatch.context() as patch:
+            patch.setattr(vo, "BUILTIN_SERVERS", tuple(dataclasses.replace(e, url=urls[e.id]) if e.id in urls else e
+                                                       for e in vo.BUILTIN_SERVERS))
+            patch.setattr(cats, "FIXED_COLLECTIONS", tuple(dataclasses.replace(c, archive=cats.ORIGINAL_ARCHIVES.get(c.id))
+                                                           for c in cats.FIXED_COLLECTIONS))
+            vizier.routes["/viz/sync"] = status(503)
+            gaia.routes["/tap/sync"] = archive_tap(GAIA_COOSYS)
+            irsa.routes["/TAP/sync"] = archive_tap("")
+            centre = SkyCoord(56.75 * u.deg, 24.1167 * u.deg)
+            seen.notes(load_catalog("II/246/out", region=(centre, 1 * u.arcmin), cache=cache, timeouts=FAST).warnings)
+            gaia.routes["/tap/sync"] = status(502)
+            seen.error(load_catalog, "I/355/gaiadr3", region=(centre, 1 * u.arcmin), cache=cache, timeouts=FAST)
+            seen.error(load_catalog, "I/239/hip_main", region=(centre, 1 * u.arcmin), cache=cache, timeouts=FAST)
+    finally:
+        for fake in (vizier, gaia, irsa):
+            fake.close()
 
     # --- verifiche finali -------------------------------------------------------------------------------------------------------------
     missing = required_combinations() - seen.pairs

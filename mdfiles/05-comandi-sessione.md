@@ -107,6 +107,23 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   `{"source": "samp", "client": "topcat", "client_id": "cli#2"}`.
   `requested_by` è un dato descrittivo: **non cambia** validazione,
   esecuzione né risultato.
+- **Dati aggiornati (`refresh`, sprint B4, 2026-11-07; richiesta del
+  proprietario, forma D14-15 (8) da confermare):** un comando registrato può
+  portare il campo **`refresh: true`** accanto a `name`, `version`,
+  `parameters` e `requested_by`: i moduli si chiamano con `refresh=True`
+  (prima la rete, la cache solo se il servizio non risponde, regola del 14
+  §3). Il campo si scrive **solo quando vale `true`** (i comandi e le
+  sessioni di prima restano identici) e **cambia l'esecuzione**: per questo
+  è un campo del comando e non un dato di `requested_by`; una sessione
+  riaperta lo riesegue tale e quale. Vale solo per i comandi con
+  l'indicatore `network`; su un altro comando → `COMMAND_PARAMETER_INVALID`
+  (`parameter = refresh`, `reason = refresh_not_network`). Il risultato lo
+  **dichiara** con l'avviso **`DATA_REFRESHED`**: `fresh` se nessun dato
+  viene dalla cache (nessun avviso `FROM_CACHE` e nessuna provenienza
+  "dalla cache"), `cache_used` se un servizio non ha risposto ed è stata
+  usata una copia in cache (dichiarata dal suo `FROM_CACHE`). Lo usa
+  "Riesegui con dati aggiornati" del `40` (§3.6 del `40`); **non è esposto
+  all'IA** (non è nello schema del §3.5).
 - **Risultato strutturato** (`CommandResult`): esito (`ok`, `error`,
   `cancelled`); valori restituiti dal modulo, **ogni numero con unità** e,
   dove pertinente, frame, epoca e convenzione dei pixel; avvisi (codice,
@@ -404,6 +421,18 @@ le scelte minori di §13; tutti versione 1):
   (`FIXED_COLLECTIONS`: `simbad`, `I/355/gaiadr3`, `II/246/out`), letti
   da quel gruppo e non copiati a mano. Il parametro resta una stringa libera:
   l'elenco è un aiuto, non un elenco chiuso.
+
+- **`catalog.load_region` con i ripieghi del 13 e del 14 (sprint B4,
+  2026-11-07):** con la voce `simbad` può rispondere il mirror di Harvard
+  (avviso `SERVICE_MIRROR_FALLBACK` del 14), con Gaia DR3 e 2MASS l'archivio
+  originale (avviso `CATALOG_ORIGINAL_ARCHIVE` del 13); la provenienza e
+  l'impronta di rete riportano l'URL del server che ha risposto. Se il 13
+  non determina colonne **e** sistema (2MASS dall'IRSA, che non dichiara il
+  sistema), avviso **`POSITION_COLUMNS_REQUIRED`** come per
+  `catalog.tap_query`, e il controllo dei corpi si fa dopo la conferma delle
+  colonne: il `40` apre il dialogo delle colonne (42 §3.5). Il livello
+  porta come nome l'identificativo scritto (`II/246/out`), anche quando i
+  dati vengono dall'archivio.
 
 - **`measure.distance` anche tra posizioni celesti (sprint 4g del 41,
   decisione del proprietario del 2026-10-23):** due forme, esattamente una
@@ -744,6 +773,7 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `distance_form`, `sky_form_incomplete`, `snap_needs_pixels`, `pixel_form_incomplete`, `box_size_required` | — | combinazioni di parametri di `measure.distance` non ammesse |
 | `crossmatch_cds_frame` | `frame` | `catalog.crossmatch` con `method = cds` e un sistema di confronto diverso da `icrs` (sprint B2) |
 | `server_already_listed` | `server`, `url` | `vo.add_server` con un URL già in elenco con lo stesso protocollo (sprint B3) |
+| `refresh_not_network` | `command` | `refresh: true` su un comando senza l'indicatore `network` (sprint B4; `parameter` = `refresh`) |
 
 **Altri codici del `05`:**
 
@@ -774,6 +804,7 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `VIEW_UNDEFINED` | `geometry` | — | lettura sotto il cursore senza geometria (la sotto-voce `export` è del `41`) |
 | `VIEW_CENTER_OUTSIDE_IMAGE` | — / `typed` | `layer`, `name` (ext) / `layer`, `name` (ext), `frame` | centro fuori dalla proiezione dell'immagine base (D41-9, sprint 9b) |
 | `MODULE_NOTE` | — | `note` (ext) | avviso di un modulo non convertito, solo testo |
+| `DATA_REFRESHED` (avviso, sprint B4) | `fresh` / `cache_used` | — | comando con `refresh: true`: dati richiesti di nuovo ai servizi; `cache_used` se almeno un dato viene comunque dalla cache |
 
 **Comandi `samp.*` (sprint B1, 2026-11-05):** nessun codice nuovo del `05`; riportano invariati i codici SAMP del 14
 (`SAMP_UNAVAILABLE` con le sotto-voci `no_hub`, `not_connected`, `timeout`; `SAMP_NO_PEER`; `SAMP_UNSUPPORTED_TYPE`);
@@ -821,6 +852,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T21 | Conversazioni nella sessione | sessione con e senza il blocco `conversations`; riapertura con un provider simulato che fallisce se chiamato | blocco presente solo se chiesto, senza cartelle nei nomi dei file; riesecuzione identica nei due casi, nessuna chiamata al provider | test di unità |
 | T25 | `catalog.crossmatch` (sprint B2, D15-10) | due cataloghi VOTable (8 stelle e copie spostate di 0,5″ e 1,5″ costruite con astropy); `best`/`all`/`none` con il raggio di default; raggio in arcsec, arcmin, mas; epoche J2016/J2000; coordinate mancanti; tabella senza colonne di posizione; raggio 0, 200°, 181″ con `cds`, unità `m`; tetto abbassato; `cds` con `galactic`; sistema galattico; Riesegui e sessione salvata e riaperta; CDS XMatch simulato (risposta, eco sbagliata, porta chiusa) | coppie e righe uguali a quelle del 15 chiamato direttamente; `max_sep` 2″ scritto nel comando registrato; `xmatch_sep` in arcsec; nuovo livello `L3`, tabelle d'ingresso invariate; `EPOCH_DIFFERS` con le epoche e stesse coppie; `COORD_MISSING`; `NO_COORD_COLUMNS` (non `BODY_UNKNOWN`); `MAX_SEP_INVALID` con `range_local`/`range_cds`; `TABLE_TOO_LARGE`; `crossmatch_cds_frame`; riesecuzioni con righe identiche; CDS entro 1 mas dal locale con impronta di rete; `CROSSMATCH_SERVICE_FAILED` `service_error`/`unreachable` che propone il locale (en/it), nessun livello creato | test di unità (`tests/core/test_commands_crossmatch.py`) |
 | T26 | `catalog.cone_search` e `catalog.tap_query`, server personali (sprint B3) | servizi SCS e TAP simulati (server HTTP locale, VOTable con e senza `COOSYS`); cone search con voce dell'elenco simulata e con URL, centro galattico con epoca e ICRS senza epoca; `max_rows` sotto le righe del servizio; ADQL vuota, senza SELECT, virgoletta aperta; servizio che rifiuta la query (VOTable `ERROR`); sincrona, asincrona (UWS simulato), asincrona oltre `async_timeout`, asincrona annullata; righe di commento; Riesegui e sessione salvata e riaperta; `vo.add_server`/`vo.remove_server` | parametri SCS ricalcolati con astropy; `url` risolto e scritto nel comando registrato, `async_timeout` 600 s nel comando; nuovo livello catalogo con `query` e provenienza; `ROW_LIMIT_EXCEEDED` con `truncated`; `ADQL_INVALID` con la posizione e nessuna richiesta al servizio; messaggio del servizio invariato nell'errore; `NET_TIMEOUT` `async_deadline`; `COMMAND_CANCELLED` con `ABORT` e lavoro eliminato; `QUERY` inviata senza commenti; riesecuzioni con stesso URL, stessi parametri e righe identiche; `POSITION_COLUMNS_REQUIRED` senza `COOSYS`; `server_already_listed`, `not_personal` | test di unità (`tests/core/test_commands_vo_queries.py`) |
+| T27 | Dati aggiornati e ripieghi nel `catalog.load_region` (sprint B4) | comando con `refresh: true` su `catalog.tap_query` con una risposta già in cache (servizio simulato); poi con il servizio giù e la copia in cache; `refresh: true` su `view.set_center`; forma JSON con e senza il campo; `catalog.load_region` su `II/246/out` con TAPVizieR giù e IRSA simulato senza `COOSYS` | prima esecuzione dalla rete (nessun `FROM_CACHE`) con `DATA_REFRESHED` `fresh`; con il servizio giù `DATA_REFRESHED` `cache_used`; `COMMAND_PARAMETER_INVALID` `refresh_not_network`; `"refresh": true` scritto solo quando vale `true` e riletto; livello creato con `CATALOG_ORIGINAL_ARCHIVE` e `POSITION_COLUMNS_REQUIRED`, provenienza = URL dell'IRSA | test di unità con servizi simulati |
 | T23 | Origine `samp` e comandi `samp.*` (D05-5, sprint B1) | comandi con `requested_by = samp` (con e senza nome del client), forma senza `client_id` o con campi dell'IA; salvare e riaprire una sessione con un `catalog.open_file` di origine `samp`; registro con i cinque `samp.*` | forma JSON di §3.1 scritta e riletta; forme non valide rifiutate; comando `samp` rieseguito alla riapertura con la stessa origine; i `samp.*` sono `application`, `bound_by = "40"`, assenti dallo schema per l'IA (`32`) | test di unità |
 
 ## 13. Decisioni aperte
@@ -1037,3 +1069,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-05 | Claude Code | **Sprint B1b (correzioni SAMP dalla prova con TOPCAT vero):** risultato di `samp.send_table`, `samp.send_selection` e `samp.point_at` con `rejected` (destinatari che rifiutano o non rispondono, anche come avvisi `SAMP_NO_PEER`); con `table_sent = true` la selezione va solo a chi ha accettato la tabella (§7). Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): nuovo comando `catalog.crossmatch` (§7: parametri con `max_sep` default 2″ risolto alla registrazione, metodo `local`/`cds`, sistema `icrs`/`galactic`; nuovo livello catalogo con la tabella unita del 15; report `as_dict()` e `describe()` nel risultato; `CROSSMATCH_SERVICE_FAILED` senza ripiego automatico; `confirm`); §5 dipende dal 15; §10.1 `CROSSMATCH_SERVICE_FAILED` e ragione `crossmatch_cds_frame`; T25 (§12). Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL** (decisioni del proprietario del 2026-11-06): nuovi comandi `catalog.cone_search` e `catalog.tap_query` (§7: `service` voce dell'elenco o URL, `url` risolto e scritto nel comando registrato così la riesecuzione rifà la stessa richiesta, `validate_adql` prima della rete, `async_timeout` 600 s risolto alla registrazione, annullamento, nuovo livello catalogo con `query` e provenienza, `POSITION_COLUMNS_REQUIRED` senza colonne determinate; `confirm`; solo la cone search per l'IA) e `vo.add_server`/`vo.remove_server` (classe `application`, esecutori del `40`); `CommandRegistry.servers`; §10.1 ragione `server_already_listed` e `QUERY_CANCELLED` del 14 reso `COMMAND_CANCELLED`; nuovo T26 (§12). Stato `approvato` invariato. |
+| 2026-11-07 | Claude Code | **Sprint B4 — dati aggiornati e ripieghi** (richiesta del proprietario del 2026-11-07, D14-14 del 14; forma D14-15 (8) da confermare; autorizzazione esplicita ad aggiornare il 05): §3.1 — campo `refresh` del comando (scritto solo quando vale `true`, solo per i comandi `network`, `COMMAND_PARAMETER_INVALID` `refresh_not_network`), avviso `DATA_REFRESHED` (`fresh`, `cache_used`), non esposto all'IA; §7 — `catalog.load_region` con il mirror di SIMBAD e gli archivi originali di Gaia DR3 e 2MASS, `POSITION_COLUMNS_REQUIRED` senza sistema (2MASS dall'IRSA); §10.1, T27. Stato `approvato` invariato. |

@@ -659,17 +659,24 @@ class Command:
     version: int
     parameters: Mapping[str, object]
     requested_by: RequestedBy = RequestedBy("menu")
+    refresh: bool = False  # dati aggiornati (sprint B4): i moduli rifanno le richieste di rete senza la cache
 
     def to_json(self) -> dict:
-        return {"name": self.name, "version": self.version, "parameters": copy.deepcopy(dict(self.parameters)),
-                "requested_by": self.requested_by.to_json()}
+        out = {"name": self.name, "version": self.version, "parameters": copy.deepcopy(dict(self.parameters)),
+               "requested_by": self.requested_by.to_json()}
+        if self.refresh:  # scritto solo quando vale true: comandi e sessioni di prima identici
+            out["refresh"] = True
+        return out
 
     @classmethod
     def from_json(cls, data: Mapping) -> Command:
         if not isinstance(data, Mapping) or not {"name", "version", "parameters"} <= set(data):
             raise ValueError("comando: oggetto con name, version, parameters")
+        refresh = data.get("refresh", False)
+        if not isinstance(refresh, bool):
+            raise ValueError("comando: refresh è true o false")
         return cls(name=data["name"], version=data["version"], parameters=copy.deepcopy(dict(data["parameters"])),
-                   requested_by=RequestedBy.from_json(data.get("requested_by", "menu")))
+                   requested_by=RequestedBy.from_json(data.get("requested_by", "menu")), refresh=refresh)
 
 
 @dataclass(frozen=True)
@@ -884,6 +891,7 @@ class ExecutionContext:
     progress: Callable[[ProgressReport], None] | None
     cache: object = None
     _step: int = 0
+    refresh: bool = False  # comando con refresh: true (sprint B4): da passare ai moduli di rete
 
     def step(self, text: str) -> None:
         """Passo di un comando a più passi: controlla l'annullamento ed emette l'avanzamento."""
@@ -905,6 +913,16 @@ class Outcome:
     layers_created: list[str] = field(default_factory=list)
     network_fingerprint: list[dict] = field(default_factory=list)
     resolved: dict = field(default_factory=dict)  # valori scelti dal modulo da scrivere nel comando registrato
+
+
+def _refreshed(outcome: Outcome) -> ResultMessage:
+    """``DATA_REFRESHED`` (sprint B4): dati freschi, o copia in cache se un servizio non ha risposto."""
+    cached = any(w.code == "FROM_CACHE" for w in outcome.warnings) or any(
+        p.get("from_cache") is True for p in outcome.provenance)
+    if cached:
+        return ResultMessage("DATA_REFRESHED", "dati aggiornati richiesti, ma almeno un servizio non ha risposto: "
+                             "usata la copia in cache (vedi FROM_CACHE)", {"reason": "cache_used"})
+    return ResultMessage("DATA_REFRESHED", "dati richiesti di nuovo ai servizi, senza la cache", {"reason": "fresh"})
 
 
 def _module_error(exc: BaseException) -> ResultMessage | None:
@@ -986,12 +1004,15 @@ class CommandRegistry:
         if extra:
             raise _invalid(extra[0], "parameter_unexpected", f"parametro non previsto da {command.name}",
                            command=command.name)
+        if command.refresh is not False and (command.refresh is not True or not spec.network):
+            raise _invalid("refresh", "refresh_not_network", f"{command.name} non usa la rete: niente da aggiornare",
+                           command=command.name)
         ws = workspace.state if isinstance(workspace, Workspace) else workspace
         params = {}
         for p in spec.parameters:
             given = command.parameters.get(p.name, p.default if p.default is not REQUIRED else None)
             params[p.name] = _normalize(p, copy.deepcopy(given), p.name, ws)
-        return Command(spec.name, spec.version, params, command.requested_by)
+        return Command(spec.name, spec.version, params, command.requested_by, command.refresh)
 
     def execute(self, command: Command, workspace: Workspace, cancel: CancelToken | None = None,
                 progress: Callable[[ProgressReport], None] | None = None) -> CommandResult:
@@ -1024,7 +1045,8 @@ class CommandRegistry:
                 "COMMAND_CANCELLED", "comando annullato prima dell'inizio", {"reason": "before_start"}),
                 started_at=started, finished_at=_now())
         before = workspace.state
-        ctx = ExecutionContext(self, spec, before, registered.parameters, cancel, progress, self.cache)
+        ctx = ExecutionContext(self, spec, before, registered.parameters, cancel, progress, self.cache,
+                               refresh=registered.refresh)
         if progress is not None and spec.steps is None:
             progress(ProgressReport(0, None, spec.name))
         try:
@@ -1051,9 +1073,11 @@ class CommandRegistry:
                 started_at=started, finished_at=_now())
         if outcome.resolved:
             registered = Command(registered.name, registered.version, {**registered.parameters, **outcome.resolved},
-                                 registered.requested_by)
+                                 registered.requested_by, registered.refresh)
         if outcome.state is not None and workspace.state is before:
             workspace._commit(outcome.state)
+        if registered.refresh:
+            outcome.warnings.append(_refreshed(outcome))
         return registered, CommandResult(
             "ok", values=outcome.values, warnings=tuple(outcome.warnings), provenance=tuple(outcome.provenance),
             layers_created=tuple(outcome.layers_created), started_at=started, finished_at=_now(),
@@ -1385,7 +1409,7 @@ def _survey_display_limits(ctx: ExecutionContext, service, coverage, vmin, vmax)
 def _exec_hips_set_survey(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.hips import set_survey
 
-    active = set_survey(p["survey"], cache=ctx.cache)
+    active = set_survey(p["survey"], cache=ctx.cache, refresh=ctx.refresh)
     service = active.service
     state = ctx.state
     display, resolved, display_warnings = None, {}, []
@@ -1544,9 +1568,14 @@ def _exec_catalog_load_region(ctx: ExecutionContext, p: Mapping) -> Outcome:
 
     center, radius = _sky(p["center"]), _q(p["radius"])
     ctx.step("load_catalog")
-    table = load_catalog(p["catalog"], region=(center, radius), max_rows=p["max_rows"], cache=ctx.cache)
+    table = load_catalog(p["catalog"], region=(center, radius), max_rows=p["max_rows"], cache=ctx.cache,
+                         refresh=ctx.refresh)
     ctx.step("check_overlay")
-    warnings = _overlay(ctx.state, table, p["force_body"])
+    # Archivio senza sistema dichiarato (2MASS dall'IRSA, sprint B4): corpi controllati dopo la conferma.
+    warnings = _overlay(ctx.state, table, p["force_body"]) if table.body is not None else []
+    if table.positions is None or table.positions.frame is None:
+        warnings.append(ResultMessage("POSITION_COLUMNS_REQUIRED", "colonne di posizione da confermare con "
+                                      "catalog.set_columns (mai dai nomi)"))
     style, derived, state = _initial_style(ctx.state, table)
     layer_id, state = _add_layer(state, "catalog", p["catalog"], table, source=table.source,
                                  force_body=p["force_body"], style=style, derived=derived)
@@ -1893,7 +1922,7 @@ def _exec_view_go_to(ctx: ExecutionContext, p: Mapping) -> Outcome:
     point, how = _parse_go_to(text, ctx.state.view.coordinate_frame)
     extra, provenance, fingerprint = {}, [], []
     if point is None:
-        resolved = resolve_name(text, cache=ctx.cache)
+        resolved = resolve_name(text, cache=ctx.cache, refresh=ctx.refresh)
         point = resolved.coords
         extra = {"resolved": _resolved_values(resolved)}
         provenance = [_source(resolved.origin, resolved.retrieved_at, resolved.from_cache, source=resolved.source)]
@@ -2126,7 +2155,7 @@ def _exec_simbad_pointer(ctx: ExecutionContext, p: Mapping) -> Outcome:
     if sky is None:
         problem = ctx.state.view.geometry.problem
         raise CommandError(problem.code, problem.text, params=problem.params)
-    found = simbad_pointer(sky.coords, _q(p["radius"]), cache=ctx.cache)
+    found = simbad_pointer(sky.coords, _q(p["radius"]), cache=ctx.cache, refresh=ctx.refresh)
     obj = found.object
     values = {"position": sky_json(sky.coords), "object": None if obj is None else {
         "main_id": obj.main_id, "otype": obj.otype, "position": sky_json(obj.coords), "nbref": obj.nbref,
@@ -2187,7 +2216,7 @@ def _resolver_warnings(resolved) -> list[ResultMessage]:
 def _exec_coords_resolve_name(ctx: ExecutionContext, p: Mapping) -> Outcome:
     from astrotwo.core.coordinates_wcs import resolve_name
 
-    resolved = resolve_name(p["name"], cache=ctx.cache)
+    resolved = resolve_name(p["name"], cache=ctx.cache, refresh=ctx.refresh)
     values = _resolved_values(resolved)
     return Outcome(values=values, warnings=_resolver_warnings(resolved),
                    provenance=[_source(resolved.origin, resolved.retrieved_at, resolved.from_cache,
@@ -2291,7 +2320,7 @@ def _exec_catalog_crossmatch(ctx: ExecutionContext, p: Mapping) -> Outcome:
     else:
         try:
             result = crossmatch_cds(layer_a.data, layer_b.data, p["mode"], max_sep, frame=p["frame"],
-                                    force_body=p["force_body"], cache=ctx.cache)
+                                    force_body=p["force_body"], cache=ctx.cache, refresh=ctx.refresh)
         except Exception as exc:  # noqa: BLE001 - solo rete e servizio diventano l'errore con la proposta del locale
             if getattr(exc, "code", None) in ("NET_TIMEOUT", "SERVICE_ERROR"):
                 raise _crossmatch_service_error(exc, vo.XMATCH_URL) from exc
@@ -2404,7 +2433,7 @@ def _exec_catalog_cone_search(ctx: ExecutionContext, p: Mapping) -> Outcome:
     url, name, label = _vo_service(ctx, p, "scs")
     center, radius = _sky(p["center"]), _q(p["radius"])
     ctx.step("cone_search")
-    result = cone_search(center, radius, url, max_rows=p["max_rows"], cache=ctx.cache)
+    result = cone_search(center, radius, url, max_rows=p["max_rows"], cache=ctx.cache, refresh=ctx.refresh)
     ctx.step("check_overlay")
     return _query_outcome(ctx, p, result, url, name, label, "cone search", {})
 
@@ -2418,6 +2447,7 @@ def _exec_catalog_tap_query(ctx: ExecutionContext, p: Mapping) -> Outcome:
     try:
         result = tap_query(url, p["adql"], max_rows=p["max_rows"], mode=p["mode"],
                            async_timeout=float(_q(p["async_timeout"]).to_value(u.s)), cache=ctx.cache,
+                           refresh=ctx.refresh,
                            cancel=lambda: ctx.cancel.cancelled)
     except Exception as exc:
         if getattr(exc, "code", None) == "QUERY_CANCELLED":  # lavoro asincrono interrotto ed eliminato dal 14

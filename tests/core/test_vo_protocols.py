@@ -1004,7 +1004,7 @@ def simbad_tap(service, monkeypatch):
 def test_t13_simbad_pointer(monkeypatch, cache, simbad_tap):
     calls = []
 
-    def fake(ra, dec, radius_deg, timeouts):
+    def fake(ra, dec, radius_deg, timeouts, server=None):
         calls.append((ra, dec, radius_deg))
         return simbad_table([("A", 10.0, 20.0, "Star", 12), ("B", 10.001, 20.0, "QSO", 340)]), "https://simbad/tap"
 
@@ -1035,12 +1035,12 @@ def test_t13_simbad_pointer(monkeypatch, cache, simbad_tap):
 
 
 def test_simbad_pointer_tie_and_empty(monkeypatch, cache, simbad_tap):
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (simbad_table(
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (simbad_table(
         [("lontano", 10.002, 20.0, "Star", 50), ("vicino", 10.0005, 20.0, "Star", 50), ("poco", 10.0, 20.0, "G", 3)]),
         "https://simbad/tap"))
     result = simbad_pointer(SkyCoord(10 * u.deg, 20 * u.deg), 30 * u.arcsec, cache=cache)
     assert result.object.main_id == "vicino" and "SIMBAD_TIE" in dict(result.warnings)
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (simbad_table([]), "https://simbad/tap"))
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (simbad_table([]), "https://simbad/tap"))
     empty = simbad_pointer(SkyCoord(11 * u.deg, 20 * u.deg), 30 * u.arcsec, cache=cache)
     assert empty.object is None and "SIMBAD_NO_OBJECT" in dict(empty.warnings)
     with pytest.raises(TypeError):

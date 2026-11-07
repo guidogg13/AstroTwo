@@ -57,6 +57,8 @@ __all__ = [
     "CollectionTree",
     "FIXED_COLLECTIONS",
     "FixedCollection",
+    "OriginalArchive",
+    "ORIGINAL_ARCHIVES",
     "POPULARITY_NOTE",
     "collection_tree",
     "datalink_column",
@@ -2446,6 +2448,15 @@ def time_filter(table: CatalogTable, start: Time, end: Time, *, column: str, tim
 
 
 @dataclass(frozen=True)
+class OriginalArchive:
+    """Archivio originale di una voce del gruppo fisso, per il ripiego con TAPVizieR giù (sprint B4, 13 §7)."""
+
+    server: str  # voce TAP dell'elenco dei server del modulo 14
+    table: str  # tabella dell'archivio
+    name: str  # nome mostrato nei messaggi
+
+
+@dataclass(frozen=True)
 class FixedCollection:
     """Collezione del gruppo fisso (D13-3): servizio TAP dell'elenco del 14 e tabella."""
 
@@ -2453,16 +2464,23 @@ class FixedCollection:
     title: str
     server: str  # voce dell'elenco dei server del modulo 14
     table: str  # nome della tabella nel servizio TAP
+    archive: OriginalArchive | None = None  # archivio originale (sprint B4); None: nessun ripiego del 13
 
 
+#: Archivi originali per il ripiego con TAPVizieR giù (sprint B4, 13 §7), verificati il 2026-11-07 (UCD di
+#: ``TAP_SCHEMA``; ``COOSYS`` ICRS J2016.0 dell'archivio Gaia; nessun ``COOSYS`` dall'IRSA).
+ORIGINAL_ARCHIVES: dict[str, OriginalArchive] = {
+    "I/355/gaiadr3": OriginalArchive("esa-gaia-tap", "gaiadr3.gaia_source", "archivio Gaia dell'ESA"),
+    "II/246/out": OriginalArchive("nasa-irsa-tap", "fp_psc", "IRSA (NASA/IPAC)"),
+}
 #: Gruppo fisso (D13-3), identificativi verificati il 2026-10-10 sui servizi del CDS (MocServer, TAPVizieR,
 #: colonne di SIMBAD); l'albero dinamico ordinato per popolarità attende D13-18.
 FIXED_COLLECTIONS: tuple[FixedCollection, ...] = (
     FixedCollection("simbad", "SIMBAD (oggetti, tabella basic)", "cds-simbad-tap", "basic"),
     FixedCollection("I/355/gaiadr3", "Gaia DR3 Part 1. Main source (Gaia Collaboration, 2022)", "cds-vizier-tap",
-                    "I/355/gaiadr3"),
+                    "I/355/gaiadr3", ORIGINAL_ARCHIVES["I/355/gaiadr3"]),
     FixedCollection("II/246/out", "2MASS All-Sky Catalog of Point Sources (Cutri+ 2003)", "cds-vizier-tap",
-                    "II/246/out"),
+                    "II/246/out", ORIGINAL_ARCHIVES["II/246/out"]),
 )
 _CATALOG_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+/-]*$")
 
@@ -2513,9 +2531,14 @@ class CatalogRegion:
     center_lat_deg: float
     radius_deg: float
     adql: str
+    archive_circle: str | None = None  # archivio senza COOSYS: cerchio chiesto in ICRS, colonne senza sistema (B4)
 
     def describe_params(self) -> dict:
         """``params`` dell'avviso ``REGION``: stessi valori di ``describe()``, mai arrotondati."""
+        if self.archive_circle is not None:
+            return {"reason": "archive_icrs_circle", "lon": self.lon, "lat": self.lat,
+                    "center_lon": _q(self.center_lon_deg, "deg"), "center_lat": _q(self.center_lat_deg, "deg"),
+                    "radius": _q(self.radius_deg, "deg"), "archive": self.archive_circle}
         reason = ("equinox_epoch" if self.equinox and self.epoch else
                   ("equinox" if self.equinox else ("epoch" if self.epoch else None)))
         return ({"lon": self.lon, "lat": self.lat, "system": self.frame.upper(),
@@ -2526,6 +2549,11 @@ class CatalogRegion:
                 | ({"reason": reason} if reason else {}))
 
     def describe(self) -> str:
+        if self.archive_circle is not None:
+            return (f"regione: cerchio di raggio {self.radius_deg!r}° attorno a ({self.center_lon_deg!r}°, "
+                    f"{self.center_lat_deg!r}°) chiesto con CIRCLE('ICRS', …) a {self.archive_circle}, che non "
+                    f"dichiara il sistema delle colonne {self.lon}/{self.lat}: posizioni da confermare (centro "
+                    "convertito in ICRS con il modulo 10)")
         sys = self.frame.upper() + (f" equinozio {self.equinox}" if self.equinox else "") + (
             f", epoca delle posizioni {self.epoch}" if self.epoch else ", epoca delle posizioni non dichiarata")
         return (f"regione: cerchio di raggio {self.radius_deg!r}° attorno a ({self.center_lon_deg!r}°, "
@@ -2609,7 +2637,7 @@ def _schema_columns(vo, server: str, name: str, kwargs: dict) -> tuple[str, str]
     return found["pos.eq.ra"], found["pos.eq.dec"]
 
 
-def _catalog_region(vo, server: str, name: str, region, kwargs: dict) -> CatalogRegion:
+def _catalog_region(vo, server: str, name: str, region, kwargs: dict, archive: str | None = None) -> CatalogRegion:
     from astropy.coordinates import SkyCoord
 
     if not isinstance(region, tuple) or len(region) != 2:
@@ -2631,6 +2659,15 @@ def _catalog_region(vo, server: str, name: str, region, kwargs: dict) -> Catalog
     header = vo.tap_query(server, f'SELECT TOP 0 {lon}, {lat} FROM "{name}"' if "/" in name
                           else f"SELECT TOP 0 {lon}, {lat} FROM {name}", **kwargs).table
     pos = header.positions
+    if archive is not None and (pos is None or pos.frame is None):
+        # Archivio originale senza COOSYS (IRSA, sprint B4): cerchio in ICRS dichiarato, posizioni senza sistema.
+        icrs = center if center.frame_name == "icrs" else center.to("icrs")
+        clon = float(np.atleast_1d(icrs.lon.to_value(u.deg))[0])
+        clat = float(np.atleast_1d(icrs.lat.to_value(u.deg))[0])
+        adql = (f"SELECT * FROM {name} WHERE 1 = CONTAINS(POINT('ICRS', {lon}, {lat}), "
+                f"CIRCLE('ICRS', {clon!r}, {clat!r}, {r!r}))")
+        return CatalogRegion(lon.strip('"'), lat.strip('"'), "icrs", None, None, clon, clat, r, adql,
+                             archive_circle=archive)
     if pos is None or pos.frame not in _ADQL_SYSTEMS:
         raise CatalogsError("FRAME_UNKNOWN", f"catalogo {name!r}: il servizio non dichiara il sistema delle colonne "
                             f"{lon}/{lat} con un COOSYS ({pos.system if pos else 'nessuno'}): regione non applicabile",
@@ -2656,6 +2693,27 @@ def _catalog_region(vo, server: str, name: str, region, kwargs: dict) -> Catalog
     return CatalogRegion(lon.strip('"'), lat.strip('"'), pos.frame, equinox, epoch, clon, clat, r, adql)
 
 
+def _vizier_no_mirror(vo, catalog_id: str, exc) -> CatalogsError:
+    """TAPVizieR giù per un identificativo senza archivio originale (sprint B4): nessuna copia fuori da Strasburgo."""
+    url = vo.service_url("cds-vizier-tap", "tap")
+    return CatalogsError("NET_TIMEOUT", f"catalogo {catalog_id!r}: TAPVizieR ({url}) non raggiungibile e senza copie "
+                         "verificate fuori da Strasburgo; Gaia DR3 (I/355/gaiadr3) e 2MASS (II/246/out) hanno il "
+                         "ripiego sugli archivi originali; per altri cataloghi usare Data → Query ADQL sull'archivio "
+                         f"originale, se esiste (es. l'archivio Gaia dell'ESA): {exc.message}",
+                         params={"reason": "vizier_no_mirror", "catalog_id": catalog_id, "url": url,
+                                 "cause": vo._message_of(exc)})
+
+
+def _catalog_servers_down(vo, catalog_id: str, server: str, archive: OriginalArchive, last) -> CatalogsError:
+    """TAPVizieR e archivio originale giù (sprint B4): numero dei server provati e ultimo errore."""
+    tried = [vo.service_url(server, "tap"), vo.service_url(archive.server, "tap")]
+    return CatalogsError("NET_TIMEOUT", f"catalogo {catalog_id!r}: nessun server risponde (provati {len(tried)}: "
+                         f"{', '.join(tried)}); ultimo errore {last.code}: {last.message}. I dati già scaricati restano "
+                         "nella cache; riprovare più tardi",
+                         params={"reason": "catalog_servers", "catalog_id": catalog_id, "servers": len(tried),
+                                 "tried": tried, "last": vo._message_of(last)})
+
+
 def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, allow_partial: bool = False,
                  limits: TableLimits | None = None, cache=None, refresh: bool = False, timeouts=None) -> CatalogTable:
     """Catalogo per identificatore (D1): VizieR (es. ``"II/246/out"``) tramite TAP VizieR del 14, o una
@@ -2674,18 +2732,48 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
     fixed = {c.id: c for c in FIXED_COLLECTIONS}
     server, name = (fixed[catalog_id].server, fixed[catalog_id].table) if catalog_id in fixed \
         else ("cds-vizier-tap", catalog_id)
+    archive = fixed[catalog_id].archive if catalog_id in fixed else None
     kwargs = {"cache": cache, "refresh": refresh}
     if timeouts is not None:
         kwargs["timeouts"] = timeouts
+    rows_limit = vo.DEFAULT_MAX_ROWS if max_rows is None else max_rows
+
+    def run(where: str, table_name: str, call: dict, archive_name: str | None = None):
+        area = None if region is None else _catalog_region(vo, where, table_name, region, call, archive=archive_name)
+        quoted = f'"{table_name}"' if "/" in table_name else table_name
+        adql = f"SELECT * FROM {quoted}" if area is None else area.adql
+        return area, vo.tap_query(where, adql, max_rows=rows_limit, limits=limits, **call)
+
+    original = None  # causa del guasto di TAPVizieR quando risponde l'archivio originale (sprint B4)
     try:
-        area = None if region is None else _catalog_region(vo, server, name, region, kwargs)
-        adql = f'SELECT * FROM "{name}"' if area is None else area.adql
-        result = vo.tap_query(server, adql, max_rows=vo.DEFAULT_MAX_ROWS if max_rows is None else max_rows,
-                              limits=limits, **kwargs)
+        try:
+            # Con un archivio originale, TAPVizieR giù non dà subito la copia vecchia: prima l'archivio (13 §7).
+            area, result = run(server, name, kwargs | ({"use_stale_cache": False} if archive else {}))
+        except vo.VoProtocolsError as exc:
+            if not vo.is_failover_error(exc) or server != "cds-vizier-tap":
+                raise
+            if archive is None:
+                raise _vizier_no_mirror(vo, catalog_id, exc) from exc
+            try:
+                area, result = run(archive.server, archive.table, kwargs | {"use_stale_cache": False}, archive.name)
+                original = exc
+            except vo.VoProtocolsError as exc2:
+                if not vo.is_failover_error(exc2):
+                    raise
+                if refresh:  # ultima possibilità: la copia di VizieR in cache, dichiarata (FROM_CACHE)
+                    try:
+                        area, result = run(server, name, kwargs | {"refresh": False})
+                    except vo.VoProtocolsError as exc3:
+                        if not vo.is_failover_error(exc3):
+                            raise
+                        raise _catalog_servers_down(vo, catalog_id, server, archive, exc2) from exc2
+                else:
+                    raise _catalog_servers_down(vo, catalog_id, server, archive, exc2) from exc2
     except vo.VoProtocolsError as exc:
         if exc.code == "ADQL_INVALID":  # il servizio rifiuta la tabella: catalogo sconosciuto
+            where = archive.server if original is not None else server
             detail = exc.details.get("service_message", exc.message)
-            raise _catalog_unknown(vo, server, name, kwargs, f"catalogo {catalog_id!r} non trovato su {server}: "
+            raise _catalog_unknown(vo, where, name, kwargs, f"catalogo {catalog_id!r} non trovato su {where}: "
                                    f"{detail}", "not_found", catalog_id=catalog_id, detail=str(detail)) from exc
         raise
     if result.truncated and not allow_partial:
@@ -2705,6 +2793,16 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
     table = _from_vo_result(result)
     history = (f"catalogo {catalog_id} da {server}",)
     notes = ()
+    if original is not None:
+        url = vo.service_url(archive.server, "tap")
+        history = (f"catalogo {catalog_id} da {archive.name} (tabella {archive.table}, {url}): TAPVizieR non "
+                   "raggiungibile; nomi delle colonne dell'archivio, non quelli di VizieR",)
+        notes += (ModuleWarning("CATALOG_ORIGINAL_ARCHIVE", f"{catalog_id}: TAPVizieR non raggiungibile "
+                                f"({original.code}); dati dall'archivio originale {archive.name}, tabella "
+                                f"{archive.table} ({url}); i nomi delle colonne sono quelli dell'archivio, non quelli "
+                                "di VizieR", {"catalog_id": catalog_id, "archive": archive.name,
+                                              "table": archive.table, "url": url,
+                                              "cause": vo._message_of(original)}),)
     if area is not None:
         history += (area.describe(),)
         notes += (ModuleWarning("REGION", area.describe(), area.describe_params()),)

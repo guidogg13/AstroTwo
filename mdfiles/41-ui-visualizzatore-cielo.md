@@ -751,6 +751,15 @@ opzioni stanno in una barra sul cielo. Il resto è scelta minore (§13).
   comando (rete, WCS): il testo del 14 o del 05 con ⚠. Il riquadro si
   chiude al primo movimento oltre `CLICK_SLOP`, con Esc, a strumento spento o
   quando il mouse esce.
+- **Puntatore Simbad con il CDS giù (sprint B4, 2026-11-07):** la regione e
+  le magnitudini passano al mirror di Harvard con le regole del 14 §3
+  (D14-14); la prima volta nella sessione il riquadro mostra l'avviso
+  `SERVICE_MIRROR_FALLBACK` (⚠), e sempre l'origine del risultato («From:
+  https://simbad.harvard.edu/simbad/sim-tap»), così si vede quale server ha
+  risposto. Il collegamento alla pagina SIMBAD va **al server che ha
+  risposto** (`https://simbad.harvard.edu/simbad/sim-id?Ident=…` quando ha
+  risposto il mirror; prefissi ammessi: `https://simbad.cds.unistra.fr/` e
+  `https://simbad.harvard.edu/`; D14-15 (9) del 14, da confermare).
 - **Assistente:** `measure.distance` è già nell'elenco del `32` (con lo
   schema esteso); `simbad.pointer` è `passive`, non è nell'elenco e non lo
   diventa (regola del `32` §3.2).
@@ -1145,3 +1154,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-11-04 | Claude Code | Sprint A3: corretto l'errore alla chiusura rapida (`RuntimeError: Signal source has been deleted`): il timer a 0 ms della prima vista ha il visualizzatore come contesto e non scatta se è già distrutto. Comportamento invariato; stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): nuova §3.20 (menu contestuale del cielo con i puntamenti SAMP; puntamento ricevuto = `view.set_center` di origine `samp`); T38 (§12). Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3:** §3 "Catalogo nel campo" — centro e raggio della vista della `ViewGeometry` del 10 usati anche da Cone search… (centro e raggio proposti) e da "Inserisci centro e raggio della vista" della query ADQL (`42` §3.8); "Catalog in view…" invariato (D41-10). Stato `approvato` invariato. |
+| 2026-11-07 | Claude Code | **Sprint B4 — puntatore Simbad con il CDS giù** (regole del proprietario del 2026-11-07, D14-14 del 14; autorizzazione esplicita ad aggiornare il 41): §3.19 — riquadro con l'avviso `SERVICE_MIRROR_FALLBACK` e l'origine del server che ha risposto; collegamento alla pagina SIMBAD del server che ha risposto (prefissi CDS e Harvard; D14-15 (9) da confermare). Stato `approvato` invariato. |

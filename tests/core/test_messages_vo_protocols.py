@@ -74,13 +74,14 @@ OWN_CODES = (
     "MAX_SEP_INVALID", "SERVER_UNKNOWN", "SIA_INVALID", "SSA_INVALID", "IDHA_UNREADABLE", "SAMP_UNAVAILABLE",
     "SAMP_UNSUPPORTED_TYPE", "SAMP_NO_PEER", "ROW_LIMIT_EXCEEDED", "CSV_UNITS_NOT_SAVED", "SIA_NO_RESULT",
     "SSA_NO_RESULT", "ASTRORES_LINK_SOURCE", "SIMBAD_NO_OBJECT", "SIMBAD_SYSTEM_UNKNOWN", "SIMBAD_SYSTEM_UNDECLARED",
-    "SIMBAD_NBREF_MISSING", "SIMBAD_TIE", "SIMBAD_NO_MAGNITUDE", "SAMP_TABLE_FETCH_FAILED",
+    "SIMBAD_NBREF_MISSING", "SIMBAD_TIE", "SIMBAD_NO_MAGNITUDE", "SAMP_TABLE_FETCH_FAILED", "SERVICE_MIRROR_FALLBACK",
 )
 #: Sotto-voci del 14 sollevate dall'interfaccia (40 §3.12, ``samp_link.py``): provocate in ``tests/ui/test_samp.py``.
 UI_SAMP_SUBVARIANTS = {("SAMP_UNAVAILABLE", "timeout"), ("SAMP_UNAVAILABLE", "hub_shutdown")}
 SHARED = {
     ("FILE_EXISTS", None), ("XML_UNSAFE", None), ("TABLE_TOO_LARGE", "upload"),
     ("NET_TIMEOUT", "url"), ("NET_TIMEOUT", "url_sync_tap"), ("NET_TIMEOUT", "async_deadline"),
+    ("NET_TIMEOUT", "service_servers"), ("NET_TIMEOUT", "mocserver_no_mirror"),
     ("BODY_UNKNOWN", "spectrum_without_candidate"), ("FORMAT_DECLARED", "recognized_differs"),
 } | {("SERVICE_ERROR", r) for r in (
     "http_status", "unreadable_response", "http_message", "http_message_async_hint", "http_no_votable",
@@ -283,31 +284,31 @@ def test_services_p4_to_p6(service, cache, catalog, tmp_path, monkeypatch, simba
     seen.error(read_idha, bomb)  # XML_UNSAFE
 
     # SIMBAD e fotometria VizieR
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (simbad_table([]), "https://simbad/tap"))
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (simbad_table([]), "https://simbad/tap"))
     center = SkyCoord(10 * u.deg, 20 * u.deg)
     seen.notes(simbad_pointer(center, 30 * u.arcsec, cache=cache).warnings)  # SIMBAD_NO_OBJECT
     tied = simbad_table([("A", 10.002, 20.0, "Star", 50), ("B", 10.0005, 20.0, "Star", 50)])
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (tied, "https://simbad/tap"))
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (tied, "https://simbad/tap"))
     first = simbad_pointer(center, 31 * u.arcsec, cache=cache)
     seen.notes(first.warnings)  # SIMBAD_TIE, SIMBAD_SYSTEM_UNDECLARED
     seen.notes(simbad_pointer(center, 31 * u.arcsec, cache=cache).warnings)  # cached_since
     untyped = simbad_table([("A", 10.002, 20.0, "Star", 1), ("B", 10.0005, 20.0, "Star", 1)])
     untyped["nbref"] = MaskedColumn([1, 2], mask=[True, True])
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (untyped, "https://simbad/tap2"))
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (untyped, "https://simbad/tap2"))
     seen.notes(simbad_pointer(center, 32 * u.arcsec, cache=cache).warnings)  # SIMBAD_NBREF_MISSING, TIE nbref_missing
     service.routes["/simbad/sync"] = lambda r: (200, "application/x-votable+xml", FLUX.replace(
         "<TD>V</TD><TD>C</TD>", "<TD>Z</TD><TD>C</TD>", 1))
     other = simbad_table([("C", 11.0, 21.0, "Star", 4)])
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (other, "https://simbad/tap3"))
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (other, "https://simbad/tap3"))
     seen.notes(simbad_pointer(SkyCoord(11 * u.deg, 21 * u.deg), 30 * u.arcsec, cache=cache).warnings)  # UNKNOWN
     service.routes["/simbad/sync"] = lambda r: (200, "application/x-votable+xml", FLUX.split("<DATA>")[0]
                                                  + "<DATA><TABLEDATA></TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>")
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (
         simbad_table([("E", 11.0, 21.0, "Star", 4)]), "https://simbad/tap3"))  # altro oggetto: nessuna cache
     seen.notes(simbad_pointer(SkyCoord(11 * u.deg, 21 * u.deg), 31 * u.arcsec, cache=cache).warnings)  # NO_MAGNITUDE
     unitless = simbad_table([("D", 12.0, 22.0, "Star", 4)])
     unitless["ra"].unit = None
-    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t: (unitless, "https://simbad/tap4"))
+    monkeypatch.setattr(vo, "_query_simbad_region", lambda ra, dec, r, t, s=None: (unitless, "https://simbad/tap4"))
     seen.error(simbad_pointer, SkyCoord(12 * u.deg, 22 * u.deg), 30 * u.arcsec, cache=cache)  # simbad_no_units
     service.routes["/sed"] = votable_route(votable_text(2))
     monkeypatch.setattr(vo, "VIZIER_PHOTOMETRY_URL", service.url + "/sed")
@@ -381,6 +382,42 @@ def test_services_p4_to_p6(service, cache, catalog, tmp_path, monkeypatch, simba
     seen.error(SampHub.save_votable, "ftp://example.invalid/t.xml", tmp_path / "t.xml")  # scheme
     seen.error(SampHub.save_votable, (tmp_path / "manca.xml").as_uri(), tmp_path / "t.xml")  # file
 
+
+
+def test_mirror_fallback_messages(cache, monkeypatch):
+    """Ripiego sui mirror (sprint B4): ``SERVICE_MIRROR_FALLBACK`` nelle tre sotto-voci, ``NET_TIMEOUT``
+    ``service_servers`` e ``mocserver_no_mirror``."""
+    import dataclasses
+
+    from tests.conftest import FakeService
+    from tests.core.test_cds_mirrors import FAST, ok, status
+
+    primary, mirror = FakeService(), FakeService()
+    try:
+        monkeypatch.setattr(vo, "BUILTIN_SERVERS", tuple(
+            dataclasses.replace(e, url=primary.url + "/tap") if e.id == "cds-simbad-tap" else e
+            for e in vo.BUILTIN_SERVERS))
+        monkeypatch.setattr(vo, "SERVICE_MIRRORS", {"cds-simbad-tap": vo.ServiceMirrors(
+            "simbad", "SIMBAD", (mirror.url + "/tap",))})
+        mirror.routes["/tap/sync"] = ok(1)
+        for k, route in enumerate((status(503), lambda r: (200, "text/html", "<html/>"), None)):
+            vo.reset_mirror_state()
+            if route is None:
+                primary.close()
+            else:
+                primary.routes["/tap/sync"] = route
+            result = tap_query("cds-simbad-tap", f"SELECT * FROM basic WHERE {k} = {k}", cache=cache, timeouts=FAST)
+            for warning in result.warnings:
+                SEEN.pairs.add(check_message(warning[0], warning.params, warning[1]))
+        mirror.routes["/tap/sync"] = status(503)
+        SEEN.error(tap_query, "cds-simbad-tap", "SELECT * FROM basic WHERE 9 = 9", cache=cache, timeouts=FAST)
+        monkeypatch.setattr(vo, "MOCSERVER_URL", mirror.url + "/MocServer/query")
+        mirror.routes["/MocServer/query"] = status(503)
+        SEEN.error(vo.vizier_collections, cache=cache, timeouts=FAST)
+    finally:
+        mirror.close()
+        if primary.server.socket.fileno() != -1:
+            primary.close()
 
 
 def test_every_code_and_reason_of_the_module_is_provoked():

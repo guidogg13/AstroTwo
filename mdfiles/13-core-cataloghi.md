@@ -579,6 +579,45 @@ suo VOTable.
   storia). Un servizio che troncasse senza dichiararlo non sarebbe
   conforme a TAP e non si può riconoscere: si usano solo i servizi
   dell'elenco del 14.
+  **Ripiego sugli archivi originali (sprint B4, 2026-11-07, D14-14 del 14
+  decisa dal proprietario; scelte minori D14-15 (5)–(7) da confermare):**
+  TAPVizieR non ha copie fuori da Strasburgo (verifica del 2026-11-07, 14
+  §3). Se TAPVizieR non risponde per una **causa di cambio** del 14
+  (`is_failover_error`: timeout, connessione, HTTP 5xx o 429, risposta non
+  valida; mai per 404, ADQL rifiutata o nessun risultato), le due voci del
+  gruppo fisso che hanno un archivio originale si caricano da lì, **con la
+  stessa regione e lo stesso `max_rows`** della richiesta: Gaia DR3
+  (`I/355/gaiadr3`) → archivio Gaia dell'ESA, tabella `gaiadr3.gaia_source`
+  (voce `esa-gaia-tap` del 14); 2MASS (`II/246/out`) → IRSA, tabella
+  `fp_psc` (voce `nasa-irsa-tap`). Le colonne di posizione si trovano
+  **dagli UCD di `TAP_SCHEMA`** come per VizieR (verifica del 2026-11-07:
+  `ra`/`dec` con `pos.eq.ra;meta.main`/`pos.eq.dec;meta.main` in entrambi);
+  il sistema e l'epoca sono **quelli dichiarati dall'archivio**: l'archivio
+  Gaia collega le colonne a un `COOSYS` ICRS epoca J2016.0; **l'IRSA non
+  dichiara il sistema** (nessun `COOSYS`; la descrizione dice solo "J2000
+  decimal deg"): la regione si chiede allora con `CIRCLE('ICRS', …)` e il
+  centro in ICRS, dichiarato nell'avviso `REGION` (`reason =
+  archive_icrs_circle`), e le posizioni della tabella restano **senza
+  sistema** (nessuna scelta al posto dell'utente: dialogo delle colonne,
+  `POSITION_COLUMNS_REQUIRED` del `05`). **Nessuna rinomina:** i nomi delle
+  colonne sono quelli dell'archivio (es. Gaia `ra`, `dec`,
+  `phot_g_mean_mag`; 2MASS `ra`, `dec`, `j_m`), non quelli di VizieR. Il
+  risultato lo **dichiara** con l'avviso `CATALOG_ORIGINAL_ARCHIVE`
+  (identificativo, archivio, tabella, URL, causa del guasto di TAPVizieR) e
+  con una voce nella storia; l'origine della tabella è l'URL dell'archivio.
+  Prima della rete vale la cache: con una copia di VizieR in cache per la
+  stessa richiesta si usa quella; con il servizio giù si prova l'archivio
+  **prima** di una copia vecchia di VizieR (`use_stale_cache=False` del
+  14), che resta l'ultima possibilità (dichiarata con `FROM_CACHE`).
+  **Se cadono tutti:** `NET_TIMEOUT` con `reason = catalog_servers`
+  (identificativo, **numero dei server provati** = 2, i loro nomi, ultimo
+  errore). **Altri identificativi VizieR** con TAPVizieR giù:
+  `NET_TIMEOUT` con `reason = vizier_no_mirror` (URL, causa), il cui testo
+  dice che TAPVizieR non ha copie fuori da Strasburgo e suggerisce le voci
+  fisse Gaia DR3 e 2MASS o la **Query ADQL sull'archivio originale** del
+  catalogo (es. l'archivio Gaia dell'ESA). La voce `simbad` usa il mirror
+  di SIMBAD del 14 (stessa tabella `basic`, `utype` MANGO verificato sul
+  mirror il 2026-11-07).
 - **`load_table(source, *, table=None, format=None, limits=None, cache=None,
   refresh=False, timeouts=None)`** (P6) — come `read_table` per un file
   locale (con i descrittori di servizio del VOTable); un URL passa da
@@ -594,7 +633,11 @@ suo VOTable.
   §3.
 - **`FIXED_COLLECTIONS`** (P6, D13-3) — gruppo fisso: `simbad` (tabella
   `basic` del TAP di SIMBAD), `I/355/gaiadr3` (Gaia DR3), `II/246/out`
-  (2MASS), ognuno con la voce TAP dell'elenco del 14.
+  (2MASS), ognuno con la voce TAP dell'elenco del 14. Dal 2026-11-07 (sprint
+  B4) `FixedCollection.archive` = archivio originale per il ripiego
+  (`OriginalArchive`: voce TAP del 14, tabella, nome; Gaia DR3 →
+  `esa-gaia-tap`/`gaiadr3.gaia_source`, 2MASS → `nasa-irsa-tap`/`fp_psc`;
+  `None` per `simbad`, che ha il mirror del 14).
 - **`datalink_column(table)`** (P6, D13-11, D14-9 punto 14) — colonna
   DataLink: quella citata da un descrittore di servizio DataLink del
   VOTable; altrimenti la colonna degli URL di accesso (UCD `meta.ref.url`,
@@ -730,6 +773,10 @@ suo VOTable.
 | Regione con più di `max_rows` righe | nessuna tabella; ridurre il raggio o `allow_partial=True` | `REGION_TOO_LARGE` |
 | Regione: colonne di posizione non univoche negli UCD di `TAP_SCHEMA` | rifiuto, con le colonne candidate per RA e per Dec nel messaggio (D13-21 (a), 2026-10-23) | `NO_COORD_COLUMNS` |
 | Regione: nessuna colonna della tabella in `TAP_SCHEMA` (identificativo che non è una tabella, es. `I/355`) | rifiuto con riferimento all'id e, se il servizio le dà, le tabelle che cominciano con l'id (2026-10-23, D32-1 (b)) | `CATALOG_UNKNOWN` |
+| TAPVizieR giù (causa di cambio del 14) per Gaia DR3 o 2MASS (sprint B4) | stessa richiesta sull'archivio originale; colonne dell'archivio, non rinominate | avviso `CATALOG_ORIGINAL_ARCHIVE` |
+| IRSA (2MASS) senza `COOSYS` | regione con `CIRCLE('ICRS', …)` dichiarata; posizioni senza sistema, dialogo delle colonne | avviso `REGION` (`archive_icrs_circle`) |
+| TAPVizieR e archivio originale giù | nessun catalogo; numero dei server provati | `NET_TIMEOUT` (`catalog_servers`) |
+| TAPVizieR giù per un altro identificativo | nessun catalogo; suggerimento di Gaia DR3/2MASS e della query ADQL sull'archivio originale | `NET_TIMEOUT` (`vizier_no_mirror`) |
 | Regione: sistema delle colonne non dichiarato con un `COOSYS` né con l'`utype` MANGO (D13-20) | rifiuto, nessun sistema assunto | `FRAME_UNKNOWN` |
 | Regione usata | righe nel cerchio; colonne, sistema, centro convertito e raggio dichiarati | avviso `REGION` |
 | Record del MocServer che non è una collezione VizieR | escluso dall'albero | avviso `COLLECTION_SKIPPED` |
@@ -996,6 +1043,10 @@ dà le tabelle che cominciano con l'identificativo (`_candidates_limited` se l'e
 | `COLLECTION_SKIPPED` | `more` | `ids` (list, esterno) |
 | `POPULARITY_INVALID` | (generale) | `count` (integer) |
 | `POPULARITY_MISSING` | (generale) | `count` (integer) |
+| `CATALOG_ORIGINAL_ARCHIVE` (avviso, sprint B4) | (generale) | `catalog_id` (string), `archive` (string), `table` (string), `url` (string), `cause` (message) |
+| `REGION` | `archive_icrs_circle` (sprint B4) | `lon` (string, esterno), `lat` (string, esterno), `center_lon` (quantity), `center_lat` (quantity), `radius` (quantity), `archive` (string) |
+| `NET_TIMEOUT` | `catalog_servers` (sprint B4) | `catalog_id` (string), `servers` (integer), `tried` (list), `last` (message) |
+| `NET_TIMEOUT` | `vizier_no_mirror` (sprint B4) | `catalog_id` (string), `url` (string), `cause` (message) |
 
 ## 11. Esposizione all'IA
 
@@ -1045,6 +1096,7 @@ sono verificati da `34-ia-verifica-risultati.md`.
 | T35 | Epoca del `COOSYS` dopo la conferma delle colonne (D41-6) | risposta di TAP VizieR registrata (Gaia DR3 `I/355/gaiadr3`, 11 righe attorno ad Alcyone, `COOSYS` ICRS `epoch="2016.0"`), servita da un servizio simulato; `confirm_position_columns` con le stesse colonne `RA_ICRS`/`DE_ICRS` e `icrs`, poi con un altro sistema, poi su colonne diverse | stesse colonne e sistema: epoca `J2016` conservata, `EPOCH_FROM_METADATA`, `display_positions` uguale a `propagate` ricalcolato da J2016.0; sistema o colonne diversi: epoca non conservata e `EPOCH_INVALID` nella propagazione | test con risposta registrata, senza rete |
 | T35c | Parola principale dell'UCD (D13-22) | VOTable con posizioni senza UCD e `pmRA`/`pmDE` con `pos.pm;pos.eq.ra`/`dec`; `TAP_SCHEMA` con `pos.pm;pos.eq.ra` e `stat.error;pos.eq.ra` accanto alle posizioni senza `meta.main` | nessuna posizione dalle colonne di moto proprio (`NO_COORD_COLUMNS`); in `TAP_SCHEMA` scelte le sole colonne di posizione | test senza rete |
 | T35b | Conferma ripetuta (sprint 9) | tabella di T35 confermata due volte con le stesse colonne e `icrs`; poi su colonne diverse e di nuovo sulle prime | epoca `J2016` e `EPOCH_FROM_METADATA` anche alla seconda conferma; dopo colonne diverse l'epoca non torna | test senza rete |
+| T36 | Ripiego di Gaia DR3 e 2MASS sugli archivi originali (sprint B4) | servizi simulati: TAPVizieR giù (connessione, HTTP 503) con regione su `I/355/gaiadr3` → archivio Gaia simulato con `TAP_SCHEMA` e `COOSYS` ICRS J2016.0; su `II/246/out` → IRSA simulato senza `COOSYS`; TAPVizieR con 404 o ADQL rifiutata → nessun ripiego; TAPVizieR e archivio giù → `NET_TIMEOUT` `catalog_servers` con 2 server; `I/239/hip_main` con TAPVizieR giù → `vizier_no_mirror`; voce `simbad` con il principale giù → mirror | stessa regione (centro e raggio) e stesso `max_rows` nella richiesta all'archivio; colonne `ra`/`dec` da UCD; Gaia: ICRS epoca J2016.0 dichiarati; 2MASS: `CIRCLE('ICRS', …)`, posizioni senza sistema, `REGION` `archive_icrs_circle`; nomi delle colonne dell'archivio; `CATALOG_ORIGINAL_ARCHIVE`; origine = URL dell'archivio | test con servizi simulati; test di rete (non nel commit) su Gaia ESA e IRSA |
 | T24 | Unità non riconosciute | colonne con `---` e con un'unità VOUnit valida | la prima con la stringa originale e `UNIT_UNRECOGNIZED`, la seconda con l'unità di `astropy.units` | test di unità |
 | T25 | `inplace` nel report | `calculated_column` e `subset` con e senza `inplace=True` | senza: nuova tabella, originale invariata; con: tabella data modificata e report che lo cita | test di unità |
 | T26 | Statistiche di una colonna | colonna con valori mascherati e NaN | minimo, massimo, media, deviazione standard e conteggi uguali a `numpy` sui valori validi | ricalcolo con `numpy` |
@@ -1283,3 +1335,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-25 | Claude Code | **Sprint 9 (E7-b):** `DisplayPositions.epoch_origin` (identificativo della fonte dell'epoca di visualizzazione) perché la scheda della sorgente del `41` mostri la fonte nella lingua dell'interfaccia (§7). Nessun valore cambia. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9:** aperta **D13-22** (colonne di moto proprio prese come posizioni quando le posizioni non hanno UCD), §13. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b (D13-22 decisa dal proprietario, opzione (a)):** per le posizioni conta solo la prima parola dell'UCD (§3, `TAP_SCHEMA` compreso); T35c. Stato `approvato` invariato. |
+| 2026-11-07 | Claude Code | **Sprint B4 — ripiego di Gaia DR3 e 2MASS sugli archivi originali** (regole del proprietario del 2026-11-07, D14-14 del 14; scelte minori D14-15 (5)–(7) da confermare; autorizzazione esplicita ad aggiornare il 13): `load_catalog` con TAPVizieR giù per una causa di cambio del 14 carica Gaia DR3 dall'archivio Gaia dell'ESA (`gaiadr3.gaia_source`, ICRS J2016.0 dal `COOSYS`) e 2MASS dall'IRSA (`fp_psc`, nessun `COOSYS`: regione con `CIRCLE('ICRS', …)` dichiarata, posizioni da confermare), stessa regione e `max_rows`, colonne dagli UCD e non rinominate, avviso `CATALOG_ORIGINAL_ARCHIVE`; tutti giù → `NET_TIMEOUT` `catalog_servers`; altri identificativi → `vizier_no_mirror`; `simbad` con il mirror del 14; `FixedCollection.archive`; verifiche reali del 2026-11-07 (UCD, `COOSYS`, Alcyone = Gaia DR3 66714384142368256 e 2MASS J03472908+2406184, uguali a SIMBAD di Harvard); §7, §10, T36. Stato `approvato` invariato. |

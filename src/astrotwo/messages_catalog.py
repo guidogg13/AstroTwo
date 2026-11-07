@@ -3314,3 +3314,71 @@ _add("CACHE_FORBIDDEN", "The cache entry cannot be used by this module.",
                   "La voce {key} è una riga della tabella {table}: usare table().", "key! table"),
      wrong_table=("The entry {key} does not belong to the table {table}.",
                   "La voce {key} non appartiene alla tabella {table}.", "key! table"))
+
+
+# --- Ripiego sui mirror dei servizi del CDS e dati aggiornati (sprint B4, 2026-11-07; 14 §3, 13 §7, 05 §3.1) ------
+_add("SERVICE_MIRROR_FALLBACK",
+     "{service}: answered by the mirror {mirror} (for the rest of the session).",
+     "{service}: risponde il mirror {mirror} (per il resto della sessione).", "service mirror",
+     network=("{service}: server {primary} not reachable; answered by the mirror {mirror} (for the rest of the "
+              "session).",
+              "{service}: server {primary} non raggiungibile; risponde il mirror {mirror} (per il resto della "
+              "sessione).", "service primary mirror"),
+     http_status=("{service}: server {primary} answered HTTP {status}; answered by the mirror {mirror} (for the rest "
+                  "of the session).",
+                  "{service}: server {primary} ha risposto HTTP {status}; risponde il mirror {mirror} (per il resto "
+                  "della sessione).", "service primary mirror status:int"),
+     invalid_response=("{service}: server {primary} gave an invalid response; answered by the mirror {mirror} (for "
+                       "the rest of the session).",
+                       "{service}: server {primary} ha dato una risposta non valida; risponde il mirror {mirror} (per "
+                       "il resto della sessione).", "service primary mirror"))
+_extend("NET_TIMEOUT",
+        service_servers=("{service}: no server answers (tried {servers}: {tried}); last error: {last}",
+                         "{service}: nessun server risponde (provati {servers}: {tried}); ultimo errore: {last}",
+                         "service servers:int tried:list last:msg"),
+        mocserver_no_mirror=("The CDS MocServer ({url}) is not reachable and there is no local copy of the list of "
+                             "collections; the MocServer has no copy outside Strasbourg. Typed identifiers can still "
+                             "be used (Gaia DR3 and 2MASS fall back to their original archives): {cause}",
+                             "Il MocServer del CDS ({url}) non è raggiungibile e non c'è una copia locale dell'elenco "
+                             "delle collezioni; il MocServer non ha copie fuori da Strasburgo. Gli identificativi "
+                             "scritti restano utilizzabili (Gaia DR3 e 2MASS con il ripiego sugli archivi originali): "
+                             "{cause}", "url cause:msg"),
+        vizier_no_mirror=("Catalogue '{catalog_id}': TAPVizieR ({url}) is not reachable and has no verified copy "
+                          "outside Strasbourg. Gaia DR3 (I/355/gaiadr3) and 2MASS (II/246/out) fall back to their "
+                          "original archives; for other catalogues use Data → ADQL query on the catalogue's original "
+                          "archive, if there is one (e.g. the ESA Gaia archive): {cause}",
+                          "Catalogo '{catalog_id}': TAPVizieR ({url}) non è raggiungibile e non ha copie verificate "
+                          "fuori da Strasburgo. Gaia DR3 (I/355/gaiadr3) e 2MASS (II/246/out) hanno il ripiego sugli "
+                          "archivi originali; per altri cataloghi usa Data → Query ADQL sull'archivio originale del "
+                          "catalogo, se esiste (es. l'archivio Gaia dell'ESA): {cause}", "catalog_id url cause:msg"),
+        catalog_servers=("Catalogue '{catalog_id}': no server answers (tried {servers}: {tried}); last error: {last}. "
+                         "Data already downloaded stay in the cache; try again later.",
+                         "Catalogo '{catalog_id}': nessun server risponde (provati {servers}: {tried}); ultimo "
+                         "errore: {last}. I dati già scaricati restano nella cache; riprova più tardi.",
+                         "catalog_id servers:int tried:list last:msg"))
+_add("CATALOG_ORIGINAL_ARCHIVE",
+     "{catalog_id}: TAPVizieR not reachable ({cause}); data from the original archive {archive}, table {table} "
+     "({url}). The column names are those of the archive, not VizieR's.",
+     "{catalog_id}: TAPVizieR non raggiungibile ({cause}); dati dall'archivio originale {archive}, tabella {table} "
+     "({url}). I nomi delle colonne sono quelli dell'archivio, non quelli di VizieR.",
+     "catalog_id archive table url cause:msg")
+_extend("REGION",
+        archive_icrs_circle=("Region: circle of radius {radius} around ({center_lon}, {center_lat}) requested with "
+                             "CIRCLE('ICRS', …) from {archive}, which does not declare the system of the columns "
+                             "{lon}/{lat}: positions to be confirmed (centre converted to ICRS with module 10).",
+                             "Regione: cerchio di raggio {radius} attorno a ({center_lon}, {center_lat}) chiesto con "
+                             "CIRCLE('ICRS', …) a {archive}, che non dichiara il sistema delle colonne {lon}/{lat}: "
+                             "posizioni da confermare (centro convertito in ICRS con il modulo 10).",
+                             "lon! lat! center_lon:qty center_lat:qty radius:qty archive"))
+_add("DATA_REFRESHED",
+     "Data requested again from the services.", "Dati richiesti di nuovo ai servizi.",
+     fresh=("Fresh data: requested again from the services, without the cache.",
+            "Dati aggiornati: richiesti di nuovo ai servizi, senza la cache.", ""),
+     cache_used=("Fresh data were requested, but at least one service did not answer: a cached copy was used (see "
+                 "FROM_CACHE).",
+                 "Dati aggiornati richiesti, ma almeno un servizio non ha risposto: usata la copia in cache (vedi "
+                 "FROM_CACHE).", ""))
+_extend("COMMAND_PARAMETER_INVALID",
+        refresh_not_network=("{parameter}: {command} does not use the network: there is nothing to refresh.",
+                             "{parameter}: {command} non usa la rete: non c'è niente da aggiornare.",
+                             "parameter command"))

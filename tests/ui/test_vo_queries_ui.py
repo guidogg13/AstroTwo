@@ -323,3 +323,66 @@ def test_t23_italian_texts(qtbot, settings_path, cache, listed):  # noqa: F811
         win.confirm = lambda title, text: True
         win.close()
 
+
+
+# =============================================================================
+# Riesegui con dati aggiornati (sprint B4, T24 del 40)
+
+
+def select_rows(win, numbers):
+    from PySide6.QtCore import QItemSelectionModel
+
+    panel = win.history
+    panel.table.clearSelection()
+    model = panel.table.selectionModel()
+    for row, entry in enumerate(panel.shown):
+        if entry.number in numbers:
+            model.select(panel.table.model().index(row, 0),
+                         QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+
+
+def test_t24_rerun_with_fresh_data(qtbot, window, listed):
+    win = window
+    panel = win.history
+    assert not panel.rerun_fresh_button.isEnabled()  # nessuna selezione
+    entry = cone(qtbot, win)
+    zoom = last(win, "view.set_zoom")
+    select_rows(win, {zoom.number})
+    assert not panel.rerun_fresh_button.isEnabled()
+    assert panel.rerun_fresh_button.toolTip() == "Only for commands that use the network"
+    select_rows(win, {zoom.number, entry.number})  # selezione mista: spento
+    assert not panel.rerun_fresh_button.isEnabled()
+    select_rows(win, {entry.number})
+    assert panel.rerun_fresh_button.isEnabled() and panel.rerun_fresh_button.toolTip() == ""
+    # Riesegui: dalla cache; Riesegui con dati aggiornati: nuova richiesta al servizio, dichiarata.
+    hits = listed.hits("/scs")
+    panel.rerun_button.click()
+    wait_idle(qtbot, win)
+    assert listed.hits("/scs") == hits and "FROM_CACHE" in [w.code for w in last(win, "catalog.cone_search").result.warnings]
+    select_rows(win, {entry.number})
+    panel.rerun_fresh_button.click()
+    wait_idle(qtbot, win)
+    fresh = last(win, "catalog.cone_search")
+    assert listed.hits("/scs") == hits + 1 and fresh.command.refresh
+    assert fresh.command.requested_by.source == "history" and fresh.command.parameters == entry.command.parameters
+    codes = {w.code: w for w in fresh.result.warnings}
+    assert "FROM_CACHE" not in codes and codes["DATA_REFRESHED"].params == {"reason": "fresh"}
+    select_rows(win, {fresh.number})
+    assert json.loads(panel.detail.toPlainText())["command"]["refresh"] is True
+    # Servizio spento: la copia in cache, dichiarata (cache_used).
+    listed.close()
+    panel.rerun_fresh_button.click()
+    wait_idle(qtbot, win)
+    down = last(win, "catalog.cone_search")
+    assert next(w for w in down.result.warnings if w.code == "DATA_REFRESHED").params == {"reason": "cache_used"}
+
+
+def test_t24_italian_fresh_button(qtbot, settings_path, cache, listed):  # noqa: F811
+    QSettings(settings_path, QSettings.Format.IniFormat).setValue("language", "it")
+    win = make_window(qtbot, settings_path, cache)
+    try:
+        assert win.history.rerun_fresh_button.text() == "Riesegui con dati aggiornati"
+        assert win.history.tr("Only for commands that use the network") == "Solo per i comandi che usano la rete"
+    finally:
+        win.confirm = lambda title, text: True
+        win.close()

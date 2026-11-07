@@ -47,6 +47,7 @@ OWN_CODES = (
     "SESSION_FILE_CHANGED", "SESSION_REPLAY_FAILED", "SESSION_NETWORK_DATA_DIFFERS", "SESSION_FINGERPRINT_CHANGE",
     "SESSION_STATE_DIFFERS", "SESSION_STATE_DIFFERENCE", "HIPS_DISPLAY_FALLBACK", "HIPS_DISPLAY_LIMITS_UNDEFINED",
     "TABLE_SORT_UNSUPPORTED", "POSITION_COLUMNS_REQUIRED", "VIEW_UNDEFINED", "OUT_OF_SKY", "MODULE_NOTE",
+    "DATA_REFRESHED",
 )
 #: Sotto-voci di codici condivisi che solo il 05 solleva o restituisce.
 SHARED = {("WCS_INVALID", "no_celestial_coordinates"), ("WCS_INVALID", "absent"),
@@ -175,6 +176,7 @@ def test_validation_errors_cover_every_reason(registry, files):
                                     "url": "https://gea.esac.esa.int/tap-server/tap"})
     # parametri che non sono un oggetto, grandezza sotto il minimo, lista troppo lunga, indirizzo non http(s)
     seen.raised(registry.validate, Command("layer.list", 1, 5))  # parameters_form
+    seen.raised(registry.validate, Command("view.set_zoom", 1, {}, refresh=True))  # refresh_not_network (sprint B4)
     seen.raised(custom.validate, Command("test.quantity", 1, {"angle": {"value": 0.5, "unit": "deg"}}))
     seen.raised(custom.validate, Command("test.list", 1, {"items": [1, 2, 3]}))  # list_too_long
     seen.raised(custom.validate, Command("test.url", 1, {"url": "ftp://x"}))  # url_form
@@ -400,10 +402,14 @@ def test_view_and_table_messages(registry, tmp_path):
     note = commands._module_warnings(["testo semplice"])[0]
     assert note.params == {"note": "testo semplice"}
     seen.message(note)
+    # dati aggiornati (sprint B4): freschi, o copia in cache dichiarata
+    assert seen.message(commands._refreshed(commands.Outcome())).params == {"reason": "fresh"}
+    cached = commands.Outcome(provenance=[{"origin": "x", "from_cache": True}])
+    assert seen.message(commands._refreshed(cached)).params == {"reason": "cache_used"}
     required = {(c, r) for c, r in catalog_combinations(OWN_CODES) if r is not None or not mc.CATALOG[c].variants}
     required -= {("VIEW_UNDEFINED", "export"), ("OUT_OF_SKY", "distance_point")}  # sotto-voce del 41 (provata in tests/ui/test_messages_ui.py)
     missing = {p for p in required if p[0] in {"VIEW_UNDEFINED", "OUT_OF_SKY", "POSITION_COLUMNS_REQUIRED",
-                                                "TABLE_SORT_UNSUPPORTED", "MODULE_NOTE"}} - seen.pairs
+                                                "TABLE_SORT_UNSUPPORTED", "MODULE_NOTE", "DATA_REFRESHED"}} - seen.pairs
     assert not missing, sorted(missing, key=str)
 
 
