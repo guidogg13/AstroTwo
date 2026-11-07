@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-07 (sprint B4): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D42-2` confermata dal proprietario e chiusa; `D14-14`, regole del ripiego sui mirror, aperta e decisa dal proprietario lo stesso giorno; nuova `D14-15`, scelte minori del ripiego e di «Riesegui con dati aggiornati», proposte da Claude Code, da confermare; file di origine `14` §13 e `42` §13).
+**Dal 2026-11-07 (sprint C1): 39 aperte** — Gruppo 1: **0** · Gruppo 2: **20** · Gruppo 3: **19** (nuove `D25-1`…`D25-12` e `D20-1`…`D20-8`, progetto del profilo di un oggetto, bloccanti per l'approvazione di `25` e `20`; file di origine `25` §13 e `20` §13).
+
+Prima, **Dal 2026-11-07 (sprint B4): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D42-2` confermata dal proprietario e chiusa; `D14-14`, regole del ripiego sui mirror, aperta e decisa dal proprietario lo stesso giorno; nuova `D14-15`, scelte minori del ripiego e di «Riesegui con dati aggiornati», proposte da Claude Code, da confermare; file di origine `14` §13 e `42` §13).
 
 Prima, **Dal 2026-11-06 (sprint B3): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (nuova `D42-2`, scelte minori della cone search e della query ADQL, da confermare; `42` §13).
 
@@ -311,11 +313,31 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (0)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (20)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| — | Nessuna: `A2` e `A6` decise dal proprietario il 2026-10-25 (`60` §13) | — |
+| `D25-1` | Numero, nome e livello del nuovo modulo del profilo (AM1, sprint C1 del 2026-11-07): proposta `25-analisi-profilo-oggetto.md`, livello 2 | `25-analisi-profilo-oggetto.md` §13 |
+| `D25-2` | Metodo della distanza: Bailer-Jones 2021 (`external.gaiaedr3_distance`) → 1/ϖ solo con ϖ/σ ≥ 10 (Gaia o SIMBAD con fonte) → nessuna distanza con motivo | `25` §13 |
+| `D25-3` | Tabella dei pianeti: `pscomppars` (riferimento per parametro, avviso di coerenza) o `ps` con `default_flag = 1` | `25` §13 |
+| `D25-4` | Catena degli identificativi: SIMBAD → incroci ufficiali di Gaia → posizione; AllWISE con cerchio piccolo e controllo della designazione | `25` §13 |
+| `D25-5` | Miniature: DSS2 colore, 2MASS colore, AllWISE colore; 5′; 256 px; TAN | `25` §13 |
+| `D25-6` | Esportazione: ECSV con provenienza, PDF della scheda, PNG della SED | `25` §13 |
+| `D25-7` | Dove vive la specifica dell'interfaccia del profilo (proposta: `43`) | `25` §13 |
+| `D25-8` | Tempi: obiettivo 60 s, massimi per sezione, 4 richieste contemporanee | `25` §13 |
+| `D25-9` | Raggi: 10″ per i candidati SIMBAD, 2″ per gli incroci per posizione | `25` §13 |
+| `D25-10` | Zero point di parallasse (Lindegren et al. 2021): non applicato nella 1.0, dichiarato | `25` §13 |
+| `D25-11` | Indicatori di qualità di Gaia mostrati e soglia RUWE 1,4 (fonte da verificare) | `25` §13 |
+| `D25-12` | Formula di fase codice per 20 e 25 e autorizzazione a modificare gli approvati 03, 05, 12, 14, 32, 34, 40, 41, 42 | `25` §13 |
+| `D20-1` | Tabella dei punti zero (Gaia AB dal flusso in e⁻/s, 2MASS Cohen 2003, WISE a spettro costante senza correzioni di colore) | `20-analisi-fotometria.md` §13 |
+| `D20-2` | λ di riferimento delle bande Gaia: pivot calcolata dalla banda ufficiale o valore della documentazione | `20` §13 |
+| `D20-3` | Propagazione degli errori con l'errore del punto zero | `20` §13 |
+| `D20-4` | Soglie di qualità per il grafico della SED | `20` §13 |
+| `D20-5` | Serie VizieR separata e non convertita, raggio 2″ | `20` §13 |
+| `D20-6` | Magnitudini SIMBAD solo in tabella (duplicati marcati), Johnson senza conversione nella 1.0 | `20` §13 |
+| `D20-7` | Grafico con matplotlib, Fν contro λ log-log | `20` §13 |
+| `D20-8` | Resto del modulo 20 (apertura/PSF, calibrazione, estrazione) da specificare prima dell'approvazione completa, o approvazione della sola parte SED | `20` §13 |
+| — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
 ## 5. GRUPPO 3 — rimandabili al momento del codice (19)
 
@@ -441,3 +463,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-05 | Claude Code | **Sprint B2 (incrocio nell'interfaccia e rifiniture SAMP):** `D15-10` aperta e decisa lo stesso giorno dal proprietario (nel `15` §13); **`D40-9` chiusa** ((6) e l'estensione di (5) confermate, (7) decisa: 60 s per `table.load.votable`, 10 s per gli altri tipi; prima nel `40` §13) e tolta dal Gruppo 3; nuova **`D42-1`** (scelte minori dell'incrocio, proposte e da confermare; prima nel `42` §13) nel Gruppo 3. Conteggi invariati: aperte **18** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 18). |
 | 2026-11-06 | Claude Code | **Sprint B3 (cone search e query ADQL nell'interfaccia):** nuova **`D42-2`** (scelte minori, proposte e da confermare; prima nel `42` §13) nel Gruppo 3. Conteggi: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 19). Decisioni del proprietario del 2026-11-06 (a)–(i) scritte come decise nei file di origine (`05`, `14`, `32`, `40`, `42`), non voci di questo elenco. |
 | 2026-11-07 | Claude Code | **Sprint B4 (ripiego sui mirror per SIMBAD e VizieR):** **`D42-2` confermata dal proprietario** (punti (1)–(11), il (6) superato) e tolta dalle aperte; **`D14-14`** (regole del ripiego) aperta e decisa dal proprietario; nuova **`D14-15`** (scelte minori, da confermare). Aperte 19. |
+| 2026-11-07 | Claude Code | **Sprint C1 (progetto del profilo di un oggetto, solo specifiche):** nuove `D25-1`…`D25-12` e `D20-1`…`D20-8` nel Gruppo 2 (prima nei file di origine `25` §13 e `20` §13), ciascuna con la raccomandazione nel file di origine. Conteggi: aperte **39** (Gruppo 1 = 0, Gruppo 2 = 20, Gruppo 3 = 19). |
