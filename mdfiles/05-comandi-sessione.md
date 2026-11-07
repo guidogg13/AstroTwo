@@ -147,8 +147,17 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   esistente e leggibile, livello esistente; un parametro non valido →
   `COMMAND_PARAMETER_INVALID` con il nome del parametro, nessuna
   esecuzione.
+- **Comandi dei livelli 2–4** (sprint C2, 2026-11-07, autorizzato con
+  D25-12 del `25`): un modulo di livello superiore definisce i suoi comandi
+  (`CommandSpec` con esecutore) nel proprio file, usando i tipi pubblici del 05
+  (dipendenza verso il basso), e li espone con una funzione `command_specs()`;
+  chi costruisce il registro dell'applicazione (il `40`, che dipende da tutti
+  i livelli) li aggiunge con `register` dopo `default_registry`. Il 05 non
+  importa mai quei moduli; i comandi registrati, la cronologia, la sessione e
+  `refresh` funzionano allo stesso modo. Primo caso: `object.profile` del `25`.
 - **Esecuzione:** il registro chiama solo le funzioni pubbliche dichiarate
-  dei moduli 04, 10–19; le eccezioni dei moduli diventano un risultato con
+  dei moduli 04, 10–19 (e, per i comandi dei livelli 2–4, quelle dichiarate
+  dal loro modulo); le eccezioni dei moduli diventano un risultato con
   esito `error`, codice, testo del modulo e `params` invariati (D40-3: `ResultMessage(code, text, params)`; `params` = dizionario nome → valore JSON, facoltativo e `{}` se assente, schema della sessione compatibile all'indietro; il `05` non traduce né riscrive, la traduzione è del catalogo dei messaggi del `40` §3.7.1).
 - **Spazio di lavoro (`Workspace`):** gli oggetti prodotti dai comandi
   (immagini dell'11, tabelle del 13, MOC del 16, survey del 12, misure del
@@ -401,6 +410,7 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.crossmatch` (`layer_a`, `layer_b`, `mode`, `max_sep`, `method`, `frame`, `force_body`) — nuovo, 2026-11-05 (sprint B2, D15-10 del 15) | 15 `crossmatch` (`method = local`) o `crossmatch_cds` (`method = cds`, rete del 14), `CrossMatchResult.joined`; 19 `check_overlay` | session | rete (solo con `cds`), lungo, `confirm`; nuovo livello catalogo con la tabella unita; dettagli sotto |
 | `catalog.cone_search` (`service`, `url`, `center`, `radius`, `max_rows`, `force_body`) — nuovo, 2026-11-06 (sprint B3) | 14 `cone_search` (voce SCS dell'elenco dei server o URL; tabella letta da `read_table` del 13); 19 `check_overlay` | session | rete, lungo, `confirm`; nuovo livello catalogo; dettagli sotto |
 | `catalog.tap_query` (`service`, `url`, `adql`, `max_rows`, `mode`, `async_timeout`, `force_body`) — nuovo, 2026-11-06 (sprint B3) | 14 `validate_adql`, `tap_query` (sincrona o asincrona; tabella letta da `read_table` del 13); 19 `check_overlay` | session | rete, lungo, `confirm`; nuovo livello catalogo; **non esposto all'IA** (`33` rimandato); dettagli sotto |
+| `object.profile` (`name`, `position`, `layer`, `row`, `simbad_id`, `sections`, `match_radius`, `crossmatch_radius`) — nuovo, 2026-11-07 (sprint C2, **comando del livello 2**, definito ed eseguito nel `25`) | 25 `resolve_target`, `build_profile` (che usano 14 `simbad_object`/`tap_query`, 10 `resolve_name`/`propagate_position`) | session | rete, lungo, `confirm`, sola lettura (nessun livello creato); `simbad_id` scritto nel comando registrato; dettagli sotto |
 | `vo.add_server` (`name`, `protocol`, `url`) — nuovo, 2026-11-06 (sprint B3) | 14 `ServerRegistry.add_personal` | application | eseguito dal 05 sull'elenco del registro; elenco salvato nelle preferenze dal `40`; dettagli sotto |
 | `vo.remove_server` (`server`) — nuovo, 2026-11-06 (sprint B3) | 14 `ServerRegistry.remove_personal` | application | idem |
 | `samp.connect` — nuovo, 2026-11-05 (sprint B1) | 14 `SampHub.connect` (hub attivo, altrimenti hub proprio con profilo web spento), `clients` | application | esecutore del `40` (§3.12); risultato `hub` (`external` o `own`), `web_profile` (`false`), `clients` (identificativo e nome); già collegato: stesso risultato, nessun nuovo collegamento |
@@ -408,6 +418,29 @@ le scelte minori di §13; tutti versione 1):
 | `samp.send_table` (livello di catalogo, `recipient` facoltativo) — nuovo | 14 `SampHub.send_table` (`table.load.votable`: VOTable con colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13, mai assunta) | application | esecutore del `40`; risultato `layer`, `table_id`, `url`, `rows`, `recipients` (destinatari che hanno accettato), `rejected` (dal 2026-11-05: destinatari che hanno rifiutato o non hanno risposto, con `id`, `reason`, `detail`; ognuno anche come avviso `SAMP_NO_PEER`) |
 | `samp.send_selection` (livello di catalogo, `recipient` facoltativo) — nuovo | 14 `SampHub.send_selection` (`table.select.rowList`, righe nell'ordine della tabella, da 0); se la tabella non è mai passata da SAMP, prima `send_table` nello stesso comando | application | esecutore del `40`; risultato `layer`, `table_id`, `rows`, `table_sent`, `recipients`, `rejected` (come `samp.send_table`; con `table_sent = true` la selezione va solo ai destinatari che hanno accettato la tabella) |
 | `samp.point_at` (posizione, `recipient` facoltativo) — nuovo | 14 `SampHub.send_point` (`coord.pointAt.sky`, gradi ICRS; conversione del 10) | application | esecutore del `40`; risultato `ra`, `dec` (gradi ICRS inviati, come nel messaggio), `position` (quella del parametro, con l'epoca dichiarata), `recipients`, `rejected` (come `samp.send_table`) |
+
+**`object.profile` (sprint C2, 2026-11-07, autorizzato con D25-12 del
+`25`).** Comando del livello 2: la definizione (`CommandSpec`) e l'esecutore
+stanno in `src/astrotwo/analysis/object_profile.py` (25 §3.10); il 05 non li
+importa (§9) e li riceve con `register` da chi costruisce il registro (§3.2).
+Bersaglio: **uno solo** tra `name` (testo), `position` (`sky_position`,
+epoca scritta o `null` con motivo), `layer` + `row` (riga di un livello
+catalogo); altrimenti `PROFILE_TARGET_INVALID`. `simbad_id` (testo, `null`
+di default) è scritto dal comando dopo la risoluzione (`main_id` SIMBAD): con
+un nome la riesecuzione risolve di nuovo il nome (stessa richiesta, dalla
+cache) e controlla `simbad_id` (`PROFILE_TARGET_CHANGED` se SIMBAD dà un
+altro oggetto); con coordinate o una riga `simbad_id` decide l'oggetto. `sections` (elenco di
+`enum`, default tutte quelle scritte: in C2 `identity` e `astrometry`; gli
+sprint C3–C4 allargano l'elenco senza cambiare versione, i comandi registrati
+restano validi), `match_radius` (angolo, default 10″) e `crossmatch_radius`
+(angolo, default 2″) risolti alla registrazione. Risultato: `values` = il
+profilo (bersaglio risolto, sezioni con stato, valori con provenienza, avvisi
+ed errori per sezione, 25 §3.10); `provenance` = una voce per richiesta di
+rete; impronta di rete per sezione; avvisi del profilo nel risultato. Un errore
+di una sezione non fa fallire il comando (regola c del 25); un bersaglio non
+risolvibile sì (`NAME_NOT_FOUND`, `PROFILE_AMBIGUOUS_TARGET`,
+`PROFILE_TARGET_INVALID`). Non esposto all'IA in C2 (strumento
+`object__profile` nello sprint C6, `32`).
 
 **Cataloghi sul cielo (sprint 4e del `41`, decisioni del proprietario del
 2026-10-21).**
@@ -693,7 +726,8 @@ codice del modulo sui tipi chiusi di §3.1.
 - **Nessun segreto** nei comandi, nella cronologia, nella sessione o nei
   log (regola d'oro n. 5).
 - **Livelli:** il 05 è livello 1 e non importa nulla dei livelli 2–4 né
-  dell'interfaccia.
+  dell'interfaccia; i comandi dei livelli 2–4 gli arrivano con `register`
+  (§3.2, sprint C2).
 - **Prestazioni:** il costo del registro per comando (validazione e
   registrazione, esclusa la funzione del modulo) va misurato nei test; i
   valori da rispettare per l'interfaccia sono nel `41`.
@@ -853,6 +887,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T25 | `catalog.crossmatch` (sprint B2, D15-10) | due cataloghi VOTable (8 stelle e copie spostate di 0,5″ e 1,5″ costruite con astropy); `best`/`all`/`none` con il raggio di default; raggio in arcsec, arcmin, mas; epoche J2016/J2000; coordinate mancanti; tabella senza colonne di posizione; raggio 0, 200°, 181″ con `cds`, unità `m`; tetto abbassato; `cds` con `galactic`; sistema galattico; Riesegui e sessione salvata e riaperta; CDS XMatch simulato (risposta, eco sbagliata, porta chiusa) | coppie e righe uguali a quelle del 15 chiamato direttamente; `max_sep` 2″ scritto nel comando registrato; `xmatch_sep` in arcsec; nuovo livello `L3`, tabelle d'ingresso invariate; `EPOCH_DIFFERS` con le epoche e stesse coppie; `COORD_MISSING`; `NO_COORD_COLUMNS` (non `BODY_UNKNOWN`); `MAX_SEP_INVALID` con `range_local`/`range_cds`; `TABLE_TOO_LARGE`; `crossmatch_cds_frame`; riesecuzioni con righe identiche; CDS entro 1 mas dal locale con impronta di rete; `CROSSMATCH_SERVICE_FAILED` `service_error`/`unreachable` che propone il locale (en/it), nessun livello creato | test di unità (`tests/core/test_commands_crossmatch.py`) |
 | T26 | `catalog.cone_search` e `catalog.tap_query`, server personali (sprint B3) | servizi SCS e TAP simulati (server HTTP locale, VOTable con e senza `COOSYS`); cone search con voce dell'elenco simulata e con URL, centro galattico con epoca e ICRS senza epoca; `max_rows` sotto le righe del servizio; ADQL vuota, senza SELECT, virgoletta aperta; servizio che rifiuta la query (VOTable `ERROR`); sincrona, asincrona (UWS simulato), asincrona oltre `async_timeout`, asincrona annullata; righe di commento; Riesegui e sessione salvata e riaperta; `vo.add_server`/`vo.remove_server` | parametri SCS ricalcolati con astropy; `url` risolto e scritto nel comando registrato, `async_timeout` 600 s nel comando; nuovo livello catalogo con `query` e provenienza; `ROW_LIMIT_EXCEEDED` con `truncated`; `ADQL_INVALID` con la posizione e nessuna richiesta al servizio; messaggio del servizio invariato nell'errore; `NET_TIMEOUT` `async_deadline`; `COMMAND_CANCELLED` con `ABORT` e lavoro eliminato; `QUERY` inviata senza commenti; riesecuzioni con stesso URL, stessi parametri e righe identiche; `POSITION_COLUMNS_REQUIRED` senza `COOSYS`; `server_already_listed`, `not_personal` | test di unità (`tests/core/test_commands_vo_queries.py`) |
 | T27 | Dati aggiornati e ripieghi nel `catalog.load_region` (sprint B4) | comando con `refresh: true` su `catalog.tap_query` con una risposta già in cache (servizio simulato); poi con il servizio giù e la copia in cache; `refresh: true` su `view.set_center`; forma JSON con e senza il campo; `catalog.load_region` su `II/246/out` con TAPVizieR giù e IRSA simulato senza `COOSYS` | prima esecuzione dalla rete (nessun `FROM_CACHE`) con `DATA_REFRESHED` `fresh`; con il servizio giù `DATA_REFRESHED` `cache_used`; `COMMAND_PARAMETER_INVALID` `refresh_not_network`; `"refresh": true` scritto solo quando vale `true` e riletto; livello creato con `CATALOG_ORIGINAL_ARCHIVE` e `POSITION_COLUMNS_REQUIRED`, provenienza = URL dell'IRSA | test di unità con servizi simulati |
+| T28 | `object.profile` (sprint C2) | registro di `default_registry` più `command_specs()` del 25; servizi simulati con le risposte registrate il 2026-11-07 (SIMBAD Harvard, archivio Gaia ESA, Exoplanet Archive); nome, coordinate, nessun bersaglio, due bersagli; Riesegui dalla sessione e con `refresh` | `simbad_id` scritto nel comando registrato; valori uguali a quelli di `build_profile` chiamato direttamente; nessun livello creato; `PROFILE_TARGET_INVALID`; riesecuzione con le stesse richieste dalla cache, con `refresh` nuove richieste e `DATA_REFRESHED`; `default_registry` da solo non contiene il comando (il 05 non importa il 25) | test di unità (`tests/analysis/test_object_profile_command.py`) |
 | T23 | Origine `samp` e comandi `samp.*` (D05-5, sprint B1) | comandi con `requested_by = samp` (con e senza nome del client), forma senza `client_id` o con campi dell'IA; salvare e riaprire una sessione con un `catalog.open_file` di origine `samp`; registro con i cinque `samp.*` | forma JSON di §3.1 scritta e riletta; forme non valide rifiutate; comando `samp` rieseguito alla riapertura con la stessa origine; i `samp.*` sono `application`, `bound_by = "40"`, assenti dallo schema per l'IA (`32`) | test di unità |
 
 ## 13. Decisioni aperte
@@ -1043,6 +1078,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** `ResultMessage` e `CommandError` portano `params` (valori JSON dei parametri del messaggio) accanto a codice e testo del modulo; il testo originale resta invariato; la lingua si sceglie nel catalogo dei messaggi del `40` §3.7.1. Nessun codice scritto. |
+| 2026-11-07 | Claude Code | **Sprint C2 (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6):** §3.2 regola dei comandi dei livelli 2–4 (definiti nel loro modulo, `command_specs()`, aggiunti con `register` dal `40`; il 05 non li importa), §7 nuovo `object.profile` con i dettagli, §9 livelli precisati, §12 T28. Stato `approvato` invariato. |
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) su decisione del proprietario del 2026-10-15 (AM1 accettata: modulo generale di livello 1, codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; registro senza Qt con annullamento cooperativo e avanzamento; spazio di lavoro immutabile; gesti registrati a fine gesto dopo 300 ms fermo; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore. Verifica della cache del 04 da più thread prima del codice. Nuove decisioni D05-1, D05-2, D05-3. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D05-1 decisa (tre classi `session`/`passive`/`application`); D05-2 decisa (avviso senza fermarsi; impronta dei risultati di rete di ogni comando salvata nella sessione, l'avviso dice quale comando e cosa è cambiato; §3.1, §3.4, §10, T15); D05-3 rimandata; scelte minori confermate. Nessuna decisione dei Gruppi 1 e 2 resta aperta in questo file. |
 | 2026-10-16 | Claude Code | **Proposta della fase 1 sull'IA approvata dal proprietario il 2026-10-16** (autorizzazione a modificare la bozza come proposto): campo `requested_by` nel comando, nella cronologia e nella sessione; indicatore `confirm` con il suo elenco; nuovi comandi di sola lettura `coords.resolve_name`, `catalog.search`, `catalog.describe`, `catalog.rows` (al più 50 righe), `layer.list`; blocco facoltativo `conversations` della sessione (solo su richiesta, mai riletto per rieseguire); riesecuzione dei comandi dell'IA senza chiamare l'IA; schema con gli indicatori per il `32`; test T18–T21. |

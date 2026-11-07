@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-07 — **sprint C1 (solo specifiche, decisione del proprietario del 2026-11-07): progetto del «Profilo di un oggetto in un minuto» (Fase C).** Creati in `bozza` `20-analisi-fotometria.md` (solo parte SED) e `25-analisi-profilo-oggetto.md` (AM1 proposta); verifiche dal vivo in `panoramica.md` §2 (Fase C); aperte 39 (Gruppo 2 = 20 nuove). Riepilogo: bozza 7, approvato 25, non esiste 12, totale 44.
+**Ultimo aggiornamento:** 2026-11-07 — **sprint C2 (decisioni del proprietario del 2026-11-07): profilo di un oggetto, motore.** `20-analisi-fotometria.md` (solo parte SED) e `25-analisi-profilo-oggetto.md` **approvati** dal proprietario (formula di D25-12); D25-1…D25-12 e D20-1…D20-8 decise; codice del motore del `25` (bersaglio, catena degli identificativi, identità, astrometria Gaia DR3, distanza con metodo dichiarato) e comando `object.profile` (05 §3.2: comandi dei livelli 2–4 registrati dal `40`); `simbad_object` e voce `nasa-exoplanet-tap` nel `14`; nuova D25-13 (scelte minori da confermare); aperte 20. Riepilogo: bozza 5, approvato 27, non esiste 12, totale 44.
+
+Prima, 2026-11-07 — **sprint C1 (solo specifiche, decisione del proprietario del 2026-11-07): progetto del «Profilo di un oggetto in un minuto» (Fase C).** Creati in `bozza` `20-analisi-fotometria.md` (solo parte SED) e `25-analisi-profilo-oggetto.md` (AM1 proposta); verifiche dal vivo in `panoramica.md` §2 (Fase C); aperte 39 (Gruppo 2 = 20 nuove). Riepilogo: bozza 7, approvato 25, non esiste 12, totale 44.
 
 Prima, 2026-11-07 — **sprint B4 (2026-11-07, regole decise dal proprietario, D14-14): ripiego sui mirror per SIMBAD e VizieR, più «Riesegui con dati aggiornati».** Mirror verificati il 2026-11-07 con richieste reali (CDS irraggiungibile): **SIMBAD TAP di Harvard entra** (M 31, Vega, `utype` MANGO uguali); **nessun TAPVizieR fuori da Strasburgo** (7 mirror ufficiali e registro VO); **SED di VizieR** su CfA e IDIA parziale e incoerente → non entra; MocServer e XMatch senza copie. Il 14 passa al mirror solo per timeout, connessione, 5xx, 429 o risposta non valida (mai 404/4xx, ADQL rifiutata o nessun risultato; `is_failover_error`), resta sul mirror per la sessione, avviso `SERVICE_MIRROR_FALLBACK` una volta per servizio, provenienza = server reale, tutti giù → `NET_TIMEOUT` `service_servers` con il numero dei server; puntatore SIMBAD (regione e magnitudini) e catalogo `simbad` sul mirror, collegamento del riquadro al server che ha risposto. Il 13 carica **Gaia DR3 dall'archivio Gaia dell'ESA** (`gaiadr3.gaia_source`, ICRS J2016.0) e **2MASS dall'IRSA** (`fp_psc`, senza `COOSYS`: regione con `CIRCLE('ICRS', …)` dichiarata e dialogo delle colonne) con stessa regione e `max_rows`, colonne non rinominate, avviso `CATALOG_ORIGINAL_ARCHIVE`; tutti giù → `catalog_servers`; altri identificativi → `vizier_no_mirror` con il suggerimento della query ADQL sull'archivio originale; MocServer giù → cache o `mocserver_no_mirror`. 05: campo `refresh` del comando e avviso `DATA_REFRESHED` (`fresh`/`cache_used`); 40: pulsante «Riesegui con dati aggiornati» (solo comandi di rete). **D42-2 confermata**, **D14-14** decisa, nuova **D14-15** (scelte minori, da confermare). Aperte 19. Test: 1068 passati di default (suite completa), ruff pulito; test di rete non nel commit (3 nuovi eseguiti a parte: passati).
 
@@ -349,12 +351,12 @@ Dove si trovano le decisioni:
 
 | File | Descrizione | Stato |
 |---|---|---|
-| `20-analisi-fotometria.md` | Fotometria; **dal 2026-11-07 (sprint C1) solo la parte SED**: punti fotometrici da Gaia DR3, 2MASS, AllWISE, SIMBAD e SED di VizieR, conversione in flusso solo con punti zero ufficiali (Gaia (E)DR3, 2MASS, WISE), grafico; apertura e PSF, calibrazione ed estrazione da specificare (D20-8) | bozza |
+| `20-analisi-fotometria.md` | Fotometria; **dal 2026-11-07 (sprint C1) solo la parte SED**: punti fotometrici da Gaia DR3, 2MASS, AllWISE, SIMBAD e SED di VizieR, conversione in flusso solo con punti zero ufficiali (Gaia (E)DR3, 2MASS, WISE), grafico; apertura e PSF, calibrazione ed estrazione da specificare (D20-8); **approvato per la sola parte SED il 2026-11-07** (D25-12), codice nello sprint C3 | approvato (parte SED) |
 | `21-analisi-spettroscopia.md` | Analisi degli spettri: lettura, dereddening, misure di linea | non esiste |
 | `22-analisi-curve-di-luce.md` | Curve di luce: fasi, detrending, periodogrammi | non esiste |
 | `23-analisi-cubi-di-dati.md` | Cubi di dati: estrazione spettri, maschere, moment maps | non esiste |
 | `24-analisi-pipeline-riproducibili.md` | Pipeline riproducibili, registro e riesecuzione delle operazioni. In Aladin la cronologia dei comandi registra anche le azioni fatte con il mouse come comandi di script; **AstroTwo adotta lo stesso principio: ogni azione dell'interfaccia = un comando registrato** (dal 2026-10-15 registro dei comandi e sessione nel `05-comandi-sessione.md`, livello 1; il 24 costruirà pipeline e scripting sopra il 05) | non esiste |
-| `25-analisi-profilo-oggetto.md` | **Profilo di un oggetto in un minuto** (Fase C, sprint C1 del 2026-11-07, AM1 proposta, D25-1): identità SIMBAD, miniature HiPS, astrometria Gaia DR3, distanza con metodo dichiarato, SED dal `20`, pianeti dal NASA Exoplanet Archive; comando registrato `object.profile`; interfaccia proposta | bozza |
+| `25-analisi-profilo-oggetto.md` | **Profilo di un oggetto in un minuto** (Fase C, sprint C1 del 2026-11-07, AM1 proposta, D25-1): identità SIMBAD, miniature HiPS, astrometria Gaia DR3, distanza con metodo dichiarato, SED dal `20`, pianeti dal NASA Exoplanet Archive; comando registrato `object.profile`; interfaccia proposta; **approvato il 2026-11-07** (AM1 accettata, D25-1…D25-12 decise); sprint C2: motore (identità, identificativi, astrometria, distanza) e `object.profile` in `src/astrotwo/analysis/object_profile.py` | approvato |
 
 ## IA (livello 3)
 
@@ -399,8 +401,8 @@ Dove si trovano le decisioni:
 
 | Stato | Quanti |
 |---|---|
-| bozza | 7 |
+| bozza | 5 |
 | in revisione | 0 |
-| approvato | 25 |
+| approvato | 27 |
 | non esiste | 12 |
 | **Totale file in `mdfiles/`** | **44** |

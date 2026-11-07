@@ -1,6 +1,6 @@
 # 20-analisi-fotometria.md — Fotometria (parte SED)
 
-**Stato:** bozza
+**Stato:** approvato (solo la parte SED; il resto del modulo è da specificare, D20-8)
 
 > **Ambito di questa versione (2026-11-07, sprint C1):** il file specifica
 > **solo la parte SED** (punti fotometrici da cataloghi, conversione
@@ -47,7 +47,7 @@ sulle fonti ufficiali (proposta D20-1):
 
 | Banda | Punto zero | λ di riferimento | Fonte ufficiale |
 |---|---|---|---|
-| Gaia G | ZP_AB = 25,8010446445 ± 0,0027590522 mag (ZP_Vega = 25,6873668671 ± 0,0027553202) | da decidere (D20-2) | file `zeropt.dat` di «Gaia (E)DR3 passbands and zero points» (ESA, `cosmos.esa.int/web/gaia/edr3-passbands`, versione 2), Riello et al. 2021, A&A 649, A3 |
+| Gaia G | ZP_AB = 25,8010446445 ± 0,0027590522 mag (ZP_Vega = 25,6873668671 ± 0,0027553202) | dalla documentazione ufficiale Gaia (D20-2 decisa; valori da trovare e citare nello sprint C3) | file `zeropt.dat` di «Gaia (E)DR3 passbands and zero points» (ESA, `cosmos.esa.int/web/gaia/edr3-passbands`, versione 2), Riello et al. 2021, A&A 649, A3 |
 | Gaia BP | ZP_AB = 25,3539555559 ± 0,0023065687 (ZP_Vega = 25,3385422158 ± 0,0027901700) | D20-2 | idem |
 | Gaia RP | ZP_AB = 25,1039837393 ± 0,0015800349 (ZP_Vega = 24,7478955012 ± 0,0037793818) | D20-2 | idem |
 | 2MASS J | Fν(0 mag) = 1594 ± 27,8 Jy | λ_iso = 1,235 ± 0,006 µm | 2MASS All-Sky Explanatory Supplement §VI.4a, Tabella 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090) |
@@ -187,30 +187,35 @@ converte né calcola flussi.
 
 ## 13. Decisioni aperte
 
-- **D20-1 — Tabella dei punti zero** di §3.2 (Gaia AB tramite il flusso in
-  e⁻/s, 2MASS di Cohen 2003, WISE a spettro costante senza correzioni di colore).
-  **Da decidere.**
-- **D20-2 — λ di riferimento delle bande Gaia:** lunghezza d'onda «pivot»
-  calcolata dal nostro codice dalla banda passante ufficiale (`passband.dat`,
-  licenza dei dati Gaia da verificare) | valore scritto nella documentazione
-  Gaia (da trovare e citare). **Da decidere.**
-- **D20-3 — Propagazione degli errori** con l'errore del punto zero (§3.2) |
-  solo l'errore della misura. **Da decidere.**
-- **D20-4 — Soglie di qualità** per il grafico (§3.3). **Da decidere.**
-- **D20-5 — Serie VizieR:** separata e non convertita, raggio 2″ dalla
-  posizione propagata, avviso di moto proprio elevato (TRAPPIST-1 ≈ 1″/anno).
-  **Da decidere.**
-- **D20-6 — Magnitudini di SIMBAD:** solo in tabella (duplicati marcati);
-  Johnson senza conversione nella 1.0 | aggiungere punti zero Johnson con
-  fonte. **Da decidere.**
-- **D20-7 — Grafico:** matplotlib incorporato in Qt, Fν contro λ log-log
-  (λFλ in opzione). **Da decidere.**
-- **D20-8 — Resto del modulo** (fotometria d'apertura e PSF, calibrazione,
-  estrazione): da specificare in questo file prima dell'approvazione completa,
-  oppure approvare ora la sola parte SED. **Da decidere (proprietario).**
+Decisioni D20-1…D20-8 **prese dal proprietario il 2026-11-07** (dopo il
+report dello sprint C1); restano qui come registro. Il codice della parte SED
+è dello sprint C3.
+
+- **D20-1 — Tabella dei punti zero — DECISA (2026-11-07):** come §3.2 (Gaia AB
+  tramite il flusso in e⁻/s, 2MASS di Cohen et al. 2003, WISE a spettro
+  costante senza correzioni di colore). Le note «da verificare» di §3.2
+  (incertezza WISE, validità per AllWISE) si chiudono prima del codice (C3).
+- **D20-2 — λ di riferimento delle bande Gaia — DECISA (2026-11-07):** valori
+  **pubblicati nella documentazione ufficiale di Gaia**, citati; il calcolo
+  dalla banda passante (`passband.dat`) solo se mancano **e** la licenza dei
+  dati lo permette, dichiarandolo nel risultato. Ricerca dei valori: sprint C3.
+- **D20-3 — Propagazione degli errori — DECISA (2026-11-07):** con l'errore
+  del punto zero, come §3.2.
+- **D20-4 — Soglie di qualità — DECISA (2026-11-07):** come §3.3.
+- **D20-5 — Serie VizieR — DECISA (2026-11-07):** separata e non convertita,
+  raggio 2″ dalla posizione propagata, avviso di moto proprio elevato.
+- **D20-6 — Magnitudini di SIMBAD — DECISA (2026-11-07):** solo in tabella,
+  duplicati marcati; Johnson senza conversione nella 1.0.
+- **D20-7 — Grafico — DECISA (2026-11-07):** matplotlib incorporato in Qt, Fν
+  contro λ log-log, λFλ in opzione.
+- **D20-8 — Resto del modulo — DECISA (2026-11-07):** si approva ora la sola
+  parte SED; fotometria d'apertura e PSF, calibrazione ed estrazione si
+  specificano in questo file in uno sprint successivo, prima della loro fase
+  codice.
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Decisioni del proprietario del 2026-11-07 (sprint C2):** file `approvato` per la sola parte SED (formula di D25-12 del `25`); D20-1…D20-8 scritte come decise (D20-2: λ di Gaia dalla documentazione ufficiale, calcolo dalla banda passante solo se mancano e la licenza lo permette, dichiarato). Nessun codice in C2 (SED nello sprint C3). |
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1: solo parte SED; punti zero di Gaia (E)DR3, 2MASS e WISE letti sulle fonti ufficiali il 2026-11-07; decisioni aperte D20-1…D20-8. |

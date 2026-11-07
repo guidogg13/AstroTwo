@@ -78,6 +78,9 @@ __all__ = [
     "SimbadMagnitude",
     "SIMBAD_FLUX_SYSTEMS",
     "SimbadPointer",
+    "SimbadRecord",
+    "SIMBAD_BASIC_COLUMNS",
+    "simbad_object",
     "VIZIER_PHOTOMETRY_URL",
     "MOCSERVER_CHARSET",
     "MOCSERVER_URL",
@@ -1212,6 +1215,10 @@ BUILTIN_SERVERS: tuple[ServerEntry, ...] = (
                 "https://heasarc.gsfc.nasa.gov/docs/archive/vo/", _VERIFIED),
     ServerEntry("nasa-mast-caom-tap", "MAST CAOM", "NASA/STScI", "tap", "https://mast.stsci.edu/vo-tap/api/v0.1/caom",
                 "https://mast.stsci.edu/vo-tap/", _VERIFIED),
+    # Sprint C2 (D25-12 del 25): URL base letto sulla pagina ufficiale e servizio provato in linea il 2026-11-07.
+    ServerEntry("nasa-exoplanet-tap", "NASA Exoplanet Archive", "NASA/IPAC (NExScI)", "tap",
+                "https://exoplanetarchive.ipac.caltech.edu/TAP",
+                "https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html", "2026-11-07"),
 )
 
 
@@ -2104,6 +2111,98 @@ def simbad_pointer(center, radius, *, cache: SharedCache | None = None, refresh:
                        nbref=None if not valid[choice] else int(nbref[choice]), separation=sep[choice],
                        magnitudes=magnitudes)
     return SimbadPointer(obj, len(found), source, record, notes, magnitudes_request=mag_result.request)
+
+
+#: Colonne della tabella ``basic`` di SIMBAD lette da ``simbad_object`` (nomi e unità verificati il 2026-11-07 sul
+#: mirror di Harvard); ``description`` viene da ``otypedef``.
+SIMBAD_BASIC_COLUMNS: tuple[str, ...] = (
+    "oid", "main_id", "otype", "sp_type", "sp_bibcode", "nbref", "ra", "dec", "coo_err_maj", "coo_err_min",
+    "coo_err_angle", "coo_qual", "coo_bibcode", "plx_value", "plx_err", "plx_bibcode", "pmra", "pmdec", "pm_err_maj",
+    "pm_err_min", "pm_err_angle", "pm_bibcode", "rvz_radvel", "rvz_err", "rvz_bibcode")
+
+
+@dataclass(frozen=True)
+class SimbadRecord:
+    """Oggetto SIMBAD esatto di un identificativo (sprint C2, 14 §7): ``basic``, identificativi, magnitudini.
+
+    ``basic``: nome di colonna → valore (``Quantity`` con l'unità dichiarata dal servizio, testo, intero o ``None``
+    se vuoto); ``coords``: ICRS all'epoca J2000 (``SIMBAD_COORDINATES_NOTE``)."""
+
+    identifier: str  # come scritto da chi chiama
+    main_id: str
+    oid: int
+    basic: Mapping[str, object]
+    otype_description: str | None
+    coords: SkyFrame
+    identifiers: tuple[str, ...]
+    magnitudes: tuple[SimbadMagnitude, ...]
+    source: str  # servizio che ha risposto (es. "SIMBAD (mirror di Harvard)")
+    requests: tuple[RequestRecord, ...]  # basic, ident, flux
+    warnings: tuple[tuple[str, str], ...] = ()
+
+
+def _cell(row, name: str):
+    """Valore di una cella: ``None`` se vuoto; ``Quantity`` se la colonna ha un'unità; tipo nativo altrimenti.
+
+    Un ``float`` a 32 bit del VOTable torna al decimale scritto dal servizio (rappresentazione più corta del valore
+    a 32 bit, es. ``1.0E-4`` e non ``9.99999975e-05``), poi in ``float64`` (DC6)."""
+    value = row[name]
+    if np.ma.is_masked(value):
+        return None
+    unit = row.columns[name].unit
+    if isinstance(value, (bytes, str, np.str_, np.bytes_)):
+        text = value.decode() if isinstance(value, bytes) else str(value)
+        return text.strip() or None
+    if isinstance(value, (np.integer, int)) and unit is None:
+        return int(value)
+    number = float(str(value)) if isinstance(value, np.float32) else float(value)  # float32: decimale scritto
+    if not np.isfinite(number):
+        return None
+    return number * unit if unit is not None else number
+
+
+def simbad_object(identifier: str, *, cache: SharedCache | None = None, refresh: bool = False,
+                  timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> SimbadRecord:
+    """L'oggetto SIMBAD esatto di un identificativo (mai il più citato), con il ripiego sul mirror (D14-14).
+
+    SIMBAD confronta ``ident.id`` normalizzando maiuscole e spazi (verificato il 2026-11-07): l'identificativo si
+    passa come scritto. Nessuna riga → ``NAME_NOT_FOUND`` (``simbad_identifier``), mai un ripiego; più oggetti →
+    ``NAME_NOT_FOUND`` (``several_objects``), nessuna scelta."""
+    if not isinstance(identifier, str) or not identifier.strip():
+        raise ValueError("identifier deve essere un testo non vuoto")
+    columns = ", ".join(f"b.{c}" for c in SIMBAD_BASIC_COLUMNS)
+    adql = (f"SELECT {columns}, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
+            "LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype "
+            f"WHERE i.id = {_adql_string(identifier.strip())}")
+    basic = tap_query(_SIMBAD_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    data = basic.table.table
+    label = _simbad_label(basic.request.url)
+    if len(data) == 0:
+        raise VoProtocolsError("NAME_NOT_FOUND", f"'{identifier}' non trovato in {label}",
+                               params={"reason": "simbad_identifier", "name": identifier, "service": label})
+    if len({int(v) for v in data["oid"]}) > 1:
+        raise VoProtocolsError("NAME_NOT_FOUND", f"'{identifier}' è ambiguo in {label}: indica più oggetti",
+                               params={"reason": "several_objects", "name": identifier, "service": label})
+    row = data[0]
+    fields = {name: _cell(row, name) for name in SIMBAD_BASIC_COLUMNS}
+    ra, dec = fields["ra"], fields["dec"]
+    if not isinstance(ra, u.Quantity) or not isinstance(dec, u.Quantity):
+        raise VoProtocolsError("SERVICE_ERROR", "SIMBAD: coordinate senza unità nella risposta",
+                               params={"reason": "simbad_no_units"})
+    coords = SkyFrame.from_lonlat(ra.to(u.deg), dec.to(u.deg), "icrs", epoch=Time("J2000.0"))
+    oid = int(fields["oid"])
+    idents = tap_query(_SIMBAD_TAP, f"SELECT id FROM ident WHERE oidref = {oid}", cache=cache, refresh=refresh,
+                       timeouts=timeouts)
+    names = sorted({str(v).strip() for v in idents.table.table["id"] if str(v).strip()})
+    main_id = str(fields["main_id"])
+    magnitudes, mag_result, mag_notes = _simbad_magnitudes(main_id, cache=cache, refresh=refresh, timeouts=timeouts)
+    notes = tuple(basic.warnings) + tuple(
+        w for result in (idents, mag_result) for w in result.warnings
+        if w[0] in ("FROM_CACHE", "SERVICE_MIRROR_FALLBACK")) + tuple(mag_notes)
+    return SimbadRecord(identifier=identifier, main_id=main_id, oid=oid, basic=fields,
+                        otype_description=_cell(row, "description"), coords=coords, identifiers=tuple(names),
+                        magnitudes=magnitudes, source=label,
+                        requests=(basic.request, idents.request, mag_result.request), warnings=notes)
 
 
 #: MocServer del CDS (D13-18): elenco delle collezioni VizieR con le loro proprietà (verificato il 2026-10-11).

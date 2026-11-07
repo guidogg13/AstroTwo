@@ -199,6 +199,16 @@ def _survey(text: str) -> str:
     return text.strip()
 
 
+def register_analysis_commands(registry: CommandRegistry) -> None:
+    """Aggiunge al registro i comandi dei livelli 2–4 (05 §3.2): il 05 non importa quei moduli, li aggiunge il 40."""
+    from astrotwo.analysis.object_profile import command_specs
+
+    names = {s.name for s in registry.specs()}
+    for spec in command_specs():
+        if spec.name not in names:
+            registry.register(spec)
+
+
 @dataclass(frozen=True)
 class Preference:
     key: str
@@ -1570,6 +1580,7 @@ class MainWindow(QMainWindow):
         if registry is None:
             self.cache = ThreadCache(int(self.preference("cache/limit_bytes")))
             registry = default_registry(cache=self.cache)
+            register_analysis_commands(registry)  # comandi del livello 2 (05 §3.2, sprint C2: object.profile)
         else:
             self.cache = registry.cache if registry.cache is not None else ThreadCache()
         for name, executor in BOUND_EXECUTORS.items():

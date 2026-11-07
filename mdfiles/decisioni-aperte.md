@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-07 (sprint C1): 39 aperte** — Gruppo 1: **0** · Gruppo 2: **20** · Gruppo 3: **19** (nuove `D25-1`…`D25-12` e `D20-1`…`D20-8`, progetto del profilo di un oggetto, bloccanti per l'approvazione di `25` e `20`; file di origine `25` §13 e `20` §13).
+**Dal 2026-11-07 (sprint C2): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `20` parte SED e `25` approvati con la formula di D25-12; nuova `D25-13`, scelte minori dello sprint C2 da confermare più il punto (8) da decidere, candidati da coordinate e pianeti; file di origine `25` §13).
+
+Prima, **Dal 2026-11-07 (sprint C1): 39 aperte** — Gruppo 1: **0** · Gruppo 2: **20** · Gruppo 3: **19** (nuove `D25-1`…`D25-12` e `D20-1`…`D20-8`, progetto del profilo di un oggetto, bloccanti per l'approvazione di `25` e `20`; file di origine `25` §13 e `20` §13).
 
 Prima, **Dal 2026-11-07 (sprint B4): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D42-2` confermata dal proprietario e chiusa; `D14-14`, regole del ripiego sui mirror, aperta e decisa dal proprietario lo stesso giorno; nuova `D14-15`, scelte minori del ripiego e di «Riesegui con dati aggiornati», proposte da Claude Code, da confermare; file di origine `14` §13 e `42` §13).
 
@@ -313,37 +315,19 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (20)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (0)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `D25-1` | Numero, nome e livello del nuovo modulo del profilo (AM1, sprint C1 del 2026-11-07): proposta `25-analisi-profilo-oggetto.md`, livello 2 | `25-analisi-profilo-oggetto.md` §13 |
-| `D25-2` | Metodo della distanza: Bailer-Jones 2021 (`external.gaiaedr3_distance`) → 1/ϖ solo con ϖ/σ ≥ 10 (Gaia o SIMBAD con fonte) → nessuna distanza con motivo | `25` §13 |
-| `D25-3` | Tabella dei pianeti: `pscomppars` (riferimento per parametro, avviso di coerenza) o `ps` con `default_flag = 1` | `25` §13 |
-| `D25-4` | Catena degli identificativi: SIMBAD → incroci ufficiali di Gaia → posizione; AllWISE con cerchio piccolo e controllo della designazione | `25` §13 |
-| `D25-5` | Miniature: DSS2 colore, 2MASS colore, AllWISE colore; 5′; 256 px; TAN | `25` §13 |
-| `D25-6` | Esportazione: ECSV con provenienza, PDF della scheda, PNG della SED | `25` §13 |
-| `D25-7` | Dove vive la specifica dell'interfaccia del profilo (proposta: `43`) | `25` §13 |
-| `D25-8` | Tempi: obiettivo 60 s, massimi per sezione, 4 richieste contemporanee | `25` §13 |
-| `D25-9` | Raggi: 10″ per i candidati SIMBAD, 2″ per gli incroci per posizione | `25` §13 |
-| `D25-10` | Zero point di parallasse (Lindegren et al. 2021): non applicato nella 1.0, dichiarato | `25` §13 |
-| `D25-11` | Indicatori di qualità di Gaia mostrati e soglia RUWE 1,4 (fonte da verificare) | `25` §13 |
-| `D25-12` | Formula di fase codice per 20 e 25 e autorizzazione a modificare gli approvati 03, 05, 12, 14, 32, 34, 40, 41, 42 | `25` §13 |
-| `D20-1` | Tabella dei punti zero (Gaia AB dal flusso in e⁻/s, 2MASS Cohen 2003, WISE a spettro costante senza correzioni di colore) | `20-analisi-fotometria.md` §13 |
-| `D20-2` | λ di riferimento delle bande Gaia: pivot calcolata dalla banda ufficiale o valore della documentazione | `20` §13 |
-| `D20-3` | Propagazione degli errori con l'errore del punto zero | `20` §13 |
-| `D20-4` | Soglie di qualità per il grafico della SED | `20` §13 |
-| `D20-5` | Serie VizieR separata e non convertita, raggio 2″ | `20` §13 |
-| `D20-6` | Magnitudini SIMBAD solo in tabella (duplicati marcati), Johnson senza conversione nella 1.0 | `20` §13 |
-| `D20-7` | Grafico con matplotlib, Fν contro λ log-log | `20` §13 |
-| `D20-8` | Resto del modulo 20 (apertura/PSF, calibrazione, estrazione) da specificare prima dell'approvazione completa, o approvazione della sola parte SED | `20` §13 |
+| — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (19)
+## 5. GRUPPO 3 — rimandabili al momento del codice (20)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
 | `D14-15` | Scelte minori del ripiego sui mirror e di «Riesegui con dati aggiornati» (sprint B4, **proposte da Claude Code il 2026-11-07, da confermare**): (1) servizio sul mirror per la sessione, `refresh=True` dal principale; (2) cache di tutti i server prima della rete, copia vecchia solo se tutti giù; (3) ripiego solo per le voci dell'elenco; (4) `SERVICE_MIRROR_FALLBACK`, `NET_TIMEOUT` `service_servers`; (5) colonne di Gaia DR3/2MASS non rinominate; (6) 2MASS dall'IRSA con `CIRCLE('ICRS', …)` e dialogo delle colonne; (7) `vizier_no_mirror`; (8) campo `refresh` e pulsante solo per i comandi di rete, `DATA_REFRESHED`; (9) collegamento SIMBAD al server che ha risposto | `14` §13 | Gruppo 3 |
+| `D25-13` | Scelte minori dello sprint C2 (profilo, **proposte da Claude Code il 2026-11-07, da confermare**): (1) parametri `crossmatch_radius` e `simbad_id` di `object.profile`; (2) ricerca dei candidati allargata da `PM_SEARCH_MAX` = 10,5″/anno; (3) riga di catalogo per posizione in C2; (4) passo per posizione solo per Gaia DR3 in C2; (5) elenco `sections` allargato senza cambiare versione; (6) comandi dei livelli 2–4 aggiunti al registro dal `40` (05 §3.2); (7) astrometria SIMBAD anche con Gaia a 2 parametri; **(8) da decidere:** candidati da coordinate e pianeti (SIMBAD li mette alla posizione della stella: 51 Peg, TRAPPIST-1, eta Tau sempre ambigui) | `25` §13 | Gruppo 3 |
 | `D42-1` | Scelte minori dell'incrocio nell'interfaccia (sprint B2, **proposte da Claude Code il 2026-11-05, da confermare**): (1) Data → Cross-match catalogs… più il menu contestuale della scheda; (2) report in finestra non modale (alla fine dell'incrocio chiesto dall'utente, riapribile dal menu contestuale) più i dettagli del comando; (3) nessuna voce "in arrivo" per incrocio per campo ed ellissi; (4) unità `mas`, `arcsec`, `arcmin`, `deg`; (5) sistemi ICRS e Galattico; (6) nome del livello «A × B · modalità»; (7) livello creato anche senza coppie (`NO_MATCH`) | `42-ui-pannello-cataloghi.md` §13, §3.7 |
 | `D40-10` | **Voce futura (proprietario, 2026-11-05):** pulizia delle tabelle SAMP ricevute, che oggi si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/` (D40-9 (3)); per esempio un pulsante nelle Impostazioni con lo spazio occupato. Da decidere: posizione del comando, sessioni che citano file cancellati, conferma | `40-ui-finestra-principale.md` §13 |
 | `D60-4` | **DECISA il 2026-11-04 (b): PySide6 6.11.3, minimo macOS 15.0.** (Prima:) macOS minimo dell'app 26.0: i moduli di collegamento della ruota di PySide6/shiboken6 6.12.0 hanno `minos 26.0` (ruota etichettata `macosx_14_0`); su macOS 14/15 l'app con ogni probabilità non parte (da verificare). Opzioni: (a) macOS 26 minimo per la beta, (b) altra versione di PySide6 (aggiornamento di dipendenza su richiesta), (c) segnalazione a Qt for Python; raccomandazione (a) + (c). Non blocca il 60a, conta per il 60b | `60-distribuzione-dmg.md` §3.1, §13 |
@@ -464,3 +448,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-06 | Claude Code | **Sprint B3 (cone search e query ADQL nell'interfaccia):** nuova **`D42-2`** (scelte minori, proposte e da confermare; prima nel `42` §13) nel Gruppo 3. Conteggi: aperte **19** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 19). Decisioni del proprietario del 2026-11-06 (a)–(i) scritte come decise nei file di origine (`05`, `14`, `32`, `40`, `42`), non voci di questo elenco. |
 | 2026-11-07 | Claude Code | **Sprint B4 (ripiego sui mirror per SIMBAD e VizieR):** **`D42-2` confermata dal proprietario** (punti (1)–(11), il (6) superato) e tolta dalle aperte; **`D14-14`** (regole del ripiego) aperta e decisa dal proprietario; nuova **`D14-15`** (scelte minori, da confermare). Aperte 19. |
 | 2026-11-07 | Claude Code | **Sprint C1 (progetto del profilo di un oggetto, solo specifiche):** nuove `D25-1`…`D25-12` e `D20-1`…`D20-8` nel Gruppo 2 (prima nei file di origine `25` §13 e `20` §13), ciascuna con la raccomandazione nel file di origine. Conteggi: aperte **39** (Gruppo 1 = 0, Gruppo 2 = 20, Gruppo 3 = 19). |
+| 2026-11-07 | Claude Code | **Sprint C2 (decisioni del proprietario del 2026-11-07):** `D25-1`…`D25-12` e `D20-1`…`D20-8` decise (scritte prima nei file di origine `25` §13 e `20` §13) e tolte dal Gruppo 2; D25-11: soglia RUWE solo con fonte ufficiale verificata, verifica senza esito (RUWE senza soglia). Nuova **`D25-13`** (Gruppo 3: scelte minori dello sprint C2 da confermare, punto (8) da decidere). Aperte **20** (Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 20). |

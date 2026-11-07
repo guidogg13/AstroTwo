@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/VOTable/votable-1.4.xsd">
+<RESOURCE type="results">
+
+<INFO name="JOBID" value="e2540735-da96-11f1-b71e-bc97e148b76b-O" ucd="meta.id;meta.query"/>
+<INFO name="JOBNAME" value=""/>
+<INFO name="QUERY_STATUS" value="OK"/>
+<INFO name="QUERY" value="SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 2097893856820155008" ucd="meta.query"/>
+
+<PARAM name="CITATION" ucd="meta.bib" datatype="char" arraysize="*" value="https://www.cosmos.esa.int/web/gaia-users/credits">
+<DESCRIPTION>How to cite and acknowledge Gaia:</DESCRIPTION>
+</PARAM>
+<PARAM name="HELP" ucd="meta.ref.url" datatype="char" arraysize="*" value="https://www.cosmos.esa.int/web/gaia-users/archive">
+<DESCRIPTION>Tutorials, documentation, and help:</DESCRIPTION>
+</PARAM>
+<PARAM name="ISSUES" ucd="meta.ref.url" datatype="char" arraysize="*" value="https://www.cosmos.esa.int/web/gaia-users/known-issues">
+<DESCRIPTION>Known issues in the data:</DESCRIPTION>
+</PARAM>
+<PARAM name="DATA" ucd="meta.ref.url" datatype="char" arraysize="*" value="https://www.cosmos.esa.int/web/gaia/data-access">
+<DESCRIPTION>Gaia data:</DESCRIPTION>
+</PARAM>
+<PARAM name="TERMS" ucd="meta.ref.url" datatype="char" arraysize="*" value="https://www.cosmos.esa.int/web/esdc/terms-and-conditions">
+<DESCRIPTION>Terms and conditions for use of Gaia data:</DESCRIPTION>
+</PARAM>
+<PARAM name="HOME" ucd="meta.ref.url" datatype="char" arraysize="*" value="https://www.cosmos.esa.int/web/gaia">
+<DESCRIPTION>Gaia mission home:</DESCRIPTION>
+</PARAM>
+<PARAM name="PUBLISHER" ucd="meta.id;meta.curation" datatype="char" arraysize="*" value="ESA/Gaia/DPAC">
+<DESCRIPTION>Dataset publisher</DESCRIPTION>
+</PARAM>
+<PARAM name="CREATOR" ucd="meta.ref" datatype="char" arraysize="*" value="Gaia Collaboration">
+<DESCRIPTION>Dataset creator</DESCRIPTION>
+</PARAM>
+
+
+<TABLE>
+<FIELD datatype="long" name="source_id" ucd="meta.id;meta.main">
+<DESCRIPTION>Unique source identifier. Note that this *cannot* be matched against the DR1 or DR2 source_ids.</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="r_med_geo" ucd="pos.distance" unit="pc">
+<DESCRIPTION>The median of the geometric distance posterior. The geometric distance estimate.</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="r_lo_geo" ucd="pos.distance;stat.min" unit="pc">
+<DESCRIPTION>The 16th percentile of the geometric distance posterior. The lower 1-sigma-like bound on the confidence interval.</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="r_hi_geo" ucd="pos.distance;stat.max" unit="pc">
+<DESCRIPTION>The 84th percentile of the geometric distance posterior. The upper 1-sigma-like bound on the confidence interval.</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="r_med_photogeo" ucd="pos.distance" unit="pc">
+<DESCRIPTION>The median of the photogeometric distance posterior. The photogeometric distance estimate.</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="r_lo_photogeo" ucd="pos.distance;stat.min" unit="pc">
+<DESCRIPTION>The 16th percentile of the photogeometric distance posterior. The lower 1-sigma-like bound on the confidence interval.</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="r_hi_photogeo" ucd="pos.distance;stat.max" unit="pc">
+<DESCRIPTION>The 84th percentile of the photogeometric distance posterior. The upper 1-sigma-like bound on the confidence interval.</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="*" datatype="char" name="flag" ucd="meta.code">
+<DESCRIPTION>Additional information on the solution. Do not use for filtering (see table note in the reference URL).</DESCRIPTION>
+</FIELD>
+<DATA>
+<BINARY2>
+<STREAM encoding='base64'>
+</STREAM>
+</BINARY2>
+</DATA>
+</TABLE>
+</RESOURCE>
+</VOTABLE>

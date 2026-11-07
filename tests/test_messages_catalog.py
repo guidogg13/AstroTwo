@@ -50,6 +50,7 @@ CONVERTED = {
     "ui/ai_panel.py": "ValueProblem",
     "ui/samp_link.py": "VoProtocolsError",  # SAMP nell'interfaccia (40 §3.12, sprint B1)
     "app_bundle.py": "CommandError",  # LICENSE_FILE_MISSING della finestra Licenze (60 §3.9)
+    "analysis/object_profile.py": "ObjectProfileError",  # profilo di un oggetto (25 §10, sprint C2)
 }
 
 #: Funzioni di appoggio che costruiscono un errore o un avviso: nome → (codice, posizione dell'argomento ``reason``).

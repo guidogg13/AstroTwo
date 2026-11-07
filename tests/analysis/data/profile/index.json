@@ -1,0 +1,192 @@
+{
+ "exoplanet|SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 2635476908753563008'": {
+  "file": "exoplanet-27920f0de58f.xml",
+  "retrieved_at": "2026-11-07T10:31:46.668214+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "exoplanet|SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 2835207319109249920'": {
+  "file": "exoplanet-998b4276cc5c.xml",
+  "retrieved_at": "2026-11-07T10:30:13.989221+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "exoplanet|SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 66714384142368256'": {
+  "file": "exoplanet-0231026d8f0f.xml",
+  "retrieved_at": "2026-11-07T10:31:07.530683+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "exoplanet|SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ('25 Tau', 'eta Tau', 'STF 4008A', 'STFA 8A', '1E 0344.5+2357', '2MASS J03472908+2406184', 'AG+23 323', 'ALS 15094', 'BD+23 541', 'BDS 1875 A', 'CCDM J03474+2407A', 'CEL 344', 'Cl Melotte 22 1432', 'Cl* Melotte 22 K 60', 'Cl* Melotte 22 VM 32', 'Cl* Melotte 22 HII 1432', 'Cl* Melotte 22 MSH 194', 'Cl* Melotte 22 MSK 141', 'Cl* Melotte 22 TRU 414', 'Cl* Melotte 22 WCZ 236', 'EM* MWC 74', 'EPIC 200007767', 'FK5 139', 'GC 4541', 'GCRV 2135', 'GEN# +5.20221432', 'GSC 01800-02202', 'Gaia DR2 66714384141781760', 'Gaia DR3 66714384142368256', 'HD 23630', 'HGAM 274', 'HIC 17702', 'HIP 17702', 'HR 1165', 'IDS 03415+2348 A', 'IRAS 03445+2357', 'IRC +20063', 'JP11 4669', 'JP11 4680', 'N30 776', 'Alcyone', 'PLX 821', 'PMC 90-93 100', 'PPM 92898', 'ROT 3785', 'SAO 76199', 'SKY# 5771', 'SRS 30139', 'TIC 125755072', 'TYC 1800-2202-1', 'UBV 3639', 'VDB 23', 'WDS J03475+2406A', 'WEB 3382', 'XZ 4911', '[B10] 869', '[JE82] 124', '[KSP2003] G166.6680-23.4550', '[KSP2003] J034729.04+240619.4', '[SCG94] O 165', '[SCG94] X 180', 'uvby98 520221432')": {
+  "file": "exoplanet-4e063f4c699f.xml",
+  "retrieved_at": "2026-11-07T10:31:08.972165+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "exoplanet|SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ('3 Lyr', 'alf Lyr', '1E 183515+3844.3', '2MASS J18365633+3847012', '8pc 128.93', 'ADS 11510 A', 'AG+38 1711', 'AKARI-IRC-V1 J1836564+384703', 'ASCC 507896', 'BD+38 3238', 'CCDM J18369+3847A', 'CEL 4636', 'CNS5 4607', 'CSI+38 3238 1', 'CSV 101745', 'EQ 183456.7+384615.4', 'EUVE J1836+38.7', 'FK5 699', 'GAT 1285', 'GC 25466', 'GCRV 11085', 'GEN# +1.00172167', 'GJ 721', 'GJ 721.0', 'HD 172167', 'HGAM 706', 'HIC 91262', 'HIP 91262', 'HR 7001', 'IDS 18336+3841 A', 'IRAS 18352+3844', 'IRAS F18352+3844', 'IRC +40322', 'JCMTSE J183656.4+384709', 'JCMTSF J183656.4+384709', 'JP11 2999', 'LSPM J1836+3847', 'LTT 15486', 'N30 4138', 'Vega', 'NLTT 46746', 'NSV 11128', 'PLX 4293', 'PLX 4293.00', 'PMC 90-93 496', 'PPM 81558', 'RAFGL 2208', 'ROT 2633', 'SAO 67174', 'SKY# 34103', 'TD1 22883', 'TIC 157587146', 'TIC 471012017', 'TYC 3105-2070-1', 'UBV 15842', 'UBV M 23118', 'USNO 882', 'USNO-B1.0 1287-00305764', 'WDS J18369+3846A', 'WEB 15681', 'WISE J183656.49+384703.9', 'Zkh 277', '[HFE83] 1223', 'uvby98 100172167')": {
+  "file": "exoplanet-89de19ec69b2.xml",
+  "retrieved_at": "2026-11-07T10:32:24.558506+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "gaia|SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.allwise_best_neighbour WHERE source_id = 2635476908753563008": {
+  "file": "gaia-1fa718cc28bf.xml",
+  "retrieved_at": "2026-11-07T10:31:44.896707+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.allwise_best_neighbour WHERE source_id = 2835207319109249920": {
+  "file": "gaia-0b41c3f16c6a.xml",
+  "retrieved_at": "2026-11-07T10:30:12.200907+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.allwise_best_neighbour WHERE source_id = 66714384142368256": {
+  "file": "gaia-d5ae8e28774a.xml",
+  "retrieved_at": "2026-11-07T10:31:06.276289+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.tmass_psc_xsc_best_neighbour WHERE source_id = 2635476908753563008": {
+  "file": "gaia-77a9b5ffe9f3.xml",
+  "retrieved_at": "2026-11-07T10:31:39.284451+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.tmass_psc_xsc_best_neighbour WHERE source_id = 2835207319109249920": {
+  "file": "gaia-efc96c04bd9e.xml",
+  "retrieved_at": "2026-11-07T10:30:11.809661+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.tmass_psc_xsc_best_neighbour WHERE source_id = 66714384142368256": {
+  "file": "gaia-9c4b74e509b6.xml",
+  "retrieved_at": "2026-11-07T10:30:54.877443+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 2097893856820155008": {
+  "file": "gaia-057e682cb723.xml",
+  "retrieved_at": "2026-11-07T10:35:00.502482+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 2635476908753563008": {
+  "file": "gaia-b3a4860febb2.xml",
+  "retrieved_at": "2026-11-07T10:31:49.852982+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 2835207319109249920": {
+  "file": "gaia-dc6d180c3384.xml",
+  "retrieved_at": "2026-11-07T10:30:17.401612+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 66714384142368256": {
+  "file": "gaia-95dae8c2249d.xml",
+  "retrieved_at": "2026-11-07T10:31:21.732858+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, ra, dec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.23588047512453, 38.784961083936, 0.0005555555555555556))": {
+  "file": "gaia-d4e8a30e8bed.xml",
+  "retrieved_at": "2026-11-07T10:32:22.956770+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, ra, dec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.23588047512453, 38.784961083936, 0.01))": {
+  "file": "gaia-c2b7d7018ecf.xml",
+  "retrieved_at": "2026-11-07T10:34:59.580003+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 2097893856820155008": {
+  "file": "gaia-1cb2c028a846.xml",
+  "retrieved_at": "2026-11-07T10:35:00.009861+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 2635476908753563008": {
+  "file": "gaia-f8996dedc956.xml",
+  "retrieved_at": "2026-11-07T10:31:48.917460+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 2835207319109249920": {
+  "file": "gaia-aaf3d7bef13e.xml",
+  "retrieved_at": "2026-11-07T10:30:16.830078+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "gaia|SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 66714384142368256": {
+  "file": "gaia-2024bb28fce4.xml",
+  "retrieved_at": "2026-11-07T10:31:13.478295+00:00",
+  "server": "https://gea.esac.esa.int/tap-server/tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '* alf Lyr'": {
+  "file": "simbad-0e6f2c20ab28.xml",
+  "retrieved_at": "2026-11-07T10:32:11.567577+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '51 Peg'": {
+  "file": "simbad-a3980df6d3c3.xml",
+  "retrieved_at": "2026-11-07T10:30:00.587756+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = 'No Such Object 98765'": {
+  "file": "simbad-4d5950b4bdfa.xml",
+  "retrieved_at": "2026-11-07T10:32:30.000677+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = 'TRAPPIST-1'": {
+  "file": "simbad-c03b60a074f0.xml",
+  "retrieved_at": "2026-11-07T10:31:27.239818+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = 'Vega'": {
+  "file": "simbad-3fe5c7b2be67.xml",
+  "retrieved_at": "2026-11-07T10:30:22.797304+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = 'eta Tau'": {
+  "file": "simbad-516eb34116da.xml",
+  "retrieved_at": "2026-11-07T10:30:42.060915+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '*  51 Peg'": {
+  "file": "simbad-66f2092422ed.xml",
+  "retrieved_at": "2026-11-07T10:30:11.433354+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '* alf Lyr'": {
+  "file": "simbad-53f4b548de5e.xml",
+  "retrieved_at": "2026-11-07T10:32:22.431702+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '* eta Tau'": {
+  "file": "simbad-5908fbd203a8.xml",
+  "retrieved_at": "2026-11-07T10:30:52.842007+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = 'TRAPPIST-1'": {
+  "file": "simbad-7ac5256b73eb.xml",
+  "retrieved_at": "2026-11-07T10:31:38.095173+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT id FROM ident WHERE oidref = 1353525": {
+  "file": "simbad-65742b819a31.xml",
+  "retrieved_at": "2026-11-07T10:31:32.664618+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT id FROM ident WHERE oidref = 1472090": {
+  "file": "simbad-732f6d84decb.xml",
+  "retrieved_at": "2026-11-07T10:30:06.052344+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT id FROM ident WHERE oidref = 2900336": {
+  "file": "simbad-cd91065961b7.xml",
+  "retrieved_at": "2026-11-07T10:32:17.001220+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT id FROM ident WHERE oidref = 676410": {
+  "file": "simbad-ea48a1fe6695.xml",
+  "retrieved_at": "2026-11-07T10:30:47.463890+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 279.234734787025, 38.783688956244, 0.002777777777777778)) = 1": {
+  "file": "simbad-5609fd17b504.xml",
+  "retrieved_at": "2026-11-07T10:32:06.149092+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 344.36658535524, 20.768832511140005, 0.002777777777777778)) = 1": {
+  "file": "simbad-5dd58a4e7c0b.xml",
+  "retrieved_at": "2026-11-07T10:31:55.241240+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "simbad|SELECT main_id, otype, ra, dec, pmra, pmdec, nbref FROM basic WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 346.62236872857875, -5.041399250518334, 0.002777777777777778)) = 1": {
+  "file": "simbad-1c4d3921b3d4.xml",
+  "retrieved_at": "2026-11-07T10:32:00.650715+00:00",
+  "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ }
+}

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VOTABLE version="1.3" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.ivoa.net/xml/VOTable/v1.3">
+  <RESOURCE type="results">
+  <INFO name="QUERY_STATUS" value="OK"/>
+  <TABLE>
+    <FIELD ID="hostname" arraysize="*" datatype="char" name="hostname">
+  <DESCRIPTION><![CDATA[ Host Name ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="gaia_dr3_id" arraysize="*" datatype="char" name="gaia_dr3_id">
+  <DESCRIPTION><![CDATA[ Gaia DR3_ID ]]></DESCRIPTION>
+</FIELD>
+    <DATA>
+      <TABLEDATA>
+        <TR>
+        <TD><![CDATA[51 Peg]]></TD>
+        <TD><![CDATA[Gaia DR3 2835207319109249920]]></TD>
+        </TR>
+      </TABLEDATA>
+    </DATA>
+  </TABLE>
+  </RESOURCE>
+</VOTABLE>

@@ -109,6 +109,7 @@ MODULE_14_SUBVARIANTS = {
     ("FORMAT_DECLARED", "recognized_differs"), ("TABLE_TOO_LARGE", "upload"),
     ("FROM_CACHE", "cached_origin"), ("FROM_CACHE", "network_cached"), ("FROM_CACHE", "cached_since"),
     ("FROM_CACHE", "network_unavailable"), ("NET_TIMEOUT", "service_servers"), ("NET_TIMEOUT", "mocserver_no_mirror"),
+    ("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects"),  # simbad_object (sprint C2)
 } | {("SERVICE_ERROR", r) for r in (
     "http_message", "http_message_async_hint", "http_no_votable", "service_rejected", "request_failed", "job_phase",
     "job_result_status", "descriptor_missing", "simbad_no_units")}

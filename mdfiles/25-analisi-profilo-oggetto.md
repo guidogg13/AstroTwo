@@ -1,11 +1,13 @@
 # 25-analisi-profilo-oggetto.md — Profilo di un oggetto in un minuto
 
-**Stato:** bozza
+**Stato:** approvato
 
-> Modulo nuovo proposto il 2026-11-07 (sprint C1, Fase C) con la meccanica AM1
-> (`panoramica.md` §6, voce `AM1 (25)`): **numero, nome e livello sono una
-> proposta da confermare** (D25-1). Solo specifica: nessun codice finché il file
-> non è `approvato` e il proprietario non dichiara la fase codice (D25-12).
+> Modulo nuovo proposto il 2026-11-07 (sprint C1, Fase C) con la meccanica AM1;
+> **AM1 accettata e file approvato dal proprietario il 2026-11-07** (D25-1:
+> numero 25, livello 2, codice in `src/astrotwo/analysis/object_profile.py`).
+> Fase codice dichiarata con la formula di D25-12 (§13). Lo sprint C2 scrive il
+> motore (bersaglio, identificativi, identità, astrometria, distanza) e il
+> comando `object.profile`; le precisazioni nate scrivendo C2 sono in §3.10.
 
 ## 2. Scopo
 
@@ -217,6 +219,127 @@ e Annulla stanno nella barra di stato come per gli altri comandi (40).
 PDF, PNG della SED), «Mostra nel cielo» (`view.set_center`), «Carica i punti
 SED come catalogo», «Invia con SAMP».
 
+### 3.10 Precisazioni dello sprint C2 (motore, 2026-11-07)
+
+Scritte prima del codice dello sprint C2; le scelte minori sono raccolte in
+D25-13 (da confermare). In C2 esistono le sezioni **Identità** e
+**Astrometria** (con la distanza); immagini, fotometria e pianeti arrivano
+negli sprint C3–C4.
+
+**Bersaglio.**
+1. **Nome:** `simbad_object` del 14 (§7.2). SIMBAD confronta gli
+   identificativi della tabella `ident` **normalizzandoli** (verificato il
+   2026-11-07 sul mirror di Harvard: `'51 Peg'` → `* 51 Peg`, `'vega'` →
+   `NAME Vega`, `'eta Tau'` → `* eta Tau`): il nome si passa così come
+   scritto. Nessun oggetto → `NAME_NOT_FOUND` (sotto-voce `simbad_identifier`),
+   profilo non creato. SIMBAD giù su tutti i server → `resolve_name` del 10
+   (fino a NED), sezione Identità in errore con l'errore del 14, profilo per
+   posizione con `PROFILE_NO_IDENTIFIERS`.
+2. **Coordinate** (sistema ed epoca dichiarati, convertite in ICRS dal 10):
+   candidati SIMBAD dalla tabella `basic` in un cerchio di raggio
+   `match_radius + PM_SEARCH_MAX · |Δt|`, con Δt = epoca del bersaglio −
+   J2000.0 e **`PM_SEARCH_MAX` = 10,5″/anno** (sopra il moto proprio più grande
+   noto, la stella di Barnard: 10,393″/anno da SIMBAD, `pm_bibcode`
+   2020yCat.1350....0G, letto il 2026-11-07). Ogni candidato con moto proprio
+   SIMBAD è portato **all'epoca del bersaglio** con `propagate_position` del 10
+   (`proper_motion_only=True`, dichiarato); senza moto proprio resta a J2000
+   (dichiarato nel candidato). Entrano i candidati con separazione ≤
+   `match_radius` (Astropy), in ordine di separazione e poi di `main_id`. Uno
+   → usato, con la separazione nel risultato; più di uno →
+   `PROFILE_AMBIGUOUS_TARGET` con l'elenco (`main_id`, `otype`, separazione,
+   `nbref`), nessuna scelta; nessuno → profilo per posizione. Epoca del
+   bersaglio non nota (`null` con motivo): nessuna propagazione, raggio =
+   `match_radius`, avviso `PROFILE_NO_PROPER_MOTION` (`target_epoch_unknown`).
+3. **Riga di catalogo** (`layer` + `row`): in C2 vale **per posizione**, con
+   l'epoca del livello (13, D10-2); il riconoscimento delle colonne
+   identificative della riga arriva con l'interfaccia (C5, D25-13 (3)).
+4. **`simbad_id`** (parametro del comando): `main_id` SIMBAD dell'oggetto. Il
+   comando lo **scrive** nel comando registrato dopo la risoluzione;
+   l'interfaccia lo passa dopo la scelta dell'utente tra più candidati.
+   **Con un nome**, la riesecuzione risolve di nuovo **il nome** (stessa
+   richiesta, quindi dalla cache, A7) e `simbad_id` fa da controllo: se SIMBAD
+   dà un oggetto diverso (tipicamente con «Riesegui con dati aggiornati»),
+   avviso `PROFILE_TARGET_CHANGED` con i due `main_id` e il profilo usa
+   l'oggetto di oggi, dichiarato. **Con coordinate o una riga**, `simbad_id`
+   decide l'oggetto (nessuna nuova ricerca dei candidati): è la scelta
+   registrata.
+
+**Catena degli identificativi in C2** (`cross_identify`).
+- **Gaia DR3:** `Gaia DR3 <source_id>` dagli identificativi SIMBAD; se manca,
+  **passo per posizione**: posizione SIMBAD (J2000) portata a J2016.0 con
+  `propagate_position` (con parallasse SIMBAD positiva; altrimenti solo moto
+  proprio, dichiarato; senza moto proprio nessuna propagazione e
+  `PROFILE_NO_PROPER_MOTION`), cerchio di `crossmatch_radius` (default 2″,
+  D25-9) su `gaiadr3.gaia_source`. Nessuna sorgente → `PROFILE_NO_GAIA`
+  (`no_counterpart`); una → usata con `PROFILE_POSITIONAL_MATCH` (raggio,
+  separazione, epoche); più di una → **nessuna scelta**, elenco nel risultato
+  e `PROFILE_POSITIONAL_MATCH` (`several_candidates`), astrometria da SIMBAD.
+  Un `source_id` indicato da SIMBAD ma assente dall'archivio →
+  `PROFILE_NO_GAIA` (`not_in_archive`).
+- **2MASS e AllWISE:** identificativo SIMBAD (`2MASS J…`, `WISEA J…`) e, con
+  un `source_id` Gaia, **sempre anche** l'incrocio ufficiale
+  (`gaiadr3.tmass_psc_xsc_best_neighbour`, `gaiadr3.allwise_best_neighbour`,
+  colonne verificate il 2026-11-07: `original_ext_source_id`,
+  `angular_distance` in arcsec, `number_of_neighbours`, `xm_flag`), così un
+  disaccordo si vede. Confronto sulle designazioni senza prefisso
+  (`2MASS J22572795+2046077` ↔ `22572795+2046077`; `WISEA
+  J230630.02-050234.1` ↔ `J230630.02-050234.1`, formati verificati). Diversi →
+  `PROFILE_IDENTIFIER_CONFLICT` con entrambi, nessuna scelta. Nessuno dei due
+  → «non trovato» con la nota che il passo per posizione arriva con la
+  fotometria (C3, D25-13 (4)).
+- **NASA Exoplanet Archive** (voce `nasa-exoplanet-tap` del 14): `SELECT
+  DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3
+  <source_id>'`; senza righe (o senza `source_id`), `hostname` uguale a un
+  identificativo SIMBAD (confronto sugli identificativi senza i prefissi
+  SIMBAD `*`, `**`, `V*`, `NAME` e con gli spazi ridotti a uno). Nessuna
+  riga: «nessun ospite nell'archivio», non è un errore. In C2 la catena dà
+  solo l'ospite; i pianeti sono dello sprint C4.
+
+**Sezione Identità:** `main_id`, `otype` con la descrizione della tabella
+`otypedef` di SIMBAD, `sp_type` con `sp_bibcode`, `nbref`, posizione ICRS
+J2000 con `coo_err_maj`/`coo_err_min`/`coo_err_angle`, `coo_qual`,
+`coo_bibcode`; identificativi raggruppati per catalogo (prima parola
+dell'identificativo, `NAME` = nomi propri, `*`/`**`/`V*` = nomi di stelle);
+collegamento alla pagina SIMBAD del server che ha risposto.
+
+**Sezione Astrometria:** dal `source_id`, `gaiadr3.gaia_source` dell'archivio
+Gaia ESA: `ra`, `dec` (con `ra_error`, `dec_error` in mas) a `ref_epoch`,
+`parallax`, `pmra`, `pmdec`, `radial_velocity` con gli errori; indicatori
+`ruwe` (senza soglia, D25-11), numero di parametri = bit a 1 di
+`astrometric_params_solved` (definizione del modello dei dati Gaia DR3),
+`duplicated_source`, `ipd_frac_multi_peak`. Soluzione a 2 parametri →
+`PROFILE_GAIA_TWO_PARAMETER` e **anche** parallasse e moto proprio di SIMBAD
+con la loro fonte (D25-13 (7)); nessuna sorgente Gaia → valori di SIMBAD
+(`plx_*`, `pm*`, `rvz_*` con i bibcode) e `PROFILE_NO_GAIA`.
+
+**Distanza** (`distance_from`): Bailer-Jones per `source_id` da
+`external.gaiaedr3_distance` (colonne verificate il 2026-11-07: `r_med_geo`,
+`r_lo_geo`, `r_hi_geo`, `r_med_photogeo`, `r_lo_photogeo`, `r_hi_photogeo`
+in pc, `flag`); altrimenti 1/ϖ con la parallasse di Gaia DR3 (soluzioni a 5
+o 6 parametri) o, **se Gaia non la dà**, quella di SIMBAD con il suo
+`plx_bibcode`, solo se ϖ/σ ≥ `PARALLAX_SNR_MIN` = 10: distanza =
+`(ϖ).to(u.pc, u.parallax())` e intervallo [1/(ϖ+σ), 1/(ϖ−σ)], con la nota
+«nessuna correzione dello zero point di parallasse (D25-10)»; altrimenti
+`PROFILE_NO_DISTANCE` (`no_parallax`, `low_snr` con il rapporto,
+`negative_parallax`). Una parallasse di Gaia con rapporto < 10 **non** passa a
+quella di SIMBAD (la regola dice «in mancanza»).
+
+**Valori e provenienza.** Ogni `ProfileValue` ha grandezza, valore e unità
+(Astropy, `float64`), errore (simmetrico o inferiore/superiore), metodo
+(`read` = letto dal servizio; `computed` = calcolato, con la funzione e la
+formula), riferimento bibliografico se il servizio lo dà, e la `Provenance`:
+servizio (con il server che ha risposto), URL, tabella, interrogazione ADQL,
+identificativo usato e tipo di incrocio, data, cache sì/no. Il `command_id`
+è il numero del comando nella cronologia del 05 (il risultato appartiene al
+comando); l'esportazione (C6) lo scrive in ogni riga.
+
+**Esecuzione in C2:** sezioni una dopo l'altra (il parallelismo è dello
+sprint C4); l'annullamento si controlla tra le richieste; un errore di una
+sezione resta nella sezione (stato `error`, messaggio del modulo invariato) e
+il comando termina `ok`; solo un bersaglio non risolvibile
+(`NAME_NOT_FOUND`, `PROFILE_AMBIGUOUS_TARGET`, `PROFILE_TARGET_INVALID`) fa
+terminare il comando in errore.
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -259,8 +382,10 @@ SED come catalogo», «Invia con SAMP».
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
 | in | `target` | testo, oppure coordinate, oppure riferimento a una riga | nome; coordinate con sistema ed epoca (DC2); `layer_id` + riga | uno solo dei tre |
-| in | `sections` | elenco | `identity`, `images`, `astrometry`, `photometry`, `planets` | default tutte |
-| in | `match_radius` | angolo | arcsec, con unità | default D25-9; usato solo senza identificativo |
+| in | `sections` | elenco | `identity`, `astrometry` (C2); `images`, `photometry`, `planets` aggiunti da C3–C4 | default tutte quelle scritte |
+| in | `match_radius` | angolo | arcsec, con unità | default 10″ (D25-9): candidati SIMBAD da coordinate |
+| in | `crossmatch_radius` | angolo | arcsec, con unità | default 2″ (D25-9): incroci per posizione dopo la propagazione (§3.10) |
+| in | `simbad_id` | testo | identificativo SIMBAD | facoltativo; scritto dal comando dopo la risoluzione (§3.10) |
 | in | `thumbnail_fov`, `thumbnail_size`, `surveys` | angolo, intero, elenco di id HiPS | arcmin; pixel | default D25-5 |
 | in | `refresh` | booleano | — | dati aggiornati dalla rete (B4) |
 | out | `ObjectProfile` | struttura | §7 | bersaglio risolto, sezioni, avvisi, comando |
@@ -336,7 +461,7 @@ SED come catalogo», «Invia con SAMP».
 
 ## 10. Casi limite ed errori
 
-Codici proposti (testi en/it nel catalogo dei messaggi, D40-3, da scrivere nello sprint del codice):
+Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2 scritti nello sprint C2, gli altri negli sprint che li usano):
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
@@ -347,7 +472,10 @@ Codici proposti (testi en/it nel catalogo dei messaggi, D40-3, da scrivere nello
 | Oggetto non in Gaia DR3 (Vega) | astrometria da SIMBAD con fonte | `PROFILE_NO_GAIA` |
 | Soluzione Gaia a 2 parametri (Alcyone) | niente parallasse/moto proprio da Gaia | `PROFILE_GAIA_TWO_PARAMETER` |
 | Parallasse assente, negativa o con errore relativo > 10 % | nessuna distanza, motivo | `PROFILE_NO_DISTANCE` |
-| RUWE oltre la soglia | valore mostrato con avviso | `PROFILE_GAIA_QUALITY` |
+| RUWE oltre la soglia | valore mostrato con avviso **solo con una soglia da fonte ufficiale verificata** (D25-11: oggi nessuna, avviso non emesso) | `PROFILE_GAIA_QUALITY` (non usato in C2) |
+| Bersaglio assente, doppio (nome e coordinate insieme) o riga senza posizione | profilo non creato | `PROFILE_TARGET_INVALID` |
+| Riesecuzione di un nome: SIMBAD dà un oggetto diverso da `simbad_id` registrato | profilo dell'oggetto di oggi, avviso con i due `main_id` | `PROFILE_TARGET_CHANGED` |
+| Nessuna sorgente Gaia entro `crossmatch_radius`, o `source_id` di SIMBAD assente dall'archivio | astrometria da SIMBAD | `PROFILE_NO_GAIA` (`no_counterpart`, `not_in_archive`) |
 | Incrocio per posizione | avviso con raggio, separazione, epoche | `PROFILE_POSITIONAL_MATCH` |
 | Moto proprio sconosciuto per la propagazione | nessuna propagazione, avviso | `PROFILE_NO_PROPER_MOTION` |
 | Archivio Gaia HTTP 503 (coda piena, visto il 2026-11-07) | nuovo tentativo come connessione (`02` §8), poi errore della sezione | `SERVICE_ERROR` / `NET_TIMEOUT` |
@@ -398,54 +526,88 @@ cambiano).
 
 ## 13. Decisioni aperte
 
-- **D25-1 — Numero, nome e livello del modulo** (AM1): proposta
-  `25-analisi-profilo-oggetto.md`, livello 2, codice in
-  `src/astrotwo/analysis/object_profile.py`. Alternative: livello 1 (è fatto
-  solo di interrogazioni) | file d'interfaccia 4x. Raccomandazione: 25, livello 2
-  (usa la SED del 20, che è analisi). **Da decidere.**
-- **D25-2 — Metodo della distanza:** proposta §3.4.4 (Bailer-Jones 2021 →
-  1/ϖ con ϖ/σ ≥ 10 da Gaia o SIMBAD con fonte → nessuna). Alternative: solo
-  Bailer-Jones | anche `distance_gspphot` di Gaia DR3 (verificata: esiste,
-  15,5181 pc per 51 Peg) come terza riga informativa. **Da decidere.**
-- **D25-3 — Tabella dei pianeti:** `pscomppars` (un valore per parametro, dal
-  lavoro scelto dall'archivio, riferimento per parametro; parametri da lavori
-  diversi possono non essere coerenti tra loro, avviso) | `ps` con
-  `default_flag = 1` (una soluzione coerente per pianeta, un riferimento; verificata
-  per 51 Peg). Raccomandazione `pscomppars` con l'avviso. **Da decidere.**
-- **D25-4 — Catena degli identificativi** (§3.2): uso degli incroci ufficiali
-  di Gaia (`tmass_psc_xsc_best_neighbour`, `allwise_best_neighbour`) come
-  identificativi dichiarati; AllWISE con cerchio piccolo + controllo della
-  `designation`. **Da decidere.**
-- **D25-5 — Miniature:** survey DSS2 colore, 2MASS colore, AllWISE colore; campo
-  5′; 256 × 256 pixel; TAN centrata. AllWISE colore ha oggi come copia solo
-  ESASky (`skies.esac.esa.int/AllWISEColor`, `properties` HTTP 200 il
-  2026-11-07; IRSA 404): confronto dei tile **da verificare** prima del codice.
-  **Da decidere.**
-- **D25-6 — Esportazione:** ECSV dei valori con provenienza + PDF della scheda +
-  PNG della SED; JSON del risultato del 05 escluso (già nella sessione).
-  **Da decidere.**
-- **D25-7 — Dove vive la specifica dell'interfaccia** di §3.9: nel `43`
-  (pannello analisi, oggi `non esiste`, che nascerebbe con profilo e SED) |
-  nuovo file d'interfaccia | resta qui. Raccomandazione: `43`, scritto nello
-  sprint C5. **Da decidere.**
-- **D25-8 — Tempi:** obiettivo 60 s; tempo massimo per sezione (SIMBAD 15 s,
-  Gaia 30 s, IRSA 60 s, Exoplanet 30 s, HiPS 30 s); 4 richieste contemporanee.
-  **Da decidere.**
-- **D25-9 — Raggi:** 10″ per i candidati SIMBAD da coordinate; 2″ per gli
-  incroci per posizione dopo la propagazione. **Da decidere.**
-- **D25-10 — Zero point di parallasse** (Lindegren et al. 2021): non applicato
-  nella 1.0, dichiarato | applicato con la libreria ufficiale
-  `gaiadr3-zeropoint` (licenza da verificare). **Da decidere.**
-- **D25-11 — Indicatori di qualità di Gaia:** quali mostrare (§3.4.3) e soglia
-  RUWE 1,4 con fonte (documentazione Gaia DR3 / Lindegren et al. 2021: **da
-  verificare** sul testo). **Da decidere.**
-- **D25-12 — Autorizzazioni per il codice:** formula di fase (es. «FASE:
-  CODICE – livello 2» limitata ad approvati 20 e 25) e autorizzazione a
-  modificare gli approvati `03`, `05`, `12`, `14`, `32`, `34`, `40`, `41`,
-  `42` per §5. **Da decidere (proprietario).**
+Tutte le decisioni D25-1…D25-12 sono state **prese dal proprietario il
+2026-11-07** (dopo il report dello sprint C1). Restano qui come registro;
+nessuna è aperta. Le scelte minori dello sprint C2 da confermare sono in
+**D25-13** (sotto).
+
+- **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
+  `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
+  `src/astrotwo/analysis/object_profile.py` (come raccomandato: usa la SED del
+  20, che è analisi). AM1 accettata.
+- **D25-2 — Metodo della distanza — DECISA (2026-11-07):** come §3.4.4:
+  Bailer-Jones et al. (2021) → 1/ϖ solo con ϖ/σ ≥ 10 (Gaia DR3 o, in
+  mancanza, SIMBAD con la fonte) → nessuna distanza con il motivo. Nessuna riga
+  `distance_gspphot`.
+- **D25-3 — Tabella dei pianeti — DECISA (2026-11-07):** `pscomppars` con
+  l'avviso che i parametri possono venire da lavori diversi (sprint C4).
+- **D25-4 — Catena degli identificativi — DECISA (2026-11-07):** come §3.2:
+  incroci ufficiali di Gaia (`tmass_psc_xsc_best_neighbour`,
+  `allwise_best_neighbour`) usati come identificativi dichiarati
+  (`official_crossmatch`); AllWISE per posizione con un cerchio piccolo e
+  controllo della `designation` (sprint C3).
+- **D25-5 — Miniature — DECISA (2026-11-07):** DSS2 colore e 2MASS colore;
+  **AllWISE colore solo se il mirror ESASky viene verificato con richieste
+  reali** (stessa regola dei mirror del 12), altrimenti AllWISE solo quando
+  risponde il CDS. Campo 5′, 256 × 256 pixel, TAN centrata (sprint C4).
+- **D25-6 — Esportazione — DECISA (2026-11-07):** ECSV dei valori con
+  provenienza + PDF della scheda + PNG della SED (sprint C6).
+- **D25-7 — Specifica dell'interfaccia — DECISA (2026-11-07):** nel `43`,
+  scritto nello sprint C5.
+- **D25-8 — Tempi — DECISA (2026-11-07):** obiettivo 60 s; tempo massimo per
+  sezione SIMBAD 15 s, Gaia 30 s, IRSA 60 s, Exoplanet 30 s, HiPS 30 s; 4
+  richieste contemporanee (parallelismo nello sprint C4; in C2 le sezioni
+  girano una dopo l'altra, §3.10).
+- **D25-9 — Raggi — DECISA (2026-11-07):** 10″ per i candidati SIMBAD da
+  coordinate; 2″ per gli incroci per posizione dopo la propagazione.
+- **D25-10 — Zero point di parallasse — DECISA (2026-11-07):** non applicato
+  nella 1.0, **dichiarato** nel risultato (nota del metodo 1/ϖ).
+- **D25-11 — Indicatori di qualità di Gaia — DECISA (2026-11-07):** si
+  mostrano `ruwe`, numero di parametri (da `astrometric_params_solved`),
+  `duplicated_source`, `ipd_frac_multi_peak`. **La soglia RUWE 1,4 si mostra
+  solo con una fonte ufficiale verificata** (documentazione Gaia o nota
+  tecnica), citata; altrimenti il valore senza soglia. **Verifica del
+  2026-11-07 (sprint C2):** la descrizione di `ruwe` nel modello dei dati di
+  Gaia DR3 (§20.1.1 `gaia_source`) definisce il valore, dice che è nullo per le
+  soluzioni a 2 parametri e cita Lindegren (2018) «Re-normalising the
+  astrometric chi-square in Gaia DR2» (GAIA-C3-TN-LU-LL-124-01), **senza
+  soglia**; neppure le sezioni 4.5.2 (proprietà dei dati astrometrici) e
+  11.1.9 della documentazione EDR3 la danno; la nota tecnica LL-124 **non è
+  stata raggiungibile** (pagina ESA 404, archivio dei documenti non
+  disponibile). Quindi **nella 1.0 di oggi RUWE si mostra senza soglia** e
+  l'avviso `PROFILE_GAIA_QUALITY` non si emette; la soglia entra solo dopo la
+  lettura della nota tecnica (**da verificare**). `phot_variable_flag` si legge
+  con la fotometria (`20`, sprint C3), non tra gli indicatori astrometrici.
+- **D25-12 — Autorizzazioni per il codice — DECISA (2026-11-07), formula del
+  proprietario:** «Il proprietario approva 20-analisi-fotometria.md (solo la
+  parte SED) e 25-analisi-profilo-oggetto.md per la fase codice, e autorizza
+  le modifiche ai file approvati 03, 05, 12, 14, 32, 34, 40, 41, 42
+  limitatamente a quanto serve agli sprint C2–C6, con annotazione nel registro
+  di ciascun file.»
+- **D25-13 — Scelte minori dello sprint C2 — da confermare (proprietario).**
+  Scritte in §3.10: (1) parametri `crossmatch_radius` e `simbad_id` del
+  comando; (2) raggio di ricerca dei candidati allargato dal moto proprio
+  massimo noto (`PM_SEARCH_MAX`); (3) una riga di catalogo come bersaglio vale
+  per posizione in C2 (riconoscimento degli identificativi delle righe con
+  l'interfaccia, C5); (4) passo «posizione» della catena solo per Gaia DR3 in
+  C2 (2MASS e AllWISE nello sprint C3, con la fotometria); (5) l'elenco
+  `sections` del comando contiene solo le sezioni già scritte, allargato negli
+  sprint successivi senza cambiare versione; (6) registrazione dei comandi dei
+  livelli 2–4 da parte di chi costruisce il registro (05 §3.2); (7) astrometria
+  di SIMBAD mostrata anche quando Gaia ha una soluzione a 2 parametri; (8)
+  **da decidere — candidati da coordinate e pianeti:** SIMBAD registra i
+  pianeti alla posizione della stella, quindi le coordinate di una stella con
+  pianeti danno sempre più candidati (verificato il 2026-11-07: 51 Peg → `*
+  51 Peg` e `* 51 Peg b`; TRAPPIST-1 → la stella e 8 oggetti `TRAPPIST-1b…i`;
+  eta Tau → la stella e la nebulosa `GN 03.44.2`). Oggi `PROFILE_AMBIGUOUS_TARGET`
+  con l'elenco (regola a). Proposta: lasciare la regola com'è e, nello sprint
+  C5, mostrare l'elenco con la stella in cima quando gli altri candidati sono
+  suoi pianeti (tipo `Pl`), senza scelta automatica; alternativa: escludere i
+  pianeti dai candidati dichiarandolo. **Decisione del proprietario.**
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C2 (decisioni del proprietario del 2026-11-07):** file `approvato` dal proprietario (D25-12, formula in §13); D25-1…D25-12 scritte come decise (D25-5 con la condizione su AllWISE colore, D25-11 con la soglia RUWE solo da fonte ufficiale: verifica senza esito, RUWE senza soglia); nuovo §3.10 (precisazioni del motore: nome con `simbad_object`, candidati da coordinate con `PM_SEARCH_MAX`, `simbad_id`, catena di C2, identità, astrometria, distanza, provenienza, esecuzione); §6 con `crossmatch_radius` e `simbad_id`; §10 con `PROFILE_TARGET_INVALID` e `PROFILE_NO_GAIA` con sotto-voci; nuova D25-13 (scelte minori, da confermare). |
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1 (Fase C, decisione del proprietario del 2026-11-07): regole a–d scritte come decise; verifiche dal vivo su Alcyone, Vega, 51 Peg, TRAPPIST-1 (SIMBAD Harvard, archivio Gaia ESA con `external.gaiaedr3_distance` e incroci ufficiali, IRSA 2MASS/AllWISE, NASA Exoplanet Archive; CDS giù); interfaccia proposta in §3.9; decisioni aperte D25-1…D25-12. |

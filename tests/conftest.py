@@ -87,6 +87,7 @@ CONVERTED_ERROR_CLASSES = (
     ("astrotwo.ai.provider_adapter", "ProfileError"),
     ("astrotwo.ai.tool_registry", "ToolRegistryError"),
     ("astrotwo.ai.chat_assistant", "AssistantError"),
+    ("astrotwo.analysis.object_profile", "ObjectProfileError"),
 )
 
 

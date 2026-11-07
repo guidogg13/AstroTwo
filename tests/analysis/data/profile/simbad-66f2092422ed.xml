@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VOTABLE version="1.3" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/VOTable/votable-1.3.xsd">
+<RESOURCE type="results">
+<INFO name="QUERY_STATUS" value="OK"/>
+<INFO name="PROVIDER" value="CDS">SIMBAD TAP Service</INFO>
+<INFO name="QUERY" value="SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '*  51 Peg'"/>
+<TABLE name="result_S1794047411370">
+<FIELD arraysize="*" datatype="char" name="filter" ucd="instr.bandpass;instr.filter">
+<DESCRIPTION>flux filter name</DESCRIPTION>
+</FIELD>
+<FIELD datatype="float" name="flux" ucd="phot.flux"/>
+<FIELD datatype="float" name="flux_err" ucd="stat.error;phot.mag">
+<DESCRIPTION>flux error</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="1" datatype="char" name="system" ucd="meta.id;phot.flux">
+<DESCRIPTION>flux system A=AB V=Vega</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="1" datatype="char" name="qual" ucd="meta.code.qual;phot.flux">
+<DESCRIPTION>flux quality flag</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="*" datatype="char" name="bibcode" ucd="meta.bib.bibcode;phot.flux">
+<DESCRIPTION>flux reference</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="*" datatype="unicodeChar" name="description" ucd="meta.note;instr.filter">
+<DESCRIPTION>flux filter description</DESCRIPTION>
+</FIELD>
+<FIELD arraysize="*" datatype="char" name="unit" ucd="meta.unit">
+<DESCRIPTION>physical unit name</DESCRIPTION>
+</FIELD>
+<DATA>
+<BINARY>
+<STREAM encoding='base64'>
+AAAAAVZArrhSPUzMzVZDAAAAEzIwMDlBcEouLi42OTQuMTA4NVYAAAALAE0AYQBn
+AG4AaQB0AHUAZABlACAAVgAAAANtYWcAAAABR0CpEBM7OYhMVkMAAAATMjAyMHlD
+YXQuMTM1MC4uLi4wRwAAABAATQBhAGcAbgBpAHQAdQBkAGUAIABHAGEAaQBhACAA
+RwAAAANtYWcAAAABS0B6TdM8rAgxVkMAAAATMjAwM3lDYXQuMjI0Ni4uLi4wQwAA
+AAsATQBhAGcAbgBpAHQAdQBkAGUAIABLAAAAA21hZwAAAAFCQMUeuH/AAABWQwAA
+ABMyMDAyeUNhdC4yMjM3Li4uLjBEAAAACwBNAGEAZwBuAGkAdAB1AGQAZQAgAEIA
+AAADbWFnAAAAAVVAzHrhf8AAAFZDAAAAEzIwMDJ5Q2F0LjIyMzcuLi4uMEQAAAAL
+AE0AYQBnAG4AaQB0AHUAZABlACAAVQAAAANtYWcAAAABUkCfCj1/wAAAVkMAAAAT
+MjAwMnlDYXQuMjIzNy4uLi4wRAAAAAsATQBhAGcAbgBpAHQAdQBkAGUAIABSAAAA
+A21hZwAAAAFJQJOFH3/AAABWQwAAABMyMDAyeUNhdC4yMjM3Li4uLjBEAAAACwBN
+AGEAZwBuAGkAdAB1AGQAZQAgAEkAAAADbWFnAAAAAUpAlR64PpmZmlZEAAAAEzIw
+MDN5Q2F0LjIyNDYuLi4uMEMAAAALAE0AYQBnAG4AaQB0AHUAZABlACAASgAAAANt
+YWcAAAABSECHXCk+ij1xVkQAAAATMjAwM3lDYXQuMjI0Ni4uLi4wQwAAAAsATQBh
+AGcAbgBpAHQAdQBkAGUAIABIAAAAA21hZw==
+</STREAM>
+</BINARY>
+</DATA>
+</TABLE>
+</RESOURCE>
+</VOTABLE>

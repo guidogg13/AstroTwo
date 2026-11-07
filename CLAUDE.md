@@ -21,6 +21,7 @@ Principio P11: **la parità con Aladin è il minimo, non il traguardo.** Tutte l
 - Se ti viene chiesto codice per un livello ancora in fase specifiche, ricorda la regola e proponi di completare prima il `.md` del modulo.
 - Solo i file con stato `approvato` autorizzano a scrivere il codice di quel modulo; le verifiche segnate "da verificare prima del codice" nel `.md` si fanno prima di scriverlo.
 - Livelli in fase codice: **livello 1** (dichiarato dal proprietario il 2026-10-09). **Interfaccia v1: dichiarata dal proprietario il 2026-10-16** ("FASE: CODICE – interfaccia v1"; 05, 30, 31, 32, 34, 35, 40, 41, 42, 44 `approvato` lo stesso giorno).
+- **Profilo di un oggetto (Fase C): fase codice dichiarata dal proprietario il 2026-11-07** con la formula di D25-12: «Il proprietario approva 20-analisi-fotometria.md (solo la parte SED) e 25-analisi-profilo-oggetto.md per la fase codice, e autorizza le modifiche ai file approvati 03, 05, 12, 14, 32, 34, 40, 41, 42 limitatamente a quanto serve agli sprint C2–C6, con annotazione nel registro di ciascun file.» Vale solo per il `25` e per la parte SED del `20` (non per il resto del livello 2).
 
 ## Regole d'oro (non negoziabili)
 

@@ -3382,3 +3382,88 @@ _extend("COMMAND_PARAMETER_INVALID",
         refresh_not_network=("{parameter}: {command} does not use the network: there is nothing to refresh.",
                              "{parameter}: {command} non usa la rete: non c'è niente da aggiornare.",
                              "parameter command"))
+# --- Profilo di un oggetto (25 §10, sprint C2) e simbad_object del 14 (§10) ----------------------------------------
+_extend("NAME_NOT_FOUND",
+        simbad_identifier=("'{name}' is not an identifier known to {service}.",
+                           "'{name}' non è un identificativo noto a {service}.", "name service"),
+        several_objects=("'{name}' points to several objects in {service}: no choice is made.",
+                         "'{name}' indica più oggetti in {service}: nessuna scelta.", "name service"))
+_add("PROFILE_TARGET_INVALID",
+     "Invalid profile target.", "Bersaglio del profilo non valido.", "",
+     none=("No target: give a name, a position or a catalog row.",
+           "Nessun bersaglio: serve un nome, una posizione o una riga di catalogo.", ""),
+     several=("Only one target: a name, a position or a catalog row.",
+              "Un solo bersaglio: un nome, una posizione o una riga di catalogo.", ""),
+     row_without_layer=("A row needs the catalog layer it belongs to.",
+                        "Una riga richiede il livello catalogo a cui appartiene.", ""),
+     row_out_of_range=("Row {row} is outside layer {layer}.", "La riga {row} è fuori dal livello {layer}.",
+                       "layer row:int"),
+     row_without_position=("Row {row} of layer {layer} has no readable position.",
+                           "La riga {row} del livello {layer} non ha una posizione leggibile.", "layer row:int"))
+_add("PROFILE_AMBIGUOUS_TARGET",
+     "{count} SIMBAD objects within {radius}: choose the object (no automatic choice).",
+     "{count} oggetti SIMBAD entro {radius}: scegliere l'oggetto (nessuna scelta automatica).",
+     "count:int radius:qty candidates:list!")
+_add("PROFILE_NO_IDENTIFIERS",
+     "SIMBAD is not reachable: profile by position, without identifiers.",
+     "SIMBAD non raggiungibile: profilo per posizione, senza identificativi.", "cause:msg",
+     simbad_unreachable=("SIMBAD is not reachable: '{name}' resolved by {service}; profile by position, without "
+                         "identifiers. Cause: {cause}",
+                         "SIMBAD non raggiungibile: '{name}' risolto da {service}; profilo per posizione, senza "
+                         "identificativi. Causa: {cause}", "name service cause:msg"),
+     simbad_unreachable_position=("SIMBAD is not reachable: profile by position, without identifiers. Cause: {cause}",
+                                  "SIMBAD non raggiungibile: profilo per posizione, senza identificativi. Causa: "
+                                  "{cause}", "cause:msg"))
+_add("PROFILE_POSITIONAL_MATCH",
+     "Positional match.", "Incrocio per posizione.", "",
+     simbad_candidate=("Target by position: {main_id} at {separation} (radius {radius}, epoch of the target "
+                       "{epoch}).",
+                       "Bersaglio per posizione: {main_id} a {separation} (raggio {radius}, epoca del bersaglio "
+                       "{epoch}).", "main_id! separation:qty radius:qty epoch"),
+     catalog_match=("{catalog} by position: {identifier} at {separation} (radius {radius}, epochs {source_epoch} → "
+                    "{target_epoch}).",
+                    "{catalog} per posizione: {identifier} a {separation} (raggio {radius}, epoche {source_epoch} → "
+                    "{target_epoch}).",
+                    "catalog identifier! separation:qty radius:qty source_epoch target_epoch"),
+     several_candidates=("{count} {catalog} sources within {radius}: no choice is made.",
+                         "{count} sorgenti {catalog} entro {radius}: nessuna scelta.", "catalog count:int radius:qty"))
+_add("PROFILE_NO_PROPER_MOTION",
+     "Proper motion unknown: no propagation.", "Moto proprio non noto: nessuna propagazione.", "",
+     target_epoch_unknown=("Epoch of the target unknown: SIMBAD candidates compared at their epoch J2000, without "
+                           "propagation.",
+                           "Epoca del bersaglio non nota: candidati SIMBAD confrontati alla loro epoca J2000, senza "
+                           "propagazione.", ""),
+     target_pm_unknown=("Proper motion of the target unknown: position compared with {catalog} without propagation.",
+                        "Moto proprio del bersaglio non noto: posizione confrontata con {catalog} senza propagazione.",
+                        "catalog"))
+_add("PROFILE_NO_GAIA",
+     "No Gaia DR3 source for this object: astrometry from SIMBAD.",
+     "Nessuna sorgente Gaia DR3 per questo oggetto: astrometria da SIMBAD.", "",
+     no_counterpart=("No Gaia DR3 source within {radius} of the propagated position: astrometry from SIMBAD.",
+                     "Nessuna sorgente Gaia DR3 entro {radius} dalla posizione propagata: astrometria da SIMBAD.",
+                     "radius:qty"),
+     not_in_archive=("{identifier} is given by SIMBAD but is not in gaiadr3.gaia_source: astrometry from SIMBAD.",
+                     "{identifier} è indicato da SIMBAD ma non è in gaiadr3.gaia_source: astrometria da SIMBAD.",
+                     "identifier!"))
+_add("PROFILE_GAIA_TWO_PARAMETER",
+     "{identifier}: two-parameter Gaia DR3 solution, without parallax or proper motion.",
+     "{identifier}: soluzione Gaia DR3 a 2 parametri, senza parallasse né moto proprio.", "identifier!")
+_add("PROFILE_IDENTIFIER_CONFLICT",
+     "{catalog}: SIMBAD gives {simbad}, the official Gaia cross-match gives {official}: both shown, no choice.",
+     "{catalog}: SIMBAD indica {simbad}, l'incrocio ufficiale di Gaia {official}: mostrati entrambi, nessuna scelta.",
+     "catalog simbad! official!")
+_add("PROFILE_NO_DISTANCE",
+     "No distance.", "Nessuna distanza.", "",
+     no_parallax=("No distance: parallax not available.", "Nessuna distanza: parallasse non disponibile.", ""),
+     no_parallax_error=("No distance: the parallax from {source} has no error.",
+                        "Nessuna distanza: la parallasse di {source} non ha errore.", "source"),
+     negative_parallax=("No distance: parallax {parallax} from {source} is not positive.",
+                        "Nessuna distanza: la parallasse {parallax} di {source} non è positiva.",
+                        "parallax:qty source"),
+     low_snr=("No distance: parallax/error = {ratio} from {source}, below {minimum}.",
+              "Nessuna distanza: parallasse/errore = {ratio} da {source}, sotto {minimum}.",
+              "ratio:num minimum:num source"))
+_add("PROFILE_TARGET_CHANGED",
+     "'{name}': SIMBAD now gives {found}, the recorded command {recorded}; profile of today's object.",
+     "'{name}': SIMBAD indica oggi {found}, il comando registrato {recorded}; profilo dell'oggetto di oggi.",
+     "name recorded! found!")

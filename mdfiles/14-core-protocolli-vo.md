@@ -567,6 +567,31 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   banda, descrizione, valore, errore, unità, sistema `AB`/`Vega`/`None`,
   qualità, riferimento), richiesta registrata in `magnitudes_request`
   (D14-12).
+- **`simbad_object(identifier, *, cache, refresh, timeouts)`** (sprint C2,
+  2026-11-07, per il profilo del `25`, autorizzato con D25-12) — l'oggetto
+  SIMBAD **esatto** di un identificativo (mai il «più citato»): tre
+  interrogazioni `tap_query` sulla voce `cds-simbad-tap` (quindi con il ripiego
+  sul mirror di Harvard, D14-14): (1) `basic` unita a `ident` (SIMBAD confronta
+  `ident.id` normalizzando maiuscole e spazi: verificato il 2026-11-07,
+  `'51 Peg'` → `* 51 Peg`, `'vega'` → `NAME Vega`) e a `otypedef` per la
+  descrizione del tipo: `oid`, `main_id`, `otype`, descrizione, `sp_type`,
+  `sp_bibcode`, `nbref`, `ra`, `dec`, `coo_err_maj`, `coo_err_min`,
+  `coo_err_angle`, `coo_qual`, `coo_bibcode`, `plx_value`, `plx_err`,
+  `plx_bibcode`, `pmra`, `pmdec`, `pm_err_maj`, `pm_err_min`,
+  `pm_err_angle`, `pm_bibcode`, `rvz_radvel`, `rvz_err`, `rvz_bibcode`
+  (colonne e unità verificate il 2026-11-07); (2) tutti gli identificativi di
+  `ident` per `oidref`; (3) le magnitudini con la stessa interrogazione di
+  `simbad_pointer` (`flux` e `filter`, D14-12). Restituisce `SimbadRecord`:
+  campi di `basic` con le unità dichiarate dal servizio (un `float` a 32 bit
+  del VOTable torna al decimale scritto dal servizio, cioè la rappresentazione
+  più corta del valore a 32 bit, poi `float64`, DC6), `identifiers`,
+  `magnitudes` (`SimbadMagnitude`), posizione `SkyFrame` ICRS epoca J2000
+  (`SIMBAD_COORDINATES_NOTE`), le tre `RequestRecord` (server che ha risposto),
+  avvisi (`SERVICE_MIRROR_FALLBACK`, `FROM_CACHE`, avvisi delle magnitudini).
+  Nessuna riga → `NAME_NOT_FOUND` (sotto-voce `simbad_identifier`), mai un
+  ripiego su un altro servizio né su un oggetto vicino; più righe con `oid`
+  diversi (un identificativo di due oggetti) → `NAME_NOT_FOUND`
+  (`several_objects`), nessuna scelta.
 - **`vizier_collections(*, cache, refresh, timeouts)`** (D13-18) —
   `MocServerRecords` (record del MocServer come dati dal servizio, richiesta
   registrata, avvisi), per l'albero delle collezioni del 13. Risposta letta
@@ -685,6 +710,8 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Nessuna immagine per i criteri SIA/SIA2 | esito vuoto con avviso, non è un errore | `SIA_NO_RESULT` |
 | Risposta SIA malformata | nessuna lista mostrata come valida | `SIA_INVALID` |
 | Nessun oggetto Simbad nel raggio | esito vuoto con avviso | `SIMBAD_NO_OBJECT` |
+| `simbad_object`: identificativo sconosciuto a SIMBAD (server raggiungibile) | errore, nessun ripiego | `NAME_NOT_FOUND` (`simbad_identifier`) |
+| `simbad_object`: identificativo di più oggetti | errore, nessuna scelta | `NAME_NOT_FOUND` (`several_objects`) |
 | Magnitudine Simbad senza codice di sistema | magnitudine restituita con sistema non dichiarato (`None`) | avviso `SIMBAD_SYSTEM_UNDECLARED` |
 | Codice di sistema Simbad diverso da `A`/`V` | magnitudine con sistema `None` | avviso `SIMBAD_SYSTEM_UNKNOWN` |
 | Oggetto Simbad senza magnitudini | oggetto restituito senza magnitudini | avviso `SIMBAD_NO_MAGNITUDE` |
@@ -812,6 +839,7 @@ sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalog
 | `ASTRORES_LINK_SOURCE` | `cached` | `url` (string), `retrieved_at` (string) |
 | `ASTRORES_LINK_SOURCE` | `downloaded` | `url` (string), `retrieved_at` (string) |
 | `SIMBAD_NO_OBJECT` (avviso) | (generale) | `radius` (quantity, deg) |
+| `NAME_NOT_FOUND` | `simbad_identifier`, `several_objects` | `name`, `service` (sprint C2, `simbad_object`) |
 | `SIMBAD_SYSTEM_UNKNOWN` (avviso) | (generale) | `band` (string, esterno), `code` (string, esterno) |
 | `SIMBAD_SYSTEM_UNDECLARED` (avviso) | (generale) | `bands` (list, esterno) |
 | `SIMBAD_NBREF_MISSING` (avviso) | (generale) | — |
@@ -873,6 +901,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
 | T27 | Ripiego sui mirror (sprint B4, 2026-11-07) | servizi simulati: SIMBAD principale giù (connessione, HTTP 503, 429, risposta 2xx non VOTable) → mirror per `tap_query("cds-simbad-tap")` e per `simbad_pointer` (regione e magnitudini); 404, ADQL rifiutata e risposta senza righe → nessun cambio; principale e mirror giù → `NET_TIMEOUT` `service_servers` con 2 server; copia vecchia in cache e tutti giù → copia dichiarata; avviso dopo il primo cambio, non al secondo; richiesta successiva subito al mirror; `refresh=True` → di nuovo il principale; URL scritto → nessun ripiego; MocServer giù con e senza copia in cache | ordine e conteggio delle richieste ai server finti; `RequestRecord.url` e `source` = server che ha risposto; avvisi; codici | test di unità con server finti; test di rete (marcatore `network`, non nel commit) per il mirror di SIMBAD |
+| T28 | `simbad_object` (sprint C2, 2026-11-07) | servizio SIMBAD simulato con le risposte registrate dal mirror di Harvard il 2026-11-07 (51 Peg, eta Tau); nome sconosciuto; principale giù | campi di `basic` con unità, 46/62 identificativi, magnitudini; `NAME_NOT_FOUND` `simbad_identifier` senza ripiego; con il principale giù risponde il mirror e la provenienza è il mirror | confronto con le risposte registrate; test di unità con server finti |
 | T26 | Commenti ADQL e annullamento (sprint B3, 2026-11-06) | `validate_adql` con commenti `--` (con apostrofo, prima di `SELECT`, dentro una stringa); `tap_query` sincrona con commenti su un servizio simulato; asincrona su un lavoro UWS simulato che non finisce, con `cancel` che diventa vero | posizioni del testo scritto; `--` dentro le virgolette non è un commento; `QUERY` inviata senza commenti e senza righe vuote, `adql` scritto negli argomenti registrati; `QUERY_CANCELLED` entro 1 s, `ABORT` inviato e lavoro eliminato | test di unità |
 
 **Test di rete:** regola delle ripetizioni in `02-convenzioni.md` §8, punto 8
@@ -936,7 +965,14 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
   serve anche all'albero delle collezioni del 13, D13-18) non sono servizi
   dei protocolli dell'elenco (cone search, TAP, SIA, SSA) e restano ai moduli
   15 e 16; nessun servizio SSA generale trovato (quelli di HEASARC chiedono
-  il nome di una tabella). **Esclusioni confermate dal proprietario il
+  il nome di una tabella). **Nona voce (sprint C2, 2026-11-07, autorizzata
+  dal proprietario con D25-12 del `25`):** `nasa-exoplanet-tap`, «NASA
+  Exoplanet Archive», ente NASA/IPAC (NExScI), protocollo TAP, URL
+  `https://exoplanetarchive.ipac.caltech.edu/TAP`, fonte
+  `https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html` (URL
+  base per pyvo e TOPCAT letto lì il 2026-11-07, tabelle `ps` e
+  `pscomppars`), servizio provato in linea il 2026-11-07 (`pscomppars` per
+  `hostname` e `gaia_dr3_id`, `SELECT DISTINCT` accettato). **Esclusioni confermate dal proprietario il
   2026-10-11, da ricontrollare in futuro** (a ogni revisione dell'elenco):
   ESASky TAP — URL non pubblicato sulle pagine ufficiali dell'ESA, quindi
   senza una fonte ufficiale da citare nella voce; MAST CAOM SIA 2 — URL
@@ -1102,4 +1138,5 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | 2026-11-05 | Claude Code | **Sprint B1b — correzioni dalla prova con TOPCAT vero** (incarico del proprietario del 2026-11-05: "spec prima se cambia un comportamento descritto"): §3 punti (7) invio con chiamata sincrona e `failures`, (8) `clients()` senza l'hub per `samp.hub-id`, (9) iscrizioni dichiarate una volta; §6 firme; §10 errori e codici `SAMP_NO_PEER` (`rejected`, `no_reply`); nuovo T24. Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — rifiniture SAMP** (decisione del proprietario del 2026-11-05, D40-9 (7)): tempo di risposta di **60 s per `table.load.votable`** (`SAMP_TABLE_REPLY_TIMEOUT`, default di `SampHub.send_table`), 10 s per gli altri tipi; nuova sotto-voce `SAMP_NO_PEER` `no_reply_table` (la tabella potrebbe arrivare comunque) per `table.load.votable`. Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL nell'interfaccia** (decisioni del proprietario del 2026-11-06; autorizzazione esplicita ad aggiornare il 14 "se cambia qualcosa"): §3 — commenti `--` tolti prima dell'invio (`adql_to_send`; provato il 2026-11-06: Gaia ESA, IRSA e HEASARC rifiutano una query con un commento, MAST la accetta) e contati come spazio da `validate_adql`; annullamento della TAP asincrona (`cancel`, `QUERY_CANCELLED`); §7 firme; §10 `QUERY_CANCELLED`; §11 riscritto: solo `cone_search` esposta all'IA (come `catalog.cone_search` del `05`), `tap_query`/`validate_adql` no (`33` rimandato); §12 nuovo T26. Server personali salvati dal `40` (`vo/personal_servers`). Stato `approvato` invariato. |
+| 2026-11-07 | Claude Code | **Sprint C2 (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6):** §7 nuova `simbad_object` (oggetto esatto per identificativo: `basic` + `otypedef`, `ident`, magnitudini, con il ripiego D14-14; `NAME_NOT_FOUND` `simbad_identifier`/`several_objects`); D14-4 nona voce `nasa-exoplanet-tap` (URL dalla pagina ufficiale, provata il 2026-11-07); §10 sotto-voce; §12 T28. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint B4 — ripiego sui mirror per SIMBAD e VizieR** (regole decise dal proprietario il 2026-11-07, D14-14; autorizzazione esplicita ad aggiornare il 14): §3 — nuova voce "Ripiego sui mirror dei servizi del CDS" (cause del cambio, ordine, avviso `SERVICE_MIRROR_FALLBACK` una volta per servizio e sessione, provenienza = server reale, servizio in uso per la sessione, cache, ambito, tutti giù → `NET_TIMEOUT` `service_servers`); **mirror verificati il 2026-11-07** con richieste reali (CDS irraggiungibile): SIMBAD TAP di Harvard **entra**; nessun TAPVizieR fuori da Strasburgo (7 mirror ufficiali e registro VO); SED di VizieR su CfA e IDIA parziale e incoerente → **non entra**; MocServer e XMatch senza copie; MocServer giù senza cache → `NET_TIMEOUT` `mocserver_no_mirror`. §7 (`SERVICE_MIRRORS`, `service_servers`, `is_failover_error`, `current_server`, `reset_mirror_state`, `use_stale_cache` di `tap_query`, `SIMBAD_SERVERS`), §10, T27 (§12), D14-14 decisa e D14-15 proposta (§13). Stato `approvato` invariato. |
