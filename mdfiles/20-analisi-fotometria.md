@@ -81,13 +81,20 @@ Note della verifica (sprint C1, completata nello sprint C3 il 2026-11-07):
   conversione delle magnitudini AllWISE in densità di flusso […] è descritta in
   IV.4.h.i del supplemento All-Sky»: **la tabella vale per AllWISE**.
 - Nessuna correzione di colore WISE (Tabella 2 del supplemento) nella 1.0.
-- **Sistema AB:** Fν = 3631 Jy a m_AB = 0 (Oke & Gunn 1983).
+- **Sistema AB:** Fν(m_AB = 0) dalla **definizione esatta** di Oke & Gunn
+  (1983): m_AB = −2,5 log₁₀ Fν − 48,60 con Fν in erg s⁻¹ cm⁻² Hz⁻¹, cioè
+  Fν(0) = 10^(−0,4·48,60) erg s⁻¹ cm⁻² Hz⁻¹ = **3630,780547… Jy**, calcolata
+  dalla definizione come in Astropy (`(1 * u.ABflux).to(u.Jy)`, unità `ABflux`
+  di `astropy.units.photometric`), **mai scritta a mano** (il valore
+  arrotondato 3631 Jy non si usa; D20-9 (5), decisa il 2026-11-07). È anche il
+  valore implicito nell'equazione 5.48 della documentazione di Gaia DR3
+  («ZP_AB + 56,10», unità SI).
 
 **Formule (deterministiche, da testare):**
 - 2MASS e WISE (sistema Vega): Fν = Fν(0) · 10^(−0,4 m);
 - Gaia: m_AB = −2,5 log₁₀(F_e) + ZP_AB, con F_e = `phot_*_mean_flux` in e⁻/s;
-  Fν = 3631 Jy · 10^(−0,4 m_AB) (definizione del sistema AB, Oke & Gunn 1983,
-  ApJ 266, 713);
+  Fν = Fν(0) · 10^(−0,4 m_AB) con Fν(0) = 3630,780547… Jy (definizione esatta
+  del sistema AB, Oke & Gunn 1983, ApJ 266, 713);
 - errore: σ_F = F · 0,4 ln 10 · √(σ_m² + σ_ZP²) per Gaia, e
   √((0,4 ln 10 · σ_m)² + (σ_F0/F0)²) · F per 2MASS/WISE (proposta D20-3).
 
@@ -176,7 +183,7 @@ Codice: `src/astrotwo/analysis/photometry.py` (livello 2; non dipende dal `25`).
   `"WISE W1"`, …→ `ZeroPoint`: banda, sistema, tipo di conversione, punto
   zero ed errore, λ di riferimento con tipo ed errore, fonte, riferimento,
   data di verifica), unica fonte delle conversioni; **`AB_FLUX_ZERO`** =
-  3631 Jy; **`CATALOG_REFERENCES`** (§3.3).
+  `(1 * u.ABflux).to(u.Jy)` = 3630,780547… Jy (D20-9 (5)); **`CATALOG_REFERENCES`** (§3.3).
 - **`SedPoint`** — un punto (§3.1) con `provenance` (mappa del chiamante),
   flusso convertito, formula, motivi (`codes`), `in_plot`, `duplicate_of`.
 - **`sed_points_from(table, catalog, *, identifier, match, provenance)`** —
@@ -232,7 +239,7 @@ converte né calcola flussi.
 |---|---|---|---|---|
 | T1 | 2MASS → flusso | J = 4,655 ± 0,296 (51 Peg, 2026-11-07) | Fν = 1594 Jy · 10^(−0,4 · 4,655), errore con la formula di §3.2 | ricalcolo con Astropy |
 | T2 | WISE → flusso | W3 = 3,929 ± 0,016 (51 Peg) | Fν = 31,674 Jy · 10^(−0,4 · 3,929) | ricalcolo |
-| T3 | Gaia → flusso | `phot_g_mean_flux` registrato | m_AB e Fν con ZP_AB di G | ricalcolo |
+| T3 | Gaia → flusso | `phot_g_mean_flux` registrato | m_AB e Fν con ZP_AB di G e Fν(0) = `(1 * u.ABflux).to(u.Jy)` (3630,780547… Jy, D20-9 (5)) | ricalcolo |
 | T4 | Banda senza punto zero | SIMBAD `V` | `SED_NO_ZERO_POINT`, punto in magnitudini | |
 | T5 | Qualità | 2MASS di Vega `CBC`, Alcyone `DCD` | punti `D` fuori dal grafico con motivo | |
 | T6 | Limite superiore | AllWISE TRAPPIST-1 W4 `U` (8,565, senza errore) | `SED_UPPER_LIMIT` | |
@@ -245,8 +252,8 @@ converte né calcola flussi.
 
 Decisioni D20-1…D20-8 **prese dal proprietario il 2026-11-07** (dopo il
 report dello sprint C1); restano qui come registro. Il codice della parte SED
-è dello sprint C3. Aperta: **D20-9** (scelte minori dello sprint C3, da
-confermare).
+è dello sprint C3. **D20-9** (scelte minori dello sprint C3) è stata decisa dal
+proprietario il 2026-11-07: nessuna decisione aperta nella parte SED.
 
 - **D20-1 — Tabella dei punti zero — DECISA (2026-11-07):** come §3.2 (Gaia AB
   tramite il flusso in e⁻/s, 2MASS di Cohen et al. 2003, WISE a spettro
@@ -273,26 +280,24 @@ confermare).
   specificano in questo file in uno sprint successivo, prima della loro fase
   codice.
 
-- **D20-9 — Scelte minori dello sprint C3 — da confermare (proprietario).**
-  (1) lunghezza d'onda di riferimento di Gaia = pivot λ_p della Tabella 5.4
-  della documentazione di Gaia DR3 (non λ₀); WISE con λ(iso) a 4 decimali
-  della Tabella 9 (stessa fonte delle incertezze); (2) SIMBAD `G` da Gaia EDR3
-  (`2020yCat.1350`) duplicato del punto Gaia DR3 (stessa fotometria);
-  (3) limiti superiori `U` convertiti come limiti ma fuori dal grafico (non
-  frecce nella 1.0); (4) 2MASS `U` trattato come AllWISE `U`; (5) **da
-  decidere — costante del sistema AB:** §3.2 scrive 3631 Jy (valore
-  arrotondato); la definizione di Oke & Gunn (m_AB = −2,5 log₁₀ Fν − 48,60, cgs)
-  dà 10^(−0,4·48,60) · 10²³ Jy = 3630,78 Jy, che è anche il valore implicito
-  nell'equazione 5.48 della documentazione di Gaia DR3 («ZP_AB + 56,10», unità
-  SI) e quello di Astropy (`u.ABmag`). Differenza relativa 6·10⁻⁵ (0,00006
-  mag), sotto l'incertezza dei punti zero Gaia (0,0016–0,0028 mag). Il codice
-  usa 3631 Jy come scritto; proposta: passare a 3630,78 Jy (definizione
-  esatta), aggiornando prima §3.2.
+- **D20-9 — Scelte minori dello sprint C3 — DECISA (proprietario, 2026-11-07).**
+  (1)–(4) **confermati**: (1) lunghezza d'onda di riferimento di Gaia = pivot
+  λ_p della Tabella 5.4 della documentazione di Gaia DR3 (non λ₀); WISE con
+  λ(iso) a 4 decimali della Tabella 9 (stessa fonte delle incertezze);
+  (2) SIMBAD `G` da Gaia EDR3 (`2020yCat.1350`) duplicato del punto Gaia DR3
+  (stessa fotometria); (3) limiti superiori `U` convertiti come limiti ma
+  fuori dal grafico (non frecce nella 1.0); (4) 2MASS `U` trattato come
+  AllWISE `U`. (5) **Costante del sistema AB — decisa:** si usa la
+  **definizione esatta** (m_AB = −2,5 log₁₀ Fν − 48,60, cgs, Oke & Gunn 1983):
+  Fν(0) = 10^(−0,4·48,60) · 10²³ Jy = 3630,780547… Jy, **calcolata dalla
+  definizione come in Astropy** (`(1 * u.ABflux).to(u.Jy)`), non scritta a
+  mano come 3631 Jy. Scritto in §3.2 e §7; test T3 aggiornato (sprint C4).
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C4 (decisioni del proprietario del 2026-11-07, autorizzazione D25-12):** D20-9 decisa: (1)–(4) confermati; (5) costante del sistema AB = definizione esatta, Fν(0) = `(1 * u.ABflux).to(u.Jy)` = 3630,780547… Jy calcolata come in Astropy, non 3631 Jy scritto a mano (§3.2, §7, T3). Nessuna decisione aperta nella parte SED. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12):** punti zero e lunghezze d'onda verificati sulle fonti ufficiali il 2026-11-07 (`zeropt.dat` ESA versione 2 identico; λ_p di Gaia dalla documentazione di Gaia DR3 §5.4.1 Tab. 5.4; incertezze e λ(iso) WISE dalla Tabella 9 del supplemento All-Sky, Jarrett et al. 2011; AllWISE §V.3.e: stessa conversione; 2MASS invariato): note «da verificare» di D20-1 e D20-2 chiuse. §3.3 qualità di 2MASS `U`, riferimenti dei duplicati (`CATALOG_REFERENCES`); nuovo §3.5 (serie VizieR, `SED_HIGH_PROPER_MOTION`); §7 con il codice `photometry.py` e le firme; §10, T10; nuova D20-9 (scelte minori, da confermare). |
 | 2026-11-07 | Claude Code | **Decisioni del proprietario del 2026-11-07 (sprint C2):** file `approvato` per la sola parte SED (formula di D25-12 del `25`); D20-1…D20-8 scritte come decise (D20-2: λ di Gaia dalla documentazione ufficiale, calcolo dalla banda passante solo se mancano e la licenza lo permette, dichiarato). Nessun codice in C2 (SED nello sprint C3). |
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1: solo parte SED; punti zero di Gaia (E)DR3, 2MASS e WISE letti sulle fonti ufficiali il 2026-11-07; decisioni aperte D20-1…D20-8. |

@@ -81,7 +81,7 @@ def test_t19_51_peg_points_quality_duplicates_and_vizier_error(services, cache):
     gaia = table_of("gaia", "phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 2835207319109249920")
     rate = float(gaia["phot_g_mean_flux"][0])
     m_ab = -2.5 * np.log10(rate) + 25.8010446445
-    assert pts["Gaia DR3 G"]["flux"]["value"] == pytest.approx((3631 * u.Jy * u.Magnitude(m_ab).physical).value,
+    assert pts["Gaia DR3 G"]["flux"]["value"] == pytest.approx(((1 * u.ABflux).to(u.Jy) * u.Magnitude(m_ab).physical).value,
                                                                 rel=1e-12)
     assert pts["SIMBAD G"]["duplicate_of"] == "Gaia DR3 G"
     assert {pts[f"SIMBAD {b}"]["duplicate_of"] for b in "JHK"} == {"2MASS J", "2MASS H", "2MASS Ks"}

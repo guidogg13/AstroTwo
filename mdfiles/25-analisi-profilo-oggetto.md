@@ -7,7 +7,9 @@
 > numero 25, livello 2, codice in `src/astrotwo/analysis/object_profile.py`).
 > Fase codice dichiarata con la formula di D25-12 (§13). Lo sprint C2 scrive il
 > motore (bersaglio, identificativi, identità, astrometria, distanza) e il
-> comando `object.profile`; le precisazioni nate scrivendo C2 sono in §3.10.
+> comando `object.profile`; le precisazioni nate scrivendo C2 sono in §3.10,
+> quelle di C3 (fotometria e SED) in §3.11, quelle di C4 (parallelismo e
+> Annulla) in §3.12.
 
 ## 2. Scopo
 
@@ -90,8 +92,8 @@ candidato entro il raggio.
 ### 3.4 Sezioni del profilo (versione 1.0)
 
 Ogni sezione è **indipendente** (regola c): ha il suo stato (`pending`,
-`running`, `done`, `partial`, `error`, `not_applicable`), i suoi errori e i suoi
-avvisi. Se un servizio è giù (dopo i mirror già esistenti), quella sezione
+`running`, `done`, `partial`, `error`, `not_applicable`, `cancelled` — §3.12),
+i suoi errori e i suoi avvisi. Se un servizio è giù (dopo i mirror già esistenti), quella sezione
 mostra l'errore e il resto del profilo arriva comunque.
 
 1. **Identità** (SIMBAD, con mirror): nome principale, tipo di oggetto
@@ -149,7 +151,8 @@ mostra l'errore e il resto del profilo arriva comunque.
 ### 3.5 Tempi e parallelismo
 
 Le sezioni partono insieme (al più 4 richieste di rete contemporanee, D25-8);
-ciascuna ha il suo tempo massimo; l'insieme ha un tempo obiettivo di 60 s.
+ciascuna ha il suo tempo massimo; l'insieme ha un tempo obiettivo di 60 s
+(regole precise dello sprint C4 in §3.12).
 Tempi osservati il 2026-11-07 (§12, verifiche): SIMBAD Harvard ≈ 0,35 s per
 interrogazione, archivio Gaia 0,4–6,7 s (con rifiuti HTTP 503 per coda piena,
 riusciti al secondo tentativo), IRSA 10–18 s per un cerchio AllWISE e 16 s per
@@ -222,7 +225,7 @@ SED come catalogo», «Invia con SAMP».
 ### 3.10 Precisazioni dello sprint C2 (motore, 2026-11-07)
 
 Scritte prima del codice dello sprint C2; le scelte minori sono raccolte in
-D25-13 (da confermare). In C2 esistono le sezioni **Identità** e
+D25-13 (decisa il 2026-11-07). In C2 esistono le sezioni **Identità** e
 **Astrometria** (con la distanza); immagini, fotometria e pianeti arrivano
 negli sprint C3–C4.
 
@@ -346,7 +349,8 @@ identificativo usato e tipo di incrocio, data, cache sì/no. Il `command_id`
 comando); l'esportazione (C6) lo scrive in ogni riga.
 
 **Esecuzione in C2:** sezioni una dopo l'altra (il parallelismo è dello
-sprint C4); l'annullamento si controlla tra le richieste; un errore di una
+sprint C4, §3.12, che sostituisce questo paragrafo per l'ordine e
+l'annullamento); l'annullamento si controlla tra le richieste; un errore di una
 sezione resta nella sezione (stato `error`, messaggio del modulo invariato) e
 il comando termina `ok`; solo un bersaglio non risolvibile
 (`NAME_NOT_FOUND`, `PROFILE_AMBIGUOUS_TARGET`, `PROFILE_TARGET_INVALID`) fa
@@ -355,7 +359,7 @@ terminare il comando in errore.
 ### 3.11 Precisazioni dello sprint C3 (fotometria e SED, 2026-11-07)
 
 Scritte prima del codice dello sprint C3; le scelte minori sono raccolte in
-D25-14 (da confermare). La sezione **`photometry`** si aggiunge a `sections`
+D25-14 (decisa il 2026-11-07). La sezione **`photometry`** si aggiunge a `sections`
 (D25-13 (5): l'elenco si allarga senza cambiare versione del comando). I punti,
 le conversioni, la qualità, i duplicati e il grafico sono del `20` (parte SED,
 §3 e §7 del `20`); il `25` sceglie le sorgenti e fa le richieste.
@@ -434,6 +438,189 @@ punto ed errori; `not_applicable` senza punti né errori.
 `is_planet_path`; costanti `ALLWISE_EPOCH`, `TMASS_OBSERVATIONS`,
 `DESIGNATION_RADIUS`; la SED è di `astrotwo.analysis.photometry` (20 §7).
 
+### 3.12 Precisazioni dello sprint C4 (parallelismo e Annulla, 2026-11-07)
+
+Scritte prima del codice dello sprint C4, dalle decisioni del proprietario del
+2026-11-07 (D25-8 con la serie VizieR, D25-15); le scelte minori sono raccolte
+in **D25-16** (da confermare). Le sezioni **Immagini** e **Pianeti** sono in
+§3.13 (stesso sprint) e usano i tempi HiPS 30 s ed Exoplanet 30 s della
+tabella.
+
+**Tempi massimi per servizio** (`SERVICE_TIME_LIMITS`, D25-8 e D25-15):
+
+| Servizio | Voce del 14 | Tempo massimo |
+|---|---|---|
+| SIMBAD | `cds-simbad-tap` (con il mirror di Harvard) | 15 s |
+| Archivio Gaia (ESA) | `esa-gaia-tap` | 30 s |
+| IRSA (2MASS, AllWISE) | `nasa-irsa-tap` | 60 s |
+| NASA Exoplanet Archive | `nasa-exoplanet-tap` | 30 s |
+| HiPS (miniature, sezione Immagini) | survey del 12 | 30 s |
+| Serie SED di VizieR | `vizier_photometry` del 14 | 30 s (D25-15) |
+
+**Obiettivo complessivo** `PROFILE_TARGET_TIME` = 60 s: è un obiettivo, non un
+limite; il tempo totale (`elapsed` del profilo) è scritto nel risultato fuori
+dall'impronta di rete, come i tempi delle sezioni.
+
+**Regole.**
+1. **Bersaglio prima.** La risoluzione del bersaglio (§3.10) precede le
+   sezioni, che ne dipendono tutte. Le sue richieste a SIMBAD hanno il tempo
+   di lettura di SIMBAD (15 s per richiesta); non ha un limite complessivo
+   proprio, perché il ripiego su `resolve_name` (NED) dopo SIMBAD giù (§3.10)
+   deve poter avvenire. È annullabile (regola 6).
+2. **Sezioni insieme.** Poi tutte le sezioni richieste partono **insieme**
+   (stesso istante di partenza, `sections_started`). La catena degli
+   identificativi è condivisa: l'esito per Gaia DR3 si calcola **una volta**
+   e serve a tutte le sezioni; 2MASS, AllWISE ed Exoplanet Archive partono
+   appena è noto Gaia, in parallelo tra loro. Ogni sezione aspetta solo gli
+   esiti che le servono (Astrometria: Gaia; Fotometria: Gaia, 2MASS,
+   AllWISE; Identità: tutti e quattro). Nella fotometria le quattro richieste
+   (Gaia, 2MASS, AllWISE, VizieR) partono insieme.
+3. **Al più 4 richieste di rete contemporanee** (`MAX_CONCURRENT_REQUESTS`
+   = 4) in tutto il profilo: un semaforo comune attorno a ogni chiamata ai
+   servizi del livello 1 (`simbad_object`, `tap_query`, `vizier_photometry`,
+   `resolve_name`). Una chiamata `simbad_object` (che fa le sue richieste una
+   dopo l'altra, 14) occupa un solo posto.
+4. **Tempo massimo di una richiesta:** il tempo di connessione e di lettura
+   di ogni richiesta è il minimo tra quello del chiamante (`timeouts`, default
+   del 04) e il tempo massimo del suo servizio (tabella sopra).
+5. **Tempo massimo di una sezione** = il più grande tra i tempi dei servizi
+   che la sezione può interrogare, contato da `sections_started`
+   (`SECTION_SERVICES`): Identità — SIMBAD, Gaia, IRSA, Exoplanet → **60 s**;
+   Astrometria — Gaia → **30 s**; Fotometria — Gaia, IRSA, VizieR → **60 s**;
+   Immagini — HiPS → **30 s**; Pianeti — Exoplanet → **30 s** (§3.13; il
+   tempo comprende l'attesa dell'esito di Gaia della catena).
+   Una sezione non arrivata entro il suo tempo passa a `error` con
+   `PROFILE_SECTION_TIMEOUT` (sezione, tempo massimo, servizi), è annunciata
+   con `on_section` e le sue richieste ancora in corso, quando finiscono, sono
+   scartate; le altre sezioni continuano (regola c).
+6. **`on_section(section)`** è chiamato **una volta per sezione**, nel thread
+   di chi ha chiamato `build_profile` (mai da un thread di lavoro), nell'ordine
+   in cui le sezioni finiscono (arrivate, in errore, scadute). Un errore di una
+   sezione non ferma le altre (T10).
+7. **Annulla** (`cancel`, controllato almeno ogni 0,05 s): le sezioni già
+   arrivate **restano** come sono; quelle in corso passano allo stato
+   **`cancelled`** (nuovo stato di sezione) e sono annunciate con
+   `on_section`; nessuna nuova richiesta parte (il semaforo non concede più
+   posti e le sezioni controllano l'annullamento tra le richieste); una
+   richiesta HTTP già partita non si interrompe (come in sincrona nel 05), la
+   sua risposta si scarta. `build_profile` restituisce subito l'`ObjectProfile`
+   con `cancelled = True`; se l'annullamento arriva prima che il bersaglio sia
+   risolto non c'è nessuna sezione e restituisce `None`.
+8. **Comando:** `object.profile` annullato termina con esito `cancelled` ed
+   errore **`COMMAND_CANCELLED`** (05 §10.1). Con almeno una sezione arrivata
+   la ragione è **`partial`**: il risultato **conserva** il profilo (sezioni
+   arrivate e sezioni `cancelled`), lo stato del lavoro non cambia (il comando
+   è di sola lettura) e `simbad_id` si scrive nel comando registrato; senza
+   sezioni arrivate la ragione resta `discarded` (05). L'avanzamento nella
+   barra di stato è «passo k di n» con una sezione per passo
+   (`ProgressReport`, testo `object_profile/<sezione>`), e **Annulla della
+   barra di stato** (40, `CancelToken`) è quello degli altri comandi: nessuna
+   modifica all'interfaccia.
+9. **Cache da più thread:** la `SharedCache` del 04 è legata al thread che la
+   apre (connessione `sqlite3`); il profilo usa **un'istanza per thread
+   sulla stessa cartella** (come la `ThreadCache` del 40) quando riceve una
+   `SharedCache`, e passa invariato un oggetto che lo gestisce già.
+10. **Un thread alla volta sulla CPU** (turno `cpu_turn`/`network_wait` del
+   14, §7): i thread del profilo, e il thread di chi chiama quando elabora gli
+   arrivi e chiama `on_section`, lavorano solo con il turno; lo lasciano
+   durante l'attesa delle risposte HTTP, del semaforo e degli esiti degli
+   altri thread. Le richieste restano parallele (al più 4); la lettura dei
+   VOTable, le unità di Astropy e il grafico di matplotlib (non sicuri tra
+   thread) non girano mai insieme. Motivo verificato il 2026-11-07 nei test
+   (14 §7: unità `'electron'.s**-1` di Gaia mal interpretata con le letture in
+   parallelo).
+
+**Codice** (`object_profile.py`): costanti `MAX_CONCURRENT_REQUESTS`,
+`SERVICE_TIME_LIMITS`, `SECTION_SERVICES`, `PROFILE_TARGET_TIME`; `build_profile`
+con il pianificatore (pool di thread, semaforo, scadenze, annullamento);
+`ObjectProfile.cancelled` ed `ObjectProfile.elapsed`.
+
+### 3.13 Precisazioni dello sprint C4: Immagini e Pianeti (2026-11-07)
+
+Scritte prima del codice; scelte minori in **D25-17** (da confermare).
+`sections` si allarga con `images` e `planets` (D25-13 (5), stessa
+versione del comando); ordine del profilo: Identità, Immagini, Astrometria,
+Fotometria, Pianeti (§3.4).
+
+**Immagini** (`profile_images`, D25-5).
+- Survey (`IMAGE_SURVEYS`): `CDS/P/DSS2/color`, `CDS/P/2MASS/color` e
+  `CDS/P/allWISE/color`. **AllWISE colore entra** perché il mirror ESASky è
+  stato **verificato il 2026-11-07 con richieste reali** con la regola del
+  12 (elenco ufficiale, `properties` confrontato, tile scaricati; anche IRSA,
+  stessi SHA-256; CDS giù, principale non confrontabile): esito scritto nel
+  registro e nella tabella `MIRROR_FALLBACKS` del 12.
+- Per ogni survey, insieme agli altri (§3.12): `add_hips` (MocServer, poi i
+  mirror) e **`hips_thumbnail`** del 12 (TAN, campo `thumbnail_fov` = 5′,
+  `thumbnail_size` = 256 pixel; stesso codice della vista, senza OpenGL, con
+  i mirror di D12-9). Ogni chiamata occupa un posto del semaforo.
+- **Centro all'epoca della survey quando nota:** epoca = punto medio di
+  `t_min`/`t_max` del `properties` (MJD, scala non dichiarata: UTC, scritta)
+  **solo se le osservazioni durano al più un anno** (`SURVEY_EPOCH_MAX_SPAN`
+  del 12): oggi AllWISE (MJD 55378–55414 → 2010,545); DSS2 (1974–1998) e
+  2MASS (1997–2001) non hanno un'epoca. Con l'epoca e il moto proprio SIMBAD
+  la posizione è portata all'epoca con `propagate_position` (come §3.10);
+  altrimenti il centro è la **posizione SIMBAD J2000** (o le coordinate
+  scritte), **dichiarato** nella miniatura (`center_note`), e senza moto
+  proprio `PROFILE_NO_PROPER_MOTION`.
+- Ogni miniatura nel risultato (`details.thumbnails`): survey, titolo,
+  **server reali** dei tile, ordine HEALPix, campo, dimensione, WCS (testo
+  FITS), centro con epoca e nota, provenienza dei tile, tile assenti,
+  **crediti** dichiarati dal survey (`obs_title`, `obs_ack`,
+  `obs_copyright`, `obs_copyright_url`) e il PNG (nord in alto) in base64,
+  **fuori dall'impronta di rete** come il grafico della SED.
+- **CDS già giù nella sessione (D25-18, decisione del proprietario del
+  2026-11-08):** se nella sessione dell'app il CDS risulta già giù —
+  MocServer già non raggiungibile una volta, survey HiPS già passato da un
+  server di Strasburgo a un mirror, o SIMBAD già sul mirror di Harvard (14) —
+  le miniature **non interrogano di nuovo il MocServer** e aprono subito il
+  survey dai mirror verificati (`MIRROR_FALLBACKS`), con l'avviso dichiarato
+  `HIPS_MIRROR_FALLBACK` ragione `cds_down` (prova: `mocserver`,
+  `hips_failover`, `simbad_failover`). Opzione `cds_down_shortcut` di
+  `add_hips` del 12, attivata solo dal profilo; con «Riesegui con dati
+  aggiornati» (`refresh`) si riprova il MocServer. L'avviso, legato
+  all'esecuzione, resta fuori dall'impronta di rete come gli altri avvisi di
+  ripiego. Misura del 2026-11-08 (CDS giù): miniature 13,6 s nel primo profilo
+  della sessione, poi 2,6–4,6 s.
+- Survey irraggiungibile su tutti i server: **miniatura mancante** con
+  l'errore del 12 (`NET_TIMEOUT` `hips_servers`) nella sezione, le altre
+  presenti (stato `partial`; `error` se nessuna).
+
+**Pianeti** (`profile_planets`, D25-3).
+- Dall'esito Exoplanet della catena (§3.10): ospite trovato per
+  `gaia_dr3_id` → `WHERE gaia_dr3_id = 'Gaia DR3 <source_id>'`; trovato per
+  `hostname` → `WHERE hostname = '<ospite>'`; tabella **`pscomppars`**,
+  ordine `pl_name`. Nessun ospite: sezione **`done`** con «nessun pianeta
+  nell'archivio» (non è un errore) e nessuna richiesta.
+- Per ogni pianeta: `pl_name`, `pl_letter`, `discoverymethod`, `disc_year`
+  (letti) e i parametri **periodo** (`pl_orbper`), **semiasse**
+  (`pl_orbsmax`), **eccentricità** (`pl_orbeccen`), **massa** (`pl_bmasse`
+  con `pl_bmassprov`, che dice se è la massa, `M sin i` o una stima da
+  relazione massa-raggio), **raggio** (`pl_rade`), **temperatura di
+  equilibrio** (`pl_eqt`), ciascuno con **errore superiore** (`…err1`) e
+  **inferiore** (`…err2`, così come dato, negativo), indicatore di limite
+  (`…lim`: 1 limite superiore, −1 inferiore, 0 misura; letto e scritto) e
+  **riferimento per parametro** (`…_reflink`).
+- **Unità** (`PLANET_PARAMETERS`): quelle dichiarate dall'archivio nel suo
+  `TAP_SCHEMA.columns` (letto il 2026-11-07): giorni, au, adimensionale,
+  masse terrestri, raggi terrestri, K. L'archivio non dichiara l'unità di
+  alcune colonne (`pl_orbsmax`, gli errori di `pl_bmasse`): si usa l'unità
+  che lo stesso schema dichiara per le altre colonne della stessa grandezza
+  (`pl_orbsmaxerr1` au, `pl_bmasse` masse terrestri), scritto qui.
+- **`*_reflink` è testo esterno (HTML):** si estraggono solo il testo
+  visibile (senza tag, entità decodificate) e, se il collegamento è di ADS
+  (`adsabs.harvard.edu`), l'URL e il **bibcode** (`/abs/<bibcode>/`); un
+  collegamento non ADS non si conserva; nulla viene eseguito (T16).
+- Avviso **`PROFILE_PLANETS_COMPOSITE`** con il numero dei pianeti e dei
+  riferimenti distinti: i parametri di `pscomppars` possono venire da lavori
+  diversi (D25-3).
+- Valori: una `ProfileValue` letta per parametro e pianeta (grandezza
+  `<pl_name> <parametro>`), con `error_upper`/`error_lower` (nuovi campi,
+  così come dati) e il riferimento; dettagli in `details.planets`.
+
+**Codice:** `profile_images`, `profile_planets`, costanti `IMAGE_SURVEYS`,
+`DEFAULT_THUMBNAIL_FOV`, `DEFAULT_THUMBNAIL_SIZE`, `PLANET_PARAMETERS`,
+`parse_reflink`; nel 12 `hips_thumbnail`.
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -462,7 +649,8 @@ punto ed errori; `not_applicable` senza punti né errori.
 - **Usato da:** `32`/`35` (strumento `object__profile`), `34` (verifica dei
   numeri), `40`/`41`/`42` (aperture), `43` o modulo d'interfaccia del profilo
   (D25-7).
-- **Modifiche richieste a moduli `approvato`** (da autorizzare, D25-12):
+- **Modifiche richieste a moduli `approvato`** (autorizzate, D25-12; in C4:
+  `05` risultato parziale annullato, `14` turno della CPU, `20` costante AB):
   `14` — `simbad_object` (oggetto per identificativo: `basic`, `ident`,
   `flux`, con mirror), voce `nasa-exoplanet-tap`
   (`https://exoplanetarchive.ipac.caltech.edu/TAP`), raggio di
@@ -476,7 +664,7 @@ punto ed errori; `not_applicable` senza punti né errori.
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
 | in | `target` | testo, oppure coordinate, oppure riferimento a una riga | nome; coordinate con sistema ed epoca (DC2); `layer_id` + riga | uno solo dei tre |
-| in | `sections` | elenco | `identity`, `astrometry` (C2), `photometry` (C3); `images`, `planets` aggiunti da C4 | default tutte quelle scritte |
+| in | `sections` | elenco | `identity`, `images`, `astrometry`, `photometry`, `planets` (C2–C4) | default tutte |
 | in | `match_radius` | angolo | arcsec, con unità | default 10″ (D25-9): candidati SIMBAD da coordinate |
 | in | `crossmatch_radius` | angolo | arcsec, con unità | default 2″ (D25-9): incroci per posizione dopo la propagazione (§3.10) |
 | in | `simbad_id` | testo | identificativo SIMBAD | facoltativo; scritto dal comando dopo la risoluzione (§3.10) |
@@ -495,8 +683,11 @@ punto ed errori; `not_applicable` senza punti né errori.
   identificativi, posizione con epoca e fonte) oppure `TargetCandidates`
   (elenco per la scelta dell'utente).
 - **`build_profile(target, *, sections, options, on_section, cancel)`** —
-  esegue le sezioni in parallelo; chiama `on_section(section)` a ogni sezione
-  terminata (arrivo progressivo); restituisce `ObjectProfile`.
+  esegue le sezioni in parallelo (§3.12: al più 4 richieste contemporanee,
+  tempo massimo per sezione); chiama `on_section(section)` a ogni sezione
+  terminata (arrivo progressivo, nel thread del chiamante); restituisce
+  `ObjectProfile` (con `cancelled = True` se annullato dopo la risoluzione
+  del bersaglio) o `None` (annullato prima).
 - **`profile_identity`, `profile_images`, `profile_astrometry`,
   `profile_distance`, `profile_photometry`, `profile_planets`** — una funzione
   per sezione, ciascuna con lo stesso contratto (`ProfileSection`).
@@ -578,9 +769,11 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Archivio Gaia HTTP 503 (coda piena, visto il 2026-11-07) | nuovo tentativo come connessione (`02` §8), poi errore della sezione | `SERVICE_ERROR` / `NET_TIMEOUT` |
 | CDS giù (SED di VizieR, nessun mirror) | serie VizieR assente, resto della fotometria presente | `SERVICE_ERROR` + `vizier_no_mirror` |
 | Survey HiPS non disponibile su alcun server | miniatura mancante con messaggio | `NET_TIMEOUT` `hips_servers` |
-| Tempo totale superato | sezioni non arrivate in errore, le altre restano | `PROFILE_SECTION_TIMEOUT` |
-| Annulla | sezioni in corso annullate, arrivate conservate | `COMMAND_CANCELLED` |
-| Nessun pianeta | sezione `done` con «nessun pianeta», non errore | — |
+| Tempo massimo di una sezione superato (§3.12 regola 5) | quella sezione in errore, le altre continuano; risposte tardive scartate | `PROFILE_SECTION_TIMEOUT` |
+| Annulla (§3.12 regole 7–8) | sezioni in corso `cancelled`, arrivate conservate; nessuna nuova richiesta | `COMMAND_CANCELLED` (`partial` con sezioni arrivate, altrimenti `discarded`) |
+| Nessun pianeta | sezione `done` con «nessun pianeta nell'archivio», non errore | — |
+| Pianeti trovati (`pscomppars`) | parametri con il loro riferimento, avviso che possono venire da lavori diversi | `PROFILE_PLANETS_COMPOSITE` |
+| Epoca della survey non nota (osservazioni più lunghe di un anno) | miniatura centrata sulla posizione SIMBAD J2000, dichiarato | — (`center_note`) |
 
 ## 11. Esposizione all'IA
 
@@ -613,11 +806,15 @@ cambiano).
 | T8 | Pianeti TRAPPIST-1 | sezione pianeti con `pscomppars` registrata | 7 pianeti b–h, ognuno con periodo, massa ed errori e riferimento (Agol et al. 2021) | confronto |
 | T9 | Nessun pianeta | Vega, eta Tau | sezione `done`, «nessun pianeta» | stato |
 | T10 | Sezioni indipendenti | archivio Gaia simulato giù (503 ripetuti), CDS giù | astrometria in errore, identità/fotometria (2MASS, AllWISE)/pianeti presenti | stati delle sezioni |
-| T11 | Arrivo progressivo | servizi simulati con ritardi diversi | `on_section` chiamato nell'ordine dei tempi, ogni sezione una volta | ordine |
+| T11 | Arrivo progressivo | servizi simulati con ritardi diversi (Gaia lento, IRSA veloce, e il contrario) | `on_section` chiamato nell'ordine dei tempi, ogni sezione una volta, nel thread del chiamante | ordine |
+| T21 | Al più 4 richieste contemporanee (§3.12) | servizi simulati che contano le richieste aperte nello stesso istante, con un ritardo | massimo osservato ≤ 4 e > 1 (le sezioni girano davvero insieme) | contatore del server simulato |
+| T22 | Tempo massimo di una sezione | `SERVICE_TIME_LIMITS` ridotti nel test; archivio Gaia simulato più lento del suo tempo | Astrometria `error` con `PROFILE_SECTION_TIMEOUT` (sezione, tempo, servizi) prima della risposta; Identità presente | stati e tempi |
+| T23 | Annulla (§3.12) | annullamento dopo l'arrivo della prima sezione, con le altre ferme su un servizio lento; poi `object.profile` annullato dal `CancelToken` | sezione arrivata conservata, le altre `cancelled`, `cancelled = True`, ritorno prima della risposta lenta, nessuna nuova richiesta dopo l'annullamento; comando con esito `cancelled`, `COMMAND_CANCELLED` `partial` con il profilo nel risultato; annullamento prima della risoluzione → `None` e `discarded` | stati, contatore delle richieste, sessione del 05 |
 | T12 | Più candidati | coordinate tra due oggetti SIMBAD entro il raggio | `TargetCandidates` con 2 voci; da script `PROFILE_AMBIGUOUS_TARGET` | nessuna scelta |
 | T18 | Pianeti esclusi dai candidati (D25-13 (8)) | coordinate di 51 Peg e di TRAPPIST-1 (risposte registrate con `otypedef.path`); coordinate di eta Tau | 51 Peg e TRAPPIST-1: un solo candidato (la stella), `PROFILE_PLANETS_EXCLUDED` con 1 e 8 nomi; eta Tau: `PROFILE_AMBIGUOUS_TARGET` con la stella e `GN 03.44.2` | nessuna scelta tra non pianeti |
 | T19 | Sezione fotometria | 51 Peg, Vega, eta Tau, TRAPPIST-1 con risposte registrate (archivio Gaia, IRSA, SIMBAD) e CDS giù | punti Gaia/2MASS/AllWISE/SIMBAD con banda, sistema, errore, qualità e provenienza; eta Tau 2MASS J e Ks (`ph_qual` `D`, saturate) fuori dal grafico con il motivo; Vega 2MASS saturata ma con `ph_qual` `CBC`: nel grafico per la regola D20-4, `rd_flg` mostrato; AllWISE `U` (Vega W1–W2, TRAPPIST-1 W4) limiti superiori fuori dal grafico; serie VizieR in errore nella sola sezione (`partial`); grafico PNG presente | confronto con le risposte registrate |
 | T20 | Passo per posizione di 2MASS | 2MASS senza identificativo da SIMBAD né dall'incrocio ufficiale, risposta registrata con `jdate` | sorgente trovata confrontando il bersaglio portato al `jdate` della riga, `PROFILE_POSITIONAL_MATCH` | separazione ricalcolata con Astropy |
+| T24 | Miniature (§3.13) | 51 Peg con le risposte vere di ESASky registrate il 2026-11-07 (DSS2, 2MASS, AllWISE colore); un survey con tutti i server giù | tre miniature 256 × 256 con survey, server reale, ordine, campo, crediti; AllWISE centrata all'epoca 2010,545 con la propagazione, DSS2 e 2MASS alla posizione J2000 dichiarata; survey giù → miniatura mancante con `NET_TIMEOUT` `hips_servers`, sezione `partial` | confronto, propagazione ricalcolata con Astropy |
 | T13 | Conflitto di identificativi | SIMBAD dà 2MASS X, l'incrocio Gaia dà 2MASS Y | entrambi, `PROFILE_IDENTIFIER_CONFLICT` | |
 | T14 | Riproducibilità | `object.profile` registrato, rieseguito dalla sessione, poi con `refresh` | stesse richieste e stessi valori dalla cache; con `refresh` nuove richieste e `DATA_REFRESHED` | sessione del 05 |
 | T15 | Esportazione | `export_profile` ECSV | una riga per valore con tutte le colonne di provenienza; rilettura con `astropy.table` | ECSV valido |
@@ -626,10 +823,10 @@ cambiano).
 
 ## 13. Decisioni aperte
 
-Tutte le decisioni D25-1…D25-13 sono state **prese dal proprietario il
+Tutte le decisioni D25-1…D25-15 sono state **prese dal proprietario il
 2026-11-07** (D25-1…D25-12 dopo il report dello sprint C1, D25-13 dopo lo
-sprint C2). Restano qui come registro. Le scelte minori dello sprint C3 da
-confermare sono in **D25-14** (sotto).
+sprint C2, D25-14 e D25-15 dopo lo sprint C3). Restano qui come registro. Le
+scelte minori dello sprint C4 da confermare sono in **D25-16** (sotto).
 
 - **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
   `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
@@ -655,9 +852,9 @@ confermare sono in **D25-14** (sotto).
 - **D25-7 — Specifica dell'interfaccia — DECISA (2026-11-07):** nel `43`,
   scritto nello sprint C5.
 - **D25-8 — Tempi — DECISA (2026-11-07):** obiettivo 60 s; tempo massimo per
-  sezione SIMBAD 15 s, Gaia 30 s, IRSA 60 s, Exoplanet 30 s, HiPS 30 s; 4
-  richieste contemporanee (parallelismo nello sprint C4; in C2 le sezioni
-  girano una dopo l'altra, §3.10).
+  sezione SIMBAD 15 s, Gaia 30 s, IRSA 60 s, Exoplanet 30 s, HiPS 30 s e
+  (D25-15) serie SED di VizieR 30 s; 4 richieste contemporanee (parallelismo
+  nello sprint C4, §3.12; in C2–C3 le sezioni giravano una dopo l'altra).
 - **D25-9 — Raggi — DECISA (2026-11-07):** 10″ per i candidati SIMBAD da
   coordinate; 2″ per gli incroci per posizione dopo la propagazione.
 - **D25-10 — Zero point di parallasse — DECISA (2026-11-07):** non applicato
@@ -702,24 +899,70 @@ confermare sono in **D25-14** (sotto).
   con avviso del numero e dei nomi degli esclusi (`PROFILE_PLANETS_EXCLUDED`);
   l'ambiguità tra oggetti non pianeti resta e si ferma con l'elenco
   (`PROFILE_AMBIGUOUS_TARGET`). Scritto in §3.10, test T12 e T18.
-- **D25-14 — Scelte minori dello sprint C3 — da confermare (proprietario).**
-  Scritte in §3.11: (1) 2MASS e AllWISE per designazione con il cerchio di 2″
-  attorno alla posizione scritta nella designazione (`DESIGNATION_RADIUS`);
-  (2) epoca AllWISE MJD 55400,0 UTC per le posizioni stazionarie `ra`/`dec`
-  (il supplemento la dà per le posizioni «motion-fit» e dice le stazionarie
-  «molto simili»); (3) 2MASS confrontato al `jdate` di ogni riga, scala
-  trattata come UTC e dichiarata, raggio di ricerca allargato con il periodo
-  delle osservazioni 2MASS; (4) passo per posizione di 2MASS e AllWISE dentro
-  `cross_identify`, quindi mostrato anche nella sezione Identità; (5) centro
-  della serie VizieR a J2000 e avviso `SED_HIGH_PROPER_MOTION` con |μ| · 16
-  anni ≥ 2″; (6) grafico come PNG in base64 nel risultato, fuori
-  dall'impronta di rete; (7) senza riga nel catalogo per un identificativo
-  noto: avviso `PROFILE_NO_PHOTOMETRY`, nessun passo per posizione.
+- **D25-14 — Scelte minori dello sprint C3 — DECISA (proprietario, 2026-11-07):
+  confermata tutta** come scritta in §3.11: (1) 2MASS e AllWISE per
+  designazione con il cerchio di 2″ attorno alla posizione scritta nella
+  designazione (`DESIGNATION_RADIUS`); (2) epoca AllWISE MJD 55400,0 UTC per
+  le posizioni stazionarie `ra`/`dec`; (3) 2MASS confrontato al `jdate` di
+  ogni riga, scala trattata come UTC e dichiarata, raggio di ricerca allargato
+  con il periodo delle osservazioni 2MASS; (4) passo per posizione di 2MASS e
+  AllWISE dentro `cross_identify`, quindi mostrato anche nella sezione
+  Identità; (5) centro della serie VizieR a J2000 e avviso
+  `SED_HIGH_PROPER_MOTION` con |μ| · 16 anni ≥ 2″; (6) grafico come PNG in
+  base64 nel risultato, fuori dall'impronta di rete; (7) senza riga nel
+  catalogo per un identificativo noto: avviso `PROFILE_NO_PHOTOMETRY`, nessun
+  passo per posizione.
+- **D25-15 — Tempo massimo della serie SED di VizieR — DECISA (proprietario,
+  2026-11-07):** 30 s, aggiunto alla tabella dei tempi di D25-8 (§3.12).
+- **D25-17 — Scelte minori di Immagini e Pianeti (sprint C4) — da confermare
+  (proprietario).** Scritte in §3.13: (1) epoca della survey = punto medio di
+  `t_min`/`t_max` solo se le osservazioni durano al più un anno, scala UTC
+  dichiarata (oggi solo AllWISE); (2) PNG delle miniature in base64 nel
+  risultato, fuori dall'impronta (circa 100–150 kB l'una nella sessione);
+  (3) crediti = soli testi dichiarati dal survey (il testo di STScI per DSS
+  del `01` §6.1 lo aggiunge l'interfaccia, C5); (4) unità dei parametri dei
+  pianeti dal `TAP_SCHEMA` dell'archivio, con l'unità della stessa grandezza
+  dove una colonna non la dichiara; (5) dai `*_reflink` solo testo, URL e
+  bibcode di ADS; collegamenti non ADS non conservati; (6) errori dei
+  pianeti come dati (`error_upper`, `error_lower` negativo) con l'indicatore
+  di limite; (7) massa = `pl_bmasse` (masse terrestri) con `pl_bmassprov`,
+  raggio = `pl_rade`; (8) ricerca dei pianeti con lo stesso criterio che ha
+  trovato l'ospite (`gaia_dr3_id` o `hostname`); (9) `add_hips` e ogni
+  miniatura occupano un posto del semaforo; con il CDS giù il primo profilo
+  della sessione attende il timeout di connessione del MocServer, i successivi
+  no (D25-18); (10) la sezione Pianeti attende l'esito di Gaia della catena:
+  con l'archivio Gaia giù e senza `Gaia DR3` negli identificativi SIMBAD (Vega,
+  2026-11-08) scade a 30 s (`PROFILE_SECTION_TIMEOUT`); proposta: in quel caso
+  cercare subito l'ospite per `hostname`, senza attendere Gaia.
+- **D25-18 — Miniature con il CDS già giù — DECISA (proprietario,
+  2026-11-08):** quando nella sessione il CDS risulta già giù (ripiego già
+  avvenuto o MocServer già scaduto una volta), le miniature non aspettano di
+  nuovo il timeout del MocServer e vanno subito sui mirror verificati, con
+  avviso dichiarato. Scritto in §3.13; test in `tests/core/test_hips_thumbnail.py`.
+- **D25-16 — Scelte minori dello sprint C4 — da confermare (proprietario).**
+  Scritte in §3.12: (1) tempo massimo di una sezione = il più grande tra i
+  tempi dei servizi che può interrogare (Identità 60 s, Astrometria 30 s,
+  Fotometria 60 s), contato dalla partenza comune delle sezioni; (2) tempo
+  massimo di ogni richiesta = minimo tra il timeout del chiamante e quello
+  del servizio; (3) la risoluzione del bersaglio non ha un limite complessivo
+  (solo 15 s per richiesta a SIMBAD), per non impedire il ripiego su NED;
+  (4) l'obiettivo di 60 s è misurato e scritto (`elapsed`), non è un limite e
+  non dà avvisi; (5) nuovo stato di sezione `cancelled`; il comando annullato
+  con sezioni arrivate conserva il profilo nel risultato
+  (`COMMAND_CANCELLED` `partial`, 05 §3.2), senza sezioni arrivate resta
+  `discarded`; (6) una `simbad_object` (tre richieste in fila) occupa un solo
+  posto dei 4; (7) una istanza della cache per thread sulla stessa cartella;
+  (8) avanzamento «passo k di n» con una sezione per passo; (9) un thread alla
+  volta sulla CPU con il turno del 14 (`cpu_turn`/`network_wait`), lasciato
+  durante le attese di rete (regola 10, motivo verificato nei test).
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C4, chiusura:** D25-18 decisa dal proprietario (miniature subito sui mirror verificati se il CDS risulta già giù nella sessione, avviso `HIPS_MIRROR_FALLBACK` `cds_down`; §3.13, §13); D25-17 (10) aggiunto (Pianeti con Gaia giù); test T8, T9, T16, T24 in `tests/analysis/test_object_profile_images_planets.py`. |
+| 2026-11-07 | Claude Code | **Sprint C4, Immagini e Pianeti (decisioni del proprietario del 2026-11-07):** nuovo §3.13 (miniature DSS2, 2MASS e AllWISE colore con `hips_thumbnail` del 12, centro all'epoca della survey quando nota, crediti dichiarati; **mirror ESASky di AllWISE colore verificato il 2026-11-07** con richieste reali — elenco ufficiale, `properties` uguale a quello di IRSA, stessi SHA-256 di due tile — quindi AllWISE entra; pianeti da `pscomppars` per `gaia_dr3_id` o `hostname`, errori e riferimento per parametro, `PROFILE_PLANETS_COMPOSITE`); §3.12 tempi di Immagini e Pianeti; §6, §10, §12 (T24); nuova D25-17. |
+| 2026-11-07 | Claude Code | **Sprint C4 (decisioni del proprietario del 2026-11-07):** D25-14 decisa (confermata tutta); nuova D25-15 decisa (serie SED di VizieR 30 s, aggiunta a D25-8). Nuovo §3.12 (parallelismo: bersaglio prima, sezioni insieme con la catena degli identificativi condivisa, al più 4 richieste contemporanee, tempo massimo per servizio e per sezione con `PROFILE_SECTION_TIMEOUT`, `on_section` nel thread del chiamante, Annulla con le sezioni arrivate conservate e lo stato `cancelled`, `COMMAND_CANCELLED` `partial`, cache per thread, un thread alla volta sulla CPU con il turno del 14 — unità di Astropy non sicure tra thread, verificato nei test); §3.5, §3.10, §6, §7.1, §10 aggiornati; §12 T11 precisato, nuovi T21–T23; nuova D25-16 (scelte minori di C4, da confermare). |
 | 2026-11-07 | Claude Code | **Sprint C3 (decisioni del proprietario del 2026-11-07):** D25-13 decisa: punti (1)–(7) confermati, punto (8) deciso (pianeti della famiglia `Pl` di SIMBAD esclusi dai candidati da coordinate, dichiarati con `PROFILE_PLANETS_EXCLUDED`; §3.10, T12, nuovo T18); RUWE resta senza soglia (D25-11). Nuovo §3.11 (sezione `photometry`: richieste per identificativo a Gaia, IRSA 2MASS e AllWISE con il cerchio della designazione, passo per posizione di 2MASS e AllWISE con le epoche verificate — AllWISE MJD 55400,0, 2MASS `jdate` e periodo 1997-06/2001-02 —, serie VizieR a J2000 con raggio 2″, grafico PNG fuori dall'impronta); §6 `sections`; §10 `PROFILE_PLANETS_EXCLUDED`, `PROFILE_NO_PHOTOMETRY`, `SED_HIGH_PROPER_MOTION`; §12 T7 con l'epoca verificata, nuovi T18–T20; nuova D25-14 (scelte minori di C3, da confermare). |
 | 2026-11-07 | Claude Code | **Sprint C2 (decisioni del proprietario del 2026-11-07):** file `approvato` dal proprietario (D25-12, formula in §13); D25-1…D25-12 scritte come decise (D25-5 con la condizione su AllWISE colore, D25-11 con la soglia RUWE solo da fonte ufficiale: verifica senza esito, RUWE senza soglia); nuovo §3.10 (precisazioni del motore: nome con `simbad_object`, candidati da coordinate con `PM_SEARCH_MAX`, `simbad_id`, catena di C2, identità, astrometria, distanza, provenienza, esecuzione); §6 con `crossmatch_radius` e `simbad_id`; §10 con `PROFILE_TARGET_INVALID` e `PROFILE_NO_GAIA` con sotto-voci; nuova D25-13 (scelte minori, da confermare). |
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1 (Fase C, decisione del proprietario del 2026-11-07): regole a–d scritte come decise; verifiche dal vivo su Alcyone, Vega, 51 Peg, TRAPPIST-1 (SIMBAD Harvard, archivio Gaia ESA con `external.gaiaedr3_distance` e incroci ufficiali, IRSA 2MASS/AllWISE, NASA Exoplanet Archive; CDS giù); interfaccia proposta in §3.9; decisioni aperte D25-1…D25-12. |

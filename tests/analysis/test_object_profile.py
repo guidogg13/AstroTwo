@@ -355,7 +355,10 @@ def test_simbad_down_falls_back_to_the_name_resolver_by_position(services, cache
 def test_sections_arrive_once_in_order_and_cancel_returns_none(services, cache):
     seen = []
     prof = profile("TRAPPIST-1", cache, on_section=lambda s: seen.append((s.name, s.status)))
-    assert seen == [("identity", "done"), ("astrometry", "done"), ("photometry", "partial")]  # VizieR (CDS) giù
+    # sezioni in parallelo (25 §3.12): ordine di arrivo, verificato in T11; qui ognuna una volta con il suo stato
+    assert sorted(seen) == [("astrometry", "done"), ("identity", "done"), ("images", "done"), ("photometry", "partial"),
+                            ("planets", "done")]  # VizieR (CDS) giù; miniature dai mirror registrati
+    assert [s.name for s in prof.sections] == ["identity", "images", "astrometry", "photometry", "planets"]
     assert [c.identifier for c in prof.cross_ids] == ["Gaia DR3 2635476908753563008", "2MASS J23062928-0502285",
                                                        "WISEA J230630.02-050234.1", "TRAPPIST-1"]
     assert values(section(prof, "astrometry"))["distance_geo"].value == 12.454126 * u.pc

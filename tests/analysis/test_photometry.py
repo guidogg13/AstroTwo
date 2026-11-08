@@ -112,15 +112,19 @@ def test_t2_wise_flux():
 def test_t3_gaia_flux_from_count_rate():
     out = mag_to_flux(point(sed_points_from(gaia_row(), "gaia_dr3", provenance=PROV), "Gaia DR3", "G"))
     m_ab = -2.5 * np.log10(1.0e7) + 25.8010446445
-    # 3631 Jy come scritto nel 20 §3.2 (Astropy usa 10^(−0,4·48,60) cgs = 3630,78 Jy: differenza 6·10⁻⁵, D20-9 (5))
-    expected = 3631.0 * u.Jy * u.Magnitude(m_ab).physical
+    # Fν(0) dalla definizione esatta del sistema AB, 10^(−0,4·48,60) erg s⁻¹ cm⁻² Hz⁻¹ (20 §3.2, D20-9 (5))
+    f0 = (10.0 ** (-0.4 * 48.60) * u.erg / u.s / u.cm ** 2 / u.Hz).to(u.Jy)
+    expected = f0 * u.Magnitude(m_ab).physical
     assert out.flux.value == pytest.approx(expected.value, rel=1e-9)
     sigma_m = 2.5 / np.log(10) * 1.0e3 / 1.0e7
     assert out.flux_error.value == pytest.approx(expected.value * 0.4 * np.log(10) * np.hypot(sigma_m, 0.0027590522),
                                                  rel=1e-9)
     assert out.conversion["m_ab"]["value"] == pytest.approx(m_ab, rel=1e-12)
     assert out.wavelength == (621.79 * u.nm).to(u.um)
-    assert AB_FLUX_ZERO == 3631 * u.Jy
+    assert AB_FLUX_ZERO.unit == u.Jy
+    assert AB_FLUX_ZERO.value == pytest.approx(f0.value, rel=1e-15)
+    assert AB_FLUX_ZERO.value == pytest.approx(3630.780547701, rel=1e-12)  # mai 3631 Jy scritto a mano
+    assert out.conversion["ab_flux_zero"]["value"] == pytest.approx(3630.780547701, rel=1e-12)
 
 
 # =============================================================================

@@ -17,6 +17,7 @@ rete, i protocolli e la scrittura.
 
 from __future__ import annotations
 
+import contextvars
 import dataclasses
 import io
 import json
@@ -26,6 +27,7 @@ import tempfile
 import threading
 import time
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
@@ -81,6 +83,8 @@ __all__ = [
     "SimbadRecord",
     "SIMBAD_BASIC_COLUMNS",
     "simbad_object",
+    "cpu_turn",
+    "network_wait",
     "VIZIER_PHOTOMETRY_URL",
     "MOCSERVER_CHARSET",
     "MOCSERVER_URL",
@@ -406,6 +410,42 @@ class _Response:
     notes: tuple[tuple[str, str], ...] = field(default=())
 
 
+#: Turno della CPU (sprint C4, 2026-11-07, per il profilo del 25 §3.12): chi esegue richieste in più thread può far
+#: lavorare un solo thread alla volta (``cpu_turn``) e lasciare il turno solo durante l'attesa di rete
+#: (``network_wait``). Serve perché l'interpretazione delle unità di Astropy (parser condiviso) e matplotlib non sono
+#: sicure tra thread: con le letture dei VOTable in parallelo ``electron / s`` dell'archivio Gaia è stato visto
+#: diventare un'unità non convertibile in ``u.electron / u.s`` (test del 25, 2026-11-07). Senza turno (default):
+#: nessun effetto.
+_CPU_TURN: contextvars.ContextVar[threading.Lock | None] = contextvars.ContextVar("astrotwo_cpu_turn", default=None)
+
+
+@contextmanager
+def cpu_turn(lock: threading.Lock):
+    """Esegue il blocco con il turno ``lock`` (acquisito qui); le richieste HTTP del 14 dentro il blocco lo lasciano
+    durante l'attesa della risposta (``network_wait``)."""
+    token = _CPU_TURN.set(lock)
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
+        _CPU_TURN.reset(token)
+
+
+@contextmanager
+def network_wait():
+    """Attesa (rete o altro lavoro) senza il turno della CPU, se il thread ne ha uno; ripreso alla fine."""
+    lock = _CPU_TURN.get()
+    if lock is None:
+        yield
+        return
+    lock.release()
+    try:
+        yield
+    finally:
+        lock.acquire()
+
+
 class _Session(requests.Session):
     """Sessione HTTP con i timeout comuni di ``04-cache.md`` (CA1) su ogni richiesta."""
 
@@ -417,7 +457,8 @@ class _Session(requests.Session):
     def request(self, method, url, **kwargs):
         if kwargs.get("timeout") is None:
             kwargs["timeout"] = self.timeouts
-        return super().request(method, url, **kwargs)
+        with network_wait():  # turno della CPU lasciato durante l'attesa (sprint C4)
+            return super().request(method, url, **kwargs)
 
 
 def _canonical(params) -> tuple[tuple[str, str], ...]:
@@ -948,7 +989,8 @@ def _tap_async(base: str, adql: str, max_rows: int, async_timeout: float, *, cac
                                                    "timeout": _q(async_timeout, "s"), "phase": str(phase)})
                 wake = time.monotonic() + min(interval, remaining)
                 while (left := wake - time.monotonic()) > 0 and not stopped():
-                    time.sleep(min(left, _CANCEL_POLL))
+                    with network_wait():
+                        time.sleep(min(left, _CANCEL_POLL))
                 interval = min(interval * 1.5, 10.0)
             if phase != "COMPLETED":
                 try:

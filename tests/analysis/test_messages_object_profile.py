@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Messaggi del profilo (25 §10), della SED (20 §10) e di ``simbad_object`` del 14 con codice + ``params`` (D40-3).
+"""Messaggi del profilo (25 §10, §3.12), della SED (20 §10) e di ``simbad_object`` del 14 con codice + ``params`` (D40-3).
 
 Provoca ogni errore e ogni avviso del 25 (più le due sotto-voci di ``NAME_NOT_FOUND`` del 14); ogni istanza è
 controllata contro il catalogo alla creazione (``tests/conftest.py``) e qui si verifica la copertura di tutte le coppie
@@ -28,6 +28,7 @@ from tests.message_helpers import catalog_combinations, check_error, check_messa
 OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_IDENTIFIERS", "PROFILE_POSITIONAL_MATCH",
              "PROFILE_NO_PROPER_MOTION", "PROFILE_NO_GAIA", "PROFILE_GAIA_TWO_PARAMETER", "PROFILE_IDENTIFIER_CONFLICT",
              "PROFILE_NO_DISTANCE", "PROFILE_TARGET_CHANGED", "PROFILE_PLANETS_EXCLUDED", "PROFILE_NO_PHOTOMETRY",
+             "PROFILE_SECTION_TIMEOUT", "PROFILE_PLANETS_COMPOSITE",
              "SED_NO_ZERO_POINT", "SED_NO_SYSTEM", "SED_NO_ERROR", "SED_LOW_QUALITY", "SED_UPPER_LIMIT", "SED_DUPLICATE",
              "SED_HIGH_PROPER_MOTION")
 FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects")}
@@ -57,6 +58,9 @@ class Seen:
             self.notes(c.warnings)
         for s in prof.sections:
             self.notes(s.warnings)
+            for e in s.errors:  # errori delle sezioni in forma JSON (es. PROFILE_SECTION_TIMEOUT, 25 §3.12)
+                if e["code"] in OWN_CODES:
+                    self.pairs.add(check_message(e["code"], e["params"], e["text"]))
 
     def sed(self, sed) -> None:
         for point in sed.points:
@@ -179,6 +183,15 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
     with pytest.raises(VoProtocolsError) as info:
         simbad_object("doppio", cache=cache)
     seen.error(info.value)
+    # PROFILE_PLANETS_COMPOSITE: pianeti di TRAPPIST-1 da pscomppars (risposta vera, 25 §3.13)
+    seen.profile(build(ProfileTarget(name="TRAPPIST-1"), sections=("planets",), cache=cache))
+    # PROFILE_SECTION_TIMEOUT: astrometria oltre il suo tempo (ridotto qui) con l'archivio Gaia lento (25 §3.12)
+    limit = op._section_limit
+    monkeypatch.setattr(op, "_section_limit", lambda name: 0.2 * u.s if name == "astrometry" else limit(name))
+    services.overrides[("gaia", "")] = lambda q: (__import__("time").sleep(0.6), votable(
+        [("source_id", "long", None)], []))[1]
+    seen.profile(build(ProfileTarget(name="51 Peg"), sections=("astrometry",), cache=cache, refresh=True))
+    services.overrides.clear()
     missing = required() - seen.pairs
     assert not missing, f"coppie (codice, ragione) non provocate: {sorted(missing, key=str)}"
 

@@ -181,6 +181,17 @@ Ogni comando è descritto nel registro da una **definizione** (`CommandSpec`):
   il risultato si scarta, **lo stato non cambia** e la cronologia registra
   l'esito `cancelled` (comando non rieseguito alla riapertura). I timeout
   di rete restano quelli di `04-cache.md` (10 s / 60 s).
+  **Annullamento con risultato parziale** (sprint C4, 2026-11-07,
+  autorizzato con D25-12 del `25`): un comando **di sola lettura** il cui
+  esecutore, annullato, restituisce un `Outcome` con `cancelled = True`
+  (es. `object.profile` con le sezioni già arrivate, 25 §3.12) termina con
+  esito `cancelled` ed errore `COMMAND_CANCELLED` ragione **`partial`**: il
+  risultato **conserva** i valori, gli avvisi, la provenienza e l'impronta di
+  ciò che è arrivato; lo stato non cambia comunque (un `Outcome` parziale con
+  un nuovo stato è un errore di programmazione); i valori scelti dal modulo
+  (`resolved`) si scrivono nel comando registrato. Come ogni esito
+  `cancelled`, il comando non si riesegue alla riapertura. Senza `Outcome`
+  parziale vale la regola sopra (`discarded`).
 - **Avanzamento:** i comandi a più passi emettono un `ProgressReport`
   (passo n di m, testo del passo); gli altri dichiarano un avanzamento
   indeterminato.
@@ -440,7 +451,13 @@ rete; impronta di rete per sezione; avvisi del profilo nel risultato. Un errore
 di una sezione non fa fallire il comando (regola c del 25); un bersaglio non
 risolvibile sì (`NAME_NOT_FOUND`, `PROFILE_AMBIGUOUS_TARGET`,
 `PROFILE_TARGET_INVALID`). Non esposto all'IA in C2 (strumento
-`object__profile` nello sprint C6, `32`).
+`object__profile` nello sprint C6, `32`). **Dallo sprint C4** (25 §3.12): le
+sezioni girano in parallelo; avanzamento «passo k di n» con una sezione per
+passo (`ProgressReport` con testo `object_profile/<sezione>`); con
+l'annullamento (Annulla della barra di stato, `CancelToken`) le sezioni già
+arrivate restano nel risultato, quelle in corso hanno stato `cancelled`, ed
+esito `cancelled` con `COMMAND_CANCELLED` `partial` (§3.2); annullato prima
+che il bersaglio sia risolto: `discarded`.
 
 **Cataloghi sul cielo (sprint 4e del `41`, decisioni del proprietario del
 2026-10-21).**
@@ -741,6 +758,7 @@ codice del modulo sui tipi chiusi di §3.1.
 | Riferimento a un livello inesistente o rimosso | nessuna esecuzione | `LAYER_UNKNOWN` |
 | Errore di un modulo | risultato `error` con codice, testo del modulo e `params` invariati (D40-3) | codice del modulo |
 | Annullamento durante l'esecuzione | risultato scartato, stato invariato, esito `cancelled` in cronologia | `COMMAND_CANCELLED` |
+| Annullamento di un comando di sola lettura con risultato parziale (sprint C4, `object.profile`) | risultato parziale conservato, stato invariato, esito `cancelled` in cronologia, non rieseguito alla riapertura | `COMMAND_CANCELLED` (`partial`) |
 | Riapertura con file cambiato | stop dichiarato, stato fino al comando precedente | `SESSION_FILE_CHANGED` |
 | Riapertura con file mancante | stop dichiarato | `SESSION_FILE_MISSING` |
 | Riapertura: comando prima `ok` ora in errore | stop dichiarato con l'errore del modulo | `SESSION_REPLAY_FAILED` |
@@ -817,7 +835,7 @@ per ogni codice; i codici condivisi con altri moduli hanno sotto-voci per `reaso
 | `CROSSMATCH_SERVICE_FAILED` | `unreachable` / `service_error` | `url`, `cause` (messaggio annidato del 14/15) | `catalog.crossmatch` con il servizio CDS: propone il metodo locale, nessun ripiego automatico (sprint B2) |
 | `COMMAND_UNKNOWN` | — / `not_bound` / `in_session` | `command` / `command`, `module` / `number` (int), `command` | non registrato, esecuzione dell'interfaccia non collegata, riapertura |
 | `COMMAND_VERSION_UNSUPPORTED` | — / `in_session` | `command`, `version` (testo), `registered` (int) [+ `number` (int)] | |
-| `COMMAND_CANCELLED` | `before_start`, `discarded`, `replay` | — | `QUERY_CANCELLED` del 14 (TAP asincrona annullata, sprint B3) diventa `discarded` |
+| `COMMAND_CANCELLED` | `before_start`, `discarded`, `replay`, `partial` | — | `QUERY_CANCELLED` del 14 (TAP asincrona annullata, sprint B3) diventa `discarded`; `partial` dallo sprint C4 (§3.2, risultato parziale conservato) |
 | `SESSION_INVALID` | `unreadable`, `structure`, `command` | `detail` (ext) per `unreadable` e `command` | |
 | `SESSION_SCHEMA_UNSUPPORTED` | — | `schema_version` (int), `app_version` (int) | |
 | `SESSION_FILE_MISSING` | — | `number` (int), `command`, `path` (ext) | |
@@ -887,6 +905,7 @@ Tutti senza Qt e senza rete (servizi simulati), in `tests/core/test_commands.py`
 | T25 | `catalog.crossmatch` (sprint B2, D15-10) | due cataloghi VOTable (8 stelle e copie spostate di 0,5″ e 1,5″ costruite con astropy); `best`/`all`/`none` con il raggio di default; raggio in arcsec, arcmin, mas; epoche J2016/J2000; coordinate mancanti; tabella senza colonne di posizione; raggio 0, 200°, 181″ con `cds`, unità `m`; tetto abbassato; `cds` con `galactic`; sistema galattico; Riesegui e sessione salvata e riaperta; CDS XMatch simulato (risposta, eco sbagliata, porta chiusa) | coppie e righe uguali a quelle del 15 chiamato direttamente; `max_sep` 2″ scritto nel comando registrato; `xmatch_sep` in arcsec; nuovo livello `L3`, tabelle d'ingresso invariate; `EPOCH_DIFFERS` con le epoche e stesse coppie; `COORD_MISSING`; `NO_COORD_COLUMNS` (non `BODY_UNKNOWN`); `MAX_SEP_INVALID` con `range_local`/`range_cds`; `TABLE_TOO_LARGE`; `crossmatch_cds_frame`; riesecuzioni con righe identiche; CDS entro 1 mas dal locale con impronta di rete; `CROSSMATCH_SERVICE_FAILED` `service_error`/`unreachable` che propone il locale (en/it), nessun livello creato | test di unità (`tests/core/test_commands_crossmatch.py`) |
 | T26 | `catalog.cone_search` e `catalog.tap_query`, server personali (sprint B3) | servizi SCS e TAP simulati (server HTTP locale, VOTable con e senza `COOSYS`); cone search con voce dell'elenco simulata e con URL, centro galattico con epoca e ICRS senza epoca; `max_rows` sotto le righe del servizio; ADQL vuota, senza SELECT, virgoletta aperta; servizio che rifiuta la query (VOTable `ERROR`); sincrona, asincrona (UWS simulato), asincrona oltre `async_timeout`, asincrona annullata; righe di commento; Riesegui e sessione salvata e riaperta; `vo.add_server`/`vo.remove_server` | parametri SCS ricalcolati con astropy; `url` risolto e scritto nel comando registrato, `async_timeout` 600 s nel comando; nuovo livello catalogo con `query` e provenienza; `ROW_LIMIT_EXCEEDED` con `truncated`; `ADQL_INVALID` con la posizione e nessuna richiesta al servizio; messaggio del servizio invariato nell'errore; `NET_TIMEOUT` `async_deadline`; `COMMAND_CANCELLED` con `ABORT` e lavoro eliminato; `QUERY` inviata senza commenti; riesecuzioni con stesso URL, stessi parametri e righe identiche; `POSITION_COLUMNS_REQUIRED` senza `COOSYS`; `server_already_listed`, `not_personal` | test di unità (`tests/core/test_commands_vo_queries.py`) |
 | T27 | Dati aggiornati e ripieghi nel `catalog.load_region` (sprint B4) | comando con `refresh: true` su `catalog.tap_query` con una risposta già in cache (servizio simulato); poi con il servizio giù e la copia in cache; `refresh: true` su `view.set_center`; forma JSON con e senza il campo; `catalog.load_region` su `II/246/out` con TAPVizieR giù e IRSA simulato senza `COOSYS` | prima esecuzione dalla rete (nessun `FROM_CACHE`) con `DATA_REFRESHED` `fresh`; con il servizio giù `DATA_REFRESHED` `cache_used`; `COMMAND_PARAMETER_INVALID` `refresh_not_network`; `"refresh": true` scritto solo quando vale `true` e riletto; livello creato con `CATALOG_ORIGINAL_ARCHIVE` e `POSITION_COLUMNS_REQUIRED`, provenienza = URL dell'IRSA | test di unità con servizi simulati |
+| T29 | Annullamento con risultato parziale (sprint C4) | `object.profile` con servizi simulati, uno lento; `CancelToken` annullato dopo l'arrivo della prima sezione; poi annullato prima della risoluzione del bersaglio; esecutore di prova di sola lettura che restituisce un `Outcome` parziale con uno stato | esito `cancelled`, `COMMAND_CANCELLED` `partial` con il profilo (sezione arrivata, altre `cancelled`) nel risultato e `simbad_id` nel comando registrato, stato invariato, voce saltata alla riapertura; prima della risoluzione `discarded`; `Outcome` parziale con stato → errore | test di unità (`tests/analysis/test_object_profile_parallel.py`, `tests/core/test_commands.py`) |
 | T28 | `object.profile` (sprint C2) | registro di `default_registry` più `command_specs()` del 25; servizi simulati con le risposte registrate il 2026-11-07 (SIMBAD Harvard, archivio Gaia ESA, Exoplanet Archive); nome, coordinate, nessun bersaglio, due bersagli; Riesegui dalla sessione e con `refresh` | `simbad_id` scritto nel comando registrato; valori uguali a quelli di `build_profile` chiamato direttamente; nessun livello creato; `PROFILE_TARGET_INVALID`; riesecuzione con le stesse richieste dalla cache, con `refresh` nuove richieste e `DATA_REFRESHED`; `default_registry` da solo non contiene il comando (il 05 non importa il 25) | test di unità (`tests/analysis/test_object_profile_command.py`) |
 | T23 | Origine `samp` e comandi `samp.*` (D05-5, sprint B1) | comandi con `requested_by = samp` (con e senza nome del client), forma senza `client_id` o con campi dell'IA; salvare e riaprire una sessione con un `catalog.open_file` di origine `samp`; registro con i cinque `samp.*` | forma JSON di §3.1 scritta e riletta; forme non valide rifiutate; comando `samp` rieseguito alla riapertura con la stessa origine; i `samp.*` sono `application`, `bound_by = "40"`, assenti dallo schema per l'IA (`32`) | test di unità |
 
@@ -1077,6 +1096,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C4 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** §3.2 annullamento con risultato parziale per i comandi di sola lettura (`Outcome.cancelled`, `COMMAND_CANCELLED` `partial`, stato invariato, non rieseguito); §7 `object.profile` con sezioni in parallelo, avanzamento per sezione e Annulla (25 §3.12); §10 e §10.1 ragione `partial`; nuovo T29. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** `object.profile` con la sezione `photometry` (25 §3.11) nell'elenco `sections`, senza cambiare versione (D25-13 (5), confermata). |
 | 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** `ResultMessage` e `CommandError` portano `params` (valori JSON dei parametri del messaggio) accanto a codice e testo del modulo; il testo originale resta invariato; la lingua si sceglie nel catalogo dei messaggi del `40` §3.7.1. Nessun codice scritto. |
 | 2026-11-07 | Claude Code | **Sprint C2 (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6):** §3.2 regola dei comandi dei livelli 2–4 (definiti nel loro modulo, `command_specs()`, aggiunti con `register` dal `40`; il 05 non li importa), §7 nuovo `object.profile` con i dettagli, §9 livelli precisati, §12 T28. Stato `approvato` invariato. |

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VOTABLE version="1.3" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.ivoa.net/xml/VOTable/v1.3">
+  <RESOURCE type="results">
+  <INFO name="QUERY_STATUS" value="OK"/>
+  <TABLE>
+    <FIELD ID="pl_name" arraysize="*" datatype="char" name="pl_name">
+  <DESCRIPTION><![CDATA[ Planet Name ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_letter" arraysize="*" datatype="char" name="pl_letter">
+  <DESCRIPTION><![CDATA[ Planet Letter ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="hostname" arraysize="*" datatype="char" name="hostname">
+  <DESCRIPTION><![CDATA[ Host Name ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="gaia_dr3_id" arraysize="*" datatype="char" name="gaia_dr3_id">
+  <DESCRIPTION><![CDATA[ Gaia DR3_ID ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="discoverymethod" arraysize="*" datatype="char" name="discoverymethod">
+  <DESCRIPTION><![CDATA[ Discovery Method ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="disc_year" datatype="int" name="disc_year"/>
+    <FIELD ID="pl_bmassprov" arraysize="*" datatype="char" name="pl_bmassprov">
+  <DESCRIPTION><![CDATA[ Planet Mass or Mass*sin(i) Provenance ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_orbper" datatype="double" name="pl_orbper" unit="days"/>
+    <FIELD ID="pl_orbpererr1" datatype="double" name="pl_orbpererr1" unit="days"/>
+    <FIELD ID="pl_orbpererr2" datatype="double" name="pl_orbpererr2" unit="days"/>
+    <FIELD ID="pl_orbperlim" datatype="int" name="pl_orbperlim"/>
+    <FIELD ID="pl_orbper_reflink" arraysize="*" datatype="char" name="pl_orbper_reflink">
+  <DESCRIPTION><![CDATA[ Orbital Period Reference ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_orbsmax" datatype="double" name="pl_orbsmax"/>
+    <FIELD ID="pl_orbsmaxerr1" datatype="double" name="pl_orbsmaxerr1" unit="au"/>
+    <FIELD ID="pl_orbsmaxerr2" datatype="double" name="pl_orbsmaxerr2" unit="au"/>
+    <FIELD ID="pl_orbsmaxlim" datatype="int" name="pl_orbsmaxlim"/>
+    <FIELD ID="pl_orbsmax_reflink" arraysize="*" datatype="char" name="pl_orbsmax_reflink">
+  <DESCRIPTION><![CDATA[ Orbit Semi-Major Axis Reference ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_orbeccen" datatype="double" name="pl_orbeccen"/>
+    <FIELD ID="pl_orbeccenerr1" datatype="double" name="pl_orbeccenerr1"/>
+    <FIELD ID="pl_orbeccenerr2" datatype="double" name="pl_orbeccenerr2"/>
+    <FIELD ID="pl_orbeccenlim" datatype="int" name="pl_orbeccenlim"/>
+    <FIELD ID="pl_orbeccen_reflink" arraysize="*" datatype="char" name="pl_orbeccen_reflink">
+  <DESCRIPTION><![CDATA[ Eccentricity Reference ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_bmasse" datatype="double" name="pl_bmasse" unit="Earth Mass"/>
+    <FIELD ID="pl_bmasseerr1" datatype="double" name="pl_bmasseerr1"/>
+    <FIELD ID="pl_bmasseerr2" datatype="double" name="pl_bmasseerr2"/>
+    <FIELD ID="pl_bmasselim" datatype="int" name="pl_bmasselim"/>
+    <FIELD ID="pl_bmasse_reflink" arraysize="*" datatype="char" name="pl_bmasse_reflink">
+  <DESCRIPTION><![CDATA[ Planet Mass or Mass*sin(i) [Earth Mass] Reference ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_rade" datatype="double" name="pl_rade" unit="Earth Radius"/>
+    <FIELD ID="pl_radeerr1" datatype="double" name="pl_radeerr1" unit="Earth Radius"/>
+    <FIELD ID="pl_radeerr2" datatype="double" name="pl_radeerr2" unit="Earth Radius"/>
+    <FIELD ID="pl_radelim" datatype="int" name="pl_radelim"/>
+    <FIELD ID="pl_rade_reflink" arraysize="*" datatype="char" name="pl_rade_reflink">
+  <DESCRIPTION><![CDATA[ Planet Radius Reference ]]></DESCRIPTION>
+</FIELD>
+    <FIELD ID="pl_eqt" datatype="double" name="pl_eqt" unit="K"/>
+    <FIELD ID="pl_eqterr1" datatype="double" name="pl_eqterr1" unit="K"/>
+    <FIELD ID="pl_eqterr2" datatype="double" name="pl_eqterr2" unit="K"/>
+    <FIELD ID="pl_eqtlim" datatype="int" name="pl_eqtlim"/>
+    <FIELD ID="pl_eqt_reflink" arraysize="*" datatype="char" name="pl_eqt_reflink">
+  <DESCRIPTION><![CDATA[ Equilibrium Temperature Reference ]]></DESCRIPTION>
+</FIELD>
+    <DATA>
+      <TABLEDATA>
+        <TR>
+        <TD><![CDATA[51 Peg b]]></TD>
+        <TD><![CDATA[b]]></TD>
+        <TD><![CDATA[51 Peg]]></TD>
+        <TD><![CDATA[Gaia DR3 2835207319109249920]]></TD>
+        <TD><![CDATA[Radial Velocity]]></TD>
+        <TD>1995</TD>
+        <TD><![CDATA[Mass]]></TD>
+        <TD>4.23079660000</TD>
+        <TD>0.00000270000</TD>
+        <TD>-0.00000270000</TD>
+        <TD>0</TD>
+        <TD><![CDATA[<a refstr=CONT_ET_AL_2026 href=https://ui.adsabs.harvard.edu/abs/2026A&A...710A.345C/abstract target=ref>Cont et al. 2026</a>]]></TD>
+        <TD>0.0520000000</TD>
+        <TD></TD>
+        <TD></TD>
+        <TD>0</TD>
+        <TD><![CDATA[<a refstr=CONT_ET_AL_2026 href=https://ui.adsabs.harvard.edu/abs/2026A&A...710A.345C/abstract target=ref>Cont et al. 2026</a>]]></TD>
+        <TD>0.006300</TD>
+        <TD></TD>
+        <TD></TD>
+        <TD>1</TD>
+        <TD><![CDATA[<a refstr=CONT_ET_AL_2026 href=https://ui.adsabs.harvard.edu/abs/2026A&A...710A.345C/abstract target=ref>Cont et al. 2026</a>]]></TD>
+        <TD>193.87532827</TD>
+        <TD>19.06970442</TD>
+        <TD>-15.89142035</TD>
+        <TD>0</TD>
+        <TD><![CDATA[<a refstr=CONT_ET_AL_2026 href=https://ui.adsabs.harvard.edu/abs/2026A&A...710A.345C/abstract target=ref>Cont et al. 2026</a>]]></TD>
+        <TD>14.10000000</TD>
+        <TD></TD>
+        <TD></TD>
+        <TD>0</TD>
+        <TD><![CDATA[<a refstr=CALCULATED_VALUE href=/docs/pscp_calc.html target=_blank>Calculated Value</a>]]></TD>
+        <TD>1328.93</TD>
+        <TD></TD>
+        <TD></TD>
+        <TD>0</TD>
+        <TD><![CDATA[<a refstr=CALCULATED_VALUE href=/docs/pscp_calc.html target=_blank>Calculated Value</a>]]></TD>
+        </TR>
+      </TABLEDATA>
+    </DATA>
+  </TABLE>
+  </RESOURCE>
+</VOTABLE>

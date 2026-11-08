@@ -47,8 +47,10 @@ __all__ = [
 #: Data della verifica delle costanti sulle fonti ufficiali (20 §3.2).
 VERIFIED_ON = "2026-11-07"
 
-#: Densità di flusso a m_AB = 0: 3631 Jy (definizione del sistema AB, Oke & Gunn 1983, ApJ 266, 713).
-AB_FLUX_ZERO = 3631.0 * u.Jy
+#: Densità di flusso a m_AB = 0 dalla definizione esatta del sistema AB (Oke & Gunn 1983, ApJ 266, 713:
+#: m_AB = −2,5 log₁₀ Fν − 48,60, cgs), calcolata come in Astropy (unità ``ABflux``): 3630,780547… Jy, mai il valore
+#: arrotondato 3631 Jy scritto a mano (20 §3.2, D20-9 (5)).
+AB_FLUX_ZERO = (1.0 * u.ABflux).to(u.Jy)
 AB_REFERENCE = "1983ApJ...266..713O"
 
 #: Raggio della serie VizieR attorno alla posizione J2000 del bersaglio (D20-5).
@@ -367,7 +369,8 @@ def mag_to_flux(point: SedPoint) -> SedPoint:
             error = flux * 0.4 * _LN10 * np.sqrt(sigma_m ** 2 + sigma_zp ** 2)
         else:
             sigma_m, error = None, None
-        conversion = {"formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = 3631 Jy * 10**(-0.4 m_AB); "
+        conversion = {"formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) "
+                                 "erg/s/cm2/Hz (u.ABflux); "
                                  "sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), "
                                  "sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
                       "zero_point": zp.as_dict(), "m_ab": {"value": float(m_ab), "unit": "mag"},

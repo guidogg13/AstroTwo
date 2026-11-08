@@ -27,6 +27,11 @@ from astrotwo.core.coordinates_wcs import ModuleWarning
 __all__ = [
     "ViewSampling",
     "ViewTile",
+    "HiPSThumbnail",
+    "hips_thumbnail",
+    "survey_epoch",
+    "cds_down_in_session",
+    "reset_cds_state",
     "view_sampling",
     "fill_view",
     "ActiveSurvey",
@@ -430,6 +435,10 @@ MIRROR_FALLBACKS: dict[str, tuple[str, ...]] = {
     "CDS/P/2MASS/color": ("https://skies.esac.esa.int/2MASSColor",
                           "https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"),
     "CDS/P/DSS2/red": ("https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/red",),
+    # Verificato il 2026-11-07 (sprint C4 del 25, D25-5): elenchi ufficiali, properties uguali, stessi SHA-256 di due
+    # tile sui due mirror; principale non confrontabile (CDS giù). 12 §3, tabella MIRROR_FALLBACKS.
+    "CDS/P/allWISE/color": ("https://skies.esac.esa.int/AllWISEColor",
+                            "https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"),
 }
 #: Tile consecutivi falliti per cause di rete sul server in uso prima del cambio (D12-9).
 MIRROR_SWITCH_FAILURES = 3
@@ -523,9 +532,48 @@ def _check_mirror(hips_id: str, mirror: str, reference: HiPSService | None, *, c
     return service, None, None
 
 
+# --- CDS già giù nella sessione (D25-18, decisione del proprietario del 2026-11-08) -----------------------------------
+
+_CDS_DOWN_LOCK = __import__("threading").Lock()
+_CDS_DOWN: dict | None = None  # prima prova nella sessione dell'app che il CDS non risponde
+
+
+def _note_cds_down(evidence: str, **detail) -> None:
+    """Registra (una volta) la prova che il CDS è giù: ``mocserver`` (MocServer non raggiungibile) o
+    ``hips_failover`` (survey passato da un server di Strasburgo a un mirror)."""
+    global _CDS_DOWN
+    with _CDS_DOWN_LOCK:
+        if _CDS_DOWN is None:
+            _CDS_DOWN = {"evidence": evidence, **detail}
+
+
+def cds_down_in_session() -> dict | None:
+    """Prova che nella sessione il CDS risulta già giù (D25-18): MocServer già non raggiungibile, ripiego HiPS da un
+    server di Strasburgo, o SIMBAD già passato al mirror (14, ``SERVICE_MIRRORS``); ``None`` se nessuna."""
+    if _CDS_DOWN is not None:
+        return dict(_CDS_DOWN)
+    from astrotwo.core import vo_protocols as vo
+
+    if vo._MIRROR_IN_USE.get("cds-simbad-tap", 0) > 0:
+        return {"evidence": "simbad_failover"}
+    return None
+
+
+def reset_cds_state() -> None:
+    """Dimentica la prova di CDS giù (nuova sessione; nei test)."""
+    global _CDS_DOWN
+    with _CDS_DOWN_LOCK:
+        _CDS_DOWN = None
+
+
 def _fallback_note(hips_id: str, failed: str | None, mirror: str, cause: Mapping) -> ModuleWarning:
     """``HIPS_MIRROR_FALLBACK`` (una volta per survey): server che non ha risposto, mirror in uso, causa."""
     reason = cause["reason"]
+    if reason == "cds_down":
+        return ModuleWarning(
+            "HIPS_MIRROR_FALLBACK", f"{hips_id}: CDS già non raggiungibile in questa sessione ({cause['evidence']}): "
+            f"MocServer non interrogato, survey servito dal mirror verificato {mirror}",
+            {"reason": "cds_down", "hips_id": hips_id, "mirror": mirror, "evidence": cause["evidence"]})
     if reason == "mocserver":
         return ModuleWarning(
             "HIPS_MIRROR_FALLBACK", f"{hips_id}: MocServer non raggiungibile, server principale non noto; survey "
@@ -630,6 +678,8 @@ def _open_service(hips_id: str, servers: tuple[str, ...], *, primary_known: bool
                 cause = _switch_cause(exc.code, exc.params)
                 if cause is None or len(servers) == 1:
                     raise
+                if _strasbourg(base):
+                    _note_cds_down("hips_failover", hips_id=hips_id, server=base)
                 last = exc
                 continue
         else:
@@ -705,11 +755,16 @@ def _resolve_id(hips_id: str, *, cache, refresh: bool, timeouts) -> tuple[str, t
     return urls[0], mirrors, notes
 
 
-def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts=None) -> HiPSService:
+def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts=None,
+             cds_down_shortcut: bool = False) -> HiPSService:
     """Legge e valida un servizio HiPS da identificativo (es. ``CDS/P/DSS2/color``, risolto con il MocServer) o da
     URL di base (C3). In caso di errore non restituisce nulla (codici del §10). Per registrarlo in un elenco:
     ``HiPSList.add_hips``. Il servizio porta i suoi server (principale e mirror, 12 §3): se il principale non
-    risponde, il ``properties`` si legge da un mirror equivalente."""
+    risponde, il ``properties`` si legge da un mirror equivalente.
+
+    ``cds_down_shortcut`` (D25-18, usato dalle miniature del 25): se nella sessione il CDS risulta già giù
+    (``cds_down_in_session``) e l'identificativo ha mirror verificati, il MocServer non si interroga e il survey si
+    apre subito dai mirror, con ``HIPS_MIRROR_FALLBACK`` ``cds_down``; mai con ``refresh=True``."""
     from astrotwo.core.cache import NETWORK_TIMEOUTS
 
     timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
@@ -723,9 +778,16 @@ def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts
             return service
         return _replace(service, servers=HiPSServers(service.hips_id, servers, 0, service))
     hips_id = text[len("ivo://"):] if text.startswith("ivo://") else text
+    down = cds_down_in_session() if cds_down_shortcut and not refresh and hips_id in MIRROR_FALLBACKS else None
+    if down is not None:
+        return _open_service(hips_id, _server_order(None, MIRROR_FALLBACKS[hips_id]), primary_known=False,
+                             cause={"reason": "cds_down", "evidence": down["evidence"]}, cache=cache, refresh=refresh,
+                             timeouts=timeouts)
     try:
         url, declared, notes = _resolve_id(hips_id, cache=cache, refresh=refresh, timeouts=timeouts)
     except HiPSError as exc:
+        if exc.code == "MOCSERVER_UNAVAILABLE":
+            _note_cds_down("mocserver", hips_id=hips_id)
         if exc.code != "MOCSERVER_UNAVAILABLE" or hips_id not in MIRROR_FALLBACKS:
             raise
         service = _open_service(hips_id, _server_order(None, MIRROR_FALLBACKS[hips_id]), primary_known=False,
@@ -1097,15 +1159,18 @@ def _download_tile(url: str, timeouts):
     """Scarica tutto o niente; 404 → ``None`` (tile non fornito)."""
     import requests
 
-    with requests.get(url, timeout=timeouts.as_requests(), stream=True) as response:
-        if response.status_code == 404:
-            return None
-        if not response.ok:
-            raise HiPSError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
-                            url=url, status=response.status_code,
-                            params={"reason": "http_status", "url": url, "status": response.status_code,
-                                    "status_text": str(response.reason)})
-        return b"".join(response.iter_content(chunk_size=1 << 16))
+    from astrotwo.core.vo_protocols import network_wait
+
+    with network_wait():  # turno della CPU lasciato durante l'attesa (14 §7, sprint C4 del 25)
+        with requests.get(url, timeout=timeouts.as_requests(), stream=True) as response:
+            if response.status_code == 404:
+                return None
+            if not response.ok:
+                raise HiPSError("SERVICE_ERROR", f"{url}: risposta HTTP {response.status_code} {response.reason}",
+                                url=url, status=response.status_code,
+                                params={"reason": "http_status", "url": url, "status": response.status_code,
+                                        "status_text": str(response.reason)})
+            return b"".join(response.iter_content(chunk_size=1 << 16))
 
 
 def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | None = None, plane: int | None = None,
@@ -1471,6 +1536,141 @@ def fill_view(sampling: ViewSampling, tile: HiPSTile) -> ViewTile:
     values[box_mask] = plane_data[ty, tx]
     return ViewTile(index=tile.index, order=tile.order, box=(y0, y1, x0, x1), values=values, mask=box_mask,
                     format=tile.format, provenance=tile.provenance(), from_cache=tile.from_cache)
+
+
+# --------------------------------------------------------------------------
+# Miniatura fuori dalla vista (sprint C4 del 25, 12 §7): stesso codice della vista, senza OpenGL
+# --------------------------------------------------------------------------
+
+#: Campi del ``properties`` riportati come crediti della miniatura: testi dichiarati dal survey, mai nostri (41 §3.14).
+THUMBNAIL_CREDIT_FIELDS = ("obs_title", "obs_ack", "obs_copyright", "obs_copyright_url")
+#: Durata massima delle osservazioni per dare un'epoca al survey (``t_max − t_min``; oltre, epoca non nota).
+SURVEY_EPOCH_MAX_SPAN = 1.0  # anni giuliani (D25-17)
+
+
+@dataclass(frozen=True, eq=False)
+class HiPSThumbnail:
+    """Miniatura TAN di un survey (12 §7): immagine in orientamento FITS (riga 0 = sud) con la sua WCS e la fonte."""
+
+    hips_id: str
+    title: str
+    image: object  # uint8 (righe, colonne, 3|4) per JPEG/PNG; tipo nativo per FITS
+    mask: object  # True dove il pixel ha un valore del survey
+    wcs: object  # astropy.wcs.WCS della griglia
+    center: object  # SkyFrame
+    fov: object  # Quantity (lato)
+    size: int
+    order: int
+    format: str
+    servers: tuple[str, ...]
+    tiles: tuple[dict, ...]
+    missing: tuple[dict, ...]
+    credits: dict
+    epoch: dict | None
+    description: str
+    warnings: tuple = ()
+
+    def png(self) -> bytes:
+        """PNG con il nord in alto (righe capovolte rispetto all'orientamento FITS); solo survey a colori."""
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        if self.format == "fits":
+            raise HiPSError("HIPS_FORMAT_UNAVAILABLE", f"{self.hips_id}: PNG solo per le miniature a colori",
+                            params={"hips_id": self.hips_id, "format": "png", "offered": [self.format]})
+        buffer = io.BytesIO()
+        Image.fromarray(np.ascontiguousarray(self.image[::-1])).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def as_dict(self) -> dict:
+        """Forma JSON senza i pixel (WCS come intestazione FITS in testo)."""
+        icrs = self.center.coord.icrs
+        return {"hips_id": self.hips_id, "title": self.title, "size": self.size, "order": self.order,
+                "format": self.format, "fov": _q(self.fov.to_value("arcmin"), "arcmin"),
+                "center": {"ra": _q(icrs.ra.deg, "deg"), "dec": _q(icrs.dec.deg, "deg"),
+                           "epoch": None if self.center.epoch is None else self.center.epoch.jyear_str},
+                "servers": list(self.servers), "tiles": [dict(t) for t in self.tiles],
+                "missing": [dict(m) for m in self.missing], "credits": dict(self.credits), "epoch": self.epoch,
+                "wcs": self.wcs.to_header().tostring(sep="\n").strip(), "description": self.description,
+                "pixels_with_data": int(self.mask.sum())}
+
+
+def survey_epoch(service: HiPSService) -> dict | None:
+    """Epoca del survey dal ``properties`` (``t_min``, ``t_max`` in MJD; scala non dichiarata: UTC, scritto) solo se
+    le osservazioni durano al più ``SURVEY_EPOCH_MAX_SPAN`` anni: il punto medio; altrimenti ``None``."""
+    from astropy.time import Time
+
+    try:
+        t_min, t_max = float(_first(service.properties, "t_min")), float(_first(service.properties, "t_max"))
+    except (TypeError, ValueError):
+        return None
+    if not (t_max >= t_min) or (t_max - t_min) / 365.25 > SURVEY_EPOCH_MAX_SPAN:
+        return None
+    middle = Time((t_min + t_max) / 2.0, format="mjd", scale="utc")
+    return {"mjd": (t_min + t_max) / 2.0, "jyear": middle.jyear, "t_min": t_min, "t_max": t_max, "scale": "utc",
+            "note": "punto medio di t_min e t_max del properties (MJD, scala non dichiarata: trattata come UTC)"}
+
+
+def hips_thumbnail(service: HiPSService, center, *, fov=None, size: int = 256, cache=None, refresh: bool = False,
+                   timeouts=None) -> HiPSThumbnail:
+    """Miniatura TAN ``size`` × ``size`` di campo ``fov`` centrata su ``center`` (12 §7): ``make_view_wcs`` del 10,
+    ``view_sampling``, ``fetch_tile`` (con i mirror, D12-9) e ``fill_view``. Tutti i server giù → ``NET_TIMEOUT``
+    ``hips_servers``; un tile 404 lascia i suoi pixel senza dati, dichiarato."""
+    import astropy.units as u
+    import numpy as np
+
+    from astrotwo.core.coordinates_wcs import SkyFrame, make_view_wcs
+
+    fov = 5.0 * u.arcmin if fov is None else fov
+    if not isinstance(fov, u.Quantity) or not fov.unit.is_equivalent(u.deg) or not 0 < fov.to_value(u.deg) <= 10:
+        raise ValueError("fov: angolo positivo con unità, al più 10 gradi")
+    if isinstance(size, bool) or not isinstance(size, (int, np.integer)) or not 16 <= int(size) <= 2048:
+        raise ValueError("size: intero tra 16 e 2048 pixel")
+    if not isinstance(center, SkyFrame):
+        raise TypeError("center: serve uno SkyFrame (coordinate con frame ed epoca)")
+    size = int(size)
+    view = make_view_wcs(center, fov / size, (size, size), projection="TAN", frame="icrs")
+    sampling = view_sampling(service, view)
+    fmt = service.tile_formats[0]
+    image = None
+    mask = np.zeros((size, size), dtype=bool)
+    tiles, missing, notes = [], [], list(sampling.warnings)
+    for index in sampling.tiles:
+        try:
+            tile = fetch_tile(service, sampling.order, index, format=fmt, cache=cache, refresh=refresh,
+                              timeouts=timeouts)
+        except HiPSError as exc:
+            if exc.code != "HIPS_TILE_MISSING":
+                raise
+            missing.append({"index": int(index), "order": int(sampling.order), "code": exc.code,
+                            "pixels": int(np.count_nonzero(sampling.tile_of_pixel == index))})
+            continue
+        part = fill_view(sampling, tile)
+        if image is None:
+            image = np.zeros((size, size) + part.values.shape[2:], dtype=part.values.dtype)
+        y0, y1, x0, x1 = part.box
+        image[y0:y1, x0:x1][part.mask] = part.values[part.mask]
+        mask[y0:y1, x0:x1] |= part.mask
+        tiles.append({"index": int(index), "url": tile.url, "server": tile.server,
+                      "retrieved_at": tile.retrieved_at.isoformat(), "from_cache": bool(tile.from_cache)})
+        notes.extend(tile.warnings)
+    if service.servers is not None:
+        notes.extend(service.servers.take_notes())
+    if image is None:
+        image = np.zeros((size, size, 3) if fmt != "fits" else (size, size), dtype=np.uint8)
+    wcs = view.base.deepcopy()
+    wcs.wcs.crpix = [view.base.wcs.crpix[0] - view.origin[0], view.base.wcs.crpix[1] - view.origin[1]]
+    wcs.pixel_shape = (size, size)
+    credits = {k: _first(service.properties, k) for k in THUMBNAIL_CREDIT_FIELDS if _first(service.properties, k)}
+    servers = tuple(sorted({t["server"] for t in tiles}))
+    description = (f"miniatura TAN {size} × {size} pixel, campo {fov.to_value(u.arcmin)!r} arcmin, di "
+                   f"{service.hips_id} all'ordine {sampling.order}: {len(tiles)} tile da {', '.join(servers) or '—'}"
+                   + (f", {len(missing)} tile assenti (404)" if missing else "") + f"; {sampling.description}")
+    return HiPSThumbnail(service.hips_id, service.title, image, mask, wcs, center, fov.to(u.arcmin), size,
+                         sampling.order, fmt, servers, tuple(tiles), tuple(missing), credits, survey_epoch(service),
+                         description, tuple(notes))
 
 
 # --------------------------------------------------------------------------

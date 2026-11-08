@@ -29,6 +29,7 @@ from astrotwo.core.commands import (
     CommandRegistry,
     CommandSpec,
     Outcome,
+    P,
     RequestedBy,
     Session,
     Workspace,
@@ -368,6 +369,42 @@ def test_t8_cancellation(registry, files, tmp_path):
     s.save(path, app_version="0.1.0")
     report = Session.load(path, registry).replay()
     assert report.replayed == (1,) and (2, "image.open", "cancelled") in report.not_replayed
+
+
+def test_t29_cancelled_read_only_command_keeps_the_partial_result(tmp_path):
+    """§3.2 (sprint C4): ``Outcome.cancelled`` di un comando di sola lettura → ``COMMAND_CANCELLED`` ``partial`` con
+    i valori conservati, stato invariato, non rieseguito alla riapertura; con un nuovo stato è un errore."""
+    custom = CommandRegistry()
+
+    def partial(ctx, p):
+        return Outcome(values={"arrived": ["a"]}, provenance=[{"origin": "x"}], resolved={"chosen": "a"},
+                       cancelled=True)
+
+    def partial_with_state(ctx, p):
+        return Outcome(state=dataclasses.replace(ctx.state, next_layer=99), cancelled=True)
+
+    custom.register(CommandSpec("test.partial", 1, "Partial.", "Parziale.", (),
+                                (P("chosen", "string", "Chosen.", "Scelto.", default=None),), "session", partial,
+                                long=True, read_only=True))
+    custom.register(CommandSpec("test.partial_state", 1, "Partial.", "Parziale.", (), (), "session",
+                                partial_with_state, long=True, read_only=True))
+    custom.register(CommandSpec("test.partial_writer", 1, "Partial.", "Parziale.", (), (), "session", partial,
+                                long=True))
+    session = Session(custom)
+    before = session.workspace.state
+    result = session.run(Command("test.partial", 1, {}))
+    assert result.status == "cancelled" and result.values == {"arrived": ["a"]}
+    assert result.error.code == "COMMAND_CANCELLED" and result.error.params == {"reason": "partial"}
+    assert result.provenance == ({"origin": "x"},)
+    assert session.workspace.state is before
+    assert session.history.entries[-1].command.parameters["chosen"] == "a"
+    path = tmp_path / "p.astrotwo.json"
+    session.save(path, app_version="0.1.0")
+    report = Session.load(path, custom).replay()
+    assert report.replayed == () and (1, "test.partial", "cancelled") in report.not_replayed
+    for name in ("test.partial_state", "test.partial_writer"):
+        with pytest.raises(RuntimeError):
+            custom.execute(Command(name, 1, {}), Workspace())
 
 
 # =============================================================================

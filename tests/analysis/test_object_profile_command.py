@@ -48,7 +48,8 @@ def test_t28_default_registry_does_not_contain_the_level_2_command(cache):
     schema = registry.export_schema(["object.profile"])["commands"][0]
     json.dumps(schema)
     assert set(schema["parameters"]["properties"]) == {"name", "position", "layer", "row", "simbad_id", "sections",
-                                                       "match_radius", "crossmatch_radius"}
+                                                       "match_radius", "crossmatch_radius", "surveys",
+                                                       "thumbnail_fov", "thumbnail_size"}
 
 
 def test_t28_the_interface_registers_the_analysis_commands(cache):
@@ -69,12 +70,17 @@ def test_t28_t14_name_profile_registered_replayed_and_refreshed(services, cache)
     assert registered.parameters["simbad_id"] == "*  51 Peg"  # scritto nel comando registrato
     assert registered.parameters["match_radius"] == {"value": 10.0, "unit": "arcsec"}
     assert registered.parameters["crossmatch_radius"] == {"value": 2.0, "unit": "arcsec"}
-    assert registered.parameters["sections"] == ["identity", "astrometry", "photometry"]
+    assert registered.parameters["sections"] == ["identity", "images", "astrometry", "photometry", "planets"]
+    assert registered.parameters["surveys"] == ["CDS/P/DSS2/color", "CDS/P/2MASS/color", "CDS/P/allWISE/color"]
+    assert registered.parameters["thumbnail_fov"] == {"value": 5.0, "unit": "arcmin"}
+    assert registered.parameters["thumbnail_size"] == 256
     assert workspace.state is before and result.layers_created == ()  # sola lettura
     direct = build_profile(ProfileTarget(name="51 Peg"), cache=cache)
     assert content(result.values)["sections"] == content(direct.as_dict())["sections"]
-    assert {p["origin"].rsplit("/", 2)[-2] for p in result.provenance} == {"simbad", "gaia", "exoplanet", "irsa"}
-    assert len(result.network_fingerprint) == 3
+    assert {p["origin"].rsplit("/", 2)[-2] for p in result.provenance if "/hips/" not in p["origin"]} == {
+        "simbad", "gaia", "exoplanet", "irsa"}
+    assert any("/hips/skies.esac.esa.int/" in p["origin"] for p in result.provenance)  # properties delle survey
+    assert len(result.network_fingerprint) == 5
     # riesecuzione: stesse richieste dalla cache, nessuna nuova richiesta ai servizi, stessi valori; solo la SED di
     # VizieR (CDS giù, nessuna risposta in cache) si chiede di nuovo e resta un errore della sezione
     asked = services.count() - services.count("vizier")

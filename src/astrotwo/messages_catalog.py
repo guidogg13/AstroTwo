@@ -1078,7 +1078,11 @@ _add("HIPS_MIRROR_FALLBACK",
                        "{mirror}.", "hips_id primary mirror"),
      mocserver=("{hips_id}: MocServer not reachable, primary server unknown; survey served by the mirror {mirror}.",
                 "{hips_id}: MocServer non raggiungibile, server principale non noto; survey servito dal mirror "
-                "{mirror}.", "hips_id mirror"))
+                "{mirror}.", "hips_id mirror"),
+     cds_down=("{hips_id}: CDS already unreachable in this session ({evidence}): MocServer not queried, survey served "
+               "by the verified mirror {mirror}.",
+               "{hips_id}: CDS già non raggiungibile in questa sessione ({evidence}): MocServer non interrogato, "
+               "survey servito dal mirror verificato {mirror}.", "hips_id mirror evidence"))
 _add("HIPS_MIRROR_REJECTED",
      "{hips_id}: mirror {mirror} discarded.", "{hips_id}: mirror {mirror} scartato.", "hips_id mirror",
      different=("{hips_id}: mirror {mirror} discarded, {field} '{found}' instead of '{expected}'.",
@@ -2896,7 +2900,9 @@ _add("COMMAND_CANCELLED", "The command was cancelled.", "Il comando è stato ann
      before_start=("The command was cancelled before it started.", "Comando annullato prima dell'inizio.", ""),
      discarded=("The command was cancelled: the result is discarded and the state is unchanged.",
                 "Comando annullato: risultato scartato, stato invariato.", ""),
-     replay=("The reopening was cancelled.", "Riapertura annullata.", ""))
+     replay=("The reopening was cancelled.", "Riapertura annullata.", ""),
+     partial=("The command was cancelled: the partial result is kept and the state is unchanged.",
+              "Comando annullato: risultato parziale conservato, stato invariato.", ""))
 _add("SESSION_INVALID", "The session file is not valid.", "Il file di sessione non è valido.",
      unreadable=("The session file cannot be read: {detail}", "File di sessione non leggibile: {detail}", "detail!"),
      structure=("The session file is not valid (format, schema_version, commands).",
@@ -3471,6 +3477,14 @@ _add("PROFILE_PLANETS_EXCLUDED",
      "{count} SIMBAD objects of the Planet family excluded from the candidates: {names}.",
      "{count} oggetti SIMBAD della famiglia dei pianeti esclusi dai candidati: {names}.",
      "count:int names:list!")
+_add("PROFILE_PLANETS_COMPOSITE",
+     "{count} planets from {table}: the parameters may come from different works ({references} distinct references).",
+     "{count} pianeti da {table}: i parametri possono venire da lavori diversi ({references} riferimenti distinti).",
+     "count:int references:int table")
+_add("PROFILE_SECTION_TIMEOUT",
+     "Section {section}: no answer within {limit} ({services}).",
+     "Sezione {section}: nessuna risposta entro {limit} ({services}).",
+     "section limit:qty services:list")
 _add("PROFILE_NO_PHOTOMETRY",
      "No photometry.", "Nessuna fotometria.", "",
      not_in_catalog=("{catalog}: {identifier} has no row in {table}.",

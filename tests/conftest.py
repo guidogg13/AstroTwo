@@ -183,6 +183,9 @@ def _no_real_mirrors(request, monkeypatch):
     from astrotwo.core import catalogs, vo_protocols
 
     vo_protocols.reset_mirror_state()  # stato dei mirror di sessione del 14 (sprint B4): ogni test parte dal principale
+    from astrotwo.core import hips as _hips
+
+    _hips.reset_cds_state()  # D25-18: nessuna prova di CDS giù ereditata da un altro test
     if request.node.get_closest_marker("network") is None:
         from astrotwo.core import hips
 
@@ -201,6 +204,7 @@ class FakeService:
 
     def __init__(self):
         self.routes = {}
+        self.prefix_routes = {}  # prefisso del percorso → funzione (es. tile HiPS)
         self.requests = []
         service = self
 
@@ -218,7 +222,8 @@ class FakeService:
                 request = {"method": method, "path": parsed.path, "params": params, "body": body,
                            "headers": dict(self.headers)}
                 service.requests.append(request)
-                route = service.routes.get(parsed.path)
+                route = service.routes.get(parsed.path) or next(
+                    (r for prefix, r in service.prefix_routes.items() if parsed.path.startswith(prefix)), None)
                 if route is None:
                     status, ctype, payload, extra = 404, "text/plain", b"not found", []
                 else:

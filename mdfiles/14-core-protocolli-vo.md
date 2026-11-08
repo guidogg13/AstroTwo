@@ -569,6 +569,23 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   banda, descrizione, valore, errore, unità, sistema `AB`/`Vega`/`None`,
   qualità, riferimento), richiesta registrata in `magnitudes_request`
   (D14-12).
+- **`cpu_turn(lock)` e `network_wait()`** (sprint C4, 2026-11-07, per il
+  profilo del `25` §3.12, autorizzato con D25-12) — **turno della CPU** per chi
+  chiama il 14 da più thread: dentro `with cpu_turn(lock)` il thread lavora
+  solo con il turno (`threading.Lock` condiviso dal chiamante) e ogni
+  richiesta HTTP del 14 (`_Session`, quindi TAP, cone search, SED di VizieR,
+  download; anche l'attesa della TAP asincrona) **lascia il turno durante
+  l'attesa della risposta** (`network_wait`) e lo riprende all'arrivo. Così le
+  attese di rete sono parallele mentre la lettura dei VOTable, l'interpretazione
+  delle unità e il resto del lavoro di CPU avvengono un thread alla volta.
+  **Motivo verificato il 2026-11-07** (test del 25 con le risposte registrate):
+  l'interpretazione delle unità di Astropy non è sicura tra thread — con le
+  letture in parallelo l'unità `'electron'.s**-1` dell'archivio Gaia, che il
+  13 dichiara non riconosciuta (`UNIT_UNRECOGNIZED`) quando la lettura è sola,
+  è stata vista diventare un'unità personalizzata `electron / s` non
+  convertibile in `u.electron / u.s`, in modo non riproducibile. Senza turno
+  (default, ogni altro chiamante) nessun effetto. `network_wait` vale anche
+  per le attese del chiamante (es. attendere il risultato di un altro thread).
 - **`simbad_object(identifier, *, cache, refresh, timeouts)`** (sprint C2,
   2026-11-07, per il profilo del `25`, autorizzato con D25-12) — l'oggetto
   SIMBAD **esatto** di un identificativo (mai il «più citato»): tre
@@ -903,6 +920,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
 | T27 | Ripiego sui mirror (sprint B4, 2026-11-07) | servizi simulati: SIMBAD principale giù (connessione, HTTP 503, 429, risposta 2xx non VOTable) → mirror per `tap_query("cds-simbad-tap")` e per `simbad_pointer` (regione e magnitudini); 404, ADQL rifiutata e risposta senza righe → nessun cambio; principale e mirror giù → `NET_TIMEOUT` `service_servers` con 2 server; copia vecchia in cache e tutti giù → copia dichiarata; avviso dopo il primo cambio, non al secondo; richiesta successiva subito al mirror; `refresh=True` → di nuovo il principale; URL scritto → nessun ripiego; MocServer giù con e senza copia in cache | ordine e conteggio delle richieste ai server finti; `RequestRecord.url` e `source` = server che ha risposto; avvisi; codici | test di unità con server finti; test di rete (marcatore `network`, non nel commit) per il mirror di SIMBAD |
+| T29 | Turno della CPU (sprint C4, 2026-11-07) | due thread con lo stesso `cpu_turn`, servizio simulato lento | durante l'attesa di una richiesta l'altro thread lavora (turno lasciato); fuori dalle richieste mai due thread insieme; senza turno `network_wait` non fa nulla | test di unità (`tests/core/test_vo_cpu_turn.py`) |
 | T28 | `simbad_object` (sprint C2, 2026-11-07) | servizio SIMBAD simulato con le risposte registrate dal mirror di Harvard il 2026-11-07 (51 Peg, eta Tau); nome sconosciuto; principale giù | campi di `basic` con unità, 46/62 identificativi, magnitudini; `NAME_NOT_FOUND` `simbad_identifier` senza ripiego; con il principale giù risponde il mirror e la provenienza è il mirror | confronto con le risposte registrate; test di unità con server finti |
 | T26 | Commenti ADQL e annullamento (sprint B3, 2026-11-06) | `validate_adql` con commenti `--` (con apostrofo, prima di `SELECT`, dentro una stringa); `tap_query` sincrona con commenti su un servizio simulato; asincrona su un lavoro UWS simulato che non finisce, con `cancel` che diventa vero | posizioni del testo scritto; `--` dentro le virgolette non è un commento; `QUERY` inviata senza commenti e senza righe vuote, `adql` scritto negli argomenti registrati; `QUERY_CANCELLED` entro 1 s, `ABORT` inviato e lavoro eliminato | test di unità |
 
@@ -1100,6 +1118,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-07 | Claude Code | **Sprint C4 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nuove `cpu_turn(lock)` e `network_wait()` (§7): turno della CPU per chi chiama da più thread, lasciato durante l'attesa delle richieste HTTP (`_Session`) e della TAP asincrona; motivo verificato: unità di Astropy non sicure tra thread (`'electron'.s**-1` di Gaia). Nuovo T29. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nota «Fotometria senza copia» aggiornata: `vizier_photometry` usata dalla sezione fotometria del profilo (25 §3.11); IRSA `nasa-irsa-tap` e `vizier_photometry` già esistenti; correzione: le magnitudini SIMBAD (`flux`, `flux_err`, colonne `float32`) tornano al decimale scritto da SIMBAD come le altre celle (es. 6,16 e non 6,159999847…), regola di `simbad_object` (sprint C2) estesa a `_simbad_magnitudes`. |
 | 2026-10-04 | agente di sviluppo | Creazione del file (stato: bozza). |
 | 2026-10-04 | agente di sviluppo | **G3 (SAMP) ed E4 (SSA) incluse per decisione del proprietario:** SAMP = invio/ricezione di tabelle, selezioni e puntamenti da e verso altri programmi, interfaccia in `42-ui-pannello-cataloghi.md` (§3/§7); SSA = ricerca e caricamento di spettri dai servizi VO, analisi in `21-analisi-spettroscopia.md` (§3/§7); nuovi errori `SAMP_UNSUPPORTED_TYPE`, `NET_TIMEOUT`/`SSA_NO_RESULT`/`SSA_INVALID` (§10); strumenti IA `ssa_search`/`ssa_load` (§11); test T8–T10 (§12); D14-2 perimetro deciso e nuova D14-6 (§13). Righe G3 ed E4 in `03-parita-aladin.md` passate a `inclusa (decisione del proprietario)`. |

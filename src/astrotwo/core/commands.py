@@ -913,6 +913,8 @@ class Outcome:
     layers_created: list[str] = field(default_factory=list)
     network_fingerprint: list[dict] = field(default_factory=list)
     resolved: dict = field(default_factory=dict)  # valori scelti dal modulo da scrivere nel comando registrato
+    #: annullato con un risultato parziale da conservare (§3.2, sprint C4): solo per i comandi di sola lettura
+    cancelled: bool = False
 
 
 def _refreshed(outcome: Outcome) -> ResultMessage:
@@ -1066,6 +1068,19 @@ class CommandRegistry:
                 else:
                     raise
             return registered, CommandResult("error", error=message, started_at=started, finished_at=_now())
+        if outcome is not None and outcome.cancelled:  # risultato parziale conservato (§3.2, sprint C4)
+            if outcome.state is not None or not spec.read_only:
+                raise RuntimeError(f"{spec.name}: un risultato parziale annullato non cambia lo stato (05 §3.2)")
+            if outcome.resolved:
+                registered = Command(registered.name, registered.version,
+                                     {**registered.parameters, **outcome.resolved}, registered.requested_by,
+                                     registered.refresh)
+            return registered, CommandResult(
+                "cancelled", values=outcome.values, warnings=tuple(outcome.warnings),
+                error=ResultMessage("COMMAND_CANCELLED", "comando annullato: risultato parziale conservato, stato "
+                                    "invariato", {"reason": "partial"}),
+                provenance=tuple(outcome.provenance), started_at=started, finished_at=_now(),
+                network_fingerprint=tuple(outcome.network_fingerprint))
         if outcome is None or cancel.cancelled:
             return registered, CommandResult("cancelled", error=ResultMessage(
                 "COMMAND_CANCELLED", "comando annullato: risultato scartato, stato invariato",

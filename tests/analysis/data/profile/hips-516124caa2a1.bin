@@ -1,0 +1,52 @@
+creator_did          = ivo://CDS/P/2MASS/color
+hips_initial_fov     = 58.63230142835039
+hips_initial_ra      = 266.40499479
+hips_initial_dec     = -28.936173970
+obs_collection       = The Two Micron All Sky Survey - J-H-K bands (2MASS color)
+obs_title            = 2MASS color J (1.23um), H (1.66um), K (2.16um)
+obs_description      = 2MASS has uniformly scanned the entire sky in three near-infrared bands to detect and characterize point sources brighter than about 1 mJy in each band, with signal-to-noise ratio (SNR) greater than 10, using a pixel size of 2.0". This has achieved an 80,000-fold improvement in sensitivity relative to earlier surveys. 2MASS used two highly-automated 1.3-m telescopes, one at Mt. Hopkins, AZ, and one at CTIO, Chile. Each telescope was equipped with a three-channel camera, each channel consisting of a 256x256 array of HgCdTe detectors, capable of observing the sky simultaneously at J (1.25 microns), H (1.65 microns), and Ks (2.17 microns). The University of Massachusetts (UMass) was responsible for the overall management of the project, and for developing the infrared cameras and on-site computing systems at both facilities. The Infrared Processing and Analysis Center (IPAC) is responsible for all data processing through the Production Pipeline, and construction and distribution of the data products. Funding is provided primarily by NASA and the NSF
+obs_copyright_url    = http://www.ipac.caltech.edu/2mass/
+hips_creator         = Oberto A. (CDS)
+
+client_application   = AladinLite
+client_sort_key      = 04-001-00
+prov_progenitor      = IPAC/NASA
+client_category      = Image/Infrared/2MASS
+#obs_copyright_url   = URL to copyright page of the original data
+#Between 1997 June and 2001 February => MJD=(UnixTime/86400)+40587 ; 1997 June =  865123200 UnixTime ; 2001 February =980985600 UnixTime
+t_min                = 50600
+t_max                = 51941
+
+obs_regime           = Infrared
+#Lambda J 1.235 (+/-0.006), H 1.662 (+/-0.009), K 2.159 (+/-0.011) cf: http://www.ipac.caltech.edu/2mass/releases/allsky/faq.html#reference
+#Bandwith J 0.162 (+/-0.001) , H 0.251 (+/- 0.002) , K 0.262 (+/- 0.002) cf: http://www.ipac.caltech.edu/2mass/releases/allsky/faq.html#reference
+em_min               = 1.147E-6
+em_max               = 2.303E-6
+hips_builder         = Aladin/HipsGen v11.023
+hips_version         = 1.4
+hips_release_date    = 2021-02-24T03:22Z
+hips_frame           = equatorial
+hips_order           = 9
+hips_order_min       = 0
+hips_tile_width      = 512
+#hips_service_url    = ex: http://yourHipsServer/2MASS Color
+hips_status          = public mirror unclonable
+hips_copyright       = CNRS/Unistra
+obs_ack              = University of Massachusetts & IPAC/Caltech
+bib_reference        = 2006AJ....131.1163S
+bib_reference_url    = http://cdsbib.u-strasbg.fr/cgi-bin/cdsbib?2006AJ....131.1163S
+obs_copyright        = University of Massachusetts & IPAC/Caltech
+hips_pixel_scale     = 2.236E-4
+dataproduct_type     = image
+hips_rgb_red         = 2MASS K [-0.5 20.0 40.0 Log]
+hips_rgb_green       = 2MASSh [1.0 20.0 100.0 Log]
+hips_rgb_blue        = 2MASS J [-0.5 20.0 40.0 Log]
+moc_sky_fraction     = 1
+hipsgen_date         = 2020-10-01T09:28Z
+hipsgen_params       = inRed=Hips-K2 inBlue=Hips-J2 inGreen=Hips-H out=Hips-Color5 creator_did=ivo://CDS-test/P/2MASS/Color skyval=SKYVAL "fitskeys=ORDATE SCANNO SCANDIR" maxthread=64 hips_frame=equatorial "cmRed=-0.5 20 40 log" "cmBlue=-0.5 20 40 log" "cmGreen=1 20 100 log" color=jpeg RGB
+hips_creation_date   = 2012-02-24T12:43Z
+hips_tile_format     = jpeg
+hipsgen_date_1       = 2020-10-12T12:49Z
+hipsgen_params_1     = inRed=Hips-K2 inBlue=Hips-J2 inGreen=Hips-H out=Hips-Color5 creator_did=ivo://CDS-test/P/2MASS/Color skyval=SKYVAL "fitskeys=ORDATE SCANNO SCANDIR" maxthread=64 hips_frame=equatorial "cmRed=-0.5 20 40 log" "cmBlue=-0.5 20 40 log" "cmGreen=1 20 100 log" color=jpeg RGB
+hips_hierarchy       = median
+dataproduct_subtype  = color

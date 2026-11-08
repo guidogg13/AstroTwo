@@ -278,5 +278,225 @@
   "file": "simbad-ea48a1fe6695.xml",
   "retrieved_at": "2026-11-07T10:30:47.463890+00:00",
   "server": "https://simbad.harvard.edu/simbad/sim-tap/sync"
+ },
+ "hips|skies.esac.esa.int/DSSColor/properties": {
+  "file": "hips-76ef1b3ce49a.bin",
+  "retrieved_at": "2026-11-07T19:17:41.137992+00:00",
+  "server": "https://skies.esac.esa.int/DSSColor/properties"
+ },
+ "exoplanet|SELECT pl_name, pl_letter, hostname, gaia_dr3_id, discoverymethod, disc_year, pl_bmassprov, pl_orbper, pl_orbpererr1, pl_orbpererr2, pl_orbperlim, pl_orbper_reflink, pl_orbsmax, pl_orbsmaxerr1, pl_orbsmaxerr2, pl_orbsmaxlim, pl_orbsmax_reflink, pl_orbeccen, pl_orbeccenerr1, pl_orbeccenerr2, pl_orbeccenlim, pl_orbeccen_reflink, pl_bmasse, pl_bmasseerr1, pl_bmasseerr2, pl_bmasselim, pl_bmasse_reflink, pl_rade, pl_radeerr1, pl_radeerr2, pl_radelim, pl_rade_reflink, pl_eqt, pl_eqterr1, pl_eqterr2, pl_eqtlim, pl_eqt_reflink FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 2835207319109249920' ORDER BY pl_name": {
+  "file": "exoplanet-8d588bc40e05.xml",
+  "retrieved_at": "2026-11-07T19:17:41.225987+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/properties": {
+  "file": "hips-6646fd5fb9a5.bin",
+  "retrieved_at": "2026-11-07T19:17:41.360437+00:00",
+  "server": "https://skies.esac.esa.int/AllWISEColor/properties"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/properties": {
+  "file": "hips-516124caa2a1.bin",
+  "retrieved_at": "2026-11-07T19:17:41.387858+00:00",
+  "server": "https://skies.esac.esa.int/2MASSColor/properties"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir320000/Npix322325.jpg": {
+  "file": "hips-48e27a1cac93.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir320000/Npix322325.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289300.jpg": {
+  "file": "hips-19e262c0560d.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289300.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289300.jpg": {
+  "file": "hips-28650eb47678.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289300.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289301.jpg": {
+  "file": "hips-07109b501ae4.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289301.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289302.jpg": {
+  "file": "hips-b220f3d15bd9.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289302.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289301.jpg": {
+  "file": "hips-7e17ec3b0dd7.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289301.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289303.jpg": {
+  "file": "hips-07fa2711cca1.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289303.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289302.jpg": {
+  "file": "hips-99eea5ea492b.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289302.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289303.jpg": {
+  "file": "hips-e6cc6fde9c96.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289303.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954010.jpg": {
+  "file": "hips-176c9d0ee42c.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954010.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954011.jpg": {
+  "file": "hips-2744ef534d7e.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954011.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir230000/Npix238502.jpg": {
+  "file": "hips-0877eef41411.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir230000/Npix238502.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954032.jpg": {
+  "file": "hips-59fe299e812d.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954032.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954010.jpg": {
+  "file": "hips-4a9487516fcc.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954010.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir230000/Npix238508.jpg": {
+  "file": "hips-358cb610793c.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir230000/Npix238508.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954033.jpg": {
+  "file": "hips-1f1c228c89a2.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir950000/Npix954033.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954011.jpg": {
+  "file": "hips-e6569b686013.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954011.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954032.jpg": {
+  "file": "hips-30fc78e72567.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954032.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954033.jpg": {
+  "file": "hips-d8f402d03dd0.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir950000/Npix954033.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir0/Npix7413.jpg": {
+  "file": "hips-45494373f23a.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir0/Npix7413.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir20000/Npix29655.jpg": {
+  "file": "hips-5d1f5593e5d0.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir20000/Npix29655.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir0/Npix7584.jpg": {
+  "file": "hips-f01051194372.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir0/Npix7584.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir20000/Npix29655.jpg": {
+  "file": "hips-efa658b6a84d.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir20000/Npix29655.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir30000/Npix30336.jpg": {
+  "file": "hips-749ff2692980.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir30000/Npix30336.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir30000/Npix30338.jpg": {
+  "file": "hips-8c4fcc0a154a.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir30000/Npix30338.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir30000/Npix30336.jpg": {
+  "file": "hips-b08e792e7690.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir30000/Npix30336.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir30000/Npix30338.jpg": {
+  "file": "hips-78cb4c5fe125.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir30000/Npix30338.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198467.jpg": {
+  "file": "hips-f880e6e38806.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198467.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198470.jpg": {
+  "file": "hips-b4a8c1c44fd4.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198470.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198473.jpg": {
+  "file": "hips-c9e84642e3c3.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198473.jpg"
+ },
+ "hips|skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198476.jpg": {
+  "file": "hips-f2d2a530d9ba.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1190000/Npix1198476.jpg"
+ },
+ "exoplanet|SELECT pl_name, pl_letter, hostname, gaia_dr3_id, discoverymethod, disc_year, pl_bmassprov, pl_orbper, pl_orbpererr1, pl_orbpererr2, pl_orbperlim, pl_orbper_reflink, pl_orbsmax, pl_orbsmaxerr1, pl_orbsmaxerr2, pl_orbsmaxlim, pl_orbsmax_reflink, pl_orbeccen, pl_orbeccenerr1, pl_orbeccenerr2, pl_orbeccenlim, pl_orbeccen_reflink, pl_bmasse, pl_bmasseerr1, pl_bmasseerr2, pl_bmasselim, pl_bmasse_reflink, pl_rade, pl_radeerr1, pl_radeerr2, pl_radelim, pl_rade_reflink, pl_eqt, pl_eqterr1, pl_eqterr2, pl_eqtlim, pl_eqt_reflink FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 2635476908753563008' ORDER BY pl_name": {
+  "file": "exoplanet-88bd9d6a3469.xml",
+  "retrieved_at": "2026-11-07T19:18:56.985480+00:00",
+  "server": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299616.jpg": {
+  "file": "hips-e67cc22a6008.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299616.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299617.jpg": {
+  "file": "hips-00c137ea8404.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299617.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299618.jpg": {
+  "file": "hips-b31e0db5de16.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299618.jpg"
+ },
+ "hips|skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299619.jpg": {
+  "file": "hips-e5982cf62e1a.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir290000/Npix299619.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198467.jpg": {
+  "file": "hips-5c830d1dd59c.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198467.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198470.jpg": {
+  "file": "hips-518f126c9bcd.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198470.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198473.jpg": {
+  "file": "hips-bcbfd4548411.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198473.jpg"
+ },
+ "hips|skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198476.jpg": {
+  "file": "hips-7ee1e04b7953.bin",
+  "retrieved_at": "2026-11-07",
+  "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198476.jpg"
  }
 }

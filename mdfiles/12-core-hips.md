@@ -517,6 +517,7 @@ server** e passa al successivo quando quello in uso non risponde.
   |---|---|---|
   | `CDS/P/DSS2/color` | `https://skies.esac.esa.int/DSSColor` (ESA ESASky); `https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color` (NASA/IPAC IRSA) | `creator_did`, `hips_order` 9, `hips_tile_width` 512, `hips_tile_format` jpeg, `hips_frame` equatorial, `hips_release_date` uguali alla copia del CDS in cache; il tile `Norder3/Npix257.jpg` ha lo **stesso SHA-256** sui due mirror e nella copia scaricata da `alasky` il 2026-10-18 |
   | `CDS/P/2MASS/color` | `https://skies.esac.esa.int/2MASSColor`; `https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color` | ordine 9, tile 512, jpeg, equatorial su entrambi; i due tile di prova hanno lo stesso SHA-256 sui due mirror; `hips_release_date` diverso (ESASky 2021-02-24, IRSA 2024-10-09): per questo la data **non** entra nel confronto di equivalenza; principale non confrontabile (CDS giù, nessuna copia in cache) |
+  | `CDS/P/allWISE/color` (aggiunto il **2026-11-07**, sprint C4 del `25`, D25-5) | `https://skies.esac.esa.int/AllWISEColor` (ESA ESASky); `https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1` (NASA/IPAC IRSA) | verificato il 2026-11-07 con richieste reali (CDS irraggiungibile, nessuna copia in cache del principale): entrambi negli elenchi ufficiali (`skies.esac.esa.int/hipslist` del 2026-09-09, `irsa.ipac.caltech.edu/data/hips/list` del 2026-03-23) con `creator_did = ivo://CDS/P/allWISE/color` e `hips_status = public mirror unclonable`; `properties` uguali nei campi del confronto (`hips_order` 8, `hips_tile_width` 512, `hips_tile_format` jpeg, `hips_frame` equatorial, `dataproduct_type` image/color) e anche in `hips_release_date` (2019-05-20T08:30Z); tile `Norder3/Dir0/Npix257.jpg` e `Norder8/Dir40000/Npix40000.jpg` scaricati (512 × 512 JPEG) con lo **stesso SHA-256** sui due mirror; principale non confrontabile (CDS giù). L'indirizzo `…/CDS/AllWISE/Color` di IRSA dà 404: vale quello dell'elenco ufficiale |
   | `CDS/P/DSS2/red` | `https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/red` | ordine 9, tile 512, `jpeg fits`, equatorial; tile JPEG e FITS scaricati (FITS 527 168 byte); IRSA ha chiuso alcune connessioni (`Connection reset by peer`), riuscite al secondo o terzo tentativo; principale non confrontabile |
 
   **Senza copie fuori da Strasburgo** (cercate negli stessi due elenchi e
@@ -650,6 +651,48 @@ server** e passa al successivo quando quello in uso non risponde.
   (P6, aggiunte il 2026-10-15) — tile necessari per la finestra della
   vista e riempimento dei suoi pixel con i valori del HiPS (campionamento
   al più vicino sulla griglia HEALPix); dettagli in §3, P6.
+- **`hips_thumbnail(service, center, *, fov, size, cache, refresh,
+  timeouts)`** (sprint C4 del `25`, 2026-11-07, autorizzato con D25-12:
+  «funzione per una miniatura fuori dalla vista») → **`HiPSThumbnail`**.
+  Miniatura di un survey a colori o FITS su una griglia **TAN** quadrata di
+  `size` × `size` pixel e campo `fov` (lato), centrata su `center`
+  (`SkyFrame`), **con lo stesso codice della vista e senza OpenGL**:
+  geometria da `make_view_wcs` del 10 (proiezione `TAN`, frame `icrs`,
+  scala `fov / size`), `view_sampling` (ordine di default
+  `order_for_resolution`, metodo `nearest`), `fetch_tile` per ogni tile
+  necessario (memoria, cache comune, rete, **mirror di D12-9**), `fill_view`
+  per comporre l'immagine. Risultato: `image` (JPEG/PNG: `uint8` righe ×
+  colonne × 3 o 4; FITS: tipo nativo), **orientamento FITS** (riga 0 = sud,
+  come la `wcs`), `mask` dei pixel con dati, `wcs` (WCS della griglia,
+  `pixel_to_world` uguale a `window_to_sky` della vista), `hips_id`,
+  `title`, `order`, `fov`, `size`, `center`, **`servers`** (URL di base dei
+  server da cui sono venuti davvero i tile, ordinati), `tiles` (provenienza
+  di ogni tile: URL, data, cache), `missing` (tile 404, pixel senza dati,
+  dichiarati), **`credits`** = testi dichiarati dal survey nel `properties`
+  (`obs_title`, `obs_ack`, `obs_copyright`, `obs_copyright_url`; mai testi
+  nostri, come i crediti del `41`), `epoch` del survey se il `properties`
+  dichiara `t_min` e `t_max` (MJD, scala non dichiarata: trattata come UTC e
+  scritta), `description`, `warnings` (anche `HIPS_MIRROR_FALLBACK` e
+  `HIPS_MIRROR_REJECTED` del survey). **`png()`** dà il PNG con il nord in
+  alto (righe capovolte, Pillow). Errori: quelli di `view_sampling` e
+  `fetch_tile`; tutti i server giù → `NET_TIMEOUT` `hips_servers` (nessuna
+  miniatura parziale per guasto di rete); un tile 404 lascia i suoi pixel
+  senza dati, dichiarato. `fov` angolo positivo ≤ 10°, `size` intero
+  16–2048 (`ValueError` altrimenti).
+- **`add_hips(…, cds_down_shortcut=False)` e `cds_down_in_session()`**
+  (D25-18 del `25`, decisione del proprietario del 2026-11-08): il 12 ricorda
+  per la sessione dell'app la prima prova che il CDS è giù (MocServer non
+  raggiungibile; survey passato da un server di Strasburgo a un mirror; o, dal
+  14, SIMBAD già sul suo mirror). Con `cds_down_shortcut=True` (solo le
+  miniature del `25`), senza `refresh` e con un identificativo di
+  `MIRROR_FALLBACKS`, il MocServer non si interroga e il survey si apre subito
+  dai mirror verificati, con `HIPS_MIRROR_FALLBACK` ragione **`cds_down`**
+  (`hips_id`, `mirror`, `evidence`). Il cielo del `41` non cambia
+  comportamento. `reset_cds_state()` dimentica la prova (nuova sessione, test).
+- **Attesa dei tile e turno della CPU** (sprint C4): lo scaricamento di un
+  tile (`_download_tile`) avviene dentro `network_wait()` del 14, così chi
+  chiama da più thread con `cpu_turn` (profilo del `25`) lascia il turno
+  durante l'attesa; senza turno nessun effetto.
 - **`MIRROR_FALLBACKS`**, **`MIRROR_SWITCH_FAILURES`** (= 3) e
   **`HiPSServers`** (sprint 10b) — tabella dei mirror verificati, soglia del
   cambio e stato dei server di un survey (ordine di prova, server in uso,
@@ -826,6 +869,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `HIPS_MIRROR_FALLBACK` | `http_status` | `hips_id` (string), `primary` (string), `mirror` (string), `status` (integer) |
 | `HIPS_MIRROR_FALLBACK` | `invalid_response` | `hips_id` (string), `primary` (string), `mirror` (string) |
 | `HIPS_MIRROR_FALLBACK` | `mocserver` | `hips_id` (string), `mirror` (string) |
+| `HIPS_MIRROR_FALLBACK` | `cds_down` (D25-18) | `hips_id` (string), `mirror` (string), `evidence` (string: `mocserver`, `hips_failover`, `simbad_failover`) |
 | `HIPS_MIRROR_REJECTED` (avviso, sprint 10b) | `different` | `hips_id` (string), `mirror` (string), `field` (string), `expected` (string, esterno), `found` (string, esterno) |
 | `HIPS_MIRROR_REJECTED` | `unreadable` | `hips_id` (string), `mirror` (string), `cause` (message: errore del 12 o del 14) |
 | `HIPS_TILE_MISSING` | (generale) | `url` (string) |
@@ -935,6 +979,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | T16 | Errori di `build_hips` | ordine mancante, `flux`, PNG senza parametri, `histeq`, `vmin ≥ vmax`, ordine troppo alto, limite di memoria piccolo, immagine senza WCS, cartella non vuota, valori non validi | `TypeError`, `OPERATION_UNSUPPORTED`, `HIPS_DISPLAY_REQUIRED`, `HIPS_DISPLAY_INVALID`, `HEALPIX_ORDER_INVALID`, `MEMORY_LIMIT_EXCEEDED`, `WCS_MISSING`, `FileExistsError` (file esistente intatto), `ValueError` | test di unità |
 | T12 | Valore del pixel su HiPS (H27) | leggere il valore sotto il cursore su un tile FITS in cache | valore uguale a quello del tile FITS letto con `astropy.io.fits` | confronto diretto |
 | T17 | Campionamento della vista (P6) | survey FITS simulato; finestre `TAN` e `AIT` (`make_view_wcs` del 10) a scale diverse, anche a cavallo di più tile e del bordo dell'`AIT` | per ogni pixel della finestra valore uguale a `pixel_values` nel suo centro (ricalcolo nel test); tile necessari = insieme dei tile di quei pixel; pixel fuori dal cielo "nessun dato"; nessuna fascia vuota tra tile adiacenti | ricalcolo con `pixel_values` e `astropy-healpix` |
+| T20 | Miniatura (sprint C4 del `25`) | survey JPEG simulato con le risposte vere di ESASky registrate il 2026-11-07 (DSS2, 2MASS, AllWISE colore attorno a 51 Peg); tile 404; tutti i server giù | immagine 256 × 256 composta da `fill_view` per tutti i pixel; `wcs.pixel_to_world` = `window_to_sky`; `servers` = server dei tile; crediti dal `properties`; epoca solo per AllWISE; PNG con il nord in alto; 404 → pixel senza dati dichiarati; tutti giù → `NET_TIMEOUT` `hips_servers` | test di unità (`tests/core/test_hips_thumbnail.py`) |
 | T19 | Ripiego sui mirror (sprint 10b) | servizi simulati: principale giù → mirror dichiarato dal MocServer; MocServer giù con un record in cache senza mirror (anche quello di prima dello sprint) → `MIRROR_FALLBACKS`; MocServer giù senza cache → mirror della tabella (`reason = mocserver`); mirror con `hips_order` diverso → scartato (`HIPS_MIRROR_REJECTED`) e si usa il successivo; tile 404 → nessun cambio; 2 tile falliti → nessun cambio, il terzo → cambio e tile servito dal mirror; HTTP 503 e 429 → cambio; tutti giù → `NET_TIMEOUT` `hips_servers` con il numero dei server; `refresh=True` → di nuovo il principale; avviso emesso una volta sola; tile in cache dal principale letto dopo il cambio; ordine fuori/dentro Strasburgo | ordine e conteggio delle richieste ai server finti, server in uso, avvisi, chiavi della cache | test di unità con server finti; test di rete (non nel commit) per i mirror di `MIRROR_FALLBACKS` |
 | T18 | Riempimento progressivo e colori (P6) | tile arrivati in ordine diverso; survey JPEG simulato | stesso risultato finale in qualunque ordine; colori uguali a quelli del tile letti con Pillow e capovolti come in `fetch_tile` | confronto diretto |
 
@@ -1050,3 +1095,5 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-24 | Claude Code | **D40-3, sprint 8d (modulo 19):** l'errore `BODY_UNSUPPORTED` del 19 incorporato dall'avviso omonimo del 12 passa da parametro esterno a parametro `message` (`detail`). Nessun comportamento scientifico cambia. |
 | 2026-10-31 | Claude Code | **Sprint 10b (richiesta del proprietario, autorizzazione esplicita a modificare il file approvato):** guasto del CDS di fine ottobre 2026 → **ripiego automatico sui mirror** dei survey HiPS (§3, "Ripiego sui mirror"): elenco principale → mirror del MocServer (`hips_service_url_N`) → `MIRROR_FALLBACKS` verificata con richieste reali il 2026-10-31 (ESASky e IRSA per DSS2 a colori e 2MASS a colori, IRSA per DSS2 rosso; nessuna copia fuori da Strasburgo per PanSTARRS, Mellinger, Gaia), prima i mirror fuori da Strasburgo; cambio solo per cause di rete (mai 404 né altri 4xx); equivalenza del `properties`; avvisi `HIPS_MIRROR_FALLBACK` (una volta per survey) e `HIPS_MIRROR_REJECTED`; `NET_TIMEOUT` `hips_servers` con il numero dei server; **D12-9** (regola del cambio) e **D12-10** (chiave della cache indipendente dall'host) decise (§13); T19 (§12); §7, §10. Stato `approvato` invariato. |
 | 2026-10-31 | Claude Code | **Correzione dello sprint 10b (richiesta del proprietario, test di rete: IRSA ha risposto HTTP 504 al `properties`):** `read_service` trasformava ogni `SERVICE_ERROR` del 14, anche 5xx e 429, in `HIPS_NOT_A_SERVICE`; ora HTTP 5xx e 429 sul `properties` rilanciano `SERVICE_ERROR` (guasto del server, causa del ripiego, D12-9) e `HIPS_NOT_A_SERVICE` resta per le risposte 2xx non valide e per i 4xx diversi da 429 (P1, §3 "Ripiego sui mirror", §10); T19 con il `properties` del principale a 503. Stato `approvato` invariato. |
+| 2026-11-07 | Claude Code | **Sprint C4 del `25` (autorizzazione D25-12, limitata agli sprint C2–C6):** nuova `hips_thumbnail` → `HiPSThumbnail` (§7: miniatura TAN fuori dalla vista con `make_view_wcs`, `view_sampling`, `fetch_tile` e `fill_view`, mirror compresi, crediti dichiarati dal survey, epoca da `t_min`/`t_max`, PNG con il nord in alto); scaricamento dei tile dentro `network_wait()` del 14; **`CDS/P/allWISE/color` in `MIRROR_FALLBACKS`** (ESASky e IRSA verificati il 2026-11-07 con richieste reali: elenchi ufficiali, `properties` uguali, stessi SHA-256 di due tile; principale non confrontabile, CDS giù). Nuovo T20. Stato `approvato` invariato. |
+| 2026-11-08 | Claude Code | **D25-18 del `25` (decisione del proprietario del 2026-11-08, autorizzazione D25-12):** prova di sessione «CDS giù» (`cds_down_in_session`, `reset_cds_state`) e opzione `cds_down_shortcut` di `add_hips` per le miniature (subito i mirror verificati, `HIPS_MIRROR_FALLBACK` `cds_down`); §7, parametri dei messaggi; test in `tests/core/test_hips_thumbnail.py` (anche T20). Stato `approvato` invariato. |

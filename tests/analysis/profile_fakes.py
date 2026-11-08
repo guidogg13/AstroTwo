@@ -8,6 +8,10 @@ Gaia dell'ESA, il NASA Exoplanet Archive e (sprint C3) l'IRSA a richieste fatte 
 Vega, eta Tau (Alcyone) e TRAPPIST-1, più bersagli per coordinate e un nome sconosciuto. Il servizio SED di VizieR
 (CDS) era giù quel giorno: senza una risposta in ``overrides`` risponde HTTP 503 (CDS giù, come il 2026-11-07).
 
+Sprint C4: le miniature HiPS (``properties`` e tile di ESASky, ``hips|<host>/<percorso>`` nell'indice, registrati il
+2026-11-07 con il CDS giù) sotto ``/hips/<host>/<percorso>``; il MocServer (``/mocserver``) risponde HTTP 503 (CDS giù,
+come il 2026-11-07), quindi i survey si aprono dai mirror di ``MIRROR_FALLBACKS``, diretti qui al server locale.
+
 Un server HTTP locale (``FakeService``) risponde a ``/simbad/sync``, ``/gaia/sync``, ``/exoplanet/sync``, ``/irsa/sync``
 e ``/vizier/sed`` cercando
 la ``QUERY`` nell'indice; ``overrides`` sostituisce una risposta (servizio giù, risposta sintetica per un caso che i
@@ -22,6 +26,7 @@ from pathlib import Path
 
 import pytest
 
+import astrotwo.core.hips as hips
 import astrotwo.core.vo_protocols as vo
 from tests.conftest import FakeService
 
@@ -67,6 +72,26 @@ class RecordedServices:
         for service in SERVICES.values():
             self.fake.routes[f"/{service}/sync"] = self._route(service)
         self.fake.routes["/vizier/sed"] = self._route("vizier")
+        self.fake.routes["/mocserver"] = self._mocserver
+        self.fake.prefix_routes = {"/hips/": self._hips}
+
+    def _mocserver(self, request):
+        self.queries.append(("mocserver", request["params"].get("ID", "")))
+        return 503, "text/plain", "MocServer del CDS non raggiungibile (come il 2026-11-07)"
+
+    def _hips(self, request):
+        path = request["path"].removeprefix("/hips/")
+        self.queries.append(("hips", path))
+        for (name, text), make in self.overrides.items():
+            if name == "hips" and text in path:
+                out = make(path)
+                return out if isinstance(out, tuple) else (200, "application/octet-stream", out)
+        key = f"hips|{path}"
+        if key not in INDEX:
+            self.missing.append(("hips", path))
+            return 404, "text/plain", f"tile non registrato: {path}"
+        ctype = "text/plain" if path.endswith("properties") else "image/jpeg"
+        return 200, ctype, (DATA / INDEX[key]["file"]).read_bytes()
 
     def _route(self, service: str):
         def answer(request):
@@ -106,6 +131,11 @@ def services(monkeypatch):
                     for e in vo.BUILTIN_SERVERS)
     monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
     monkeypatch.setattr(vo, "VIZIER_PHOTOMETRY_URL", f"{fake.url('vizier')}/sed")
+    monkeypatch.setattr(vo, "MOCSERVER_URL", "http://127.0.0.1:9/mocserver")  # connessione rifiutata: CDS giù
+    monkeypatch.setattr(hips, "MIRROR_FALLBACKS", {
+        "CDS/P/DSS2/color": (f"{fake.fake.url}/hips/skies.esac.esa.int/DSSColor",),
+        "CDS/P/2MASS/color": (f"{fake.fake.url}/hips/skies.esac.esa.int/2MASSColor",),
+        "CDS/P/allWISE/color": (f"{fake.fake.url}/hips/skies.esac.esa.int/AllWISEColor",)})
     yield fake
     fake.close()
     assert not fake.missing, f"interrogazioni non registrate: {fake.missing}"

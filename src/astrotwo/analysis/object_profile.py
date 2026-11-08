@@ -9,8 +9,9 @@ Nessun numero nasce qui fuori da codice deterministico (regola d'oro n. 1): i va
 ``astropy.units.parallax``), con il metodo scritto nel valore. Ogni valore porta la sua provenienza (servizio, server
 che ha risposto, tabella, interrogazione ADQL, identificativo usato, tipo di incrocio, data, cache).
 
-Le sezioni sono indipendenti (regola c): l'errore di un servizio resta nella sua sezione. Le sezioni girano una dopo
-l'altra (parallelismo nello sprint C4). Sprint C3 (25 §3.11): sezione ``photometry`` con i punti e la SED del ``20``
+Le sezioni sono indipendenti (regola c): l'errore di un servizio resta nella sua sezione. Sprint C4 (25 §3.12): le
+sezioni partono insieme dopo la risoluzione del bersaglio, al più 4 richieste di rete contemporanee, tempo massimo per
+servizio e per sezione, Annulla con le sezioni arrivate conservate. Sprint C3 (25 §3.11): sezione ``photometry`` con i punti e la SED del ``20``
 (``astrotwo.analysis.photometry``), passo per posizione di 2MASS e AllWISE nella catena, pianeti esclusi dai
 candidati da coordinate (D25-13 (8)). Il comando ``object.profile`` è definito qui (comando del livello 2,
 05 §3.2): il 05 non importa questo modulo, lo riceve con ``register`` da chi costruisce il registro (``40``).
@@ -18,11 +19,15 @@ candidati da coordinate (D25-13 (8)). Il comando ``object.profile`` è definito 
 
 from __future__ import annotations
 
+import contextvars
 import dataclasses
+import queue
 import re
+import threading
 import time
 import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -46,6 +51,8 @@ from astrotwo.core.vo_protocols import (
     RequestRecord,
     SimbadRecord,
     VoProtocolsError,
+    cpu_turn,
+    network_wait,
     simbad_object,
     tap_query,
     vizier_photometry,
@@ -57,11 +64,19 @@ __all__ = [
     "CATALOGS",
     "DEFAULT_CROSSMATCH_RADIUS",
     "DEFAULT_MATCH_RADIUS",
+    "DEFAULT_THUMBNAIL_FOV",
+    "DEFAULT_THUMBNAIL_SIZE",
     "DESIGNATION_RADIUS",
+    "IMAGE_SURVEYS",
+    "PLANET_PARAMETERS",
     "GAIA_DR3_EPOCH",
+    "MAX_CONCURRENT_REQUESTS",
     "PARALLAX_SNR_MIN",
     "PM_SEARCH_MAX",
+    "PROFILE_TARGET_TIME",
     "SECTIONS",
+    "SECTION_SERVICES",
+    "SERVICE_TIME_LIMITS",
     "TMASS_OBSERVATIONS",
     "CrossIdentification",
     "ObjectProfile",
@@ -78,13 +93,21 @@ __all__ = [
     "distance_from",
     "profile_astrometry",
     "profile_content",
+    "parse_reflink",
     "profile_identity",
+    "profile_images",
     "profile_photometry",
+    "profile_planets",
     "resolve_target",
 ]
 
-#: Sezioni scritte (25 §3.10, §3.11): C2 identità e astrometria, C3 fotometria; immagini e pianeti nello sprint C4.
-SECTIONS: tuple[str, ...] = ("identity", "astrometry", "photometry")
+#: Sezioni del profilo nell'ordine di §3.4 (C2 identità e astrometria, C3 fotometria, C4 immagini e pianeti, §3.13).
+SECTIONS: tuple[str, ...] = ("identity", "images", "astrometry", "photometry", "planets")
+#: Survey delle miniature (D25-5): AllWISE colore perché il mirror ESASky è stato verificato il 2026-11-07 (§3.13).
+IMAGE_SURVEYS: tuple[str, ...] = ("CDS/P/DSS2/color", "CDS/P/2MASS/color", "CDS/P/allWISE/color")
+#: Campo e dimensione delle miniature (D25-5).
+DEFAULT_THUMBNAIL_FOV = 5.0 * u.arcmin
+DEFAULT_THUMBNAIL_SIZE = 256
 #: Cataloghi della catena degli identificativi (25 §3.2).
 CATALOGS: tuple[str, ...] = ("gaia_dr3", "2mass", "allwise", "exoplanet")
 #: Raggio dei candidati SIMBAD da coordinate (D25-9).
@@ -108,12 +131,30 @@ TMASS_OBSERVATIONS = (Time("1997-06-01", scale="utc"), Time("2001-03-01", scale=
 #: Raggio attorno alla posizione scritta nella designazione 2MASS/AllWISE (posizione troncata; 25 §3.11).
 DESIGNATION_RADIUS = 2.0 * u.arcsec
 
+#: Al più 4 richieste di rete contemporanee in tutto il profilo (D25-8, 25 §3.12 regola 3).
+MAX_CONCURRENT_REQUESTS = 4
+#: Tempo massimo per servizio (D25-8, D25-15; 25 §3.12): per ogni richiesta e, attraverso ``SECTION_SERVICES``, per
+#: ogni sezione. HiPS vale per la sezione Immagini, quando scritta.
+SERVICE_TIME_LIMITS: Mapping[str, u.Quantity] = {
+    "simbad": 15.0 * u.s, "gaia": 30.0 * u.s, "irsa": 60.0 * u.s, "exoplanet": 30.0 * u.s, "hips": 30.0 * u.s,
+    "vizier_sed": 30.0 * u.s}
+#: Servizi che ogni sezione può interrogare (25 §3.12 regola 5): il tempo massimo della sezione è il più grande.
+SECTION_SERVICES: Mapping[str, tuple[str, ...]] = {
+    "identity": ("simbad", "gaia", "irsa", "exoplanet"), "astrometry": ("gaia",),
+    "photometry": ("gaia", "irsa", "vizier_sed"), "images": ("hips",), "planets": ("exoplanet",)}
+#: Obiettivo complessivo (D25-8): misurato e scritto nel risultato (``elapsed``), non è un limite (25 §3.12).
+PROFILE_TARGET_TIME = 60.0 * u.s
+
 _SIMBAD_TAP = "cds-simbad-tap"
 _GAIA_TAP = "esa-gaia-tap"
 _EXOPLANET_TAP = "nasa-exoplanet-tap"
 _GAIA_SOURCE = "gaiadr3.gaia_source"
 _BJ_TABLE = "external.gaiaedr3_distance"
 _IRSA_TAP = "nasa-irsa-tap"
+_SERVICE_OF = {_SIMBAD_TAP: "simbad", _GAIA_TAP: "gaia", _IRSA_TAP: "irsa", _EXOPLANET_TAP: "exoplanet"}
+_POLL = 0.05  # s: intervallo di controllo di Annulla e delle scadenze (25 §3.12 regola 7)
+_WORKERS = 16  # thread del profilo: risoluzione, 4 incroci, sezioni, 4 richieste della fotometria (mai in attesa
+               # reciproca senza un thread libero); le richieste contemporanee le limita il semaforo
 _IRSA_TABLE = {"2mass": "fp_psc", "allwise": "allwise_p3as_psd"}
 _IRSA_COLUMNS = {
     "2mass": "designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate",
@@ -200,6 +241,8 @@ class ProfileValue:
     formula: str | None = None
     reference: str | None = None
     note: str | None = None
+    error_upper: u.Quantity | None = None  # errori asimmetrici così come dati dal servizio (pianeti, §3.13)
+    error_lower: u.Quantity | None = None
 
     def as_dict(self) -> dict:
         from astrotwo.core.commands import quantity_json
@@ -216,7 +259,9 @@ class ProfileValue:
         return {"quantity": self.quantity, "value": plain(self.value), "error": plain(self.error),
                 "interval": None if self.interval is None else [plain(self.interval[0]), plain(self.interval[1])],
                 "interval_kind": self.interval_kind, "method": self.method, "formula": self.formula,
-                "reference": self.reference, "note": self.note, "provenance": self.provenance.as_dict()}
+                "reference": self.reference, "note": self.note, "provenance": self.provenance.as_dict(),
+                **({"error_upper": plain(self.error_upper), "error_lower": plain(self.error_lower)}
+                   if self.error_upper is not None or self.error_lower is not None else {})}
 
 
 def _provenance(request: RequestRecord, service: str, table: str | None, query: str | None,
@@ -231,6 +276,8 @@ def _service_name(url: str) -> str:
         return "SIMBAD (mirror di Harvard)" if "harvard" in host else "SIMBAD (CDS)"
     if "gea.esac.esa.int" in host:
         return "Archivio Gaia (ESA)"
+    if "skies.esac.esa.int" in host:
+        return "ESASky (ESA)"
     if "exoplanetarchive" in host:
         return "NASA Exoplanet Archive"
     if "irsa" in host:
@@ -345,6 +392,106 @@ def _check(cancel) -> None:
         raise _Cancelled()
 
 
+# --------------------------------------------------------------------------
+# Esecuzione parallela (25 §3.12): semaforo delle richieste, tempi per servizio, thread, cache per thread
+# --------------------------------------------------------------------------
+
+
+class _Run:
+    """Un profilo in esecuzione: thread di lavoro, semaforo delle richieste di rete, segnale di arresto, turno della
+    CPU (``cpu_turn`` del 14: un thread alla volta lavora, le attese di rete sono parallele; 25 §3.12 regola 10)."""
+
+    def __init__(self) -> None:
+        self.gate = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
+        self.stop = threading.Event()
+        self.cpu = threading.Lock()
+        self.pool = ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="astrotwo-profile")
+
+    def submit(self, fn: Callable, *args, **kwargs) -> Future:
+        """Lavoro in un thread del profilo, con il turno della CPU e questo profilo come contesto (``_RUN``)."""
+        def task():
+            with cpu_turn(self.cpu):
+                return fn(*args, **kwargs)
+
+        context = contextvars.copy_context()
+        context.run(_RUN.set, self)
+        return self.pool.submit(context.run, task)
+
+    def wait(self, future: Future):
+        """Risultato di un lavoro, senza il turno della CPU durante l'attesa; arrestato → ``_Cancelled``."""
+        with network_wait():
+            while True:
+                try:
+                    return future.result(timeout=_POLL)
+                except TimeoutError:
+                    if self.stop.is_set():
+                        raise _Cancelled() from None
+
+
+_RUN: contextvars.ContextVar[_Run | None] = contextvars.ContextVar("astrotwo_profile_run", default=None)
+
+
+def _limited(timeouts: NetworkTimeouts, service: str) -> NetworkTimeouts:
+    """Timeout di una richiesta: il minimo tra quello del chiamante e il tempo massimo del servizio (§3.12 regola 4)."""
+    limit = float(SERVICE_TIME_LIMITS[service].to_value(u.s))
+    return NetworkTimeouts(connect=min(timeouts.connect, limit), read=min(timeouts.read, limit))
+
+
+def _network(service: str | None, function: Callable, *args, **kwargs):
+    """Chiamata a un servizio del livello 1 con il tempo massimo del servizio e, dentro ``build_profile``, con uno dei
+    ``MAX_CONCURRENT_REQUESTS`` posti del semaforo (25 §3.12 regole 3–4); profilo arrestato → ``_Cancelled``."""
+    if service is not None and "timeouts" in kwargs:
+        kwargs["timeouts"] = _limited(kwargs["timeouts"], service)
+    run = _RUN.get()
+    if run is None:
+        return function(*args, **kwargs)
+    with network_wait():  # posto del semaforo atteso senza il turno della CPU
+        while not run.gate.acquire(timeout=_POLL):
+            if run.stop.is_set():
+                raise _Cancelled()
+    try:
+        if run.stop.is_set():
+            raise _Cancelled()
+        return function(*args, **kwargs)
+    finally:
+        run.gate.release()
+
+
+def _tap(service: str, adql: str, **kwargs):
+    return _network(_SERVICE_OF[service], tap_query, service, adql, **kwargs)
+
+
+def _gather(functions: Sequence[Callable[[], object]]) -> list:
+    """Esegue funzioni indipendenti insieme dentro ``build_profile`` (in fila fuori); risultati nell'ordine dato."""
+    run = _RUN.get()
+    if run is None:
+        return [f() for f in functions]
+    futures = [run.submit(f) for f in functions]
+    return [run.wait(f) for f in futures]
+
+
+class _ThreadCaches:
+    """La ``SharedCache`` del 04 con un'istanza per thread sulla stessa cartella (la connessione ``sqlite3`` è legata
+    al thread che la apre; 25 §3.12 regola 9): il thread di chi chiama usa l'istanza ricevuta."""
+
+    def __init__(self, cache: SharedCache) -> None:
+        self._main = cache
+        self._owner = threading.get_ident()
+        self._local = threading.local()
+
+    def _cache(self) -> SharedCache:
+        if threading.get_ident() == self._owner:
+            return self._main
+        cache = getattr(self._local, "cache", None)
+        if cache is None:
+            cache = self._local.cache = SharedCache(self._main.root, limit_bytes=self._main.limit_bytes,
+                                                    orphan_min_age=self._main.orphan_min_age)
+        return cache
+
+    def __getattr__(self, name: str):
+        return getattr(self._cache(), name)
+
+
 def _simbad_candidates(position: SkyFrame, radius: u.Quantity, *, cache, refresh, timeouts):
     """Candidati SIMBAD per coordinate (25 §3.10): cerchio allargato da ``PM_SEARCH_MAX``, propagazione all'epoca."""
     icrs = position if position.frame_name == "icrs" else position.to("icrs")
@@ -355,7 +502,7 @@ def _simbad_candidates(position: SkyFrame, radius: u.Quantity, *, cache, refresh
     adql = ("SELECT b.main_id, b.otype, b.ra, b.dec, b.pmra, b.pmdec, b.nbref, d.path FROM basic AS b "
             "LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE CONTAINS(POINT('ICRS', b.ra, b.dec), "
             f"CIRCLE('ICRS', {ra0!r}, {dec0!r}, {float(search.value)!r})) = 1")
-    result = tap_query(_SIMBAD_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    result = _tap(_SIMBAD_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
     target = SkyCoord(ra0 * u.deg, dec0 * u.deg, frame="icrs")
     found, planets = [], []
     for row in result.table.table:
@@ -411,11 +558,11 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
     identifier = target.name or target.simbad_id  # con un nome: stessa richiesta del comando registrato (A7)
     if identifier is not None:
         try:
-            record = simbad_object(identifier, cache=cache, refresh=refresh, timeouts=timeouts)
+            record = _network("simbad", simbad_object, identifier, cache=cache, refresh=refresh, timeouts=timeouts)
         except VoProtocolsError as exc:
             if exc.code in ("NAME_NOT_FOUND", "ADQL_INVALID"):
                 raise
-            resolved = resolve_name(identifier, cache=cache, refresh=refresh)
+            resolved = _network(None, resolve_name, identifier, cache=cache, refresh=refresh)
             note = ModuleWarning("PROFILE_NO_IDENTIFIERS", f"SIMBAD non raggiungibile ({exc.code}): '{identifier}' "
                                  f"risolto da {resolved.source}, profilo per posizione senza identificativi",
                                  {"reason": "simbad_unreachable", "name": identifier, "service": resolved.source,
@@ -455,7 +602,8 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
                               f"{float(match_radius.to_value(u.arcsec)):g} arcsec)", "position",
                               warnings=notes + _network_notes(cand_notes) + excluded, requests=(request,))
     chosen = candidates[0]
-    record = simbad_object(chosen["main_id"], cache=cache, refresh=refresh, timeouts=timeouts)
+    record = _network("simbad", simbad_object, chosen["main_id"], cache=cache, refresh=refresh,
+                      timeouts=timeouts)
     sep = chosen["separation"]["value"] * u.arcsec
     note = ModuleWarning("PROFILE_POSITIONAL_MATCH", f"bersaglio per posizione: {record.main_id} a "
                          f"{float(sep.value)!r} arcsec (raggio {float(match_radius.to_value(u.arcsec))!r} arcsec)",
@@ -552,7 +700,7 @@ def _gaia_by_position(resolved: ResolvedTarget, radius: u.Quantity, *, cache, re
     ra0, dec0 = float(icrs.lon.to_value(u.deg)), float(icrs.lat.to_value(u.deg))
     adql = (f"SELECT source_id, ra, dec, phot_g_mean_mag FROM {_GAIA_SOURCE} WHERE 1 = CONTAINS(POINT('ICRS', ra, "
             f"dec), CIRCLE('ICRS', {ra0!r}, {dec0!r}, {float(radius.to_value(u.deg))!r}))")
-    result = tap_query(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    result = _tap(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
     target = SkyCoord(ra0 * u.deg, dec0 * u.deg, frame="icrs")
     found = []
     for row in result.table.table:
@@ -594,7 +742,7 @@ def _official_crossmatch(catalog: str, source_id: int, *, cache, refresh, timeou
     table = _OFFICIAL[catalog]
     adql = (f"SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM {table} "
             f"WHERE source_id = {int(source_id)}")
-    result = tap_query(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    result = _tap(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
     rows = result.table.table
     if len(rows) == 0:
         return None, result, adql
@@ -726,7 +874,7 @@ def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quant
         target_epoch = "jdate della riga (UTC)"
     ra0, dec0 = _icrs_deg(center)
     adql = f"SELECT {_IRSA_COLUMNS[catalog]} FROM {table} WHERE {_circle(ra0, dec0, search)}"
-    result = tap_query(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    result = _tap(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
     found = []
     for row in result.table.table:
         ra, dec = _value(row, "ra"), _value(row, "dec")
@@ -775,7 +923,7 @@ def _exoplanet_host(resolved: ResolvedTarget, gaia: CrossIdentification, *, cach
     requests, queries, notes = [], [], []
 
     def ask(adql: str):
-        result = tap_query(_EXOPLANET_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+        result = _tap(_EXOPLANET_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
         requests.append(result.request)
         queries.append(adql)
         notes.extend(w for w in result.warnings if w[0] == "FROM_CACHE")
@@ -816,7 +964,7 @@ class ProfileSection:
     """Una sezione: stato, valori, dettagli, avvisi, errori, server, tempo."""
 
     name: str
-    status: str = "pending"  # pending, running, done, partial, error, not_applicable
+    status: str = "pending"  # pending, running, done, partial, error, not_applicable, cancelled (25 §3.12)
     values: list[ProfileValue] = field(default_factory=list)
     details: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)
@@ -935,7 +1083,7 @@ def profile_astrometry(resolved: ResolvedTarget, gaia: CrossIdentification, *, c
     if gaia.source_id is not None:
         adql = f"SELECT {', '.join(_GAIA_COLUMNS)} FROM {_GAIA_SOURCE} WHERE source_id = {gaia.source_id}"
         try:
-            result = tap_query(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+            result = _tap(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
         except VoProtocolsError as exc:
             section.errors.append(_message(exc))
             gaia_failed = True
@@ -954,7 +1102,7 @@ def profile_astrometry(resolved: ResolvedTarget, gaia: CrossIdentification, *, c
             bj_adql = ("SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, "
                        f"flag FROM {_BJ_TABLE} WHERE source_id = {gaia.source_id}")
             try:
-                bj_result = tap_query(_GAIA_TAP, bj_adql, cache=cache, refresh=refresh, timeouts=timeouts)
+                bj_result = _tap(_GAIA_TAP, bj_adql, cache=cache, refresh=refresh, timeouts=timeouts)
             except VoProtocolsError as exc:
                 section.errors.append(_message(exc))
             else:
@@ -1114,7 +1262,7 @@ def _irsa_by_designation(catalog: str, identifier: str, *, cache, refresh, timeo
         where = _circle(position[0], position[1], DESIGNATION_RADIUS) + " AND "
     adql = (f"SELECT {_IRSA_COLUMNS[catalog]} FROM {_IRSA_TABLE[catalog]} WHERE {where or ''}"
             f"designation = {_adql_text(designation)}")
-    return tap_query(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts), adql
+    return _tap(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts), adql
 
 
 def _vizier_center(resolved: ResolvedTarget) -> tuple[SkyFrame, tuple]:
@@ -1159,31 +1307,55 @@ def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossId
         points.extend(new_points)
         provs.extend([prov] * len(new_points))
 
+    def attempt(function):
+        """Una richiesta della sezione: ``(risultato, None)`` oppure ``(None, errore del 14)``."""
+        def run():
+            _check(cancel)
+            try:
+                return function(), None
+            except VoProtocolsError as exc:
+                return None, exc
+        return run
+
+    # Le quattro richieste (Gaia, 2MASS, AllWISE, VizieR) partono insieme dentro build_profile (25 §3.12 regola 2);
+    # i risultati si applicano sempre nello stesso ordine.
     gaia = cross_ids.get("gaia_dr3")
+    gaia_adql = None
+    jobs: list[tuple[str, Callable]] = []
     if gaia is not None and gaia.source_id is not None:
-        adql = f"SELECT {', '.join(_GAIA_PHOT_COLUMNS)} FROM {_GAIA_SOURCE} WHERE source_id = {gaia.source_id}"
-        try:
-            result = tap_query(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
-        except VoProtocolsError as exc:
+        gaia_adql = f"SELECT {', '.join(_GAIA_PHOT_COLUMNS)} FROM {_GAIA_SOURCE} WHERE source_id = {gaia.source_id}"
+        jobs.append(("gaia_dr3", attempt(lambda: _tap(_GAIA_TAP, gaia_adql, cache=cache, refresh=refresh,
+                                                      timeouts=timeouts))))
+    for catalog in ("2mass", "allwise"):
+        found = cross_ids.get(catalog)
+        if found is not None and found.identifier is not None:
+            jobs.append((catalog, attempt(lambda c=catalog, f=found: _irsa_by_designation(
+                c, f.identifier, cache=cache, refresh=refresh, timeouts=timeouts))))
+    center, center_notes = _vizier_center(resolved)
+    jobs.append(("vizier_sed", attempt(lambda: _network("vizier_sed", vizier_photometry, center, VIZIER_SED_RADIUS,
+                                                        cache=cache, refresh=refresh, timeouts=timeouts))))
+    answers = dict(zip([name for name, _ in jobs], _gather([job for _, job in jobs]), strict=True))
+    _check(cancel)
+    if "gaia_dr3" in answers:
+        result, exc = answers["gaia_dr3"]
+        if exc is not None:
             section.errors.append({**_message(exc), "catalog": "Gaia DR3"})
         else:
             section.requests.append(result.request)
             section.warnings.extend(_network_notes(result.warnings))
-            prov = _provenance(result.request, _service_name(result.request.url), _GAIA_SOURCE, adql,
+            prov = _provenance(result.request, _service_name(result.request.url), _GAIA_SOURCE, gaia_adql,
                                gaia.identifier, gaia.method)
             add(sed_points_from(result.table.table, "gaia_dr3", identifier=gaia.identifier, match=gaia.method,
                                 provenance=prov.as_dict(), epoch="J2016.0 (ref_epoch)"), prov)
     for catalog in ("2mass", "allwise"):
-        _check(cancel)
-        found = cross_ids.get(catalog)
-        if found is None or found.identifier is None:
+        if catalog not in answers:
             continue
-        try:
-            result, adql = _irsa_by_designation(catalog, found.identifier, cache=cache, refresh=refresh,
-                                                timeouts=timeouts)
-        except VoProtocolsError as exc:
+        found = cross_ids[catalog]
+        answer, exc = answers[catalog]
+        if exc is not None:
             section.errors.append({**_message(exc), "catalog": catalog})
             continue
+        result, adql = answer
         section.requests.append(result.request)
         section.warnings.extend(_network_notes(result.warnings))
         if len(result.table.table) == 0:
@@ -1204,13 +1376,10 @@ def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossId
         add(sed_points_from(record.magnitudes, "simbad", identifier=record.main_id, match="simbad_identifier",
                             provenance=prov.as_dict()), prov)
         section.requests.append(req)
-    _check(cancel)
     vizier = None
-    center, center_notes = _vizier_center(resolved)
     section.warnings.extend(center_notes)
-    try:
-        result = vizier_photometry(center, VIZIER_SED_RADIUS, cache=cache, refresh=refresh, timeouts=timeouts)
-    except VoProtocolsError as exc:
+    result, exc = answers["vizier_sed"]
+    if exc is not None:
         section.errors.append({**_message(exc), "catalog": "vizier_sed"})
     else:
         section.requests.append(result.request)
@@ -1243,6 +1412,206 @@ def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossId
 
 
 # --------------------------------------------------------------------------
+# Immagini (25 §3.13, D25-5): miniature HiPS del 12
+# --------------------------------------------------------------------------
+
+
+def _thumbnail_center(resolved: ResolvedTarget, epoch: dict | None) -> tuple[SkyFrame, str, tuple]:
+    """Centro della miniatura: all'epoca della survey se nota (con il moto proprio SIMBAD), altrimenti la posizione
+    del bersaglio così com'è (SIMBAD J2000 o coordinate scritte), dichiarato."""
+    position = resolved.position
+    where = "posizione SIMBAD (ICRS J2000)" if resolved.simbad is not None else resolved.position_source
+    if epoch is None:
+        return position, (f"epoca della survey non nota (osservazioni più lunghe di un anno o t_min/t_max assenti): "
+                          f"centro = {where}"), ()
+    target = Time(epoch["mjd"], format="mjd", scale="utc")
+    moved, notes = _propagated(resolved, target, "la miniatura")
+    if notes:
+        return position, f"epoca della survey {epoch['jyear']!r} senza moto proprio noto: centro = {where}", notes
+    return moved, (f"centro portato all'epoca della survey (MJD {epoch['mjd']!r} UTC, {epoch['jyear']!r}) con il moto "
+                   f"proprio SIMBAD da {where} (propagate_position del 10)"), ()
+
+
+def profile_images(resolved: ResolvedTarget, *, surveys: Sequence[str] = IMAGE_SURVEYS,
+                   fov: u.Quantity = DEFAULT_THUMBNAIL_FOV, size: int = DEFAULT_THUMBNAIL_SIZE,
+                   cache: SharedCache | None = None, refresh: bool = False,
+                   timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+                   cancel: Callable[[], bool] | None = None) -> ProfileSection:
+    """Sezione Immagini (25 §3.13): una miniatura TAN per survey con ``hips_thumbnail`` del 12 (mirror compresi);
+    un survey giù resta un errore della sola miniatura."""
+    import base64
+
+    from astrotwo.core.hips import HiPSError, add_hips, hips_thumbnail, survey_epoch
+
+    section = ProfileSection("images")
+
+    def one(hips_id: str):
+        def run():
+            _check(cancel)
+            try:
+                service = _network("hips", add_hips, hips_id, cache=cache, refresh=refresh, timeouts=timeouts,
+                                   cds_down_shortcut=True)  # D25-18: CDS già giù → subito i mirror verificati
+                _check(cancel)
+                center, note, notes = _thumbnail_center(resolved, survey_epoch(service))
+                thumb = _network("hips", hips_thumbnail, service, center, fov=fov, size=size, cache=cache,
+                                 refresh=refresh, timeouts=timeouts)
+            except (HiPSError, VoProtocolsError) as exc:
+                return hips_id, None, exc
+            return hips_id, (service, thumb, note, notes), None
+        return run
+
+    thumbnails = []
+    for hips_id, found, exc in _gather([one(h) for h in surveys]):
+        if exc is not None:
+            section.errors.append({**_message(exc), "survey": hips_id})
+            continue
+        service, thumb, note, notes = found
+        section.warnings.extend(notes)
+        section.warnings.extend(w for w in tuple(service.warnings) + tuple(thumb.warnings)
+                                if w[0] in ("HIPS_MIRROR_FALLBACK", "HIPS_MIRROR_REJECTED", "FROM_CACHE"))
+        if service.request is not None:
+            section.requests.append(service.request)
+        thumbnails.append({**thumb.as_dict(), "center_note": note,
+                           "png": base64.b64encode(thumb.png()).decode("ascii") if thumb.format != "fits" else None})
+    section.details = {"thumbnails": thumbnails, "surveys": list(surveys), "fov": _qj(fov, "arcmin"), "size": size}
+    if not thumbnails:
+        section.status = "error" if section.errors else "not_applicable"
+    else:
+        section.status = "partial" if section.errors else "done"
+    return section
+
+
+# --------------------------------------------------------------------------
+# Pianeti (25 §3.13, D25-3): NASA Exoplanet Archive, pscomppars
+# --------------------------------------------------------------------------
+
+#: Parametri dei pianeti (colonna di ``pscomppars`` → unità). Unità dichiarate dall'archivio nel ``TAP_SCHEMA.columns``
+#: (letto il 2026-11-07); dove una colonna non la dichiara (``pl_orbsmax``, errori di ``pl_bmasse``) vale quella della
+#: stessa grandezza nelle altre colonne (``pl_orbsmaxerr1`` au, ``pl_bmasse`` masse terrestri), 25 §3.13.
+PLANET_PARAMETERS: Mapping[str, tuple[str, u.UnitBase]] = {
+    "period": ("pl_orbper", u.d), "semi_major_axis": ("pl_orbsmax", u.AU),
+    "eccentricity": ("pl_orbeccen", u.dimensionless_unscaled), "mass": ("pl_bmasse", u.M_earth),
+    "radius": ("pl_rade", u.R_earth), "equilibrium_temperature": ("pl_eqt", u.K)}
+_PLANET_TEXT = ("pl_name", "pl_letter", "hostname", "gaia_dr3_id", "discoverymethod", "disc_year", "pl_bmassprov")
+_HREF = re.compile(r"""href\s*=\s*["']?([^"'\s>]+)""", re.IGNORECASE)
+_ADS_BIBCODE = re.compile(r"/abs/([^/?#]+)")
+_TAG = re.compile(r"<[^>]*>")
+
+
+def parse_reflink(text: str | None) -> dict | None:
+    """Riferimento da un ``*_reflink`` dell'Exoplanet Archive (frammento HTML, testo esterno): solo il testo visibile
+    e, se il collegamento è di ADS, URL e bibcode (25 §3.13, T16). Nulla viene eseguito."""
+    import html
+
+    if text is None or not str(text).strip():
+        return None
+    raw = str(text)
+    label = " ".join(html.unescape(_TAG.sub(" ", raw)).split()) or None
+    out = {"text": label, "url": None, "bibcode": None}
+    match = _HREF.search(raw)
+    if match is not None:
+        url = html.unescape(match.group(1))
+        host = urllib.parse.urlparse(url).hostname or ""
+        if host.endswith("adsabs.harvard.edu"):
+            out["url"] = url
+            bib = _ADS_BIBCODE.search(urllib.parse.urlparse(url).path)
+            if bib is not None:
+                out["bibcode"] = urllib.parse.unquote(bib.group(1))
+    return out
+
+
+def _planet_columns() -> str:
+    cols = list(_PLANET_TEXT)
+    for column, _unit in PLANET_PARAMETERS.values():
+        cols += [column, f"{column}err1", f"{column}err2", f"{column}lim", f"{column}_reflink"]
+    return ", ".join(cols)
+
+
+def _as_unit(value, unit) -> u.Quantity | None:
+    if value is None:
+        return None
+    number = float(value.value) if isinstance(value, u.Quantity) else float(value)
+    return u.Quantity(number, unit, dtype=np.float64)
+
+
+def profile_planets(resolved: ResolvedTarget, host: CrossIdentification | None, *, cache: SharedCache | None = None,
+                    refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+                    cancel: Callable[[], bool] | None = None) -> ProfileSection:
+    """Sezione Pianeti (25 §3.13): ``pscomppars`` per ``gaia_dr3_id`` o ``hostname`` (come l'ospite è stato trovato);
+    parametri letti con errori, limite e riferimento; nessun ospite → ``done`` «nessun pianeta nell'archivio»."""
+    section = ProfileSection("planets")
+    if host is None or host.identifier is None:
+        if host is not None and host.error is not None:
+            section.errors.append({**host.error, "catalog": "exoplanet"})
+            section.status = "error"
+            return section
+        section.details = {"planets": [], "note": "nessun pianeta nell'archivio"
+                           + (f" ({host.note})" if host is not None and host.note else "")}
+        section.status = "done"
+        return section
+    official = dict(host.official or {})
+    if official.get("gaia_dr3_id"):
+        where = f"gaia_dr3_id = {_adql_text(str(official['gaia_dr3_id']))}"
+    else:
+        where = f"hostname = {_adql_text(host.identifier)}"
+    adql = f"SELECT {_planet_columns()} FROM pscomppars WHERE {where} ORDER BY pl_name"
+    _check(cancel)
+    try:
+        result = _tap(_EXOPLANET_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
+    except VoProtocolsError as exc:
+        section.errors.append({**_message(exc), "catalog": "exoplanet"})
+        section.status = "error"
+        return section
+    section.requests.append(result.request)
+    section.warnings.extend(_network_notes(result.warnings))
+    prov = _provenance(result.request, _service_name(result.request.url), "pscomppars", adql, host.identifier,
+                       host.method)
+    planets, references = [], set()
+    for row in result.table.table:
+        name = _value(row, "pl_name")
+        planet = {k: _value(row, k) for k in _PLANET_TEXT}
+        planet["parameters"] = {}
+        for key in ("discoverymethod", "disc_year"):
+            if planet[key] is not None:
+                section.values.append(ProfileValue(f"{name} {key}", planet[key], prov))
+        for key, (column, unit) in PLANET_PARAMETERS.items():
+            value = _as_unit(_value(row, column), unit)
+            ref = parse_reflink(_value(row, f"{column}_reflink"))
+            limit = _value(row, f"{column}lim")
+            upper, lower = _as_unit(_value(row, f"{column}err1"), unit), _as_unit(_value(row, f"{column}err2"), unit)
+            entry = {"column": column, "value": None if value is None else _qj(value),
+                     "error_upper": None if upper is None else _qj(upper),
+                     "error_lower": None if lower is None else _qj(lower),
+                     "limit": {1: "upper", -1: "lower", 0: None}.get(limit, limit), "reference": ref}
+            if key == "mass":
+                entry["mass_provenance"] = planet["pl_bmassprov"]
+            planet["parameters"][key] = entry
+            if value is None:
+                continue
+            if ref is not None:
+                references.add(ref.get("bibcode") or ref.get("text"))
+            note = None
+            if key == "mass" and planet["pl_bmassprov"]:
+                note = f"pl_bmassprov = {planet['pl_bmassprov']}"
+            if entry["limit"] in ("upper", "lower"):
+                note = "; ".join(x for x in (note, f"limite {'superiore' if entry['limit'] == 'upper' else 'inferiore'}"
+                                             f" ({column}lim = {limit})") if x)
+            section.values.append(ProfileValue(f"{name} {key}", value, prov, error_upper=upper, error_lower=lower,
+                                               reference=None if ref is None else (ref["bibcode"] or ref["text"]),
+                                               note=note))
+        planets.append(planet)
+    section.details = {"planets": planets, "host": host.identifier, "query_by": where.split(" =")[0],
+                       "note": None if planets else "nessun pianeta nell'archivio"}
+    if planets:
+        section.warnings.append(ModuleWarning(
+            "PROFILE_PLANETS_COMPOSITE", f"{len(planets)} pianeti da pscomppars: i parametri possono venire da lavori "
+            f"diversi ({len(references)} riferimenti distinti)",
+            {"count": len(planets), "references": len(references), "table": "pscomppars"}))
+    section.status = "done"
+    return section
+
+
+# --------------------------------------------------------------------------
 # Profilo completo (25 §7.1)
 # --------------------------------------------------------------------------
 
@@ -1257,6 +1626,8 @@ class ObjectProfile:
     sections: tuple[ProfileSection, ...]
     warnings: tuple = ()
     options: Mapping[str, object] = field(default_factory=dict)
+    cancelled: bool = False  # annullato: sezioni arrivate conservate, le altre ``cancelled`` (25 §3.12)
+    elapsed: float | None = None  # s, dalla chiamata (obiettivo PROFILE_TARGET_TIME, misurato, non un limite)
 
     @property
     def requests(self) -> tuple[RequestRecord, ...]:
@@ -1273,7 +1644,17 @@ class ObjectProfile:
         return {"target": self.target.as_dict(), "resolved": self.resolved.as_dict(), "options": dict(self.options),
                 "cross_identifications": [c.as_dict() for c in self.cross_ids],
                 "sections": [s.as_dict() for s in self.sections],
-                "warnings": [_warning_json(w) for w in self.warnings]}
+                "warnings": [_warning_json(w) for w in self.warnings], "cancelled": self.cancelled,
+                "elapsed": None if self.elapsed is None else {"value": self.elapsed, "unit": "s"}}
+
+
+def _section_limit(name: str) -> u.Quantity:
+    """Tempo massimo di una sezione: il più grande tra quelli dei suoi servizi (25 §3.12 regola 5)."""
+    return max((SERVICE_TIME_LIMITS[s] for s in SECTION_SERVICES[name]), key=lambda q: float(q.to_value(u.s)))
+
+
+def _cross_failed(catalog: str, exc: VoProtocolsError) -> CrossIdentification:
+    return CrossIdentification(catalog, None, None, note="incrocio non riuscito", error=_message(exc))
 
 
 def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
@@ -1281,18 +1662,37 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                   crossmatch_radius: u.Quantity = DEFAULT_CROSSMATCH_RADIUS,
                   on_section: Callable[[ProfileSection], None] | None = None,
                   cancel: Callable[[], bool] | None = None, cache: SharedCache | None = None,
-                  refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> ObjectProfile | None:
-    """Esegue le sezioni richieste (in C2 una dopo l'altra); ``on_section`` a ogni sezione terminata.
+                  refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
+                  surveys: Sequence[str] = IMAGE_SURVEYS, thumbnail_fov: u.Quantity = DEFAULT_THUMBNAIL_FOV,
+                  thumbnail_size: int = DEFAULT_THUMBNAIL_SIZE) -> ObjectProfile | None:
+    """Profilo (25 §3.12, §3.13): bersaglio, poi tutte le sezioni insieme con al più ``MAX_CONCURRENT_REQUESTS`` richieste
+    contemporanee e il tempo massimo di ogni sezione; ``on_section`` nel thread di chi chiama, una volta per sezione,
+    nell'ordine di arrivo.
 
-    Più candidati → ``PROFILE_AMBIGUOUS_TARGET`` con l'elenco (nessuna scelta); annullato → ``None``."""
+    Più candidati → ``PROFILE_AMBIGUOUS_TARGET`` con l'elenco (nessuna scelta). Annullato prima che il bersaglio sia
+    risolto → ``None``; dopo → ``ObjectProfile`` con ``cancelled = True``, sezioni arrivate conservate e le altre nello
+    stato ``cancelled``."""
     unknown = [s for s in sections if s not in SECTIONS]
     if unknown or not sections:
         raise ValueError(f"sezioni {unknown or list(sections)} non in {SECTIONS}")
     for name, value in (("match_radius", match_radius), ("crossmatch_radius", crossmatch_radius)):
         if not isinstance(value, u.Quantity) or not value.unit.is_equivalent(u.deg) or not value.value > 0:
             raise ValueError(f"{name}: angolo positivo con unità")
+    started = time.monotonic()
+    if _cancelled(cancel):
+        return None
+    if isinstance(cache, SharedCache):
+        cache = _ThreadCaches(cache)
+    run = _Run()
+    net = dict(cache=cache, refresh=refresh, timeouts=timeouts)
     try:
-        resolved = resolve_target(target, match_radius=match_radius, cache=cache, refresh=refresh, timeouts=timeouts)
+        # 1. Bersaglio (regola 1): annullabile, nessun limite complessivo (ripiego su NED, §3.10).
+        future = run.submit(resolve_target, target, match_radius=match_radius, **net)
+        while not future.done():
+            if _cancelled(cancel):
+                return None
+            time.sleep(_POLL / 5)
+        resolved = future.result()
         if isinstance(resolved, TargetCandidates):
             raise ObjectProfileError(
                 "PROFILE_AMBIGUOUS_TARGET", f"{len(resolved.candidates)} oggetti SIMBAD entro "
@@ -1300,53 +1700,71 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                 + ", ".join(str(c["main_id"]) for c in resolved.candidates) + ")",
                 params={"count": len(resolved.candidates), "radius": _qj(match_radius, "arcsec"),
                         "candidates": [dict(c) for c in resolved.candidates]})
-        _check(cancel)
-        done: list[ProfileSection] = []
-        cross_ids: list[CrossIdentification] = []
+        if _cancelled(cancel):
+            return None
+        names = [name for name in SECTIONS if name in sections]
+        flags = {name: threading.Event() for name in names}
 
-        def finish(section: ProfileSection, started: float) -> None:
-            section.elapsed = time.monotonic() - started
-            done.append(section)
-            if on_section is not None:
-                on_section(section)
+        def stopper(name: str) -> Callable[[], bool]:
+            return lambda: run.stop.is_set() or flags[name].is_set() or _cancelled(cancel)
 
-        if "identity" in sections:
-            started = time.monotonic()
-            section = profile_identity(resolved)
-            if section.status == "done":
-                for catalog in CATALOGS:
-                    _check(cancel)
-                    gaia = cross_ids[0] if cross_ids else None
-                    try:
-                        found = cross_identify(resolved, catalog, gaia=gaia, crossmatch_radius=crossmatch_radius,
-                                               cache=cache, refresh=refresh, timeouts=timeouts)
-                    except VoProtocolsError as exc:
-                        found = CrossIdentification(catalog, None, None, note="incrocio non riuscito",
-                                                    error=_message(exc))
-                    cross_ids.append(found)
-                    if found.error is not None:
-                        section.errors.append({**found.error, "catalog": catalog})
-                section.details["cross_identifications"] = [c.as_dict() for c in cross_ids]
-                for c in cross_ids:
-                    section.warnings.extend(w for w in c.warnings if w[0] == "PROFILE_IDENTIFIER_CONFLICT")
-                    section.requests.extend(c.requests)
-                if section.errors:
-                    section.status = "partial"
-            finish(section, started)
-        if "astrometry" in sections:
-            _check(cancel)
-            started = time.monotonic()
-            gaia = cross_ids[0] if cross_ids else None
-            section = ProfileSection("astrometry")
+        # 2. Catena degli identificativi condivisa (regola 2): Gaia una volta, gli altri appena Gaia è noto.
+        needed: set[str] = set()
+        if "identity" in names and resolved.simbad is not None:
+            needed.update(CATALOGS)
+        if "astrometry" in names:
+            needed.add("gaia_dr3")
+        if "photometry" in names:
+            needed.update(("gaia_dr3", "2mass", "allwise"))
+        if "planets" in names:
+            needed.update(("gaia_dr3", "exoplanet"))
+
+        def identify_gaia() -> CrossIdentification:
             try:
-                if gaia is None:
-                    gaia = cross_identify(resolved, "gaia_dr3", crossmatch_radius=crossmatch_radius, cache=cache,
-                                          refresh=refresh, timeouts=timeouts)
-                    cross_ids.insert(0, gaia)
-                section = profile_astrometry(resolved, gaia, cache=cache, refresh=refresh, timeouts=timeouts,
-                                             cancel=cancel)
+                return cross_identify(resolved, "gaia_dr3", crossmatch_radius=crossmatch_radius, **net)
             except VoProtocolsError as exc:
-                section.errors.append(_message(exc))
+                return _cross_failed("gaia_dr3", exc)
+
+        ids: dict[str, Future] = {}
+        sections_started = time.monotonic()
+        if needed:
+            ids["gaia_dr3"] = run.submit(identify_gaia)
+        for catalog in CATALOGS[1:]:
+            if catalog in needed:
+                def identify(catalog: str = catalog) -> CrossIdentification:
+                    gaia = run.wait(ids["gaia_dr3"])
+                    try:
+                        return cross_identify(resolved, catalog, gaia=gaia, crossmatch_radius=crossmatch_radius,
+                                              **net)
+                    except VoProtocolsError as exc:
+                        return _cross_failed(catalog, exc)
+                ids[catalog] = run.submit(identify)
+
+        def known(catalogs) -> list[CrossIdentification]:
+            return [run.wait(ids[c]) for c in CATALOGS if c in catalogs and c in ids]
+
+        # 3. Sezioni (regole 2, 5, 6).
+        def identity_section() -> ProfileSection:
+            section = profile_identity(resolved)
+            if section.status != "done":
+                return section
+            found = known(CATALOGS)
+            for c in found:
+                if c.error is not None:
+                    section.errors.append({**c.error, "catalog": c.catalog})
+            section.details["cross_identifications"] = [c.as_dict() for c in found]
+            for c in found:
+                section.warnings.extend(w for w in c.warnings if w[0] == "PROFILE_IDENTIFIER_CONFLICT")
+                section.requests.extend(c.requests)
+            if section.errors:
+                section.status = "partial"
+            return section
+
+        def astrometry_section() -> ProfileSection:
+            gaia = run.wait(ids["gaia_dr3"])
+
+            def without_gaia(error: dict) -> ProfileSection:  # servizio Gaia non riuscito: SIMBAD con la fonte
+                section = ProfileSection("astrometry", errors=[error])
                 if resolved.simbad is not None:
                     _simbad_astrometry(section, resolved.simbad)
                     section.requests.append(resolved.simbad.requests[0])
@@ -1355,38 +1773,105 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                     section.values.extend(values)
                     section.warnings.extend(notes)
                 section.status = "partial" if section.values else "error"
-            finish(section, started)
-        if "photometry" in sections:
-            _check(cancel)
-            started = time.monotonic()
-            have = {c.catalog for c in cross_ids}
-            for catalog in ("gaia_dr3", "2mass", "allwise"):
-                if catalog in have:
-                    continue
-                gaia = next((c for c in cross_ids if c.catalog == "gaia_dr3"), None)
-                try:
-                    found = cross_identify(resolved, catalog, gaia=gaia, crossmatch_radius=crossmatch_radius,
-                                           cache=cache, refresh=refresh, timeouts=timeouts)
-                except VoProtocolsError as exc:
-                    found = CrossIdentification(catalog, None, None, note="incrocio non riuscito",
-                                                error=_message(exc))
-                cross_ids.append(found)
-            section, _sed = profile_photometry(resolved, {c.catalog: c for c in cross_ids}, cache=cache,
-                                               refresh=refresh, timeouts=timeouts, cancel=cancel)
-            if "identity" not in sections:
-                section.details["cross_identifications"] = [c.as_dict() for c in cross_ids]
-                for c in cross_ids:
+                return section
+
+            if gaia.error is not None:  # incrocio per posizione con Gaia non riuscito
+                return without_gaia(dict(gaia.error))
+            try:
+                return profile_astrometry(resolved, gaia, cancel=stopper("astrometry"), **net)
+            except VoProtocolsError as exc:
+                return without_gaia(_message(exc))
+
+        def photometry_section() -> ProfileSection:
+            found = known(("gaia_dr3", "2mass", "allwise"))
+            section, _sed = profile_photometry(resolved, {c.catalog: c for c in found}, cancel=stopper("photometry"),
+                                               **net)
+            if "identity" not in names:
+                section.details["cross_identifications"] = [c.as_dict() for c in found]
+                for c in found:
                     section.warnings.extend(w for w in c.warnings if w[0] in ("PROFILE_POSITIONAL_MATCH",
                                                                               "PROFILE_IDENTIFIER_CONFLICT"))
                     section.requests.extend(c.requests)
-            finish(section, started)
+            return section
+
+        def images_section() -> ProfileSection:
+            return profile_images(resolved, surveys=surveys, fov=thumbnail_fov, size=thumbnail_size,
+                                  cancel=stopper("images"), **net)
+
+        def planets_section() -> ProfileSection:
+            host = run.wait(ids["exoplanet"])
+            return profile_planets(resolved, host, cancel=stopper("planets"), **net)
+
+        builders = {"identity": identity_section, "astrometry": astrometry_section,
+                    "photometry": photometry_section, "images": images_section, "planets": planets_section}
+        arrivals: queue.Queue = queue.Queue()
+
+        def run_section(name: str) -> None:
+            try:
+                section = builders[name]()
+            except _Cancelled:
+                return
+            except BaseException as exc:  # noqa: BLE001 - errore di programmazione: risale nel thread di chi chiama
+                arrivals.put((name, None, exc))
+                return
+            arrivals.put((name, section, None))
+
+        for name in names:
+            run.submit(run_section, name)
+        deadlines = {name: sections_started + float(_section_limit(name).to_value(u.s)) for name in names}
+        done: dict[str, ProfileSection] = {}
+        cancelled = False
+
+        def announce(section: ProfileSection) -> None:
+            done[section.name] = section
+            if on_section is not None:
+                on_section(section)
+
+        while len(done) < len(names):
+            try:
+                arrival = arrivals.get(timeout=_POLL)  # attesa senza il turno della CPU
+            except queue.Empty:
+                arrival = None
+            with cpu_turn(run.cpu):  # come i thread di lavoro: unità di Astropy e on_section un thread alla volta
+                if _cancelled(cancel):  # regola 7: arrivate conservate, le altre annullate
+                    run.stop.set()
+                    cancelled = True
+                    for name in names:
+                        if name not in done:
+                            announce(ProfileSection(name, status="cancelled",
+                                                    elapsed=time.monotonic() - sections_started))
+                    break
+                if arrival is not None and arrival[0] not in done:
+                    name, section, exc = arrival
+                    if exc is not None:
+                        raise exc
+                    section.elapsed = time.monotonic() - sections_started
+                    announce(section)
+                now = time.monotonic()
+                for name in names:
+                    if name not in done and now >= deadlines[name]:  # regola 5: scaduta, le altre continuano
+                        flags[name].set()
+                        limit = _section_limit(name)
+                        services = list(SECTION_SERVICES[name])
+                        timeout = ObjectProfileError(
+                            "PROFILE_SECTION_TIMEOUT", f"sezione {name}: nessuna risposta entro "
+                            f"{float(limit.to_value(u.s))!r} s ({', '.join(services)})",
+                            params={"section": name, "limit": _qj(limit, "s"), "services": services})
+                        announce(ProfileSection(name, status="error", elapsed=now - sections_started,
+                                                errors=[_message(timeout)]))
+        cross_ids = [f.result() for c, f in ids.items() if f.done() and not f.cancelled() and f.exception() is None]
+        order = {c: k for k, c in enumerate(CATALOGS)}
+        cross_ids.sort(key=lambda c: order[c.catalog])
     except _Cancelled:
         return None
+    finally:
+        run.stop.set()  # le richieste ancora in corso (sezioni scadute o annullate) si scartano quando finiscono
+        run.pool.shutdown(wait=False, cancel_futures=True)
     options = {"sections": list(sections), "match_radius": _qj(match_radius, "arcsec"),
-               "crossmatch_radius": _qj(crossmatch_radius, "arcsec")}
-    order = {name: k for k, name in enumerate(SECTIONS)}
-    return ObjectProfile(target, resolved, tuple(cross_ids), tuple(sorted(done, key=lambda s: order[s.name])),
-                         tuple(resolved.warnings), options)
+               "crossmatch_radius": _qj(crossmatch_radius, "arcsec"), "surveys": list(surveys),
+               "thumbnail_fov": _qj(thumbnail_fov, "arcmin"), "thumbnail_size": int(thumbnail_size)}
+    return ObjectProfile(target, resolved, tuple(cross_ids), tuple(done[name] for name in names),
+                         tuple(resolved.warnings), options, cancelled=cancelled, elapsed=time.monotonic() - started)
 
 
 # --------------------------------------------------------------------------
@@ -1394,8 +1879,9 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
 # --------------------------------------------------------------------------
 
 
-_RUN_KEYS = ("retrieved_at", "from_cache", "elapsed", "plot_png")  # plot_png: disegnato dai valori (25 §3.11)
-_RUN_CODES = ("FROM_CACHE", "SERVICE_MIRROR_FALLBACK", "DATA_REFRESHED")
+#: plot_png: disegnato dai valori (25 §3.11); png: miniature disegnate dai tile, la cui provenienza resta (§3.13)
+_RUN_KEYS = ("retrieved_at", "from_cache", "elapsed", "plot_png", "png")
+_RUN_CODES = ("FROM_CACHE", "SERVICE_MIRROR_FALLBACK", "DATA_REFRESHED", "HIPS_MIRROR_FALLBACK")  # D25-18
 
 
 def profile_content(data):
@@ -1412,6 +1898,7 @@ def profile_content(data):
 def _exec_object_profile(ctx, p: Mapping):
     from astrotwo.core.commands import (
         Outcome,
+        ProgressReport,
         ResultMessage,
         catalog_positions,
         quantity_json,
@@ -1449,11 +1936,20 @@ def _exec_object_profile(ctx, p: Mapping):
         position = SkyFrame(coords.coord[0], epoch=coords.epoch)
         origin = f"riga {int(row)} del livello {layer.id}"
     target = ProfileTarget(name=p.get("name"), position=position, simbad_id=p.get("simbad_id"), origin=origin)
-    ctx.step("object_profile")
+    total = len(p["sections"])
+    arrived: list[str] = []
+
+    def on_section(section: ProfileSection) -> None:  # avanzamento «passo k di n», una sezione per passo (§3.12)
+        arrived.append(section.name)
+        if ctx.progress is not None:
+            ctx.progress(ProgressReport(len(arrived), total, f"object_profile/{section.name}"))
+
     profile = build_profile(target, sections=tuple(p["sections"]), match_radius=q(p["match_radius"]),
-                            crossmatch_radius=q(p["crossmatch_radius"]), cancel=lambda: ctx.cancel.cancelled,
-                            cache=ctx.cache, refresh=ctx.refresh)
-    if profile is None:
+                            crossmatch_radius=q(p["crossmatch_radius"]), on_section=on_section,
+                            cancel=lambda: ctx.cancel.cancelled, cache=ctx.cache, refresh=ctx.refresh,
+                            surveys=tuple(p["surveys"]), thumbnail_fov=q(p["thumbnail_fov"]),
+                            thumbnail_size=int(p["thumbnail_size"]))
+    if profile is None:  # annullato prima della risoluzione del bersaglio: niente da conservare (discarded)
         return None
     values = profile.as_dict()
     warnings = [ResultMessage(w[0], w[1], dict(getattr(w, "params", None) or {})) for w in profile.warnings]
@@ -1483,8 +1979,9 @@ def _exec_object_profile(ctx, p: Mapping):
     if profile.resolved.simbad is not None:
         resolved["simbad_id"] = profile.resolved.simbad.main_id
     values["match_radius"] = quantity_json(q(p["match_radius"]))
+    # Annullato dopo la risoluzione: le sezioni arrivate restano nel risultato (COMMAND_CANCELLED partial, 05 §3.2)
     return Outcome(values=values, warnings=unique, provenance=provenance, network_fingerprint=fingerprint,
-                   resolved=resolved)
+                   resolved=resolved, cancelled=profile.cancelled or ctx.cancel.cancelled)
 
 
 def command_specs() -> list:
@@ -1494,13 +1991,14 @@ def command_specs() -> list:
     angle = {"physical_type": "angle"}
     return [
         CommandSpec(
-            "object.profile", 1, "Build the profile of an object: identity (SIMBAD), Gaia DR3 astrometry and "
-            "distance with a declared method, photometry and SED with official zero points; every value with its "
-            "source.",
-            "Costruisce il profilo di un oggetto: identità (SIMBAD), astrometria Gaia DR3 e distanza con metodo "
-            "dichiarato, fotometria e SED con punti zero ufficiali; ogni valore con la sua fonte.",
+            "object.profile", 1, "Build the profile of an object: identity (SIMBAD), HiPS thumbnails, Gaia DR3 "
+            "astrometry and distance with a declared method, photometry and SED with official zero points, known "
+            "planets (NASA Exoplanet Archive); every value with its source.",
+            "Costruisce il profilo di un oggetto: identità (SIMBAD), miniature HiPS, astrometria Gaia DR3 e distanza "
+            "con metodo dichiarato, fotometria e SED con punti zero ufficiali, pianeti noti (NASA Exoplanet "
+            "Archive); ogni valore con la sua fonte.",
             ("25 resolve_target", "25 build_profile", "14 simbad_object", "14 tap_query", "14 vizier_photometry",
-             "20 build_sed", "10 resolve_name", "10 propagate_position"), (
+             "20 build_sed", "10 resolve_name", "10 propagate_position", "12 add_hips", "12 hips_thumbnail"), (
                 P("name", "string", "Object name or identifier (one target only).",
                   "Nome o identificativo dell'oggetto (un solo bersaglio).", default=None),
                 P("position", "sky_position", "Sky position with frame and epoch (one target only).",
@@ -1520,6 +2018,15 @@ def command_specs() -> list:
                 P("crossmatch_radius", "quantity", "Radius of the positional cross-matches after propagation.",
                   "Raggio degli incroci per posizione dopo la propagazione.",
                   default={"value": float(DEFAULT_CROSSMATCH_RADIUS.value), "unit": "arcsec"}, minimum=0.0,
-                  exclusive_minimum=True, maximum=60.0, range_unit="arcsec", **angle)),
-            "session", _exec_object_profile, network=True, long=True, read_only=True, confirm=True, steps=1),
+                  exclusive_minimum=True, maximum=60.0, range_unit="arcsec", **angle),
+                P("surveys", "list", "HiPS surveys of the thumbnails (identifiers).",
+                  "Survey HiPS delle miniature (identificativi).", default=list(IMAGE_SURVEYS),
+                  item=P("survey", "string", "HiPS identifier.", "Identificativo HiPS.")),
+                P("thumbnail_fov", "quantity", "Field of view of the thumbnails (side).",
+                  "Campo delle miniature (lato).",
+                  default={"value": float(DEFAULT_THUMBNAIL_FOV.value), "unit": "arcmin"}, minimum=0.0,
+                  exclusive_minimum=True, maximum=600.0, range_unit="arcmin", **angle),
+                P("thumbnail_size", "integer", "Side of the thumbnails in pixels.", "Lato delle miniature in pixel.",
+                  default=DEFAULT_THUMBNAIL_SIZE, minimum=16, maximum=2048)),
+            "session", _exec_object_profile, network=True, long=True, read_only=True, confirm=True),
     ]
