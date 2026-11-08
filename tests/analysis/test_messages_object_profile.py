@@ -28,7 +28,7 @@ from tests.message_helpers import catalog_combinations, check_error, check_messa
 OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_IDENTIFIERS", "PROFILE_POSITIONAL_MATCH",
              "PROFILE_NO_PROPER_MOTION", "PROFILE_NO_GAIA", "PROFILE_GAIA_TWO_PARAMETER", "PROFILE_IDENTIFIER_CONFLICT",
              "PROFILE_NO_DISTANCE", "PROFILE_TARGET_CHANGED", "PROFILE_PLANETS_EXCLUDED", "PROFILE_NO_PHOTOMETRY",
-             "PROFILE_SECTION_TIMEOUT", "PROFILE_PLANETS_COMPOSITE",
+             "PROFILE_SECTION_TIMEOUT", "PROFILE_PLANETS_COMPOSITE", "PROFILE_PLANET_HOST_MISMATCH",
              "SED_NO_ZERO_POINT", "SED_NO_SYSTEM", "SED_NO_ERROR", "SED_LOW_QUALITY", "SED_UPPER_LIMIT", "SED_DUPLICATE",
              "SED_HIGH_PROPER_MOTION")
 FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects")}
@@ -37,6 +37,7 @@ PEG = (344.36658535524, 20.768832511140005)
 ETA_TAU = (56.871152303749994, 24.105135651944444)
 GAIA_CONE = [("source_id", "long", None), ("ra", "double", "deg"), ("dec", "double", "deg"),
              ("phot_g_mean_mag", "float", "mag")]
+HOSTS = [("hostname", "char", None), ("gaia_dr3_id", "char", None)]
 
 
 def required() -> set[tuple[str, str | None]]:
@@ -185,6 +186,21 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
     seen.error(info.value)
     # PROFILE_PLANETS_COMPOSITE: pianeti di TRAPPIST-1 da pscomppars (risposta vera, 25 §3.13)
     seen.profile(build(ProfileTarget(name="TRAPPIST-1"), sections=("planets",), cache=cache))
+    # PROFILE_PLANET_HOST_MISMATCH (D25-17 (10)): Vega, ospite per hostname e poi per gaia_dr3_id (risposte sintetiche)
+    for by_name in ([], [["Ospite per nome", ""]]):
+        services.overrides[("gaia", "CONTAINS")] = lambda q: votable(GAIA_CONE, [[42, VEGA[0], VEGA[1], 17.0]])
+        services.overrides[("gaia", "best_neighbour")] = lambda q: votable(
+            [("source_id", "long", None), ("original_ext_source_id", "char", None),
+             ("angular_distance", "double", "arcsec"), ("number_of_neighbours", "int", None),
+             ("xm_flag", "short", None)], [])
+        services.overrides[("irsa", "")] = lambda q: votable([("designation", "char", None)], [])
+        services.overrides[("exoplanet", "gaia_dr3_id = 'Gaia DR3 42'")] = lambda q: votable(
+            HOSTS, [["Altro ospite", "Gaia DR3 42"]])
+        services.overrides[("exoplanet", "hostname IN")] = lambda q, rows=by_name: votable(HOSTS, rows)
+        services.overrides[("exoplanet", "hostname = 'Ospite per nome'")] = lambda q: votable(
+            [("pl_name", "char", None)], [])
+        seen.profile(build(ProfileTarget(name="Vega"), sections=("identity", "planets"), cache=cache, refresh=True))
+        services.overrides.clear()
     # PROFILE_SECTION_TIMEOUT: astrometria oltre il suo tempo (ridotto qui) con l'archivio Gaia lento (25 §3.12)
     limit = op._section_limit
     monkeypatch.setattr(op, "_section_limit", lambda name: 0.2 * u.s if name == "astrometry" else limit(name))

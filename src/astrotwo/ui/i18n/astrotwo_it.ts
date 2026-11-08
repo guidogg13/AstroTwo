@@ -491,6 +491,37 @@
     </message>
 </context>
 <context>
+    <name>CandidatesDialog</name>
+    <message>
+        <source>Choose the object</source>
+        <translation>Scegli l&apos;oggetto</translation>
+    </message>
+    <message>
+        <source>Several SIMBAD objects match: choose one. No object is chosen automatically.</source>
+        <translation>Più oggetti SIMBAD corrispondono: scegline uno. Nessun oggetto viene scelto in automatico.</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nome</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Tipo</translation>
+    </message>
+    <message>
+        <source>Separation</source>
+        <translation>Separazione</translation>
+    </message>
+    <message>
+        <source>Citations</source>
+        <translation>Citazioni</translation>
+    </message>
+    <message>
+        <source>Profile of this object</source>
+        <translation>Profilo di questo oggetto</translation>
+    </message>
+</context>
+<context>
     <name>CatalogInViewDialog</name>
     <message>
         <source>Catalog in view</source>
@@ -835,7 +866,7 @@
     <name>HistoryPanel</name>
     <message>
         <source>AI</source>
-        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25; valore confermato il 2026-10-25): il troncamento lo dichiara il 13; il comando resta con il default del 14. Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
+        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25; valore confermato il 2026-10-25): il troncamento lo dichiara il 13; il comando resta con il default del 14. Durata del pulsante «Profilo» accanto al campo «Vai a» (43 §3.2 punto 2, D43-6). Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
         <translation>IA</translation>
     </message>
     <message>
@@ -925,6 +956,56 @@
     <message>
         <source>cancelled</source>
         <translation>annullato</translation>
+    </message>
+</context>
+<context>
+    <name>IdentityView</name>
+    <message>
+        <source>Identifiers (%1)</source>
+        <translation>Identificativi (%1)</translation>
+    </message>
+    <message>
+        <source>Catalog</source>
+        <translation>Catalogo</translation>
+    </message>
+    <message>
+        <source>Identifier</source>
+        <translation>Identificativo</translation>
+    </message>
+    <message>
+        <source>Method</source>
+        <translation>Metodo</translation>
+    </message>
+    <message>
+        <source>Separation</source>
+        <translation>Separazione</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Note</translation>
+    </message>
+    <message>
+        <source>%1 candidates, no choice</source>
+        <translation>%1 candidati, nessuna scelta</translation>
+    </message>
+    <message>
+        <source>SIMBAD page</source>
+        <translation>Pagina SIMBAD</translation>
+    </message>
+</context>
+<context>
+    <name>ImagesView</name>
+    <message>
+        <source>Center epoch: %1</source>
+        <translation>Epoca del centro: %1</translation>
+    </message>
+    <message>
+        <source>Tiles from %1</source>
+        <translation>Tile da %1</translation>
+    </message>
+    <message>
+        <source>Full text</source>
+        <translation>Testo integrale</translation>
     </message>
 </context>
 <context>
@@ -1257,6 +1338,10 @@
         <translation>Pagina SIMBAD</translation>
     </message>
     <message>
+        <source>Profile of %1</source>
+        <translation>Profilo di %1</translation>
+    </message>
+    <message>
         <source>source %1</source>
         <translation>fonte %1</translation>
     </message>
@@ -1449,6 +1534,14 @@
         <translation>Incrocia cataloghi…</translation>
     </message>
     <message>
+        <source>Object profile…</source>
+        <translation>Profilo dell&apos;oggetto…</translation>
+    </message>
+    <message>
+        <source>Profiles</source>
+        <translation>Profili</translation>
+    </message>
+    <message>
         <source>Distance</source>
         <translation>Distanza</translation>
     </message>
@@ -1509,6 +1602,14 @@
         <translation>Barra degli strumenti</translation>
     </message>
     <message>
+        <source>Profile</source>
+        <translation>Profilo</translation>
+    </message>
+    <message>
+        <source>Open the profile of the object just found</source>
+        <translation>Apri il profilo dell&apos;oggetto appena trovato</translation>
+    </message>
+    <message>
         <source>The file cannot be opened</source>
         <translation>Il file non si può aprire</translation>
     </message>
@@ -1539,6 +1640,10 @@
     <message>
         <source>Send only the selected rows (%1)</source>
         <translation>Manda solo le righe selezionate (%1)</translation>
+    </message>
+    <message>
+        <source>Profile at this position…</source>
+        <translation>Profilo in questa posizione…</translation>
     </message>
     <message>
         <source>Send whole table via SAMP</source>
@@ -1579,6 +1684,10 @@
     <message>
         <source>Show cross-match report</source>
         <translation>Mostra il report dell&apos;incrocio</translation>
+    </message>
+    <message>
+        <source>Profile of this source</source>
+        <translation>Profilo di questa sorgente</translation>
     </message>
     <message>
         <source>field %1</source>
@@ -1737,6 +1846,127 @@
     </message>
 </context>
 <context>
+    <name>ObjectProfileDialog</name>
+    <message>
+        <source>Object profile</source>
+        <translation>Profilo dell&apos;oggetto</translation>
+    </message>
+    <message>
+        <source>Name or coordinates (%1)</source>
+        <translation>Nome o coordinate (%1)</translation>
+    </message>
+    <message>
+        <source>Name or coordinates</source>
+        <translation>Nome o coordinate</translation>
+    </message>
+    <message>
+        <source>Epoch of typed coordinates (never assumed): written in the command</source>
+        <translation>Epoca delle coordinate scritte (mai assunta): scritta nel comando</translation>
+    </message>
+    <message>
+        <source>Epoch</source>
+        <translation>Epoca</translation>
+    </message>
+    <message>
+        <source>Profile</source>
+        <translation>Profilo</translation>
+    </message>
+    <message>
+        <source>Write a name or a coordinate pair</source>
+        <translation>Scrivi un nome o una coppia di coordinate</translation>
+    </message>
+    <message>
+        <source>Epoch not readable: %1 (for example J2000.0 or 2016.0)</source>
+        <translation>Epoca non leggibile: %1 (per esempio J2000.0 o 2016.0)</translation>
+    </message>
+</context>
+<context>
+    <name>PhotometryView</name>
+    <message>
+        <source>Catalog</source>
+        <translation>Catalogo</translation>
+    </message>
+    <message>
+        <source>Band</source>
+        <translation>Banda</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>Sistema</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation>Valore</translation>
+    </message>
+    <message>
+        <source>Quality</source>
+        <translation>Qualità</translation>
+    </message>
+    <message>
+        <source>λ</source>
+        <translation>λ</translation>
+    </message>
+    <message>
+        <source>Fν</source>
+        <translation>Fν</translation>
+    </message>
+    <message>
+        <source>In plot</source>
+        <translation>Nel grafico</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>sì</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>no</translation>
+    </message>
+    <message>
+        <source>upper limit</source>
+        <translation>limite superiore</translation>
+    </message>
+</context>
+<context>
+    <name>PlanetsView</name>
+    <message>
+        <source>No planet in the archive</source>
+        <translation>Nessun pianeta nell&apos;archivio</translation>
+    </message>
+    <message>
+        <source>Period</source>
+        <translation>Periodo</translation>
+    </message>
+    <message>
+        <source>Semi-major axis</source>
+        <translation>Semiasse maggiore</translation>
+    </message>
+    <message>
+        <source>Eccentricity</source>
+        <translation>Eccentricità</translation>
+    </message>
+    <message>
+        <source>Mass</source>
+        <translation>Massa</translation>
+    </message>
+    <message>
+        <source>Radius</source>
+        <translation>Raggio</translation>
+    </message>
+    <message>
+        <source>Equilibrium temperature</source>
+        <translation>Temperatura di equilibrio</translation>
+    </message>
+    <message>
+        <source>Planet</source>
+        <translation>Pianeta</translation>
+    </message>
+    <message>
+        <source>Discovery</source>
+        <translation>Scoperta</translation>
+    </message>
+</context>
+<context>
     <name>PreferencesDialog</name>
     <message>
         <source>Settings</source>
@@ -1824,6 +2054,168 @@
     </message>
 </context>
 <context>
+    <name>ProfileTab</name>
+    <message>
+        <source>Rerun with fresh data</source>
+        <translation>Riesegui con dati aggiornati</translation>
+    </message>
+    <message>
+        <source>Show in sky</source>
+        <translation>Mostra nel cielo</translation>
+    </message>
+    <message>
+        <source>Identity</source>
+        <translation>Identità</translation>
+    </message>
+    <message>
+        <source>Images</source>
+        <translation>Immagini</translation>
+    </message>
+    <message>
+        <source>Astrometry and distance</source>
+        <translation>Astrometria e distanza</translation>
+    </message>
+    <message>
+        <source>Photometry</source>
+        <translation>Fotometria</translation>
+    </message>
+    <message>
+        <source>Planets</source>
+        <translation>Pianeti</translation>
+    </message>
+    <message>
+        <source>Queued</source>
+        <translation>In coda</translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation>In corso</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>Annullato</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Errore</translation>
+    </message>
+    <message>
+        <source>Done in %1 s</source>
+        <translation>Finito in %1 s</translation>
+    </message>
+</context>
+<context>
+    <name>ProfilesWindow</name>
+    <message>
+        <source>Profiles</source>
+        <translation>Profili</translation>
+    </message>
+    <message>
+        <source>Close profile</source>
+        <translation>Chiudi il profilo</translation>
+    </message>
+    <message>
+        <source>The profile is still running: cancel it and close the tab?</source>
+        <translation>Il profilo è ancora in corso: annullarlo e chiudere la scheda?</translation>
+    </message>
+</context>
+<context>
+    <name>ProvenancePopup</name>
+    <message>
+        <source>Copy</source>
+        <extracomment>Ordine fisso delle sezioni nella scheda (D43-2): le Immagini stanno a destra dell&apos;Identità. Servizi che ogni sezione può interrogare (copia dei nomi di ``SECTION_SERVICES`` del 25, per l&apos;intestazione). Testo di riconoscimento di STScI per i survey DSS (01 §6.1, primo paragrafo; D25-17 (3)). Misure (D43-6). Riconoscimento dell&apos;identificativo di una riga (43 §3.2 punto 5, D43-3): origine del livello → colonne e prefisso. URL di copyright dichiarati dai survey (``obs_copyright_url``) già mostrati come collegamento (43 §3.7).</extracomment>
+        <translation>Copia</translation>
+    </message>
+    <message>
+        <source>Quantity</source>
+        <translation>Grandezza</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation>Valore</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Errore</translation>
+    </message>
+    <message>
+        <source>Unit</source>
+        <translation>Unità</translation>
+    </message>
+    <message>
+        <source>Interval</source>
+        <translation>Intervallo</translation>
+    </message>
+    <message>
+        <source>Band</source>
+        <translation>Banda</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>Sistema</translation>
+    </message>
+    <message>
+        <source>read from the service</source>
+        <translation>letto dal servizio</translation>
+    </message>
+    <message>
+        <source>computed</source>
+        <translation>calcolato</translation>
+    </message>
+    <message>
+        <source>Method</source>
+        <translation>Metodo</translation>
+    </message>
+    <message>
+        <source>Service</source>
+        <translation>Servizio</translation>
+    </message>
+    <message>
+        <source>Server</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <source>Table</source>
+        <translation>Tabella</translation>
+    </message>
+    <message>
+        <source>Query</source>
+        <translation>Interrogazione</translation>
+    </message>
+    <message>
+        <source>Identifier</source>
+        <translation>Identificativo</translation>
+    </message>
+    <message>
+        <source>Reference</source>
+        <translation>Riferimento</translation>
+    </message>
+    <message>
+        <source>Retrieved</source>
+        <translation>Data</translation>
+    </message>
+    <message>
+        <source>From cache</source>
+        <translation>Dalla cache</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>sì</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>no</translation>
+    </message>
+    <message>
+        <source>Command</source>
+        <translation>Comando</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Nota</translation>
+    </message>
+</context>
+<context>
     <name>SaveSessionDialog</name>
     <message>
         <source>Save session</source>
@@ -1840,6 +2232,61 @@
     <message>
         <source>AstroTwo session (*%1)</source>
         <translation>Sessione di AstroTwo (*%1)</translation>
+    </message>
+</context>
+<context>
+    <name>SectionView</name>
+    <message>
+        <source>Retry this section</source>
+        <translation>Riprova questa sezione</translation>
+    </message>
+    <message>
+        <source>Waiting</source>
+        <translation>In attesa</translation>
+    </message>
+    <message>
+        <source>Running · %1 · %2 s</source>
+        <translation>In corso · %1 · %2 s</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>Annullata</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Errore</translation>
+    </message>
+    <message>
+        <source>no request</source>
+        <translation>nessuna richiesta</translation>
+    </message>
+    <message>
+        <source>Arrived · %1 · %2 s</source>
+        <translation>Arrivata · %1 · %2 s</translation>
+    </message>
+    <message>
+        <source>in part</source>
+        <translation>in parte</translation>
+    </message>
+    <message>
+        <source>Quantity</source>
+        <translation>Grandezza</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation>Valore</translation>
+    </message>
+    <message>
+        <source>Unit</source>
+        <translation>Unità</translation>
+    </message>
+    <message>
+        <source>Reference</source>
+        <translation>Riferimento</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Nota</translation>
     </message>
 </context>
 <context>
@@ -1943,6 +2390,13 @@
     <message>
         <source>step %1 of %2</source>
         <translation>passo %1 di %2</translation>
+    </message>
+</context>
+<context>
+    <name>ValueTable</name>
+    <message>
+        <source>Click for the source of this value</source>
+        <translation>Clic per la fonte di questo valore</translation>
     </message>
 </context>
 <context>

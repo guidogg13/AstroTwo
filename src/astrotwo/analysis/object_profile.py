@@ -919,39 +919,96 @@ def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quant
                                warnings=warnings + (note,), **common)
 
 
-def _exoplanet_host(resolved: ResolvedTarget, gaia: CrossIdentification, *, cache, refresh, timeouts):
-    requests, queries, notes = [], [], []
+class _ExoplanetAsk:
+    """Richieste all'Exoplanet Archive di un passo della catena, con richieste, interrogazioni e avvisi raccolti."""
 
-    def ask(adql: str):
-        result = _tap(_EXOPLANET_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
-        requests.append(result.request)
-        queries.append(adql)
-        notes.extend(w for w in result.warnings if w[0] == "FROM_CACHE")
+    def __init__(self, *, cache, refresh, timeouts) -> None:
+        self.net = dict(cache=cache, refresh=refresh, timeouts=timeouts)
+        self.requests: list = []
+        self.queries: list = []
+        self.notes: list = []
+
+    def __call__(self, adql: str):
+        result = _tap(_EXOPLANET_TAP, adql, **self.net)
+        self.requests.append(result.request)
+        self.queries.append(adql)
+        self.notes.extend(w for w in result.warnings if w[0] == "FROM_CACHE")
         return result.table.table
 
-    if gaia.source_id is not None:
-        rows = ask("SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = "
-                   f"{_adql_text(gaia.identifier)}")
-        if len(rows):
-            return CrossIdentification("exoplanet", _value(rows[0], "hostname"), "simbad_identifier",
-                                       official={"gaia_dr3_id": gaia.identifier}, warnings=tuple(notes),
-                                       requests=tuple(requests), queries=tuple(queries))
+    def found(self, identifier: str | None, official=None, **kw) -> CrossIdentification:
+        return CrossIdentification("exoplanet", identifier, None if identifier is None else "simbad_identifier",
+                                   official=official, warnings=tuple(self.notes), requests=tuple(self.requests),
+                                   queries=tuple(self.queries), **kw)
+
+
+def _exoplanet_by_gaia(gaia: CrossIdentification, ask: _ExoplanetAsk) -> CrossIdentification | None:
+    """Ospite per ``gaia_dr3_id`` (25 §3.10); ``None`` senza righe."""
+    rows = ask("SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = "
+               f"{_adql_text(gaia.identifier)}")
+    if not len(rows):
+        return None
+    return ask.found(_value(rows[0], "hostname"), official={"gaia_dr3_id": gaia.identifier})
+
+
+def _exoplanet_by_hostname(resolved: ResolvedTarget, ask: _ExoplanetAsk) -> CrossIdentification:
+    """Ospite per ``hostname`` uguale a un identificativo SIMBAD (25 §3.10); nessuno → «nessun ospite»."""
     names = _host_names(resolved)
     if names:
         rows = ask("SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ("
                    + ", ".join(_adql_text(n) for n in names) + ")")
         hosts = sorted({str(_value(r, "hostname")) for r in rows})
         if len(hosts) == 1:
-            return CrossIdentification("exoplanet", hosts[0], "simbad_identifier",
-                                       official={"hostname": hosts[0]}, warnings=tuple(notes),
-                                       requests=tuple(requests), queries=tuple(queries))
+            return ask.found(hosts[0], official={"hostname": hosts[0]})
         if len(hosts) > 1:
-            return CrossIdentification("exoplanet", None, None, candidates=tuple({"hostname": h} for h in hosts),
-                                       note="più ospiti dell'archivio corrispondono agli identificativi SIMBAD: "
-                                            "nessuna scelta", warnings=tuple(notes), requests=tuple(requests),
-                                       queries=tuple(queries))
-    return CrossIdentification("exoplanet", None, None, note="nessun ospite nell'archivio", warnings=tuple(notes),
-                               requests=tuple(requests), queries=tuple(queries))
+            return ask.found(None, candidates=tuple({"hostname": h} for h in hosts),
+                             note="più ospiti dell'archivio corrispondono agli identificativi SIMBAD: nessuna scelta")
+    return ask.found(None, note="nessun ospite nell'archivio")
+
+
+def _exoplanet_host(resolved: ResolvedTarget, gaia: CrossIdentification, *, cache, refresh, timeouts):
+    ask = _ExoplanetAsk(cache=cache, refresh=refresh, timeouts=timeouts)
+    if gaia.source_id is not None:
+        found = _exoplanet_by_gaia(gaia, ask)
+        if found is not None:
+            return found
+    return _exoplanet_by_hostname(resolved, ask)
+
+
+def exoplanet_host_early(resolved: ResolvedTarget) -> bool:
+    """Vero se l'ospite dei pianeti si cerca subito per ``hostname``, senza aspettare l'esito di Gaia della catena
+    (D25-17 (10), 25 §3.14): SIMBAD ha risposto e i suoi identificativi non contengono ``Gaia DR3``."""
+    return resolved.simbad is not None and _simbad_identifier(resolved, "gaia_dr3") is None and bool(
+        _host_names(resolved))
+
+
+def check_exoplanet_host(early: CrossIdentification, gaia: CrossIdentification, *, cache: SharedCache | None = None,
+                         refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS) -> CrossIdentification:
+    """Verifica dell'ospite trovato subito per ``hostname`` con il ``gaia_dr3_id`` arrivato dopo (D25-17 (10)).
+
+    Stesso ospite, o nessuna riga per ``gaia_dr3_id``: l'esito per ``hostname`` resta (come nella catena normale, dove
+    ``hostname`` è il secondo passo). Ospite diverso, o trovato solo per ``gaia_dr3_id``: l'esito per ``hostname``
+    resta (è quello usato dalla sezione Pianeti) con l'altro in ``conflict`` e l'avviso
+    ``PROFILE_PLANET_HOST_MISMATCH``: nessuna scelta silenziosa."""
+    if gaia.source_id is None or early.error is not None:
+        return early
+    ask = _ExoplanetAsk(cache=cache, refresh=refresh, timeouts=timeouts)
+    by_gaia = _exoplanet_by_gaia(gaia, ask)
+    merged = dict(requests=early.requests + tuple(ask.requests), queries=early.queries + tuple(ask.queries),
+                  warnings=early.warnings + tuple(ask.notes))
+    if by_gaia is None or by_gaia.identifier == early.identifier:
+        note = early.note if by_gaia is None else "confermato da gaia_dr3_id"
+        return dataclasses.replace(early, note=note, **merged)
+    params = {"gaia_dr3_id": gaia.identifier, "by_gaia": by_gaia.identifier}
+    if early.identifier is None:
+        warning = ModuleWarning("PROFILE_PLANET_HOST_MISMATCH", f"ospite dei pianeti: nessuno per hostname, "
+                                f"{by_gaia.identifier} per {gaia.identifier}: pianeti mostrati per hostname",
+                                {"reason": "only_gaia", **params})
+    else:
+        warning = ModuleWarning("PROFILE_PLANET_HOST_MISMATCH", f"ospite dei pianeti: {early.identifier} per "
+                                f"hostname, {by_gaia.identifier} per {gaia.identifier}: pianeti mostrati per hostname",
+                                {"reason": "different", "by_name": early.identifier, **params})
+    conflict = {"hostname": early.identifier or "", "gaia_dr3_id": gaia.identifier, "by_gaia": by_gaia.identifier}
+    return dataclasses.replace(early, conflict=conflict, **{**merged, "warnings": merged["warnings"] + (warning,)})
 
 
 # --------------------------------------------------------------------------
@@ -1648,6 +1705,10 @@ class ObjectProfile:
                 "elapsed": None if self.elapsed is None else {"value": self.elapsed, "unit": "s"}}
 
 
+#: avvisi della catena che l'Identità mostra (nessuna scelta tra due esiti, 25 §3.10 e §3.14)
+_CHAIN_CONFLICTS = ("PROFILE_IDENTIFIER_CONFLICT", "PROFILE_PLANET_HOST_MISMATCH")
+
+
 def _section_limit(name: str) -> u.Quantity:
     """Tempo massimo di una sezione: il più grande tra quelli dei suoi servizi (25 §3.12 regola 5)."""
     return max((SERVICE_TIME_LIMITS[s] for s in SECTION_SERVICES[name]), key=lambda q: float(q.to_value(u.s)))
@@ -1661,6 +1722,7 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                   match_radius: u.Quantity = DEFAULT_MATCH_RADIUS,
                   crossmatch_radius: u.Quantity = DEFAULT_CROSSMATCH_RADIUS,
                   on_section: Callable[[ProfileSection], None] | None = None,
+                  on_resolved: Callable[[ResolvedTarget], None] | None = None,
                   cancel: Callable[[], bool] | None = None, cache: SharedCache | None = None,
                   refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
                   surveys: Sequence[str] = IMAGE_SURVEYS, thumbnail_fov: u.Quantity = DEFAULT_THUMBNAIL_FOV,
@@ -1702,6 +1764,8 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                         "candidates": [dict(c) for c in resolved.candidates]})
         if _cancelled(cancel):
             return None
+        if on_resolved is not None:  # bersaglio risolto, prima delle sezioni, nel thread di chi chiama (43 §3.5)
+            on_resolved(resolved)
         names = [name for name in SECTIONS if name in sections]
         flags = {name: threading.Event() for name in names}
 
@@ -1729,8 +1793,26 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
         sections_started = time.monotonic()
         if needed:
             ids["gaia_dr3"] = run.submit(identify_gaia)
+        early_host = "exoplanet" in needed and exoplanet_host_early(resolved)
+        if early_host:  # D25-17 (10): ospite subito per hostname, poi verifica con gaia_dr3_id quando Gaia arriva
+            def host_by_name() -> CrossIdentification:
+                try:
+                    return _exoplanet_by_hostname(resolved, _ExoplanetAsk(**net))
+                except VoProtocolsError as exc:
+                    return _cross_failed("exoplanet", exc)
+
+            def host_checked() -> CrossIdentification:
+                early = run.wait(ids["exoplanet_hostname"])
+                gaia = run.wait(ids["gaia_dr3"])
+                try:
+                    return check_exoplanet_host(early, gaia, **net)
+                except VoProtocolsError as exc:  # verifica non riuscita: resta l'esito per hostname, con l'errore
+                    return dataclasses.replace(early, error=_message(exc), note="verifica con gaia_dr3_id non riuscita")
+            ids["exoplanet_hostname"] = run.submit(host_by_name)
         for catalog in CATALOGS[1:]:
-            if catalog in needed:
+            if catalog == "exoplanet" and early_host:
+                ids[catalog] = run.submit(host_checked)
+            elif catalog in needed:
                 def identify(catalog: str = catalog) -> CrossIdentification:
                     gaia = run.wait(ids["gaia_dr3"])
                     try:
@@ -1754,7 +1836,7 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                     section.errors.append({**c.error, "catalog": c.catalog})
             section.details["cross_identifications"] = [c.as_dict() for c in found]
             for c in found:
-                section.warnings.extend(w for w in c.warnings if w[0] == "PROFILE_IDENTIFIER_CONFLICT")
+                section.warnings.extend(w for w in c.warnings if w[0] in _CHAIN_CONFLICTS)
                 section.requests.extend(c.requests)
             if section.errors:
                 section.status = "partial"
@@ -1799,7 +1881,7 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                                   cancel=stopper("images"), **net)
 
         def planets_section() -> ProfileSection:
-            host = run.wait(ids["exoplanet"])
+            host = run.wait(ids["exoplanet_hostname" if early_host else "exoplanet"])
             return profile_planets(resolved, host, cancel=stopper("planets"), **net)
 
         builders = {"identity": identity_section, "astrometry": astrometry_section,
@@ -1859,9 +1941,15 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                             params={"section": name, "limit": _qj(limit, "s"), "services": services})
                         announce(ProfileSection(name, status="error", elapsed=now - sections_started,
                                                 errors=[_message(timeout)]))
+        # Un solo esito per l'Exoplanet Archive: la verifica con gaia_dr3_id se è finita (l'Identità la aspetta
+        # sempre), altrimenti la ricerca per hostname usata dai Pianeti (D25-17 (10), 25 §3.14).
+        if early_host and not ids["exoplanet"].done():
+            ids["exoplanet"] = ids["exoplanet_hostname"]
+        ids.pop("exoplanet_hostname", None)
         cross_ids = [f.result() for c, f in ids.items() if f.done() and not f.cancelled() and f.exception() is None]
         order = {c: k for k, c in enumerate(CATALOGS)}
         cross_ids.sort(key=lambda c: order[c.catalog])
+        chain_notes = tuple(w for c in cross_ids for w in c.warnings if w[0] == "PROFILE_PLANET_HOST_MISMATCH")
     except _Cancelled:
         return None
     finally:
@@ -1871,7 +1959,8 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                "crossmatch_radius": _qj(crossmatch_radius, "arcsec"), "surveys": list(surveys),
                "thumbnail_fov": _qj(thumbnail_fov, "arcmin"), "thumbnail_size": int(thumbnail_size)}
     return ObjectProfile(target, resolved, tuple(cross_ids), tuple(done[name] for name in names),
-                         tuple(resolved.warnings), options, cancelled=cancelled, elapsed=time.monotonic() - started)
+                         tuple(resolved.warnings) + chain_notes, options, cancelled=cancelled,
+                         elapsed=time.monotonic() - started)
 
 
 # --------------------------------------------------------------------------
@@ -1941,11 +2030,19 @@ def _exec_object_profile(ctx, p: Mapping):
 
     def on_section(section: ProfileSection) -> None:  # avanzamento «passo k di n», una sezione per passo (§3.12)
         arrived.append(section.name)
+        if ctx.progress is not None:  # con la sezione arrivata per la finestra Profili (43 §3.5)
+            ctx.progress(ProgressReport(len(arrived), total, f"object_profile/{section.name}",
+                                        detail={"event": "section", "section": section.as_dict()}))
+
+    def on_resolved(resolved: ResolvedTarget) -> None:
         if ctx.progress is not None:
-            ctx.progress(ProgressReport(len(arrived), total, f"object_profile/{section.name}"))
+            ctx.progress(ProgressReport(0, total, "object_profile/resolved", detail={
+                "event": "resolved", "resolved": resolved.as_dict(),
+                "warnings": [_warning_json(w) for w in resolved.warnings], "sections": list(p["sections"])}))
 
     profile = build_profile(target, sections=tuple(p["sections"]), match_radius=q(p["match_radius"]),
                             crossmatch_radius=q(p["crossmatch_radius"]), on_section=on_section,
+                            on_resolved=on_resolved,
                             cancel=lambda: ctx.cancel.cancelled, cache=ctx.cache, refresh=ctx.refresh,
                             surveys=tuple(p["surveys"]), thumbnail_fov=q(p["thumbnail_fov"]),
                             thumbnail_size=int(p["thumbnail_size"]))

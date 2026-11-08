@@ -9,7 +9,9 @@
 > motore (bersaglio, identificativi, identità, astrometria, distanza) e il
 > comando `object.profile`; le precisazioni nate scrivendo C2 sono in §3.10,
 > quelle di C3 (fotometria e SED) in §3.11, quelle di C4 (parallelismo e
-> Annulla) in §3.12.
+> Annulla) in §3.12, Immagini e Pianeti in §3.13, la ricerca dei pianeti
+> senza attendere Gaia (D25-17 (10), sprint C5) in §3.14. L'interfaccia è
+> specificata in `43-ui-profili.md` (D25-7).
 
 ## 2. Scopo
 
@@ -189,6 +191,10 @@ epoch photometry; modulo 22), articoli scientifici (ADS), spettri (SSA, modulo
 (Fase C) come estensioni; nessuno è specificato qui.
 
 ### 3.9 Interfaccia (proposta; dove scriverla: D25-7)
+
+> Dal 2026-11-08 la specifica dell'interfaccia è **`43-ui-profili.md`**
+> (D25-7, sprint C5), che parte da questo paragrafo e lo precisa; in caso di
+> differenza vale il `43`.
 
 **Da dove si apre:**
 - menu **Data → Object profile…** / **Profilo dell'oggetto…** (campo nome o
@@ -621,6 +627,58 @@ Fotometria, Pianeti (§3.4).
 `DEFAULT_THUMBNAIL_FOV`, `DEFAULT_THUMBNAIL_SIZE`, `PLANET_PARAMETERS`,
 `parse_reflink`; nel 12 `hips_thumbnail`.
 
+### 3.14 Pianeti senza attendere Gaia (D25-17 (10), sprint C5, 2026-11-08)
+
+Decisione del proprietario del 2026-11-08: se l'archivio Gaia non risponde,
+o il bersaglio non ha `Gaia DR3` tra gli identificativi SIMBAD, la sezione
+Pianeti cerca **subito** l'ospite per `hostname`, senza aspettare la catena
+di Gaia; se poi arriva un `gaia_dr3_id` che dà un risultato diverso, avviso
+dichiarato.
+
+- **Quando** (`exoplanet_host_early`): SIMBAD ha risposto, i suoi
+  identificativi **non** contengono `Gaia DR3 …` e ci sono identificativi
+  da confrontare con `hostname`. Con `Gaia DR3` in SIMBAD l'esito di Gaia
+  della catena è immediato (nessuna richiesta all'archivio, §3.10): la
+  catena resta quella di §3.10 (prima `gaia_dr3_id`, poi `hostname`) e
+  l'archivio Gaia giù non la ferma. Il caso «archivio Gaia giù» che faceva
+  attendere i Pianeti è quindi sempre quello senza `Gaia DR3` in SIMBAD
+  (passo per posizione su Gaia, Vega il 2026-11-08). SIMBAD giù: nessun
+  identificativo da confrontare, catena come prima.
+- **Come** (`build_profile`): la ricerca per `hostname` (stessa richiesta
+  di §3.10, `_exoplanet_by_hostname`) parte con le altre all'inizio delle
+  sezioni; la sezione Pianeti usa il suo esito (`profile_planets` con
+  `WHERE hostname = …`, come in §3.13). In parallelo, quando l'esito di Gaia
+  arriva, **`check_exoplanet_host`** fa la richiesta per `gaia_dr3_id` se
+  la catena ha trovato un `source_id` (per posizione):
+  - nessuna riga, o **lo stesso ospite**: resta l'esito per `hostname`
+    (nella catena normale `hostname` è il secondo passo dopo `gaia_dr3_id`
+    senza righe, quindi l'esito è lo stesso); stesso ospite → nota
+    «confermato da gaia_dr3_id»;
+  - **ospite diverso**, o ospite trovato **solo** per `gaia_dr3_id`:
+    l'esito per `hostname` resta quello usato dai Pianeti (nessuna scelta
+    silenziosa: non si cambia l'ospite dopo che la sezione è arrivata),
+    l'altro ospite è in `conflict` (`hostname`, `gaia_dr3_id`, `by_gaia`)
+    e c'è l'avviso **`PROFILE_PLANET_HOST_MISMATCH`** (ragioni `different`
+    e `only_gaia`, con i due ospiti e il `gaia_dr3_id`);
+  - richiesta per `gaia_dr3_id` non riuscita: resta l'esito per `hostname`,
+    con l'errore del servizio nell'esito della catena e la nota «verifica
+    con gaia_dr3_id non riuscita»; l'errore dell'archivio Gaia, se c'è, è
+    già nell'Identità (§3.10).
+- **Dove si vede l'avviso:** nell'**Identità** (che aspetta sempre tutta
+  la catena, §3.12 regola 2, e mostra i conflitti della catena) e tra gli
+  avvisi del profilo (`ObjectProfile.warnings`, quindi del comando). Se
+  l'Identità non è tra le sezioni richieste, la verifica entra nel profilo
+  **solo se è finita** quando l'ultima sezione arriva; altrimenti l'esito
+  della catena per l'Exoplanet Archive è quello per `hostname` (scelta
+  minore, D25-19 (1)).
+- **Test:** T25 (§12): Vega con l'archivio Gaia fermo, Pianeti arrivati in
+  meno di 2 s (non 30 s) con la sola richiesta per `hostname`; ospite
+  trovato solo dal `gaia_dr3_id` arrivato dopo → avviso dichiarato.
+
+**Codice** (`object_profile.py`): `exoplanet_host_early`,
+`check_exoplanet_host`, `_exoplanet_by_gaia`, `_exoplanet_by_hostname`
+(la catena di §3.10 resta `_exoplanet_host`, ora composta dalle due).
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -685,7 +743,11 @@ Fotometria, Pianeti (§3.4).
 - **`build_profile(target, *, sections, options, on_section, cancel)`** —
   esegue le sezioni in parallelo (§3.12: al più 4 richieste contemporanee,
   tempo massimo per sezione); chiama `on_section(section)` a ogni sezione
-  terminata (arrivo progressivo, nel thread del chiamante); restituisce
+  terminata (arrivo progressivo, nel thread del chiamante) e, dallo sprint
+  C5, `on_resolved(resolved)` una volta, a bersaglio risolto e prima delle
+  sezioni (nel thread del chiamante; `object.profile` lo manda come evento
+  `resolved` nel campo `detail` dell'avanzamento, con le sezioni come eventi
+  `section`, per la finestra Profili del `43` §3.5); restituisce
   `ObjectProfile` (con `cancelled = True` se annullato dopo la risoluzione
   del bersaglio) o `None` (annullato prima).
 - **`profile_identity`, `profile_images`, `profile_astrometry`,
@@ -773,6 +835,7 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Annulla (§3.12 regole 7–8) | sezioni in corso `cancelled`, arrivate conservate; nessuna nuova richiesta | `COMMAND_CANCELLED` (`partial` con sezioni arrivate, altrimenti `discarded`) |
 | Nessun pianeta | sezione `done` con «nessun pianeta nell'archivio», non errore | — |
 | Pianeti trovati (`pscomppars`) | parametri con il loro riferimento, avviso che possono venire da lavori diversi | `PROFILE_PLANETS_COMPOSITE` |
+| Ospite trovato subito per `hostname` (§3.14) e poi diverso per `gaia_dr3_id` (o trovato solo per `gaia_dr3_id`) | pianeti dell'esito per `hostname`, l'altro ospite mostrato, nessuna scelta | `PROFILE_PLANET_HOST_MISMATCH` (`different`, `only_gaia`) |
 | Epoca della survey non nota (osservazioni più lunghe di un anno) | miniatura centrata sulla posizione SIMBAD J2000, dichiarato | — (`center_note`) |
 
 ## 11. Esposizione all'IA
@@ -815,6 +878,7 @@ cambiano).
 | T19 | Sezione fotometria | 51 Peg, Vega, eta Tau, TRAPPIST-1 con risposte registrate (archivio Gaia, IRSA, SIMBAD) e CDS giù | punti Gaia/2MASS/AllWISE/SIMBAD con banda, sistema, errore, qualità e provenienza; eta Tau 2MASS J e Ks (`ph_qual` `D`, saturate) fuori dal grafico con il motivo; Vega 2MASS saturata ma con `ph_qual` `CBC`: nel grafico per la regola D20-4, `rd_flg` mostrato; AllWISE `U` (Vega W1–W2, TRAPPIST-1 W4) limiti superiori fuori dal grafico; serie VizieR in errore nella sola sezione (`partial`); grafico PNG presente | confronto con le risposte registrate |
 | T20 | Passo per posizione di 2MASS | 2MASS senza identificativo da SIMBAD né dall'incrocio ufficiale, risposta registrata con `jdate` | sorgente trovata confrontando il bersaglio portato al `jdate` della riga, `PROFILE_POSITIONAL_MATCH` | separazione ricalcolata con Astropy |
 | T24 | Miniature (§3.13) | 51 Peg con le risposte vere di ESASky registrate il 2026-11-07 (DSS2, 2MASS, AllWISE colore); un survey con tutti i server giù | tre miniature 256 × 256 con survey, server reale, ordine, campo, crediti; AllWISE centrata all'epoca 2010,545 con la propagazione, DSS2 e 2MASS alla posizione J2000 dichiarata; survey giù → miniatura mancante con `NET_TIMEOUT` `hips_servers`, sezione `partial` | confronto, propagazione ricalcolata con Astropy |
+| T25 | Pianeti senza attendere Gaia (§3.14, D25-17 (10)) | Vega (senza `Gaia DR3` in SIMBAD) con l'archivio Gaia simulato fermo 3 s; poi Gaia per posizione che dà una sorgente sintetica il cui `gaia_dr3_id` ha un ospite nell'archivio | Pianeti arrivati prima della risposta di Gaia (< 2 s, non 30 s), `done`, «nessun pianeta», una sola richiesta (per `hostname`); nel secondo caso pianeti per `hostname` (nessuno), `PROFILE_PLANET_HOST_MISMATCH` `only_gaia` nell'Identità e tra gli avvisi del profilo | tempi, richieste, avvisi |
 | T13 | Conflitto di identificativi | SIMBAD dà 2MASS X, l'incrocio Gaia dà 2MASS Y | entrambi, `PROFILE_IDENTIFIER_CONFLICT` | |
 | T14 | Riproducibilità | `object.profile` registrato, rieseguito dalla sessione, poi con `refresh` | stesse richieste e stessi valori dalla cache; con `refresh` nuove richieste e `DATA_REFRESHED` | sessione del 05 |
 | T15 | Esportazione | `export_profile` ECSV | una riga per valore con tutte le colonne di provenienza; rilettura con `astropy.table` | ECSV valido |
@@ -823,10 +887,11 @@ cambiano).
 
 ## 13. Decisioni aperte
 
-Tutte le decisioni D25-1…D25-15 sono state **prese dal proprietario il
-2026-11-07** (D25-1…D25-12 dopo il report dello sprint C1, D25-13 dopo lo
-sprint C2, D25-14 e D25-15 dopo lo sprint C3). Restano qui come registro. Le
-scelte minori dello sprint C4 da confermare sono in **D25-16** (sotto).
+Tutte le decisioni D25-1…D25-18 sono state **prese dal proprietario**
+(D25-1…D25-15 il 2026-11-07: D25-1…D25-12 dopo il report dello sprint C1,
+D25-13 dopo lo sprint C2, D25-14 e D25-15 dopo lo sprint C3; D25-16, D25-17
+e D25-18 il 2026-11-08). Restano qui come registro. Aperta: **D25-19**
+(scelte minori dello sprint C5, da confermare).
 
 - **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
   `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
@@ -849,8 +914,9 @@ scelte minori dello sprint C4 da confermare sono in **D25-16** (sotto).
   risponde il CDS. Campo 5′, 256 × 256 pixel, TAN centrata (sprint C4).
 - **D25-6 — Esportazione — DECISA (2026-11-07):** ECSV dei valori con
   provenienza + PDF della scheda + PNG della SED (sprint C6).
-- **D25-7 — Specifica dell'interfaccia — DECISA (2026-11-07):** nel `43`,
-  scritto nello sprint C5.
+- **D25-7 — Specifica dell'interfaccia — DECISA (2026-11-07), ribadita il
+  2026-11-08:** nel nuovo `43-ui-profili.md` (template a 14 sezioni), scritto
+  nello sprint C5 e aggiunto a `INDICE.md`.
 - **D25-8 — Tempi — DECISA (2026-11-07):** obiettivo 60 s; tempo massimo per
   sezione SIMBAD 15 s, Gaia 30 s, IRSA 60 s, Exoplanet 30 s, HiPS 30 s e
   (D25-15) serie SED di VizieR 30 s; 4 richieste contemporanee (parallelismo
@@ -914,8 +980,11 @@ scelte minori dello sprint C4 da confermare sono in **D25-16** (sotto).
   passo per posizione.
 - **D25-15 — Tempo massimo della serie SED di VizieR — DECISA (proprietario,
   2026-11-07):** 30 s, aggiunto alla tabella dei tempi di D25-8 (§3.12).
-- **D25-17 — Scelte minori di Immagini e Pianeti (sprint C4) — da confermare
-  (proprietario).** Scritte in §3.13: (1) epoca della survey = punto medio di
+- **D25-17 — Scelte minori di Immagini e Pianeti (sprint C4) — DECISA
+  (proprietario, 2026-11-08): punti (1)–(9) confermati, punto (10) deciso**
+  (Pianeti subito per `hostname` senza attendere Gaia, avviso se poi
+  `gaia_dr3_id` dà un risultato diverso; scritto in §3.14, test T25).
+  Testo delle scelte, scritte in §3.13: (1) epoca della survey = punto medio di
   `t_min`/`t_max` solo se le osservazioni durano al più un anno, scala UTC
   dichiarata (oggi solo AllWISE); (2) PNG delle miniature in base64 nel
   risultato, fuori dall'impronta (circa 100–150 kB l'una nella sessione);
@@ -933,14 +1002,15 @@ scelte minori dello sprint C4 da confermare sono in **D25-16** (sotto).
   no (D25-18); (10) la sezione Pianeti attende l'esito di Gaia della catena:
   con l'archivio Gaia giù e senza `Gaia DR3` negli identificativi SIMBAD (Vega,
   2026-11-08) scade a 30 s (`PROFILE_SECTION_TIMEOUT`); proposta: in quel caso
-  cercare subito l'ospite per `hostname`, senza attendere Gaia.
+  cercare subito l'ospite per `hostname`, senza attendere Gaia — **decisa
+  così dal proprietario il 2026-11-08** (§3.14).
 - **D25-18 — Miniature con il CDS già giù — DECISA (proprietario,
   2026-11-08):** quando nella sessione il CDS risulta già giù (ripiego già
   avvenuto o MocServer già scaduto una volta), le miniature non aspettano di
   nuovo il timeout del MocServer e vanno subito sui mirror verificati, con
   avviso dichiarato. Scritto in §3.13; test in `tests/core/test_hips_thumbnail.py`.
-- **D25-16 — Scelte minori dello sprint C4 — da confermare (proprietario).**
-  Scritte in §3.12: (1) tempo massimo di una sezione = il più grande tra i
+- **D25-16 — Scelte minori dello sprint C4 — DECISA (proprietario,
+  2026-11-08): confermata tutta, punti (1)–(9).** Scritte in §3.12: (1) tempo massimo di una sezione = il più grande tra i
   tempi dei servizi che può interrogare (Identità 60 s, Astrometria 30 s,
   Fotometria 60 s), contato dalla partenza comune delle sezioni; (2) tempo
   massimo di ogni richiesta = minimo tra il timeout del chiamante e quello
@@ -956,10 +1026,21 @@ scelte minori dello sprint C4 da confermare sono in **D25-16** (sotto).
   volta sulla CPU con il turno del 14 (`cpu_turn`/`network_wait`), lasciato
   durante le attese di rete (regola 10, motivo verificato nei test).
 
+- **D25-19 — Scelte minori dello sprint C5 (motore) — da confermare
+  (proprietario).** Scritte in §3.14: (1) se l'Identità non è richiesta, la
+  verifica dell'ospite per `gaia_dr3_id` entra nel profilo solo se finita
+  quando arriva l'ultima sezione (il profilo non aspetta Gaia per lei);
+  (2) con un ospite diverso i Pianeti restano quelli dell'esito per
+  `hostname` (già mostrati), l'altro ospite è nel conflitto della catena e
+  nell'avviso; (3) un ospite trovato per `hostname` e nessuna riga per
+  `gaia_dr3_id` non dà avviso (è l'esito della catena normale).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C5, interfaccia (istruzione del proprietario del 2026-11-08):** `build_profile` con `on_resolved`; `object.profile` manda nell'avanzamento (`ProgressReport.detail` del 05) l'evento `resolved` (passo 0) e ogni sezione arrivata (evento `section`, stessa forma JSON del risultato) per la finestra Profili (`43` §3.5); test T29 del 05 aggiornati. |
+| 2026-11-08 | Claude Code | **Sprint C5 (decisioni del proprietario del 2026-11-08, autorizzazione D25-12):** D25-16 decisa (confermata tutta, (1)–(9)); D25-17 decisa ((1)–(9) confermati, (10) deciso: Pianeti subito per `hostname` senza attendere Gaia, avviso se poi `gaia_dr3_id` dà un risultato diverso); D25-7 ribadita (interfaccia in `43-ui-profili.md`, creato in bozza lo stesso giorno). Nuovo §3.14 (`exoplanet_host_early`, `check_exoplanet_host`, avviso `PROFILE_PLANET_HOST_MISMATCH` con ragioni `different` e `only_gaia`); §3.9 rimanda al `43`; §10 e §12 (T25); nuova D25-19 (scelte minori del motore in C5, da confermare). Codice e test in `object_profile.py` e `tests/analysis/test_object_profile_images_planets.py` (T25). |
 | 2026-11-08 | Claude Code | **Sprint C4, chiusura:** D25-18 decisa dal proprietario (miniature subito sui mirror verificati se il CDS risulta già giù nella sessione, avviso `HIPS_MIRROR_FALLBACK` `cds_down`; §3.13, §13); D25-17 (10) aggiunto (Pianeti con Gaia giù); test T8, T9, T16, T24 in `tests/analysis/test_object_profile_images_planets.py`. |
 | 2026-11-07 | Claude Code | **Sprint C4, Immagini e Pianeti (decisioni del proprietario del 2026-11-07):** nuovo §3.13 (miniature DSS2, 2MASS e AllWISE colore con `hips_thumbnail` del 12, centro all'epoca della survey quando nota, crediti dichiarati; **mirror ESASky di AllWISE colore verificato il 2026-11-07** con richieste reali — elenco ufficiale, `properties` uguale a quello di IRSA, stessi SHA-256 di due tile — quindi AllWISE entra; pianeti da `pscomppars` per `gaia_dr3_id` o `hostname`, errori e riferimento per parametro, `PROFILE_PLANETS_COMPOSITE`); §3.12 tempi di Immagini e Pianeti; §6, §10, §12 (T24); nuova D25-17. |
 | 2026-11-07 | Claude Code | **Sprint C4 (decisioni del proprietario del 2026-11-07):** D25-14 decisa (confermata tutta); nuova D25-15 decisa (serie SED di VizieR 30 s, aggiunta a D25-8). Nuovo §3.12 (parallelismo: bersaglio prima, sezioni insieme con la catena degli identificativi condivisa, al più 4 richieste contemporanee, tempo massimo per servizio e per sezione con `PROFILE_SECTION_TIMEOUT`, `on_section` nel thread del chiamante, Annulla con le sezioni arrivate conservate e lo stato `cancelled`, `COMMAND_CANCELLED` `partial`, cache per thread, un thread alla volta sulla CPU con il turno del 14 — unità di Astropy non sicure tra thread, verificato nei test); §3.5, §3.10, §6, §7.1, §10 aggiornati; §12 T11 precisato, nuovi T21–T23; nuova D25-16 (scelte minori di C4, da confermare). |

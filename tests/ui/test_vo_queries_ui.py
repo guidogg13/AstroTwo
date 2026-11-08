@@ -68,7 +68,8 @@ def cone(qtbot, win):
 def test_t23_menu_order(window):
     data = next(a.menu() for a in window.menuBar().actions() if a.text() == "Data")
     texts = [a.text() for a in data.actions()]
-    assert texts == ["HiPS survey…", "Catalog in view…", "Cone search…", "ADQL query…", "", "Cross-match catalogs…"]
+    assert texts == ["HiPS survey…", "Catalog in view…", "Cone search…", "ADQL query…", "", "Cross-match catalogs…",
+                     "", "Object profile…"]  # sprint C5: profilo di un oggetto dopo un separatore (43 §3.2)
 
 
 def test_t23_cone_search_view_centre(qtbot, window, listed):

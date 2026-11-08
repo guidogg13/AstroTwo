@@ -3481,6 +3481,17 @@ _add("PROFILE_PLANETS_COMPOSITE",
      "{count} planets from {table}: the parameters may come from different works ({references} distinct references).",
      "{count} pianeti da {table}: i parametri possono venire da lavori diversi ({references} riferimenti distinti).",
      "count:int references:int table")
+_add("PROFILE_PLANET_HOST_MISMATCH",
+     "Planet host: the search by name and the one by {gaia_dr3_id} disagree; planets shown for the search by name.",
+     "Ospite dei pianeti: la ricerca per nome e quella per {gaia_dr3_id} non coincidono; pianeti mostrati per la "
+     "ricerca per nome.", "gaia_dr3_id! by_gaia!",
+     different=("Planet host: {by_name} by name, {by_gaia} by {gaia_dr3_id}; planets shown for {by_name}, no choice.",
+                "Ospite dei pianeti: {by_name} per nome, {by_gaia} per {gaia_dr3_id}; pianeti mostrati per {by_name}, "
+                "nessuna scelta.", "by_name! gaia_dr3_id! by_gaia!"),
+     only_gaia=("Planet host: none by name, {by_gaia} by {gaia_dr3_id}; planets shown for the search by name (none), "
+                "no choice.",
+                "Ospite dei pianeti: nessuno per nome, {by_gaia} per {gaia_dr3_id}; pianeti mostrati per la ricerca per "
+                "nome (nessuno), nessuna scelta.", "gaia_dr3_id! by_gaia!"))
 _add("PROFILE_SECTION_TIMEOUT",
      "Section {section}: no answer within {limit} ({services}).",
      "Sezione {section}: nessuna risposta entro {limit} ({services}).",

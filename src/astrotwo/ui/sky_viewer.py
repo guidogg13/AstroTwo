@@ -739,6 +739,7 @@ class SkyViewer(QWidget):
     first_shown = Signal()  # la finestra ha la sua dimensione vera: si può chiedere la vista iniziale
     cursor_read = Signal(object)  # CommandResult di cursor.read, o None se il mouse esce dal cielo
     layers_drawn = Signal()  # posizioni di un catalogo o celle di un MOC pronte (dettagli del pannello dei livelli)
+    profile_requested = Signal(str)  # main_id dal riquadro del puntatore SIMBAD: profilo per identificativo (43)
     context_menu_requested = Signal(object)  # punto sullo schermo del clic destro: menu SAMP della finestra (§3.20)
 
     def __init__(self, submit: Callable[..., int], cache=None, renderer: SkyRenderer | None = None,
@@ -1559,8 +1560,27 @@ class SkyViewer(QWidget):
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802 - nome di Qt
         """Clic destro (o ⌃-clic): la finestra costruisce il menu con i puntamenti SAMP (§3.20); nessun calcolo qui."""
+        self._context_point = event.position() if hasattr(event, "position") else QPointF(event.pos())
         self.context_menu_requested.emit(event.globalPos())
         event.accept()
+
+    def context_sky_text(self) -> str | None:
+        """Posizione dell'ultimo clic destro come coppia decimale in gradi nel frame delle coordinate mostrate, per il
+        dialogo del profilo (43 §3.2 punto 3): ``window_to_sky`` e ``convert_coordinates`` del 10; ``None`` fuori
+        dal cielo o senza WCS. L'epoca la chiede il dialogo (mai assunta)."""
+        from astrotwo.core.coordinates_wcs import SkyFrame, convert_coordinates
+
+        point = getattr(self, "_context_point", None)
+        geometry = self.geometry
+        if point is None or geometry is None or not self._has_sky(geometry):
+            return None
+        at = self.window_position(point)
+        sky = geometry.window_to_sky(at["x"], at["y"])
+        if not (np.isfinite(sky.spherical.lon.deg) and np.isfinite(sky.spherical.lat.deg)):
+            return None
+        frame = self.view.coordinate_frame if self.view is not None else "icrs"
+        moved = convert_coordinates(SkyFrame(coord=sky), frame).coord.spherical
+        return f"{float(moved.lon.deg)!r} {float(moved.lat.deg)!r}"
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:

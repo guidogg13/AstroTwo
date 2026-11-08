@@ -1096,6 +1096,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C5 (autorizzazione D25-12, istruzione del proprietario del 2026-11-08):** `ProgressReport` riceve il campo facoltativo **`detail`** (valore JSON, `None` per gli altri comandi, ignorato dalla barra di stato) per i dati parziali di `object.profile` (eventi `resolved` e `section`, `43` §3.5). Il file resta `approvato`. |
 | 2026-11-07 | Claude Code | **Sprint C4 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** §3.2 annullamento con risultato parziale per i comandi di sola lettura (`Outcome.cancelled`, `COMMAND_CANCELLED` `partial`, stato invariato, non rieseguito); §7 `object.profile` con sezioni in parallelo, avanzamento per sezione e Annulla (25 §3.12); §10 e §10.1 ragione `partial`; nuovo T29. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** `object.profile` con la sezione `photometry` (25 §3.11) nell'elenco `sections`, senza cambiare versione (D25-13 (5), confermata). |
 | 2026-10-24 | Claude Code | **D40-3 (sprint 8, solo specifiche):** `ResultMessage` e `CommandError` portano `params` (valori JSON dei parametri del messaggio) accanto a codice e testo del modulo; il testo originale resta invariato; la lingua si sceglie nel catalogo dei messaggi del `40` §3.7.1. Nessun codice scritto. |

@@ -262,7 +262,7 @@ def test_t29_cancelled_command_keeps_the_partial_profile(services, cache):
     assert entry.result.status == "cancelled"
     assert entry.command.parameters["simbad_id"] == "TRAPPIST-1"  # scritto anche se annullato
     assert session.workspace.state is before  # sola lettura: stato invariato
-    steps = [(r.step, r.total, r.text) for r in reports if r.total]
+    steps = [(r.step, r.total, r.text) for r in reports if r.total and r.step]  # passo 0: bersaglio risolto
     assert steps[0] == (1, 3, "object_profile/astrometry")
     assert len(steps) == 3  # una sezione per passo, anche quelle annullate
 
@@ -274,9 +274,18 @@ def test_t29_progress_is_one_step_per_section(services, cache):
     result = Session(registry).run(Command("object.profile", 1, {"name": "TRAPPIST-1", "sections": list(THREE)}, RequestedBy("menu")),
                                    progress=reports.append)
     assert result.status == "ok"
-    texts = [r.text for r in reports if r.total]
+    steps = [r for r in reports if r.total and r.step]
+    texts = [r.text for r in steps]
     assert sorted(texts) == ["object_profile/astrometry", "object_profile/identity", "object_profile/photometry"]
-    assert [r.step for r in reports if r.total] == [1, 2, 3]
+    assert [r.step for r in steps] == [1, 2, 3]
+    # dati parziali per la finestra Profili (43 §3.5): prima il bersaglio risolto, poi una sezione per passo
+    first = next(r for r in reports if r.total)
+    assert first.step == 0 and first.text == "object_profile/resolved"
+    assert first.detail["event"] == "resolved" and first.detail["resolved"]["main_id"] == "TRAPPIST-1"
+    assert first.detail["sections"] == list(THREE)
+    assert [r.detail["section"]["name"] for r in steps] == [t.removeprefix("object_profile/") for t in texts]
+    final = {s["name"]: s for s in result.values["sections"]}
+    assert all(r.detail["section"] == final[r.detail["section"]["name"]] for r in steps)
 
 
 def test_t29_cancelled_before_the_target_is_discarded(services, cache):

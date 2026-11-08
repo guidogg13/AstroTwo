@@ -48,6 +48,8 @@ SIMBAD_LINK_PREFIX = "https://simbad.cds.unistra.fr/"
 SIMBAD_MIRROR_LINK_PREFIX = "https://simbad.harvard.edu/"
 #: Magnitudini scritte nel riquadro (le altre restano nel risultato del comando, 41 §3.19).
 SIMBAD_MAX_MAGNITUDES = 8
+#: Collegamento interno del riquadro verso il profilo dell'oggetto (43 §3.2 punto 4).
+PROFILE_LINK = "profile:"
 #: Cifre significative dell'etichetta di una misura (41 §3.19, scelta minore).
 LABEL_SIGNIFICANT_DIGITS = 4
 #: Unità offerte dallo strumento: nome di astropy → simbolo mostrato.
@@ -62,6 +64,7 @@ DEFAULT_TOOL_TEXTS = {
     "simbad_separation": "%1 from the pointer", "simbad_system_unknown": "system not declared",
     "simbad_more": "+%1 more magnitudes (in the command result)", "simbad_link": "SIMBAD page",
     "simbad_retrieved": "retrieved %1", "simbad_from": "source %1", "simbad_error": "SIMBAD: %1",
+    "simbad_profile": "Profile of %1",
 }
 
 _MEASURE_INK = "#f0e442"  # giallo di Okabe e Ito: leggibile su cielo scuro e chiaro
@@ -384,7 +387,12 @@ class SimbadPointerTool:
         viewer.tiles.read(viewer.passive, "simbad.pointer", self.last_request, signal="simbad")
 
     def done(self, result) -> None:
-        """Risultato nel thread principale: riquadro, a meno che sia arrivato un arresto più recente."""
+        """Risultato nel thread principale: riquadro, a meno che sia arrivato un arresto più recente. Un risultato
+        arrivato dopo la chiusura della finestra (riquadro già distrutto) si scarta."""
+        from shiboken6 import isValid
+
+        if not isValid(self.card):
+            return
         self.busy = False
         waiting, self.waiting = self.waiting, None
         if waiting is not None:
@@ -413,10 +421,13 @@ class SimbadPointerTool:
                                 f"border: 1px solid {edge}; border-radius: 6px; padding: 8px; }}"
                                 f"QLabel#simbadCard a {{ color: {ink}; }}")
 
-    @staticmethod
-    def open_link(url: str) -> None:
-        """Solo pagine di Simbad, del CDS o del mirror di Harvard (41 §3.19)."""
-        if url.startswith((SIMBAD_LINK_PREFIX, SIMBAD_MIRROR_LINK_PREFIX)):
+    def open_link(self, url: str) -> None:
+        """Solo pagine di Simbad, del CDS o del mirror di Harvard (41 §3.19); ``profile:<main_id>`` apre il profilo
+        dell'oggetto del riquadro per identificativo (43 §3.2 punto 4)."""
+        if url.startswith(PROFILE_LINK):
+            self.viewer.profile_requested.emit(urllib.parse.unquote(url[len(PROFILE_LINK):]))
+            self.hide()
+        elif url.startswith((SIMBAD_LINK_PREFIX, SIMBAD_MIRROR_LINK_PREFIX)):
             QDesktopServices.openUrl(QUrl(url))
 
     def card_html(self, result) -> str:
@@ -461,6 +472,9 @@ class SimbadPointerTool:
             origin = next((str(src["origin"]) for src in result.provenance if src.get("origin")), None)
             url = simbad_url(obj["main_id"], origin)
             lines.append(f'<a href="{esc(url, quote=True)}">{esc(t["simbad_link"])}</a>')
+            profile = PROFILE_LINK + urllib.parse.quote(obj["main_id"], safe="")
+            lines.append(f'<a href="{esc(profile, quote=True)}">'
+                         f'{esc(t["simbad_profile"].replace("%1", obj["main_id"]))}</a>')
         for message in result.warnings:
             lines.append(f"⚠ {esc(shown_text(message))}")
         for source in result.provenance:

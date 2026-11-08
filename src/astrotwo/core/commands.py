@@ -728,11 +728,15 @@ class CommandResult:
 
 @dataclass(frozen=True)
 class ProgressReport:
-    """Avanzamento di un comando a più passi (passo n di m); ``total`` None = indeterminato."""
+    """Avanzamento di un comando a più passi (passo n di m); ``total`` None = indeterminato.
+
+    ``detail``: dati parziali facoltativi (valore JSON) per un'interfaccia che li mostra prima della fine (43 §3.5,
+    ``object.profile``: eventi ``resolved`` e ``section``); la barra di stato li ignora; ``None`` per gli altri."""
 
     step: int
     total: int | None
     text: str
+    detail: object = None
 
 
 class CancelToken:

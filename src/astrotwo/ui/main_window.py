@@ -172,6 +172,10 @@ TOOLS = ("none", "distance", "simbad_pointer")
 DEFAULT_SURVEY = "CDS/P/DSS2/color"  # D12-3 (default del 12, hips.DEFAULT_SURVEY)
 
 
+#: Durata del pulsante «Profilo» accanto al campo «Vai a» (43 §3.2 punto 2, D43-6).
+GO_TO_PROFILE_MS = 30_000
+
+
 def _choice(choices: tuple[str, ...]) -> Callable[[str], str]:
     def check(text: str) -> str:
         if text not in choices:
@@ -1614,6 +1618,7 @@ class MainWindow(QMainWindow):
         self._jobs: dict[int, CommandJob | ReplayJob] = {}
         self._running: int | None = None
         self._assistant_waiters: dict[int, _AssistantTicket] = {}
+        self.profiles = None  # finestra Profili (43), creata alla prima apertura
         self.collection_index_loader: Callable = self._load_collection_index
         self.confirm: Callable[[str, str], bool] = self._ask_confirmation
         self.show_modal: Callable[[str, str], None] = self._modal
@@ -1641,6 +1646,8 @@ class MainWindow(QMainWindow):
         self.samp.point_received.connect(self._samp_point_received)
         self.samp.notice.connect(self._samp_notice)
         self.sky.context_menu_requested.connect(self._sky_context_menu)
+        self.sky.profile_requested.connect(  # puntatore SIMBAD: per identificativo (43 §3.2 punto 4)
+            lambda main_id: self.open_profile({"name": main_id, "simbad_id": main_id}, source="mouse"))
         self.catalog_panel.context_menu_requested.connect(self._table_context_menu)
         self._start_runner()
         self.apply_appearance(self.preference("appearance"))
@@ -1677,7 +1684,7 @@ class MainWindow(QMainWindow):
             "simbad_separation": self.tr("%1 from the pointer"),
             "simbad_system_unknown": self.tr("system not declared"),
             "simbad_more": self.tr("+%1 more magnitudes (in the command result)"),
-            "simbad_link": self.tr("SIMBAD page"), "simbad_retrieved": self.tr("retrieved %1"),
+            "simbad_link": self.tr("SIMBAD page"), "simbad_profile": self.tr("Profile of %1"), "simbad_retrieved": self.tr("retrieved %1"),
             "simbad_from": self.tr("source %1"), "simbad_error": self.tr("SIMBAD: %1")}
         for key, pref in TOOL_PREFERENCES.items():  # opzioni ricordate dello strumento di distanza
             value = self.settings.value(key, pref.default)
@@ -1969,6 +1976,9 @@ class MainWindow(QMainWindow):
         self.act_adql = a(self.tr("ADQL query…"), lambda: self.adql_dialog(), name="adqlQuery")
         self.act_crossmatch = a(self.tr("Cross-match catalogs…"), lambda: self.crossmatch_dialog(),
                                 name="crossmatch")  # sprint B2: incrocio per posizione (42 §3.7)
+        self.act_profile = a(self.tr("Object profile…"), lambda: self.object_profile_dialog(),
+                             name="objectProfile")  # sprint C5: finestra Profili (43 §3.2)
+        self.act_profiles_window = a(self.tr("Profiles"), lambda: self.profiles_window().show(), name="profilesWindow")
         self.tool_group = QActionGroup(self)
         self.tool_group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
         self.act_distance = a(self.tr("Distance"), lambda c: self._tool("distance", c), checkable=True,
@@ -2032,6 +2042,8 @@ class MainWindow(QMainWindow):
         m.addAction(self.act_adql)
         m.addSeparator()
         m.addAction(self.act_crossmatch)
+        m.addSeparator()
+        m.addAction(self.act_profile)
         m = bar.addMenu(self.tr("Tools"))
         m.addAction(self.act_distance)
         m.addAction(self.act_simbad)
@@ -2043,6 +2055,8 @@ class MainWindow(QMainWindow):
         m = bar.addMenu(self.tr("Window"))
         for act in self.panel_actions.values():
             m.addAction(act)
+        m.addSeparator()
+        m.addAction(self.act_profiles_window)
         m = bar.addMenu(self.tr("Help"))
         m.addAction(self.act_about)
         m.addAction(self.act_licenses)
@@ -2070,6 +2084,18 @@ class MainWindow(QMainWindow):
         self.go_to_field = GoToField()
         self.go_to_field.goTo.connect(self.go_to)
         tb.addWidget(self.go_to_field)
+        # Pulsante «Profilo» accanto al risultato di un «Vai a» con un nome (43 §3.2 punto 2), per 30 s
+        self.go_to_profile = QPushButton(self.tr("Profile"))
+        self.go_to_profile.setObjectName("goToProfile")
+        self.go_to_profile.setToolTip(self.tr("Open the profile of the object just found"))
+        self.go_to_profile.clicked.connect(self._go_to_profile_clicked)
+        self.go_to_profile_action = tb.addWidget(self.go_to_profile)
+        self.go_to_profile_action.setVisible(False)
+        self._go_to_profile_name: str | None = None
+        self._go_to_profile_timer = QTimer(self)
+        self._go_to_profile_timer.setSingleShot(True)
+        self._go_to_profile_timer.setInterval(GO_TO_PROFILE_MS)
+        self._go_to_profile_timer.timeout.connect(lambda: self.go_to_profile_action.setVisible(False))
         tb.addWidget(spacer())
         self.survey_label = QLabel()
         self.survey_label.setObjectName("surveyLabel")
@@ -2173,12 +2199,16 @@ class MainWindow(QMainWindow):
     def _job_started(self, job_id: int, name: str) -> None:
         self._running = job_id
         self.status.show_running(name)
+        if self.profiles is not None and self.profiles.handles(job_id):
+            self.profiles.job_started(job_id)
 
     @Slot(int, object)
     def _job_progress(self, job_id: int, report: ProgressReport) -> None:
         job = self._jobs.get(job_id)
         if job is not None:
             self.status.show_running(job.command.name if isinstance(job, CommandJob) else "session.open", report)
+        if self.profiles is not None and self.profiles.handles(job_id):  # dati parziali del profilo (43 §3.5)
+            self.profiles.job_progress(job_id, report)
 
     def _job_done(self, job_id: int) -> None:
         self._jobs.pop(job_id, None)
@@ -2231,6 +2261,9 @@ class MainWindow(QMainWindow):
             self.columns_dialogs(result.values["layer"])
         if done.registered.name == "view.go_to" and result.status == "ok":
             self.sky.go_to_zoom()  # campo > 1°: zoom su circa 1° (41 §3.4), così lo spostamento si vede
+            self._offer_go_to_profile(done.registered, result)
+        if self.profiles is not None and self.profiles.handles(done.job_id):
+            self.profiles.job_finished(done)
         if done.registered.name in ("vo.add_server", "vo.remove_server") and result.status == "ok":
             self._servers_changed(result.values)
         if (done.registered.name == "catalog.crossmatch" and result.status == "ok"
@@ -2487,6 +2520,11 @@ class MainWindow(QMainWindow):
                               None if center is None else {"position": center}, connected)
         self._recipients_menu(menu, self.tr("Point SAMP applications at selected source"), "samp.point_at",
                               None if source is None else {"position": source}, connected)
+        menu.addSeparator()  # profilo (43 §3.2 punto 3): posizione del clic, epoca chiesta nel dialogo
+        here = self.sky.context_sky_text()
+        profile = menu.addAction(self.tr("Profile at this position…"))
+        profile.setEnabled(here is not None)
+        profile.triggered.connect(lambda checked=False: self.object_profile_dialog(here or "", source="mouse"))
         self.last_context_menu = menu
         if global_pos is not None:
             menu.popup(global_pos)
@@ -2513,6 +2551,12 @@ class MainWindow(QMainWindow):
         if self.crossmatch_entry(layer_id) is not None:
             menu.addAction(self.tr("Show cross-match report")).triggered.connect(
                 lambda checked=False: self.show_crossmatch_report(layer_id))
+        menu.addSeparator()  # profilo della sorgente (43 §3.2 punto 5)
+        profile = menu.addAction(self.tr("Profile of this source"))
+        profile.setEnabled(layer is not None and len(layer.selection) == 1)
+        if layer is not None and len(layer.selection) == 1:
+            row = layer.selection[0]
+            profile.triggered.connect(lambda checked=False: self.profile_of_row(layer_id, row))
         self.last_context_menu = menu
         if global_pos is not None:
             menu.popup(global_pos)
@@ -2543,6 +2587,64 @@ class MainWindow(QMainWindow):
         if sky.field is not None:
             parts.append(self.tr("field %1").replace("%1", format_field(sky.field)))
         self.survey_label.setText(" · ".join(parts))
+
+    # --- finestra Profili (43) -------------------------------------------------------------
+
+    def profiles_window(self):
+        """Finestra non modale «Profili» (43 §3.3), creata alla prima apertura."""
+        if self.profiles is None:
+            from astrotwo.ui.profiles import ProfilesWindow
+
+            self.profiles = ProfilesWindow(self, self.settings)
+        return self.profiles
+
+    def open_profile(self, params: Mapping[str, object], *, source: str = "menu", label: str | None = None):
+        """Mette in coda ``object.profile`` e apre la sua scheda (43 §3.2)."""
+        return self.profiles_window().open_profile(params, source=source, label=label)
+
+    def object_profile_dialog(self, text: str = "", *, source: str = "menu"):
+        """Data → Object profile…: nome o coordinate con l'epoca (43 §3.2 punto 1); con ``text`` precompilato (clic
+        destro nel cielo, punto 3)."""
+        from astrotwo.ui.profiles import ObjectProfileDialog
+
+        dialog = ObjectProfileDialog(self.session.workspace.state.view.coordinate_frame, text, self)
+        self.last_profile_dialog = dialog
+
+        def accepted() -> None:
+            if dialog.params is not None:
+                self.open_profile(dialog.params, source=source)
+
+        dialog.accepted.connect(accepted)
+        dialog.open()
+        return dialog
+
+    def _offer_go_to_profile(self, registered: Command, result: CommandResult) -> None:
+        """Pulsante «Profilo» per 30 s dopo un «Vai a» riuscito con un **nome** (con coordinate non compare)."""
+        if not isinstance(result.values, Mapping) or "resolved" not in result.values:
+            self.go_to_profile_action.setVisible(False)
+            return
+        self._go_to_profile_name = str(registered.parameters["text"])
+        self.go_to_profile_action.setVisible(True)
+        self._go_to_profile_timer.start()
+
+    def _go_to_profile_clicked(self) -> None:
+        if self._go_to_profile_name:
+            self.open_profile({"name": self._go_to_profile_name}, source="menu")
+        self.go_to_profile_action.setVisible(False)
+
+    def profile_of_row(self, layer_id: str, row: int):
+        """«Profilo di questa sorgente» (43 §3.2 punto 5): identificativo riconosciuto dall'origine del livello e
+        dalla colonna, altrimenti la riga (per posizione, con l'epoca del livello)."""
+        from astrotwo.ui.profiles import row_identifier
+
+        layer = self.session.workspace.state.find(layer_id)
+        table = getattr(layer.data, "table", None)
+        origin = {"catalog": layer.name, "table": getattr(layer.data, "table_name", None)}
+        values = {} if table is None else {c: table[c][row] for c in table.colnames}
+        name = row_identifier(origin, {k: (None if getattr(v, "mask", False) is True else v)
+                                       for k, v in values.items()})
+        params = {"name": name} if name else {"layer": layer_id, "row": int(row)}
+        return self.open_profile(params, source="mouse")
 
     def go_to(self, text: str) -> int:
         return self.submit("view.go_to", {"text": text, "window": self.view_window()}, source="keyboard")

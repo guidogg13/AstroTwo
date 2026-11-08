@@ -579,6 +579,59 @@ def plot_sed(sed: Sed, *, quantity: str = "fnu", title: str | None = None):
     return fig
 
 
+def plot_sed_rows(points: Sequence[Mapping], vizier: Mapping | None = None, *, upper_limits: bool = False,
+                  title: str | None = None, figure=None):
+    """Grafico della SED dalla **forma JSON** del risultato (``Sed.as_dict``: ``points`` e ``vizier``), per la finestra
+    Profili del 43 (D43-8): stessi assi, colori e serie di ``plot_sed`` (Fν in Jy contro λ in µm, log-log, barre
+    d'errore, serie VizieR distinta). Nessun valore ricalcolato: si leggono ``wavelength``, ``flux``, ``flux_error``.
+
+    ``upper_limits=True``: i punti ``upper_limit`` con un flusso (limiti convertiti, D20-9 (3)) si disegnano come
+    frecce verso il basso nel colore del loro catalogo (D43-9, interfaccia); con ``False`` restano fuori (D20-9 (3)).
+    ``figure``: figura in cui disegnare (``FigureCanvasQTAgg`` del 43); senza, una nuova ``Figure``."""
+    from matplotlib.figure import Figure
+
+    def val(q, unit: str) -> float | None:
+        if not q or q.get("value") is None:
+            return None
+        return float((float(q["value"]) * u.Unit(q["unit"])).to_value(unit))
+
+    fig = figure if figure is not None else Figure(figsize=(6.4, 4.4), dpi=100)
+    fig.clear()
+    ax = fig.add_subplot(1, 1, 1)
+    for catalog, color in _COLORS.items():
+        pts = [p for p in points if p.get("catalog") == catalog and p.get("in_plot")]
+        xs = [val(p["wavelength"], "um") for p in pts]
+        if pts:
+            ax.errorbar(xs, [val(p["flux"], "Jy") for p in pts],
+                        yerr=[val(p.get("flux_error"), "Jy") or 0.0 for p in pts], fmt="o", color=color,
+                        label=catalog, capsize=2, ms=5)
+        if upper_limits:
+            lims = [p for p in points if p.get("catalog") == catalog and p.get("upper_limit") and not p.get("in_plot")
+                    and val(p.get("flux"), "Jy") and val(p.get("wavelength"), "um")]
+            if lims:
+                ys = [val(p["flux"], "Jy") for p in lims]
+                ax.errorbar([val(p["wavelength"], "um") for p in lims], ys, yerr=[0.4 * y for y in ys], uplims=True,
+                            fmt="v", color=color, ms=5, label=f"{catalog} upper limit")
+    rows = [r for r in ((vizier or {}).get("rows") or []) if r.get("wavelength") and r.get("flux")
+            and r["flux"].get("value") and r["flux"]["value"] > 0]
+    if rows:
+        ax.plot([val(r["wavelength"], "um") for r in rows], [val(r["flux"], "Jy") for r in rows], "x", color="0.45",
+                ms=5, label="VizieR SED (as given by VizieR)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("λ (µm)")
+    ax.set_ylabel("Fν (Jy)")
+    if title:
+        ax.set_title(title)
+    if ax.has_data():
+        ax.legend(fontsize=8)
+    ax.grid(True, which="both", alpha=0.25)
+    fig.text(0.01, 0.01, "Zero points: Gaia (E)DR3 ESA/DPAC, 2MASS Cohen+2003, WISE Jarrett+2011. "
+             "Data: ESA Gaia, IPAC/IRSA, CDS.", fontsize=6, color="0.35")
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    return fig
+
+
 def sed_png(sed: Sed, *, quantity: str = "fnu", title: str | None = None, encoded: bool = False) -> bytes | str:
     """PNG del grafico (metadati del programma tolti); ``encoded=True`` → testo base64 per il risultato JSON."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
