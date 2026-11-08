@@ -446,7 +446,13 @@ specificare allora).
 ## 12. Test di accettazione
 
 Test con pytest-qt e servizi simulati con le risposte vere registrate del 25
-(`tests/analysis/profile_fakes.py`), in `tests/ui/test_profiles.py`.
+(`tests/analysis/profile_fakes.py`), in `tests/ui/test_profiles.py` (T1–T4,
+stati) e `tests/ui/test_profiles_open.py` (aperture, T5, T6, T8, T9, T11,
+pulsanti, chiusura in corso, traduzioni). Scritti nello sprint C5 (2026-11-08)
+e verdi; T7, T10, T14 e T15 sono coperti in parte (numeri della tabella
+dell'astrometria e dei pianeti confrontati con il risultato; pianeti di
+TRAPPIST-1; nessun collegamento SIMBAD verso un server non ammesso), T12 e
+T13 con l'apertura dalla tabella e dal riquadro del puntatore.
 
 | # | Descrizione | Passi | Atteso | Verifica |
 |---|---|---|---|---|
@@ -457,10 +463,10 @@ Test con pytest-qt e servizi simulati con le risposte vere registrate del 25
 | T5 | Annulla | Annulla della barra di stato dopo la prima sezione | arrivate conservate, altre «Annullata» | stati |
 | T6 | Riquadro della provenienza | clic sulla parallasse di 51 Peg e su un periodo di TRAPPIST-1 b | valore, errori, unità, metodo, servizio, server reale, tabella, ADQL, collegamento ADS (2021PSJ.....2....1A per TRAPPIST-1), data, cache, numero del comando: uguali alla `ProfileValue` | confronto campo per campo |
 | T7 | Nessun numero calcolato | ogni numero mostrato nella scheda di 51 Peg | ogni testo numerico è la rappresentazione di un valore del risultato | confronto con `result.values` |
-| T8 | Candidati | coordinate di eta Tau | elenco con la stella e `GN 03.44.2`, nessuno scelto; il pulsante mette in coda `object.profile` con `simbad_id` | comando registrato |
+| T8 | Candidati | coordinate di eta Tau | **dialogo** con la stella e `GN 03.44.2`, nessuno scelto e pulsante spento; la scelta mette in coda `object.profile` con la stessa posizione e `simbad_id` in una scheda nuova | comando registrato |
 | T9 | Crediti delle miniature | 51 Peg | ogni miniatura con titolo, server, crediti del survey; DSS2 con il testo di STScI del `01` | testi |
 | T10 | Pianeti | TRAPPIST-1; Vega | tabella di 7 pianeti con errori `+a / −b` e `PROFILE_PLANETS_COMPOSITE`; Vega «Nessun pianeta nell'archivio» | testi |
-| T11 | Grafico | 51 Peg | figura incorporata con assi in µm e Jy logaritmici, serie per catalogo; serie VizieR in errore → messaggio nella sezione | proprietà della figura |
+| T11 | Grafico | TRAPPIST-1 | figura incorporata con assi in µm e Jy logaritmici, serie per catalogo, **limite superiore AllWISE W4 come freccia** (D43-9) e fuori dalla serie dei punti; senza l'opzione (come il PNG) nessuna freccia | proprietà della figura |
 | T12 | Riconoscimento delle righe | livello Gaia DR3 (origine `gaiadr3.gaia_source`) e livello sconosciuto con una colonna `source_id` | il primo dà `name = "Gaia DR3 <id>"`, il secondo `layer` + `row` | comando registrato |
 | T13 | Puntatore SIMBAD | collegamento «Profilo di <main_id>» nel riquadro | `object.profile` con `name` e `simbad_id` = `main_id` | comando registrato |
 | T14 | Più schede e coda | due profili chiesti insieme | due schede subito; la seconda «In coda» finché la prima non finisce | stati |
@@ -523,5 +529,6 @@ proprietario.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C5b:** §12 con i file di test reali (`test_profiles.py`, `test_profiles_open.py`) e T8, T11 come provati (dialogo dei candidati, freccia del limite superiore di TRAPPIST-1 W4); test dei pulsanti della scheda e della chiusura di una scheda in corso. |
 | 2026-11-08 | Claude Code | **Codice dello sprint C5 (istruzione del proprietario del 2026-11-08, punti a–h):** `src/astrotwo/ui/profiles.py` (finestra, schede, sezioni, riquadro della provenienza, dialoghi dei candidati e del profilo), aggancio nel 40 (menu Data e Window, pulsante «Profilo» del «Vai a», coda), 41 (clic destro e riquadro del puntatore SIMBAD), 42 (clic destro su una riga), 05 (`ProgressReport.detail`), 25 (`on_resolved` ed eventi `resolved`/`section`), 20 (`plot_sed_rows`); §3.4 bersaglio ambiguo in un dialogo (punto e); §3.7 e D43-9: frecce dei limiti superiori solo nel grafico della finestra (istruzione più recente del proprietario, da confermare). Il file resta `bozza`. |
 | 2026-11-08 | Claude Code | Creazione del file (stato: bozza), sprint C5, decisione D25-7 del proprietario (specifica dell'interfaccia del profilo nel `43`): finestra Profili non modale con una scheda per profilo, aperture (menu Data, «Vai a», cielo, puntatore SIMBAD, tabella con riconoscimento degli identificativi), scheletro e stati delle sezioni, arrivo progressivo (proposta: `detail` di `ProgressReport`), «Riprova questa sezione», corpo delle sezioni con miniature e crediti (testo di STScI per DSS, D25-17 (3)), grafico della SED del 20, riquadro della provenienza; decisioni D43-1…D43-10 (D43-9: conflitto tra il brief e D20-9 (3)). |
