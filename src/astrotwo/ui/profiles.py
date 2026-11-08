@@ -725,6 +725,9 @@ class ProfileTab(QWidget):
             samp.status_changed.connect(self._samp_changed)  # metodo legato: scollegato con la scheda
         self.status = _label("", name="profileStatus")
         outer.addWidget(self.status)
+        self.origin_label = _label("", name="profileOrigin")  # «Chiesto dall'assistente» (43 §3.11)
+        self.origin_label.hide()
+        outer.addWidget(self.origin_label)
         self.warnings = _label("", name="profileWarnings")
         self.warnings.hide()
         outer.addWidget(self.warnings)
@@ -1075,6 +1078,21 @@ class ProfilesWindow(QWidget):
         self.tabs.setCurrentWidget(tab)
         self.show()
         self.raise_()
+        return tab
+
+    def adopt(self, job: int, params: Mapping, cancel: CancelToken | None = None) -> ProfileTab:
+        """Scheda di un ``object.profile`` già in coda chiesto dall'assistente (43 §3.11): nessun secondo comando;
+        chiudere la scheda in corso annulla quel comando con il ``CancelToken`` della risposta."""
+        tab = ProfileTab(self, job, dict(params), describe_target(params))
+        tab.origin_label.setText(self.tr("Asked by the assistant"))
+        tab.origin_label.show()
+        self.jobs[job] = tab
+        self.tokens = getattr(self, "tokens", {})
+        if cancel is not None:
+            self.tokens[job] = cancel
+        self.tabs.addTab(tab, tab.label)
+        self.tabs.setCurrentWidget(tab)
+        self.show()
         return tab
 
     def rerun_fresh(self, tab: ProfileTab) -> ProfileTab:

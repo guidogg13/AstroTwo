@@ -90,6 +90,7 @@ __all__ = [
     "build_profile",
     "command_specs",
     "cross_identify",
+    "model_view",
     "distance_from",
     "profile_astrometry",
     "profile_content",
@@ -1982,6 +1983,166 @@ def profile_content(data):
         return [profile_content(v) for v in data
                 if not (isinstance(v, Mapping) and v.get("code") in _RUN_CODES and "text" in v)]
     return data
+
+
+#: Chiavi tolte nel riassunto per il modello (32 §3.7bis): immagini, ADQL, duplicati dei valori; nessun numero nuovo
+_MODEL_DROP_DETAILS = {"photometry": ("zero_points", "plot_png"), "identity": ("identifiers",)}
+_MODEL_THUMB = ("hips_id", "title", "fov", "size", "order", "center", "pixels_with_data", "epoch")
+#: campi di un punto della SED nel riassunto (la tabella dei punti al posto dei valori duplicati, 25 §11)
+_MODEL_POINT = ("catalog", "band", "system", "magnitude", "magnitude_error", "count_rate", "count_rate_error",
+                "quality", "wavelength", "flux", "flux_error", "in_plot", "duplicate_of", "reference", "zero_point")
+_MODEL_PLANET_TEXT = ("discoverymethod", "disc_year")
+#: byte del riassunto (JSON) oltre i quali si tolgono pianeti interi dalla coda, dichiarato (32 §3.7bis): il resto
+#: del limite di 20 kB del 32 serve ai testi esterni marcati e all'intestazione del risultato
+MODEL_BUDGET = 13_000
+
+
+def _without(value, keys=("query", "queries")):
+    """Senza ADQL, chiavi nulle ed elenchi vuoti (nessuna informazione persa)."""
+    if isinstance(value, Mapping):
+        out = {k: _without(v, keys) for k, v in value.items() if k not in keys and v is not None}
+        return {k: v for k, v in out.items() if not (isinstance(v, (list, dict)) and not v)}
+    if isinstance(value, list):
+        return [_without(v, keys) for v in value]
+    return value
+
+
+def _trim(values: dict) -> None:
+    """Oltre ``MODEL_BUDGET``: prima le magnitudini di SIMBAD (fuori dal grafico, in magnitudini), poi le descrizioni
+    delle miniature, poi i pianeti dalla coda; ogni taglio dichiarato in ``truncated`` della sezione con il totale (32 §3.7bis)."""
+    sections = {s.get("name"): s for s in values.get("sections") or []}
+    photometry = sections.get("photometry")
+    if photometry is not None and _json_size(values) > MODEL_BUDGET:
+        points = photometry.get("details", {}).get("points") or []
+        kept = [p for p in points if p.get("catalog") != "SIMBAD"]
+        removed = "SIMBAD magnitudes (not in the plot)"
+        if len(kept) < len(points):
+            photometry["details"]["points"] = kept
+        if _json_size(values) > MODEL_BUDGET:  # poi i punti fuori dal grafico che non sono limiti superiori
+            kept = [p for p in kept if p.get("in_plot") or p.get("upper_limit")]
+            photometry["details"]["points"] = kept
+            removed = "SIMBAD magnitudes and points out of the plot that are not upper limits"
+        if len(kept) < len(points):
+            photometry["truncated"] = {"points_total": len(points), "points_kept": len(kept), "removed": removed}
+    images = sections.get("images")
+    if images is not None and _json_size(values) > MODEL_BUDGET:
+        thumbs = images.get("details", {}).get("thumbnails") or []
+        if thumbs:
+            images["details"]["thumbnails"] = [{"hips_id": t.get("hips_id")} for t in thumbs]
+            images["truncated"] = {"removed": "thumbnail descriptions (the images are shown in the Profiles window)"}
+    planets = sections.get("planets")
+    if planets is not None and _json_size(values) > MODEL_BUDGET:
+        rows = planets.get("details", {}).get("planets") or []
+        total = len(rows)
+        while len(rows) > 1 and _json_size(values) > MODEL_BUDGET:
+            gone = rows.pop()
+            prefix = f"{gone.get('pl_name')} "
+            planets["values"] = [v for v in planets["values"] if not str(v.get("quantity", "")).startswith(prefix)]
+        if len(rows) < total:
+            planets["truncated"] = {"planets_total": total, "planets_kept": len(rows),
+                                    "removed": "planets from the end; ask sections = [planets] for all of them"}
+
+
+def _json_size(value) -> int:
+    import json
+
+    return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+
+
+def model_view(full: Mapping) -> dict:
+    """Riassunto per il modello del risultato di ``object.profile`` (25 §11, 32 §3.7bis): ``full`` = ``{"values",
+    "provenance"}`` del risultato completo. Stessa struttura del risultato, senza PNG, ADQL, chiavi nulle e duplicati
+    dei valori; la provenienza di ogni valore è nell'elenco ``sources`` della sua sezione (``source`` = indice) e le
+    formule in ``formulas`` (``formula`` = indice). Ogni numero restante è quello del risultato, mai cambiato. Oltre
+    ``MODEL_BUDGET`` si tolgono pianeti interi dalla coda, dichiarati in ``truncated`` della sezione."""
+    import copy
+
+    values = copy.deepcopy(dict(full.get("values") or {}))
+    for key in ("cross_identifications", "options"):
+        values.pop(key, None)
+    for section in values.get("sections") or []:
+        details = section.get("details") or {}
+        name = section.get("name")
+        # gli avvisi delle sezioni sono già tra gli avvisi del risultato (resi in inglese dal 32); i server sono nelle
+        # fonti dei valori
+        section.pop("warnings", None)
+        section.pop("servers", None)
+        section.pop("elapsed", None)
+        details.pop("identifiers_provenance", None)  # stessa fonte dei valori dell'Identità
+        details.pop("simbad_url", None)
+        if name == "photometry":
+            # la tabella dei punti (stessi numeri dei valori della sezione) al posto dei valori: fonte e formula per
+            # indice, motivi come codici; i limiti superiori hanno upper_limit vero (mai una misura, D43-9)
+            points, sources, formulas = [], [], []
+            for p in details.get("points") or []:
+                item = {k: p.get(k) for k in _MODEL_POINT}
+                prov = _without(p.get("provenance") or {})
+                if prov not in sources:
+                    sources.append(prov)
+                item["source"] = sources.index(prov)
+                formula = (p.get("conversion") or {}).get("formula")
+                if formula:
+                    if formula not in formulas:
+                        formulas.append(formula)
+                    item["formula"] = formulas.index(formula)
+                reasons = [n.get("code") for n in p.get("notes") or []]
+                if reasons:
+                    item["reasons"] = reasons
+                if p.get("upper_limit"):
+                    item["upper_limit"] = True  # limite superiore: mai una misura (D43-9)
+                points.append(item)
+            details["points"] = points
+            section["values"] = []
+            section["point_sources"], section["point_formulas"] = sources, formulas
+        if name == "planets":
+            planets = details.get("planets") or []
+            names = {str(pl.get("pl_name")) for pl in planets}
+            section["values"] = [v for v in section.get("values") or []
+                                 if not any(v.get("quantity") == f"{n} {k}" for n in names for k in _MODEL_PLANET_TEXT)]
+            details["planets"] = [{k: pl.get(k) for k in ("pl_name", "discoverymethod", "disc_year", "pl_bmassprov")}
+                                  for pl in planets]
+        if name == "images":
+            details["thumbnails"] = [{**{k: t.get(k) for k in _MODEL_THUMB},
+                                      "credits": {"obs_copyright": (t.get("credits") or {}).get("obs_copyright")}}
+                                     for t in details.get("thumbnails") or []]
+        for key in _MODEL_DROP_DETAILS.get(name, ()):
+            details.pop(key, None)
+        sources: list[dict] = []
+        formulas: list[str] = []
+        references: list[str] = []
+        for v in section.get("values") or []:
+            prov = _without(v.pop("provenance", None) or {})
+            if prov not in sources:
+                sources.append(prov)
+            v["source"] = sources.index(prov)
+            if v.get("method") == "read":  # metodo di default della sezione, scritto una volta (method_default)
+                del v["method"]
+            unit = v["value"].get("unit") if isinstance(v.get("value"), Mapping) else None
+            for key in ("error", "error_upper", "error_lower"):  # errori nell'unità del valore: solo il numero
+                if isinstance(v.get(key), Mapping) and v[key].get("unit") == unit:
+                    v[key] = v[key].get("value")
+            if isinstance(v.get("interval"), list) and all(isinstance(x, Mapping) and x.get("unit") == unit
+                                                           for x in v["interval"]):
+                v["interval"] = [x.get("value") for x in v["interval"]]
+            if v.get("reference"):  # riferimenti scritti una volta per sezione (references), come le fonti
+                if v["reference"] not in references:
+                    references.append(v["reference"])
+                v["reference"] = references.index(v["reference"])
+            if v.get("formula"):
+                if v["formula"] not in formulas:
+                    formulas.append(v["formula"])
+                v["formula"] = formulas.index(v["formula"])
+        if sources:
+            section["sources"] = sources
+            section["method_default"] = "read"
+            section["errors_unit"] = "errors and intervals without a unit are in the unit of their value"
+        if formulas:
+            section["formulas"] = formulas
+        if references:
+            section["references"] = references
+    values = _without(values)
+    _trim(values)
+    return {"values": values, "provenance": []}
 
 
 def _exec_object_profile(ctx, p: Mapping):

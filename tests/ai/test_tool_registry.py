@@ -50,7 +50,13 @@ KEPT = {"type", "properties", "required", "enum", "minimum", "maximum", "items",
 
 @pytest.fixture
 def registry(cache):
-    return default_registry(cache=cache)
+    """Registro come quello dell'app: il 05 più i comandi del livello 2 (05 §3.2, ``object.profile`` dal C6)."""
+    from astrotwo.analysis.object_profile import command_specs
+
+    registry = default_registry(cache=cache)
+    for spec in command_specs():
+        registry.register(spec)
+    return registry
 
 
 @pytest.fixture
@@ -94,7 +100,8 @@ def numbers(value, path=""):
 def test_t1_closed_list(tools):
     names = [t["name"] for t in tools.tools()]
     assert names == [tool for _, tool in EXPOSED_COMMANDS]
-    assert len(names) == 24 and "view__set_overlays" in names and "catalog__crossmatch" in names  # B2
+    assert len(names) == 25 and "view__set_overlays" in names and "catalog__crossmatch" in names  # B2; C6: 25
+    assert "object__profile" in names and "object__export" not in names and "object__send_sed" not in names
     assert "catalog__cone_search" in names and "catalog__tap_query" not in names  # B3: ADQL = 33, rimandato
     for command in NOT_EXPOSED:
         assert tools.tool_name(command) is None
@@ -407,7 +414,8 @@ def test_t11_replay_without_ai(tools, session, tmp_path, registry, monkeypatch):
 
 def test_t12_every_string_classified(tools, session, offline):
     calls = exposed_calls(session, offline)
-    assert {tool for tool, _ in calls} == {tool for _, tool in EXPOSED_COMMANDS}  # ogni strumento esposto
+    # ogni strumento esposto; object__profile con le risposte vere registrate in tests/ai/test_tool_profile.py (T15)
+    assert {tool for tool, _ in calls} | {"object__profile"} == {tool for _, tool in EXPOSED_COMMANDS}
     for tool, args in calls:
         command = tools.command_for(tool, args, ai(), session.workspace.state)
         result = session.run(command)

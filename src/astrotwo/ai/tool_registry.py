@@ -83,7 +83,12 @@ EXPOSED_COMMANDS: tuple[tuple[str, str], ...] = (
     ("layer.list", "layer__list"),
     ("catalog.crossmatch", "catalog__crossmatch"),  # sprint B2, D15-10 (e): l'IA sceglie modalità e soglia
     ("catalog.cone_search", "catalog__cone_search"),  # sprint B3: solo la cone search (catalog.tap_query = 33)
+    ("object.profile", "object__profile"),  # sprint C6: profilo di un oggetto (25 §11), comando del livello 2
 )
+
+#: Comandi dei livelli 2–4 (§3.1, sprint C6): lo strumento c'è solo se chi costruisce il registro li ha aggiunti
+#: (05 §3.2); un registro del solo livello 1 non li ha, senza errore.
+OPTIONAL_COMMANDS = frozenset({"object.profile"})
 
 #: Nomi accettati da entrambi i provider (§3.4 punto 1).
 TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -119,6 +124,27 @@ _CATALOG_EXTERNAL = ("values.columns[]", "values.positions.lon", "values.positio
 # un record di record_view del 13: nome, valore, unità, UCD vengono dal file o dal servizio
 _RECORD = ("name", "value", "value[]", "unit", "unit_unrecognized", "ucd")
 
+# profilo di un oggetto (25, sprint C6): testi di SIMBAD, dei cataloghi, dei survey e dell'Exoplanet Archive
+_S = "values.sections[]"
+_CHAIN = ("identifier", "official.*", "conflict.*", "candidates[].*", "error.text", "error.params.*",
+          "warnings[].text", "warnings[].params.*", "epochs.*")
+_PROFILE_EXTERNAL = (
+    "values.resolved.main_id", "values.resolved.position_source", "values.resolved.simbad_error.text",
+    "values.resolved.simbad_error.params.*", "values.resolved.candidates[].*",
+    f"{_S}.values[].value", f"{_S}.values[].note", f"{_S}.values[].reference", f"{_S}.values[].provenance.identifier",
+    f"{_S}.references[]", f"{_S}.sources[].identifier", f"{_S}.point_sources[].identifier",
+    f"{_S}.warnings[].text", f"{_S}.warnings[].params.*", f"{_S}.errors[].text", f"{_S}.errors[].params.*",
+    *(f"{_S}.details.cross_identifications[].{k}" for k in _CHAIN),
+    *(f"values.cross_identifications[].{k}" for k in _CHAIN),
+    f"{_S}.details.identifiers.*", f"{_S}.details.identifiers_provenance.identifier", f"{_S}.details.gaia.identifier",
+    f"{_S}.details.host", f"{_S}.details.planets[].*", f"{_S}.details.thumbnails[].credits.*",
+    f"{_S}.details.thumbnails[].title", f"{_S}.details.points[].flags.*", f"{_S}.details.points[].reference",
+    f"{_S}.details.points[].identifier", f"{_S}.details.points[].provenance.identifier",
+    f"{_S}.details.points[].notes[].params.*", f"{_S}.details.points[].epoch", f"{_S}.details.points[].quality",
+    f"{_S}.details.vizier.rows[].filter", f"{_S}.details.vizier.rows[].catalog", f"{_S}.details.note",
+    "values.warnings[].text", "values.warnings[].params.*", "values.target.simbad_id",
+)
+
 EXTERNAL_FIELDS: dict[str, tuple[str, ...]] = {
     "view.go_to": tuple(f"values.resolved.{f}" for f in _RESOLVED_EXTERNAL),
     "hips.set_survey": ("values.title", "values.hips_id", "values.frame", "values.tile_formats[]",
@@ -137,6 +163,7 @@ EXTERNAL_FIELDS: dict[str, tuple[str, ...]] = {
                            "values.crossmatch.report.*", "values.crossmatch.report_text"),
     # colonne e posizioni vengono dal servizio; servizio, URL e parametri inviati sono di AstroTwo (sprint B3)
     "catalog.cone_search": (*_CATALOG_EXTERNAL, "values.suggestions[].lon", "values.suggestions[].lat"),
+    "object.profile": _PROFILE_EXTERNAL,
 }
 
 #: Campi comuni a tutti i comandi: provenienza scritta dai moduli (origine = URL configurato o nome del file).
@@ -180,6 +207,9 @@ ASTROTWO_FIELDS: dict[str, tuple[str, ...]] = {
                            "values.crossmatch.separation_unit"),
     "catalog.cone_search": (*_CATALOG_ASTROTWO, "values.query.*", "values.suggestions[].frame_hint",
                             "values.suggestions[].reason", "values.suggestions[].kind"),
+    # tutto il resto del profilo è scritto da AstroTwo: nomi di sezioni e grandezze, stati, metodi, formule, unità,
+    # servizi, URL dei server, tabelle, ADQL, incroci, date, identificativi HiPS, codici dei messaggi (32 §3.6)
+    "object.profile": ("values.*", "provenance[].query"),  # ADQL scritto da AstroTwo (25)
 }
 
 #: Codici di avvisi ed errori il cui testo è scritto solo da AstroTwo (05 e moduli, senza testo di terzi); gli altri
@@ -446,6 +476,8 @@ class ToolRegistry:
             try:
                 registry.spec(command)
             except CommandError:
+                if command in OPTIONAL_COMMANDS:  # livello 2–4 non nel registro: nessuno strumento (§3.1)
+                    continue
                 raise ToolRegistryError("TOOL_NAME_INVALID", f"{command} non è un comando registrato del 05",
                                         params={"reason": "not_registered", "command": command},
                                         tool=tool, command=command) from None
@@ -561,6 +593,8 @@ class ToolRegistry:
                       state: WorkspaceState | None = None) -> dict:
         """JSON per il modello: ``#n``, parametri registrati, valori pieni, testi esterni marcati, limiti fissi."""
         full = result.to_json()
+        if command.name in MODEL_VIEWS:  # riassunto con la stessa struttura (§3.7bis): mai numeri cambiati
+            full = {**full, **MODEL_VIEWS[command.name]({"values": full["values"], "provenance": full["provenance"]})}
         source = external_source(command, full, state)
         once = command.name in SOURCE_ONCE
         marker = _Marker(self, command.name, source, inline_source=not once)
@@ -580,6 +614,16 @@ class ToolRegistry:
         if cuts:
             out["truncated"] = cuts
         return _fit(out)
+
+
+def _profile_view(full: Mapping) -> dict:
+    from astrotwo.analysis.object_profile import model_view
+
+    return model_view(full)
+
+
+#: Riassunti per il modello di risultati troppo grandi (§3.7bis): stessa struttura, nessun numero cambiato.
+MODEL_VIEWS = {"object.profile": _profile_view}
 
 
 def external_source(command: Command, full: Mapping, state: WorkspaceState | None) -> str:

@@ -108,6 +108,27 @@ def test_t15_ecsv_one_row_per_value_with_provenance(cache, services, tmp_path): 
     assert geo["interval_kind"] == "16th-84th percentile" and geo["reference"] == "2021AJ....161..147B"
 
 
+@pytest.mark.parametrize("name", ["51 Peg", "Vega", "eta Tau", "TRAPPIST-1"])
+def test_t15_ecsv_row_by_row_for_the_four_objects(cache, services, tmp_path, name):  # noqa: F811
+    session = session_with_export(cache)
+    number, result = profile(session, {"name": name})
+    assert export(session, [number], "ecsv", tmp_path / "p.ecsv").status == "ok"
+    table = Table.read(tmp_path / "p.ecsv", format="ascii.ecsv")
+    expected = [(s["name"], v) for s in result.values["sections"] for v in s["values"]]
+    assert len(table) == len(expected)
+    for row, (section, value) in zip(table, expected, strict=True):
+        shown = "" if np.ma.is_masked(row["value_text"]) else row["value_text"]  # valore assente: cella vuota
+        assert (row["section"], row["quantity"], shown) == (section, value["quantity"],
+                                                            "" if value["value"] is None else text_of(value["value"]))
+        for key in ("error", "error_upper", "error_lower"):
+            given = value.get(key)
+            cell = row[key]
+            assert (np.ma.is_masked(cell) if given is None else cell == given["value"]), (name, value["quantity"], key)
+        prov = value["provenance"]
+        assert (row["service"], row["server"]) == (prov["service"], prov["server"])
+        assert (row["retrieved_at"], row["command_id"]) == (prov["retrieved_at"], number)
+
+
 def test_t15_vizier_series_rows_as_given(cache, services, tmp_path):  # noqa: F811
     session = session_with_export(cache)
     number, result = profile(session, {"name": "51 Peg", "sections": ["photometry"]})
@@ -155,6 +176,15 @@ def test_t26_pdf_and_png(cache, services, tmp_path):  # noqa: F811
 
     assert mpimg.imread(io.BytesIO((tmp_path / "sed.png").read_bytes()), format="png").shape[2] in (3, 4)
     assert export_profile(data, tmp_path / "sed.png", "sed_png").sha256 == png.sha256
+    # il PNG esportato è il grafico del 20 dai punti del risultato, con la freccia del limite superiore (D43-9)
+    from astrotwo.analysis.photometry import plot_sed_rows, sed_rows_png
+
+    photometry = next(s for s in data["sections"] if s["name"] == "photometry")["details"]
+    assert (tmp_path / "sed.png").read_bytes() == sed_rows_png(photometry["points"], photometry["vizier"],
+                                                               title="TRAPPIST-1")
+    figure = plot_sed_rows(photometry["points"], photometry["vizier"])
+    arrow = [c for c in figure.axes[0].containers if c.get_label() == "AllWISE upper limit"]
+    assert arrow and len(arrow[0].lines[1]) == 1  # una freccia (uplims) per W4
     # pagina della Fotometria: grafico con il limite superiore come freccia, numeri del risultato tali e quali
     page = pe._photometry_page(data, pe._LABELS["en"], "x")
     texts = [t.get_text() for t in page.fig.texts]

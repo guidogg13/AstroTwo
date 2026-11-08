@@ -27,6 +27,13 @@ stessa coda del `40` con `requested_by = ai`, risultati entro 50 righe e
 - **Elenco esplicito e chiuso** (§3.2): un comando che non è nell'elenco
   non esiste per l'IA, anche se è registrato nel `05`. Un comando nuovo del
   `05` non diventa strumento finché questo file non lo aggiunge.
+- **Comandi dei livelli 2–4 nell'elenco (sprint C6, 2026-11-08):** sono
+  definiti dal loro modulo e aggiunti al registro da chi lo costruisce (`05`
+  §3.2, il `40`). Un registro **senza** quel livello (per esempio
+  `default_registry` del 05 da solo) non ha lo strumento: nessun errore
+  (`OPTIONAL_COMMANDS`; i comandi del livello 1 restano obbligatori, la loro
+  assenza è `TOOL_NAME_INVALID`). Primo caso: `object.profile` (25). Con
+  il registro dell'app gli strumenti esposti sono **25**.
 
 ### 3.2 Comandi esposti nella v1
 
@@ -55,6 +62,7 @@ esterno, §3.6).
 | `catalog__rows` | `catalog.rows` (nuovo, `05`) | session; sola lettura | no | **al più 50 righe** per chiamata |
 | `layer__list` | `layer.list` (nuovo, `05`) | session; sola lettura | no | livelli con tipo, nome, visibilità, opacità, ordine, sorgente |
 | `catalog__crossmatch` | `catalog.crossmatch` (nuovo, `05`, sprint B2, D15-10 (e) del `15`, 2026-11-05) | session; rete (solo `method = cds`), lungo | sì (rete, lungo) | incrocio per posizione di due cataloghi già aperti: l'IA **sceglie** modalità (`best`/`all`/`none`) e soglia (`max_sep` con unità; default 2″ del `05`) e spiega il risultato; **il calcolo è del 15** (astropy o CDS XMatch); crea un nuovo livello catalogo; numeri del risultato (coppie, separazioni, conteggi) verificabili dal `34` come ogni risultato |
+| `object__profile` | `object.profile` (comando del **livello 2**, `25` §7, sprint C6, brief del proprietario del 2026-11-08) | session; rete, lungo, sola lettura | sì (rete, lungo) | l'IA chiede il profilo di un oggetto (nome, o coordinate con sistema ed epoca dichiarati); riceve il **riassunto** di §3.7bis con i numeri esattamente come nel profilo e la loro provenienza; più candidati → `PROFILE_AMBIGUOUS_TARGET` con l'elenco, l'IA chiede all'utente e non sceglie (25 regola a); la scheda si apre anche nella finestra Profili (`43` §3.11); numeri verificati dal `34` sul risultato completo; presente solo se il registro contiene il livello 2 (§3.1) |
 | `catalog__cone_search` | `catalog.cone_search` (nuovo, `05`, sprint B3, decisione del proprietario del 2026-11-06) | session; rete, lungo | sì (rete, lungo) | cone search su una voce SCS dell'elenco dei server del 14 (gli identificativi sono nella descrizione di `service`) o su un URL SCS: l'IA **sceglie** servizio, centro (con frame ed epoca dichiarati) e raggio con unità; la tabella viene dal servizio, crea un nuovo livello catalogo; `ROW_LIMIT_EXCEEDED` riportato |
 
 ### 3.3 Comandi non esposti
@@ -207,6 +215,15 @@ elementi di un elenco) con due elenchi chiusi scritti nel codice
   (sprint B2) i nomi dei due livelli, le colonne e le posizioni della tabella
   unita, tutto il report (`report.*`: origini, sistemi, epoche, rinomine) e
   `report_text`.
+  In `object.profile` (sprint C6): bersaglio risolto (`main_id`, fonte della
+  posizione), valori di testo delle sezioni (nome, tipo, tipo spettrale…),
+  note e riferimenti dei valori, identificativi usati e della catena,
+  candidati e conflitti, crediti e titoli dei survey, flag e note dei
+  cataloghi nei punti della SED, filtri e cataloghi della serie VizieR, nomi
+  e riferimenti dei pianeti, testi e `params` degli avvisi e degli errori
+  delle sezioni. Sono di AstroTwo: nomi delle sezioni e delle grandezze,
+  stati, metodi, formule, unità, servizi, URL dei server, tabelle, ADQL,
+  tipi di incrocio, date, identificativi HiPS, codici dei messaggi.
 - `ASTROTWO_FIELDS`, per comando o comuni: i campi scritti dal codice di
   AstroTwo (identificativi `L<n>`, frame normalizzati, unità dei valori
   calcolati, metodi, note dei moduli, date ISO, URL dei servizi
@@ -264,6 +281,53 @@ Il modello riceve un JSON con:
   "removed": true, "source"}` (senza `source` in `catalog.rows`, §3.6).
 - La riduzione riguarda **solo ciò che vede il modello**: la cronologia e
   la sessione hanno il risultato completo del `05`.
+
+### 3.7bis Riassunto del profilo per il modello (`object__profile`, sprint C6)
+
+Il risultato completo di `object.profile` (PNG delle miniature e del
+grafico, interrogazioni ADQL, provenienza ripetuta in ogni valore, elenco
+completo degli identificativi) pesa 45–70 kB, oltre il limite di 20 kB di
+§3.7. Prima della riduzione generale, `model_view` del `25` ne fa un
+**riassunto con la stessa struttura** (stessi percorsi, quindi stessa
+classificazione dei testi esterni di §3.6). Regole, verificate sui profili
+veri registrati di 51 Peg e TRAPPIST-1:
+
+1. **Tolto senza perdere numeri:** PNG (`plot_png`, `thumbnails[].png`,
+   `wcs`, `tiles`), ADQL (`query`, `queries[]`), chiavi nulle ed elenchi
+   vuoti, `options` e la catena ripetuta al primo livello (sono nei
+   parametri e nell'Identità), `details.identifiers` (resta
+   `identifier_count`), gli avvisi e i server di ogni sezione (gli avvisi
+   sono già nel risultato, resi in inglese da §3.7), la provenienza di
+   primo livello (è in ogni sezione, punto 2).
+2. **Scritto una volta per sezione, con un indice nei valori:** la
+   provenienza (`sources`, `value.source`: servizio, server reale, tabella,
+   identificativo, incrocio, data, cache), le formule (`formulas`), i
+   riferimenti (`references`); il metodo `read` è il default della sezione
+   (`method_default`, si scrive solo `computed`); gli errori e gli
+   intervalli nell'unità del loro valore sono solo numeri (`errors_unit` lo
+   dichiara).
+3. **Fotometria come tabella dei punti** (25 §11): `details.points` con
+   catalogo, banda, sistema, magnitudine o conteggio con errore, λ, Fν con
+   errore, qualità, nel grafico, duplicato, riferimento, punto zero, motivi
+   (codici), `upper_limit: true` per i limiti superiori (mai misure,
+   D43-9), fonte e formula per indice (`point_sources`, `point_formulas`); i
+   valori della sezione, che ripetono gli stessi numeri, non si mandano.
+   **Pianeti:** i valori numerici con errori e riferimento per parametro;
+   nome, metodo, anno di scoperta e `pl_bmassprov` in `details.planets`.
+4. **Tagli dichiarati, in quest'ordine, solo se il riassunto supera
+   `MODEL_BUDGET` (13 000 byte, il resto dei 20 kB serve ai testi esterni
+   marcati e all'intestazione):** (a) le magnitudini di SIMBAD (fuori dal
+   grafico), poi i punti fuori dal grafico che non sono limiti superiori;
+   (b) le descrizioni delle miniature (resta l'identificativo del survey);
+   (c) i pianeti dalla coda. Ogni taglio è in `truncated` della sezione,
+   con il totale; per i pianeti il modello può chiedere il profilo della
+   sola sezione `planets` (7 pianeti di TRAPPIST-1 entro 20 kB).
+
+**Ogni numero del riassunto è identico** a quello del risultato completo
+(nessun arrotondamento, nessun ricalcolo; i soli numeri nuovi sono gli
+indici e i conteggi dei tagli). La cronologia e la sessione hanno il
+risultato completo, e il `34` verifica le risposte sul risultato completo
+(§3.7, ultima voce; `34` T15).
 
 ### 3.8 Nuovi comandi di sola lettura (definiti nel `05`)
 
@@ -399,6 +463,7 @@ provider (richieste di strumenti scritte nei test).
 | T2 | Nomi tradotti | per ogni strumento, nome → comando → nome | corrispondenza biunivoca; nomi validi per i due provider (regex `^[A-Za-z0-9_-]{1,64}$`) | test di unità |
 | T3 | Schema dal `05` | confronto tra `tools()` ed `export_schema()`; descrizione di `catalog` di `catalog__load_region` | stessi parametri, tipi, intervalli, elenchi chiusi; unità nella descrizione; nessun parametro aggiunto; la descrizione di `catalog` contiene tutti gli `id` di `FIXED_COLLECTIONS` (2026-10-23) | confronto diretto |
 | T13 | `catalog__crossmatch` (sprint B2) | argomenti validi (L2 con sé stesso, 1″); poi raggio senza unità, unità `m`, modalità e metodo fuori elenco, livello inesistente, livello immagine; raggio 181″ con `cds` | conferma richiesta (`network`, `long`); comando in cronologia con origine `ai`, metodo `local` e `icrs` di default, numeri pieni nel risultato ridotto; errori `COMMAND_PARAMETER_INVALID` con il parametro o `LAYER_UNKNOWN` senza cronologia; `MAX_SEP_INVALID` del 15 riportato al modello | test di unità (T12 copre la classificazione delle stringhe del risultato) |
+| T15 | `object__profile` (sprint C6) | registro con il livello 2; TRAPPIST-1 e 51 Peg con le risposte vere registrate (`tests/analysis/profile_fakes.py`); registro del solo 05 | 25 strumenti, conferma richiesta (`network`, `long`); comando in cronologia con origine `ai` e `simbad_id`; ogni stringa del risultato classificata (T12); riassunto ≤ 20 kB, senza PNG né ADQL, `main_id` e testi di SIMBAD marcati esterni, ogni numero uguale al risultato completo, `upper_limit` su AllWISE W4 di TRAPPIST-1; senza livello 2 lo strumento non c'è (24 strumenti) | `tests/ai/test_tool_profile.py` |
 | T14 | `catalog__cone_search` e nessuno strumento per l'ADQL (sprint B3) | argomenti validi (voce SCS, centro ICRS con epoca `null` e motivo, 2 arcmin); poi raggio senza unità, unità `m`, raggio 0, `max_rows` 0, voce di un altro protocollo, URL non http; elenco degli strumenti | conferma richiesta (`network`, `long`); comando in cronologia con origine `ai` e `url` risolto; testi del risultato classificati (T12); errori `COMMAND_PARAMETER_INVALID` con il parametro o `SERVER_UNKNOWN`/`MAX_ROWS_INVALID` riportati al modello; nessuno strumento per `catalog.tap_query`, `vo.add_server`, `vo.remove_server`; 24 strumenti | test di unità (`tests/ai/test_tool_registry.py`) |
 | T4 | Validazione come l'utente | raggio senza unità; unità `m`; livello `L9` inesistente; JSON rotto | errori `COMMAND_PARAMETER_INVALID`, `LAYER_UNKNOWN`, `TOOL_ARGUMENTS_INVALID` come risultato al modello; nome sconosciuto (`catalog_search`, `catalog.search`, `image__open`) → `TOOL_NOT_EXPOSED` con `valid_tools` uguale a `tools()` (2026-10-23); nessun comando in cronologia | test di unità |
 | T5 | Stessa coda, `requested_by` | un comando dall'utente e uno dall'IA | eseguiti in ordine di arrivo; il secondo in cronologia con `requested_by = ai`, conversazione, turno, chiamata, profilo, modello | ispezione della cronologia |
@@ -460,6 +525,19 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   modello pesano troppo. Idea: per i cataloghi solo le colonne principali (identificativo, posizione, magnitudini
   principali, con il numero di colonne omesse dichiarato e `catalog__rows` per chiedere le altre), eventualmente
   come opzione del profilo IA. Da specificare qui e nel `35` prima del codice.
+- **D32-4 — Riassunto del profilo per il modello (sprint C6) — da confermare
+  (proprietario).** Regole di §3.7bis, proposte da Claude Code il 2026-11-08:
+  (1) stessa struttura del risultato con fonti, formule e riferimenti per
+  indice e il metodo `read` di default; (2) Fotometria come tabella dei
+  punti al posto dei valori duplicati; (3) tagli dichiarati solo oltre
+  13 000 byte, nell'ordine magnitudini SIMBAD e punti fuori dal grafico,
+  descrizioni delle miniature, pianeti dalla coda (con il suggerimento di
+  chiedere la sola sezione `planets`); (4) `object__profile` con conferma
+  (rete e lungo) come gli altri comandi di rete; il parametro `simbad_id`
+  resta nello schema (la scelta di un candidato la fa l'utente, la scheda di
+  conferma la mostra). Alternativa a (3): alzare il limite di 20 kB per
+  questo strumento (cambierebbe una regola decisa il 2026-10-16).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -480,3 +558,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-25 | Claude Code | **Sprint 9:** registrata **D32-3** (risultati più leggeri verso l'IA per i provider con limiti bassi di token), rinviata a dopo la v1, §13. Stato `approvato` invariato. |
 | 2026-11-05 | Claude Code | **Sprint B2 — `catalog__crossmatch`** (decisione del proprietario del 2026-11-05, D15-10 (e) del `15`: esposto perché il registro lo permette con lavoro contenuto, una riga di §3.2 e la classificazione dei campi del risultato): §3.2 nuova riga (conferma sì: rete e lungo), §3.6 testi esterni del risultato, T13 (§12). Strumenti esposti: 23. Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — `catalog__cone_search`** (decisione del proprietario del 2026-11-06: esporre solo la cone search, con conferma come gli altri comandi di rete): §3.2 nuova riga; §3.3 `catalog.tap_query` non esposto (ADQL = `33`, rimandato) e `vo.*` non esposti; nota sugli strumenti annotati dal 14 aggiornata; testi esterni del risultato (§3.6: colonne e posizioni come `catalog.load_region`; servizio, URL e parametri inviati sono di AstroTwo); nuovo T14 (§12). Strumenti esposti: 24. Stato `approvato` invariato. |
+| 2026-11-08 | Claude Code | **Sprint C6 — `object__profile`** (brief del proprietario del 2026-11-08, punto d, autorizzazione D25-12): §3.1 comandi dei livelli 2–4 presenti solo se il registro li contiene (`OPTIONAL_COMMANDS`), §3.2 nuova riga (conferma: rete e lungo), §3.6 testi esterni del risultato del profilo, nuovo §3.7bis (riassunto per il modello con `model_view` del 25), T15, nuova D32-4 (da confermare). Strumenti esposti con il registro dell'app: **25**. Stato `approvato` invariato. |

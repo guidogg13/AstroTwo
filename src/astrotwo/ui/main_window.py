@@ -2174,7 +2174,10 @@ class MainWindow(QMainWindow):
 
     @Slot(object, object, object)
     def _assistant_enqueue(self, command: Command, cancel: CancelToken, ticket: _AssistantTicket) -> None:
-        self._assistant_waiters[self.submit_command(command, cancel)] = ticket
+        job = self.submit_command(command, cancel)
+        self._assistant_waiters[job] = ticket
+        if command.name == "object.profile":  # profilo chiesto dall'assistente: la sua scheda nei Profili (43 §3.11)
+            self.profiles_window().adopt(job, dict(command.parameters), cancel)
 
     def _release_assistant(self, job_id: int, done: CommandDone | None) -> None:
         ticket = self._assistant_waiters.pop(job_id, None)

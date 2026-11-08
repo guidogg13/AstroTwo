@@ -41,9 +41,9 @@ SED), «Carica i punti SED come catalogo», «Invia con SAMP», strumento
 compaiono** (nessun pulsante spento senza funzione).
 
 **Sprint C6 (2026-11-08):** dentro «Esporta…», «Carica i punti SED come
-catalogo» e «Invia con SAMP» (§3.10). Lo strumento `object__profile`
-dell'assistente (25 §11, 32) **non è nel brief dello sprint C6**: resta
-fuori finché il proprietario non lo chiede (§11).
+catalogo» e «Invia con SAMP» (§3.10) e, con la seconda parte del brief
+(C6b), la scheda dei profili chiesti dall'assistente con lo strumento
+`object__profile` (§3.11).
 
 ### 3.2 Da dove si apre
 
@@ -373,6 +373,18 @@ non manda messaggi da sé. Regole dei file e dei comandi nel `25` §3.15.
   avvisi (`SAMP_NO_PEER`, `no_reply_table`) come `samp.send_table` (40
   §3.12).
 
+### 3.11 Profilo chiesto dall'assistente (sprint C6, 2026-11-08)
+
+Quando l'assistente (35) mette in coda `object.profile` (strumento
+`object__profile` del 32, dopo la conferma dell'utente), la finestra
+Profili **apre una scheda per quel comando** come per le altre aperture
+(scheletro subito, arrivo progressivo, risultato definitivo, pulsanti), senza
+mettere in coda un secondo comando: è lo stesso lavoro della coda. La
+testata dice l'origine («Asked by the assistant» / «Chiesto
+dall'assistente»). L'assistente riceve il suo risultato come per gli altri
+strumenti; chiudere la scheda in corso annulla il comando (§3.3), e
+l'assistente riceve `COMMAND_CANCELLED`.
+
 ## 4. Cosa NON fa
 
 - Non calcola, converte o arrotonda valori scientifici: mostra quelli del
@@ -384,8 +396,8 @@ non manda messaggi da sé. Regole dei file e dei comandi nel `25` §3.15.
 - Non scrive file né manda messaggi SAMP da sé: esportazione, catalogo e
   SAMP sono comandi registrati (`object.export`, `catalog.open_file`,
   `object.send_sed`, §3.10) che rileggono i risultati registrati.
-- Non è uno strumento dell'IA (`object__profile` non è nel brief di C6,
-  §3.1).
+- Non è uno strumento dell'IA: lo strumento è `object__profile` del 32; la
+  finestra mostra i profili chiesti dall'assistente (§3.11).
 - Non riapre le schede alla riapertura di una sessione: la sessione del 05
   contiene i comandi `object.profile` (sola lettura) e li riesegue, ma la
   finestra Profili non fa parte dello stato della sessione (D43-10).
@@ -499,11 +511,10 @@ Codice previsto in `src/astrotwo/ui/profiles.py` (proposta):
 
 ## 11. Esposizione all'IA
 
-Non applicabile: la finestra non è uno strumento, e `object.export` e
-`object.send_sed` sono comandi `application`, non esposti all'IA (32
-§3.3). Lo strumento `object__profile` (25 §11, 32) non è nel brief dello
-sprint C6 (2026-11-08): quando il proprietario lo chiederà, la scheda si
-aprirà come per le altre aperture (da specificare allora).
+La finestra non è uno strumento, e `object.export` e `object.send_sed`
+sono comandi `application`, non esposti all'IA (32 §3.3). Lo strumento
+`object__profile` (25 §11, 32 §3.2, sprint C6b) apre la sua scheda come in
+§3.11.
 
 ## 12. Test di accettazione
 
@@ -538,6 +549,7 @@ T13 con l'apertura dalla tabella e dal riquadro del puntatore.
 | T18 | Esporta dopo «Riprova» | astrometria in errore, «Riprova questa sezione» riuscito, poi ECSV | `commands = [#n, #m]`; le righe dell'astrometria con `command_id = m` | ECSV |
 | T19 | Carica i punti SED come catalogo | 51 Peg | `object.export` `sed_votable` nella cartella `Profiles/` (sostituita nel test), poi `catalog.open_file`; nuovo livello `SED * 51 Peg` con posizioni riconosciute e una riga per punto | cronologia, spazio di lavoro |
 | T20 | Invia con SAMP | hub e client simulati; senza collegamento | pulsante spento senza collegamento; con un client `object.send_sed` con `recipient`, tabella ricevuta con le righe dei punti | messaggi SAMP |
+| T22 | Profilo chiesto dall'assistente (C6b) | comando `object.profile` con `requested_by = ai` messo nella coda dall'esecutore dell'assistente | scheda aperta subito con «Chiesto dall'assistente», nessun secondo comando in cronologia, risultato all'assistente | cronologia, schede |
 | T21 | Pulsanti attivi | scheda in coda, in corso, finita, in errore | pulsanti spenti finché non c'è un profilo; attivi alla fine (anche annullata con sezioni) | stato dei pulsanti |
 
 ## 13. Decisioni aperte
@@ -600,6 +612,7 @@ decisione aperta.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6b (brief del proprietario del 2026-11-08, punto d):** nuovo §3.11 (scheda per i profili chiesti dall'assistente, nessun secondo comando), §3.1, §4, §11, T22. Stato `approvato` invariato (autorizzazione D25-12, brief di C6). |
 | 2026-11-08 | Claude Code | **Sprint C6 (decisioni del proprietario del 2026-11-08):** file **approvato** dal proprietario; D43-1…D43-8 e D43-10 confermate; D43-9 decisa (limiti superiori come frecce verso il basso ovunque: finestra, PNG del 20, esportazione del 25). Nuovo §3.10 (pulsanti «Esporta…» con ECSV, PDF e PNG della SED, «Carica i punti SED come catalogo», «Invia con SAMP», tutti comandi registrati: `object.export`, `catalog.open_file`, `object.send_sed` del 25 §3.15; elenco `commands` della scheda con le sezioni riprovate); §3.1, §3.7, §4, §5, §6, §7, §10, §11 (strumento `object__profile` non nel brief di C6), §12 (T11 precisato, nuovi T17–T21), §13. |
 | 2026-11-08 | Claude Code | **Sprint C5b:** §12 con i file di test reali (`test_profiles.py`, `test_profiles_open.py`) e T8, T11 come provati (dialogo dei candidati, freccia del limite superiore di TRAPPIST-1 W4); test dei pulsanti della scheda e della chiusura di una scheda in corso. |
 | 2026-11-08 | Claude Code | **Codice dello sprint C5 (istruzione del proprietario del 2026-11-08, punti a–h):** `src/astrotwo/ui/profiles.py` (finestra, schede, sezioni, riquadro della provenienza, dialoghi dei candidati e del profilo), aggancio nel 40 (menu Data e Window, pulsante «Profilo» del «Vai a», coda), 41 (clic destro e riquadro del puntatore SIMBAD), 42 (clic destro su una riga), 05 (`ProgressReport.detail`), 25 (`on_resolved` ed eventi `resolved`/`section`), 20 (`plot_sed_rows`); §3.4 bersaglio ambiguo in un dialogo (punto e); §3.7 e D43-9: frecce dei limiti superiori solo nel grafico della finestra (istruzione più recente del proprietario, da confermare). Il file resta `bozza`. |

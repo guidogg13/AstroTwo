@@ -2159,8 +2159,12 @@
         <translation>Profili</translation>
     </message>
     <message>
+        <source>Asked by the assistant</source>
+        <translation>Chiesto dall'assistente</translation>
+    </message>
+    <message>
         <source>The export was not written</source>
-        <translation>L'esportazione non è stata scritta</translation>
+        <translation>L&apos;esportazione non è stata scritta</translation>
     </message>
     <message>
         <source>Close profile</source>

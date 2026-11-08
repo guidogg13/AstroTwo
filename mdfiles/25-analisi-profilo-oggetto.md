@@ -950,6 +950,9 @@ Gaia), nel PDF e nella finestra del 43.
   `(command_id, values)` di comandi `object.profile` (primo = base) alla
   forma JSON della scheda: sezioni dei comandi successivi al posto di quelle
   del base, `command_id` in ogni sezione.
+- **`model_view(full)`** (sprint C6, §11) — da `{"values", "provenance"}`
+  del risultato completo di `object.profile` al riassunto per il modello
+  (32 §3.7bis): stessi percorsi, nessun numero cambiato.
 - **`export_profile(data, path, format, *, language="en")`** — scrive
   ECSV, PDF, PNG della SED o VOTable dei punti (§3.15) dalla forma JSON
   unita; restituisce `ProfileExport` (percorso, formato, SHA-256, byte,
@@ -1045,7 +1048,14 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 
 ## 11. Esposizione all'IA
 
-Strumento **`object__profile`** (nel `32`, da aggiungere): parametri `target`
+**Sprint C6 (2026-11-08, brief del proprietario punto d): strumento scritto**
+nel `32` (§3.2, §3.7bis): parametri del comando `object.profile` (nome, o
+coordinate con sistema ed epoca dichiarati, `sections`, raggi); classe di
+rete, **con conferma** (rete e lungo). Il riassunto per il modello è
+`model_view(full)` di questo modulo (stessa struttura del risultato, senza
+PNG, ADQL e duplicati; ogni numero identico, provenienza per valore). La
+scheda si apre anche nella finestra Profili (`43` §3.11). Testo originale
+della proposta: strumento **`object__profile`** (nel `32`, da aggiungere): parametri `target`
 (nome o coordinate con sistema ed epoca), `sections`; classe di rete, **con
 conferma**. Restituisce un **riassunto** entro i limiti del 32 (≤ 50 righe,
 20 kB): identità, astrometria, distanza con metodo, punti della SED in tabella,
@@ -1091,7 +1101,7 @@ cambiano).
 | T27 | Comando `object.export` (§3.15) | registro con `object.export` legato a una cronologia di prova: `object.profile` di 51 Peg, poi «Riprova» dell'astrometria; numeri sbagliati, comando non profilo, profilo in errore; percorsi sbagliati; Riesegui | file scritto con le sezioni del secondo comando al posto di quelle del primo (`command_id`); `PROFILE_EXPORT_INVALID` con ogni ragione, nessun file; Riesegui → stesso SHA-256; comando `application` in cronologia, non rieseguito alla riapertura | comando registrato, SHA-256 |
 | T28 | Punti SED come catalogo e SAMP (§3.15) | `sed_catalog_table` di 51 Peg e TRAPPIST-1; `object.export` `sed_votable` poi `catalog.open_file`; `object.send_sed` con un hub e un client SAMP simulati (`tests/core/samp_fakes.py`) | una riga per punto con λ, Fν, errori, banda, fonte, `upper_limit`; livello catalogo con posizioni ICRS riconosciute dagli UCD e la provenienza; `table.load.votable` con chiamata sincrona e 60 s, tabella ricevuta uguale; senza collegamento `SAMP_UNAVAILABLE` | confronto con il risultato del profilo |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
-| T17 | Rete (marcato `network`) | 3 oggetti veri | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s) | non nel commit (`--no-network`) |
+| T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`) | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
 
 ## 13. Decisioni aperte
 
@@ -1283,6 +1293,7 @@ dello sprint C6, da confermare).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6b (brief del proprietario del 2026-11-08, punti d–f):** §11 strumento `object__profile` scritto (32 §3.2, §3.7bis) con `model_view` (§7.1); finestra Profili anche per i profili chiesti dall'assistente (`43` §3.11); test di rete a parte dei 4 oggetti con i tempi (`tests/analysis/test_profile_network.py`, §12 T17). |
 | 2026-11-08 | Claude Code | **Sprint C6 (decisioni del proprietario del 2026-11-08, autorizzazione D25-12):** D25-19 confermata; `43-ui-profili.md` approvato (D43-9 decisa: limiti superiori come frecce ovunque, D20-9 (3) cambiata nel 20). Nuovo §3.15 (esportazione dai risultati registrati: comando `object.export` con ECSV dei valori con provenienza, PDF della scheda, PNG della SED e VOTable dei punti; «Carica i punti SED come catalogo» = `object.export` `sed_votable` + `catalog.open_file`; «Invia con SAMP» = comando `object.send_sed` con `table.load.votable`, callAndWait, 60 s); §3.7, §6, §7.1, §8 (PDF con matplotlib), §10 (`PROFILE_EXPORT_INVALID`, `PROFILE_EXPORT_FAILED`), §12 (T15 precisato, nuovi T26–T28); nuova D25-20 (scelte minori di C6, da confermare). |
 | 2026-11-08 | Claude Code | **Sprint C5, interfaccia (istruzione del proprietario del 2026-11-08):** `build_profile` con `on_resolved`; `object.profile` manda nell'avanzamento (`ProgressReport.detail` del 05) l'evento `resolved` (passo 0) e ogni sezione arrivata (evento `section`, stessa forma JSON del risultato) per la finestra Profili (`43` §3.5); test T29 del 05 aggiornati. |
 | 2026-11-08 | Claude Code | **Sprint C5 (decisioni del proprietario del 2026-11-08, autorizzazione D25-12):** D25-16 decisa (confermata tutta, (1)–(9)); D25-17 decisa ((1)–(9) confermati, (10) deciso: Pianeti subito per `hostname` senza attendere Gaia, avviso se poi `gaia_dr3_id` dà un risultato diverso); D25-7 ribadita (interfaccia in `43-ui-profili.md`, creato in bozza lo stesso giorno). Nuovo §3.14 (`exoplanet_host_early`, `check_exoplanet_host`, avviso `PROFILE_PLANET_HOST_MISMATCH` con ragioni `different` e `only_gaia`); §3.9 rimanda al `43`; §10 e §12 (T25); nuova D25-19 (scelte minori del motore in C5, da confermare). Codice e test in `object_profile.py` e `tests/analysis/test_object_profile_images_planets.py` (T25). |
