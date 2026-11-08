@@ -525,8 +525,11 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   modello pesano troppo. Idea: per i cataloghi solo le colonne principali (identificativo, posizione, magnitudini
   principali, con il numero di colonne omesse dichiarato e `catalog__rows` per chiedere le altre), eventualmente
   come opzione del profilo IA. Da specificare qui e nel `35` prima del codice.
-- **D32-4 — Riassunto del profilo per il modello (sprint C6) — da confermare
-  (proprietario).** Regole di §3.7bis, proposte da Claude Code il 2026-11-08:
+- **D32-4 — Riassunto del profilo per il modello (sprint C6) — CONFERMATA
+  (proprietario, 2026-11-08, brief dello sprint C7):** il limite resta
+  **20 kB anche per `object__profile`** (l'alternativa di alzarlo è
+  **respinta**), con i tagli dichiarati al modello nell'ordine di (3).
+  Regole di §3.7bis, proposte da Claude Code il 2026-11-08:
   (1) stessa struttura del risultato con fonti, formule e riferimenti per
   indice e il metodo `read` di default; (2) Fotometria come tabella dei
   punti al posto dei valori duplicati; (3) tagli dichiarati solo oltre
@@ -559,3 +562,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-11-05 | Claude Code | **Sprint B2 — `catalog__crossmatch`** (decisione del proprietario del 2026-11-05, D15-10 (e) del `15`: esposto perché il registro lo permette con lavoro contenuto, una riga di §3.2 e la classificazione dei campi del risultato): §3.2 nuova riga (conferma sì: rete e lungo), §3.6 testi esterni del risultato, T13 (§12). Strumenti esposti: 23. Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — `catalog__cone_search`** (decisione del proprietario del 2026-11-06: esporre solo la cone search, con conferma come gli altri comandi di rete): §3.2 nuova riga; §3.3 `catalog.tap_query` non esposto (ADQL = `33`, rimandato) e `vo.*` non esposti; nota sugli strumenti annotati dal 14 aggiornata; testi esterni del risultato (§3.6: colonne e posizioni come `catalog.load_region`; servizio, URL e parametri inviati sono di AstroTwo); nuovo T14 (§12). Strumenti esposti: 24. Stato `approvato` invariato. |
 | 2026-11-08 | Claude Code | **Sprint C6 — `object__profile`** (brief del proprietario del 2026-11-08, punto d, autorizzazione D25-12): §3.1 comandi dei livelli 2–4 presenti solo se il registro li contiene (`OPTIONAL_COMMANDS`), §3.2 nuova riga (conferma: rete e lungo), §3.6 testi esterni del risultato del profilo, nuovo §3.7bis (riassunto per il modello con `model_view` del 25), T15, nuova D32-4 (da confermare). Strumenti esposti con il registro dell'app: **25**. Stato `approvato` invariato. |
+| 2026-11-08 | Claude Code | **Sprint C7 (decisione del proprietario del 2026-11-08):** D32-4 **confermata** così com'è: limite di 20 kB anche per `object__profile`, tagli dichiarati nell'ordine proposto, nessun limite più alto. Stato `approvato` invariato. |

@@ -103,7 +103,10 @@ def test_t18_export_after_retry_uses_both_commands(qtbot, win, services, tmp_pat
     assert tab.views["astrometry"].state in ("error", "partial")  # Gaia giù: solo SIMBAD
     services.overrides.clear()
     tab.retry("astrometry")
-    qtbot.waitUntil(lambda: tab.views["astrometry"].state == "done", timeout=60000)
+    # La sezione arriva prima con l'avanzamento (numero ancora None), il numero del comando alla fine del comando:
+    # si aspettano entrambi (corsa vista con la suite completa, sprint C7).
+    qtbot.waitUntil(lambda: tab.views["astrometry"].state == "done"
+                    and tab.views["astrometry"].command_number is not None, timeout=60000)
     retry = tab.views["astrometry"].command_number
     assert tab.export_commands() == [tab.command_number, retry]
     tab.export("ecsv", str(tmp_path / "p.ecsv"))

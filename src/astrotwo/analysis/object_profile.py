@@ -154,8 +154,9 @@ _BJ_TABLE = "external.gaiaedr3_distance"
 _IRSA_TAP = "nasa-irsa-tap"
 _SERVICE_OF = {_SIMBAD_TAP: "simbad", _GAIA_TAP: "gaia", _IRSA_TAP: "irsa", _EXOPLANET_TAP: "exoplanet"}
 _POLL = 0.05  # s: intervallo di controllo di Annulla e delle scadenze (25 §3.12 regola 7)
-_WORKERS = 16  # thread del profilo: risoluzione, 4 incroci, sezioni, 4 richieste della fotometria (mai in attesa
-               # reciproca senza un thread libero); le richieste contemporanee le limita il semaforo
+_WORKERS = 24  # thread del profilo: risoluzione, incroci, 5 sezioni, 4 richieste della fotometria, 3 miniature (fino
+               # a 17 insieme, mai in attesa reciproca senza un thread libero; 25 §3.16 C7-g); le richieste
+               # contemporanee le limita il semaforo
 _IRSA_TABLE = {"2mass": "fp_psc", "allwise": "allwise_p3as_psd"}
 _IRSA_COLUMNS = {
     "2mass": "designation, ra, dec, j_m, j_msigcom, h_m, h_msigcom, k_m, k_msigcom, ph_qual, rd_flg, cc_flg, jdate",
@@ -639,6 +640,9 @@ class CrossIdentification:
     requests: tuple[RequestRecord, ...] = ()
     queries: tuple[str, ...] = ()
     error: Mapping[str, object] | None = None  # errore del servizio dell'incrocio (messaggio invariato)
+    #: Passo per posizione di 2MASS/AllWISE: la riga scelta (tabella di una riga, stesse colonne della fotometria),
+    #: usata dalla fotometria senza una seconda richiesta (25 §3.16 C7-a); non fa parte del risultato (``as_dict``).
+    row: object = field(default=None, repr=False, compare=False)
 
     @property
     def source_id(self) -> int | None:
@@ -877,7 +881,7 @@ def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quant
     adql = f"SELECT {_IRSA_COLUMNS[catalog]} FROM {table} WHERE {_circle(ra0, dec0, search)}"
     result = _tap(_IRSA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts)
     found = []
-    for row in result.table.table:
+    for index, row in enumerate(result.table.table):
         ra, dec = _value(row, "ra"), _value(row, "dec")
         if ra is None or dec is None:
             continue
@@ -892,8 +896,9 @@ def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quant
         if sep <= radius:
             prefix = "2MASS J" if catalog == "2mass" else "WISEA "
             found.append({"identifier": prefix + str(_value(row, "designation")).strip(),
-                          "separation": _qj(sep, "arcsec")})
+                          "separation": _qj(sep, "arcsec"), "_index": index})
     found.sort(key=lambda c: (c["separation"]["value"], c["identifier"]))
+    indices = [c.pop("_index") for c in found]
     epochs = {"source": None if source_epoch is None else source_epoch.jyear_str, "target": target_epoch}
     common = dict(epochs=epochs, requests=(result.request,), queries=(adql,))
     warnings = notes + _network_notes(result.warnings)
@@ -917,7 +922,8 @@ def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quant
                           "separation": _qj(sep), "radius": _qj(radius, "arcsec"),
                           "source_epoch": epochs["source"] or "", "target_epoch": target_epoch})
     return CrossIdentification(catalog, best["identifier"], "position", separation=sep, candidates=tuple(found),
-                               warnings=warnings + (note,), **common)
+                               warnings=warnings + (note,), row=result.table.table[indices[0]:indices[0] + 1],
+                               **common)
 
 
 class _ExoplanetAsk:
@@ -1352,13 +1358,28 @@ def _point_values(point, prov: Provenance) -> list[ProfileValue]:
     return out
 
 
-def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossIdentification], *,
+def profile_photometry(resolved: ResolvedTarget,
+                       cross_ids: Mapping[str, CrossIdentification | Callable[[], CrossIdentification]], *,
                        cache: SharedCache | None = None, refresh: bool = False,
                        timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
                        cancel: Callable[[], bool] | None = None) -> tuple[ProfileSection, Sed]:
     """Sezione Fotometria e SED (25 §3.11): punti Gaia DR3, 2MASS, AllWISE, SIMBAD per gli identificativi della
-    catena, serie VizieR separata; conversioni, qualità, duplicati e grafico dal ``20``."""
+    catena, serie VizieR separata; conversioni, qualità, duplicati e grafico dal ``20``.
+
+    Un valore di ``cross_ids`` può essere una funzione senza argomenti che attende l'esito della catena: dentro
+    ``build_profile`` la serie VizieR (altro servizio) parte subito, le richieste di Gaia, 2MASS e AllWISE dopo i
+    tre identificativi come prima (25 §3.16 C7-b: più richieste insieme allo stesso archivio occuperebbero i posti
+    del semaforo quando l'archivio non risponde)."""
     section = ProfileSection("photometry")
+    pending = dict(cross_ids)
+
+    def crossid(catalog: str) -> CrossIdentification | None:
+        value = pending.get(catalog)
+        return value() if callable(value) else value
+
+    def all_ids() -> None:
+        for catalog in ("gaia_dr3", "2mass", "allwise"):
+            crossid(catalog)
     points, provs = [], []
 
     def add(new_points, prov: Provenance) -> None:
@@ -1375,30 +1396,46 @@ def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossId
                 return None, exc
         return run
 
-    # Le quattro richieste (Gaia, 2MASS, AllWISE, VizieR) partono insieme dentro build_profile (25 §3.12 regola 2);
-    # i risultati si applicano sempre nello stesso ordine.
-    gaia = cross_ids.get("gaia_dr3")
-    gaia_adql = None
-    jobs: list[tuple[str, Callable]] = []
-    if gaia is not None and gaia.source_id is not None:
-        gaia_adql = f"SELECT {', '.join(_GAIA_PHOT_COLUMNS)} FROM {_GAIA_SOURCE} WHERE source_id = {gaia.source_id}"
-        jobs.append(("gaia_dr3", attempt(lambda: _tap(_GAIA_TAP, gaia_adql, cache=cache, refresh=refresh,
-                                                      timeouts=timeouts))))
-    for catalog in ("2mass", "allwise"):
-        found = cross_ids.get(catalog)
-        if found is not None and found.identifier is not None:
-            jobs.append((catalog, attempt(lambda c=catalog, f=found: _irsa_by_designation(
-                c, f.identifier, cache=cache, refresh=refresh, timeouts=timeouts))))
+    # Le quattro richieste (Gaia, 2MASS, AllWISE, VizieR) partono insieme dentro build_profile (25 §3.12 regola 2):
+    # VizieR subito, le altre tre dopo i tre identificativi (§3.16 C7-b); i risultati si applicano sempre nello stesso
+    # ordine. Una richiesta senza identificativo restituisce ``None`` (nessuna richiesta fatta).
+    def gaia_job():
+        all_ids()
+        gaia = crossid("gaia_dr3")
+        if gaia is None or gaia.source_id is None:
+            return None
+        adql = f"SELECT {', '.join(_GAIA_PHOT_COLUMNS)} FROM {_GAIA_SOURCE} WHERE source_id = {gaia.source_id}"
+        return _tap(_GAIA_TAP, adql, cache=cache, refresh=refresh, timeouts=timeouts), adql
+
+    def irsa_job(catalog: str):
+        def job():
+            all_ids()
+            found = crossid(catalog)
+            if found is None or found.identifier is None:
+                return None
+            if found.method == "position" and found.row is not None:  # riga già letta nella catena (C7-a)
+                return found.requests[0], found.queries[0], found.row, ()
+            result, adql = _irsa_by_designation(catalog, found.identifier, cache=cache, refresh=refresh,
+                                                timeouts=timeouts)
+            return result.request, adql, result.table.table, result.warnings
+        return job
+
     center, center_notes = _vizier_center(resolved)
-    jobs.append(("vizier_sed", attempt(lambda: _network("vizier_sed", vizier_photometry, center, VIZIER_SED_RADIUS,
-                                                        cache=cache, refresh=refresh, timeouts=timeouts))))
+    jobs: list[tuple[str, Callable]] = [
+        ("gaia_dr3", attempt(gaia_job)), ("2mass", attempt(irsa_job("2mass"))),
+        ("allwise", attempt(irsa_job("allwise"))),
+        ("vizier_sed", attempt(lambda: _network("vizier_sed", vizier_photometry, center, VIZIER_SED_RADIUS,
+                                                cache=cache, refresh=refresh, timeouts=timeouts)))]
     answers = dict(zip([name for name, _ in jobs], _gather([job for _, job in jobs]), strict=True))
+    answers = {k: v for k, v in answers.items() if v[0] is not None or v[1] is not None}
     _check(cancel)
+    gaia = crossid("gaia_dr3")
     if "gaia_dr3" in answers:
-        result, exc = answers["gaia_dr3"]
+        answer, exc = answers["gaia_dr3"]
         if exc is not None:
             section.errors.append({**_message(exc), "catalog": "Gaia DR3"})
         else:
+            result, gaia_adql = answer
             section.requests.append(result.request)
             section.warnings.extend(_network_notes(result.warnings))
             prov = _provenance(result.request, _service_name(result.request.url), _GAIA_SOURCE, gaia_adql,
@@ -1408,24 +1445,24 @@ def profile_photometry(resolved: ResolvedTarget, cross_ids: Mapping[str, CrossId
     for catalog in ("2mass", "allwise"):
         if catalog not in answers:
             continue
-        found = cross_ids[catalog]
+        found = crossid(catalog)
         answer, exc = answers[catalog]
         if exc is not None:
             section.errors.append({**_message(exc), "catalog": catalog})
             continue
-        result, adql = answer
-        section.requests.append(result.request)
-        section.warnings.extend(_network_notes(result.warnings))
-        if len(result.table.table) == 0:
+        request, adql, rows, notes = answer
+        section.requests.append(request)
+        section.warnings.extend(_network_notes(notes))
+        if len(rows) == 0:
             section.warnings.append(ModuleWarning(
                 "PROFILE_NO_PHOTOMETRY", f"{found.identifier} non ha righe in {_IRSA_TABLE[catalog]}",
                 {"reason": "not_in_catalog", "catalog": {"2mass": "2MASS", "allwise": "AllWISE"}[catalog],
                  "identifier": found.identifier, "table": _IRSA_TABLE[catalog]}))
             continue
-        prov = _provenance(result.request, _service_name(result.request.url), _IRSA_TABLE[catalog], adql,
+        prov = _provenance(request, _service_name(request.url), _IRSA_TABLE[catalog], adql,
                            found.identifier, found.method)
         epoch = "MJD 55400.0 UTC (AllWISE Explanatory Supplement §II.1)" if catalog == "allwise" else None
-        add(sed_points_from(result.table.table[:1], catalog, identifier=found.identifier, match=found.method,
+        add(sed_points_from(rows[:1], catalog, identifier=found.identifier, match=found.method,
                             provenance=prov.as_dict(), epoch=epoch), prov)
     record = resolved.simbad
     if record is not None and len(record.requests) > 2:
@@ -1499,7 +1536,7 @@ def profile_images(resolved: ResolvedTarget, *, surveys: Sequence[str] = IMAGE_S
     un survey giù resta un errore della sola miniatura."""
     import base64
 
-    from astrotwo.core.hips import HiPSError, add_hips, hips_thumbnail, survey_epoch
+    from astrotwo.core.hips import HiPSError, add_hips, cds_down_in_session, hips_thumbnail, survey_epoch
 
     section = ProfileSection("images")
 
@@ -1518,8 +1555,13 @@ def profile_images(resolved: ResolvedTarget, *, surveys: Sequence[str] = IMAGE_S
             return hips_id, (service, thumb, note, notes), None
         return run
 
+    # Stato del CDS non noto nella sessione: prima un survey, poi gli altri insieme; se il MocServer non ha risposto
+    # gli altri prendono subito la scorciatoia di D25-18 invece di occupare altri posti (25 §3.16 C7-d).
+    first: list = []
+    if surveys and not refresh and cds_down_in_session() is None:
+        first = _gather([one(surveys[0])])
     thumbnails = []
-    for hips_id, found, exc in _gather([one(h) for h in surveys]):
+    for hips_id, found, exc in first + _gather([one(h) for h in surveys[len(first):]]):
         if exc is not None:
             section.errors.append({**_message(exc), "survey": hips_id})
             continue
@@ -1866,15 +1908,15 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                 return without_gaia(_message(exc))
 
         def photometry_section() -> ProfileSection:
-            found = known(("gaia_dr3", "2mass", "allwise"))
-            section, _sed = profile_photometry(resolved, {c.catalog: c for c in found}, cancel=stopper("photometry"),
-                                               **net)
+            waits = {c: (lambda c=c: run.wait(ids[c])) for c in ("gaia_dr3", "2mass", "allwise") if c in ids}
+            section, _sed = profile_photometry(resolved, waits, cancel=stopper("photometry"), **net)  # C7-b
             if "identity" not in names:
+                found = known(("gaia_dr3", "2mass", "allwise"))
                 section.details["cross_identifications"] = [c.as_dict() for c in found]
                 for c in found:
                     section.warnings.extend(w for w in c.warnings if w[0] in ("PROFILE_POSITIONAL_MATCH",
                                                                               "PROFILE_IDENTIFIER_CONFLICT"))
-                    section.requests.extend(c.requests)
+                    section.requests.extend(r for r in c.requests if r not in section.requests)  # C7-a: una volta
             return section
 
         def images_section() -> ProfileSection:

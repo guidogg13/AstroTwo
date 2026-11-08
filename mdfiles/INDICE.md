@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-08 — **sprint C6b: strumento `object__profile` (25 strumenti IA), scheda dei profili chiesti dall'assistente, test dell'esportazione e di rete.** `32` §3.1, §3.2, §3.7bis (riassunto per il modello), D32-4 nuova; `25` §11; `34` T15; `43` §3.11. Nessun cambio di stato.
+**Ultimo aggiornamento:** 2026-11-08 — **sprint C7: tempi del profilo.** D25-20 e D32-4 confermate; `25` §3.16 (diagnosi, correzioni, misure), T29, D25-21 nuova; `32` §13; difetto di `cds_down_in_session` del `12` corretto nel codice. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
+
+Prima, 2026-11-08 — **sprint C6b: strumento `object__profile` (25 strumenti IA), scheda dei profili chiesti dall'assistente, test dell'esportazione e di rete.** `32` §3.1, §3.2, §3.7bis (riassunto per il modello), D32-4 nuova; `25` §11; `34` T15; `43` §3.11. Nessun cambio di stato.
 
 Prima, 2026-11-08 — **sprint C6 (decisioni del proprietario del 2026-11-08): esportazione, SED come catalogo e SAMP; Fase C chiusa salvo lo strumento dell'IA.** `43-ui-profili.md` **approvato** (D43-1…D43-8 e D43-10 confermate, D43-9 decisa: limiti superiori come frecce ovunque, D20-9 (3) cambiata nel `20`); D25-19 confermata; `25` §3.15 nuovo (comandi `object.export` — ECSV dei valori con provenienza, PDF della scheda, PNG della SED, VOTable dei punti — e `object.send_sed`, «Carica i punti SED come catalogo» = esportazione + `catalog.open_file`), nuova D25-20 da confermare; `05`, `20`, `40` aggiornati (stato invariato). Codice: `src/astrotwo/analysis/profile_export.py`, pulsanti della scheda in `ui/profiles.py`, `SampLink.send_catalog`. Conteggi: approvati 27 → 28, bozze 6 → 5.
 

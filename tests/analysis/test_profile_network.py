@@ -25,7 +25,9 @@ def test_network_full_profile_of_four_objects_with_times(cache):
     summary = []
     for name in OBJECTS:
         start = time.monotonic()
-        prof = build_profile(ProfileTarget(name=name), cache=cache, refresh=True)
+        # Cache del test nuova e vuota: dati scaricati comunque. Niente refresh=True, che riparte dal server
+        # principale a ogni richiesta e misurerebbe anche i timeout del CDS giù (25 §3.16 C7-f, sprint C7).
+        prof = build_profile(ProfileTarget(name=name), cache=cache)
         total = time.monotonic() - start
         assert prof is not None and not prof.cancelled
         assert [s.name for s in prof.sections] == list(SECTIONS)

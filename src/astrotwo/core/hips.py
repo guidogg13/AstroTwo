@@ -554,7 +554,10 @@ def cds_down_in_session() -> dict | None:
         return dict(_CDS_DOWN)
     from astrotwo.core import vo_protocols as vo
 
-    if vo._MIRROR_IN_USE.get("cds-simbad-tap", 0) > 0:
+    # Stato del 14 per servizio (``ServiceMirrors.service``, cioè ``simbad``), non per voce dell'elenco: con la chiave
+    # della voce la prova non valeva mai (difetto trovato nello sprint C7, 25 §3.16 C7-e).
+    entry = vo.SERVICE_MIRRORS.get("cds-simbad-tap")
+    if vo._MIRROR_IN_USE.get("simbad" if entry is None else entry.service, 0) > 0:
         return {"evidence": "simbad_failover"}
     return None
 

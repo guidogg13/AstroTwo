@@ -118,9 +118,28 @@ def test_d25_18_mocserver_down_once_then_straight_to_the_mirrors(services, cache
     assert len(calls) == 3
 
 
+_SIMBAD_MIRRORS = vo.SERVICE_MIRRORS["cds-simbad-tap"]  # letta all'import, prima che il fixture svuoti l'elenco
+
+
 def test_d25_18_simbad_on_its_mirror_is_also_evidence(services, cache, monkeypatch):
     calls = mocserver_calls(monkeypatch)
-    monkeypatch.setitem(vo._MIRROR_IN_USE, "cds-simbad-tap", 1)  # SIMBAD già passato a Harvard nella sessione
+    # SIMBAD passato davvero a Harvard con il ripiego del 14 (sprint C7: prima il test impostava a mano la chiave
+    # sbagliata ``cds-simbad-tap`` e nascondeva il difetto di ``cds_down_in_session``, 25 §3.16 C7-e).
+    import requests
+
+    monkeypatch.setattr(vo, "_MIRROR_IN_USE", {})
+    monkeypatch.setattr(vo, "_MIRROR_ANNOUNCED", set())
+    monkeypatch.setitem(vo.SERVICE_MIRRORS, "cds-simbad-tap", _SIMBAD_MIRRORS)  # voce vera (il fixture la toglie)
+    entry = _SIMBAD_MIRRORS
+    servers = ("https://simbad.cds.unistra.fr/simbad/sim-tap",) + tuple(entry.mirrors)
+    assert hips.cds_down_in_session() is None
+
+    def attempt(server, refresh, stale):
+        if server == servers[0]:
+            raise requests.exceptions.ConnectTimeout("CDS giù")
+        return "risposta"
+
+    assert vo._with_mirrors(entry, servers, attempt, None, refresh=False)[0] == "risposta"
     assert hips.cds_down_in_session() == {"evidence": "simbad_failover"}
     service = open_survey("CDS/P/DSS2/color", cache, cds_down_shortcut=True)
     assert calls == [] and next(w for w in service.warnings if w[0] == "HIPS_MIRROR_FALLBACK").params["evidence"] \
