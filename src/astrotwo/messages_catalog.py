@@ -3500,6 +3500,24 @@ _add("PROFILE_NO_PHOTOMETRY",
      "No photometry.", "Nessuna fotometria.", "",
      not_in_catalog=("{catalog}: {identifier} has no row in {table}.",
                      "{catalog}: {identifier} non ha righe in {table}.", "catalog identifier! table"))
+# Esportazione del profilo (25 §3.15, §10, sprint C6)
+_add("PROFILE_EXPORT_INVALID", "The export of the profile is not valid.", "L'esportazione del profilo non è valida.",
+     "",
+     command_missing=("#{number}: there is no command with this number in the history.",
+                      "#{number}: nessun comando con questo numero in cronologia.", "number:int"),
+     not_profile=("#{number} is {command}, not object.profile.", "#{number} è {command}, non object.profile.",
+                  "number:int command"),
+     no_profile=("#{number}: the result contains no profile.", "#{number}: il risultato non contiene un profilo.",
+                 "number:int"),
+     not_absolute=("{path}: an absolute path is required.", "{path}: serve un percorso assoluto.", "path!"),
+     extension=("{path}: the format {format} requires the extension {extensions}.",
+                "{path}: il formato {format} vuole l'estensione {extensions}.", "path! format extensions:list"),
+     folder_unwritable=("{folder}: the folder does not exist or is not writable.",
+                        "{folder}: cartella inesistente o non scrivibile.", "folder!"),
+     is_directory=("{path} is a folder.", "{path} è una cartella.", "path!"),
+     no_sed=("The Photometry section has no SED points.", "La sezione Fotometria non ha punti della SED.", ""))
+_add("PROFILE_EXPORT_FAILED", "{path}: the file was not written: {detail}",
+     "{path}: il file non è stato scritto: {detail}", "path! detail!")
 
 # Fotometria, parte SED (20 §10, sprint C3)
 _add("SED_NO_ZERO_POINT",
@@ -3515,8 +3533,8 @@ _add("SED_LOW_QUALITY",
      "{catalog} {band}: quality {quality} (ph_qual), out of the plot.",
      "{catalog} {band}: qualità {quality} (ph_qual), fuori dal grafico.", "catalog band! quality!")
 _add("SED_UPPER_LIMIT",
-     "{catalog} {band}: upper limit (ph_qual U), out of the plot.",
-     "{catalog} {band}: limite superiore (ph_qual U), fuori dal grafico.", "catalog band!")
+     "{catalog} {band}: upper limit (ph_qual U), drawn as an arrow, never a measurement.",
+     "{catalog} {band}: limite superiore (ph_qual U), disegnato come freccia, mai una misura.", "catalog band!")
 _add("SED_DUPLICATE",
      "SIMBAD {band} ({reference}): same data as {duplicate_of}, plotted once.",
      "SIMBAD {band} ({reference}): stesso dato di {duplicate_of}, una sola volta nel grafico.",

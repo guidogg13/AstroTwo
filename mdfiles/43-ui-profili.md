@@ -1,6 +1,6 @@
 # 43-ui-profili.md — finestra «Profili» (profilo di un oggetto)
 
-**Stato:** bozza
+**Stato:** approvato
 
 > Creato il 2026-11-08 (sprint C5, Fase C) per la decisione **D25-7** del
 > proprietario (2026-11-07, ribadita il 2026-11-08): la specifica
@@ -8,16 +8,17 @@
 > `25-analisi-profilo-oggetto.md` §3.9 (proposta d'interfaccia, approvata con
 > il `25`) e lo precisa. Il numero 43 era riservato in `INDICE.md` a un
 > «pannello analisi» generico (`non esiste`): il proprietario lo assegna alla
-> finestra Profili. Esportazione, strumento dell'IA e SAMP **non** sono qui:
-> sprint C6.
+> finestra Profili. Esportazione, «Carica i punti SED come catalogo» e
+> «Invia con SAMP»: sprint C6, §3.10.
 >
 > **Codice dello sprint C5 (2026-11-08):** scritto su **istruzione esplicita
 > del proprietario** del 2026-11-08 (brief dello sprint C5, punti a–h, con i
 > commit C5a e C5b), nell'ambito dell'autorizzazione D25-12 (sprint C2–C6).
-> Il file resta `bozza` finché il proprietario non lo porta ad `approvato`
-> (solo lui può farlo, CLAUDE.md); le scelte D43-1…D43-10 restano da
-> confermare. Codice in `src/astrotwo/ui/profiles.py`, test in
-> `tests/ui/test_profiles.py`.
+> **File approvato dal proprietario il 2026-11-08** (brief dello sprint C6):
+> D43-1…D43-8 e D43-10 confermate, D43-9 decisa (limiti superiori come
+> frecce ovunque). Codice in `src/astrotwo/ui/profiles.py`, test in
+> `tests/ui/test_profiles.py`, `tests/ui/test_profiles_open.py` e (C6)
+> `tests/ui/test_profiles_export.py`.
 
 ## 2. Scopo
 
@@ -38,6 +39,11 @@ e «Mostra nel cielo». Fuori (sprint C6): «Esporta…» (ECSV, PDF, PNG della
 SED), «Carica i punti SED come catalogo», «Invia con SAMP», strumento
 `object__profile` dell'assistente. Nello sprint C5 questi pulsanti **non
 compaiono** (nessun pulsante spento senza funzione).
+
+**Sprint C6 (2026-11-08):** dentro «Esporta…», «Carica i punti SED come
+catalogo» e «Invia con SAMP» (§3.10). Lo strumento `object__profile`
+dell'assistente (25 §11, 32) **non è nel brief dello sprint C6**: resta
+fuori finché il proprietario non lo chiede (§11).
 
 ### 3.2 Da dove si apre
 
@@ -273,16 +279,14 @@ distinta in un altro colore e simbolo, così come data da VizieR). La scheda
 lo disegna con la funzione del 20 (`plot_sed`) su una figura incorporata
 (`FigureCanvasQTAgg`), ricostruendo la SED dalla forma JSON del risultato
 con una funzione del 20 (D43-8); il PNG `plot_png` del risultato resta per
-l'esportazione (C6). **Limiti superiori:** il brief dello sprint C5
-(2026-11-08, punti b e h) li chiede «come frecce»; **D20-9 (3)**, decisa il
-2026-11-07, diceva «fuori dal grafico (non frecce nella 1.0)». Applicata
-l'istruzione più recente del proprietario **solo nel grafico della
-finestra** (D43-9, da confermare): i limiti superiori convertiti
-(`upper_limit` con un flusso) si disegnano come frecce verso il basso nel
-colore del loro catalogo, restano nella tabella con `SED_UPPER_LIMIT` e
-«nel grafico: no · limite superiore»; il PNG `plot_png` del risultato (per
-l'esportazione, C6) resta come D20-9 (3). Funzione del 20:
-`plot_sed_rows(points, vizier, upper_limits=True)`. Serie VizieR in errore (CDS giù): il messaggio nella
+l'esportazione (C6). **Limiti superiori (D43-9, decisa dal proprietario
+il 2026-11-08):** i limiti superiori convertiti (`upper_limit` con un
+flusso) si disegnano come **frecce verso il basso** nel colore del loro
+catalogo **ovunque** — grafico della finestra, PNG del risultato (20) ed
+esportazione (25 §3.15) —, distinti dai punti misurati e mai usati come
+misure; nella tabella restano con `SED_UPPER_LIMIT` e «nel grafico: no ·
+limite superiore» (non sono punti della serie misurata). Funzione del 20:
+`plot_sed_rows(points, vizier)`. Serie VizieR in errore (CDS giù): il messaggio nella
 sezione (stato `partial`), il resto del grafico presente.
 
 **Pianeti:** «Nessun pianeta nell'archivio» quando non ce ne sono (non è un
@@ -328,6 +332,47 @@ messaggi dei moduli resi dal catalogo con codice e `params` (D40-3, 40
 Images / Immagini, Astrometry and distance / Astrometria e distanza,
 Photometry / Fotometria, Planets / Pianeti).
 
+### 3.10 Esporta, Carica i punti SED come catalogo, Invia con SAMP (sprint C6, 2026-11-08)
+
+Tre pulsanti nella testata della scheda, dopo «Mostra nel cielo», **attivi
+quando la scheda ha un profilo** (risultato finale con esito `ok` o
+`cancelled` `partial`, cioè con il numero del comando); «Carica i punti SED
+come catalogo» e «Invia con SAMP» solo se la Fotometria ha almeno un punto
+(suggerimento sul pulsante spento: «nessun punto della SED»). Ogni azione è
+un **comando registrato** (regola d'oro n. 6): la scheda non scrive file e
+non manda messaggi da sé. Regole dei file e dei comandi nel `25` §3.15.
+
+- **Elenco dei comandi della scheda (`commands`):** il numero del comando
+  di base, poi, per ogni sezione riprovata, il numero dell'ultimo
+  «Riprova questa sezione» riuscito (con la sezione nel risultato),
+  nell'ordine in cui sono finiti. È quello che la scheda mostra (sezioni
+  con «#m», §3.6).
+- **«Export…» / «Esporta…»:** menu con tre voci — «Values with provenance
+  (ECSV)…» / «Valori con provenienza (ECSV)…», «Profile sheet (PDF)…» /
+  «Scheda del profilo (PDF)…», «SED plot (PNG)…» / «Grafico della SED
+  (PNG)…» (spenta senza punti) — ciascuna con il dialogo di salvataggio di
+  Qt (nome proposto `<main_id ridotto>-profile.ecsv`, `-profile.pdf`,
+  `-sed.png`, conferma della sovrascrittura del dialogo), poi in coda
+  **`object.export`** con `commands`, `format` (`ecsv`, `pdf`, `sed_png`),
+  `path` e `language` = lingua dell'app. Esito: messaggio nel pannello
+  Messaggi del 40 come gli altri comandi; errori (`PROFILE_EXPORT_INVALID`,
+  `PROFILE_EXPORT_FAILED`) in una finestra «The export was not written» /
+  «L'esportazione non è stata scritta» con il messaggio del catalogo.
+- **«Load SED points as catalog» / «Carica i punti SED come catalogo»:**
+  in coda `object.export` con `format = sed_votable` e il file della
+  cartella `~/Library/Application Support/AstroTwo/Profiles/` (25 §3.15),
+  poi, quando finisce con esito `ok`, **`catalog.open_file`** su quel
+  file; il nuovo livello compare nel cielo e nel pannello Tabella come ogni
+  catalogo (42), con il nome `SED <main_id>`. Origine dei due comandi:
+  `menu`.
+- **«Send via SAMP» / «Invia con SAMP»:** menu dei destinatari come le
+  altre voci SAMP del 40 §3.12 («All» / «Tutti» e un'azione per programma
+  collegato, nomi dichiarati come testo); senza collegamento il pulsante è
+  spento con il suggerimento «SAMP not connected» / «SAMP non collegato».
+  In coda **`object.send_sed`** con `commands` e `recipient`; esiti e
+  avvisi (`SAMP_NO_PEER`, `no_reply_table`) come `samp.send_table` (40
+  §3.12).
+
 ## 4. Cosa NON fa
 
 - Non calcola, converte o arrotonda valori scientifici: mostra quelli del
@@ -336,8 +381,11 @@ Photometry / Fotometria, Planets / Pianeti).
   l'elenco e lascia scegliere (25 regola a).
 - Non esegue comandi fuori dalla coda del 40 e non fa richieste di rete
   proprie (le miniature e il grafico vengono dal risultato).
-- Non esporta, non carica la SED come catalogo, non usa SAMP, non è uno
-  strumento dell'IA (sprint C6).
+- Non scrive file né manda messaggi SAMP da sé: esportazione, catalogo e
+  SAMP sono comandi registrati (`object.export`, `catalog.open_file`,
+  `object.send_sed`, §3.10) che rileggono i risultati registrati.
+- Non è uno strumento dell'IA (`object__profile` non è nel brief di C6,
+  §3.1).
 - Non riapre le schede alla riapertura di una sessione: la sessione del 05
   contiene i comandi `object.profile` (sola lettura) e li riesegue, ma la
   finestra Profili non fa parte dello stato della sessione (D43-10).
@@ -358,7 +406,8 @@ Photometry / Fotometria, Planets / Pianeti).
   tabella), `10` (`format_coordinates`, `parse_sexagesimal`,
   `window_to_sky`), `13` (origine dei livelli catalogo per il
   riconoscimento degli identificativi), `01` §6.1 (testo di STScI).
-- **Usato da:** nessuno (in C6: esportazione dalla scheda e assistente).
+- **Usato da:** nessuno. Esegue (`bound_by = 43`) il comando `object.export`
+  del 25 con la cronologia della finestra principale (sprint C6).
 - **Modifiche richieste a moduli `approvato`** (autorizzate da D25-12 per
   C2–C6, con annotazione nei registri): `05` — campo `detail` di
   `ProgressReport`; `25` — `on_resolved` di `build_profile` ed eventi di
@@ -366,7 +415,9 @@ Photometry / Fotometria, Planets / Pianeti).
   grafico; `40` — voce Data → Object profile…, Window → Profiles, pulsante
   «Profilo» del campo «Vai a»; `41` — voce del menu contestuale e
   collegamento nel riquadro del puntatore SIMBAD; `42` — voce del menu
-  contestuale della tabella.
+  contestuale della tabella. Sprint C6: `40` — esecutore di `object.send_sed`
+  (collegamento SAMP) e `SampLink.send_catalog`; `20` — frecce dei limiti
+  superiori ovunque (D43-9).
 
 ## 6. Input e output
 
@@ -376,7 +427,8 @@ Photometry / Fotometria, Planets / Pianeti).
 | in | eventi di avanzamento | `ProgressReport` con `detail` (`resolved`, `section`) | JSON | §3.5 |
 | in | risultato del comando | `CommandDone` del 40 con `result.values` = forma JSON di `ObjectProfile` | JSON | fonte definitiva |
 | out | comandi | `object.profile` (anche con `sections` = una, o `refresh`), `view.set_center` | 05 | ogni azione è un comando registrato |
-| out | finestra | schede, sezioni, riquadri | Qt | nessun file scritto in C5 |
+| out | finestra | schede, sezioni, riquadri | Qt | nessun file scritto dalla finestra |
+| out | comandi dello sprint C6 | `object.export` (`ecsv`, `pdf`, `sed_png`, `sed_votable`), `catalog.open_file`, `object.send_sed` | 05, 25 §3.15 | §3.10 |
 
 ## 7. Interfaccia pubblica
 
@@ -393,6 +445,11 @@ Codice previsto in `src/astrotwo/ui/profiles.py` (proposta):
 - **`row_identifier(layer, row)`** — riconoscimento dell'identificativo di una riga (§3.2 punto 5): `name` o
   `None` (posizione).
 - **`object_profile_dialog(...)`** — dialogo del menu Data (nome o coordinate, epoca).
+- Sprint C6: **`ProfileTab.export_commands()`** (elenco `commands` di §3.10), **`ProfileTab.export(format, path)`**,
+  **`ProfileTab.load_sed_catalog()`**, **`ProfileTab.send_sed(recipient)`**; **`exec_object_export(history)`** —
+  esecutore di `object.export` legato dal 40 con la cronologia della sessione (`bound_by = 43`);
+  **`ProfilesWindow.sed_folder`** — cartella `Profiles/` (`default_sed_folder` del 25, sostituibile nei test);
+  il nome del file è `sed_catalog_path(main_id, number, folder)` del 25.
 
 ## 8. Librerie e standard di riferimento
 
@@ -435,13 +492,18 @@ Codice previsto in `src/astrotwo/ui/profiles.py` (proposta):
 | Coordinate scritte o cliccate senza epoca | il dialogo chiede l'epoca (default J2000.0 mostrato e scritto nel comando) | — |
 | Collegamento non ammesso in un testo esterno | mostrato come testo, non cliccabile | — |
 | Risultato di «Riprova» per una scheda chiusa | nessuna scheda da aggiornare: il risultato resta nella cronologia | — |
+| Esportazione non valida o non scritta (§3.10) | finestra «L'esportazione non è stata scritta» con il messaggio | `PROFILE_EXPORT_INVALID`, `PROFILE_EXPORT_FAILED` |
+| «Carica i punti SED come catalogo» con l'esportazione fallita | nessun `catalog.open_file` | come sopra |
+| «Invia con SAMP» senza collegamento | pulsante spento con il suggerimento | `SAMP_UNAVAILABLE` (`not_connected`) se chiesto lo stesso |
+| Nessun punto della SED | «Carica…», «Invia con SAMP» e la voce PNG spenti | — |
 
 ## 11. Esposizione all'IA
 
-Non applicabile in C5: la finestra non è uno strumento. Lo strumento
-`object__profile` (25 §11, 32) è dello sprint C6; quando l'assistente chiederà
-un profilo, la scheda si aprirà come per le altre aperture (C6, da
-specificare allora).
+Non applicabile: la finestra non è uno strumento, e `object.export` e
+`object.send_sed` sono comandi `application`, non esposti all'IA (32
+§3.3). Lo strumento `object__profile` (25 §11, 32) non è nel brief dello
+sprint C6 (2026-11-08): quando il proprietario lo chiederà, la scheda si
+aprirà come per le altre aperture (da specificare allora).
 
 ## 12. Test di accettazione
 
@@ -466,54 +528,63 @@ T13 con l'apertura dalla tabella e dal riquadro del puntatore.
 | T8 | Candidati | coordinate di eta Tau | **dialogo** con la stella e `GN 03.44.2`, nessuno scelto e pulsante spento; la scelta mette in coda `object.profile` con la stessa posizione e `simbad_id` in una scheda nuova | comando registrato |
 | T9 | Crediti delle miniature | 51 Peg | ogni miniatura con titolo, server, crediti del survey; DSS2 con il testo di STScI del `01` | testi |
 | T10 | Pianeti | TRAPPIST-1; Vega | tabella di 7 pianeti con errori `+a / −b` e `PROFILE_PLANETS_COMPOSITE`; Vega «Nessun pianeta nell'archivio» | testi |
-| T11 | Grafico | TRAPPIST-1 | figura incorporata con assi in µm e Jy logaritmici, serie per catalogo, **limite superiore AllWISE W4 come freccia** (D43-9) e fuori dalla serie dei punti; senza l'opzione (come il PNG) nessuna freccia | proprietà della figura |
+| T11 | Grafico | TRAPPIST-1 | figura incorporata con assi in µm e Jy logaritmici, serie per catalogo, **limite superiore AllWISE W4 come freccia** (D43-9, anche nel PNG del risultato) e fuori dalla serie dei punti | proprietà della figura |
 | T12 | Riconoscimento delle righe | livello Gaia DR3 (origine `gaiadr3.gaia_source`) e livello sconosciuto con una colonna `source_id` | il primo dà `name = "Gaia DR3 <id>"`, il secondo `layer` + `row` | comando registrato |
 | T13 | Puntatore SIMBAD | collegamento «Profilo di <main_id>» nel riquadro | `object.profile` con `name` e `simbad_id` = `main_id` | comando registrato |
 | T14 | Più schede e coda | due profili chiesti insieme | due schede subito; la seconda «In coda» finché la prima non finisce | stati |
 | T15 | Testi esterni | `main_id` e crediti con `<b>` e un URL non ammesso | mostrati come testo, nessun collegamento non ammesso | testi |
 | T16 | Messaggi | ogni messaggio mostrato dalla finestra | voce del catalogo nelle due lingue (D40-3) | `check_message` |
+| T17 | Esporta (sprint C6) | 51 Peg finito; «Esporta…» → ECSV, PDF, PNG con il dialogo di salvataggio simulato | tre `object.export` in cronologia con `commands = [#n]`, `format`, `path`, `language`; tre file scritti; voce PNG spenta senza punti | comandi registrati, file |
+| T18 | Esporta dopo «Riprova» | astrometria in errore, «Riprova questa sezione» riuscito, poi ECSV | `commands = [#n, #m]`; le righe dell'astrometria con `command_id = m` | ECSV |
+| T19 | Carica i punti SED come catalogo | 51 Peg | `object.export` `sed_votable` nella cartella `Profiles/` (sostituita nel test), poi `catalog.open_file`; nuovo livello `SED * 51 Peg` con posizioni riconosciute e una riga per punto | cronologia, spazio di lavoro |
+| T20 | Invia con SAMP | hub e client simulati; senza collegamento | pulsante spento senza collegamento; con un client `object.send_sed` con `recipient`, tabella ricevuta con le righe dei punti | messaggi SAMP |
+| T21 | Pulsanti attivi | scheda in coda, in corso, finita, in errore | pulsanti spenti finché non c'è un profilo; attivi alla fine (anche annullata con sezioni) | stato dei pulsanti |
 
 ## 13. Decisioni aperte
 
-Tutte di Gruppo 3 (rimandabili al codice) tranne D43-9 (conflitto con una
-decisione già presa). Raccomandazioni di Claude Code; la decisione è del
-proprietario.
+**Tutte decise dal proprietario il 2026-11-08** (brief dello sprint C6):
+D43-1…D43-8 e D43-10 **confermate** come scritte; **D43-9 decisa**
+(limiti superiori come frecce ovunque). Restano qui come registro. Nessuna
+decisione aperta.
 
-- **D43-1 — Più schede, coda unica — da confermare.** Ogni apertura
+- **D43-1 — Più schede, coda unica — CONFERMATA (proprietario, 2026-11-08).** Ogni apertura
   (anche «Riesegui con dati aggiornati») apre una **scheda nuova**, mai
   riusata per lo stesso oggetto (una scheda = un comando, riproducibile);
   i profili si eseguono uno alla volta nella coda unica del 40, la scheda
   in attesa dice «In coda». Alternativa: riusare la scheda dello stesso
   `main_id`.
-- **D43-2 — Ordine delle sezioni — da confermare.** Posizioni fisse
+- **D43-2 — Ordine delle sezioni — CONFERMATA (proprietario, 2026-11-08).** Posizioni fisse
   (Identità con Immagini, Astrometria e distanza, Fotometria, Pianeti) e
   contenuto che compare nell'ordine di arrivo. Alternativa: riordinare le
   sezioni secondo l'arrivo (la pagina si sposta mentre si legge).
-- **D43-3 — Riconoscimento degli identificativi delle righe — da
-  confermare.** Tabella di §3.2 punto 5 (origine del livello + colonna);
+- **D43-3 — Riconoscimento degli identificativi delle righe — CONFERMATA (proprietario, 2026-11-08).** **Promemoria del
+  proprietario (2026-11-08):** quando il CDS torna, verificare sui metadati veri i nomi delle colonne VizieR usati per
+  riconoscere l'identificativo di una riga. Tabella di §3.2 punto 5 (origine del livello + colonna);
   nomi delle colonne VizieR da verificare prima del codice.
-- **D43-4 — Canale dei dati parziali — da confermare.** (a) **campo
+- **D43-4 — Canale dei dati parziali — CONFERMATA (proprietario, 2026-11-08).** (a) **campo
   `detail` di `ProgressReport` del 05** con gli eventi `resolved` e
   `section`, e richiamo `on_resolved` nel 25 (raccomandata: usa il segnale
   `progress` già esistente, nessun canale nuovo); (b) in più, un evento per
   ogni richiesta di rete aperta, per mostrare «il servizio interrogato
   adesso» invece dei servizi della sezione (più eventi dai thread del
   profilo, più codice nel motore).
-- **D43-5 — Riprova anche per le sezioni annullate — da confermare.** Il
+- **D43-5 — Riprova anche per le sezioni annullate — CONFERMATA (proprietario, 2026-11-08).** Il
   brief lo dice per l'errore; proposto anche per `cancelled`.
-- **D43-6 — Misure — da confermare.** Finestra 760 × 900 pt, colonna delle
+- **D43-6 — Misure — CONFERMATA (proprietario, 2026-11-08).** Finestra 760 × 900 pt, colonna delle
   miniature 200 pt (miniature da 256 pixel mostrate a 192 pt), gruppi di
   identificativi chiusi oltre 8 voci, pulsante «Profilo» del «Vai a» per
   30 s.
-- **D43-7 — Formato dei numeri — da confermare.** Rappresentazione decimale
+- **D43-7 — Formato dei numeri — CONFERMATA (proprietario, 2026-11-08).** Rappresentazione decimale
   più corta del `float64` del risultato, con l'unità del risultato;
   coordinate con `format_coordinates`.
-- **D43-8 — Grafico dalla forma JSON — da confermare.** Nuova funzione del
+- **D43-8 — Grafico dalla forma JSON — CONFERMATA (proprietario, 2026-11-08).** Nuova funzione del
   20 che ricostruisce la `Sed` dalla forma JSON del risultato per
   `plot_sed` (stesso disegno del PNG); alternativa: mostrare il PNG
   `plot_png` (niente tooltip sui punti, 20 §3.4).
-- **D43-9 — Limiti superiori nel grafico — da confermare (conflitto
-  risolto in via provvisoria).** Il brief di C5 (2026-11-08, ripetuto nei
+- **D43-9 — Limiti superiori nel grafico — DECISA (proprietario,
+  2026-11-08): frecce verso il basso ovunque** (finestra, PNG del risultato
+  del 20, esportazione del 25); D20-9 (3) cambiata di conseguenza nel 20.
+  Testo della proposta, come registro: Il brief di C5 (2026-11-08, ripetuto nei
   punti b e h) chiede «limiti superiori come frecce»; **D20-9 (3)**, decisa
   dal proprietario il 2026-11-07, dice «convertiti come limiti ma fuori dal
   grafico (non frecce nella 1.0)». Applicata l'istruzione più recente
@@ -521,7 +592,7 @@ proprietario.
   PNG del risultato resta D20-9 (3). Da confermare: (b) anche nel PNG e nel
   `20` (cambia D20-9 (3), `20` §3.3–§3.4, T10 del 20); oppure (a) tornare a
   D20-9 (3) anche nella finestra.
-- **D43-10 — Sessione — da confermare.** La finestra Profili non è nello
+- **D43-10 — Sessione — CONFERMATA (proprietario, 2026-11-08).** La finestra Profili non è nello
   stato della sessione: riaprire una sessione non riapre le schede (i
   comandi restano nella cronologia).
 
@@ -529,6 +600,7 @@ proprietario.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6 (decisioni del proprietario del 2026-11-08):** file **approvato** dal proprietario; D43-1…D43-8 e D43-10 confermate; D43-9 decisa (limiti superiori come frecce verso il basso ovunque: finestra, PNG del 20, esportazione del 25). Nuovo §3.10 (pulsanti «Esporta…» con ECSV, PDF e PNG della SED, «Carica i punti SED come catalogo», «Invia con SAMP», tutti comandi registrati: `object.export`, `catalog.open_file`, `object.send_sed` del 25 §3.15; elenco `commands` della scheda con le sezioni riprovate); §3.1, §3.7, §4, §5, §6, §7, §10, §11 (strumento `object__profile` non nel brief di C6), §12 (T11 precisato, nuovi T17–T21), §13. |
 | 2026-11-08 | Claude Code | **Sprint C5b:** §12 con i file di test reali (`test_profiles.py`, `test_profiles_open.py`) e T8, T11 come provati (dialogo dei candidati, freccia del limite superiore di TRAPPIST-1 W4); test dei pulsanti della scheda e della chiusura di una scheda in corso. |
 | 2026-11-08 | Claude Code | **Codice dello sprint C5 (istruzione del proprietario del 2026-11-08, punti a–h):** `src/astrotwo/ui/profiles.py` (finestra, schede, sezioni, riquadro della provenienza, dialoghi dei candidati e del profilo), aggancio nel 40 (menu Data e Window, pulsante «Profilo» del «Vai a», coda), 41 (clic destro e riquadro del puntatore SIMBAD), 42 (clic destro su una riga), 05 (`ProgressReport.detail`), 25 (`on_resolved` ed eventi `resolved`/`section`), 20 (`plot_sed_rows`); §3.4 bersaglio ambiguo in un dialogo (punto e); §3.7 e D43-9: frecce dei limiti superiori solo nel grafico della finestra (istruzione più recente del proprietario, da confermare). Il file resta `bozza`. |
 | 2026-11-08 | Claude Code | Creazione del file (stato: bozza), sprint C5, decisione D25-7 del proprietario (specifica dell'interfaccia del profilo nel `43`): finestra Profili non modale con una scheda per profilo, aperture (menu Data, «Vai a», cielo, puntatore SIMBAD, tabella con riconoscimento degli identificativi), scheletro e stati delle sezioni, arrivo progressivo (proposta: `detail` di `ProgressReport`), «Riprova questa sezione», corpo delle sezioni con miniature e crediti (testo di STScI per DSS, D25-17 (3)), grafico della SED del 20, riquadro della provenienza; decisioni D43-1…D43-10 (D43-9: conflitto tra il brief e D20-9 (3)). |

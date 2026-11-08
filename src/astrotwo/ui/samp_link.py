@@ -279,6 +279,19 @@ class SampLink(QObject):
                 "rows": len(layer.data.table), "recipients": list(sent.recipients),
                 "rejected": self._rejected(sent)}
 
+    def send_catalog(self, table, key: str, name: str, recipient: str | None = None) -> dict:
+        """Una tabella che non è un livello (punti della SED di un profilo, 25 §3.15, ``object.send_sed``) con
+        ``table.load.votable``: stesse regole di ``send_table`` (chiamata sincrona, 60 s, esiti dei destinatari);
+        identificativo ``astrotwo-<avvio>-<key>-<n>``. Non si ricorda: nessuna selezione la segue."""
+        hub = self._require()
+        table_id = f"astrotwo-{self.launch}-{key}-{next(self._tables)}"
+        wait = self.reply_timeout("table.load.votable")
+        sent = self._timed("send", lambda: hub.send_table(table, table_id=table_id, name=name, recipient=recipient,
+                                                          timeout=wait),
+                           margin=2.0, wait=wait)
+        return {"table_id": table_id, "url": str(sent.params["url"]), "name": name, "rows": len(table.table),
+                "recipients": list(sent.recipients), "rejected": self._rejected(sent)}
+
     def send_selection(self, layer, recipient: str | None = None) -> dict:
         """Righe selezionate; tabella mai passata da SAMP → prima la tabella (D40-9 (4)) e la selezione solo a chi ha
         risposto di averla caricata. Una tabella già passata da SAMP non si rimanda mai (sprint B1b)."""

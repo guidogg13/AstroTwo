@@ -51,12 +51,14 @@ CONVERTED = {
     "ui/samp_link.py": "VoProtocolsError",  # SAMP nell'interfaccia (40 §3.12, sprint B1)
     "app_bundle.py": "CommandError",  # LICENSE_FILE_MISSING della finestra Licenze (60 §3.9)
     "analysis/object_profile.py": "ObjectProfileError",  # profilo di un oggetto (25 §10, sprint C2)
+    "analysis/profile_export.py": "ProfileExportError",  # esportazione del profilo (25 §3.15, sprint C6)
     "analysis/photometry.py": "ObjectProfileError",  # SED (20 §10, sprint C3): solo avvisi, nessun errore proprio
 }
 
 #: Funzioni di appoggio che costruiscono un errore o un avviso: nome → (codice, posizione dell'argomento ``reason``).
 #: Solo per il modulo indicato (``_check_memory`` ha un'altra forma nell'11).
 HELPERS = {
+    "analysis/profile_export.py": {"_invalid": ("PROFILE_EXPORT_INVALID", 0)},
     "core/hips.py": {"_diagnosis": ("HIPS_TILE_PROBLEM", 0)},
     "core/catalogs.py": {
         "_invalid": ("EXPRESSION_INVALID", 0), "_rule_invalid": ("PLOT_RULE_INVALID", 0),

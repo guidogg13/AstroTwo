@@ -25,6 +25,7 @@ from astrotwo.analysis.photometry import (
     build_sed,
     high_proper_motion,
     mag_to_flux,
+    plot_sed,
     sed_png,
     sed_points_from,
     sed_table,
@@ -161,6 +162,14 @@ def test_t6_upper_limit():
     assert w4.upper_limit and "SED_UPPER_LIMIT" in w4.codes() and "SED_NO_ERROR" in w4.codes()
     assert not w4.in_plot and w4.flux.value == pytest.approx(vega_flux(8.363, 8.565).value, rel=1e-12)
     assert point(sed.points, "AllWISE", "W1").in_plot
+    # D43-9 (2026-11-08): freccia verso il basso nel colore di AllWISE, fuori dalla serie dei punti misurati
+    ax = plot_sed(sed).axes[0]
+    labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert labels == ["AllWISE", "AllWISE upper limit"]
+    measured = [c for c in ax.containers if c.get_label() == "AllWISE"][0]
+    assert len(measured.lines[0].get_xdata()) == 3  # W1–W3 misurati, W4 no
+    arrow = [c for c in ax.containers if c.get_label() == "AllWISE upper limit"][0]
+    assert list(arrow.lines[0].get_ydata()) == [w4.flux.to_value(u.Jy)]
 
 
 # =============================================================================

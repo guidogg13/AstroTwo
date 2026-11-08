@@ -451,7 +451,8 @@ def _quality_notes(point: SedPoint) -> tuple[ModuleWarning, ...]:
     if point.catalog not in ("2MASS", "AllWISE") or point.quality in _GOOD_QUALITY:
         return ()
     if point.quality == "U":
-        return (_note("SED_UPPER_LIMIT", f"{point.label}: limite superiore (ph_qual U), fuori dal grafico",
+        return (_note("SED_UPPER_LIMIT", f"{point.label}: limite superiore (ph_qual U), freccia nel grafico, mai una "
+                      "misura",
                       catalog=point.catalog, band=point.band),)
     return (_note("SED_LOW_QUALITY", f"{point.label}: qualità {point.quality} (ph_qual), fuori dal grafico",
                   catalog=point.catalog, band=point.band, quality=point.quality or ""),)
@@ -532,11 +533,22 @@ def sed_table(sed: Sed) -> Table:
 
 
 _COLORS = {"Gaia DR3": "#1f77b4", "2MASS": "#d62728", "AllWISE": "#2ca02c"}  # colori per catalogo (D20-7)
+#: lunghezza delle frecce dei limiti superiori sull'asse logaritmico: solo grafica, non un numero scientifico (20 §3.4)
+_ARROW_FRACTION = 0.4
+
+
+def _upper_limit_arrows(ax, xs: Sequence[float], ys: Sequence[float], color: str, catalog: str) -> None:
+    """Limiti superiori come frecce verso il basso nel colore del catalogo, con una voce di legenda propria (D43-9):
+    distinti dai punti misurati, mai usati come misure."""
+    if xs:
+        ax.errorbar(list(xs), list(ys), yerr=[_ARROW_FRACTION * y for y in ys], uplims=True, fmt="v", color=color,
+                    ms=5, label=f"{catalog} upper limit")
 
 
 def plot_sed(sed: Sed, *, quantity: str = "fnu", title: str | None = None):
     """Grafico della SED (20 §3.4, D20-7): Fν (Jy) contro λ (µm), scale logaritmiche, barre d'errore, colori per
-    catalogo, serie VizieR distinta; ``quantity="lambda_flambda"`` per λFλ (W/m²). Solo i punti ``in_plot``.
+    catalogo, serie VizieR distinta; ``quantity="lambda_flambda"`` per λFλ (W/m²). Serie dei punti: solo gli
+    ``in_plot``; i limiti superiori convertiti come frecce verso il basso (D43-9, D20-9 (3) cambiata il 2026-11-08).
     Figura matplotlib senza pyplot (incorporabile in Qt dal 43)."""
     from matplotlib.figure import Figure
 
@@ -558,6 +570,11 @@ def plot_sed(sed: Sed, *, quantity: str = "fnu", title: str | None = None):
         ys = [y(p.flux, p.wavelength) for p in pts]
         errs = [0.0 if p.flux_error is None else y(p.flux_error, p.wavelength) for p in pts]
         ax.errorbar(xs, ys, yerr=errs, fmt="o", color=_COLORS[catalog], label=catalog, capsize=2, ms=5)
+    for catalog in ("Gaia DR3", "2MASS", "AllWISE"):
+        lims = [p for p in sed.points if p.catalog == catalog and p.upper_limit and not p.in_plot
+                and p.flux is not None and p.wavelength is not None and float(p.flux.value) > 0]
+        _upper_limit_arrows(ax, [float(p.wavelength.to_value(u.um)) for p in lims],
+                            [y(p.flux, p.wavelength) for p in lims], _COLORS[catalog], catalog)
     if sed.vizier is not None:
         rows = [r for r in sed.vizier.rows() if r["wavelength"] and r["flux"] and r["flux"]["value"] > 0]
         if rows:
@@ -579,14 +596,14 @@ def plot_sed(sed: Sed, *, quantity: str = "fnu", title: str | None = None):
     return fig
 
 
-def plot_sed_rows(points: Sequence[Mapping], vizier: Mapping | None = None, *, upper_limits: bool = False,
-                  title: str | None = None, figure=None):
+def plot_sed_rows(points: Sequence[Mapping], vizier: Mapping | None = None, *, title: str | None = None,
+                  figure=None):
     """Grafico della SED dalla **forma JSON** del risultato (``Sed.as_dict``: ``points`` e ``vizier``), per la finestra
     Profili del 43 (D43-8): stessi assi, colori e serie di ``plot_sed`` (Fν in Jy contro λ in µm, log-log, barre
     d'errore, serie VizieR distinta). Nessun valore ricalcolato: si leggono ``wavelength``, ``flux``, ``flux_error``.
 
-    ``upper_limits=True``: i punti ``upper_limit`` con un flusso (limiti convertiti, D20-9 (3)) si disegnano come
-    frecce verso il basso nel colore del loro catalogo (D43-9, interfaccia); con ``False`` restano fuori (D20-9 (3)).
+    I punti ``upper_limit`` con un flusso (limiti convertiti) si disegnano come frecce verso il basso nel colore del
+    loro catalogo, ovunque (D43-9, decisa il 2026-11-08: finestra, PNG, esportazione).
     ``figure``: figura in cui disegnare (``FigureCanvasQTAgg`` del 43); senza, una nuova ``Figure``."""
     from matplotlib.figure import Figure
 
@@ -605,13 +622,10 @@ def plot_sed_rows(points: Sequence[Mapping], vizier: Mapping | None = None, *, u
             ax.errorbar(xs, [val(p["flux"], "Jy") for p in pts],
                         yerr=[val(p.get("flux_error"), "Jy") or 0.0 for p in pts], fmt="o", color=color,
                         label=catalog, capsize=2, ms=5)
-        if upper_limits:
-            lims = [p for p in points if p.get("catalog") == catalog and p.get("upper_limit") and not p.get("in_plot")
-                    and val(p.get("flux"), "Jy") and val(p.get("wavelength"), "um")]
-            if lims:
-                ys = [val(p["flux"], "Jy") for p in lims]
-                ax.errorbar([val(p["wavelength"], "um") for p in lims], ys, yerr=[0.4 * y for y in ys], uplims=True,
-                            fmt="v", color=color, ms=5, label=f"{catalog} upper limit")
+        lims = [p for p in points if p.get("catalog") == catalog and p.get("upper_limit") and not p.get("in_plot")
+                and val(p.get("flux"), "Jy") and val(p.get("wavelength"), "um")]
+        _upper_limit_arrows(ax, [val(p["wavelength"], "um") for p in lims], [val(p["flux"], "Jy") for p in lims],
+                            color, catalog)
     rows = [r for r in ((vizier or {}).get("rows") or []) if r.get("wavelength") and r.get("flux")
             and r["flux"].get("value") and r["flux"]["value"] > 0]
     if rows:
@@ -630,6 +644,21 @@ def plot_sed_rows(points: Sequence[Mapping], vizier: Mapping | None = None, *, u
              "Data: ESA Gaia, IPAC/IRSA, CDS.", fontsize=6, color="0.35")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig
+
+
+def _png(fig) -> bytes:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    FigureCanvasAgg(fig)
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", metadata={"Software": None})
+    return buffer.getvalue()
+
+
+def sed_rows_png(points: Sequence[Mapping], vizier: Mapping | None = None, *, title: str | None = None) -> bytes:
+    """PNG di ``plot_sed_rows`` (dalla forma JSON del risultato), per l'esportazione del 25 (§3.15): stesso disegno
+    della finestra Profili, limiti superiori come frecce, nessun metadato del programma che cambia."""
+    return _png(plot_sed_rows(points, vizier, title=title))
 
 
 def sed_png(sed: Sed, *, quantity: str = "fnu", title: str | None = None, encoded: bool = False) -> bytes | str:

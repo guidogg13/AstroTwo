@@ -30,7 +30,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QFileDialog,
     QLineEdit,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -41,11 +43,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from astrotwo.core.commands import CancelToken, Command, RequestedBy, ResultMessage
+from astrotwo.analysis.profile_export import STSCI_DSS_TEXT, STSCI_DSS_URL  # testo di STScI (01 §6.1), anche nel PDF
+from astrotwo.core.commands import CancelToken, Command, Outcome, RequestedBy, ResultMessage
 from astrotwo.ui.message_view import shown_line, shown_text
 
 __all__ = ["ProfilesWindow", "ProfileTab", "SectionView", "ProvenancePopup", "CandidatesDialog", "ObjectProfileDialog",
-           "number_text", "row_identifier", "SECTION_ORDER", "STSCI_DSS_TEXT"]
+           "number_text", "row_identifier", "SECTION_ORDER", "STSCI_DSS_TEXT", "exec_object_export"]
 
 #: Ordine fisso delle sezioni nella scheda (D43-2): le Immagini stanno a destra dell'Identità.
 SECTION_ORDER = ("identity", "images", "astrometry", "photometry", "planets")
@@ -54,13 +57,6 @@ SERVICE_NAMES = {"simbad": "SIMBAD", "gaia": "Gaia archive (ESA)", "irsa": "IRSA
                  "hips": "HiPS", "vizier_sed": "VizieR SED"}
 ADS_ABSTRACT = "https://ui.adsabs.harvard.edu/abs/"
 SIMBAD_PREFIXES = ("https://simbad.cds.unistra.fr/", "https://simbad.harvard.edu/")
-#: Testo di riconoscimento di STScI per i survey DSS (01 §6.1, primo paragrafo; D25-17 (3)).
-STSCI_DSS_TEXT = ("The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. "
-                  "Government grant NAG W-2166. The images of these surveys are based on photographic data obtained "
-                  "using the Oschin Schmidt Telescope on Palomar Mountain and the UK Schmidt Telescope. The plates "
-                  "were processed into the present compressed digital form with the permission of these "
-                  "institutions.")
-STSCI_DSS_URL = "https://archive.stsci.edu/dss/acknowledging.html"
 #: Misure (D43-6).
 WINDOW_SIZE = (760, 900)
 THUMBNAIL_SHOWN = 192
@@ -574,7 +570,8 @@ class PhotometryView(SectionView):
                 read = values.get(f"{label} magnitude") or values.get(f"{label} count_rate")
                 flux = values.get(f"{label} flux_nu")
                 shown = p.get("magnitude") or p.get("count_rate")
-                err = p.get("magnitude_error") or p.get("count_rate_error")
+                # l'errore del valore mostrato: mai quello del flusso in e⁻/s accanto a una magnitudine Gaia (C6)
+                err = p.get("magnitude_error") if p.get("magnitude") else p.get("count_rate_error")
                 value = "" if not shown else (f"{number_text(shown)} {unit_text(shown)}"
                                               + (f" ± {number_text(err)}" if err else ""))
                 fnu = "" if not p.get("flux") else (f"{number_text(p['flux'])} {unit_text(p['flux'])}"
@@ -602,7 +599,7 @@ class PhotometryView(SectionView):
         from astrotwo.analysis.photometry import plot_sed_rows
 
         figure = Figure(figsize=(6.4, 4.0), dpi=100)
-        plot_sed_rows(points, vizier, upper_limits=True, figure=figure)  # D43-9: limiti superiori come frecce
+        plot_sed_rows(points, vizier, figure=figure)  # D43-9: limiti superiori come frecce, ovunque
         canvas = FigureCanvasQTAgg(figure)
         canvas.setObjectName("sedPlot")
         canvas.setFixedHeight(340)
@@ -699,6 +696,33 @@ class ProfileTab(QWidget):
         self.sky_button.clicked.connect(self.show_in_sky)
         head.addWidget(self.sky_button)
         outer.addLayout(head)
+        # Sprint C6 (43 §3.10): esportazione, punti SED come catalogo, SAMP; tutti comandi registrati
+        actions = QHBoxLayout()
+        self.export_button = QPushButton(self.tr("Export…"))
+        self.export_button.setObjectName("exportProfile")
+        menu = QMenu(self.export_button)
+        self.act_export_ecsv = menu.addAction(self.tr("Values with provenance (ECSV)…"),
+                                              lambda: self.export_dialog("ecsv"))
+        self.act_export_pdf = menu.addAction(self.tr("Profile sheet (PDF)…"), lambda: self.export_dialog("pdf"))
+        self.act_export_png = menu.addAction(self.tr("SED plot (PNG)…"), lambda: self.export_dialog("sed_png"))
+        self.export_button.setMenu(menu)
+        actions.addWidget(self.export_button)
+        self.catalog_button = QPushButton(self.tr("Load SED points as catalog"))
+        self.catalog_button.setObjectName("loadSedCatalog")
+        self.catalog_button.clicked.connect(self.load_sed_catalog)
+        actions.addWidget(self.catalog_button)
+        self.samp_button = QPushButton(self.tr("Send via SAMP"))
+        self.samp_button.setObjectName("sendSedSamp")
+        self.samp_menu = QMenu(self.samp_button)
+        self.samp_menu.aboutToShow.connect(self._fill_samp_menu)
+        self.samp_button.setMenu(self.samp_menu)
+        actions.addWidget(self.samp_button)
+        actions.addStretch(1)
+        outer.addLayout(actions)
+        self.retry_numbers: dict[str, int] = {}  # sezione → ultimo «Riprova» riuscito, nell'ordine di fine
+        samp = getattr(owner.main, "samp", None)
+        if samp is not None:
+            samp.status_changed.connect(self._samp_changed)  # metodo legato: scollegato con la scheda
         self.status = _label("", name="profileStatus")
         outer.addWidget(self.status)
         self.warnings = _label("", name="profileWarnings")
@@ -743,6 +767,7 @@ class ProfileTab(QWidget):
         self.timer.timeout.connect(self._tick)
         self.popup: ProvenancePopup | None = None
         self.refresh_status()
+        self.refresh_actions()
 
     # --- stato complessivo ----------------------------------------------------------------------
 
@@ -804,6 +829,9 @@ class ProfileTab(QWidget):
         sections = {s["name"]: s for s in values.get("sections") or []}
         if retry is not None:  # Riprova questa sezione: si sostituisce solo quella sezione (43 §3.6)
             view = self.views.get(retry)
+            if retry in sections and number is not None:  # entra nell'esportazione (43 §3.10)
+                self.retry_numbers.pop(retry, None)
+                self.retry_numbers[retry] = number
             if view is not None:
                 if retry in sections:
                     view.show_section(sections[retry], number)
@@ -812,6 +840,7 @@ class ProfileTab(QWidget):
                                        "errors": [{"code": result.error.code, "text": result.error.text,
                                                    "params": dict(result.error.params)}]}, number)
             self._stop_timer()
+            self.refresh_actions()
             return
         self.command_number = number
         self.registered = dict(done.registered.parameters)
@@ -844,6 +873,7 @@ class ProfileTab(QWidget):
         extra = "" if result.error is None else shown_line(result.error)
         self.refresh_status(extra)
         self._stop_timer()
+        self.refresh_actions()
 
     def _stop_timer(self) -> None:
         if not self.active_jobs():
@@ -889,6 +919,93 @@ class ProfileTab(QWidget):
         if position:
             self.owner.main.submit("view.set_center", {"position": position}, source="menu")
 
+    # --- esportazione, catalogo, SAMP (43 §3.10, sprint C6) ----------------------------------------
+
+    def has_profile(self) -> bool:
+        return self.command_number is not None and self.result_values is not None
+
+    def has_sed(self) -> bool:
+        view = self.views.get("photometry")
+        details = ((view.data if view is not None else None) or {}).get("details") or {}
+        return bool(details.get("points")) or bool((details.get("vizier") or {}).get("rows"))
+
+    def export_commands(self) -> list[int]:
+        """``commands`` di 43 §3.10: il comando di base, poi l'ultimo «Riprova» riuscito di ogni sezione."""
+        out = [self.command_number] if self.command_number is not None else []
+        for number in self.retry_numbers.values():
+            if number not in out:
+                out.append(number)
+        return out
+
+    def refresh_actions(self) -> None:
+        profile, sed = self.has_profile(), self.has_profile() and self.has_sed()
+        self.export_button.setEnabled(profile)
+        self.act_export_png.setEnabled(sed)
+        self.catalog_button.setEnabled(sed)
+        samp = getattr(self.owner.main, "samp", None)
+        connected = samp is not None and samp.status.connected
+        self.samp_button.setEnabled(sed and connected)
+        no_sed = self.tr("No SED points") if profile and not sed else ""
+        self.catalog_button.setToolTip(no_sed)
+        self.samp_button.setToolTip(no_sed or ("" if connected else self.tr("SAMP not connected")))
+
+    def _samp_changed(self, status=None) -> None:
+        self.refresh_actions()
+
+    def main_id(self) -> str:
+        return " ".join(str((self.resolved or {}).get("main_id") or self.title.text() or "profile").split())
+
+    def export_dialog(self, fmt: str) -> None:
+        from astrotwo.analysis.profile_export import sed_catalog_path
+
+        suffix = {"ecsv": ("-profile.ecsv", "ECSV (*.ecsv)"), "pdf": ("-profile.pdf", "PDF (*.pdf)"),
+                  "sed_png": ("-sed.png", "PNG (*.png)")}[fmt]
+        proposed = sed_catalog_path(self.main_id(), 0).name.replace("-sed-0.xml", suffix[0])
+        titles = {"ecsv": self.tr("Export values with provenance"), "pdf": self.tr("Export profile sheet"),
+                  "sed_png": self.tr("Export SED plot")}
+        path, _ = QFileDialog.getSaveFileName(self, titles[fmt], proposed, suffix[1])
+        if path:
+            self.export(fmt, path)
+
+    def export(self, fmt: str, path: str, *, then: str | None = None) -> int:
+        """Mette in coda ``object.export`` (25 §3.15) con i comandi della scheda e la lingua dell'app."""
+        from pathlib import Path
+
+        language = getattr(self.owner.main, "language", "en")
+        params = {"commands": self.export_commands(), "format": fmt, "path": str(Path(path).resolve()),
+                  "language": language if language in ("en", "it") else "en"}
+        job = self.owner.main.submit("object.export", params, source="menu")
+        self.owner.exports[job] = (self, then)
+        return job
+
+    def load_sed_catalog(self) -> int:
+        """«Carica i punti SED come catalogo»: ``object.export`` ``sed_votable`` nella cartella ``Profiles/``, poi
+        ``catalog.open_file`` sullo stesso file (43 §3.10, 25 §3.15)."""
+        from astrotwo.analysis.profile_export import sed_catalog_path
+
+        folder = self.owner.sed_folder
+        folder.mkdir(parents=True, exist_ok=True)
+        commands = self.export_commands()
+        return self.export("sed_votable", str(sed_catalog_path(self.main_id(), commands[-1], folder)),
+                           then="catalog")
+
+    def send_sed(self, recipient: str | None) -> int:
+        return self.owner.main.submit("object.send_sed", {"commands": self.export_commands(), "recipient": recipient},
+                                      source="menu")
+
+    def _fill_samp_menu(self) -> None:
+        self.samp_menu.clear()
+        every = self.samp_menu.addAction(self.tr("All applications"))
+        every.triggered.connect(lambda checked=False: self.send_sed(None))
+        samp = getattr(self.owner.main, "samp", None)
+        clients = samp.status.clients if samp is not None else ()
+        if clients:
+            self.samp_menu.addSeparator()
+        for client in clients:
+            act = self.samp_menu.addAction(client.name or client.id)  # nome dichiarato: testo semplice
+            act.setToolTip(client.id)
+            act.triggered.connect(lambda checked=False, cid=client.id: self.send_sed(cid))
+
     def show_provenance(self, entry: Mapping, command_number: int | None) -> ProvenancePopup:
         self.popup = ProvenancePopup(entry, command_number if command_number is not None else self.command_number,
                                      self)
@@ -928,6 +1045,10 @@ class ProfilesWindow(QWidget):
         self.tabs.tabCloseRequested.connect(self.close_tab)
         layout.addWidget(self.tabs)
         self.jobs: dict[int, ProfileTab] = {}
+        self.exports: dict[int, tuple[ProfileTab, str | None]] = {}  # lavoro object.export → scheda, poi (43 §3.10)
+        from astrotwo.analysis.profile_export import default_sed_folder
+
+        self.sed_folder = default_sed_folder()  # cartella dei punti SED caricati come catalogo (25 §3.15)
         self.last_dialog: QDialog | None = None
 
     # --- comandi -----------------------------------------------------------------------------------
@@ -978,7 +1099,7 @@ class ProfilesWindow(QWidget):
     # --- eventi dalla finestra principale ------------------------------------------------------
 
     def handles(self, job_id: int) -> bool:
-        return job_id in self.jobs
+        return job_id in self.jobs or job_id in self.exports
 
     def job_started(self, job_id: int) -> None:
         tab = self.jobs.get(job_id)
@@ -991,10 +1112,25 @@ class ProfilesWindow(QWidget):
             tab.job_progress(job_id, report)
 
     def job_finished(self, done) -> None:
+        if done.job_id in self.exports:
+            self.export_finished(done)
+            return
         tab = self.jobs.pop(done.job_id, None)
         getattr(self, "tokens", {}).pop(done.job_id, None)
         if tab is not None and self.tabs.indexOf(tab) >= 0:
             tab.job_finished(done)
+
+    def export_finished(self, done) -> None:
+        """Esito di ``object.export``: errore in una finestra; per «Carica i punti SED come catalogo» il
+        ``catalog.open_file`` sul file scritto (43 §3.10)."""
+        _tab, then = self.exports.pop(done.job_id)
+        result = done.result
+        if result.status != "ok":
+            if result.error is not None:
+                self.main.show_modal(self.tr("The export was not written"), shown_line(result.error))
+            return
+        if then == "catalog":
+            self.main.submit("catalog.open_file", {"file": {"path": result.values["path"]}}, source="menu")
 
     def tab_changed(self, tab: ProfileTab) -> None:
         index = self.tabs.indexOf(tab)
@@ -1043,6 +1179,21 @@ class ProfilesWindow(QWidget):
         if self.settings is not None:
             self.settings.setValue("profiles/geometry", self.saveGeometry())
         super().hideEvent(event)
+
+
+def exec_object_export(history):
+    """Esecutore di ``object.export`` (``bound_by = 43``, 25 §3.15): ``history()`` dà la cronologia della sessione
+    della finestra principale; i file si scrivono dai risultati registrati, nel thread dei comandi."""
+    from astrotwo.analysis.profile_export import export_profile, merge_profile_results, results_from_history
+
+    def run(ctx, p: Mapping) -> Outcome:
+        data = merge_profile_results(results_from_history(history(), p["commands"]))
+        written = export_profile(data, p["path"], p["format"], language=p["language"])
+        warnings = [ResultMessage(w[0], w[1], dict(getattr(w, "params", None) or {})) for w in written.warnings]
+        return Outcome(values={**written.as_dict(), "commands": list(p["commands"]),
+                               "main_id": (data.get("resolved") or {}).get("main_id")}, warnings=warnings)
+
+    return run
 
 
 def describe_target(params: Mapping) -> str:

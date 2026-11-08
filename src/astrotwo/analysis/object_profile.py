@@ -2085,7 +2085,14 @@ def command_specs() -> list:
     """Definizioni dei comandi del 25 da aggiungere al registro con ``register`` (05 §3.2, comandi dei livelli 2–4)."""
     from astrotwo.core.commands import P, CommandSpec
 
+    from astrotwo.analysis.profile_export import EXPORT_FORMATS
+
     angle = {"physical_type": "angle"}
+    commands = P("commands", "list", "Numbers (#n) of the object.profile commands of the profile: the first is the base, "
+                 "the next ones replace the sections they contain.",
+                 "Numeri (#n) dei comandi object.profile del profilo: il primo è la base, i successivi sostituiscono "
+                 "le sezioni che contengono.", item=P("command", "integer", "Command number.", "Numero del comando.",
+                                                      minimum=1))
     return [
         CommandSpec(
             "object.profile", 1, "Build the profile of an object: identity (SIMBAD), HiPS thumbnails, Gaia DR3 "
@@ -2126,4 +2133,25 @@ def command_specs() -> list:
                 P("thumbnail_size", "integer", "Side of the thumbnails in pixels.", "Lato delle miniature in pixel.",
                   default=DEFAULT_THUMBNAIL_SIZE, minimum=16, maximum=2048)),
             "session", _exec_object_profile, network=True, long=True, read_only=True, confirm=True),
+        # Sprint C6 (25 §3.15): file e SAMP dai risultati registrati; eseguiti dall'interfaccia, che ha la cronologia
+        CommandSpec(
+            "object.export", 1, "Write the profile of an object to a file (ECSV of the values with provenance, PDF "
+            "sheet, PNG of the SED, VOTable of the SED points) from the recorded results of object.profile commands.",
+            "Scrive il profilo di un oggetto in un file (ECSV dei valori con provenienza, scheda PDF, PNG della SED, "
+            "VOTable dei punti SED) dai risultati registrati dei comandi object.profile.",
+            ("25 merge_profile_results", "25 export_profile", "14 export_table", "20 sed_rows_png"), (
+                commands,
+                P("format", "enum", "File format.", "Formato del file.", choices=EXPORT_FORMATS),
+                P("path", "string", "Absolute path of the file to write.", "Percorso assoluto del file da scrivere."),
+                P("language", "enum", "Language of the PDF headings.", "Lingua delle intestazioni del PDF.",
+                  default="en", choices=("en", "it"))),
+            "application", bound_by="43"),
+        CommandSpec(
+            "object.send_sed", 1, "Send the SED points of a profile to SAMP applications (table.load.votable).",
+            "Manda i punti della SED di un profilo ai programmi SAMP (table.load.votable).",
+            ("25 merge_profile_results", "25 sed_catalog_table", "14 SampHub.send_table"), (
+                commands,
+                P("recipient", "string", "Public id of one SAMP client (null: all subscribed clients).",
+                  "Identificativo pubblico di un client SAMP (null: tutti i client iscritti).", default=None)),
+            "application", bound_by="40"),
     ]

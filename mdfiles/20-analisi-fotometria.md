@@ -107,8 +107,11 @@ con il catalogo d'origine, **senza fonderli** con i nostri (D20-5).
 - 2MASS `ph_qual` diverso da `A`/`B`/`C` (`D`, `E`, `F`, `X`, `U`) e AllWISE
   `ph_qual` diverso da `A`/`B`/`C` (`U`, `X`, `Z`): punto nella tabella,
   **fuori dal grafico**, con il motivo (D20-4); `U` (2MASS e AllWISE) =
-  **limite superiore** (`SED_UPPER_LIMIT`): convertito in flusso come limite,
-  fuori dal grafico (D20-9 (3)); gli altri `SED_LOW_QUALITY`. Il carattere di
+  **limite superiore** (`SED_UPPER_LIMIT`): convertito in flusso come limite
+  e **disegnato come freccia verso il basso**, distinto dai punti misurati e
+  **mai usato come misura** (fuori dalla serie dei punti, `in_plot` falso;
+  D20-9 (3) cambiata dal proprietario il 2026-11-08 con D43-9); gli altri
+  `SED_LOW_QUALITY` (fuori dal grafico). Il carattere di
   `ph_qual` è quello della banda (J, H, Ks; W1–W4, nell'ordine). Gaia: nessuna
   esclusione, `phot_variable_flag` e `phot_bp_rp_excess_factor` mostrati.
   Esempi del 2026-11-07: Vega 2MASS `CBC` con J = −0,177 (saturata), Alcyone
@@ -133,8 +136,14 @@ con il catalogo d'origine, **senza fonderli** con i nostri (D20-5).
 ### 3.4 Grafico
 
 λ (µm) in ascissa, Fν (Jy) in ordinata, scale logaritmiche; barre d'errore;
-colori per catalogo; serie VizieR distinta; limiti superiori come frecce;
-tooltip con la provenienza del punto. Alternativa λFλ come opzione (D20-7).
+colori per catalogo; serie VizieR distinta; **limiti superiori come frecce
+verso il basso** nel colore del loro catalogo, con una voce di legenda
+propria («<catalogo> upper limit»), **ovunque**: grafico della finestra
+Profili (`43`), PNG del risultato (`plot_png`) ed esportazione (`25` §3.15)
+(D43-9, decisa dal proprietario il 2026-11-08). La lunghezza della freccia è
+solo grafica (40 % del valore sull'asse logaritmico), non un numero
+scientifico. Tooltip con la provenienza del punto. Alternativa λFλ come
+opzione (D20-7).
 
 ### 3.5 Serie VizieR e avviso di moto proprio
 
@@ -197,6 +206,12 @@ Codice: `src/astrotwo/analysis/photometry.py` (livello 2; non dipende dal `25`).
 - **`plot_sed(sed, *, quantity="fnu")`** (figura matplotlib, senza pyplot;
   `"lambda_flambda"` in opzione, D20-7), **`sed_png(sed, ...)`** (PNG) e
   **`sed_table(sed)`** (tabella Astropy, una riga per punto).
+- **`plot_sed_rows(points, vizier=None, *, title=None, figure=None)`**
+  (sprint C5) — stesso grafico dalla forma JSON del risultato (finestra
+  Profili del 43, esportazione del 25); **`sed_rows_png(points, vizier, *,
+  title)`** (sprint C6) — il suo PNG. Limiti superiori come frecce in
+  `plot_sed`, `plot_sed_rows` e nei PNG (D43-9); l'opzione `upper_limits`
+  di C5 è tolta (non c'è più un grafico senza frecce).
 
 ## 8. Librerie e standard di riferimento
 
@@ -221,7 +236,7 @@ Codice: `src/astrotwo/analysis/photometry.py` (livello 2; non dipende dal `25`).
 | Banda senza punto zero | resta in magnitudini, fuori dal grafico | `SED_NO_ZERO_POINT` |
 | Magnitudine senza errore (es. SIMBAD B, U di 51 Peg) | punto senza barra, marcato | `SED_NO_ERROR` |
 | Qualità bassa o saturazione | in tabella, fuori dal grafico di default | `SED_LOW_QUALITY` |
-| Limite superiore (AllWISE `U`) | freccia o fuori dal grafico | `SED_UPPER_LIMIT` |
+| Limite superiore (2MASS o AllWISE `U`) | convertito come limite, freccia verso il basso, mai una misura (D43-9) | `SED_UPPER_LIMIT` |
 | Duplicato SIMBAD | marcato, una sola volta nel grafico | `SED_DUPLICATE` |
 | Sistema non dichiarato | resta in magnitudini | `SED_NO_SYSTEM` |
 | Moto proprio elevato per la serie VizieR | serie presente, avviso (§3.5) | `SED_HIGH_PROPER_MOTION` |
@@ -242,11 +257,11 @@ converte né calcola flussi.
 | T3 | Gaia → flusso | `phot_g_mean_flux` registrato | m_AB e Fν con ZP_AB di G e Fν(0) = `(1 * u.ABflux).to(u.Jy)` (3630,780547… Jy, D20-9 (5)) | ricalcolo |
 | T4 | Banda senza punto zero | SIMBAD `V` | `SED_NO_ZERO_POINT`, punto in magnitudini | |
 | T5 | Qualità | 2MASS di Vega `CBC`, Alcyone `DCD` | punti `D` fuori dal grafico con motivo | |
-| T6 | Limite superiore | AllWISE TRAPPIST-1 W4 `U` (8,565, senza errore) | `SED_UPPER_LIMIT` | |
+| T6 | Limite superiore | AllWISE TRAPPIST-1 W4 `U` (8,565, senza errore) | `SED_UPPER_LIMIT`; nel grafico (`plot_sed`, `plot_sed_rows`, PNG) una freccia verso il basso nel colore di AllWISE, fuori dalla serie dei punti misurati | proprietà della figura |
 | T7 | Duplicati | flux SIMBAD di 51 Peg + Gaia + 2MASS | G, J, H, K di SIMBAD marcati duplicati | |
-| T8 | Serie VizieR | risposta registrata del servizio SED (quando il CDS risponde) | punti non convertiti né fusi, catalogo d'origine | |
+| T8 | Serie VizieR | risposta registrata del servizio SED (quando il CDS risponde; **promemoria del proprietario del 2026-11-08: registrare la SED vera di VizieR quando il CDS torna**) | punti non convertiti né fusi, catalogo d'origine | |
 | T9 | Tabella dei punti zero | `ZERO_POINTS` | ogni voce con fonte e data | ispezione |
-| T10 | Grafico | `sed_png` per 51 Peg | PNG leggibile, solo i punti `in_plot`, serie VizieR distinta | lettura del PNG |
+| T10 | Grafico | `sed_png` per 51 Peg e TRAPPIST-1 | PNG leggibile, serie dei punti con i soli `in_plot`, limiti superiori come frecce (D43-9), serie VizieR distinta | lettura del PNG, proprietà della figura |
 
 ## 13. Decisioni aperte
 
@@ -287,7 +302,11 @@ proprietario il 2026-11-07: nessuna decisione aperta nella parte SED.
   (2) SIMBAD `G` da Gaia EDR3 (`2020yCat.1350`) duplicato del punto Gaia DR3
   (stessa fotometria); (3) limiti superiori `U` convertiti come limiti ma
   fuori dal grafico (non frecce nella 1.0); (4) 2MASS `U` trattato come
-  AllWISE `U`. (5) **Costante del sistema AB — decisa:** si usa la
+  AllWISE `U`. **(3) cambiato dal proprietario il 2026-11-08 (D43-9 del
+  `43`):** i limiti superiori sono convertiti in flusso e **disegnati come
+  frecce verso il basso ovunque** (finestra, PNG del risultato,
+  esportazione), distinti dai punti misurati, mai usati come misure (§3.3,
+  §3.4, T6, T10). (5) **Costante del sistema AB — decisa:** si usa la
   **definizione esatta** (m_AB = −2,5 log₁₀ Fν − 48,60, cgs, Oke & Gunn 1983):
   Fν(0) = 10^(−0,4·48,60) · 10²³ Jy = 3630,780547… Jy, **calcolata dalla
   definizione come in Astropy** (`(1 * u.ABflux).to(u.Jy)`), non scritta a
@@ -297,6 +316,7 @@ proprietario il 2026-11-07: nessuna decisione aperta nella parte SED.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6 (decisione del proprietario del 2026-11-08, D43-9 del `43`; autorizzazione D25-12):** D20-9 (3) cambiata: limiti superiori convertiti in flusso e disegnati come **frecce verso il basso ovunque** (finestra, PNG del risultato, esportazione), distinti dai punti misurati, mai usati come misure (§3.3, §3.4, §10, T6, T10); `plot_sed` disegna le frecce, `plot_sed_rows` senza l'opzione `upper_limits`, nuovo `sed_rows_png` per l'esportazione del 25 (§7). Il file resta `approvato` (solo la parte SED). |
 | 2026-11-08 | Claude Code | **Sprint C5 (autorizzazione D25-12, istruzione del proprietario del 2026-11-08):** nuova `plot_sed_rows(points, vizier, *, upper_limits, figure)` che disegna la SED dalla forma JSON del risultato per la finestra Profili (`43`, D43-8), stessi assi e colori di `plot_sed`; con `upper_limits=True` i limiti superiori convertiti come frecce (solo nella finestra, D43-9 da confermare; il PNG resta D20-9 (3)). Il file resta `approvato`. |
 | 2026-11-07 | Claude Code | **Sprint C4 (decisioni del proprietario del 2026-11-07, autorizzazione D25-12):** D20-9 decisa: (1)–(4) confermati; (5) costante del sistema AB = definizione esatta, Fν(0) = `(1 * u.ABflux).to(u.Jy)` = 3630,780547… Jy calcolata come in Astropy, non 3631 Jy scritto a mano (§3.2, §7, T3). Nessuna decisione aperta nella parte SED. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12):** punti zero e lunghezze d'onda verificati sulle fonti ufficiali il 2026-11-07 (`zeropt.dat` ESA versione 2 identico; λ_p di Gaia dalla documentazione di Gaia DR3 §5.4.1 Tab. 5.4; incertezze e λ(iso) WISE dalla Tabella 9 del supplemento All-Sky, Jarrett et al. 2011; AllWISE §V.3.e: stessa conversione; 2MASS invariato): note «da verificare» di D20-1 e D20-2 chiuse. §3.3 qualità di 2MASS `U`, riferimenti dei duplicati (`CATALOG_REFERENCES`); nuovo §3.5 (serie VizieR, `SED_HIGH_PROPER_MOTION`); §7 con il codice `photometry.py` e le firme; §10, T10; nuova D20-9 (scelte minori, da confermare). |

@@ -296,12 +296,12 @@ def test_t11_sed_plot_with_upper_limits(qtbot, win):
     assert "AllWISE upper limit" in labels and "Gaia DR3" in labels  # W4 di TRAPPIST-1 (ph_qual U) come freccia
     points = view.data["details"]["points"]
     upper = [p for p in points if p["upper_limit"]]
-    assert upper and all(not p["in_plot"] for p in upper)  # restano fuori dalla serie dei punti (D20-9 (3))
+    assert upper and all(not p["in_plot"] for p in upper)  # fuori dalla serie dei punti misurati (D43-9)
     table = view.findChild(object, "photometryPoints")
     assert any("upper limit" in table.item(r, 7).text() for r in range(table.rowCount()))
-    # senza l'opzione, come il PNG del risultato: nessuna freccia
-    plain = plot_sed_rows(points, None)
-    assert all("upper limit" not in t.get_text() for t in plain.axes[0].get_legend().get_texts())
+    # stesse frecce fuori dalla finestra (PNG del risultato ed esportazione): D43-9, ovunque
+    again = plot_sed_rows(points, None)
+    assert "AllWISE upper limit" in [t.get_text() for t in again.axes[0].get_legend().get_texts()]
 
 
 def test_t9_thumbnail_credits_with_the_stsci_text(qtbot, win):
@@ -348,7 +348,7 @@ def test_tab_buttons_rerun_fresh_and_show_in_sky(qtbot, win):
     qtbot.waitUntil(lambda: finished(win, tab), timeout=60000)
     names = {b.objectName() for b in tab.findChildren(type(tab.fresh_button)) if b.isVisibleTo(tab)}
     assert {"rerunFresh", "showInSky"} <= names
-    assert not names & {"export", "loadSedCatalog", "sendSamp"}  # pulsanti dello sprint C6: non ancora
+    assert {"exportProfile", "loadSedCatalog", "sendSedSamp"} <= names  # pulsanti dello sprint C6 (43 §3.10)
     tab.sky_button.click()
     qtbot.waitUntil(lambda: not win.busy(), timeout=30000)
     entry = win.session.history.entries[-1]

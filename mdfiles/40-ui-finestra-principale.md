@@ -463,6 +463,11 @@ punto 10); comandi `samp.*` e origine `samp` del `05` (D05-5). Codice: `src/astr
   bloccare l'interfaccia.
 - **Invio** (Tools → SAMP, menu contestuale della tabella del `42` §3.6 e del cielo del `41` §3.20); ogni voce apre
   l'elenco dei destinatari: **All applications** (tutti i client iscritti a quel tipo di messaggio) o un client:
+  - *Send via SAMP* della finestra Profili (`43` §3.10, sprint C6, 2026-11-08): **`object.send_sed`** del 25
+    (§3.15), eseguito qui perché il collegamento SAMP è della finestra: tabella dei punti della SED
+    (`sed_catalog_table` del 25) mandata con `SampHub.send_table` del 14 (`table.load.votable`, chiamata
+    sincrona, **60 s**), identificativo `astrotwo-<avvio>-sed<n>-<k>`, stessi esiti e avvisi di
+    `samp.send_table` (`SampLink.send_catalog`).
   - *Send whole table* (`samp.send_table`): catalogo della scheda in primo piano nel pannello Tabella (anche un
     catalogo nato da `catalog.crossmatch`, sprint B2); VOTable con
     colonne, unità, UCD e `COOSYS` con l'epoca dichiarata dal 13 (mai assunta; senza colonne confermate nessun
@@ -857,6 +862,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6 (autorizzazione D25-12, brief del proprietario del 2026-11-08):** §3.12 — esecutore di **`object.send_sed`** (25 §3.15, «Invia con SAMP» della finestra Profili, `43` §3.10) con `SampLink.send_catalog` (`table.load.votable`, 60 s); la finestra lega anche `object.export` all'esecutore del `43` con la propria cronologia. Il file resta `approvato`. |
 | 2026-11-08 | Claude Code | **Sprint C5 (autorizzazione D25-12, istruzione del proprietario del 2026-11-08):** Data → **Object profile…** / **Profilo dell'oggetto…** (dopo un separatore sotto Cross-match catalogs…), Window → **Profiles** / **Profili**, pulsante **«Profile» / «Profilo»** accanto al campo «Vai a» per 30 s dopo un «Vai a» riuscito con un nome; eventi della coda (`started`, `progress` con `detail`, `finished`) inoltrati alla finestra Profili (`43`). Il file resta `approvato`. |
 | 2026-10-15 | Claude Code | Creazione del file (stato: bozza) dalla proposta della fase 1 approvata dal proprietario il 2026-10-15: perimetro v1 (menu, barra di stato, campo "Vai a", preferenze essenziali, apertura di file e sessioni, pannelli Comandi e Messaggi, schermo intero, spazio per il 44), coda dei comandi in un thread di lavoro con segnali di Qt, avanzamento e Annulla per ogni comando lungo, A9 decisa (inglese con `tr()`, italiano nostro con Qt Linguist, traduzioni di Qt, punto decimale sempre). Nuove decisioni D40-1, D40-2. |
 | 2026-10-15 | Claude Code | **Decisioni del proprietario del 2026-10-15:** D40-1 decisa (v1: codice + testo del modulo invariato); nuova **D40-3** (Gruppo 3: messaggi dei moduli in inglese con traduzione); D40-2 rimandata; scelte minori confermate; **nuova §3.11 "Linee guida visive"** (valide per tutte le interfacce: macOS, tema che segue il sistema con lo scuro di riferimento, modalità notte rossa, cielo al centro con pannelli richiudibili e barre sottili, carattere di sistema, un solo accento, spaziature di 4 punti, icone Lucide proposte con licenza da verificare, colori dei cataloghi di Okabe e Ito, nulla da Aladin); preferenza "Aspetto" e voce Night mode; PySide6/Qt LGPL-3 registrata per A11 e per il 60; mockup in `mdfiles/mockup/`; test T13. Nessuna decisione dei Gruppi 1 e 2 resta aperta. |

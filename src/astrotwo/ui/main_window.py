@@ -1592,6 +1592,10 @@ class MainWindow(QMainWindow):
                 registry.bind(name, executor)
         if "view.export_png" in {s.name for s in registry.specs()}:
             registry.bind("view.export_png", self._exec_export_png)  # legge la modalità notte della finestra (41 §3.14)
+        if "object.export" in {s.name for s in registry.specs()}:  # esportazione del profilo (43 §3.10, 25 §3.15)
+            from astrotwo.ui.profiles import exec_object_export
+
+            registry.bind("object.export", exec_object_export(lambda: self.session.history))
         # SAMP (§3.12): collegamento del 14 con tempo massimo; esecutori nel thread dei comandi, ricezione in segnali
         self.samp = samp_link if samp_link is not None else SampLink(parent=self)
         if self.samp.parent() is None:
@@ -1600,7 +1604,8 @@ class MainWindow(QMainWindow):
                                ("samp.disconnect", self._exec_samp_disconnect),
                                ("samp.send_table", self._exec_samp_send_table),
                                ("samp.send_selection", self._exec_samp_send_selection),
-                               ("samp.point_at", self._exec_samp_point_at)):
+                               ("samp.point_at", self._exec_samp_point_at),
+                               ("object.send_sed", self._exec_object_send_sed)):
             if name in {s.name for s in registry.specs()}:
                 registry.bind(name, executor)
         self._samp_tables: dict[int, object] = {}  # lavoro di catalog.open_file → ReceivedTable (tabelle note)
@@ -2382,6 +2387,15 @@ class MainWindow(QMainWindow):
     def _exec_samp_send_selection(self, ctx, p: Mapping) -> Outcome:
         values = self.samp.send_selection(ctx.state.layer(p["layer"]), p["recipient"])
         return Outcome(values=values, warnings=self._samp_rejected(values))
+
+    def _exec_object_send_sed(self, ctx, p: Mapping) -> Outcome:
+        """«Invia con SAMP» della finestra Profili (43 §3.10): punti della SED dei risultati registrati (25 §3.15)."""
+        from astrotwo.analysis.profile_export import merge_profile_results, results_from_history, sed_catalog_table
+
+        data = merge_profile_results(results_from_history(self.session.history, p["commands"]))
+        table = sed_catalog_table(data)
+        values = self.samp.send_catalog(table, f"sed{p['commands'][-1]}", table.table_name, p["recipient"])
+        return Outcome(values={**values, "commands": list(p["commands"])}, warnings=self._samp_rejected(values))
 
     def _exec_samp_point_at(self, ctx, p: Mapping) -> Outcome:
         values = self.samp.point_at(sky_from_json(p["position"]), p["recipient"])

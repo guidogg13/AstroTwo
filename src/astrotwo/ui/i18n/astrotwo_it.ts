@@ -2064,6 +2064,30 @@
         <translation>Mostra nel cielo</translation>
     </message>
     <message>
+        <source>Export…</source>
+        <translation>Esporta…</translation>
+    </message>
+    <message>
+        <source>Values with provenance (ECSV)…</source>
+        <translation>Valori con provenienza (ECSV)…</translation>
+    </message>
+    <message>
+        <source>Profile sheet (PDF)…</source>
+        <translation>Scheda del profilo (PDF)…</translation>
+    </message>
+    <message>
+        <source>SED plot (PNG)…</source>
+        <translation>Grafico della SED (PNG)…</translation>
+    </message>
+    <message>
+        <source>Load SED points as catalog</source>
+        <translation>Carica i punti SED come catalogo</translation>
+    </message>
+    <message>
+        <source>Send via SAMP</source>
+        <translation>Invia con SAMP</translation>
+    </message>
+    <message>
         <source>Identity</source>
         <translation>Identità</translation>
     </message>
@@ -2103,12 +2127,40 @@
         <source>Done in %1 s</source>
         <translation>Finito in %1 s</translation>
     </message>
+    <message>
+        <source>No SED points</source>
+        <translation>Nessun punto della SED</translation>
+    </message>
+    <message>
+        <source>SAMP not connected</source>
+        <translation>SAMP non collegato</translation>
+    </message>
+    <message>
+        <source>Export values with provenance</source>
+        <translation>Esporta i valori con provenienza</translation>
+    </message>
+    <message>
+        <source>Export profile sheet</source>
+        <translation>Esporta la scheda del profilo</translation>
+    </message>
+    <message>
+        <source>Export SED plot</source>
+        <translation>Esporta il grafico della SED</translation>
+    </message>
+    <message>
+        <source>All applications</source>
+        <translation>Tutti i programmi</translation>
+    </message>
 </context>
 <context>
     <name>ProfilesWindow</name>
     <message>
         <source>Profiles</source>
         <translation>Profili</translation>
+    </message>
+    <message>
+        <source>The export was not written</source>
+        <translation>L'esportazione non è stata scritta</translation>
     </message>
     <message>
         <source>Close profile</source>
@@ -2123,7 +2175,7 @@
     <name>ProvenancePopup</name>
     <message>
         <source>Copy</source>
-        <extracomment>Ordine fisso delle sezioni nella scheda (D43-2): le Immagini stanno a destra dell&apos;Identità. Servizi che ogni sezione può interrogare (copia dei nomi di ``SECTION_SERVICES`` del 25, per l&apos;intestazione). Testo di riconoscimento di STScI per i survey DSS (01 §6.1, primo paragrafo; D25-17 (3)). Misure (D43-6). Riconoscimento dell&apos;identificativo di una riga (43 §3.2 punto 5, D43-3): origine del livello → colonne e prefisso. URL di copyright dichiarati dai survey (``obs_copyright_url``) già mostrati come collegamento (43 §3.7).</extracomment>
+        <extracomment>Ordine fisso delle sezioni nella scheda (D43-2): le Immagini stanno a destra dell&apos;Identità. Servizi che ogni sezione può interrogare (copia dei nomi di ``SECTION_SERVICES`` del 25, per l&apos;intestazione). Misure (D43-6). Riconoscimento dell&apos;identificativo di una riga (43 §3.2 punto 5, D43-3): origine del livello → colonne e prefisso. URL di copyright dichiarati dai survey (``obs_copyright_url``) già mostrati come collegamento (43 §3.7).</extracomment>
         <translation>Copia</translation>
     </message>
     <message>

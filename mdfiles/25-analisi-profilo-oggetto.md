@@ -10,8 +10,9 @@
 > comando `object.profile`; le precisazioni nate scrivendo C2 sono in §3.10,
 > quelle di C3 (fotometria e SED) in §3.11, quelle di C4 (parallelismo e
 > Annulla) in §3.12, Immagini e Pianeti in §3.13, la ricerca dei pianeti
-> senza attendere Gaia (D25-17 (10), sprint C5) in §3.14. L'interfaccia è
-> specificata in `43-ui-profili.md` (D25-7).
+> senza attendere Gaia (D25-17 (10), sprint C5) in §3.14, esportazione, SED
+> come catalogo e SAMP (sprint C6) in §3.15. L'interfaccia è specificata in
+> `43-ui-profili.md` (D25-7, `approvato` il 2026-11-08).
 
 ## 2. Scopo
 
@@ -172,7 +173,7 @@ presenti, A7); **«Riesegui con dati aggiornati»** (`refresh`, sprint B4) le
 rifà dalla rete e segnala le differenze (`DATA_REFRESHED`). Ogni valore porta
 il comando (`command_id`) che lo ha prodotto.
 
-### 3.7 Esportazione (proposta D25-6)
+### 3.7 Esportazione (D25-6, decisa; precisata in §3.15)
 
 - **Tabella dei dati con provenienza** in ECSV (una riga per valore: sezione,
   grandezza, valore, errore inferiore/superiore, unità, banda e sistema, metodo,
@@ -679,6 +680,190 @@ dichiarato.
 `check_exoplanet_host`, `_exoplanet_by_gaia`, `_exoplanet_by_hostname`
 (la catena di §3.10 resta `_exoplanet_host`, ora composta dalle due).
 
+### 3.15 Esportazione, SED come catalogo e SAMP (sprint C6, 2026-11-08)
+
+Precisa §3.7 (D25-6, decisa il 2026-11-07) per lo sprint C6 (brief del
+proprietario del 2026-11-08). Le scelte minori sono in **D25-20** (§13), da
+confermare. L'interfaccia (pulsanti della scheda) è nel `43` §3.10.
+
+**Da dove vengono i dati (regola d'oro n. 1).** Ogni file esportato si
+costruisce **dalla forma JSON del risultato** di uno o più comandi
+`object.profile` già eseguiti (la stessa che mostra la finestra Profili),
+mai rifacendo richieste né ricalcolando valori: numeri, unità, errori,
+provenienza e PNG (miniature, grafico) sono quelli del risultato registrato.
+Una scheda può avere sezioni di più comandi («Riprova questa sezione», `43`
+§3.6): l'elenco **`commands`** (numeri `#n` della cronologia) dice quali,
+nell'ordine; il primo è il profilo di base, ogni comando successivo
+**sostituisce le sezioni che contiene** (`merge_profile_results`, §7.1), e
+ogni sezione porta il numero del comando che l'ha prodotta (`command_id`).
+Bersaglio, catena degli identificativi e avvisi del profilo vengono dal
+primo comando.
+
+**Comando `object.export`** (versione 1, classe `application`, eseguito
+dall'interfaccia: `bound_by = 43`, perché la cronologia è della finestra
+principale; definito in `command_specs()` di questo modulo). Parametri:
+`commands` (elenco di interi ≥ 1, almeno uno), `format` (`ecsv`, `pdf`,
+`sed_png`, `sed_votable`), `path` (percorso assoluto del file da scrivere),
+`language` (`en`, `it`: lingua delle intestazioni del PDF, default `en`;
+l'interfaccia passa la lingua dell'app). Come `view.export_png` del 41 è un
+comando registrato in cronologia, **rieseguibile** con Riesegui del 40
+(riscrive lo stesso file dagli stessi risultati registrati: stesso
+contenuto, byte per byte) e, come ogni comando `application`, **non
+rieseguito alla riapertura di una sessione** (scrivere file alla riapertura
+non è un'azione chiesta dall'utente). Non usa la rete, non crea livelli,
+non è esposto all'IA (classe `application`, 32 §3.3). Controlli prima di
+scrivere (`PROFILE_EXPORT_INVALID`, §10): ogni numero esiste in cronologia
+(`command_missing`), è un `object.profile` (`not_profile`) e ha un profilo
+nel risultato — esito `ok` o `cancelled` `partial` (`no_profile`);
+percorso assoluto con l'estensione del formato (`.ecsv`, `.pdf`, `.png`,
+`.xml` o `.vot`; `extension`), cartella esistente e scrivibile
+(`folder_unwritable`), non una cartella (`is_directory`); per `sed_png` e
+`sed_votable` serve la sezione Fotometria con almeno un punto (`no_sed`).
+Un file esistente si sovrascrive (la conferma è del dialogo di salvataggio
+del 43). Errore di scrittura (disco pieno, permessi) → `PROFILE_EXPORT_FAILED`
+con il percorso e il motivo, nessun file a metà (scrittura in un file
+temporaneo nella stessa cartella e rinomina). Risultato: `path`, `format`,
+`commands`, `sha256` e dimensione del file scritto, `rows` (ECSV, VOTable)
+o `pages` (PDF).
+
+**1. ECSV dei valori con provenienza** (`format = ecsv`): una riga per ogni
+`ProfileValue` delle sezioni, nell'ordine fisso delle sezioni (Identità,
+Immagini, Astrometria e distanza, Fotometria, Pianeti) e dei valori nel
+risultato, più una riga per ogni riga della serie VizieR (quando c'è:
+grandezza `VizieR SED <filtro> flux_nu`, metodo `read`, valore e errore in
+Jy così come dati da VizieR, `table` = `_tabname`, frequenza nella nota).
+Colonne (D25-20 (3)):
+
+| Colonna | Tipo | Contenuto |
+|---|---|---|
+| `section` | testo | nome della sezione (`identity`, `astrometry`, …) |
+| `quantity` | testo | grandezza come nel risultato (es. `parallax`, `2MASS J flux_nu`, `TRAPPIST-1 b period`) |
+| `value` | `float64` | il valore numerico, **vuoto (mascherato)** per testi, booleani e interi che un `float64` non rappresenta esattamente (es. `source_id`) |
+| `value_text` | testo | il valore esattamente come nel risultato: `repr` del `float64` (rappresentazione più corta), intero in cifre, testo, `true`/`false` |
+| `unit` | testo | unità del valore come nel risultato (vuota se senza unità) |
+| `error`, `error_lower`, `error_upper` | `float64` | errore simmetrico, oppure inferiore e superiore così come dati (pianeti), nell'unità del valore; vuoti se assenti |
+| `interval_lower`, `interval_upper`, `interval_kind` | `float64`, testo | intervallo dichiarato (Bailer-Jones 16°–84° percentile, 1/(ϖ ± σ)) |
+| `band`, `system` | testo | per i valori della fotometria: banda e sistema del punto della SED (letti da `details.points` per etichetta `<catalogo> <banda>`), altrimenti vuoti |
+| `upper_limit` | booleano | punto della SED che è un limite superiore (`SED_UPPER_LIMIT`): **mai una misura** (D43-9) |
+| `method`, `formula` | testo | `read` o `computed` e la formula scritta dal motore |
+| `service`, `server`, `table`, `query` | testo | servizio, URL del server che ha risposto davvero (anche un mirror), tabella, interrogazione ADQL |
+| `identifier`, `match` | testo | identificativo usato e tipo di incrocio (`simbad_identifier`, `official_crossmatch`, `position`) |
+| `reference` | testo | riferimento bibliografico (bibcode) |
+| `note` | testo | nota del valore |
+| `retrieved_at` | testo | data della risposta, ISO 8601 UTC (DC1) |
+| `from_cache` | testo | `true`, `false` o vuoto (sconosciuto) |
+| `command_id` | intero | numero del comando `object.profile` che ha prodotto il valore |
+
+Nell'intestazione ECSV (metadati YAML): `A2VERS` (versione di AstroTwo),
+`A2KIND = object_profile`, il bersaglio come scritto, `main_id`, posizione
+risolta con epoca e fonte, `commands`. Nessuna data di esportazione nel file
+(così Riesegui riscrive lo stesso file; la data è nel risultato del comando,
+05). La tabella si rilegge con `astropy.table.Table.read(..., format="ascii.ecsv")`.
+
+**2. PDF della scheda** (`format = pdf`): disegnato con matplotlib
+(`PdfPages`, backend PDF senza pyplot), **non** con `QPdfWriter` di Qt
+(proposta di §8): il modulo resta di livello 2 senza dipendere
+dall'interfaccia e il grafico della SED è lo stesso del 20 (D25-20 (1)).
+Formato A4 verticale, **al più una pagina per sezione**, nell'ordine:
+(1) **Identità e Immagini** (nome, tipo con la descrizione, tipo spettrale
+con il bibcode, citazioni, posizione con epoca e fonte, identificativi per
+catalogo — al più 8 per gruppo e 30 gruppi, oltre «… N in più: elenco
+completo nella scheda» —, catena degli identificativi; a destra le
+miniature dal PNG del risultato con survey, campo, centro con epoca,
+server, `obs_copyright` e, per DSS, la prima frase del testo di STScI del
+`01` §6.1); (2) **Astrometria e distanza** (tabella grandezza, valore,
+errore, unità, note; distanza con il metodo scritto); (3) **Fotometria**
+(grafico della SED del 20 in Fν contro λ con i limiti superiori come
+frecce, D43-9, e la tabella dei punti: catalogo, banda, sistema, valore con
+errore, qualità, λ, Fν con errore, nel grafico sì/no e motivo); (4)
+**Pianeti** (una riga per pianeta: valori con errori `+a / −b` così come
+dati, segno di limite); più una pagina finale **«Fonti e crediti»**
+(crediti completi dei survey `obs_ack`, punti zero usati con la fonte,
+elenco delle interrogazioni: servizio, server, tabella, data, cache,
+comando). In fondo a ogni pagina, in nota, le fonti di quella sezione
+(servizi, server, tabelle, date, cache, `#n`). Sezioni non presenti nella
+scheda (non richieste) o senza valori: pagina con lo stato e i messaggi
+(errore, annullata). Una tabella più lunga di quanto sta nella pagina si
+tronca con la riga «… N righe in più: tabella completa nell'ECSV». Numeri
+scritti con la rappresentazione più corta del `float64` del risultato (come
+la finestra, D43-7): nessun arrotondamento, nessun ricalcolo. Testi esterni
+(nomi SIMBAD, crediti, riferimenti) come testo semplice. Metadati del PDF:
+titolo (`Profile of <main_id>`), `Creator` = `AstroTwo <versione>`, nessuna
+data di creazione (stesso file a ogni Riesegui).
+
+**3. PNG della SED** (`format = sed_png`): `plot_sed_rows` del 20 dalla
+forma JSON dei punti e della serie VizieR, con i limiti superiori come
+frecce (D43-9) e la riga dei crediti dei punti zero e dei servizi già scritta
+dal 20; titolo = `main_id`. PNG senza metadati del programma che cambiano.
+
+**4. Tabella dei punti della SED** (`format = sed_votable`, usata da
+«Carica i punti SED come catalogo» e da «Invia con SAMP»): VOTable 1.4
+scritto con `export_table` del 14 da una `CatalogTable` costruita da
+`sed_catalog_table` (§7.1), una riga per punto della SED (anche i punti
+rimasti in magnitudini) e una per riga della serie VizieR. Colonne (con UCD):
+`ra`, `dec` (`pos.eq.ra;meta.main`, `pos.eq.dec;meta.main`: la posizione
+del bersaglio risolto, uguale per tutte le righe, con il sistema e l'epoca
+del risultato nel `COOSYS`; serve a mostrare il livello nel cielo, non è la
+posizione della misura), `series` (`astrotwo` o `vizier`), `catalog`
+(fonte: catalogo del punto o `_tabname` di VizieR), `band`
+(`instr.bandpass`), `system`, `wavelength` (µm, `em.wl`), `flux_nu` (Jy,
+`phot.flux.density`), `flux_nu_error` (Jy, `stat.error;phot.flux.density`),
+`magnitude`, `magnitude_error` (mag, `phot.mag`), `quality`, `upper_limit`,
+`in_plot`, `reasons` (codici `SED_*`), `zero_point`, `reference`,
+`identifier`, `match`, `server`, `table`, `retrieved_at`, `from_cache`,
+`command_id`. Nessun valore calcolato qui: λ e Fν sono quelli del risultato
+(conversioni del 20, serie VizieR così come data). Provenienza della tabella
+(14 §3, `A2ORIGIN`, `A2DATE`, `A2HIST`): «punti della SED del profilo di
+<main_id>, comandi #n…», data della risposta più recente dei punti,
+servizi interrogati. Corpo `celestial` (posizioni ICRS).
+
+**«Carica i punti SED come catalogo»** (parità H17): due comandi registrati
+in coda, senza logica propria dell'interfaccia: `object.export` con
+`format = sed_votable` in un file della cartella dell'app
+`~/Library/Application Support/AstroTwo/Profiles/` (mai cancellato da
+AstroTwo: serve per riaprire la sessione, come i VOTable ricevuti con SAMP,
+40 §3.12), poi, se è riuscito, **`catalog.open_file`** del 05 su quel file
+(classe `session`, SHA-256 registrato, rieseguito alla riapertura). Il
+livello si chiama come la tabella (`SED <main_id>`), con la provenienza del
+VOTable. Nome del file: `<main_id ridotto a lettere, cifre, - e _>-sed-<n>.xml`
+con `<n>` = ultimo numero di `commands` (un numero già usato si riscrive
+con gli stessi dati).
+
+**Comando `object.send_sed`** («Invia con SAMP»; versione 1, classe
+`application`, eseguito dall'interfaccia: `bound_by = 40`, che possiede il
+collegamento SAMP; definito in `command_specs()` di questo modulo).
+Parametri: `commands` (come sopra) e `recipient` (identificativo pubblico di
+un client SAMP, `null` = tutti gli iscritti; come `samp.send_table` del 05).
+Manda la tabella dei punti della SED (`sed_catalog_table`) con
+**`table.load.votable`** tramite `SampHub.send_table` del 14: chiamata
+sincrona (`callAndWait`) a ogni destinatario con **60 s** di tempo di
+risposta per le tabelle (`SAMP_TABLE_REPLY_TIMEOUT`, D40-9 (7)),
+identificativo `astrotwo-<avvio>-sed<n>-<k>` (40 §3.12), nome
+`SED <main_id>`. Esiti come `samp.send_table`: destinatari che hanno
+accettato, rifiuti con `SAMP_NO_PEER` (`rejected`, `no_reply_table`),
+non collegato → `SAMP_UNAVAILABLE` (`not_connected`). Stessi controlli di
+`commands` e `no_sed` di `object.export`. Non rieseguito alla riapertura,
+non esposto all'IA.
+
+**Test:** T15 (ECSV), T26 (PDF e PNG), T27 (comando `object.export`:
+controlli, Riesegui identico, sezioni da più comandi), T28 (tabella dei
+punti, catalogo e SAMP), §12.
+
+**Codice:** `src/astrotwo/analysis/profile_export.py` (stesso modulo 25,
+file a parte per la lunghezza di `object_profile.py`): `results_from_history`,
+`merge_profile_results`, `export_profile`, `profile_values_table`,
+`sed_catalog_table`, `check_export_path`, `sed_catalog_path`,
+`default_sed_folder`, `ProfileExportError`; specifiche `object.export` e
+`object.send_sed` in `command_specs()` di `object_profile.py`. Il testo di
+STScI per i survey DSS (`STSCI_DSS_TEXT`, 01 §6.1) è definito qui e la
+finestra Profili lo importa (prima era nel 43). Test:
+`tests/analysis/test_profile_export.py`.
+**Correzione trovata scrivendo il PDF:** nella tabella dei punti l'errore
+accanto a una magnitudine Gaia era quello del flusso in e⁻/s
+(`phot_*_mean_flux_error`), perché Gaia non dà l'errore della magnitudine;
+ora si mostra l'errore del valore mostrato (nessuno per la magnitudine
+Gaia), nel PDF e nella finestra del 43.
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -730,11 +915,14 @@ dichiarato.
 | in | `refresh` | booleano | — | dati aggiornati dalla rete (B4) |
 | out | `ObjectProfile` | struttura | §7 | bersaglio risolto, sezioni, avvisi, comando |
 | out | `ProfileValue` | struttura | valore `float64` con `astropy.units`, errori, banda, sistema | provenienza obbligatoria |
-| out | file esportati | ECSV, PDF, PNG, VOTable | §3.7 | con fonti e crediti |
+| out | file esportati | ECSV, PDF, PNG, VOTable | §3.7, §3.15 | con fonti e crediti; comando `object.export` (dai risultati registrati, mai nuove richieste) |
+| in | `commands` | elenco di interi | numeri `#n` della cronologia | `object.export`, `object.send_sed` (§3.15): profilo di base e sezioni riprovate |
+| in | `format`, `path`, `language` | enum, testo, enum | `ecsv`, `pdf`, `sed_png`, `sed_votable`; percorso assoluto; `en`/`it` | `object.export` (§3.15) |
+| out | tabella dei punti SED via SAMP | `table.load.votable` | VOTable 1.4 | `object.send_sed` (§3.15) |
 
 ## 7. Interfaccia pubblica
 
-### 7.1 Questo modulo (`src/astrotwo/analysis/object_profile.py`, proposta)
+### 7.1 Questo modulo (`src/astrotwo/analysis/object_profile.py`; esportazione in `profile_export.py`, sprint C6)
 
 - **`resolve_target(target, *, match_radius, ...)`** — dal nome, dalla riga o
   dalle coordinate all'oggetto: `ResolvedTarget` (oggetto SIMBAD con
@@ -758,7 +946,21 @@ dichiarato.
   `official_crossmatch` | `position`, separazione, epoche, candidati, conflitti).
 - **`distance_from(astrometry, *, rules)`** — §3.4.4: `ProfileValue` con il metodo
   o il motivo dell'assenza.
-- **`export_profile(profile, path, format)`** — ECSV, PDF, PNG (SED).
+- **`merge_profile_results(results)`** (sprint C6, §3.15) — da un elenco di
+  `(command_id, values)` di comandi `object.profile` (primo = base) alla
+  forma JSON della scheda: sezioni dei comandi successivi al posto di quelle
+  del base, `command_id` in ogni sezione.
+- **`export_profile(data, path, format, *, language="en")`** — scrive
+  ECSV, PDF, PNG della SED o VOTable dei punti (§3.15) dalla forma JSON
+  unita; restituisce `ProfileExport` (percorso, formato, SHA-256, byte,
+  righe o pagine). Scrittura atomica (file temporaneo e rinomina).
+- **`profile_values_table(data)`** — tabella Astropy dei valori con
+  provenienza (colonne di §3.15, punto 1).
+- **`sed_catalog_table(data)`** — `CatalogTable` del 13 con i punti della
+  SED (§3.15, punto 4), per il VOTable, il livello catalogo e SAMP.
+- **`check_export_path(path, format)`**, **`results_from_history(history,
+  commands)`** — controlli di §3.15 (`PROFILE_EXPORT_INVALID`): percorso, e
+  risultati dei comandi `object.profile` presi dalla cronologia del 05.
 - Classi: **`ObjectProfile`** (bersaglio, sezioni, avvisi, `command_id`,
   date), **`ProfileSection`** (nome, stato, valori, errori, avvisi, tempo,
   servizi), **`ProfileValue`** (grandezza, valore, errori, unità, banda,
@@ -787,7 +989,7 @@ dichiarato.
 | pyvo / TAP (IVOA) | interrogazioni tramite `tap_query` del 14 | già in uso, standard IVOA |
 | ADQL 2.1 | interrogazioni a SIMBAD, Gaia, IRSA, Exoplanet Archive | standard IVOA |
 | matplotlib (già dipendenza) | grafico della SED e PDF | proposta, D20-7 |
-| Qt (`QPdfWriter`) | PDF della scheda | proposta, D25-6 |
+| matplotlib (`backend_pdf.PdfPages`) | PDF della scheda (§3.15) | D25-20 (1): stesso grafico del 20, nessuna dipendenza dall'interfaccia; al posto di `QPdfWriter` proposto qui nel C1 |
 | Bailer-Jones et al. 2021 (AJ 161, 147) | distanze | D25-2 |
 
 ## 9. Regole e vincoli
@@ -837,6 +1039,9 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Pianeti trovati (`pscomppars`) | parametri con il loro riferimento, avviso che possono venire da lavori diversi | `PROFILE_PLANETS_COMPOSITE` |
 | Ospite trovato subito per `hostname` (§3.14) e poi diverso per `gaia_dr3_id` (o trovato solo per `gaia_dr3_id`) | pianeti dell'esito per `hostname`, l'altro ospite mostrato, nessuna scelta | `PROFILE_PLANET_HOST_MISMATCH` (`different`, `only_gaia`) |
 | Epoca della survey non nota (osservazioni più lunghe di un anno) | miniatura centrata sulla posizione SIMBAD J2000, dichiarato | — (`center_note`) |
+| Esportazione: numero di comando assente, non `object.profile`, senza profilo nel risultato; percorso non assoluto o con estensione diversa dal formato, cartella non scrivibile, percorso che è una cartella; SED vuota per `sed_png`/`sed_votable` (§3.15) | nessun file scritto | `PROFILE_EXPORT_INVALID` (`command_missing`, `not_profile`, `no_profile`, `not_absolute`, `extension`, `folder_unwritable`, `is_directory`, `no_sed`) |
+| Errore di scrittura del file esportato (disco pieno, permessi) | nessun file a metà (temporaneo rimosso) | `PROFILE_EXPORT_FAILED` |
+| «Invia con SAMP» senza collegamento o senza destinatari che accettano | come `samp.send_table` (40 §3.12) | `SAMP_UNAVAILABLE` (`not_connected`), `SAMP_NO_PEER` |
 
 ## 11. Esposizione all'IA
 
@@ -881,17 +1086,21 @@ cambiano).
 | T25 | Pianeti senza attendere Gaia (§3.14, D25-17 (10)) | Vega (senza `Gaia DR3` in SIMBAD) con l'archivio Gaia simulato fermo 3 s; poi Gaia per posizione che dà una sorgente sintetica il cui `gaia_dr3_id` ha un ospite nell'archivio | Pianeti arrivati prima della risposta di Gaia (< 2 s, non 30 s), `done`, «nessun pianeta», una sola richiesta (per `hostname`); nel secondo caso pianeti per `hostname` (nessuno), `PROFILE_PLANET_HOST_MISMATCH` `only_gaia` nell'Identità e tra gli avvisi del profilo | tempi, richieste, avvisi |
 | T13 | Conflitto di identificativi | SIMBAD dà 2MASS X, l'incrocio Gaia dà 2MASS Y | entrambi, `PROFILE_IDENTIFIER_CONFLICT` | |
 | T14 | Riproducibilità | `object.profile` registrato, rieseguito dalla sessione, poi con `refresh` | stesse richieste e stessi valori dalla cache; con `refresh` nuove richieste e `DATA_REFRESHED` | sessione del 05 |
-| T15 | Esportazione | `export_profile` ECSV | una riga per valore con tutte le colonne di provenienza; rilettura con `astropy.table` | ECSV valido |
+| T15 | Esportazione ECSV (§3.15) | `export_profile` ECSV di 51 Peg e TRAPPIST-1 (risposte registrate); una serie VizieR sintetica | una riga per valore (più una per riga VizieR) con tutte le colonne di provenienza di §3.15; `value_text` uguale al valore del risultato (anche `source_id` intero esatto, `value` vuoto); errori `+a / −b` dei pianeti; banda e sistema dei punti; limite superiore di TRAPPIST-1 W4 con `upper_limit` vero; `command_id`; rilettura con `astropy.table` | ECSV valido, confronto con il risultato |
+| T26 | PDF e PNG (§3.15) | `export_profile` PDF e `sed_png` di TRAPPIST-1; scheda con una sezione in errore | PDF A4 di 5 pagine (4 sezioni + fonti e crediti) leggibile, titolo nei metadati, nessuna data di creazione; pagina della sezione in errore con il messaggio; PNG leggibile; due esportazioni uguali byte per byte | lettura del PDF (`pypdf` se presente, altrimenti struttura del file) e del PNG, SHA-256 |
+| T27 | Comando `object.export` (§3.15) | registro con `object.export` legato a una cronologia di prova: `object.profile` di 51 Peg, poi «Riprova» dell'astrometria; numeri sbagliati, comando non profilo, profilo in errore; percorsi sbagliati; Riesegui | file scritto con le sezioni del secondo comando al posto di quelle del primo (`command_id`); `PROFILE_EXPORT_INVALID` con ogni ragione, nessun file; Riesegui → stesso SHA-256; comando `application` in cronologia, non rieseguito alla riapertura | comando registrato, SHA-256 |
+| T28 | Punti SED come catalogo e SAMP (§3.15) | `sed_catalog_table` di 51 Peg e TRAPPIST-1; `object.export` `sed_votable` poi `catalog.open_file`; `object.send_sed` con un hub e un client SAMP simulati (`tests/core/samp_fakes.py`) | una riga per punto con λ, Fν, errori, banda, fonte, `upper_limit`; livello catalogo con posizioni ICRS riconosciute dagli UCD e la provenienza; `table.load.votable` con chiamata sincrona e 60 s, tabella ricevuta uguale; senza collegamento `SAMP_UNAVAILABLE` | confronto con il risultato del profilo |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
 | T17 | Rete (marcato `network`) | 3 oggetti veri | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s) | non nel commit (`--no-network`) |
 
 ## 13. Decisioni aperte
 
-Tutte le decisioni D25-1…D25-18 sono state **prese dal proprietario**
+Tutte le decisioni D25-1…D25-19 sono state **prese dal proprietario**
 (D25-1…D25-15 il 2026-11-07: D25-1…D25-12 dopo il report dello sprint C1,
 D25-13 dopo lo sprint C2, D25-14 e D25-15 dopo lo sprint C3; D25-16, D25-17
-e D25-18 il 2026-11-08). Restano qui come registro. Aperta: **D25-19**
-(scelte minori dello sprint C5, da confermare).
+e D25-18 il 2026-11-08; D25-19 confermata il 2026-11-08 con il brief dello
+sprint C6). Restano qui come registro. Aperta: **D25-20** (scelte minori
+dello sprint C6, da confermare).
 
 - **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
   `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
@@ -913,7 +1122,8 @@ e D25-18 il 2026-11-08). Restano qui come registro. Aperta: **D25-19**
   reali** (stessa regola dei mirror del 12), altrimenti AllWISE solo quando
   risponde il CDS. Campo 5′, 256 × 256 pixel, TAN centrata (sprint C4).
 - **D25-6 — Esportazione — DECISA (2026-11-07):** ECSV dei valori con
-  provenienza + PDF della scheda + PNG della SED (sprint C6).
+  provenienza + PDF della scheda + PNG della SED (sprint C6, precisata in
+  §3.15; scelte minori in D25-20).
 - **D25-7 — Specifica dell'interfaccia — DECISA (2026-11-07), ribadita il
   2026-11-08:** nel nuovo `43-ui-profili.md` (template a 14 sezioni), scritto
   nello sprint C5 e aggiunto a `INDICE.md`.
@@ -1026,8 +1236,8 @@ e D25-18 il 2026-11-08). Restano qui come registro. Aperta: **D25-19**
   volta sulla CPU con il turno del 14 (`cpu_turn`/`network_wait`), lasciato
   durante le attese di rete (regola 10, motivo verificato nei test).
 
-- **D25-19 — Scelte minori dello sprint C5 (motore) — da confermare
-  (proprietario).** Scritte in §3.14: (1) se l'Identità non è richiesta, la
+- **D25-19 — Scelte minori dello sprint C5 (motore) — DECISA (proprietario,
+  2026-11-08): confermate tutte.** Scritte in §3.14: (1) se l'Identità non è richiesta, la
   verifica dell'ospite per `gaia_dr3_id` entra nel profilo solo se finita
   quando arriva l'ultima sezione (il profilo non aspetta Gaia per lei);
   (2) con un ospite diverso i Pianeti restano quelli dell'esito per
@@ -1035,10 +1245,45 @@ e D25-18 il 2026-11-08). Restano qui come registro. Aperta: **D25-19**
   nell'avviso; (3) un ospite trovato per `hostname` e nessuna riga per
   `gaia_dr3_id` non dà avviso (è l'esito della catena normale).
 
+- **D25-20 — Scelte minori dello sprint C6 (esportazione, SED come
+  catalogo, SAMP) — da confermare (proprietario).** Scritte in §3.15.
+  Raccomandazioni di Claude Code:
+  (1) **PDF con matplotlib** (`PdfPages`) invece di `QPdfWriter` di Qt: il
+  25 resta di livello 2 senza dipendere dall'interfaccia, il grafico è lo
+  stesso del 20, si prova senza finestra; alternativa: `QPdfWriter` nel 43;
+  (2) **i file si costruiscono dai risultati registrati** dei comandi
+  `object.profile` indicati da `commands` (numeri `#n`, sezioni riprovate
+  al posto di quelle del base), mai rifacendo le richieste; per questo
+  `object.export` e `object.send_sed` sono comandi `application` eseguiti
+  dall'interfaccia (che ha la cronologia), rieseguibili con Riesegui ma non
+  alla riapertura di una sessione (come `view.export_png`); alternativa:
+  comandi `session` che rifanno il profilo dalla cache;
+  (3) **colonne dell'ECSV** come §3.15 punto 1: `value` numerico (vuoto per
+  testi e interi non esatti in `float64`) più `value_text` esatto; banda e
+  sistema dai punti della SED; una riga per riga della serie VizieR;
+  (4) **«Carica i punti SED come catalogo» = `object.export`
+  (`sed_votable`) in `~/Library/Application Support/AstroTwo/Profiles/` +
+  `catalog.open_file`** del 05 (stesso schema dei VOTable ricevuti con
+  SAMP): il livello è riaperto con la sessione dal file con SHA-256; righe
+  con la posizione del bersaglio risolto (uguale per tutte, dichiarata) per
+  vedere il livello nel cielo;
+  (5) **«Invia con SAMP» = nuovo comando `object.send_sed`** (non un livello
+  creato e poi mandato con `samp.send_table`): niente livello non chiesto;
+  stesse regole del 14 (callAndWait, 60 s); destinatari dal sottomenu come
+  le altre voci SAMP;
+  (6) **PDF**: una pagina per sezione più «Fonti e crediti», fonti in nota a
+  ogni pagina, tabelle troncate con rimando all'ECSV (identificativi: 8 per
+  gruppo, 30 gruppi), intestazioni in inglese o italiano secondo la lingua
+  dell'app (parametro `language` del comando);
+  (7) **nessuna data di esportazione nei file** (ECSV, PDF, PNG): Riesegui
+  riscrive lo stesso file byte per byte; la data è nel risultato del
+  comando.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6 (decisioni del proprietario del 2026-11-08, autorizzazione D25-12):** D25-19 confermata; `43-ui-profili.md` approvato (D43-9 decisa: limiti superiori come frecce ovunque, D20-9 (3) cambiata nel 20). Nuovo §3.15 (esportazione dai risultati registrati: comando `object.export` con ECSV dei valori con provenienza, PDF della scheda, PNG della SED e VOTable dei punti; «Carica i punti SED come catalogo» = `object.export` `sed_votable` + `catalog.open_file`; «Invia con SAMP» = comando `object.send_sed` con `table.load.votable`, callAndWait, 60 s); §3.7, §6, §7.1, §8 (PDF con matplotlib), §10 (`PROFILE_EXPORT_INVALID`, `PROFILE_EXPORT_FAILED`), §12 (T15 precisato, nuovi T26–T28); nuova D25-20 (scelte minori di C6, da confermare). |
 | 2026-11-08 | Claude Code | **Sprint C5, interfaccia (istruzione del proprietario del 2026-11-08):** `build_profile` con `on_resolved`; `object.profile` manda nell'avanzamento (`ProgressReport.detail` del 05) l'evento `resolved` (passo 0) e ogni sezione arrivata (evento `section`, stessa forma JSON del risultato) per la finestra Profili (`43` §3.5); test T29 del 05 aggiornati. |
 | 2026-11-08 | Claude Code | **Sprint C5 (decisioni del proprietario del 2026-11-08, autorizzazione D25-12):** D25-16 decisa (confermata tutta, (1)–(9)); D25-17 decisa ((1)–(9) confermati, (10) deciso: Pianeti subito per `hostname` senza attendere Gaia, avviso se poi `gaia_dr3_id` dà un risultato diverso); D25-7 ribadita (interfaccia in `43-ui-profili.md`, creato in bozza lo stesso giorno). Nuovo §3.14 (`exoplanet_host_early`, `check_exoplanet_host`, avviso `PROFILE_PLANET_HOST_MISMATCH` con ragioni `different` e `only_gaia`); §3.9 rimanda al `43`; §10 e §12 (T25); nuova D25-19 (scelte minori del motore in C5, da confermare). Codice e test in `object_profile.py` e `tests/analysis/test_object_profile_images_planets.py` (T25). |
 | 2026-11-08 | Claude Code | **Sprint C4, chiusura:** D25-18 decisa dal proprietario (miniature subito sui mirror verificati se il CDS risulta già giù nella sessione, avviso `HIPS_MIRROR_FALLBACK` `cds_down`; §3.13, §13); D25-17 (10) aggiunto (Pianeti con Gaia giù); test T8, T9, T16, T24 in `tests/analysis/test_object_profile_images_planets.py`. |

@@ -422,6 +422,8 @@ le scelte minori di §13; tutti versione 1):
 | `catalog.cone_search` (`service`, `url`, `center`, `radius`, `max_rows`, `force_body`) — nuovo, 2026-11-06 (sprint B3) | 14 `cone_search` (voce SCS dell'elenco dei server o URL; tabella letta da `read_table` del 13); 19 `check_overlay` | session | rete, lungo, `confirm`; nuovo livello catalogo; dettagli sotto |
 | `catalog.tap_query` (`service`, `url`, `adql`, `max_rows`, `mode`, `async_timeout`, `force_body`) — nuovo, 2026-11-06 (sprint B3) | 14 `validate_adql`, `tap_query` (sincrona o asincrona; tabella letta da `read_table` del 13); 19 `check_overlay` | session | rete, lungo, `confirm`; nuovo livello catalogo; **non esposto all'IA** (`33` rimandato); dettagli sotto |
 | `object.profile` (`name`, `position`, `layer`, `row`, `simbad_id`, `sections`, `match_radius`, `crossmatch_radius`) — nuovo, 2026-11-07 (sprint C2, **comando del livello 2**, definito ed eseguito nel `25`) | 25 `resolve_target`, `build_profile` (che usano 14 `simbad_object`/`tap_query`, 10 `resolve_name`/`propagate_position`) | session | rete, lungo, `confirm`, sola lettura (nessun livello creato); `simbad_id` scritto nel comando registrato; dettagli sotto |
+| `object.export` (`commands`, `format`, `path`, `language`) — nuovo, 2026-11-08 (sprint C6, **comando del livello 2**, definito nel `25` §3.15) | 25 `merge_profile_results`, `export_profile` (14 `export_table` per il VOTable dei punti, 20 `sed_rows_png`) | application | eseguito dal `43` (`bound_by`, legge la cronologia); scrive ECSV, PDF, PNG della SED o VOTable dei punti dai risultati registrati dei comandi `object.profile` indicati; nessuna rete, nessun livello; rieseguibile con Riesegui, non alla riapertura; non esposto all'IA |
+| `object.send_sed` (`commands`, `recipient`) — nuovo, 2026-11-08 (sprint C6, livello 2, definito nel `25` §3.15) | 25 `merge_profile_results`, `sed_catalog_table`; 14 `SampHub.send_table` (`table.load.votable`, 60 s) | application | eseguito dal `40` (collegamento SAMP); risultato come `samp.send_table` (`table_id`, `url`, `rows`, `recipients`, `rejected`) |
 | `vo.add_server` (`name`, `protocol`, `url`) — nuovo, 2026-11-06 (sprint B3) | 14 `ServerRegistry.add_personal` | application | eseguito dal 05 sull'elenco del registro; elenco salvato nelle preferenze dal `40`; dettagli sotto |
 | `vo.remove_server` (`server`) — nuovo, 2026-11-06 (sprint B3) | 14 `ServerRegistry.remove_personal` | application | idem |
 | `samp.connect` — nuovo, 2026-11-05 (sprint B1) | 14 `SampHub.connect` (hub attivo, altrimenti hub proprio con profilo web spento), `clients` | application | esecutore del `40` (§3.12); risultato `hub` (`external` o `own`), `web_profile` (`false`), `clients` (identificativo e nome); già collegato: stesso risultato, nessun nuovo collegamento |
@@ -450,8 +452,9 @@ ed errori per sezione, 25 §3.10); `provenance` = una voce per richiesta di
 rete; impronta di rete per sezione; avvisi del profilo nel risultato. Un errore
 di una sezione non fa fallire il comando (regola c del 25); un bersaglio non
 risolvibile sì (`NAME_NOT_FOUND`, `PROFILE_AMBIGUOUS_TARGET`,
-`PROFILE_TARGET_INVALID`). Non esposto all'IA in C2 (strumento
-`object__profile` nello sprint C6, `32`). **Dallo sprint C4** (25 §3.12): le
+`PROFILE_TARGET_INVALID`). Non esposto all'IA (strumento
+`object__profile` previsto dal `25` §11, non ancora nel `32`: non nel brief
+dello sprint C6). **Dallo sprint C4** (25 §3.12): le
 sezioni girano in parallelo; avanzamento «passo k di n» con una sezione per
 passo (`ProgressReport` con testo `object_profile/<sezione>`); con
 l'annullamento (Annulla della barra di stato, `CancelToken`) le sezioni già
@@ -1096,6 +1099,7 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-08 | Claude Code | **Sprint C6 (autorizzazione D25-12, brief del proprietario del 2026-11-08):** §7 con i comandi del livello 2 **`object.export`** (classe `application`, eseguito dal `43`, file dai risultati registrati di `object.profile`) e **`object.send_sed`** (classe `application`, eseguito dal `40`, `table.load.votable`), definiti nel `25` §3.15; nessuna modifica al codice del 05. Il file resta `approvato`. |
 | 2026-11-08 | Claude Code | **Sprint C5 (autorizzazione D25-12, istruzione del proprietario del 2026-11-08):** `ProgressReport` riceve il campo facoltativo **`detail`** (valore JSON, `None` per gli altri comandi, ignorato dalla barra di stato) per i dati parziali di `object.profile` (eventi `resolved` e `section`, `43` §3.5). Il file resta `approvato`. |
 | 2026-11-07 | Claude Code | **Sprint C4 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** §3.2 annullamento con risultato parziale per i comandi di sola lettura (`Outcome.cancelled`, `COMMAND_CANCELLED` `partial`, stato invariato, non rieseguito); §7 `object.profile` con sezioni in parallelo, avanzamento per sezione e Annulla (25 §3.12); §10 e §10.1 ragione `partial`; nuovo T29. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** `object.profile` con la sezione `photometry` (25 §3.11) nell'elenco `sections`, senza cambiare versione (D25-13 (5), confermata). |
