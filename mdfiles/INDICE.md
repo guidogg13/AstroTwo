@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-08 — **sprint C7: tempi del profilo.** D25-20 e D32-4 confermate; `25` §3.16 (diagnosi, correzioni, misure), T29, D25-21 nuova; `32` §13; difetto di `cds_down_in_session` del `12` corretto nel codice. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
+**Ultimo aggiornamento:** 2026-11-09 — **sprint C8: tempi del profilo, D25-21 approvata e applicata.** `25` §3.17 (Cone Search di IRSA, `refresh` una volta per profilo, VizieR saltata con il CDS giù, tempo di sezione dalla partenza, 2 richieste per servizio), T30–T34, D25-22 nuova; `14` §3/§7 e `12` §7 aggiornati (modifiche limitate, annotate nei registri). Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
+
+Prima, 2026-11-08 — **sprint C7: tempi del profilo.** D25-20 e D32-4 confermate; `25` §3.16 (diagnosi, correzioni, misure), T29, D25-21 nuova; `32` §13; difetto di `cds_down_in_session` del `12` corretto nel codice. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
 
 Prima, 2026-11-08 — **sprint C6b: strumento `object__profile` (25 strumenti IA), scheda dei profili chiesti dall'assistente, test dell'esportazione e di rete.** `32` §3.1, §3.2, §3.7bis (riassunto per il modello), D32-4 nuova; `25` §11; `34` T15; `43` §3.11. Nessun cambio di stato.
 

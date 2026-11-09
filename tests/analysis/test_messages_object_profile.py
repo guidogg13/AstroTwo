@@ -22,7 +22,7 @@ from astrotwo.analysis.object_profile import ObjectProfileError, ProfileTarget, 
 from astrotwo.core.commands import Command, RequestedBy, Workspace, default_registry, sky_json
 from astrotwo.core.coordinates_wcs import ResolvedName, SkyFrame
 from astrotwo.core.vo_protocols import VoProtocolsError, simbad_object
-from tests.analysis.profile_fakes import services, votable  # noqa: F401
+from tests.analysis.profile_fakes import SCS_51PEG_2MASS, irsa_empty, services, votable  # noqa: F401
 from tests.message_helpers import catalog_combinations, check_error, check_message
 
 OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_IDENTIFIERS", "PROFILE_POSITIONAL_MATCH",
@@ -30,7 +30,7 @@ OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_I
              "PROFILE_NO_DISTANCE", "PROFILE_TARGET_CHANGED", "PROFILE_PLANETS_EXCLUDED", "PROFILE_NO_PHOTOMETRY",
              "PROFILE_SECTION_TIMEOUT", "PROFILE_PLANETS_COMPOSITE", "PROFILE_PLANET_HOST_MISMATCH",
              "SED_NO_ZERO_POINT", "SED_NO_SYSTEM", "SED_NO_ERROR", "SED_LOW_QUALITY", "SED_UPPER_LIMIT", "SED_DUPLICATE",
-             "SED_HIGH_PROPER_MOTION")
+             "SED_HIGH_PROPER_MOTION", "PROFILE_VIZIER_SKIPPED")
 FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects")}
 VEGA = (279.234734787025, 38.783688956244)
 PEG = (344.36658535524, 20.768832511140005)
@@ -130,9 +130,12 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
         seen.profile(prof)
         seen.sed(op.build_sed(op.sed_points_from(prof.resolved.simbad.magnitudes, "simbad", provenance={})))
         seen.points(prof)
+    # PROFILE_VIZIER_SKIPPED cds_down: miniature col MocServer giù (prova della sessione), poi la fotometria non chiede
+    # VizieR (nessuna copia in cache: 25 §3.17 punto 3)
+    seen.profile(build(ProfileTarget(name="51 Peg"), sections=("images",), cache=cache))
+    seen.profile(build(ProfileTarget(name="TRAPPIST-1"), sections=("photometry",), cache=cache))
     # PROFILE_NO_PHOTOMETRY: identificativo 2MASS senza righe nel catalogo (risposta sintetica vuota)
-    services.overrides[("irsa", "designation = '22572795+2046077'")] = lambda q: votable(
-        [("designation", "char", None)], [])
+    services.overrides[("irsa", SCS_51PEG_2MASS)] = lambda q: irsa_empty("2mass")
     seen.profile(build(ProfileTarget(name="51 Peg"), sections=("photometry",), cache=cache, refresh=True))
     services.overrides.clear()
     # PROFILE_POSITIONAL_MATCH simbad_candidate; PROFILE_NO_GAIA no_counterpart (Vega)
@@ -193,7 +196,7 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
             [("source_id", "long", None), ("original_ext_source_id", "char", None),
              ("angular_distance", "double", "arcsec"), ("number_of_neighbours", "int", None),
              ("xm_flag", "short", None)], [])
-        services.overrides[("irsa", "")] = lambda q: votable([("designation", "char", None)], [])
+        services.overrides[("irsa", "")] = lambda q: irsa_empty("allwise" if "allwise" in q else "2mass")
         services.overrides[("exoplanet", "gaia_dr3_id = 'Gaia DR3 42'")] = lambda q: votable(
             HOSTS, [["Altro ospite", "Gaia DR3 42"]])
         services.overrides[("exoplanet", "hostname IN")] = lambda q, rows=by_name: votable(HOSTS, rows)

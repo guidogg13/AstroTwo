@@ -689,6 +689,13 @@ server** e passa al successivo quando quello in uso non risponde.
   dai mirror verificati, con `HIPS_MIRROR_FALLBACK` ragione **`cds_down`**
   (`hips_id`, `mirror`, `evidence`). Il cielo del `41` non cambia
   comportamento. `reset_cds_state()` dimentica la prova (nuova sessione, test).
+  **Dal 2026-11-09 (D25-21 (2) del `25`, decisione del proprietario):** la
+  scorciatoia vale anche con `refresh=True`, ma solo con una prova raccolta
+  nel «giro con dati aggiornati» in corso (`refresh_once()` del 14: il
+  profilo); la prova si legge con **`cds_down_evidence(*, refresh=False)`**
+  (senza `refresh` = `cds_down_in_session()`; con `refresh` = la prova del
+  giro, `None` fuori da un giro). Ogni prova del 12 (`mocserver`,
+  `hips_failover`) si registra anche nel giro in corso.
 - **Attesa dei tile e turno della CPU** (sprint C4): lo scaricamento di un
   tile (`_download_tile`) avviene dentro `network_wait()` del 14, così chi
   chiama da più thread con `cpu_turn` (profilo del `25`) lascia il turno
@@ -1097,3 +1104,4 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | 2026-10-31 | Claude Code | **Correzione dello sprint 10b (richiesta del proprietario, test di rete: IRSA ha risposto HTTP 504 al `properties`):** `read_service` trasformava ogni `SERVICE_ERROR` del 14, anche 5xx e 429, in `HIPS_NOT_A_SERVICE`; ora HTTP 5xx e 429 sul `properties` rilanciano `SERVICE_ERROR` (guasto del server, causa del ripiego, D12-9) e `HIPS_NOT_A_SERVICE` resta per le risposte 2xx non valide e per i 4xx diversi da 429 (P1, §3 "Ripiego sui mirror", §10); T19 con il `properties` del principale a 503. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C4 del `25` (autorizzazione D25-12, limitata agli sprint C2–C6):** nuova `hips_thumbnail` → `HiPSThumbnail` (§7: miniatura TAN fuori dalla vista con `make_view_wcs`, `view_sampling`, `fetch_tile` e `fill_view`, mirror compresi, crediti dichiarati dal survey, epoca da `t_min`/`t_max`, PNG con il nord in alto); scaricamento dei tile dentro `network_wait()` del 14; **`CDS/P/allWISE/color` in `MIRROR_FALLBACKS`** (ESASky e IRSA verificati il 2026-11-07 con richieste reali: elenchi ufficiali, `properties` uguali, stessi SHA-256 di due tile; principale non confrontabile, CDS giù). Nuovo T20. Stato `approvato` invariato. |
 | 2026-11-08 | Claude Code | **D25-18 del `25` (decisione del proprietario del 2026-11-08, autorizzazione D25-12):** prova di sessione «CDS giù» (`cds_down_in_session`, `reset_cds_state`) e opzione `cds_down_shortcut` di `add_hips` per le miniature (subito i mirror verificati, `HIPS_MIRROR_FALLBACK` `cds_down`); §7, parametri dei messaggi; test in `tests/core/test_hips_thumbnail.py` (anche T20). Stato `approvato` invariato. |
+| 2026-11-09 | Claude Code | **Sprint C8 del `25` (D25-21 (2)–(3) approvate dal proprietario il 2026-11-09; modifica del 12 limitata a quanto serve):** nuova `cds_down_evidence(refresh)`; scorciatoia `cds_down_shortcut` di `add_hips` anche con `refresh=True` con una prova raccolta nel giro con dati aggiornati del 14 (`refresh_once`); le prove `mocserver` e `hips_failover` si registrano anche nel giro. Il cielo del `41` non cambia. Stato `approvato` invariato. |

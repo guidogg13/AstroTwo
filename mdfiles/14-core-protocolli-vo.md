@@ -386,6 +386,14 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     SIMBAD (regione e magnitudini) e il catalogo `simbad` condividono lo
     stesso stato (servizio `simbad`). **`refresh=True` riparte dal
     principale** (e, se risponde, il servizio torna sul principale).
+    **Dentro un «giro con dati aggiornati»** (`refresh_once()`, D25-21 (2)
+    del `25`, decisione del proprietario del 2026-11-09: oggi solo il
+    profilo di un oggetto) riparte dal principale **solo la prima richiesta
+    di ogni servizio** del giro; le altre partono dal server in uso, sempre
+    senza cache. L'ambito ricorda anche la prova che il CDS è giù raccolta
+    nel giro (principale di Strasburgo caduto per una causa di cambio),
+    letta dal 12 e dal 25 (`refresh_scope_cds_down()`). Fuori da un ambito
+    nulla cambia.
   - **Cache (D14-15 (2), da confermare):** chiave di ogni risposta TAP =
     URL del server che ha risposto (come prima: nessuna chiave nuova).
     Senza `refresh` si cerca prima nella cache di **tutti** i server
@@ -620,6 +628,20 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   (coppie con `angDist`, `idx`, `idx2`, richiesta registrata).
 - **`vizier_photometry(center, radius, ...)`** (P6, H17) — misure di flusso
   dal servizio fotometrico di VizieR, con catalogo d'origine per ogni punto.
+- **`vizier_photometry_cached(center, radius, *, max_rows, limits, cache)`**
+  (D25-21 (3) del `25`, sprint C8) — la copia in cache della stessa
+  richiesta di `vizier_photometry` (stessi parametri, stessa chiave), letta
+  come `vizier_photometry` con `FROM_CACHE`; **nessuna richiesta di rete**;
+  `None` se la copia non c'è.
+- **`refresh_once()`** e **`refresh_scope_cds_down()`** (D25-21 (2) del
+  `25`, sprint C8) — ambito «giro con dati aggiornati» (gestore di contesto,
+  `contextvars`: vale nel thread che lo apre e nei lavori lanciati con una
+  copia del contesto): con `refresh=True`, per ogni servizio di
+  `SERVICE_MIRRORS` solo la prima richiesta del giro riparte dal principale
+  (§3). `refresh_scope_cds_down()` → la prima prova del CDS giù raccolta nel
+  giro (`{"evidence": "simbad_failover"}` quando il principale di SIMBAD
+  cade per una causa di cambio; il 12 vi aggiunge `mocserver` e
+  `hips_failover`), `None` senza prova o fuori da un ambito.
 - **Ripiego sui mirror (sprint B4, §3):** **`SERVICE_MIRRORS`** (voce
   dell'elenco dei server → servizio, nome e URL dei mirror verificati, in
   ordine: oggi `cds-simbad-tap` → `simbad`, "SIMBAD",
@@ -1118,6 +1140,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-09 | Claude Code | **Sprint C8 del `25` (D25-21 approvata dal proprietario il 2026-11-09; modifica del 14 limitata a quanto serve ai punti (2) e (3)):** §3 «Servizio in uso per la sessione» — dentro un giro con dati aggiornati (`refresh_once()`) riparte dal principale solo la prima richiesta di ogni servizio, con la prova del CDS giù raccolta nel giro; §7 nuove `vizier_photometry_cached`, `refresh_once`, `refresh_scope_cds_down`. D14-15 (1) invariata fuori dall'ambito. Il Cone Search di IRSA del profilo usa `cone_search` così com'è (URL scritto). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C4 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nuove `cpu_turn(lock)` e `network_wait()` (§7): turno della CPU per chi chiama da più thread, lasciato durante l'attesa delle richieste HTTP (`_Session`) e della TAP asincrona; motivo verificato: unità di Astropy non sicure tra thread (`'electron'.s**-1` di Gaia). Nuovo T29. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nota «Fotometria senza copia» aggiornata: `vizier_photometry` usata dalla sezione fotometria del profilo (25 §3.11); IRSA `nasa-irsa-tap` e `vizier_photometry` già esistenti; correzione: le magnitudini SIMBAD (`flux`, `flux_err`, colonne `float32`) tornano al decimale scritto da SIMBAD come le altre celle (es. 6,16 e non 6,159999847…), regola di `simbad_object` (sprint C2) estesa a `_simbad_magnitudes`. |
 | 2026-10-04 | agente di sviluppo | Creazione del file (stato: bozza). |

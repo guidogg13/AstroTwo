@@ -126,8 +126,11 @@ __all__ = [
     "SIMBAD_SERVERS",
     "current_server",
     "is_failover_error",
+    "refresh_once",
+    "refresh_scope_cds_down",
     "reset_mirror_state",
     "service_servers",
+    "vizier_photometry_cached",
     "VOTABLE_VERSION",
     "VoProtocolsError",
     "export_table",
@@ -1082,6 +1085,62 @@ def current_server(service: str) -> int:
         return _MIRROR_IN_USE.get(service, 0)
 
 
+class _RefreshScope:
+    """Un «giro con dati aggiornati» (25 §3.17 punto 2): servizi già ripartiti dal principale, prova del CDS giù."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.restarted: set[str] = set()
+        self.cds_down: dict | None = None
+
+
+_REFRESH_SCOPE: contextvars.ContextVar[_RefreshScope | None] = contextvars.ContextVar(
+    "astrotwo_refresh_scope", default=None)
+
+
+@contextmanager
+def refresh_once():
+    """Ambito «giro con dati aggiornati» (D25-21 (2) del 25): con ``refresh=True`` solo la prima richiesta di ogni
+    servizio con mirror riparte dal principale, le altre dal server in uso (sempre senza cache). Vale nel thread che
+    lo apre e nei lavori lanciati con una copia del contesto (``contextvars``)."""
+    token = _REFRESH_SCOPE.set(_RefreshScope())
+    try:
+        yield
+    finally:
+        _REFRESH_SCOPE.reset(token)
+
+
+def refresh_scope_cds_down() -> dict | None:
+    """Prima prova del CDS giù raccolta nel giro con dati aggiornati in corso; ``None`` senza prova o fuori."""
+    scope = _REFRESH_SCOPE.get()
+    if scope is None:
+        return None
+    with scope.lock:
+        return None if scope.cds_down is None else dict(scope.cds_down)
+
+
+def note_refresh_scope_cds_down(evidence: str, **detail) -> None:
+    """Registra (una volta) nel giro in corso la prova che il CDS è giù (14, e il 12 per MocServer e survey)."""
+    scope = _REFRESH_SCOPE.get()
+    if scope is None:
+        return
+    with scope.lock:
+        if scope.cds_down is None:
+            scope.cds_down = {"evidence": evidence, **detail}
+
+
+def _restart_from_primary(service: str) -> bool:
+    """Con ``refresh=True``: riparte dal principale? Sempre fuori da un giro; nel giro solo la prima volta."""
+    scope = _REFRESH_SCOPE.get()
+    if scope is None:
+        return True
+    with scope.lock:
+        if service in scope.restarted:
+            return False
+        scope.restarted.add(service)
+        return True
+
+
 def reset_mirror_state() -> None:
     """Riporta tutti i servizi sul principale e riemette l'avviso al prossimo cambio (test, nuova sessione)."""
     with _MIRROR_LOCK:
@@ -1158,7 +1217,7 @@ def _with_mirrors(entry: ServiceMirrors, servers: Sequence[str], attempt, cached
             hit = cached(server, None)
             if hit is not None:
                 return hit, ()
-    start = 0 if refresh else current_server(entry.service)
+    start = 0 if refresh and _restart_from_primary(entry.service) else current_server(entry.service)
     failures: list[tuple[str, BaseException]] = []
     for index in range(start, len(servers)):
         try:
@@ -1167,6 +1226,8 @@ def _with_mirrors(entry: ServiceMirrors, servers: Sequence[str], attempt, cached
             if not is_failover_error(exc):
                 raise
             failures.append((servers[index], exc))
+            if index == 0 and _in_strasbourg(servers[0]):  # prova del CDS giù per il giro in corso (25 §3.17)
+                note_refresh_scope_cds_down(f"{entry.service}_failover")
             continue
         notes: tuple = ()
         with _MIRROR_LOCK:
@@ -2389,6 +2450,24 @@ def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limit
     Ogni punto ha frequenza (``_sed_freq``), flusso ed errore (``_sed_flux``, ``_sed_eflux``), filtro,
     catalogo d'origine (``_tabname``) e, se presente, data (``_time``, con il ``TIMESYS`` del servizio).
     """
+    limits, params, arguments = _vizier_photometry_request(center, radius, max_rows, limits)
+    response = _http("vizier-photometry", VIZIER_PHOTOMETRY_URL, params, cache=cache, refresh=refresh,
+                     timeouts=timeouts, accept_error_body=True)
+    return _vizier_photometry_result(response, arguments, max_rows, limits, cache)
+
+
+def vizier_photometry_cached(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limits: TableLimits | None = None,
+                             cache: SharedCache | None = None) -> VoResult | None:
+    """La copia in cache della stessa richiesta di ``vizier_photometry`` (con ``FROM_CACHE``), senza rete; ``None``
+    se non c'è (D25-21 (3) del 25: serie VizieR con il CDS già giù)."""
+    limits, params, arguments = _vizier_photometry_request(center, radius, max_rows, limits)
+    response = _cached_response("vizier-photometry", "GET", VIZIER_PHOTOMETRY_URL, params, cache)
+    if response is None:
+        return None
+    return _vizier_photometry_result(response, arguments, max_rows, limits, cache)
+
+
+def _vizier_photometry_request(center, radius, max_rows, limits):
     limits = _check_max_rows(max_rows, limits)
     ra, dec = _icrs_degrees(center)
     r = _radius_degrees(radius)
@@ -2396,11 +2475,13 @@ def vizier_photometry(center, radius, *, max_rows: int = DEFAULT_MAX_ROWS, limit
         raise ValueError(f"radius: il servizio fotometrico di VizieR accetta al massimo {_VIZIER_MAX_RADIUS} "
                          "(nessuna riduzione silenziosa)")
     params = {"-c": f"{ra:.8f} {dec:+.8f}", "-c.rs": f"{(r * u.deg).to_value(u.arcsec):.6g}"}
-    response = _http("vizier-photometry", VIZIER_PHOTOMETRY_URL, params, cache=cache, refresh=refresh,
-                     timeouts=timeouts, accept_error_body=True)
-    parsed = _parse_results(response, pyvo.dal.DALResults)
     arguments = {"center": {"ra_deg": ra, "dec_deg": dec, "frame": "icrs"}, "radius": {"value": r, "unit": "deg"},
                  "max_rows": max_rows}
+    return limits, params, arguments
+
+
+def _vizier_photometry_result(response, arguments, max_rows, limits, cache) -> VoResult:
+    parsed = _parse_results(response, pyvo.dal.DALResults)
     result = _finish("vizier-photometry", "vizier_photometry", arguments, response, parsed, max_rows=max_rows,
                      limits=limits, cache=cache)
     missing = [c for c in ("_sed_freq", "_sed_flux", "_tabname") if c not in result.table.colnames]

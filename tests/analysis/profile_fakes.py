@@ -12,8 +12,13 @@ Sprint C4: le miniature HiPS (``properties`` e tile di ESASky, ``hips|<host>/<pe
 2026-11-07 con il CDS giù) sotto ``/hips/<host>/<percorso>``; il MocServer (``/mocserver``) risponde HTTP 503 (CDS giù,
 come il 2026-11-07), quindi i survey si aprono dai mirror di ``MIRROR_FALLBACKS``, diretti qui al server locale.
 
-Un server HTTP locale (``FakeService``) risponde a ``/simbad/sync``, ``/gaia/sync``, ``/exoplanet/sync``, ``/irsa/sync``
-e ``/vizier/sed`` cercando
+Sprint C8 (D25-21 (1), 25 §3.17): 2MASS e AllWISE con il Cone Search di IRSA (``/irsa/SCS``); risposte vere
+registrate il 2026-11-09 per gli stessi centri e raggi delle risposte TAP del 2026-11-07 (``irsa-scs|<parametri>``
+nell'indice, parametri ordinati come ``DEC=…&RA=…&SR=…&table=…``); nelle richieste raccolte il servizio è ``irsa``
+e il testo è quella stringa di parametri.
+
+Un server HTTP locale (``FakeService``) risponde a ``/simbad/sync``, ``/gaia/sync``, ``/exoplanet/sync``, ``/irsa/sync``,
+``/irsa/SCS`` e ``/vizier/sed`` cercando
 la ``QUERY`` nell'indice; ``overrides`` sostituisce una risposta (servizio giù, risposta sintetica per un caso che i
 dati veri non hanno). Una interrogazione non registrata fa fallire il test con il testo della query.
 """
@@ -26,6 +31,7 @@ from pathlib import Path
 
 import pytest
 
+import astrotwo.analysis.object_profile as op
 import astrotwo.core.hips as hips
 import astrotwo.core.vo_protocols as vo
 from tests.conftest import FakeService
@@ -54,6 +60,22 @@ def recorded(service: str, query: str) -> bytes:
     return (DATA / INDEX[f"{service}|{query}"]["file"]).read_bytes()
 
 
+def scs_params(url: str) -> str:
+    """Parametri di una richiesta del Cone Search (URL della provenienza) come nell'indice: ``DEC=…&RA=…&SR=…&table=…``."""
+    import urllib.parse
+
+    return "&".join(f"{k}={v}" for k, v in sorted(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query)))
+
+
+def irsa_empty(catalog: str) -> str:
+    """Risposta vuota del Cone Search di IRSA con le colonne lette dal profilo (``_IRSA_COLUMNS``)."""
+    return votable([(c.strip(), "char", None) for c in op._IRSA_COLUMNS[catalog].split(",")], [])
+
+
+#: Cono di 2″ attorno alla designazione 2MASS di 51 Peg (``22572795+2046077``) nel Cone Search di IRSA.
+SCS_51PEG_2MASS = "RA=344.3664583333333&SR=0.0005555555555555556&table=fp_psc"
+
+
 def recorded_query(service: str, contains: str) -> str:
     """L'unica interrogazione registrata del servizio che contiene il testo dato."""
     found = [k.split("|", 1)[1] for k in INDEX if k.startswith(service + "|") and contains in k]
@@ -72,6 +94,7 @@ class RecordedServices:
         for service in SERVICES.values():
             self.fake.routes[f"/{service}/sync"] = self._route(service)
         self.fake.routes["/vizier/sed"] = self._route("vizier")
+        self.fake.routes["/irsa/SCS"] = self._route("irsa", "irsa-scs")
         self.fake.routes["/mocserver"] = self._mocserver
         self.fake.prefix_routes = {"/hips/": self._hips}
 
@@ -93,23 +116,25 @@ class RecordedServices:
         ctype = "text/plain" if path.endswith("properties") else "image/jpeg"
         return 200, ctype, (DATA / INDEX[key]["file"]).read_bytes()
 
-    def _route(self, service: str):
+    def _route(self, service: str, kind: str | None = None):
+        kind = kind or service
+
         def answer(request):
             params = request["params"]
-            query = (params.get("QUERY", "") if service != "vizier"
+            query = (params.get("QUERY", "") if kind not in ("vizier", "irsa-scs")
                      else "&".join(f"{k}={v}" for k, v in sorted(params.items())))
             self.queries.append((service, query))
             for (name, text), make in self.overrides.items():
                 if name == service and text in query:
                     out = make(query)
                     return out if isinstance(out, tuple) else (200, "application/x-votable+xml", out)
-            key = f"{service}|{query}"
+            key = f"{kind}|{query}"
             if service == "vizier" and key not in INDEX:
                 return 503, "text/plain", "CDS non raggiungibile (come il 2026-11-07)"
             if key not in INDEX:
                 self.missing.append((service, query))
                 return 400, "text/plain", f"query non registrata: {query}"
-            return 200, "application/x-votable+xml", recorded(service, query)
+            return 200, "application/x-votable+xml", recorded(kind, query)
         return answer
 
     def url(self, service: str) -> str:
@@ -131,6 +156,7 @@ def services(monkeypatch):
                     for e in vo.BUILTIN_SERVERS)
     monkeypatch.setattr(vo, "BUILTIN_SERVERS", entries)
     monkeypatch.setattr(vo, "VIZIER_PHOTOMETRY_URL", f"{fake.url('vizier')}/sed")
+    monkeypatch.setattr(op, "_IRSA_SCS", f"{fake.url('irsa')}/SCS")
     monkeypatch.setattr(vo, "MOCSERVER_URL", "http://127.0.0.1:9/mocserver")  # connessione rifiutata: CDS giù
     monkeypatch.setattr(hips, "MIRROR_FALLBACKS", {
         "CDS/P/DSS2/color": (f"{fake.fake.url}/hips/skies.esac.esa.int/DSSColor",),

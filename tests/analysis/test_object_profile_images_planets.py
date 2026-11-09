@@ -21,7 +21,7 @@ from PIL import Image
 import astrotwo.analysis.object_profile as op
 from astrotwo.analysis.object_profile import ProfileTarget, build_profile, parse_reflink
 from astrotwo.core.coordinates_wcs import propagate_position
-from tests.analysis.profile_fakes import services, votable  # noqa: F401
+from tests.analysis.profile_fakes import irsa_empty, services, votable  # noqa: F401
 
 AGOL = "2021PSJ.....2....1A"
 
@@ -120,8 +120,7 @@ def test_t25_host_found_only_by_the_later_gaia_dr3_id_is_declared(services, cach
         [("source_id", "long", None), ("original_ext_source_id", "char", None),
          ("angular_distance", "double", "arcsec"), ("number_of_neighbours", "int", None), ("xm_flag", "short", None)],
         [])
-    services.overrides[("irsa", "")] = lambda q: votable([("designation", "char", None), ("ra", "double", "deg"),
-                                                          ("dec", "double", "deg")], [])
+    services.overrides[("irsa", "")] = lambda q: irsa_empty("allwise" if "allwise" in q else "2mass")
     services.overrides[("exoplanet", "gaia_dr3_id = 'Gaia DR3 42'")] = lambda q: votable(
         HOSTS, [["Altro ospite", "Gaia DR3 42"]])
     prof = build_profile(ProfileTarget(name="Vega"), sections=("identity", "planets"), cache=cache)

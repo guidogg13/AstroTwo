@@ -158,3 +158,27 @@ def test_d25_18_profile_thumbnails_skip_the_mocserver_after_the_first_profile(se
     images = prof.sections[0]
     assert images.status == "done"
     assert {w.params["reason"] for w in images.warnings if w[0] == "HIPS_MIRROR_FALLBACK"} == {"cds_down"}
+
+
+# =============================================================================
+# D25-21 (2) del 25 (sprint C8): scorciatoia anche con refresh, solo con una prova raccolta nel giro
+
+
+def test_c8_cds_down_evidence_with_refresh_counts_only_the_current_scope(services, cache, monkeypatch):
+    calls = mocserver_calls(monkeypatch)
+    hips._note_cds_down("mocserver", hips_id="prima del giro")  # prova della sessione, non del giro
+    assert hips.cds_down_evidence() == hips.cds_down_in_session() == {"evidence": "mocserver",
+                                                                      "hips_id": "prima del giro"}
+    assert hips.cds_down_evidence(refresh=True) is None  # fuori da un giro: nessuna scorciatoia con refresh
+    with vo.refresh_once():
+        assert hips.cds_down_evidence(refresh=True) is None  # la prova della sessione non vale con refresh
+        open_survey("CDS/P/DSS2/color", cache, cds_down_shortcut=True, refresh=True)
+        assert len(calls) == 1  # MocServer riprovato una volta nel giro
+        assert hips.cds_down_evidence(refresh=True)["evidence"] == "mocserver"
+        second = open_survey("CDS/P/2MASS/color", cache, cds_down_shortcut=True, refresh=True)
+        assert len(calls) == 1  # poi subito i mirror, anche con refresh
+        note = next(w for w in second.warnings if w[0] == "HIPS_MIRROR_FALLBACK")
+        assert note.params["reason"] == "cds_down" and note.params["evidence"] == "mocserver"
+    open_survey("CDS/P/allWISE/color", cache, cds_down_shortcut=True, refresh=True)  # giro chiuso: si riprova
+    assert len(calls) == 2
+

@@ -1,0 +1,1267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VOTABLE version="1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:stc="http://www.ivoa.net/xml/STC/v1.30" xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/STC/v1.30 http://www.ivoa.net/xml/STC/v1.30">
+  <RESOURCE type="results">
+    <INFO name="QUERY_STATUS" value="OK"/>
+    <TABLE>
+      <GROUP ID="group_allwise_p3as_psd_flags" name="flags" ucd="meta.code" utype="">
+        <DESCRIPTION>Measurement quality and source reliability information</DESCRIPTION>
+        <FIELDref ref="col_55"/>
+        <FIELDref ref="col_56"/>
+        <FIELDref ref="col_57"/>
+        <FIELDref ref="col_58"/>
+        <FIELDref ref="col_59"/>
+        <FIELDref ref="col_60"/>
+        <FIELDref ref="col_61"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_phot_w1" name="phot_w1" ucd="phot;em.IR.3-4um" utype="">
+        <DESCRIPTION>Instrumental photometry parameters, band W1</DESCRIPTION>
+        <FIELDref ref="col_16"/>
+        <FIELDref ref="col_17"/>
+        <FIELDref ref="col_18"/>
+        <FIELDref ref="col_19"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_phot_w2" name="phot_w2" ucd="phot;em.IR.4-8um" utype="">
+        <DESCRIPTION>Instrumental photometry parameters, band W2</DESCRIPTION>
+        <FIELDref ref="col_20"/>
+        <FIELDref ref="col_21"/>
+        <FIELDref ref="col_22"/>
+        <FIELDref ref="col_23"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_phot_w3" name="phot_w3" ucd="phot;em.IR.8-15um" utype="">
+        <DESCRIPTION>Instrumental photometry parameters, band W3</DESCRIPTION>
+        <FIELDref ref="col_24"/>
+        <FIELDref ref="col_25"/>
+        <FIELDref ref="col_26"/>
+        <FIELDref ref="col_27"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_phot_w4" name="phot_w4" ucd="phot;em.IR.15-30um" utype="">
+        <DESCRIPTION>Instrumental photometry parameters, band W4</DESCRIPTION>
+        <FIELDref ref="col_28"/>
+        <FIELDref ref="col_29"/>
+        <FIELDref ref="col_30"/>
+        <FIELDref ref="col_31"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_pm" name="pm" ucd="pos.pm" utype="">
+        <DESCRIPTION>Source proper motion</DESCRIPTION>
+        <FIELDref ref="col_45"/>
+        <FIELDref ref="col_46"/>
+        <FIELDref ref="col_47"/>
+        <FIELDref ref="col_48"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_pos" name="pos" ucd="pos.eq" utype="">
+        <DESCRIPTION>Position, determined using a profile-fitting measurement model that does not include motion</DESCRIPTION>
+        <FIELDref ref="col_1"/>
+        <FIELDref ref="col_2"/>
+        <FIELDref ref="col_3"/>
+        <FIELDref ref="col_4"/>
+        <FIELDref ref="col_5"/>
+      </GROUP>
+      <GROUP ID="group_allwise_p3as_psd_pos_pm" name="pos_pm" ucd="pos.eq" utype="">
+        <DESCRIPTION>Position, determined using a profile-fitting measurement model that includes motion</DESCRIPTION>
+        <FIELDref ref="col_40"/>
+        <FIELDref ref="col_41"/>
+        <FIELDref ref="col_42"/>
+        <FIELDref ref="col_43"/>
+        <FIELDref ref="col_44"/>
+      </GROUP>
+      <FIELD name="designation" datatype="char" arraysize="*" ID="col_0" ucd="meta.id;meta.main">
+        <DESCRIPTION>WISE source designation</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ra" datatype="double" ID="col_1" irsa_format="11.7f" precision="F7" ucd="pos.eq.ra;meta.main" unit="deg">
+        <DESCRIPTION>right ascension (J2000)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dec" datatype="double" ID="col_2" irsa_format="11.7f" precision="F7" ucd="pos.eq.dec;meta.main" unit="deg">
+        <DESCRIPTION>declination (J2000)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigra" datatype="double" ID="col_3" irsa_format="8.4f" precision="F4" ucd="pos.errorEllipse" unit="arcsec">
+        <DESCRIPTION>uncertainty in RA</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigdec" datatype="double" ID="col_4" irsa_format="8.4f" precision="F4" ucd="pos.errorEllipse" unit="arcsec">
+        <DESCRIPTION>uncertainty in DEC</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigradec" datatype="double" ID="col_5" irsa_format="9.4f" precision="F4" ucd="pos.errorEllipse" unit="arcsec">
+        <DESCRIPTION>cross-term of RA and Dec uncertainties</DESCRIPTION>
+      </FIELD>
+      <FIELD name="glon" datatype="double" ID="col_6" irsa_format="11.7f" precision="F7" ucd="pos.galactic.lon" unit="deg">
+        <DESCRIPTION>galactic longitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="glat" datatype="double" ID="col_7" irsa_format="11.7f" precision="F7" ucd="pos.galactic.lat" unit="deg">
+        <DESCRIPTION>galactic latitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="elon" datatype="double" ID="col_8" irsa_format="11.7f" precision="F7" ucd="pos.ecliptic.lon" unit="deg">
+        <DESCRIPTION>ecliptic longitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="elat" datatype="double" ID="col_9" irsa_format="11.7f" precision="F7" ucd="pos.ecliptic.lat" unit="deg">
+        <DESCRIPTION>ecliptic latitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="wx" datatype="double" ID="col_10" irsa_format="8.3f" precision="F3" ucd="pos.cartesian.x" unit="pix">
+        <DESCRIPTION>x-pixel coordinate, all bands</DESCRIPTION>
+      </FIELD>
+      <FIELD name="wy" datatype="double" ID="col_11" irsa_format="8.3f" precision="F3" ucd="pos.cartesian.y" unit="pix">
+        <DESCRIPTION>y-pixel coordinate, all bands</DESCRIPTION>
+      </FIELD>
+      <FIELD name="cntr" datatype="long" ID="col_12" ucd="meta.record">
+        <DESCRIPTION>unique entry counter (key) number</DESCRIPTION>
+      </FIELD>
+      <FIELD name="source_id" datatype="char" arraysize="*" ID="col_13" ucd="meta.id">
+        <DESCRIPTION>unique source ID (coadd ID and source number)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="coadd_id" datatype="char" arraysize="*" ID="col_14" ucd="meta.id.part">
+        <DESCRIPTION>coadd ID</DESCRIPTION>
+      </FIELD>
+      <FIELD name="src" datatype="long" ID="col_15" ucd="meta.id.part">
+        <DESCRIPTION>source number in coadd</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mpro" datatype="float" ID="col_16" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry magnitude, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigmpro" datatype="float" ID="col_17" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry flux uncertainty in mag units, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1snr" datatype="double" ID="col_18" irsa_format="8.1f" precision="F1" ucd="stat.snr">
+        <DESCRIPTION>instrumental profile-fit photometry S/N ratio, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1rchi2" datatype="float" ID="col_19" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>instrumental profile-fit photometry reduced chi^2, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mpro" datatype="float" ID="col_20" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry magnitude, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigmpro" datatype="float" ID="col_21" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry flux uncertainty in mag units, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2snr" datatype="double" ID="col_22" irsa_format="8.1f" precision="F1" ucd="stat.snr">
+        <DESCRIPTION>instrumental profile-fit photometry S/N ratio, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2rchi2" datatype="float" ID="col_23" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>instrumental profile-fit photometry reduced chi^2, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mpro" datatype="float" ID="col_24" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry magnitude, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigmpro" datatype="float" ID="col_25" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry flux uncertainty in mag units, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3snr" datatype="double" ID="col_26" irsa_format="8.1f" precision="F1" ucd="stat.snr">
+        <DESCRIPTION>instrumental profile-fit photometry S/N ratio, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3rchi2" datatype="float" ID="col_27" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>instrumental profile-fit photometry reduced chi^2, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mpro" datatype="float" ID="col_28" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry magnitude, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigmpro" datatype="float" ID="col_29" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental profile-fit photometry flux uncertainty in mag units, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4snr" datatype="double" ID="col_30" irsa_format="8.1f" precision="F1" ucd="stat.snr">
+        <DESCRIPTION>instrumental profile-fit photometry S/N ratio, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4rchi2" datatype="float" ID="col_31" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>instrumental profile-fit photometry reduced chi^2, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rchi2" datatype="float" ID="col_32" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>instrumental profile-fit photometry reduced chi squared, total</DESCRIPTION>
+      </FIELD>
+      <FIELD name="nb" datatype="long" ID="col_33" ucd="meta.number;stat.fit.param">
+        <DESCRIPTION>number of blend components used in each fit</DESCRIPTION>
+      </FIELD>
+      <FIELD name="na" datatype="long" ID="col_34" ucd="meta.code">
+        <DESCRIPTION>active deblend flag (=1 if actively deblended)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sat" datatype="float" ID="col_35" irsa_format="5.3f" precision="F3" ucd="stat.value">
+        <DESCRIPTION>fraction of pixels affected by saturation, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sat" datatype="float" ID="col_36" irsa_format="5.3f" precision="F3" ucd="stat.value">
+        <DESCRIPTION>fraction of pixels affected by saturation, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sat" datatype="float" ID="col_37" irsa_format="5.3f" precision="F3" ucd="stat.value">
+        <DESCRIPTION>fraction of pixels affected by saturation, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sat" datatype="float" ID="col_38" irsa_format="5.3f" precision="F3" ucd="stat.value">
+        <DESCRIPTION>fraction of pixels affected by saturation, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="satnum" datatype="char" arraysize="*" ID="col_39" ucd="instr.saturation">
+        <DESCRIPTION>minimum sample at which saturation occurs in frame stack, 1 char per band</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ra_pm" datatype="double" ID="col_40" irsa_format="11.7f" precision="F7" ucd="pos.eq.ra" unit="deg">
+        <DESCRIPTION>Right ascension at epoch MJD=55400.0 (2010.5589) from pff model incl. motion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dec_pm" datatype="double" ID="col_41" irsa_format="11.7f" precision="F7" ucd="pos.eq.dec" unit="deg">
+        <DESCRIPTION>Declination at epoch MJD=55400.0 (2010.5589) from pff model incl. motion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigra_pm" datatype="double" ID="col_42" irsa_format="8.4f" precision="F4" ucd="pos.errorEllipse" unit="arcsec">
+        <DESCRIPTION>One-sigma uncertainty in RA from pff model incl. motion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigdec_pm" datatype="double" ID="col_43" irsa_format="8.4f" precision="F4" ucd="pos.errorEllipse" unit="arcsec">
+        <DESCRIPTION>One-sigma uncertainty in DEC  from pff model incl. motion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigradec_pm" datatype="double" ID="col_44" irsa_format="9.4f" precision="F4" ucd="pos.errorEllipse" unit="arcsec">
+        <DESCRIPTION>The co-sigma of the equatorial position uncertainties from ppf model incl motion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="pmra" datatype="long" ID="col_45" ucd="pos.pm" unit="mas/yr">
+        <DESCRIPTION>Apparent motion in RA</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigpmra" datatype="long" ID="col_46" ucd="stat.error" unit="mas/yr">
+        <DESCRIPTION>Uncertainty in the RA motion estimate</DESCRIPTION>
+      </FIELD>
+      <FIELD name="pmdec" datatype="long" ID="col_47" ucd="pos.pm" unit="mas/yr">
+        <DESCRIPTION>Apparent motion in Dec</DESCRIPTION>
+      </FIELD>
+      <FIELD name="sigpmdec" datatype="long" ID="col_48" ucd="stat.error" unit="mas/yr">
+        <DESCRIPTION>Uncertainty in the Dec  motion estimate</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1rchi2_pm" datatype="float" ID="col_49" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>Reduced chi^2 of the W1 profile-fit photometry measurement including motion est</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2rchi2_pm" datatype="float" ID="col_50" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>Reduced chi^2 of the W2 profile-fit photometry measurement including motion est</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3rchi2_pm" datatype="float" ID="col_51" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>Reduced chi^2 of the W3 profile-fit photometry measurement including motion est</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4rchi2_pm" datatype="float" ID="col_52" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>Reduced chi^2 of the W4 profile-fit photometry measurement including motion est</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rchi2_pm" datatype="float" ID="col_53" irsa_format="9.3E" precision="E3" ucd="stat.fit.chi2">
+        <DESCRIPTION>Combined Reduced chi^2 in all bands for the pff photometry includes src motion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="pmcode" datatype="char" arraysize="*" ID="col_54" ucd="meta.code.qual">
+        <DESCRIPTION>Motion estimate quality code</DESCRIPTION>
+      </FIELD>
+      <FIELD name="cc_flags" datatype="char" arraysize="*" ID="col_55" ucd="meta.code">
+        <DESCRIPTION>prioritized artifacts affecting the source in each band</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rel" datatype="char" arraysize="*" ID="col_56" ucd="meta.code.multip">
+        <DESCRIPTION>Small separation multiple detection flag</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ext_flg" datatype="long" ID="col_57" ucd="stat.probability">
+        <DESCRIPTION>probability that source morphology is not consistent with single PSF</DESCRIPTION>
+      </FIELD>
+      <FIELD name="var_flg" datatype="char" arraysize="*" ID="col_58" ucd="stat.probabillity">
+        <DESCRIPTION>probability that flux varied in any band greater than amount expected from unc.s</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ph_qual" datatype="char" arraysize="*" ID="col_59" ucd="meta.code.qual">
+        <DESCRIPTION>photometric quality of each band (A=highest, U=upper limit)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="det_bit" datatype="long" ID="col_60" ucd="meta.code">
+        <DESCRIPTION>bit-encoded integer indicating detection for each band</DESCRIPTION>
+      </FIELD>
+      <FIELD name="moon_lev" datatype="char" arraysize="*" ID="col_61" ucd="stat.value">
+        <DESCRIPTION>level of moon contamination in coadd (ceiling(#frmmoon/#frames*10)), 1 per band</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1nm" datatype="long" ID="col_62" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source with SNR &gt;= 3, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1m" datatype="long" ID="col_63" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2nm" datatype="long" ID="col_64" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source with SNR &gt;= 3, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2m" datatype="long" ID="col_65" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3nm" datatype="long" ID="col_66" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source with SNR &gt;= 3, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3m" datatype="long" ID="col_67" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4nm" datatype="long" ID="col_68" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source with SNR &gt;= 3, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4m" datatype="long" ID="col_69" ucd="meta.number">
+        <DESCRIPTION>number of profile-fit flux measurements for source, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1cov" datatype="float" ID="col_70" irsa_format="7.3f" precision="F3" ucd="obs.exposure;time.duration">
+        <DESCRIPTION>mean coverage depth, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2cov" datatype="float" ID="col_71" irsa_format="7.3f" precision="F3" ucd="obs.exposure;time.duration">
+        <DESCRIPTION>mean coverage depth, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3cov" datatype="float" ID="col_72" irsa_format="7.3f" precision="F3" ucd="obs.exposure;time.duration">
+        <DESCRIPTION>mean coverage depth, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4cov" datatype="float" ID="col_73" irsa_format="7.3f" precision="F3" ucd="obs.exposure;time.duration">
+        <DESCRIPTION>mean coverage depth, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1cc_map" datatype="long" ID="col_74" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion bit array for the source in band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1cc_map_str" datatype="char" arraysize="*" ID="col_75" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion character array for the source in band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2cc_map" datatype="long" ID="col_76" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion bit array for the source in band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2cc_map_str" datatype="char" arraysize="*" ID="col_77" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion character array for the source in band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3cc_map" datatype="long" ID="col_78" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion bit array for the source in band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3cc_map_str" datatype="char" arraysize="*" ID="col_79" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion character array for the source in band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4cc_map" datatype="long" ID="col_80" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion bit array for the source in band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4cc_map_str" datatype="char" arraysize="*" ID="col_81" ucd="meta.code.qual">
+        <DESCRIPTION>contamination and confusion character array for the source in band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="best_use_cntr" datatype="long" ID="col_82" ucd="meta.record;meta.id.assoc">
+        <DESCRIPTION>&apos;cntr&apos; of source to use from &apos;best&apos; duplicate resolution group for this source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ngrp" datatype="int" ID="col_83" ucd="meta.number">
+        <DESCRIPTION>number of additional duplicate resolution groups in which this source resides</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flux" datatype="float" ID="col_84" irsa_format="11.4E" precision="E4" ucd="phot.count" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigflux" datatype="float" ID="col_85" irsa_format="11.4E" precision="E4" ucd="stat.error" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sky" datatype="double" ID="col_86" irsa_format="9.3f" precision="F3" ucd="instr.skyLevel" unit="count">
+        <DESCRIPTION>sky background value, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigsk" datatype="float" ID="col_87" irsa_format="7.3f" precision="F3" ucd="stat.error" unit="count">
+        <DESCRIPTION>sky background value uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1conf" datatype="double" ID="col_88" irsa_format="9.3f" precision="F3" ucd="stat.value" unit="count">
+        <DESCRIPTION>sky confusion based on the uncertainty images, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flux" datatype="float" ID="col_89" irsa_format="11.4E" precision="E4" ucd="phot.count" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigflux" datatype="float" ID="col_90" irsa_format="11.4E" precision="E4" ucd="stat.error" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sky" datatype="double" ID="col_91" irsa_format="9.3f" precision="F3" ucd="instr.skyLevel" unit="count">
+        <DESCRIPTION>sky background value, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigsk" datatype="float" ID="col_92" irsa_format="7.3f" precision="F3" ucd="stat.error" unit="count">
+        <DESCRIPTION>sky background value uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2conf" datatype="double" ID="col_93" irsa_format="9.3f" precision="F3" ucd="stat.value" unit="count">
+        <DESCRIPTION>sky confusion based on the uncertainty images, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flux" datatype="float" ID="col_94" irsa_format="11.4E" precision="E4" ucd="phot.count" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigflux" datatype="float" ID="col_95" irsa_format="11.4E" precision="E4" ucd="stat.error" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sky" datatype="double" ID="col_96" irsa_format="9.3f" precision="F3" ucd="instr.skyLevel" unit="count">
+        <DESCRIPTION>sky background value, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigsk" datatype="float" ID="col_97" irsa_format="7.3f" precision="F3" unit="count">
+        <DESCRIPTION>sky background value uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3conf" datatype="double" ID="col_98" irsa_format="9.3f" precision="F3" unit="count">
+        <DESCRIPTION>sky confusion based on the uncertainty images, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flux" datatype="float" ID="col_99" irsa_format="11.4E" precision="E4" ucd="phot.count" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigflux" datatype="float" ID="col_100" irsa_format="11.4E" precision="E4" ucd="stat.error" unit="count">
+        <DESCRIPTION>profile-fit photometry raw flux uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sky" datatype="double" ID="col_101" irsa_format="9.3f" precision="F3" ucd="instr.skyLevel" unit="count">
+        <DESCRIPTION>sky background value, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigsk" datatype="float" ID="col_102" irsa_format="7.3f" precision="F3" ucd="stat.error" unit="count">
+        <DESCRIPTION>sky background value uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4conf" datatype="double" ID="col_103" irsa_format="9.3f" precision="F3" ucd="stat.value" unit="count">
+        <DESCRIPTION>sky confusion based on the uncertainty images, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag" datatype="float" ID="col_104" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag w/ aperture correction applied, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm" datatype="float" ID="col_105" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg" datatype="long" ID="col_106" ucd="meta.code">
+        <DESCRIPTION>instrumental standard aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mcor" datatype="float" ID="col_107" irsa_format="6.3f" precision="F3" ucd="stat.value" unit="mag">
+        <DESCRIPTION>instrumental aperture correction, band 1, standard aperture</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag" datatype="float" ID="col_108" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag w/ aperture correction applied, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm" datatype="float" ID="col_109" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg" datatype="long" ID="col_110" ucd="meta.code">
+        <DESCRIPTION>instrumental standard aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mcor" datatype="float" ID="col_111" irsa_format="6.3f" precision="F3" ucd="stat.value" unit="mag">
+        <DESCRIPTION>instrumental aperture correction, band 2, standard aperture</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag" datatype="float" ID="col_112" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag w/ aperture correction applied, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm" datatype="float" ID="col_113" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg" datatype="long" ID="col_114" ucd="meta.code">
+        <DESCRIPTION>instrumental standard aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mcor" datatype="float" ID="col_115" irsa_format="6.3f" precision="F3" ucd="stat.value" unit="mag">
+        <DESCRIPTION>instrumental aperture correction, band 3, standard aperture</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag" datatype="float" ID="col_116" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag w/ aperture correction applied, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm" datatype="float" ID="col_117" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>instrumental standard aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg" datatype="long" ID="col_118" ucd="meta.code">
+        <DESCRIPTION>instrumental standard aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mcor" datatype="float" ID="col_119" irsa_format="6.3f" precision="F3" ucd="stat.value" unit="mag">
+        <DESCRIPTION>instrumental aperture correction, band 4, standard aperture</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_1" datatype="float" ID="col_120" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_1" datatype="float" ID="col_121" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_1" datatype="long" ID="col_122" ucd="meta.code">
+        <DESCRIPTION>aperture 1 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_1" datatype="float" ID="col_123" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_1" datatype="float" ID="col_124" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_1" datatype="long" ID="col_125" ucd="meta.code">
+        <DESCRIPTION>aperture 1 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_1" datatype="float" ID="col_126" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_1" datatype="float" ID="col_127" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_1" datatype="long" ID="col_128" ucd="meta.code">
+        <DESCRIPTION>aperture 1 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_1" datatype="float" ID="col_129" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_1" datatype="float" ID="col_130" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 1 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_1" datatype="long" ID="col_131" ucd="meta.code">
+        <DESCRIPTION>aperture 1 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_2" datatype="float" ID="col_132" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_2" datatype="float" ID="col_133" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_2" datatype="long" ID="col_134" ucd="meta.code">
+        <DESCRIPTION>aperture 2 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_2" datatype="float" ID="col_135" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_2" datatype="float" ID="col_136" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_2" datatype="long" ID="col_137" ucd="meta.code">
+        <DESCRIPTION>aperture 2 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_2" datatype="float" ID="col_138" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_2" datatype="float" ID="col_139" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_2" datatype="long" ID="col_140" ucd="meta.code">
+        <DESCRIPTION>aperture 2 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_2" datatype="float" ID="col_141" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_2" datatype="float" ID="col_142" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 2 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_2" datatype="long" ID="col_143" ucd="meta.code">
+        <DESCRIPTION>aperture 2 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_3" datatype="float" ID="col_144" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_3" datatype="float" ID="col_145" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_3" datatype="long" ID="col_146" ucd="meta.code">
+        <DESCRIPTION>aperture 3 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_3" datatype="float" ID="col_147" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_3" datatype="float" ID="col_148" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_3" datatype="long" ID="col_149" ucd="meta.code">
+        <DESCRIPTION>aperture 3 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_3" datatype="float" ID="col_150" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_3" datatype="float" ID="col_151" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_3" datatype="long" ID="col_152" ucd="meta.code">
+        <DESCRIPTION>aperture 3 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_3" datatype="float" ID="col_153" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_3" datatype="float" ID="col_154" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 3 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_3" datatype="long" ID="col_155" ucd="meta.code">
+        <DESCRIPTION>aperture 3 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_4" datatype="float" ID="col_156" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_4" datatype="float" ID="col_157" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_4" datatype="long" ID="col_158" ucd="meta.code">
+        <DESCRIPTION>aperture 4 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_4" datatype="float" ID="col_159" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_4" datatype="float" ID="col_160" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_4" datatype="long" ID="col_161" ucd="meta.code">
+        <DESCRIPTION>aperture 4 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_4" datatype="float" ID="col_162" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_4" datatype="float" ID="col_163" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_4" datatype="long" ID="col_164" ucd="meta.code">
+        <DESCRIPTION>aperture 4 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_4" datatype="float" ID="col_165" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_4" datatype="float" ID="col_166" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 4 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_4" datatype="long" ID="col_167" ucd="meta.code">
+        <DESCRIPTION>aperture 4 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_5" datatype="float" ID="col_168" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_5" datatype="float" ID="col_169" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_5" datatype="long" ID="col_170" ucd="meta.code">
+        <DESCRIPTION>aperture 5 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_5" datatype="float" ID="col_171" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_5" datatype="float" ID="col_172" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_5" datatype="long" ID="col_173" ucd="meta.code">
+        <DESCRIPTION>aperture 5 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_5" datatype="float" ID="col_174" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_5" datatype="float" ID="col_175" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_5" datatype="long" ID="col_176" ucd="meta.code">
+        <DESCRIPTION>aperture 5 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_5" datatype="float" ID="col_177" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_5" datatype="float" ID="col_178" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 5 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_5" datatype="long" ID="col_179" ucd="meta.code">
+        <DESCRIPTION>aperture 5 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_6" datatype="float" ID="col_180" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_6" datatype="float" ID="col_181" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_6" datatype="long" ID="col_182" ucd="meta.code">
+        <DESCRIPTION>aperture 6 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_6" datatype="float" ID="col_183" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_6" datatype="float" ID="col_184" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_6" datatype="long" ID="col_185" ucd="meta.code">
+        <DESCRIPTION>aperture 6 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_6" datatype="float" ID="col_186" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_6" datatype="float" ID="col_187" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_6" datatype="long" ID="col_188" ucd="meta.code">
+        <DESCRIPTION>aperture 6 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_6" datatype="float" ID="col_189" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_6" datatype="float" ID="col_190" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 6 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_6" datatype="long" ID="col_191" ucd="meta.code">
+        <DESCRIPTION>aperture 6 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_7" datatype="float" ID="col_192" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_7" datatype="float" ID="col_193" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_7" datatype="long" ID="col_194" ucd="meta.code">
+        <DESCRIPTION>aperture 7 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_7" datatype="float" ID="col_195" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_7" datatype="float" ID="col_196" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_7" datatype="long" ID="col_197" ucd="meta.code">
+        <DESCRIPTION>aperture 7 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_7" datatype="float" ID="col_198" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_7" datatype="float" ID="col_199" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_7" datatype="long" ID="col_200" ucd="meta.code">
+        <DESCRIPTION>aperture 7 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_7" datatype="float" ID="col_201" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_7" datatype="float" ID="col_202" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 7 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_7" datatype="long" ID="col_203" ucd="meta.code">
+        <DESCRIPTION>aperture 7 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mag_8" datatype="float" ID="col_204" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigm_8" datatype="float" ID="col_205" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag uncertainty, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1flg_8" datatype="long" ID="col_206" ucd="meta.code">
+        <DESCRIPTION>aperture 8 instrumental aperture flag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mag_8" datatype="float" ID="col_207" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigm_8" datatype="float" ID="col_208" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag uncertainty, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2flg_8" datatype="long" ID="col_209" ucd="meta.code">
+        <DESCRIPTION>aperture 8 instrumental aperture flag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mag_8" datatype="float" ID="col_210" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigm_8" datatype="float" ID="col_211" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag uncertainty, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3flg_8" datatype="long" ID="col_212" ucd="meta.code">
+        <DESCRIPTION>aperture 8 instrumental aperture flag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mag_8" datatype="float" ID="col_213" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigm_8" datatype="float" ID="col_214" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>aperture 8 instrumental aperture mag uncertainty, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4flg_8" datatype="long" ID="col_215" ucd="meta.code">
+        <DESCRIPTION>aperture 8 instrumental aperture flag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1magp" datatype="float" ID="col_216" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>profile-fit repeatability mag -- inverse-variance weighted mean mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigp1" datatype="float" ID="col_217" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of population of profile-fit repeatability mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1sigp2" datatype="float" ID="col_218" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the mean of profile-fit repeatability mag, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1k" datatype="float" ID="col_219" irsa_format="5.3f" precision="F3" ucd="stat.param">
+        <DESCRIPTION>Stetson K variability index, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1ndf" datatype="long" ID="col_220" ucd="stat.fit.dof">
+        <DESCRIPTION>number degrees of freedom in variability chi^2, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mlq" datatype="float" ID="col_221" irsa_format="5.2f" precision="F2" ucd="stat.value">
+        <DESCRIPTION>-ln(Q), where Q = 1 - P(chi^2), band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mjdmin" datatype="double" ID="col_222" irsa_format="14.8f" precision="F8" ucd="time.start">
+        <DESCRIPTION>minimum modified Julian Date of frame extractions, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mjdmax" datatype="double" ID="col_223" irsa_format="14.8f" precision="F8" ucd="time.end">
+        <DESCRIPTION>maximum modified Julian Date of frame extractions, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1mjdmean" datatype="double" ID="col_224" irsa_format="14.8f" precision="F8" ucd="time.epoch">
+        <DESCRIPTION>mean modified Julian Date of frame extractions, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2magp" datatype="float" ID="col_225" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>profile-fit repeatability mag -- inverse-variance weighted mean mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigp1" datatype="float" ID="col_226" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the population of profile-fit repeatability mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2sigp2" datatype="float" ID="col_227" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the mean of profile-fit repeatability mag, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2k" datatype="float" ID="col_228" irsa_format="5.3f" precision="F3" ucd="stat.param">
+        <DESCRIPTION>Stetson K variability index, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2ndf" datatype="long" ID="col_229" ucd="stat.fit.dof">
+        <DESCRIPTION>number degrees of freedom in variability chi^2, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mlq" datatype="float" ID="col_230" irsa_format="5.2f" precision="F2" ucd="stat.value">
+        <DESCRIPTION>-ln(Q), where Q = 1 - P(chi^2), band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mjdmin" datatype="double" ID="col_231" irsa_format="14.8f" precision="F8" ucd="time.start">
+        <DESCRIPTION>minimum modified Julian Date of frame extractions, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mjdmax" datatype="double" ID="col_232" irsa_format="14.8f" precision="F8" ucd="time.end">
+        <DESCRIPTION>maximum modified Julian Date of frame extractions, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2mjdmean" datatype="double" ID="col_233" irsa_format="14.8f" precision="F8" ucd="time.epoch">
+        <DESCRIPTION>mean modified Julian Date of frame extractions, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3magp" datatype="float" ID="col_234" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>profile-fit repeatability mag -- inverse-variance weighted mean mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigp1" datatype="float" ID="col_235" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the population of profile-fit repeatability mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3sigp2" datatype="float" ID="col_236" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the mean of profile-fit repeatability mag, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3k" datatype="float" ID="col_237" irsa_format="5.3f" precision="F3" ucd="stat.param">
+        <DESCRIPTION>Stetson K variability index, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3ndf" datatype="long" ID="col_238" ucd="stat.fit.dof">
+        <DESCRIPTION>number degrees of freedom in variability chi^2, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mlq" datatype="float" ID="col_239" irsa_format="5.2f" precision="F2" ucd="stat.value">
+        <DESCRIPTION>-ln(Q), where Q = 1 - P(chi^2), band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mjdmin" datatype="double" ID="col_240" irsa_format="14.8f" precision="F8" ucd="time.start">
+        <DESCRIPTION>minimum modified Julian Date of frame extractions, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mjdmax" datatype="double" ID="col_241" irsa_format="14.8f" precision="F8" ucd="time.end">
+        <DESCRIPTION>maximum modified Julian Date of frame extractions, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3mjdmean" datatype="double" ID="col_242" irsa_format="14.8f" precision="F8" ucd="time.epoch">
+        <DESCRIPTION>mean modified Julian Date of frame extractions, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4magp" datatype="float" ID="col_243" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>profile-fit repeatability mag -- inverse-variance weighted mean mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigp1" datatype="float" ID="col_244" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the population of profile-fit repeatability mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4sigp2" datatype="float" ID="col_245" irsa_format="6.3f" precision="F3" ucd="stat.stdev" unit="mag">
+        <DESCRIPTION>standard deviation of the mean of profile-fit repeatability mag, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4k" datatype="float" ID="col_246" irsa_format="5.3f" precision="F3" ucd="stat.param">
+        <DESCRIPTION>Stetson K variability index, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4ndf" datatype="long" ID="col_247" ucd="stat.fit.dof">
+        <DESCRIPTION>number degrees of freedom in variability chi^2, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mlq" datatype="float" ID="col_248" irsa_format="5.2f" precision="F2" ucd="stat.value">
+        <DESCRIPTION>-ln(Q), where Q = 1 - P(chi^2), band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mjdmin" datatype="double" ID="col_249" irsa_format="14.8f" precision="F8" ucd="time.start">
+        <DESCRIPTION>minimum modified Julian Date of frame extractions, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mjdmax" datatype="double" ID="col_250" irsa_format="14.8f" precision="F8" ucd="time.end">
+        <DESCRIPTION>maximum modified Julian Date of frame extractions, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4mjdmean" datatype="double" ID="col_251" irsa_format="14.8f" precision="F8" ucd="time.epoch">
+        <DESCRIPTION>mean modified Julian Date of frame extractions, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rho12" datatype="long" ID="col_252" ucd="stat.correlation">
+        <DESCRIPTION>band 1 - band 2 correlation coefficient</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rho23" datatype="long" ID="col_253" ucd="stat.correlation">
+        <DESCRIPTION>band 2 - band 3 correlation coefficient</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rho34" datatype="long" ID="col_254" ucd="stat.correlation">
+        <DESCRIPTION>band 3 - band 4 correlation coefficient</DESCRIPTION>
+      </FIELD>
+      <FIELD name="q12" datatype="long" ID="col_255" ucd="stat.value">
+        <DESCRIPTION>-log10(1 - P(rho12)), given no real correlation</DESCRIPTION>
+      </FIELD>
+      <FIELD name="q23" datatype="long" ID="col_256" ucd="stat.value">
+        <DESCRIPTION>-log10(1 - P(rho23)), given no real correlation</DESCRIPTION>
+      </FIELD>
+      <FIELD name="q34" datatype="long" ID="col_257" ucd="stat.value">
+        <DESCRIPTION>-log10(1 - P(rho34)), given no real correlation</DESCRIPTION>
+      </FIELD>
+      <FIELD name="xscprox" datatype="double" ID="col_258" irsa_format="8.2f" precision="F2" ucd="pos.angDistance" unit="arcsec">
+        <DESCRIPTION>distance between source center and XSC galaxy</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1rsemi" datatype="double" ID="col_259" irsa_format="8.2f" precision="F2" ucd="phys.angSize.smajAxis" unit="arcsec">
+        <DESCRIPTION>semi-major axis of galaxy from XSC, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1ba" datatype="float" ID="col_260" irsa_format="4.2f" precision="F2" ucd="phys.size.axisRatio">
+        <DESCRIPTION>axis ratio of galaxy from XSC, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1pa" datatype="float" ID="col_261" irsa_format="7.2f" precision="F2" ucd="pos.posAng" unit="deg">
+        <DESCRIPTION>position angle (E of N) of galaxy from XSC, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1gmag" datatype="float" ID="col_262" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>elliptical aperture mag of extracted galaxy, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1gerr" datatype="float" ID="col_263" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>elliptical aperture mag uncertainty of extracted galaxy, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w1gflg" datatype="long" ID="col_264" ucd="meta.code">
+        <DESCRIPTION>elliptical aperture flag of extracted galaxy, band 1</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2rsemi" datatype="double" ID="col_265" irsa_format="8.2f" precision="F2" ucd="phys.angSize.smajAxis" unit="arcsec">
+        <DESCRIPTION>semi-major axis of galaxy from XSC, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2ba" datatype="float" ID="col_266" irsa_format="4.2f" precision="F2" ucd="phys.size.axisRatio">
+        <DESCRIPTION>axis ratio of galaxy from XSC, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2pa" datatype="float" ID="col_267" irsa_format="7.2f" precision="F2" ucd="pos.posAng" unit="deg">
+        <DESCRIPTION>position angle (E of N) of galaxy from XSC, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2gmag" datatype="float" ID="col_268" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>elliptical aperture mag of extracted galaxy, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2gerr" datatype="float" ID="col_269" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>elliptical aperture mag uncertainty of extracted galaxy, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w2gflg" datatype="long" ID="col_270" ucd="meta.code">
+        <DESCRIPTION>elliptical aperture flag of extracted galaxy, band 2</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3rsemi" datatype="double" ID="col_271" irsa_format="8.2f" precision="F2" ucd="phys.angSize.smajAxis" unit="arcsec">
+        <DESCRIPTION>semi-major axis of galaxy from XSC, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3ba" datatype="float" ID="col_272" irsa_format="4.2f" precision="F2" ucd="phys.size.axisRatio">
+        <DESCRIPTION>axis ratio of galaxy from XSC, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3pa" datatype="float" ID="col_273" irsa_format="7.2f" precision="F2" ucd="pos.posAng" unit="deg">
+        <DESCRIPTION>position angle (E of N) of galaxy from XSC, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3gmag" datatype="float" ID="col_274" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>elliptical aperture mag of extracted galaxy, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3gerr" datatype="float" ID="col_275" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>elliptical aperture mag uncertainty of extracted galaxy, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w3gflg" datatype="long" ID="col_276" ucd="meta.code">
+        <DESCRIPTION>elliptical aperture flag of extracted galaxy, band 3</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4rsemi" datatype="double" ID="col_277" irsa_format="8.2f" precision="F2" ucd="phys.angSize.smajAxis" unit="arcsec">
+        <DESCRIPTION>semi-major axis of galaxy from XSC, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4ba" datatype="float" ID="col_278" irsa_format="4.2f" precision="F2" ucd="phys.size.axisRatio">
+        <DESCRIPTION>axis ratio of galaxy from XSC, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4pa" datatype="float" ID="col_279" irsa_format="7.2f" precision="F2" ucd="pos.posAng" unit="deg">
+        <DESCRIPTION>position angle (E of N) of galaxy from XSC, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4gmag" datatype="float" ID="col_280" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>elliptical aperture mag of extracted galaxy, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4gerr" datatype="float" ID="col_281" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>elliptical aperture mag uncertainty of extracted galaxy, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="w4gflg" datatype="long" ID="col_282" ucd="meta.code">
+        <DESCRIPTION>elliptical aperture flag of extracted galaxy, band 4</DESCRIPTION>
+      </FIELD>
+      <FIELD name="tmass_key" datatype="long" ID="col_283" ucd="meta.id.assoc">
+        <DESCRIPTION>closest associated 2MASS All-Sky Release PSC key</DESCRIPTION>
+      </FIELD>
+      <FIELD name="r_2mass" datatype="float" ID="col_284" irsa_format="7.3f" precision="F3" ucd="pos.angDistance" unit="arcsec">
+        <DESCRIPTION>radial offset between WISE src and associated 2MASS src</DESCRIPTION>
+      </FIELD>
+      <FIELD name="pa_2mass" datatype="float" ID="col_285" irsa_format="6.1f" precision="F1" ucd="pos.posAng" unit="deg">
+        <DESCRIPTION>position angle (E of N) of vector from WISE src to associated 2MASS src</DESCRIPTION>
+      </FIELD>
+      <FIELD name="n_2mass" datatype="long" ID="col_286" ucd="meta.number">
+        <DESCRIPTION>number of 2MASS All-Sky PSC entries found within search radius of WISE src</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_m_2mass" datatype="float" ID="col_287" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>J magnitude entry of the associated 2MASS All-Sky PSC source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_msig_2mass" datatype="float" ID="col_288" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>J photometric uncertainty of the associated 2MASS All-Sky PSC source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_m_2mass" datatype="float" ID="col_289" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>H magnitude entry of the associated 2MASS All-Sky PSC source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_msig_2mass" datatype="float" ID="col_290" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>H photometric uncertainty of the associated 2MASS All-Sky PSC source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_m_2mass" datatype="float" ID="col_291" irsa_format="7.3f" precision="F3" ucd="phot.mag" unit="mag">
+        <DESCRIPTION>Ks magnitude entry of the associated 2MASS All-Sky PSC source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_msig_2mass" datatype="float" ID="col_292" irsa_format="5.3f" precision="F3" ucd="stat.error" unit="mag">
+        <DESCRIPTION>Ks photometric uncertainty of the associated 2MASS All-Sky PSC source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="x" datatype="double" ID="col_293" irsa_format="19.16f" precision="F16" ucd="pos.cartesian.x">
+        <DESCRIPTION>unit sphere (x,y,z) position x value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="y" datatype="double" ID="col_294" irsa_format="19.16f" precision="F16" ucd="pos.cartesian.y">
+        <DESCRIPTION>unit sphere (x,y,z) position y value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="z" datatype="double" ID="col_295" irsa_format="19.16f" precision="F16" ucd="pos.cartesian.z">
+        <DESCRIPTION>unit sphere (x,y,z) position z value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="spt_ind" datatype="long" ID="col_296" ucd="pos.HTM">
+        <DESCRIPTION>spatial (x,y,z) index key</DESCRIPTION>
+      </FIELD>
+      <FIELD name="htm20" datatype="long" ID="col_297" ucd="pos.HTM">
+        <DESCRIPTION>HTM20 spatial index key</DESCRIPTION>
+      </FIELD>
+      <DATA>
+        <TABLEDATA>
+          <TR>
+            <TD>J225728.12+204608.6</TD>
+            <TD>344.3671847</TD>
+            <TD>20.7690614</TD>
+            <TD>0.0516</TD>
+            <TD>0.0536</TD>
+            <TD>-0.0044</TD>
+            <TD>90.0633296</TD>
+            <TD>-34.7273114</TD>
+            <TD>354.2847698</TD>
+            <TD>25.1864434</TD>
+            <TD>800.804</TD>
+            <TD>915.923</TD>
+            <TD>3438121201351023343</TD>
+            <TD>3438p212_ac51-023343</TD>
+            <TD>3438p212_ac51</TD>
+            <TD>23343</TD>
+            <TD>3.909</TD>
+            <TD>0.387</TD>
+            <TD>2.8</TD>
+            <TD>1.473e-02</TD>
+            <TD>3.624</TD>
+            <TD>0.246</TD>
+            <TD>4.4</TD>
+            <TD>2.660e-01</TD>
+            <TD>3.929</TD>
+            <TD>0.016</TD>
+            <TD>69.1</TD>
+            <TD>1.837e+00</TD>
+            <TD>3.904</TD>
+            <TD>0.024</TD>
+            <TD>44.7</TD>
+            <TD>7.163e-01</TD>
+            <TD>1.869e-01</TD>
+            <TD>1</TD>
+            <TD>0</TD>
+            <TD>0.216</TD>
+            <TD>0.208</TD>
+            <TD>0.000</TD>
+            <TD>0.000</TD>
+            <TD>2200</TD>
+            <TD>344.3672180</TD>
+            <TD>20.7690408</TD>
+            <TD>0.0518</TD>
+            <TD>0.0544</TD>
+            <TD>-0.0017</TD>
+            <TD>-632</TD>
+            <TD>57</TD>
+            <TD>408</TD>
+            <TD>61</TD>
+            <TD>1.451e-02</TD>
+            <TD>2.647e-01</TD>
+            <TD>1.275e+00</TD>
+            <TD>6.580e-01</TD>
+            <TD>1.746e-01</TD>
+            <TD>1N001</TD>
+            <TD>0000</TD>
+            <TD></TD>
+            <TD>0</TD>
+            <TD>0000</TD>
+            <TD>CBAA</TD>
+            <TD>15</TD>
+            <TD>0100</TD>
+            <TD>22</TD>
+            <TD>28</TD>
+            <TD>18</TD>
+            <TD>27</TD>
+            <TD>13</TD>
+            <TD>13</TD>
+            <TD>13</TD>
+            <TD>13</TD>
+            <TD>2.425</TD>
+            <TD>3.028</TD>
+            <TD>12.709</TD>
+            <TD>12.851</TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD>3438121201351023343</TD>
+            <TD>0</TD>
+            <TD>4.3308e+06</TD>
+            <TD>1.5450e+06</TD>
+            <TD>12.028</TD>
+            <TD>2.861</TD>
+            <TD>0.071</TD>
+            <TD>2.2399e+06</TD>
+            <TD>5.0734e+05</TD>
+            <TD>31.597</TD>
+            <TD>3.854</TD>
+            <TD>0.380</TD>
+            <TD>4.2520e+05</TD>
+            <TD>6.1571e+03</TD>
+            <TD>1931.385</TD>
+            <TD>29.967</TD>
+            <TD>7.466</TD>
+            <TD>4.3504e+03</TD>
+            <TD>9.7278e+01</TD>
+            <TD>589.005</TD>
+            <TD>12.055</TD>
+            <TD>5.092</TD>
+            <TD>7.687</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>0.261</TD>
+            <TD>6.950</TD>
+            <TD>0.006</TD>
+            <TD>18</TD>
+            <TD>0.319</TD>
+            <TD>4.008</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>0.825</TD>
+            <TD>3.904</TD>
+            <TD>0.010</TD>
+            <TD>1</TD>
+            <TD>0.576</TD>
+            <TD>8.763</TD>
+            <TD>0.006</TD>
+            <TD>18</TD>
+            <TD>8.113</TD>
+            <TD>0.006</TD>
+            <TD>18</TD>
+            <TD>5.439</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>4.974</TD>
+            <TD>0.011</TD>
+            <TD>0</TD>
+            <TD>7.948</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>7.269</TD>
+            <TD>0.006</TD>
+            <TD>18</TD>
+            <TD>4.833</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>4.480</TD>
+            <TD>0.010</TD>
+            <TD>1</TD>
+            <TD>7.392</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>6.704</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>4.514</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>4.198</TD>
+            <TD>0.011</TD>
+            <TD>1</TD>
+            <TD>7.023</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>6.323</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>4.348</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>4.060</TD>
+            <TD>0.012</TD>
+            <TD>1</TD>
+            <TD>6.786</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>6.086</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>4.263</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>4.001</TD>
+            <TD>0.014</TD>
+            <TD>1</TD>
+            <TD>6.630</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>5.948</TD>
+            <TD>0.005</TD>
+            <TD>18</TD>
+            <TD>4.218</TD>
+            <TD>0.005</TD>
+            <TD>0</TD>
+            <TD>3.973</TD>
+            <TD>0.017</TD>
+            <TD>1</TD>
+            <TD>6.522</TD>
+            <TD>0.005</TD>
+            <TD>19</TD>
+            <TD>5.864</TD>
+            <TD>0.005</TD>
+            <TD>19</TD>
+            <TD>4.193</TD>
+            <TD>0.005</TD>
+            <TD>1</TD>
+            <TD>3.962</TD>
+            <TD>0.020</TD>
+            <TD>1</TD>
+            <TD>6.445</TD>
+            <TD>0.005</TD>
+            <TD>19</TD>
+            <TD>5.807</TD>
+            <TD>0.005</TD>
+            <TD>19</TD>
+            <TD>4.177</TD>
+            <TD>0.006</TD>
+            <TD>1</TD>
+            <TD>3.953</TD>
+            <TD>0.023</TD>
+            <TD>1</TD>
+            <TD>3.915</TD>
+            <TD>0.055</TD>
+            <TD>0.015</TD>
+            <TD>0.731</TD>
+            <TD>13</TD>
+            <TD>0.02</TD>
+            <TD>55362.46181030</TD>
+            <TD>55363.45402509</TD>
+            <TD>55362.97207947</TD>
+            <TD>3.692</TD>
+            <TD>0.073</TD>
+            <TD>0.020</TD>
+            <TD>0.770</TD>
+            <TD>13</TD>
+            <TD>9.87</TD>
+            <TD>55362.46181030</TD>
+            <TD>55363.45402509</TD>
+            <TD>55362.97207947</TD>
+            <TD>3.929</TD>
+            <TD>0.019</TD>
+            <TD>0.005</TD>
+            <TD>0.872</TD>
+            <TD>12</TD>
+            <TD>1.48</TD>
+            <TD>55362.46181030</TD>
+            <TD>55363.45402509</TD>
+            <TD>55363.00115374</TD>
+            <TD>3.904</TD>
+            <TD>0.029</TD>
+            <TD>0.008</TD>
+            <TD>0.766</TD>
+            <TD>12</TD>
+            <TD>0.41</TD>
+            <TD>55362.46181030</TD>
+            <TD>55363.45402509</TD>
+            <TD>55363.00115374</TD>
+            <TD>-30</TD>
+            <TD>-43</TD>
+            <TD>30</TD>
+            <TD>1</TD>
+            <TD>1</TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD>360567014</TD>
+            <TD>2.472</TD>
+            <TD>-110.8</TD>
+            <TD>1</TD>
+            <TD>4.655</TD>
+            <TD>0.296</TD>
+            <TD>4.234</TD>
+            <TD>0.270</TD>
+            <TD>3.911</TD>
+            <TD>0.021</TD>
+            <TD>0.9004294950391580</TD>
+            <TD>-0.2519604309544540</TD>
+            <TD>0.3546021230855410</TD>
+            <TD>200331320</TD>
+            <TD>13459937258453</TD>
+          </TR>
+        </TABLEDATA>
+      </DATA>
+    </TABLE>
+  </RESOURCE>
+</VOTABLE>

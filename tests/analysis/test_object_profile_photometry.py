@@ -22,7 +22,7 @@ from astropy.time import Time
 
 import astrotwo.analysis.object_profile as op
 from astrotwo.analysis.object_profile import ProfileTarget, build_profile, cross_identify, resolve_target
-from tests.analysis.profile_fakes import recorded, recorded_query, services, votable  # noqa: F401
+from tests.analysis.profile_fakes import SCS_51PEG_2MASS, irsa_empty, recorded, recorded_query, scs_params, services, votable  # noqa: F401,E501
 
 
 def table_of(service: str, contains: str):
@@ -149,7 +149,8 @@ def test_t7_allwise_by_position_only_after_propagation(services, cache):
                      distance=basic["plx_value"].to(u.pc, u.parallax()), radial_velocity=0 * u.km / u.s,
                      obstime=Time("J2000.0"))
     moved = start.apply_space_motion(new_obstime=Time(55400.0, format="mjd", scale="utc"))
-    row = parsed("irsa", found.queries[-1])
+    assert found.queries[-1].startswith(services.url("irsa") + "/SCS?table=allwise_p3as_psd&")  # 25 §3.17 punto 1
+    row = parsed("irsa-scs", scs_params(found.queries[-1]))
     row = row[[str(d) == "J183656.51+384704.4" for d in row["designation"]]]
     sep = SkyCoord(row["ra"][0], row["dec"][0], unit="deg").separation(
         SkyCoord(moved.ra, moved.dec)).to(u.arcsec)
@@ -174,8 +175,8 @@ def test_t20_2mass_by_position_at_the_jdate_of_the_row(services, cache):
     found = cross_identify(resolved, "2mass", cache=cache)
     assert found.identifier == "2MASS J18365633+3847012" and found.method == "position"
     query = found.queries[-1]
-    assert "FROM fp_psc WHERE CONTAINS" in query
-    row = parsed("irsa", query)
+    assert "table=fp_psc" in query and "SR=" in query  # Cone Search di IRSA (25 §3.17 punto 1)
+    row = parsed("irsa-scs", scs_params(query))
     row = row[[str(d) == "18365633+3847012" for d in row["designation"]]]
     basic = resolved.simbad.basic
     start = SkyCoord(basic["ra"], basic["dec"], pm_ra_cosdec=basic["pmra"], pm_dec=basic["pmdec"],
@@ -185,7 +186,7 @@ def test_t20_2mass_by_position_at_the_jdate_of_the_row(services, cache):
     sep = SkyCoord(row["ra"][0], row["dec"][0], unit="deg").separation(SkyCoord(moved.ra, moved.dec)).to(u.arcsec)
     assert found.separation.to_value(u.arcsec) == pytest.approx(sep.value, abs=1e-6)
     # cerchio di ricerca allargato dal moto proprio sul periodo delle osservazioni 2MASS (1997-06-01 – 2001-03-01)
-    radius = float(query.split(",")[-1].split(")")[0]) * u.deg
+    radius = float(dict(p.split("=") for p in scs_params(query).split("&"))["SR"]) * u.deg
     span = (Time("J2000.0") - Time("1997-06-01", scale="utc")).to(u.yr)
     pm = np.hypot(basic["pmra"], basic["pmdec"])
     assert radius.to_value(u.arcsec) == pytest.approx((2 * u.arcsec + pm * span).to_value(u.arcsec), rel=1e-9)
@@ -206,8 +207,7 @@ def test_t10_gaia_down_keeps_2mass_and_allwise_photometry(services, cache):
 
 
 def test_no_row_for_a_known_identifier_is_declared(services, cache):
-    services.overrides[("irsa", "designation = '22572795+2046077'")] = lambda q: votable(
-        [("designation", "char", None)], [])
+    services.overrides[("irsa", SCS_51PEG_2MASS)] = lambda q: irsa_empty("2mass")
     sec = photometry(run("51 Peg", cache))
     note = next(w for w in sec.warnings if w[0] == "PROFILE_NO_PHOTOMETRY")
     assert note.params == {"reason": "not_in_catalog", "catalog": "2MASS", "identifier": "2MASS J22572795+2046077",

@@ -1092,6 +1092,24 @@ def test_t14_vizier_photometry(service, cache, monkeypatch):
     assert err.value.code == "NET_TIMEOUT"
 
 
+def test_c8_vizier_photometry_cached_without_network(service, cache, monkeypatch):
+    """D25-21 (3) del 25: la copia in cache della stessa richiesta, senza rete; ``None`` se non c'è."""
+    service.routes["/sed"] = votable_route(SED)
+    monkeypatch.setattr(vo, "VIZIER_PHOTOMETRY_URL", service.url + "/sed")
+    center = SkyCoord(10 * u.deg, 20 * u.deg)
+    assert vo.vizier_photometry_cached(center, 2 * u.arcsec, cache=cache) is None
+    assert service.requests == []
+    fresh = vizier_photometry(center, 2 * u.arcsec, cache=cache)
+    hit = vo.vizier_photometry_cached(center, 2 * u.arcsec, cache=cache)
+    assert len(service.requests) == 1  # nessuna richiesta di rete
+    assert hit.request.from_cache and hit.request.params == fresh.request.params
+    assert [w[0] for w in hit.warnings] == ["FROM_CACHE"]
+    assert np.array_equal(hit.table.table["_sed_flux"], fresh.table.table["_sed_flux"])
+    assert vo.vizier_photometry_cached(center, 3 * u.arcsec, cache=cache) is None  # altra richiesta
+    with pytest.raises(ValueError):
+        vo.vizier_photometry_cached(center, 31 * u.arcsec, cache=cache)
+
+
 @pytest.mark.network
 def test_t13_t14_network(cache):
     vega = SkyCoord(279.2347 * u.deg, 38.7837 * u.deg)

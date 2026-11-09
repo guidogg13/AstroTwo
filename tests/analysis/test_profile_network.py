@@ -31,7 +31,7 @@ def test_network_full_profile_of_four_objects_with_times(cache):
         total = time.monotonic() - start
         assert prof is not None and not prof.cancelled
         assert [s.name for s in prof.sections] == list(SECTIONS)
-        sections = {s.name: {"status": s.status, "elapsed": s.elapsed,
+        sections = {s.name: {"status": s.status, "elapsed": s.elapsed, "started": s.started,
                              "errors": [e.get("code") for e in s.errors],
                              "servers": sorted({r.url for r in s.requests})} for s in prof.sections}
         summary.append({"name": name, "main_id": None if prof.resolved.simbad is None else prof.resolved.simbad.main_id, "total_s": total, "sections": sections,

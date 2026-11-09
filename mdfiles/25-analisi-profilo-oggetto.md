@@ -380,7 +380,8 @@ le conversioni, la qualità, i duplicati e il grafico sono del `20` (parte SED,
   (archivio Gaia ESA). Una soluzione astrometrica a 2 parametri ha comunque la
   fotometria (Alcyone).
 - **2MASS** (IRSA `fp_psc`) e **AllWISE** (IRSA `allwise_p3as_psd`), servizio
-  `nasa-irsa-tap` del 14: `designation = '…'` **dentro un cerchio di
+  `nasa-irsa-tap` del 14 (**dal 2026-11-09 Cone Search di IRSA con lo stesso
+  centro e raggio, D25-21 (1), §3.17 punto 1**): `designation = '…'` **dentro un cerchio di
   `DESIGNATION_RADIUS` = 2″ attorno alla posizione scritta nella designazione**
   (2MASS `hhmmssss±ddmmsss`, AllWISE `Jhhmmss.ss±ddmmss.s`: posizione del
   catalogo troncata, formati verificati il 2026-11-07). Il cerchio viene
@@ -486,12 +487,15 @@ dall'impronta di rete, come i tempi delle sezioni.
    = 4) in tutto il profilo: un semaforo comune attorno a ogni chiamata ai
    servizi del livello 1 (`simbad_object`, `tap_query`, `vizier_photometry`,
    `resolve_name`). Una chiamata `simbad_object` (che fa le sue richieste una
-   dopo l'altra, 14) occupa un solo posto.
+   dopo l'altra, 14) occupa un solo posto. **Dal 2026-11-09 anche al più 2
+   per servizio** (D25-21 (5), §3.17 punto 5).
 4. **Tempo massimo di una richiesta:** il tempo di connessione e di lettura
    di ogni richiesta è il minimo tra quello del chiamante (`timeouts`, default
    del 04) e il tempo massimo del suo servizio (tabella sopra).
 5. **Tempo massimo di una sezione** = il più grande tra i tempi dei servizi
-   che la sezione può interrogare, contato da `sections_started`
+   che la sezione può interrogare, contato da `sections_started` (**dal
+   2026-11-09 contato dalla partenza della sezione, D25-21 (4): definizione
+   esatta in §3.17 punto 4**)
    (`SECTION_SERVICES`): Identità — SIMBAD, Gaia, IRSA, Exoplanet → **60 s**;
    Astrometria — Gaia → **30 s**; Fotometria — Gaia, IRSA, VizieR → **60 s**;
    Immagini — HiPS → **30 s**; Pianeti — Exoplanet → **30 s** (§3.13; il
@@ -537,7 +541,8 @@ dall'impronta di rete, come i tempi delle sezioni.
    (14 §7: unità `'electron'.s**-1` di Gaia mal interpretata con le letture in
    parallelo).
 
-**Codice** (`object_profile.py`): costanti `MAX_CONCURRENT_REQUESTS`,
+**Codice** (`object_profile.py`): costanti `MAX_CONCURRENT_REQUESTS`
+(dal C8 anche `MAX_REQUESTS_PER_SERVICE`, §3.17),
 `SERVICE_TIME_LIMITS`, `SECTION_SERVICES`, `PROFILE_TARGET_TIME`; `build_profile`
 con il pianificatore (pool di thread, semaforo, scadenze, annullamento);
 `ObjectProfile.cancelled` ed `ObjectProfile.elapsed`.
@@ -868,7 +873,8 @@ Gaia), nel PDF e nella finestra del 43.
 
 Brief del proprietario del 2026-11-08 (sprint C7, rifinitura prima della beta
 6). Le regole sulla provenienza dei numeri **non cambiano**; le scelte che
-richiedono il proprietario sono in **D25-21** (§13) e **non sono applicate**.
+richiedono il proprietario sono in **D25-21** (§13) e **non sono applicate**
+in questa sezione (D25-21 decisa il 2026-11-09 e applicata in §3.17).
 
 **Come si è misurato.** Traccia di ogni richiesta HTTP (server, inizio, fine,
 byte, esito, timeout) e dell'attesa del posto del semaforo per servizio, con
@@ -993,6 +999,198 @@ tempo sale a 45–66 s e le sezioni che dipendono da quell'archivio scadono
 (riga conservata in `CrossIdentification`, fuori da `as_dict`), `_WORKERS` in
 `object_profile.py`; `cds_down_in_session` in `core/hips.py`. Test: T29 (§12).
 
+### 3.17 Tempi del profilo: decisioni D25-21 (sprint C8, 2026-11-09)
+
+Decisione del proprietario del 2026-11-09: **D25-21 approvata in tutti e 5 i
+punti** (§13). Le regole sulla provenienza dei numeri non cambiano. Questa
+sezione è la definizione esatta di ciascun punto; dove contraddice §3.11,
+§3.12, §3.13 o §3.16 vale questa.
+
+**(1) 2MASS e AllWISE con il Cone Search di IRSA.** Condizione del
+proprietario: stesse colonne, unità e precisione usate oggi. **Verificata il
+2026-11-09** con richieste reali, `tap_query` (`nasa-irsa-tap`) contro
+`cone_search` del 14 sullo stesso cerchio: 51 Peg, eta Tau e TRAPPIST-1
+(raggio 20″, 1 riga per catalogo) e un campo affollato (M 13, raggio 60″:
+2MASS 199 righe, AllWISE 26): **stesse righe, stesse designazioni, nessuna
+cella diversa**; per ognuna delle colonne di §3.11 (`_IRSA_COLUMNS`) stessa
+unità (`deg`, `mag`, `d`, nessuna) e stesso tipo (`float64` per `ra`, `dec`,
+`jdate`; `float32` per magnitudini ed errori; testo per designazione e
+indicatori; `int64` per `ext_flg`). Il Cone Search dà tutte le colonne della
+tabella (2MASS 64, AllWISE 298): si leggono solo quelle di §3.11. Tempi: Cone
+Search 0,7–1,8 s, TAP 2,4–20,5 s. **Il punto vale per entrambi i cataloghi.**
+- Servizio: `https://irsa.ipac.caltech.edu/SCS?table=fp_psc` (2MASS) e
+  `…?table=allwise_p3as_psd` (AllWISE), con `cone_search` del 14 (URL
+  scritto, D14-9 punto 6; nessuna voce nuova nell'elenco dei server).
+  Parametri: `RA`, `DEC` in gradi ICRS e `SR` in gradi, **gli stessi
+  numeri** del cerchio ADQL di prima (centro propagato e raggio di §3.11).
+  Tempo massimo: quello di IRSA (60 s, D25-8); posto del semaforo `irsa`.
+- **Passo per posizione:** il cerchio di §3.11 diventa il cono con lo stesso
+  centro e raggio; la scelta della riga (separazione dalla posizione portata
+  all'epoca, `jdate` per 2MASS) non cambia.
+- **Per designazione:** cono di `DESIGNATION_RADIUS` (2″) attorno alla
+  posizione scritta nella designazione; la riga è quella la cui
+  `designation` è uguale (spazi tolti) all'identificativo, scelta nel codice
+  (come la condizione `designation = …` dell'ADQL di prima). Nessuna riga →
+  `PROFILE_NO_PHOTOMETRY` `not_in_catalog` come prima; più righe con la
+  stessa designazione → la prima, come prima `rows[:1]`. Una designazione
+  **senza posizione leggibile** (formato diverso da quelli di §3.11) resta
+  sull'interrogazione TAP per designazione di prima (il Cone Search non
+  cerca per nome).
+- **Provenienza:** `query` = URL completo della richiesta GET del Cone Search
+  (tabella, `RA`, `DEC`, `SR`), `server` = URL che ha risposto, `table` =
+  nome della tabella IRSA, `identifier`/`match` come prima;
+  `CrossIdentification.queries` riporta lo stesso URL. Cache: la chiave è
+  quella del Cone Search (le copie TAP già in cache non si usano più).
+
+**(2) «Dati aggiornati» (`refresh=True`): dal principale una volta per
+profilo.** Ambito («giro con dati aggiornati»): **una chiamata di
+`build_profile` con `refresh=True`** (comando `object.profile`, «Riesegui con
+dati aggiornati», strumento IA). Nell'ambito:
+- per ogni servizio con mirror verificati del 14 (oggi solo SIMBAD,
+  `SERVICE_MIRRORS`) la **prima** richiesta del profilo riparte dal server
+  principale; le richieste successive dello stesso profilo partono dal server
+  in uso (quello che ha risposto o a cui si è passati), con le regole del
+  ripiego di sempre. **Tutte** le richieste restano senza cache (`refresh`
+  vale per ognuna: nessuna copia in cache usata, nuova copia salvata);
+- la scorciatoia delle miniature (D25-18) vale anche con `refresh=True`, ma
+  solo con una **prova raccolta in questo profilo** (principale di SIMBAD
+  caduto in una richiesta del profilo, MocServer non raggiungibile, survey
+  passato da un server di Strasburgo a un mirror); le prove della sessione
+  raccolte prima del profilo non valgono con `refresh`. Con `refresh=True` e
+  nessuna prova nel profilo, la sezione Immagini apre prima un survey e poi
+  gli altri (C7-d), come senza `refresh` con lo stato del CDS non noto;
+- fuori da un profilo (un singolo comando rieseguito con dati aggiornati)
+  nulla cambia: ogni richiesta con `refresh=True` riparte dal principale
+  (D14-15 (1)).
+
+Codice: ambito `refresh_once()` del 14 (§7.2), aperto da `build_profile`
+quando `refresh=True` e copiato nei thread del profilo (`contextvars`).
+
+**(3) VizieR SED saltata con il CDS già giù.** All'istante in cui parte la
+richiesta della serie VizieR (subito dopo la risoluzione del bersaglio,
+C7-b) si legge la prova del CDS giù: senza `refresh` quella della sessione
+(`cds_down_in_session` del 12, D25-18), con `refresh=True` solo quella
+raccolta nel profilo (punto 2). Con una prova:
+- senza `refresh`, se la stessa richiesta è già **in cache** si usa la copia
+  (con `FROM_CACHE`, come sempre: nessuna richiesta di rete);
+- altrimenti **nessuna richiesta**: la sezione Fotometria ha l'errore
+  **`PROFILE_VIZIER_SKIPPED`** (ragione `cds_down`, `evidence` = `mocserver`,
+  `hips_failover` o `simbad_failover`, `catalog` = `vizier_sed`), mostrato
+  nella sezione al posto dell'errore di rete di prima, e nei metadati della
+  sezione `details["vizier_sed"] = {"skipped": true, "reason": "cds_down",
+  "evidence": …}`; nel PDF compare con gli altri errori della sezione
+  (l'ECSV ha una riga per valore: la serie saltata non ne ha).
+  Stato della sezione: `partial` se ci sono altri punti, come con l'errore di
+  rete di prima. Mai in silenzio.
+- Una prova che arriva dopo la partenza della richiesta non la ferma.
+
+**(4) Il tempo di una sezione si conta da quando parte davvero.** Definizione
+esatta (sostituisce la regola 5 di §3.12 per l'istante di partenza; il
+tempo massimo di ogni sezione resta quello di `SECTION_SERVICES`):
+- **`sections_started`** resta l'istante in cui tutte le sezioni sono
+  lanciate (regola 2).
+- La **partenza** di una sezione (`started`) è l'istante in cui sono noti
+  **tutti gli esiti della catena degli identificativi che la sezione aspetta**
+  (regola 2), cioè l'istante in cui finisce l'ultimo di quei passi (letto
+  alla fine del passo, non al controllo periodico):
+  - **Immagini:** nessun esito → `sections_started`;
+  - **Astrometria:** esito di Gaia DR3;
+  - **Fotometria:** esiti di Gaia DR3, 2MASS e AllWISE (quelli calcolati nel
+    profilo). La serie VizieR (C7-b) e la richiesta Gaia della fotometria
+    (punto 5) possono partire prima: restano limitate dal tempo massimo per
+    richiesta del loro servizio (regola 4);
+  - **Pianeti:** esito dell'ospite che la sezione usa (per `hostname` subito,
+    D25-17 (10), oppure quello della catena);
+  - **Identità:** esiti dei quattro cataloghi (non fa richieste proprie:
+    arriva appena li ha);
+  - una sezione che non aspetta nessun esito (es. Identità senza SIMBAD) →
+    `sections_started`.
+- **Scadenza** = `started` + tempo massimo della sezione (Identità 60 s,
+  Astrometria 30 s, Fotometria 60 s, Immagini 30 s, Pianeti 30 s). Il tempo
+  dopo la partenza comprende tutto: attese dei posti del semaforo (comune e
+  del servizio, punto 5), richieste in fila della sezione, elaborazione.
+- **Prima della partenza** la sezione non ha scadenza propria: l'attesa degli
+  esiti è limitata dalle richieste della catena, ognuna con il tempo massimo
+  del suo servizio (regola 4), e da Annulla, come la risoluzione del
+  bersaglio (regola 1). Il tempo totale del profilo (`elapsed`) è sempre
+  scritto nel risultato.
+- **Nel risultato** ogni sezione scrive `started` (secondi dopo
+  `sections_started`) accanto a `elapsed` (secondi dopo `sections_started`,
+  invariato). `PROFILE_SECTION_TIMEOUT` resta con sezione, tempo massimo e
+  servizi; la sezione scaduta ha anch'essa `started`.
+
+**(5) Al più 2 richieste contemporanee per servizio, dentro le 4 del
+profilo.** `MAX_REQUESTS_PER_SERVICE` = 2 per ognuno dei servizi di
+`SERVICE_TIME_LIMITS` (`simbad`, `gaia`, `irsa`, `exoplanet`, `hips`,
+`vizier_sed`); `MAX_CONCURRENT_REQUESTS` = 4 resta il limite comune (D25-8).
+Ogni chiamata a un servizio prende **prima** il posto del suo servizio e
+**poi** un posto comune (chi aspetta il posto del servizio non tiene un posto
+comune); `resolve_name` (NED, ripiego del bersaglio) prende solo il posto
+comune. `hips` è un servizio solo (le miniature dei tre survey insieme ne
+usano al più 2). Limite che resta: due servizi fermi insieme tengono ancora
+tutti e 4 i posti comuni (2 + 2). **Ripristinate le due partenze anticipate
+tolte nel C7 (C7-c):**
+- la richiesta Gaia della fotometria parte appena è noto l'esito di Gaia DR3
+  (non aspetta più 2MASS e AllWISE); 2MASS e AllWISE dopo i loro esiti;
+  l'ordine in cui i risultati si applicano non cambia;
+- Bailer-Jones parte insieme a `gaia_source` (stesso `source_id`); il suo
+  risultato si usa solo se `gaia_source` ha dato la riga (regola di prima):
+  altrimenti si scarta, senza valori, richiesta né errore nella sezione.
+
+**Codice** (sprint C8): `object_profile.py` — `MAX_REQUESTS_PER_SERVICE`,
+`_Run.service_gates`, `_network` (posto del servizio, poi posto comune),
+`_IRSA_SCS`, `_irsa_cone`, `_irsa_by_designation`, `_catalog_by_position`,
+`profile_photometry` (Gaia appena noto Gaia, VizieR saltata o dalla cache),
+`profile_astrometry` (Bailer-Jones insieme a `gaia_source`),
+`build_profile` (ambito `refresh_once`, partenza delle sezioni da
+`finished`, `ProfileSection.started`), `profile_images` (C7-d con
+`cds_down_evidence`); `vo_protocols.py` — `refresh_once`,
+`refresh_scope_cds_down`, `note_refresh_scope_cds_down`,
+`_restart_from_primary`, `_with_mirrors`, `vizier_photometry_cached`;
+`hips.py` — `cds_down_evidence`, `_note_cds_down`, `add_hips`; catalogo dei
+messaggi: `PROFILE_VIZIER_SKIPPED` (`cds_down`). Test: T30–T34 (§12) in
+`tests/analysis/test_profile_timing.py`, più `tests/core/test_cds_mirrors.py`,
+`test_hips_thumbnail.py`, `test_vo_protocols.py` (prefisso `test_c8_`);
+risposte vere del Cone Search registrate il 2026-11-09 in
+`tests/analysis/data/profile/` (`irsa-scs|…` nell'indice).
+
+**Misure (2026-11-09, rete vera, cache vuota).** Il giorno delle misure
+**l'archivio Gaia non rispondeva** (nessuna risposta in 40 s, provato anche
+con `curl`) e il CDS era giù (SIMBAD da Harvard, MocServer irraggiungibile):
+le misure sono quindi il caso «archivio Gaia fermo», non il caso normale.
+T17 (`refresh=False`), tempo totale in secondi; tra parentesi partenza →
+arrivo delle sezioni in ritardo:
+
+| Oggetto | C7 «Gaia a tratti fermo» | C8, Gaia fermo tutto il giorno |
+|---|---|---|
+| 51 Peg | 65,8 | 79,5 (Astrometria scaduta 0 → 30,0; Fotometria 31,4 → 68,2 `partial`) |
+| Vega | 23,2 | 32,8 (Astrometria da SIMBAD 30,2 `partial`, nessuna scadenza) |
+| eta Tau | 61,4 | 61,6 (Astrometria scaduta 0 → 30,0; Fotometria 31,4 → 60,4) |
+| TRAPPIST-1 | 47,8 | 91,3 (Astrometria scaduta 0 → 30,0; Fotometria scaduta 30,1 → 90,2) |
+
+Immagini 3,8–4,8 s e Pianeti 1,5–11,2 s in tutti e quattro (non toccati
+dall'archivio Gaia fermo: punto 5); VizieR saltata in tutti e quattro
+(`PROFILE_VIZIER_SKIPPED`, prova `simbad_failover` dal primo profilo);
+2MASS/AllWISE dal Cone Search. Con `refresh=True` (sezione Immagini, 51 Peg
+e TRAPPIST-1): bersaglio **11,2 s** invece di 31 s (una sola richiesta al
+CDS per profilo, poi Harvard), miniature 2,8–3,5 s subito dai mirror
+(`cds_down`, prova `simbad_failover` del profilo), MocServer mai
+interrogato.
+
+**Cosa dicono le misure (da sapere, nessuna regola cambiata):**
+- con un archivio **fermo**, il limite di 2 per servizio mette in fila le sue
+  richieste (2 alla volta × 30 s): le sezioni che non lo usano non aspettano
+  più (Immagini e Pianeti sempre sotto 12 s), ma quelle che lo usano arrivano
+  più tardi e, contate dalla partenza (punto 4), possono arrivare fino a
+  partenza + 60 s (Fotometria). Per TRAPPIST-1 il profilo è passato da 47,8 a
+  91,3 s; con l'archivio Gaia che risponde i tempi non sono stati misurabili
+  oggi (da rifare: D25-22 (11));
+- l'Astrometria senza attesa della catena (Gaia DR3 da SIMBAD) ha come tempo
+  massimo 30 s, uguale al tempo per richiesta di Gaia: con l'archivio fermo
+  la sezione scade (`PROFILE_SECTION_TIMEOUT`) un istante prima che la
+  richiesta dia `NET_TIMEOUT`, quindi senza il ripiego sui valori SIMBAD che
+  avrebbe con l'errore di rete (come prima del C8; D25-22 (12)).
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -1112,6 +1310,20 @@ tempo sale a 45–66 s e le sezioni che dipendono da quell'archivio scadono
 - `12` **miniatura**: campionamento di un survey su una griglia TAN centrata
   (campo, dimensione), con la stessa logica di `view_sampling`/`fill_view` e i
   mirror; restituisce immagine RGB o valori con WCS, crediti, server.
+- `14` **`refresh_once()`** (D25-21 (2), sprint C8): ambito «giro con dati
+  aggiornati»; dentro l'ambito, con `refresh=True`, la prima richiesta di un
+  servizio con mirror riparte dal principale, le altre dal server in uso; e
+  **`refresh_scope_cds_down()`**: la prova del CDS giù raccolta nell'ambito
+  (principale di SIMBAD caduto, più quelle del 12). Fuori dall'ambito nulla
+  cambia (14 §3, D14-15 (1)).
+- `14` **`vizier_photometry_cached(center, radius, *, cache)`** (D25-21 (3)):
+  la copia in cache della stessa richiesta di `vizier_photometry`, senza rete;
+  `None` se non c'è.
+- `12` **`cds_down_evidence(*, refresh=False)`** (D25-21 (2)–(3)): senza
+  `refresh` = `cds_down_in_session()`; con `refresh` = la prova raccolta
+  nell'ambito del 14 (`None` fuori da un ambito). `add_hips(…,
+  cds_down_shortcut=True)` la usa al posto di `cds_down_in_session()`, quindi
+  la scorciatoia vale anche con `refresh=True` e una prova del profilo.
 
 ## 8. Librerie e standard di riferimento
 
@@ -1164,6 +1376,7 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Moto proprio sconosciuto per la propagazione | nessuna propagazione, avviso | `PROFILE_NO_PROPER_MOTION` |
 | Archivio Gaia HTTP 503 (coda piena, visto il 2026-11-07) | nuovo tentativo come connessione (`02` §8), poi errore della sezione | `SERVICE_ERROR` / `NET_TIMEOUT` |
 | CDS giù (SED di VizieR, nessun mirror) | serie VizieR assente, resto della fotometria presente | `SERVICE_ERROR` + `vizier_no_mirror` |
+| CDS già giù nella sessione (o, con `refresh`, nel profilo) e serie VizieR non in cache (§3.17 punto 3) | nessuna richiesta a VizieR; errore della sola serie nella Fotometria (`partial` con altri punti), `details["vizier_sed"]` con la prova | `PROFILE_VIZIER_SKIPPED` (`cds_down`) |
 | Survey HiPS non disponibile su alcun server | miniatura mancante con messaggio | `NET_TIMEOUT` `hips_servers` |
 | Tempo massimo di una sezione superato (§3.12 regola 5) | quella sezione in errore, le altre continuano; risposte tardive scartate | `PROFILE_SECTION_TIMEOUT` |
 | Annulla (§3.12 regole 7–8) | sezioni in corso `cancelled`, arrivate conservate; nessuna nuova richiesta | `COMMAND_CANCELLED` (`partial` con sezioni arrivate, altrimenti `discarded`) |
@@ -1230,8 +1443,13 @@ cambiano).
 | T27 | Comando `object.export` (§3.15) | registro con `object.export` legato a una cronologia di prova: `object.profile` di 51 Peg, poi «Riprova» dell'astrometria; numeri sbagliati, comando non profilo, profilo in errore; percorsi sbagliati; Riesegui | file scritto con le sezioni del secondo comando al posto di quelle del primo (`command_id`); `PROFILE_EXPORT_INVALID` con ogni ragione, nessun file; Riesegui → stesso SHA-256; comando `application` in cronologia, non rieseguito alla riapertura | comando registrato, SHA-256 |
 | T28 | Punti SED come catalogo e SAMP (§3.15) | `sed_catalog_table` di 51 Peg e TRAPPIST-1; `object.export` `sed_votable` poi `catalog.open_file`; `object.send_sed` con un hub e un client SAMP simulati (`tests/core/samp_fakes.py`) | una riga per punto con λ, Fν, errori, banda, fonte, `upper_limit`; livello catalogo con posizioni ICRS riconosciute dagli UCD e la provenienza; `table.load.votable` con chiamata sincrona e 60 s, tabella ricevuta uguale; senza collegamento `SAMP_UNAVAILABLE` | confronto con il risultato del profilo |
 | T29 | Tempi del profilo (§3.16, sprint C7) | AllWISE identificato per posizione (risposte registrate); profilo con richieste simulate lente e con il MocServer giù | fotometria AllWISE dalla riga del cerchio, nessuna seconda richiesta IRSA, provenienza = ADQL e server del cerchio, metodo `position`; VizieR della fotometria parte senza attendere gli incroci, Gaia dopo gli incroci come prima; con il MocServer giù un solo survey lo interroga, gli altri con `HIPS_MIRROR_FALLBACK` `cds_down`; `cds_down_in_session` vera dopo il vero ripiego di SIMBAD del 14 | conteggio delle richieste, istanti di partenza, avvisi |
+| T30 | Cone Search di IRSA (§3.17 punto 1) | 51 Peg, Vega, eta Tau, TRAPPIST-1 con le risposte vere del Cone Search registrate il 2026-11-09 (stessi centri e raggi delle risposte TAP registrate il 2026-11-07); designazione senza posizione leggibile | stessi punti 2MASS/AllWISE (valori, errori, unità, indicatori) delle risposte TAP; provenienza = URL del Cone Search con tabella, `RA`, `DEC`, `SR`; nessuna richiesta TAP a IRSA; designazione senza posizione → TAP per designazione come prima | confronto con T19/T20 e con le risposte TAP registrate |
+| T31 | Dati aggiornati una volta per profilo (§3.17 punto 2) | principale SIMBAD simulato giù, mirror su; profilo con `refresh=True` due volte di seguito; poi un comando singolo con `refresh=True` | in ogni profilo **una** sola richiesta al principale SIMBAD, le altre al mirror, nessuna copia in cache usata; miniature con `HIPS_MIRROR_FALLBACK` `cds_down` (prova `simbad_failover` del profilo), MocServer non interrogato; fuori dal profilo ogni richiesta riparte dal principale | conteggio delle richieste per server |
+| T32 | VizieR saltata con il CDS giù (§3.17 punto 3) | prova del CDS giù nella sessione; senza e con copia in cache della serie; con `refresh=True` senza prova nel profilo | senza copia: nessuna richiesta a VizieR, errore `PROFILE_VIZIER_SKIPPED` `cds_down` con la prova, `details["vizier_sed"]["skipped"]`, Fotometria `partial`; con copia: serie dalla cache con `FROM_CACHE`; con `refresh` e nessuna prova nel profilo: richiesta fatta | conteggio delle richieste, errori, dettagli |
+| T33 | Tempo di sezione dalla partenza (§3.17 punto 4) | tempi dei servizi ridotti nel test; incrocio Gaia simulato più lento del tempo dell'Astrometria, poi `gaia_source` veloce; poi `gaia_source` più lento del tempo | primo caso: Astrometria `done` (nessuna scadenza durante l'attesa dell'esito), `started` ≈ fine dell'incrocio; secondo caso: `PROFILE_SECTION_TIMEOUT` a `started` + tempo massimo, non prima | istanti e stati |
+| T34 | Due richieste per servizio (§3.17 punto 5) | archivio Gaia simulato fermo; più richieste Gaia del profilo insieme | mai più di 2 richieste Gaia in corso; Immagini, Pianeti e Identità continuano; richiesta Gaia della fotometria partita prima degli esiti di 2MASS/AllWISE; Bailer-Jones partita insieme a `gaia_source` e scartata se `gaia_source` non dà la riga | massimo di richieste contemporanee per servizio, istanti di partenza |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
-| T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`); dallo sprint C7 con `refresh=False` sulla cache vuota del test (§3.16 C7-f) | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
+| T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`); dallo sprint C7 con `refresh=False` sulla cache vuota del test (§3.16 C7-f); dallo sprint C8 con la partenza (`started`) di ogni sezione nel riepilogo | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
 
 ## 13. Decisioni aperte
 
@@ -1239,9 +1457,10 @@ Tutte le decisioni D25-1…D25-19 sono state **prese dal proprietario**
 (D25-1…D25-15 il 2026-11-07: D25-1…D25-12 dopo il report dello sprint C1,
 D25-13 dopo lo sprint C2, D25-14 e D25-15 dopo lo sprint C3; D25-16, D25-17
 e D25-18 il 2026-11-08; D25-19 confermata il 2026-11-08 con il brief dello
-sprint C6; D25-20 confermata il 2026-11-08 con il brief dello sprint C7).
-Restano qui come registro. Aperta: **D25-21** (tempi del profilo, sprint C7,
-§3.16: da decidere).
+sprint C6; D25-20 confermata il 2026-11-08 con il brief dello sprint C7;
+D25-21 approvata in tutti e 5 i punti il 2026-11-09).
+Restano qui come registro. Aperta: **D25-22** (scelte minori dello sprint
+C8, §3.17: da confermare).
 
 - **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
   `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
@@ -1423,9 +1642,18 @@ Restano qui come registro. Aperta: **D25-21** (tempi del profilo, sprint C7,
   (7) **nessuna data di esportazione nei file** (ECSV, PDF, PNG): Riesegui
   riscrive lo stesso file byte per byte; la data è nel risultato del
   comando.
-- **D25-21 — Tempi del profilo (sprint C7) — da decidere (proprietario).**
-  Cause in §3.16; nessuna di queste scelte è applicata. Raccomandazioni di
-  Claude Code:
+- **D25-21 — Tempi del profilo (sprint C7) — DECISA (2026-11-09): approvata
+  in tutti e 5 i punti** dal proprietario, con queste precisazioni: (1)
+  Cone Search di IRSA solo se dà stesse colonne, unità e precisione usate
+  oggi, altrimenti TAP per quel catalogo (verificato: vale per entrambi);
+  (2) con `refresh=True` dal principale una volta per profilo, non a ogni
+  richiesta; (3) salto della serie VizieR dichiarato nel profilo (nota
+  visibile e metadati), mai in silenzio; (4) il tempo di una sezione si conta
+  da quando parte davvero, con la definizione esatta scritta prima del
+  codice; (5) al più 2 richieste per servizio dentro le 4, ripristinate le
+  due partenze anticipate tolte nel C7. Definizioni esatte e applicazione in
+  **§3.17**. Testo della proposta (registro):
+  Cause in §3.16. Raccomandazioni di Claude Code:
   (1) **2MASS e AllWISE con il Cone Search di IRSA** (`cone_search` del 14,
   `https://irsa.ipac.caltech.edu/SCS?table=…`) al posto di TAP: stesso
   archivio e stesse tabelle, 1,2 s invece di 8–19 s per richiesta (misurato
@@ -1460,6 +1688,39 @@ Restano qui come registro. Aperta: **D25-21** (tempi del profilo, sprint C7,
   possono riattivare la richiesta Gaia della fotometria appena noto Gaia e
   Bailer-Jones insieme a `gaia_source` (≈ 4 s in meno quando l'archivio
   risponde). Raccomandato: sì; alternativa: com'è ora.
+- **D25-22 — Scelte minori dello sprint C8 (D25-21 applicata) — PROPOSTE da
+  Claude Code il 2026-11-09, da confermare (Gruppo 3).** (1) Prima della sua
+  partenza una sezione non ha scadenza propria: l'attesa degli esiti della
+  catena è limitata solo dal tempo per richiesta di ogni passo e da Annulla
+  (nessun limite complessivo della catena: un limite fisso, es. 60 s,
+  rifarebbe la causa 7 sulla catena Gaia → incrocio ufficiale → IRSA);
+  (2) VizieR saltata = **errore** della serie (`PROFILE_VIZIER_SKIPPED`,
+  Fotometria `partial` come con l'errore di rete di prima) e non solo un
+  avviso, così lo stato della sezione dice che manca una fonte; (3) con il
+  CDS giù la copia di VizieR **in cache** si usa (senza `refresh`): saltarla
+  toglierebbe dati che oggi arrivano; (4) con `refresh=True` contano solo le
+  prove del CDS giù raccolte nel profilo; (5) `hips` è un servizio solo per il
+  limite di 2 (i tre survey sono sullo stesso CDS o sullo stesso mirror
+  ESASky); `resolve_name` (NED) solo il limite comune; (6) Bailer-Jones
+  scartata quando `gaia_source` non dà la riga: né valori né richiesta né
+  errore nella sezione (prima non si chiedeva); (7) una designazione 2MASS o
+  AllWISE senza posizione leggibile resta su TAP; (8) `query` della
+  provenienza = URL GET completo del Cone Search; (9) nessuna voce nuova
+  nell'elenco dei server del 14 per il Cone Search di 2MASS (URL scritto nel
+  25; la voce `nasa-irsa-allwise-scs` esistente non cambia); (10) l'errore
+  della serie VizieR fa parte dell'impronta di rete della Fotometria (come
+  ogni errore di sezione): rieseguito nella stessa sessione dopo la prova del
+  CDS giù, un profilo con VizieR in errore di rete torna con VizieR saltata e
+  la riesecuzione segnala l'impronta cambiata per la sola Fotometria; (11)
+  **da rifare** la misura T17 con l'archivio Gaia che risponde (il
+  2026-11-09 non rispondeva): prima di allora non si sa quanto il limite di 2
+  per servizio costi con Gaia sano; (12) **proposta da decidere**: con
+  l'archivio Gaia già fermo nel profilo (una richiesta scaduta), le altre
+  richieste Gaia del profilo potrebbero non partire (come VizieR con il CDS
+  giù), dichiarato; e/o dare all'Astrometria un tempo massimo maggiore di
+  quello per richiesta (es. 35 s) perché l'errore di rete arrivi prima della
+  scadenza e si mostrino i valori SIMBAD. Raccomandazione di Claude Code:
+  entrambe, ma sono regole nuove (proprietario).
 
 ## 14. Registro modifiche
 
@@ -1476,3 +1737,4 @@ Restano qui come registro. Aperta: **D25-21** (tempi del profilo, sprint C7,
 | 2026-11-07 | Claude Code | **Sprint C2 (decisioni del proprietario del 2026-11-07):** file `approvato` dal proprietario (D25-12, formula in §13); D25-1…D25-12 scritte come decise (D25-5 con la condizione su AllWISE colore, D25-11 con la soglia RUWE solo da fonte ufficiale: verifica senza esito, RUWE senza soglia); nuovo §3.10 (precisazioni del motore: nome con `simbad_object`, candidati da coordinate con `PM_SEARCH_MAX`, `simbad_id`, catena di C2, identità, astrometria, distanza, provenienza, esecuzione); §6 con `crossmatch_radius` e `simbad_id`; §10 con `PROFILE_TARGET_INVALID` e `PROFILE_NO_GAIA` con sotto-voci; nuova D25-13 (scelte minori, da confermare). |
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1 (Fase C, decisione del proprietario del 2026-11-07): regole a–d scritte come decise; verifiche dal vivo su Alcyone, Vega, 51 Peg, TRAPPIST-1 (SIMBAD Harvard, archivio Gaia ESA con `external.gaiaedr3_distance` e incroci ufficiali, IRSA 2MASS/AllWISE, NASA Exoplanet Archive; CDS giù); interfaccia proposta in §3.9; decisioni aperte D25-1…D25-12. |
 | 2026-11-08 | Claude Code | **Sprint C7 (brief del proprietario del 2026-11-08, autorizzazione D25-12):** D25-20 **confermata** così com'è. Nuovo §3.16 (diagnosi dei tempi con la traccia di ogni richiesta: `refresh=True` dal principale a ogni richiesta, difetto di `cds_down_in_session` del 12 — chiave del 14 sbagliata —, AllWISE/2MASS interrogati due volte, IRSA TAP lento lato server, richieste in fila, VizieR con il CDS giù, tempi di sezione e catene, semaforo comune bloccato da un servizio fermo); correzioni C7-a (riga della catena riusata), C7-b (VizieR subito), C7-d (una sola prova del MocServer), C7-e (difetto del 12 corretto nel codice, la specifica del 12 era già giusta), C7-f (T17 senza `refresh=True`), C7-g (24 thread); C7-c provata e tolta; §12 T17 precisato, nuovo T29; nuova **D25-21** (cinque scelte sui tempi, da decidere, nessuna applicata). Stato `approvato` invariato. |
+| 2026-11-09 | Claude Code | **Sprint C8 (decisioni del proprietario del 2026-11-09: D25-21 approvata in tutti e 5 i punti; modifiche ai file approvati 12 e 14 limitate a quanto serve, annotate nei loro registri):** nuovo §3.17 con le definizioni esatte scritte prima del codice — (1) 2MASS e AllWISE con il Cone Search di IRSA (condizione verificata il 2026-11-09: stesse righe, colonne, unità, tipi e valori del TAP su 4 coni, anche M 13), (2) `refresh=True` dal principale una volta per profilo (`refresh_once` del 14) e scorciatoia delle miniature con una prova del profilo, (3) VizieR saltata con il CDS già giù (`PROFILE_VIZIER_SKIPPED`, `details["vizier_sed"]`; copia in cache usata), (4) tempo di sezione contato dalla partenza (fine dell'ultimo esito della catena che la sezione aspetta; `started` nel risultato), (5) al più 2 richieste per servizio dentro le 4, ripristinate Gaia della fotometria appena noto Gaia e Bailer-Jones insieme a `gaia_source`; §3.11, §3.12 (regole 3 e 5), §3.16 con i rimandi; §7.2 nuove funzioni del 14 e del 12; §10 riga nuova; §12 T17 precisato, nuovi T30–T34; §13 D25-21 decisa, nuova D25-22 (scelte minori e due proposte, da confermare); misure del 2026-11-09 (archivio Gaia fermo tutto il giorno). Stato `approvato` invariato. |

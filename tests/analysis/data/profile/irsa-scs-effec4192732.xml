@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VOTABLE version="1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:stc="http://www.ivoa.net/xml/STC/v1.30" xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/STC/v1.30 http://www.ivoa.net/xml/STC/v1.30">
+  <RESOURCE type="results">
+    <INFO name="QUERY_STATUS" value="OK"/>
+    <TABLE>
+      <FIELD name="ra" datatype="double" ID="col_0" irsa_format="10.6f" precision="F6" ucd="pos.eq.ra;meta.main" unit="deg">
+        <DESCRIPTION>right ascension (J2000 decimal deg)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dec" datatype="double" ID="col_1" irsa_format="10.6f" precision="F6" ucd="pos.eq.dec;meta.main" unit="deg">
+        <DESCRIPTION>declination (J2000 decimal deg)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="err_maj" datatype="float" ID="col_2" irsa_format="4.2f" precision="F2" unit="arcsec">
+        <DESCRIPTION>Semi-major axis length of the one sigma position uncertainty ellipse</DESCRIPTION>
+      </FIELD>
+      <FIELD name="err_min" datatype="float" ID="col_3" irsa_format="4.2f" precision="F2" unit="arcsec">
+        <DESCRIPTION>Semi-minor axis length of the one sigma position uncertainty ellipse</DESCRIPTION>
+      </FIELD>
+      <FIELD name="err_ang" datatype="int" ID="col_4" unit="deg">
+        <DESCRIPTION>angle of error ellipse major axis (E of N)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="designation" datatype="char" arraysize="*" ID="col_5" ucd="meta.id;meta.main">
+        <DESCRIPTION>source designation formed from sexigesimal coordinates</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_m" datatype="float" ID="col_6" irsa_format="6.3f" precision="F3" ucd="phot.mag;em.IR.J" unit="mag">
+        <DESCRIPTION>J band selected &quot;default&quot; magnitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_cmsig" datatype="float" ID="col_7" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>corrected J band photometric uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_msigcom" datatype="float" ID="col_8" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>combined (total) J band photometric uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_snr" datatype="double" ID="col_9" irsa_format="10.1f" precision="F1">
+        <DESCRIPTION>J band &quot;scan&quot; signal-to-noise ratio</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_m" datatype="float" ID="col_10" irsa_format="6.3f" precision="F3" ucd="phot.mag;em.IR.H" unit="mag">
+        <DESCRIPTION>H band selected &quot;default&quot; magnitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_cmsig" datatype="float" ID="col_11" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>corrected H band photometric uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_msigcom" datatype="float" ID="col_12" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>combined (total) H band photometric uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_snr" datatype="double" ID="col_13" irsa_format="10.1f" precision="F1">
+        <DESCRIPTION>H band &quot;scan&quot; signal-to-noise ratio</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_m" datatype="float" ID="col_14" irsa_format="6.3f" precision="F3" ucd="phot.mag;em.IR.K" unit="mag">
+        <DESCRIPTION>K band selected &quot;default&quot; magnitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_cmsig" datatype="float" ID="col_15" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>corrected K band photometric uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_msigcom" datatype="float" ID="col_16" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>combined (total) K band photometric uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_snr" datatype="double" ID="col_17" irsa_format="10.1f" precision="F1">
+        <DESCRIPTION>K band &quot;scan&quot; signal-to-noise ratio</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ph_qual" datatype="char" arraysize="*" ID="col_18" ucd="meta.code.qual">
+        <DESCRIPTION>flag indicating photometric quality of source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="rd_flg" datatype="char" arraysize="*" ID="col_19">
+        <DESCRIPTION>source of JHK &quot;default&quot; mags (AKA &quot;read flag&quot;)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="bl_flg" datatype="char" arraysize="*" ID="col_20">
+        <DESCRIPTION>indicates # JHK components fit simultaneously to source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="cc_flg" datatype="char" arraysize="*" ID="col_21">
+        <DESCRIPTION>indicates JHK artifact contamination and/or confusion</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ndet" datatype="char" arraysize="*" ID="col_22">
+        <DESCRIPTION>number of &gt;3-sig. ap. mag measurements, # possible (jjhhkk)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="prox" datatype="float" ID="col_23" irsa_format="6.1f" precision="F1" unit="arcsec">
+        <DESCRIPTION>distance in arcsec to nearest catalog point source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="pxpa" datatype="int" ID="col_24" unit="deg">
+        <DESCRIPTION>angle (deg E of N) to nearest catalog point source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="pxcntr" datatype="long" ID="col_25">
+        <DESCRIPTION>cntr of nearest catalog point source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="gal_contam" datatype="int" ID="col_26">
+        <DESCRIPTION>flag indicating if src is contaminated by extended source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="mp_flg" datatype="int" ID="col_27">
+        <DESCRIPTION>src is positionally associated with an asteroid, comet, etc</DESCRIPTION>
+      </FIELD>
+      <FIELD name="cntr" datatype="long" ID="col_28" ucd="meta.record;meta.main">
+        <DESCRIPTION>entry key (counter) number (unique within table)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="hemis" datatype="char" arraysize="*" ID="col_29">
+        <DESCRIPTION>hemisphere (N/S) of facility from which src was observed</DESCRIPTION>
+      </FIELD>
+      <FIELD name="xdate" datatype="char" arraysize="*" ID="col_30">
+        <DESCRIPTION>observation reference date</DESCRIPTION>
+      </FIELD>
+      <FIELD name="scan" datatype="int" ID="col_31">
+        <DESCRIPTION>scan number (unique within date)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="glon" datatype="double" ID="col_32" irsa_format="7.3f" precision="F3" ucd="pos.galactic.lon" unit="deg">
+        <DESCRIPTION>galactic longitude (decimal deg)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="glat" datatype="double" ID="col_33" irsa_format="7.3f" precision="F3" ucd="pos.galactic.lat" unit="deg">
+        <DESCRIPTION>galactic latitude (decimal deg)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="x" datatype="double" ID="col_34" irsa_format="19.16f" precision="F16" ucd="pos.cartesian.x">
+        <DESCRIPTION>unit sphere x value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="y" datatype="double" ID="col_35" irsa_format="19.16f" precision="F16" ucd="pos.cartesian.y">
+        <DESCRIPTION>unit sphere y value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="z" datatype="double" ID="col_36" irsa_format="19.16f" precision="F16" ucd="pos.cartesian.z">
+        <DESCRIPTION>unit sphere z value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="x_scan" datatype="float" ID="col_37" irsa_format="6.1f" precision="F1" unit="arcsec">
+        <DESCRIPTION>x (cross-scan) position (U-Scan coord.)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="jdate" datatype="double" ID="col_38" irsa_format="12.4f" precision="F4" ucd="time;obs.exposure" unit="d">
+        <DESCRIPTION>julian date of source measurement to +/- 30 sec</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_psfchi" datatype="float" ID="col_39" irsa_format="6.2f" precision="F2">
+        <DESCRIPTION>J band reduced chi-squared goodness-of-fit value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_psfchi" datatype="float" ID="col_40" irsa_format="6.2f" precision="F2">
+        <DESCRIPTION>H band reduced chi-squared goodness-of-fit value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_psfchi" datatype="float" ID="col_41" irsa_format="6.2f" precision="F2">
+        <DESCRIPTION>K band reduced chi-squared goodness-of-fit value</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_m_stdap" datatype="float" ID="col_42" irsa_format="6.3f" precision="F3" unit="mag">
+        <DESCRIPTION>J band standard (r=4&quot;) aperture magnitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="j_msig_stdap" datatype="float" ID="col_43" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>J band standard (r=4&quot;) aperture mag uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_m_stdap" datatype="float" ID="col_44" irsa_format="6.3f" precision="F3" unit="mag">
+        <DESCRIPTION>H band standard (r=4&quot;) aperture magnitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="h_msig_stdap" datatype="float" ID="col_45" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>H band standard (r=4&quot;) aperture mag uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_m_stdap" datatype="float" ID="col_46" irsa_format="6.3f" precision="F3" unit="mag">
+        <DESCRIPTION>K band standard (r=4&quot;) aperture magnitude</DESCRIPTION>
+      </FIELD>
+      <FIELD name="k_msig_stdap" datatype="float" ID="col_47" irsa_format="5.3f" precision="F3" unit="mag">
+        <DESCRIPTION>K band standard (r=4&quot;) aperture mag uncertainty</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dist_edge_ns" datatype="float" ID="col_48" unit="arcsec">
+        <DESCRIPTION>distance to nearest north or south full-coverage scan edge</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dist_edge_ew" datatype="float" ID="col_49" unit="arcsec">
+        <DESCRIPTION>distance to nearest east or west full-coverage scan edge</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dist_edge_flg" datatype="char" arraysize="*" ID="col_50">
+        <DESCRIPTION>flag indicating which edges ([n|s][e|w]) are nearest to src</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dup_src" datatype="int" ID="col_51">
+        <DESCRIPTION>duplicate source extractions flag (overlap areas)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="use_src" datatype="int" ID="col_52">
+        <DESCRIPTION>use source flag -- source is to be used in catalog</DESCRIPTION>
+      </FIELD>
+      <FIELD name="a" datatype="char" arraysize="*" ID="col_53">
+        <DESCRIPTION>optical source catalog identifier of closest match within 5&quot;</DESCRIPTION>
+      </FIELD>
+      <FIELD name="dist_opt" datatype="float" ID="col_54" irsa_format="3.1f" precision="F1" unit="arcsec">
+        <DESCRIPTION>distance in arcsec relative to associated optical source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="phi_opt" datatype="int" ID="col_55" unit="deg">
+        <DESCRIPTION>position angle relative to optical source (E of N)</DESCRIPTION>
+      </FIELD>
+      <FIELD name="b_m_opt" datatype="float" ID="col_56" irsa_format="5.2f" precision="F2" unit="mag">
+        <DESCRIPTION>catalog blue mag of associated optical source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="vr_m_opt" datatype="float" ID="col_57" irsa_format="5.2f" precision="F2" unit="mag">
+        <DESCRIPTION>catalog visual or red mag of associated optical source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="nopt_mchs" datatype="int" ID="col_58">
+        <DESCRIPTION>number of optical sources matched to this 2MASS source</DESCRIPTION>
+      </FIELD>
+      <FIELD name="ext_key" datatype="long" ID="col_59">
+        <DESCRIPTION>key to extended source data DB record</DESCRIPTION>
+      </FIELD>
+      <FIELD name="scan_key" datatype="long" ID="col_60">
+        <DESCRIPTION>key to scan data record in the scan information table</DESCRIPTION>
+      </FIELD>
+      <FIELD name="coadd_key" datatype="long" ID="col_61">
+        <DESCRIPTION>key to coadd data record in the atlas image data table</DESCRIPTION>
+      </FIELD>
+      <FIELD name="coadd" datatype="int" ID="col_62">
+        <DESCRIPTION>number of atlas image in which the source falls</DESCRIPTION>
+      </FIELD>
+      <FIELD name="htm20" datatype="long" ID="col_63" ucd="pos.HTM">
+        <DESCRIPTION>HTM 20 spatial (x,y,z) index key</DESCRIPTION>
+      </FIELD>
+      <DATA>
+        <TABLEDATA>
+          <TR>
+            <TD>346.622013</TD>
+            <TD>-5.041274</TD>
+            <TD>0.13</TD>
+            <TD>0.13</TD>
+            <TD>90</TD>
+            <TD>23062928-0502285</TD>
+            <TD>11.354</TD>
+            <TD>0.019</TD>
+            <TD>0.022</TD>
+            <TD>1073.6</TD>
+            <TD>10.718</TD>
+            <TD>0.020</TD>
+            <TD>0.021</TD>
+            <TD>744.2</TD>
+            <TD>10.296</TD>
+            <TD>0.021</TD>
+            <TD>0.023</TD>
+            <TD>665.3</TD>
+            <TD>AAA</TD>
+            <TD>222</TD>
+            <TD>111</TD>
+            <TD>000</TD>
+            <TD>666666</TD>
+            <TD>47.0</TD>
+            <TD>294</TD>
+            <TD>1307757241</TD>
+            <TD>0</TD>
+            <TD>0</TD>
+            <TD>1307757231</TD>
+            <TD>s</TD>
+            <TD>1998-09-19</TD>
+            <TD>75</TD>
+            <TD>69.712</TD>
+            <TD>-56.644</TD>
+            <TD>0.9691014674160000</TD>
+            <TD>-0.2304791116490000</TD>
+            <TD>-0.0878733460526000</TD>
+            <TD>75.4</TD>
+            <TD>2451075.6776</TD>
+            <TD>0.71</TD>
+            <TD>0.66</TD>
+            <TD>1.03</TD>
+            <TD>11.355</TD>
+            <TD>0.013</TD>
+            <TD>10.719</TD>
+            <TD>0.035</TD>
+            <TD>10.315</TD>
+            <TD>0.013</TD>
+            <TD>3465.69995</TD>
+            <TD>176.800003</TD>
+            <TD>sw</TD>
+            <TD>0</TD>
+            <TD>1</TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD></TD>
+            <TD>0</TD>
+            <TD></TD>
+            <TD>70404</TD>
+            <TD>1619273</TD>
+            <TD>44</TD>
+            <TD>4802823389478336512</TD>
+          </TR>
+        </TABLEDATA>
+      </DATA>
+    </TABLE>
+  </RESOURCE>
+</VOTABLE>

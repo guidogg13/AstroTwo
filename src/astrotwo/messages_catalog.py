@@ -3500,6 +3500,11 @@ _add("PROFILE_NO_PHOTOMETRY",
      "No photometry.", "Nessuna fotometria.", "",
      not_in_catalog=("{catalog}: {identifier} has no row in {table}.",
                      "{catalog}: {identifier} non ha righe in {table}.", "catalog identifier! table"))
+_add("PROFILE_VIZIER_SKIPPED",
+     "VizieR SED series not requested.", "Serie SED di VizieR non chiesta.", "",
+     cds_down=("VizieR SED series not requested: the CDS is already unreachable ({evidence}); no copy in the cache.",
+               "Serie SED di VizieR non chiesta: il CDS risulta già non raggiungibile ({evidence}); nessuna copia in "
+               "cache.", "evidence"))
 # Esportazione del profilo (25 §3.15, §10, sprint C6)
 _add("PROFILE_EXPORT_INVALID", "The export of the profile is not valid.", "L'esportazione del profilo non è valida.",
      "",

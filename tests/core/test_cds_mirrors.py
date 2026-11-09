@@ -500,3 +500,58 @@ def test_network_vizier_mirrors_have_no_tap():
     for host in ("vizier.cfa.harvard.edu", "vizier.idia.ac.za"):
         response = requests.get(f"https://{host}/TAPVizieR/tap/capabilities", timeout=(10, 30))
         assert response.status_code == 404
+
+
+# =============================================================================
+# D25-21 (2) del 25 (sprint C8): «giro con dati aggiornati» — dal principale una volta per giro
+# =============================================================================
+
+
+def test_c8_refresh_once_restarts_from_the_primary_once_per_scope(pair, cache, monkeypatch):
+    import contextvars
+    import threading
+
+    primary, mirror = pair
+    primary.routes["/tap/sync"] = status(503)
+    mirror.routes["/tap/sync"] = ok(2)
+    monkeypatch.setattr(vo, "_in_strasbourg", lambda url: url.startswith(primary.url))  # principale «a Strasburgo»
+    assert vo.refresh_scope_cds_down() is None
+    with vo.refresh_once():
+        first = query(cache=cache, refresh=True)
+        second = query("SELECT ra, dec, main_id FROM basic WHERE ra > 1", cache=cache, refresh=True)
+        assert first.request.url == second.request.url == mirror.url + "/tap/sync"
+        assert primary.hits("/tap/sync") == 1  # una sola volta dal principale nel giro
+        assert not first.request.from_cache and not second.request.from_cache  # sempre senza cache
+        assert vo.refresh_scope_cds_down() == {"evidence": "simbad_failover"}
+        # un lavoro lanciato con una copia del contesto (thread del profilo) è nello stesso giro
+        context, seen = contextvars.copy_context(), []
+        from astrotwo.core.cache import SharedCache
+
+        worker = threading.Thread(target=context.run, args=(lambda: seen.append(query(  # cache: una per thread
+            "SELECT ra, dec, main_id FROM basic WHERE ra > 2", cache=SharedCache(cache.root), refresh=True)),))
+        worker.start()
+        worker.join()
+        assert seen[0].request.url == mirror.url + "/tap/sync" and primary.hits("/tap/sync") == 1
+    assert vo.refresh_scope_cds_down() is None  # fuori dal giro: nessuna prova del giro
+    # nuovo giro: di nuovo una volta dal principale
+    with vo.refresh_once():
+        query("SELECT ra, dec, main_id FROM basic WHERE ra > 3", cache=cache, refresh=True)
+    assert primary.hits("/tap/sync") == 2
+    # fuori da un giro (comando singolo con dati aggiornati): ogni richiesta riparte dal principale (D14-15 (1))
+    query("SELECT ra, dec, main_id FROM basic WHERE ra > 4", cache=cache, refresh=True)
+    query("SELECT ra, dec, main_id FROM basic WHERE ra > 5", cache=cache, refresh=True)
+    assert primary.hits("/tap/sync") == 4
+
+
+def test_c8_refresh_once_primary_up_returns_to_the_primary(pair, cache):
+    primary, mirror = pair
+    primary.routes["/tap/sync"] = status(503)
+    mirror.routes["/tap/sync"] = ok(2)
+    query(cache=cache)
+    assert vo.current_server("simbad") == 1
+    primary.routes["/tap/sync"] = ok(4)
+    with vo.refresh_once():
+        again = query("SELECT ra, dec, main_id FROM basic WHERE ra > 0", cache=cache, refresh=True)
+        later = query("SELECT ra, dec, main_id FROM basic WHERE ra > 1", cache=cache, refresh=True)
+        assert vo.refresh_scope_cds_down() is None  # il principale ha risposto: nessuna prova
+    assert again.request.url == later.request.url == primary.url + "/tap/sync" and vo.current_server("simbad") == 0

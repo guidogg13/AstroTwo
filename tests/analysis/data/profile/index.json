@@ -498,5 +498,70 @@
   "file": "hips-7ee1e04b7953.bin",
   "retrieved_at": "2026-11-07",
   "server": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1190000/Npix1198476.jpg"
+ },
+ "irsa-scs|DEC=38.78366666666666&RA=279.23470833333334&SR=0.0005555555555555556&table=fp_psc": {
+  "file": "irsa-scs-8be0510e0772.xml",
+  "retrieved_at": "2026-11-09T20:21:28.572384+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.78366666666666&RA=279.23470833333334&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556&table=fp_psc": {
+  "file": "irsa-scs-70c5ad4b7985.xml",
+  "retrieved_at": "2026-11-09T20:21:29.267695+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=38.783688956244&RA=279.234734787025&SR=0.0008067616190477293&table=fp_psc": {
+  "file": "irsa-scs-2cee9ba5e464.xml",
+  "retrieved_at": "2026-11-09T20:21:30.927923+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0008067616190477293"
+ },
+ "irsa-scs|DEC=20.768805555555556&RA=344.3664583333333&SR=0.0005555555555555556&table=fp_psc": {
+  "file": "irsa-scs-503331fdfff3.xml",
+  "retrieved_at": "2026-11-09T20:21:32.033070+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768805555555556&RA=344.3664583333333&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=-5.04125&RA=346.622&SR=0.0005555555555555556&table=fp_psc": {
+  "file": "irsa-scs-effec4192732.xml",
+  "retrieved_at": "2026-11-09T20:21:32.796227+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=-5.04125&RA=346.622&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=24.105111111111114&RA=56.87116666666667&SR=0.0005555555555555556&table=fp_psc": {
+  "file": "irsa-scs-f9b56646c738.xml",
+  "retrieved_at": "2026-11-09T20:21:33.472743+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=24.105111111111114&RA=56.87116666666667&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-242ec983cb09.xml",
+  "retrieved_at": "2026-11-09T20:21:34.487963+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=38.784555555555556&RA=279.2354583333333&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-61da2e215415.xml",
+  "retrieved_at": "2026-11-09T20:21:37.270315+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=38.784555555555556&RA=279.2354583333333&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=38.784528226746126&RA=279.2354906348513&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-77d45e3fda15.xml",
+  "retrieved_at": "2026-11-09T20:21:38.297354+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=38.784528226746126&RA=279.2354906348513&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=20.769055555555553&RA=344.36716666666666&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-f2b0eab3e5a0.xml",
+  "retrieved_at": "2026-11-09T20:21:39.452238+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=20.769055555555553&RA=344.36716666666666&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=20.769011852717775&RA=344.36723552421523&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-b03c78140349.xml",
+  "retrieved_at": "2026-11-09T20:21:40.455458+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=20.769011852717775&RA=344.36723552421523&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=-5.042805555555556&RA=346.62508333333335&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-260e7f0dce7f.xml",
+  "retrieved_at": "2026-11-09T20:21:41.485998+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=-5.042805555555556&RA=346.62508333333335&SR=0.0005555555555555556"
+ },
+ "irsa-scs|DEC=24.105007604385722&RA=56.87121442921137&SR=0.0005555555555555556&table=allwise_p3as_psd": {
+  "file": "irsa-scs-713f1441db88.xml",
+  "retrieved_at": "2026-11-09T20:21:42.833863+00:00",
+  "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=24.105007604385722&RA=56.87121442921137&SR=0.0005555555555555556"
  }
 }

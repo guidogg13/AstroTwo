@@ -30,6 +30,7 @@ __all__ = [
     "HiPSThumbnail",
     "hips_thumbnail",
     "survey_epoch",
+    "cds_down_evidence",
     "cds_down_in_session",
     "reset_cds_state",
     "view_sampling",
@@ -542,9 +543,12 @@ def _note_cds_down(evidence: str, **detail) -> None:
     """Registra (una volta) la prova che il CDS è giù: ``mocserver`` (MocServer non raggiungibile) o
     ``hips_failover`` (survey passato da un server di Strasburgo a un mirror)."""
     global _CDS_DOWN
+    from astrotwo.core import vo_protocols as vo
+
     with _CDS_DOWN_LOCK:
         if _CDS_DOWN is None:
             _CDS_DOWN = {"evidence": evidence, **detail}
+    vo.note_refresh_scope_cds_down(evidence, **detail)  # anche nel giro con dati aggiornati in corso (25 §3.17)
 
 
 def cds_down_in_session() -> dict | None:
@@ -560,6 +564,17 @@ def cds_down_in_session() -> dict | None:
     if vo._MIRROR_IN_USE.get("simbad" if entry is None else entry.service, 0) > 0:
         return {"evidence": "simbad_failover"}
     return None
+
+
+def cds_down_evidence(*, refresh: bool = False) -> dict | None:
+    """Prova del CDS giù da usare (D25-21 (2)–(3) del 25): senza ``refresh`` quella della sessione
+    (``cds_down_in_session``); con ``refresh`` solo quella raccolta nel giro con dati aggiornati in corso
+    (``refresh_once`` del 14), ``None`` fuori da un giro."""
+    if not refresh:
+        return cds_down_in_session()
+    from astrotwo.core import vo_protocols as vo
+
+    return vo.refresh_scope_cds_down()
 
 
 def reset_cds_state() -> None:
@@ -767,7 +782,8 @@ def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts
 
     ``cds_down_shortcut`` (D25-18, usato dalle miniature del 25): se nella sessione il CDS risulta già giù
     (``cds_down_in_session``) e l'identificativo ha mirror verificati, il MocServer non si interroga e il survey si
-    apre subito dai mirror, con ``HIPS_MIRROR_FALLBACK`` ``cds_down``; mai con ``refresh=True``."""
+    apre subito dai mirror, con ``HIPS_MIRROR_FALLBACK`` ``cds_down``; con ``refresh=True`` solo con una prova
+    raccolta nel giro con dati aggiornati in corso (``cds_down_evidence``, D25-21 (2) del 25)."""
     from astrotwo.core.cache import NETWORK_TIMEOUTS
 
     timeouts = NETWORK_TIMEOUTS if timeouts is None else timeouts
@@ -781,7 +797,7 @@ def add_hips(hips_id_or_url: str, *, cache=None, refresh: bool = False, timeouts
             return service
         return _replace(service, servers=HiPSServers(service.hips_id, servers, 0, service))
     hips_id = text[len("ivo://"):] if text.startswith("ivo://") else text
-    down = cds_down_in_session() if cds_down_shortcut and not refresh and hips_id in MIRROR_FALLBACKS else None
+    down = cds_down_evidence(refresh=refresh) if cds_down_shortcut and hips_id in MIRROR_FALLBACKS else None
     if down is not None:
         return _open_service(hips_id, _server_order(None, MIRROR_FALLBACKS[hips_id]), primary_known=False,
                              cause={"reason": "cds_down", "evidence": down["evidence"]}, cache=cache, refresh=refresh,

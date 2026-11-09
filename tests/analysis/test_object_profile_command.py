@@ -36,6 +36,23 @@ def content(values: dict) -> dict:
     return data
 
 
+def vizier_codes(values: dict) -> list[str]:
+    phot = next(x for x in values["sections"] if x["name"] == "photometry")
+    return [e["code"] for e in phot["errors"] if e.get("catalog") == "vizier_sed"]
+
+
+def same_but_vizier(values: dict) -> dict:
+    """``content`` con l'errore della serie VizieR ridotto a «serie assente»: nel primo profilo della sessione la
+    richiesta si fa (CDS giù: HTTP 503), dopo la prova del CDS giù si salta (``PROFILE_VIZIER_SKIPPED``, 25 §3.17
+    punto 3); ogni test verifica a parte quale dei due errori c'è."""
+    data = content(values)
+    for sec in data["sections"]:
+        if sec["name"] == "photometry":
+            sec["errors"] = [{"catalog": "vizier_sed"} if e.get("catalog") == "vizier_sed" else e for e in sec["errors"]]
+            sec["details"].pop("vizier_sed", None)
+    return data
+
+
 def run(registry, workspace, params, refresh=False):
     return registry.run(Command("object.profile", 1, params, RequestedBy("menu"), refresh), workspace)
 
@@ -76,7 +93,11 @@ def test_t28_t14_name_profile_registered_replayed_and_refreshed(services, cache)
     assert registered.parameters["thumbnail_size"] == 256
     assert workspace.state is before and result.layers_created == ()  # sola lettura
     direct = build_profile(ProfileTarget(name="51 Peg"), cache=cache)
-    assert content(result.values)["sections"] == content(direct.as_dict())["sections"]
+    # primo profilo: VizieR chiesta (503) o già saltata se il MocServer simulato (connessione rifiutata all'istante)
+    # ha dato la prova prima della sua partenza; poi sempre saltata, dichiarata (§3.17 punto 3)
+    assert vizier_codes(result.values) in (["SERVICE_ERROR"], ["PROFILE_VIZIER_SKIPPED"])
+    assert vizier_codes(direct.as_dict()) == ["PROFILE_VIZIER_SKIPPED"]
+    assert same_but_vizier(result.values)["sections"] == same_but_vizier(direct.as_dict())["sections"]
     assert {p["origin"].rsplit("/", 2)[-2] for p in result.provenance if "/hips/" not in p["origin"]} == {
         "simbad", "gaia", "exoplanet", "irsa"}
     assert any("/hips/skies.esac.esa.int/" in p["origin"] for p in result.provenance)  # properties delle survey
@@ -86,15 +107,19 @@ def test_t28_t14_name_profile_registered_replayed_and_refreshed(services, cache)
     asked = services.count() - services.count("vizier")
     _, again = registry.run(registered, workspace)
     assert again.status == "ok" and services.count() - services.count("vizier") == asked
-    assert content(again.values) == content(result.values)
-    assert [f["sha256"] for f in again.network_fingerprint] == [f["sha256"] for f in result.network_fingerprint]
+    assert same_but_vizier(again.values) == same_but_vizier(result.values)
+    assert vizier_codes(again.values) == ["PROFILE_VIZIER_SKIPPED"]
+    # impronte uguali tranne la Fotometria, che cambia solo per l'errore della serie VizieR (D25-22 (10))
+    prints = {f["origin"]: f["sha256"] for f in result.network_fingerprint}
+    assert {o for o, sha in ((f["origin"], f["sha256"]) for f in again.network_fingerprint)
+            if prints[o] != sha} <= {"object.profile/photometry"}
     assert all(p["from_cache"] for p in again.provenance)
     # con refresh: di nuovo dalla rete, DATA_REFRESHED fresh
     refreshed = Command(registered.name, 1, registered.parameters, RequestedBy("history"), True)
     _, fresh = registry.run(refreshed, workspace)
     assert fresh.status == "ok" and services.count() - services.count("vizier") > asked
     assert fresh.warnings[-1].code == "DATA_REFRESHED" and fresh.warnings[-1].params == {"reason": "fresh"}
-    assert content(fresh.values) == content(result.values)
+    assert same_but_vizier(fresh.values) == same_but_vizier(result.values)
 
 
 def test_t28_session_saved_and_replayed(services, cache, tmp_path):
@@ -109,7 +134,8 @@ def test_t28_session_saved_and_replayed(services, cache, tmp_path):
     report = reopened.replay()
     assert report.stop is None and report.replayed == (1,)
     replayed = reopened.history.entries[-1].result
-    assert content(replayed.values) == content(first.values)
+    assert same_but_vizier(replayed.values) == same_but_vizier(first.values)
+    assert vizier_codes(replayed.values) == ["PROFILE_VIZIER_SKIPPED"]
 
 
 def test_t28_position_target_and_catalog_row(services, cache, tmp_path):
