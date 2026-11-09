@@ -222,7 +222,9 @@ def test_t10_gaia_down_keeps_the_other_sections(services, cache):
     identity, astrometry = section(prof, "identity"), section(prof, "astrometry")
     assert identity.status == "partial" and values(identity)["main_id"].value == prof.resolved.simbad.main_id
     assert {e["catalog"] for e in identity.errors} == {"2mass", "allwise"}
-    assert astrometry.status == "partial" and astrometry.errors[0]["code"] == "SERVICE_ERROR"
+    # errore di rete di Gaia, oppure richiesta non inviata se Gaia era già fermo nel profilo (D25-22, 25 §3.17)
+    assert astrometry.status == "partial" and astrometry.errors[0]["code"] in ("SERVICE_ERROR", "PROFILE_GAIA_SKIPPED")
+    assert prof.skipped_services.get("gaia", {"evidence": "SERVICE_ERROR"})["evidence"] == "SERVICE_ERROR"
     v = values(astrometry)
     assert v["parallax"].note == "SIMBAD" and v["distance_parallax"].method == "computed"
     exo = prof.cross_ids[3]

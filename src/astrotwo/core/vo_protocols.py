@@ -130,6 +130,7 @@ __all__ = [
     "refresh_scope_cds_down",
     "reset_mirror_state",
     "service_servers",
+    "tap_query_cached",
     "vizier_photometry_cached",
     "VOTABLE_VERSION",
     "VoProtocolsError",
@@ -940,6 +941,27 @@ def tap_query(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, mode: st
     return dataclasses.replace(result, warnings=tuple(notes) + result.warnings) if notes else result
 
 
+def tap_query_cached(url: str, adql: str, *, max_rows: int = DEFAULT_MAX_ROWS, servers: ServerRegistry | None = None,
+                     limits: TableLimits | None = None, cache: SharedCache | None = None) -> VoResult | None:
+    """La copia in cache della stessa interrogazione sincrona di ``tap_query`` (prima copia nell'ordine dei server,
+    con ``FROM_CACHE``), **senza rete**; ``None`` se non c'è (D25-22 del 25: archivio Gaia già fermo nel profilo)."""
+    check = validate_adql(adql)
+    if not check.valid:
+        raise VoProtocolsError("ADQL_INVALID", f"{check.message} (carattere {check.position})",
+                               position=check.position, params=_adql_params(check))
+    limits = _check_max_rows(max_rows, limits)
+    sent = adql_to_send(adql)
+    for base in service_servers(url, servers):
+        query = pyvo.dal.tap.TAPQuery(base, sent, mode="sync", maxrec=max_rows)
+        response = _cached_response("tap", "POST", query.queryurl, dict(query), cache)
+        if response is not None:
+            parsed = _parse_results(response, pyvo.dal.TAPResults)
+            arguments = {"url": url, "adql": adql, "max_rows": max_rows, "mode": "sync"}
+            return _finish("tap", "tap_query", arguments, response, parsed, max_rows=max_rows, limits=limits,
+                           cache=cache)
+    return None
+
+
 #: Intervallo massimo tra due controlli dell'annullamento durante l'attesa di un lavoro asincrono (s, sprint B3).
 _CANCEL_POLL = 0.25
 
@@ -1402,7 +1424,16 @@ class ServerRegistry:
         if servicetype not in PROTOCOLS:
             raise ValueError(f"servicetype {servicetype!r}: ammessi {', '.join(PROTOCOLS)}")
         words = [keywords] if isinstance(keywords, str) else list(keywords)
-        adql = pyvo.registry.regtap.get_RegTAP_query(keywords=words, servicetype=servicetype)
+        # L'ADQL dipende dalle capacità del registro (UNION o OR): si leggono da quello davvero usato, con i timeout
+        # del 04. Senza ``service`` pyvo leggerebbe quelle di http://reg.g-vo.org con una connessione nascosta, senza
+        # tempo massimo e verso un registro diverso (sprint C8b del 25: nessuna rete fuori dai servizi scelti).
+        base = service_servers(registry_url, self)[0]
+        try:
+            with _Session(timeouts) as session:
+                adql = pyvo.registry.regtap.get_RegTAP_query(keywords=words, servicetype=servicetype,
+                                                             service=pyvo.dal.TAPService(base, session=session))
+        except (pyvo.dal.DALServiceError, requests.exceptions.RequestException) as exc:
+            raise _net_error(base, exc, timeouts) from exc
         result = tap_query(registry_url, adql, max_rows=max_rows, cache=cache, refresh=refresh, timeouts=timeouts)
         return RegistrySearch(result=result, services=_registry_services(result.table.table, servicetype))
 
@@ -2558,6 +2589,16 @@ class SampSelection:
     rows: tuple[int, ...]
 
 
+
+def _samp_local_only() -> None:
+    """SAMP solo sulla macchina locale: ``pyvo.samp`` per default prova ``http://google.com`` a ogni avvio dell'hub e
+    a ogni collegamento di un client (``internet_on``) e, se risponde, usa il nome di rete del Mac con
+    ``socket.getfqdn()`` (senza tempo massimo). AstroTwo non contatta servizi esterni per SAMP: hub e client su
+    ``127.0.0.1`` (opzione ``use_internet`` di ``pyvo.samp``; sprint C8b del 25, 14 §3 SAMP)."""
+    from pyvo.samp import conf
+
+    conf.use_internet = False
+
 def _restricted_client_class():
     """Client SAMP di ``pyvo`` che **non** si iscrive a ``client.env.get`` (sprint B1, 2026-11-05).
 
@@ -2572,6 +2613,8 @@ def _restricted_client_class():
     ridichiarava l'elenco: 12 avvisi ``samp.hub.event.subscriptions`` a tutti i client a ogni collegamento)."""
     from pyvo.samp import SAMPIntegratedClient
     from pyvo.samp.client import SAMPClient
+
+    _samp_local_only()
 
     class RestrictedSampClient(SAMPIntegratedClient):
         def connect(self, hub=None, hub_params=None, pool_size=20, bindings=()):
@@ -2625,6 +2668,7 @@ class SampHub:
         """Si collega all'hub attivo; se non c'è ne avvia uno proprio; altrimenti ``SAMP_UNAVAILABLE``."""
         from pyvo.samp import SAMPHubError, SAMPHubServer
 
+        _samp_local_only()
         if self.connected:
             return self
         client = _restricted_client_class()(name=self.name, description=f"AstroTwo {astrotwo.__version__}",

@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-09 (sprint C8): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti e tolta; nuova `D25-22`, scelte minori dello sprint C8 e due proposte nate dalle misure, da confermare; file di origine `25` §13 e §3.17).
+**Dal 2026-11-09 (sprint C8b): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D25-22` decisa dal proprietario il 2026-11-09 — approvate le due proposte del punto (12): richieste Gaia non inviate con l'archivio già fermo nel profilo, Astrometria 35 s — e tolta; file di origine `25` §13 e §3.17).
+
+Prima, **Dal 2026-11-09 (sprint C8): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti e tolta; nuova `D25-22`, scelte minori dello sprint C8 e due proposte nate dalle misure, da confermare; file di origine `25` §13 e §3.17).
 
 Prima, **Dal 2026-11-08 (sprint C7): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-20` e `D32-4` confermate dal proprietario il 2026-11-08 così come proposte — D32-4: limite di 20 kB anche per `object__profile`, non alzato — e tolte; nuova `D25-21`, tempi del profilo, cinque scelte da decidere, nessuna applicata; file di origine `25` §13, §3.16 e `32` §13).
 
@@ -339,11 +341,11 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (20)
+## 5. GRUPPO 3 — rimandabili al momento del codice (19)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `D25-22` | Scelte minori dello sprint C8 (D25-21 applicata, **proposte da Claude Code il 2026-11-09, da confermare**; `25` §3.17 e §13): (1) nessuna scadenza di sezione prima della partenza, attesa della catena limitata solo dal tempo per richiesta e da Annulla; (2) VizieR saltata come **errore** della serie (`PROFILE_VIZIER_SKIPPED`, Fotometria `partial`); (3) copia di VizieR in cache usata anche con il CDS giù; (4) con `refresh=True` contano solo le prove del CDS giù del profilo; (5) `hips` un servizio solo, NED solo il limite comune; (6) Bailer-Jones scartata senza traccia se `gaia_source` non dà la riga; (7) designazione senza posizione leggibile su TAP; (8) `query` = URL del Cone Search; (9) nessuna voce nuova nell'elenco dei server; (10) impronta della Fotometria cambiata quando VizieR passa da errore di rete a saltata; (11) T17 da rifare con l'archivio Gaia che risponde (il 2026-11-09 era fermo); (12) **proposta**: con Gaia già fermo nel profilo non far partire le altre richieste Gaia (dichiarato) e/o Astrometria 35 s invece di 30 s | `25` |
+| — | (`D25-22` decisa dal proprietario il 2026-11-09: approvate le due proposte del punto (12); `25` §13, §3.17) | — |
 | — | (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti; `25` §13, §3.17) | — |
 | — | (`D25-20` e `D32-4` confermate dal proprietario il 2026-11-08 così come proposte; `25` §13, `32` §13) | — |
 | — | (`D43-1`…`D43-8`, `D43-10` e `D25-19` confermate dal proprietario il 2026-11-08, `43` §13 e `25` §13) | — |
@@ -478,3 +480,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-08 | Claude Code | **Sprint C6b:** nuova **`D32-4`** (riassunto del profilo per il modello, strumento `object__profile`) nel Gruppo 3, scritta prima nel `32` §13. Aperte 20 → **21**. |
 | 2026-11-08 | Claude Code | **Sprint C7 (decisioni del proprietario del 2026-11-08):** **`D25-20` confermata** così com'è e **`D32-4` confermata** (limite di 20 kB anche per `object__profile`, nessun limite più alto), scritte prima nel `25` §13 e nel `32` §13 e tolte da qui; nuova **`D25-21`** (tempi del profilo, da decidere) nel Gruppo 3, scritta prima nel `25` §13 e §3.16. Aperte 21 → **20**. |
 | 2026-11-09 | Claude Code | **Sprint C8 (decisioni del proprietario del 2026-11-09):** **`D25-21` approvata** in tutti e 5 i punti, scritta prima nel `25` §13 e §3.17 e tolta dal Gruppo 3; nuova **`D25-22`** (scelte minori dello sprint C8 e due proposte nate dalle misure con l'archivio Gaia fermo) nel Gruppo 3. Aperte invariate: **20** (Gruppo 3 = 20). |
+| 2026-11-09 | Claude Code | **Sprint C8b (decisioni del proprietario del 2026-11-09):** **`D25-22` decisa** (le due proposte del punto (12) approvate), scritta prima nel `25` §13 e §3.17 e tolta dal Gruppo 3. Aperte 20 → **19**. |

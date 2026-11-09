@@ -3505,6 +3505,11 @@ _add("PROFILE_VIZIER_SKIPPED",
      cds_down=("VizieR SED series not requested: the CDS is already unreachable ({evidence}); no copy in the cache.",
                "Serie SED di VizieR non chiesta: il CDS risulta già non raggiungibile ({evidence}); nessuna copia in "
                "cache.", "evidence"))
+_add("PROFILE_GAIA_SKIPPED",
+     "Gaia archive request not sent.", "Richiesta all'archivio Gaia non inviata.", "",
+     gaia_down=("Gaia archive: request not sent, the archive did not answer in this profile ({evidence}).",
+                "Archivio Gaia: richiesta non inviata, l'archivio non ha risposto in questo profilo ({evidence}).",
+                "evidence"))
 # Esportazione del profilo (25 §3.15, §10, sprint C6)
 _add("PROFILE_EXPORT_INVALID", "The export of the profile is not valid.", "L'esportazione del profilo non è valida.",
      "",

@@ -237,6 +237,14 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
    Nelle parti intermedie di un modulo, se il proprietario chiede i test di
    rete solo alla fine del modulo, si usa `--no-network`: il messaggio di
    commit dichiara che i test di rete non sono stati eseguiti.
+   **Mai un'attesa senza fine (istruzione del proprietario del
+   2026-11-10):** oltre ai 120 s per test di `pyproject.toml`
+   (`pytest-timeout`), lo script dà a ogni esecuzione di pytest un tempo
+   massimo complessivo (`PYTEST_TIME_LIMIT`, 30 minuti) e lo stdin chiuso;
+   oltre il limite pytest si ferma e il commit non si fa. **Nessun test di
+   default usa la rete vera:** `tests/conftest.py` rifiuta ogni connessione
+   verso un indirizzo non locale fuori dai test `network` e fa fallire il
+   test anche se il codice ha gestito l'errore.
 10. **Test dell'interfaccia (decisione del proprietario del 2026-10-15):**
     **pytest-qt** (licenza da verificare e da aggiungere a
     `THIRD_PARTY_LICENSES`) con la piattaforma Qt **`offscreen`** (senza
@@ -320,3 +328,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-16 | Claude Code | **Regola dei commit (decisione del proprietario del 2026-10-16**, autorizzazione esplicita a modificare il file approvato): §8 punti 8 e 9 — le risposte HTTP 429, 502, 503 e 504 dei servizi esterni contano come "connessione" (servizio temporaneamente non disponibile), con le stesse ripetizioni e la dichiarazione nel messaggio di commit; gli altri 4xx restano risultati sbagliati e bloccano il commit. Aggiornati `tests/conftest.py` (`network_reason`), `scripts/commit_checked.py` e i loro test. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per 30, 31, 32, 34, 35 e 44; §8 punto 4 — test del livello 3 con servizi simulati delle due API, adattatore finto e Portachiavi simulato, provider reali solo nella lista di controllo manuale. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | DC4: forma della pre-release `0.1.0-beta.1` / `0.1.0b1` (decisione del proprietario del 2026-10-25, `60` §3.2). |
+| 2026-11-10 | Claude Code | §8 punto 9 (istruzione del proprietario del 2026-11-10, dopo una suite rimasta ferma un'ora nel commit C8b): tempo massimo complessivo e stdin chiuso per pytest in `scripts/commit_checked.py`; controllo in `tests/conftest.py` che fa fallire ogni test di default che prova la rete vera. Stato `approvato` invariato. |

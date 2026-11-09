@@ -25,11 +25,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+#: Tempo massimo di un'esecuzione completa di pytest (s): la suite dura circa 10 minuti; oltre questo limite pytest
+#: si ferma e nessun commit (mai un'attesa senza fine, sprint C8b del 25). Il limite di 120 s per test resta in
+#: ``pyproject.toml``; questo copre anche ciò che lì non si vede (raccolta, uscita del processo, processo sospeso).
+PYTEST_TIME_LIMIT = 30 * 60
+
+
 def run_pytest(*args: str, junit: Path | None = None) -> int:
     command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *args]
     if junit is not None:
         command.append(f"--junitxml={junit}")
-    return subprocess.run(command, cwd=ROOT).returncode
+    try:
+        # stdin chiuso: nessun test (né un suo sottoprocesso) può fermarsi aspettando il terminale
+        return subprocess.run(command, cwd=ROOT, stdin=subprocess.DEVNULL, timeout=PYTEST_TIME_LIMIT).returncode
+    except subprocess.TimeoutExpired:
+        print(f"pytest oltre {PYTEST_TIME_LIMIT} s: fermato, nessun commit.", file=sys.stderr)
+        return 124
 
 
 def network_failures(junit: Path) -> tuple[list[str], list[str]]:

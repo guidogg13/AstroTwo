@@ -141,8 +141,9 @@ def test_t21_at_most_four_requests_at_the_same_time(services, cache):
 def test_t21_time_limits_of_the_services_and_of_the_sections():
     assert {k: float(v.to_value(u.s)) for k, v in SERVICE_TIME_LIMITS.items()} == {
         "simbad": 15.0, "gaia": 30.0, "irsa": 60.0, "exoplanet": 30.0, "hips": 30.0, "vizier_sed": 30.0}
+    # Astrometria 35 s (D25-22, 25 §3.17), oltre i 30 s per richiesta di Gaia
     assert {name: float(op._section_limit(name).to_value(u.s)) for name in SECTION_SERVICES} == {
-        "identity": 60.0, "astrometry": 30.0, "photometry": 60.0, "images": 30.0, "planets": 30.0}
+        "identity": 60.0, "astrometry": 35.0, "photometry": 60.0, "images": 30.0, "planets": 30.0}
     timeouts = op._limited(op.NETWORK_TIMEOUTS, "simbad")
     assert (timeouts.connect, timeouts.read) == (10.0, 15.0)  # minimo tra il 04 (10 s / 60 s) e il servizio
     assert float(op.PROFILE_TARGET_TIME.to_value(u.s)) == 60.0

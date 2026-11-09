@@ -385,3 +385,57 @@ def test_t34_bailer_jones_with_gaia_source_and_discarded_without_the_row(service
     assert not any(v.provenance.table == "external.gaiaedr3_distance" for v in astro.values)
     assert not astro.errors
 
+
+
+# =============================================================================
+# T35 — archivio Gaia già fermo nel profilo: le altre richieste Gaia non partono (D25-22 (12 a), 25 §3.17)
+
+
+def _gaia_down(services, delay: float = 0.3) -> None:
+    def down(query):
+        time.sleep(delay)
+        return 503, "text/plain", "coda piena"
+    services.overrides[("gaia", "")] = down
+
+
+def test_t35_gaia_down_in_the_profile_skips_the_other_gaia_requests(services, cache):
+    _gaia_down(services)
+    prof = build_profile(ProfileTarget(name="51 Peg"), cache=cache)
+    sent = services.count("gaia")
+    assert sent == 2  # le due in corso insieme (2 posti di Gaia); dopo il guasto nessun'altra parte
+    skipped = prof.skipped_services["gaia"]
+    assert skipped["evidence"] == "SERVICE_ERROR" and skipped["requests"] >= 2
+    errors = [e for s in prof.sections for e in s.errors] + [dict(c.error) for c in prof.cross_ids if c.error]
+    codes = [e["code"] for e in errors]
+    assert "PROFILE_GAIA_SKIPPED" in codes
+    note = next(e for e in errors if e["code"] == "PROFILE_GAIA_SKIPPED")
+    assert note["params"] == {"reason": "gaia_down", "evidence": "SERVICE_ERROR"}
+    astro = section(prof, "astrometry")  # valori SIMBAD con la fonte, come con l'errore di rete
+    assert astro.status == "partial" and any(v.quantity == "parallax" for v in astro.values)
+    assert section(prof, "images").status == "done"
+    assert prof.as_dict()["skipped_services"]["gaia"] == skipped
+    # il profilo successivo riprova
+    services.overrides.clear()
+    again = build_profile(ProfileTarget(name="51 Peg"), cache=cache)
+    assert again.skipped_services == {} and section(again, "astrometry").status in ("done", "partial")
+
+
+def test_t35_gaia_down_uses_the_cached_copies(services, cache):
+    first = build_profile(ProfileTarget(name="51 Peg"), sections=("astrometry",), cache=cache)  # copie in cache
+    assert section(first, "astrometry").status == "done"
+    before = services.count("gaia")
+    _gaia_down(services)
+    prof = build_profile(ProfileTarget(name="51 Peg"), cache=cache)
+    assert services.count("gaia") - before <= 2  # al più le due in corso; le copie in cache senza rete
+    astro = section(prof, "astrometry")
+    assert astro.status == "done" and not astro.errors  # gaia_source e Bailer-Jones dalla cache
+    assert all(r.from_cache for r in astro.requests if "gaia" in r.url)
+    assert prof.skipped_services["gaia"]["requests"] >= 1
+
+
+def test_t35_astrometry_limit_is_35_seconds():
+    import astropy.units as u
+
+    import astrotwo.analysis.object_profile as op
+
+    assert op._section_limit("astrometry") == 35 * u.s and op.SERVICE_TIME_LIMITS["gaia"] == 30 * u.s

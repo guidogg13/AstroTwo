@@ -1191,6 +1191,50 @@ interrogato.
   richiesta dia `NET_TIMEOUT`, quindi senza il ripiego sui valori SIMBAD che
   avrebbe con l'errore di rete (come prima del C8; D25-22 (12)).
 
+**D25-22 (12) decisa dal proprietario il 2026-11-09 (sprint C8b): entrambe
+le proposte.** Definizioni esatte:
+- **(a) Archivio Gaia già fermo nel profilo → le altre richieste Gaia non
+  partono.** «Fermo nel profilo» = una richiesta all'archivio Gaia di
+  questo profilo è finita con una **causa di guasto del servizio**
+  (`is_failover_error` del 14: timeout o connessione, HTTP 5xx o 429,
+  risposta illeggibile; mai un 4xx, un'ADQL rifiutata o un risultato vuoto).
+  Da quell'istante ogni richiesta Gaia del profilo **non ancora partita**
+  (anche se in attesa di un posto del semaforo: il controllo si rifà dopo
+  aver preso il posto) non si invia: senza `refresh` si usa la sua copia in
+  cache se c'è (`tap_query_cached` del 14, con `FROM_CACHE`), altrimenti
+  l'esito è l'errore **`PROFILE_GAIA_SKIPPED`** (ragione `gaia_down`,
+  `evidence` = codice dell'errore che ha mostrato il guasto, es.
+  `NET_TIMEOUT`), trattato da ogni sezione come un errore di rete di Gaia
+  (Identità: errore dell'incrocio; Astrometria: valori SIMBAD con la fonte;
+  Fotometria: errore della serie Gaia DR3). Le richieste già partite
+  continuano. Metadati: nel risultato `skipped_services["gaia"] =
+  {"evidence": …, "requests": n}` (richieste non inviate e non servite dalla
+  cache). Vale solo per l'archivio Gaia e solo dentro un profilo; il
+  profilo successivo riprova.
+- **(b) Astrometria 35 s.** Il tempo massimo della sezione Astrometria è
+  **35 s** (`SECTION_TIME_LIMITS`), contato dalla partenza (punto 4); il
+  tempo per richiesta di Gaia resta 30 s, così l'errore di rete arriva prima
+  della scadenza e la sezione mostra i valori SIMBAD. Le altre sezioni non
+  cambiano (il più grande dei tempi dei loro servizi).
+
+**Misure con l'archivio Gaia che risponde (2026-11-09 sera, sprint C8b, codice
+finale; D25-22 (11) fatta).** T17 (`refresh=False`, cache vuota, Mac libero,
+nessun'altra suite in corso; CDS ancora giù: SIMBAD da Harvard, miniature da
+ESASky, VizieR saltata in tutti e quattro con `PROFILE_VIZIER_SKIPPED`).
+Tempo totale in secondi; sezioni partenza → arrivo:
+
+| Oggetto | C7, T17 | C8b |
+|---|---|---|
+| 51 Peg | 37,6 | **28,5** (bersaglio ≈ 11 s: primo profilo, SIMBAD del CDS 10 s; Identità 6,4; Immagini 0 → 5,2; Astrometria 0 → 17,2; Fotometria 6,4 → 17,2; Pianeti 1,6 → 3,3) |
+| Vega | 12,4 | **4,0** (tutte le sezioni entro 2,9 s) |
+| eta Tau | 11,7 | **5,9** (Astrometria 0 → 4,7; Immagini 4,8) |
+| TRAPPIST-1 | 44,2 (Astrometria scaduta) | **12,3** (Astrometria 0 → 11,2; Fotometria 3,8 → 8,7) |
+
+Nessuna sezione scaduta, nessun errore oltre la serie VizieR saltata;
+Fotometria `partial` solo per VizieR. **Obiettivo di 60 s raggiunto** su
+tutti e quattro, con il margine più piccolo su 51 Peg (primo profilo della
+sessione, che paga i 10 s del CDS giù per SIMBAD).
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -1316,6 +1360,9 @@ interrogato.
   **`refresh_scope_cds_down()`**: la prova del CDS giù raccolta nell'ambito
   (principale di SIMBAD caduto, più quelle del 12). Fuori dall'ambito nulla
   cambia (14 §3, D14-15 (1)).
+- `14` **`tap_query_cached(url, adql, *, max_rows, servers, limits, cache)`**
+  (D25-22, sprint C8b): la copia in cache della stessa interrogazione
+  sincrona di `tap_query`, senza rete; `None` se non c'è.
 - `14` **`vizier_photometry_cached(center, radius, *, cache)`** (D25-21 (3)):
   la copia in cache della stessa richiesta di `vizier_photometry`, senza rete;
   `None` se non c'è.
@@ -1376,6 +1423,7 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Moto proprio sconosciuto per la propagazione | nessuna propagazione, avviso | `PROFILE_NO_PROPER_MOTION` |
 | Archivio Gaia HTTP 503 (coda piena, visto il 2026-11-07) | nuovo tentativo come connessione (`02` §8), poi errore della sezione | `SERVICE_ERROR` / `NET_TIMEOUT` |
 | CDS giù (SED di VizieR, nessun mirror) | serie VizieR assente, resto della fotometria presente | `SERVICE_ERROR` + `vizier_no_mirror` |
+| Archivio Gaia già fermo nel profilo (una richiesta Gaia finita con una causa di guasto) e richiesta Gaia non in cache (§3.17, D25-22) | richiesta non inviata; trattata come errore di rete di Gaia nella sua sezione; `skipped_services["gaia"]` | `PROFILE_GAIA_SKIPPED` (`gaia_down`) |
 | CDS già giù nella sessione (o, con `refresh`, nel profilo) e serie VizieR non in cache (§3.17 punto 3) | nessuna richiesta a VizieR; errore della sola serie nella Fotometria (`partial` con altri punti), `details["vizier_sed"]` con la prova | `PROFILE_VIZIER_SKIPPED` (`cds_down`) |
 | Survey HiPS non disponibile su alcun server | miniatura mancante con messaggio | `NET_TIMEOUT` `hips_servers` |
 | Tempo massimo di una sezione superato (§3.12 regola 5) | quella sezione in errore, le altre continuano; risposte tardive scartate | `PROFILE_SECTION_TIMEOUT` |
@@ -1448,6 +1496,7 @@ cambiano).
 | T32 | VizieR saltata con il CDS giù (§3.17 punto 3) | prova del CDS giù nella sessione; senza e con copia in cache della serie; con `refresh=True` senza prova nel profilo | senza copia: nessuna richiesta a VizieR, errore `PROFILE_VIZIER_SKIPPED` `cds_down` con la prova, `details["vizier_sed"]["skipped"]`, Fotometria `partial`; con copia: serie dalla cache con `FROM_CACHE`; con `refresh` e nessuna prova nel profilo: richiesta fatta | conteggio delle richieste, errori, dettagli |
 | T33 | Tempo di sezione dalla partenza (§3.17 punto 4) | tempi dei servizi ridotti nel test; incrocio Gaia simulato più lento del tempo dell'Astrometria, poi `gaia_source` veloce; poi `gaia_source` più lento del tempo | primo caso: Astrometria `done` (nessuna scadenza durante l'attesa dell'esito), `started` ≈ fine dell'incrocio; secondo caso: `PROFILE_SECTION_TIMEOUT` a `started` + tempo massimo, non prima | istanti e stati |
 | T34 | Due richieste per servizio (§3.17 punto 5) | archivio Gaia simulato fermo; più richieste Gaia del profilo insieme | mai più di 2 richieste Gaia in corso; Immagini, Pianeti e Identità continuano; richiesta Gaia della fotometria partita prima degli esiti di 2MASS/AllWISE; Bailer-Jones partita insieme a `gaia_source` e scartata se `gaia_source` non dà la riga | massimo di richieste contemporanee per servizio, istanti di partenza |
+| T35 | Archivio Gaia già fermo nel profilo e Astrometria 35 s (§3.17, D25-22) | archivio Gaia simulato che risponde HTTP 503 dopo 0,3 s; poi lo stesso con `gaia_source` e Bailer-Jones già in cache; poi Gaia di nuovo su | 2 sole richieste Gaia inviate (le 2 in corso), le altre `PROFILE_GAIA_SKIPPED` `gaia_down` con la prova, `skipped_services["gaia"]`, Astrometria con i valori SIMBAD; con le copie in cache Astrometria `done` dalla cache; il profilo successivo riprova; tempo massimo dell'Astrometria 35 s | richieste per servizio, errori, metadati |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
 | T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`); dallo sprint C7 con `refresh=False` sulla cache vuota del test (§3.16 C7-f); dallo sprint C8 con la partenza (`started`) di ogni sezione nel riepilogo | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
 
@@ -1459,8 +1508,8 @@ D25-13 dopo lo sprint C2, D25-14 e D25-15 dopo lo sprint C3; D25-16, D25-17
 e D25-18 il 2026-11-08; D25-19 confermata il 2026-11-08 con il brief dello
 sprint C6; D25-20 confermata il 2026-11-08 con il brief dello sprint C7;
 D25-21 approvata in tutti e 5 i punti il 2026-11-09).
-Restano qui come registro. Aperta: **D25-22** (scelte minori dello sprint
-C8, §3.17: da confermare).
+D25-22 decisa il 2026-11-09 (sprint C8b). Restano qui come registro.
+Nessuna decisione aperta.
 
 - **D25-1 — Numero, nome e livello del modulo — DECISA (2026-11-07):**
   `25-analisi-profilo-oggetto.md`, **livello 2**, codice in
@@ -1688,8 +1737,10 @@ C8, §3.17: da confermare).
   possono riattivare la richiesta Gaia della fotometria appena noto Gaia e
   Bailer-Jones insieme a `gaia_source` (≈ 4 s in meno quando l'archivio
   risponde). Raccomandato: sì; alternativa: com'è ora.
-- **D25-22 — Scelte minori dello sprint C8 (D25-21 applicata) — PROPOSTE da
-  Claude Code il 2026-11-09, da confermare (Gruppo 3).** (1) Prima della sua
+- **D25-22 — Scelte minori dello sprint C8 (D25-21 applicata) — DECISA
+  (2026-11-09):** il proprietario approva le due proposte del punto (12)
+  (applicate in §3.17, sprint C8b); i punti (1)–(11) restano come scritti.
+  Testo della proposta (registro): (1) Prima della sua
   partenza una sezione non ha scadenza propria: l'attesa degli esiti della
   catena è limitata solo dal tempo per richiesta di ogni passo e da Annulla
   (nessun limite complessivo della catena: un limite fisso, es. 60 s,
@@ -1720,7 +1771,8 @@ C8, §3.17: da confermare).
   giù), dichiarato; e/o dare all'Astrometria un tempo massimo maggiore di
   quello per richiesta (es. 35 s) perché l'errore di rete arrivi prima della
   scadenza e si mostrino i valori SIMBAD. Raccomandazione di Claude Code:
-  entrambe, ma sono regole nuove (proprietario).
+  entrambe, ma sono regole nuove (proprietario). (11) fatta il 2026-11-09
+  sera (§3.17, misure con l'archivio Gaia che risponde).
 
 ## 14. Registro modifiche
 
@@ -1738,3 +1790,4 @@ C8, §3.17: da confermare).
 | 2026-11-07 | Claude Code | Creazione del file (stato: bozza), sprint C1 (Fase C, decisione del proprietario del 2026-11-07): regole a–d scritte come decise; verifiche dal vivo su Alcyone, Vega, 51 Peg, TRAPPIST-1 (SIMBAD Harvard, archivio Gaia ESA con `external.gaiaedr3_distance` e incroci ufficiali, IRSA 2MASS/AllWISE, NASA Exoplanet Archive; CDS giù); interfaccia proposta in §3.9; decisioni aperte D25-1…D25-12. |
 | 2026-11-08 | Claude Code | **Sprint C7 (brief del proprietario del 2026-11-08, autorizzazione D25-12):** D25-20 **confermata** così com'è. Nuovo §3.16 (diagnosi dei tempi con la traccia di ogni richiesta: `refresh=True` dal principale a ogni richiesta, difetto di `cds_down_in_session` del 12 — chiave del 14 sbagliata —, AllWISE/2MASS interrogati due volte, IRSA TAP lento lato server, richieste in fila, VizieR con il CDS giù, tempi di sezione e catene, semaforo comune bloccato da un servizio fermo); correzioni C7-a (riga della catena riusata), C7-b (VizieR subito), C7-d (una sola prova del MocServer), C7-e (difetto del 12 corretto nel codice, la specifica del 12 era già giusta), C7-f (T17 senza `refresh=True`), C7-g (24 thread); C7-c provata e tolta; §12 T17 precisato, nuovo T29; nuova **D25-21** (cinque scelte sui tempi, da decidere, nessuna applicata). Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8 (decisioni del proprietario del 2026-11-09: D25-21 approvata in tutti e 5 i punti; modifiche ai file approvati 12 e 14 limitate a quanto serve, annotate nei loro registri):** nuovo §3.17 con le definizioni esatte scritte prima del codice — (1) 2MASS e AllWISE con il Cone Search di IRSA (condizione verificata il 2026-11-09: stesse righe, colonne, unità, tipi e valori del TAP su 4 coni, anche M 13), (2) `refresh=True` dal principale una volta per profilo (`refresh_once` del 14) e scorciatoia delle miniature con una prova del profilo, (3) VizieR saltata con il CDS già giù (`PROFILE_VIZIER_SKIPPED`, `details["vizier_sed"]`; copia in cache usata), (4) tempo di sezione contato dalla partenza (fine dell'ultimo esito della catena che la sezione aspetta; `started` nel risultato), (5) al più 2 richieste per servizio dentro le 4, ripristinate Gaia della fotometria appena noto Gaia e Bailer-Jones insieme a `gaia_source`; §3.11, §3.12 (regole 3 e 5), §3.16 con i rimandi; §7.2 nuove funzioni del 14 e del 12; §10 riga nuova; §12 T17 precisato, nuovi T30–T34; §13 D25-21 decisa, nuova D25-22 (scelte minori e due proposte, da confermare); misure del 2026-11-09 (archivio Gaia fermo tutto il giorno). Stato `approvato` invariato. |
+| 2026-11-09 | Claude Code | **Sprint C8b (decisioni del proprietario del 2026-11-09):** D25-22 **decisa** (approvate le due proposte del punto (12); le modifiche al 12 e al 14 dei punti (2) e (3) approvate come parte di D25-21); §3.17 con le definizioni esatte di (a) archivio Gaia già fermo nel profilo → le altre richieste Gaia non partono (copia in cache se c'è, altrimenti `PROFILE_GAIA_SKIPPED` `gaia_down`, `skipped_services` nel risultato) e (b) Astrometria 35 s (`SECTION_TIME_LIMITS`); §7.2 `tap_query_cached` del 14; §10 riga nuova; §12 T35; §13 senza decisioni aperte. Stato `approvato` invariato. |

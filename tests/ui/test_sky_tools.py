@@ -271,8 +271,12 @@ def fake_object(main_id="* alf Tau", nbref=1500):
 
 
 @pytest.fixture
-def simbad(monkeypatch):
-    """Servizio Simbad simulato: registra le chiamate; ``gate`` ferma la risposta finché il test non la libera."""
+def simbad(monkeypatch, win):
+    """Servizio Simbad simulato: registra le chiamate; ``gate`` ferma la risposta finché il test non la libera.
+
+    Alla fine, **prima** che ``monkeypatch`` rimetta il vero ``simbad_pointer``: timer del puntatore fermo, risposte
+    liberate e lavori di lettura finiti. Prima una richiesta ancora in coda (puntatore fermo dopo l'ultimo clic)
+    partiva dopo il ripristino e andava al vero SIMBAD durante il test successivo (sprint C8b, controllo della rete)."""
     state = SimpleNamespace(calls=[], result=lambda: fake_object(), gate=threading.Event(), block=False, error=None)
     state.gate.set()
 
@@ -287,7 +291,11 @@ def simbad(monkeypatch):
         return vo.SimbadPointer(found, 0 if found is None else 1, "SIMBAD", request)
 
     monkeypatch.setattr(vo, "simbad_pointer", pointer)
-    return state
+    yield state
+    win.sky.simbad_tool.timer.stop()
+    state.block = False
+    state.gate.set()
+    assert win.sky.tiles.pool.waitForDone(10000)
 
 
 def expected_radius(win, at):

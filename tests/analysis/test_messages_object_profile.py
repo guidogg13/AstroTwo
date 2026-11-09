@@ -30,7 +30,7 @@ OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_I
              "PROFILE_NO_DISTANCE", "PROFILE_TARGET_CHANGED", "PROFILE_PLANETS_EXCLUDED", "PROFILE_NO_PHOTOMETRY",
              "PROFILE_SECTION_TIMEOUT", "PROFILE_PLANETS_COMPOSITE", "PROFILE_PLANET_HOST_MISMATCH",
              "SED_NO_ZERO_POINT", "SED_NO_SYSTEM", "SED_NO_ERROR", "SED_LOW_QUALITY", "SED_UPPER_LIMIT", "SED_DUPLICATE",
-             "SED_HIGH_PROPER_MOTION", "PROFILE_VIZIER_SKIPPED")
+             "SED_HIGH_PROPER_MOTION", "PROFILE_VIZIER_SKIPPED", "PROFILE_GAIA_SKIPPED")
 FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects")}
 VEGA = (279.234734787025, 38.783688956244)
 PEG = (344.36658535524, 20.768832511140005)
@@ -134,6 +134,11 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
     # VizieR (nessuna copia in cache: 25 §3.17 punto 3)
     seen.profile(build(ProfileTarget(name="51 Peg"), sections=("images",), cache=cache))
     seen.profile(build(ProfileTarget(name="TRAPPIST-1"), sections=("photometry",), cache=cache))
+    # PROFILE_GAIA_SKIPPED gaia_down: archivio Gaia fermo nel profilo, le altre richieste Gaia non partono (D25-22)
+    services.overrides[("gaia", "")] = lambda q: (__import__("time").sleep(0.3), (503, "text/plain", "giù"))[1]
+    seen.profile(build(ProfileTarget(name="51 Peg"), sections=("identity", "astrometry", "photometry"), cache=cache,
+                       refresh=True))
+    services.overrides.clear()
     # PROFILE_NO_PHOTOMETRY: identificativo 2MASS senza righe nel catalogo (risposta sintetica vuota)
     services.overrides[("irsa", SCS_51PEG_2MASS)] = lambda q: irsa_empty("2mass")
     seen.profile(build(ProfileTarget(name="51 Peg"), sections=("photometry",), cache=cache, refresh=True))

@@ -56,8 +56,10 @@ from astrotwo.core.vo_protocols import (
     cpu_turn,
     network_wait,
     refresh_once,
+    is_failover_error,
     simbad_object,
     tap_query,
+    tap_query_cached,
     vizier_photometry,
     vizier_photometry_cached,
 )
@@ -145,6 +147,11 @@ MAX_REQUESTS_PER_SERVICE = 2
 SERVICE_TIME_LIMITS: Mapping[str, u.Quantity] = {
     "simbad": 15.0 * u.s, "gaia": 30.0 * u.s, "irsa": 60.0 * u.s, "exoplanet": 30.0 * u.s, "hips": 30.0 * u.s,
     "vizier_sed": 30.0 * u.s}
+#: Tempo massimo di una sezione diverso dal più grande dei suoi servizi (D25-22 (12 b), 25 §3.17): Astrometria 35 s,
+#: oltre i 30 s per richiesta di Gaia, perché l'errore di rete arrivi prima della scadenza.
+SECTION_TIME_LIMITS: Mapping[str, u.Quantity] = {"astrometry": 35.0 * u.s}
+#: Servizi le cui richieste non partono più dopo un guasto nello stesso profilo (D25-22 (12 a), 25 §3.17).
+SKIP_AFTER_FAILURE: tuple[str, ...] = ("gaia",)
 #: Servizi che ogni sezione può interrogare (25 §3.12 regola 5): il tempo massimo della sezione è il più grande.
 SECTION_SERVICES: Mapping[str, tuple[str, ...]] = {
     "identity": ("simbad", "gaia", "irsa", "exoplanet"), "astrometry": ("gaia",),
@@ -415,8 +422,11 @@ class _Run:
     def __init__(self) -> None:
         self.gate = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         self.service_gates = {s: threading.BoundedSemaphore(MAX_REQUESTS_PER_SERVICE) for s in SERVICE_TIME_LIMITS}
+        self.down: dict[str, dict] = {}  # servizio → prova del guasto nel profilo (D25-22 (12 a))
+        self.skipped: dict[str, int] = {}  # servizio → richieste non inviate
         self.stop = threading.Event()
         self.cpu = threading.Lock()
+        self.cpu_free = threading.Lock()  # stato dei guasti (``down``, ``skipped``), senza il turno della CPU
         self.pool = ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="astrotwo-profile")
 
     def submit(self, fn: Callable, *args, **kwargs) -> Future:
@@ -456,15 +466,36 @@ def _acquire(run: _Run, gate: threading.BoundedSemaphore) -> None:
                 raise _Cancelled()
 
 
-def _network(service: str | None, function: Callable, *args, **kwargs):
+def _skipped(run: _Run, service: str, cached: Callable[[], object] | None, refresh: bool):
+    """Richiesta non inviata perché il servizio è già fermo nel profilo: copia in cache (senza ``refresh``) oppure
+    ``PROFILE_GAIA_SKIPPED`` come errore di rete del servizio (D25-22 (12 a), 25 §3.17)."""
+    hit = cached() if cached is not None and not refresh else None
+    if hit is not None:
+        return hit
+    with run.cpu_free:
+        run.skipped[service] = run.skipped.get(service, 0) + 1
+    evidence = str(run.down[service]["evidence"])
+    note = ObjectProfileError("PROFILE_GAIA_SKIPPED", f"archivio Gaia: richiesta non inviata, l'archivio non ha "
+                              f"risposto in questo profilo ({evidence})",
+                              params={"reason": "gaia_down", "evidence": evidence})
+    # Messaggio del 25 portato come errore di rete del 14: ogni sezione lo tratta come un errore di Gaia.
+    raise VoProtocolsError(note.code, note.message, params=dict(note.params))
+
+
+def _network(service: str | None, function: Callable, *args, cached: Callable[[], object] | None = None, **kwargs):
     """Chiamata a un servizio del livello 1 con il tempo massimo del servizio e, dentro ``build_profile``, con un posto
     del suo servizio (``MAX_REQUESTS_PER_SERVICE``) e poi uno dei ``MAX_CONCURRENT_REQUESTS`` posti comuni (25 §3.12
-    regole 3–4, §3.17 punto 5); profilo arrestato → ``_Cancelled``."""
+    regole 3–4, §3.17 punto 5); profilo arrestato → ``_Cancelled``. Per i servizi di ``SKIP_AFTER_FAILURE``, dopo un
+    guasto nel profilo la richiesta non parte (``cached``: copia in cache, D25-22 (12 a))."""
     if service is not None and "timeouts" in kwargs:
         kwargs["timeouts"] = _limited(kwargs["timeouts"], service)
     run = _RUN.get()
     if run is None:
         return function(*args, **kwargs)
+    watched = service in SKIP_AFTER_FAILURE
+    refresh = bool(kwargs.get("refresh"))
+    if watched and service in run.down:
+        return _skipped(run, service, cached, refresh)
     own = run.service_gates.get(service) if service is not None else None
     if own is not None:  # prima il posto del servizio: chi lo aspetta non tiene un posto comune
         _acquire(run, own)
@@ -473,7 +504,15 @@ def _network(service: str | None, function: Callable, *args, **kwargs):
         try:
             if run.stop.is_set():
                 raise _Cancelled()
-            return function(*args, **kwargs)
+            if watched and service in run.down:  # guasto arrivato durante l'attesa del posto
+                return _skipped(run, service, cached, refresh)
+            try:
+                return function(*args, **kwargs)
+            except VoProtocolsError as exc:
+                if watched and is_failover_error(exc):  # registrato prima di lasciare il posto
+                    with run.cpu_free:
+                        run.down.setdefault(service, {"evidence": exc.code})
+                raise
         finally:
             run.gate.release()
     finally:
@@ -482,7 +521,8 @@ def _network(service: str | None, function: Callable, *args, **kwargs):
 
 
 def _tap(service: str, adql: str, **kwargs):
-    return _network(_SERVICE_OF[service], tap_query, service, adql, **kwargs)
+    return _network(_SERVICE_OF[service], tap_query, service, adql,
+                    cached=lambda: tap_query_cached(service, adql, cache=kwargs.get("cache")), **kwargs)
 
 
 def _gather(functions: Sequence[Callable[[], object]]) -> list:
@@ -1798,6 +1838,7 @@ class ObjectProfile:
     options: Mapping[str, object] = field(default_factory=dict)
     cancelled: bool = False  # annullato: sezioni arrivate conservate, le altre ``cancelled`` (25 §3.12)
     elapsed: float | None = None  # s, dalla chiamata (obiettivo PROFILE_TARGET_TIME, misurato, non un limite)
+    skipped_services: Mapping[str, Mapping] = field(default_factory=dict)  # D25-22 (12 a): servizio → prova, n
 
     @property
     def requests(self) -> tuple[RequestRecord, ...]:
@@ -1815,7 +1856,8 @@ class ObjectProfile:
                 "cross_identifications": [c.as_dict() for c in self.cross_ids],
                 "sections": [s.as_dict() for s in self.sections],
                 "warnings": [_warning_json(w) for w in self.warnings], "cancelled": self.cancelled,
-                "elapsed": None if self.elapsed is None else {"value": self.elapsed, "unit": "s"}}
+                "elapsed": None if self.elapsed is None else {"value": self.elapsed, "unit": "s"},
+                "skipped_services": {k: dict(v) for k, v in self.skipped_services.items()}}
 
 
 #: avvisi della catena che l'Identità mostra (nessuna scelta tra due esiti, 25 §3.10 e §3.14)
@@ -1823,7 +1865,10 @@ _CHAIN_CONFLICTS = ("PROFILE_IDENTIFIER_CONFLICT", "PROFILE_PLANET_HOST_MISMATCH
 
 
 def _section_limit(name: str) -> u.Quantity:
-    """Tempo massimo di una sezione: il più grande tra quelli dei suoi servizi (25 §3.12 regola 5)."""
+    """Tempo massimo di una sezione: ``SECTION_TIME_LIMITS`` (Astrometria 35 s, D25-22) o il più grande tra quelli
+    dei suoi servizi (25 §3.12 regola 5)."""
+    if name in SECTION_TIME_LIMITS:
+        return SECTION_TIME_LIMITS[name]
     return max((SERVICE_TIME_LIMITS[s] for s in SECTION_SERVICES[name]), key=lambda q: float(q.to_value(u.s)))
 
 
@@ -2100,9 +2145,10 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
     options = {"sections": list(sections), "match_radius": _qj(match_radius, "arcsec"),
                "crossmatch_radius": _qj(crossmatch_radius, "arcsec"), "surveys": list(surveys),
                "thumbnail_fov": _qj(thumbnail_fov, "arcmin"), "thumbnail_size": int(thumbnail_size)}
+    skipped = {s: {"evidence": run.down[s]["evidence"], "requests": n} for s, n in run.skipped.items()}
     return ObjectProfile(target, resolved, tuple(cross_ids), tuple(done[name] for name in names),
                          tuple(resolved.warnings) + chain_notes, options, cancelled=cancelled,
-                         elapsed=time.monotonic() - started)
+                         elapsed=time.monotonic() - started, skipped_services=skipped)
 
 
 # --------------------------------------------------------------------------

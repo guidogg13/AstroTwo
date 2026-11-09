@@ -383,6 +383,20 @@ def test_t3_tap_truncation(service, cache):
     assert not full.truncated and full.table.rows == 50 and "ROW_LIMIT_EXCEEDED" not in dict(full.warnings)
 
 
+def test_c8_tap_query_cached_without_network(service, cache):
+    """D25-22 del 25: copia in cache della stessa interrogazione sincrona, senza rete; ``None`` se non c'è."""
+    service.routes["/tap/sync"] = tap_sync_route(5)
+    url = service.url + "/tap"
+    assert vo.tap_query_cached(url, "SELECT * FROM stelle", cache=cache) is None and service.requests == []
+    fresh = tap_query(url, "SELECT * FROM stelle", cache=cache)
+    hit = vo.tap_query_cached(url, "SELECT * FROM stelle", cache=cache)
+    assert len(service.requests) == 1 and hit.request.from_cache and hit.table.rows == fresh.table.rows == 5
+    assert [w[0] for w in hit.warnings] == ["FROM_CACHE"]
+    assert vo.tap_query_cached(url, "SELECT * FROM altre", cache=cache) is None
+    with pytest.raises(VoProtocolsError):
+        vo.tap_query_cached(url, "DELETE FROM t", cache=cache)
+
+
 def test_t4_invalid_adql_no_network(service, cache):
     service.routes["/tap/sync"] = tap_sync_route(5)
     for adql in ("", "DELETE FROM t", "SELECT * FROM t WHERE a = 'x", "SELECT COUNT(* FROM t"):
@@ -612,12 +626,28 @@ REGTAP = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+REG_CAPABILITIES = """<?xml version="1.0" encoding="UTF-8"?>
+<vosi:capabilities xmlns:vosi="http://www.ivoa.net/xml/VOSICapabilities/v1.0"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tr="http://www.ivoa.net/xml/TAPRegExt/v1.0"
+ xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
+<capability standardID="ivo://ivoa.net/std/TAP" xsi:type="tr:TableAccess">
+<interface xsi:type="vs:ParamHTTP" role="std"><accessURL use="base">{url}</accessURL></interface>
+<language><name>ADQL</name><version ivo-id="ivo://ivoa.net/std/ADQL#v2.0">2.0</version><description>ADQL</description>
+<languageFeatures type="ivo://ivoa.net/std/TAPRegExt#features-adql-sets"><feature><form>UNION</form></feature>
+</languageFeatures></language></capability></vosi:capabilities>"""
+
+
 def test_t18_registry_search(service, cache):
     service.routes["/reg/sync"] = votable_route(REGTAP)
+    service.routes["/reg/capabilities"] = lambda request: (200, "text/xml",
+                                                           REG_CAPABILITIES.format(url=service.url + "/reg"))
     assert vo.DEFAULT_REGISTRY_URL.startswith("https://")  # nessun default senza HTTPS
     found = ServerRegistry().search_registry(["gaia"], "tap", registry_url=service.url + "/reg", cache=cache)
+    # capacità lette dal registro scelto (non da http://reg.g-vo.org, il default nascosto di pyvo; sprint C8b)
+    assert [r["path"] for r in service.requests] == ["/reg/capabilities", "/reg/sync"]
     sent = service.requests[-1]["params"]["QUERY"]
-    expected_adql = pyvo.registry.regtap.get_RegTAP_query(keywords=["gaia"], servicetype="tap")
+    expected_adql = pyvo.registry.regtap.get_RegTAP_query(keywords=["gaia"], servicetype="tap",
+                                                          service=pyvo.dal.TAPService(service.url + "/reg"))
     assert sent == expected_adql  # ADQL RegTAP costruito da pyvo
     assert [(s.url, s.protocol, s.source) for s in found.services] == [
         ("https://gea.esac.esa.int/tap-server/tap", "tap", "registro VO")]

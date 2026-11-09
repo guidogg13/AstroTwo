@@ -29,6 +29,57 @@ NETWORK_TEST_TIMEOUT = 600
 pytest_plugins = ["pytester"]  # per il test della regola di ripetizione dei test di rete
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _samp_local_only():
+    """Hub e client SAMP creati dai test (anche quelli che simulano un programma esterno) solo su ``127.0.0.1``: senza
+    questa opzione ``pyvo.samp`` prova ``http://google.com`` a ogni avvio (come ``_samp_local_only`` del 14)."""
+    from pyvo.samp import conf
+
+    conf.use_internet = False
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network(request, monkeypatch):
+    """Nessun test del commit usa la rete vera (sprint C8b del 25): fuori dai test ``network`` ogni connessione
+    verso un indirizzo non locale è rifiutata **e** il test fallisce, anche se il codice ha gestito l'errore (ripiego
+    sulla cache o su un mirror) e altrimenti passerebbe senza che nessuno se ne accorga."""
+    if request.node.get_closest_marker("network") is not None:
+        yield
+        return
+    import ipaddress
+    import socket
+
+    attempts: list = []
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+
+    def remote(sock, address) -> bool:
+        if sock.family not in (socket.AF_INET, socket.AF_INET6) or not isinstance(address, tuple):
+            return False
+        host = str(address[0]).split("%")[0]
+        try:
+            return not ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return host != "localhost"
+
+    def connect(sock, address):
+        if remote(sock, address):
+            attempts.append(address)
+            raise ConnectionRefusedError(f"rete vera vietata nei test del commit: {address}")
+        return real_connect(sock, address)
+
+    def connect_ex(sock, address):
+        if remote(sock, address):
+            attempts.append(address)
+            return 111  # ECONNREFUSED
+        return real_connect_ex(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    yield
+    assert not attempts, f"il test ha provato la rete vera (non è marcato network): {attempts}"
+
+
 @pytest.fixture(autouse=True)
 def _memory_sky_renderer(request, monkeypatch):
     """Sulla piattaforma ``offscreen`` non c'è GPU: il visualizzatore del 41 disegna in memoria (tranne ``gl``)."""

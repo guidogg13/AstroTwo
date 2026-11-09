@@ -105,8 +105,10 @@ def test_t1_skeleton_at_once_then_sections_arrive(qtbot, win, services):  # noqa
     header = tab.views["astrometry"].header.text()
     assert "Arrived · 127.0.0.1 · " in header and f"#{number}" in header  # server che ha risposto (simulato)
     assert "in part" in tab.views["photometry"].header.text()  # serie VizieR in errore (CDS giù)
+    # errore di rete di VizieR, oppure serie saltata se il MocServer simulato (connessione rifiutata all'istante) ha
+    # già dato la prova del CDS giù quando VizieR parte (25 §3.17 punto 3)
     assert tab.views["photometry"].errors_label.isVisibleTo(tab) and \
-        tab.views["photometry"].errors_label.text().startswith("SERVICE_ERROR")
+        tab.views["photometry"].errors_label.text().startswith(("SERVICE_ERROR", "PROFILE_VIZIER_SKIPPED"))
     assert tab.fresh_button.isEnabled() and tab.sky_button.isEnabled()
     assert win.profiles.tabs.tabText(win.profiles.tabs.indexOf(tab)) == "*  51 Peg"
 

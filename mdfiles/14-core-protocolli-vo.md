@@ -633,6 +633,11 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
   richiesta di `vizier_photometry` (stessi parametri, stessa chiave), letta
   come `vizier_photometry` con `FROM_CACHE`; **nessuna richiesta di rete**;
   `None` se la copia non c'è.
+- **`tap_query_cached(url, adql, *, max_rows, servers, limits, cache)`**
+  (D25-22 del `25`, sprint C8b) — la copia in cache della stessa
+  interrogazione **sincrona** di `tap_query` (stessa chiave; prima copia
+  nell'ordine dei server, con `FROM_CACHE`), **nessuna richiesta di rete**;
+  `None` se non c'è; ADQL non valida → `ADQL_INVALID` come `tap_query`.
 - **`refresh_once()`** e **`refresh_scope_cds_down()`** (D25-21 (2) del
   `25`, sprint C8) — ambito «giro con dati aggiornati» (gestore di contesto,
   `contextvars`: vale nel thread che lo apre e nei lavori lanciati con una
@@ -1140,6 +1145,8 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **Correzioni trovate con il controllo della rete nei test (istruzione del proprietario del 2026-11-10):** (1) **SAMP solo locale:** `pyvo.samp` provava `http://google.com` a ogni avvio dell'hub e a ogni collegamento di un client (`internet_on`) e, se rispondeva, chiamava `socket.getfqdn()` senza tempo massimo; ora `use_internet = False` (`_samp_local_only`): hub e client su `127.0.0.1`, nessun contatto esterno per SAMP; (2) **registro VO:** `search_registry` costruiva l'ADQL con `get_RegTAP_query` senza servizio, e pyvo leggeva le capacità di `http://reg.g-vo.org` (in HTTP, senza tempo massimo, registro diverso da quello scelto); ora le capacità si leggono dal registro usato con i timeout del 04, un guasto dà `NET_TIMEOUT` `url`. Test T18 e test SAMP aggiornati. Stato `approvato` invariato. |
+| 2026-11-09 | Claude Code | **Sprint C8b del `25` (decisioni del proprietario del 2026-11-09):** le modifiche del 14 per i punti (2) e (3) di D25-21 (riga sotto) **approvate dal proprietario** come parte di D25-21; nuova `tap_query_cached` (§7) per D25-22 del `25` (archivio Gaia già fermo nel profilo: copia in cache senza rete). Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8 del `25` (D25-21 approvata dal proprietario il 2026-11-09; modifica del 14 limitata a quanto serve ai punti (2) e (3)):** §3 «Servizio in uso per la sessione» — dentro un giro con dati aggiornati (`refresh_once()`) riparte dal principale solo la prima richiesta di ogni servizio, con la prova del CDS giù raccolta nel giro; §7 nuove `vizier_photometry_cached`, `refresh_once`, `refresh_scope_cds_down`. D14-15 (1) invariata fuori dall'ambito. Il Cone Search di IRSA del profilo usa `cone_search` così com'è (URL scritto). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C4 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nuove `cpu_turn(lock)` e `network_wait()` (§7): turno della CPU per chi chiama da più thread, lasciato durante l'attesa delle richieste HTTP (`_Session`) e della TAP asincrona; motivo verificato: unità di Astropy non sicure tra thread (`'electron'.s**-1` di Gaia). Nuovo T29. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C3 (autorizzazione D25-12 del `25`, limitata agli sprint C2–C6):** nota «Fotometria senza copia» aggiornata: `vizier_photometry` usata dalla sezione fotometria del profilo (25 §3.11); IRSA `nasa-irsa-tap` e `vizier_photometry` già esistenti; correzione: le magnitudini SIMBAD (`flux`, `flux_err`, colonne `float32`) tornano al decimale scritto da SIMBAD come le altre celle (es. 6,16 e non 6,159999847…), regola di `simbad_object` (sprint C2) estesa a `_simbad_magnitudes`. |
