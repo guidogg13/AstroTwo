@@ -3,7 +3,8 @@
 **Stato:** approvato
 
 > Parte A (sprint **60a**, questo file completo): costruzione di `dist/AstroTwo.app` per macOS su Apple Silicon.
-> Parte B (sprint **60b**): immagine disco `.dmg`, §3.10, **da completare** prima del suo codice.
+> Parte B (sprint **60b**, scritta il 2026-11-10 nello sprint D5c): immagine disco `.dmg` con `hdiutil`, §3.10
+> (decisione del proprietario del 2026-11-10).
 > Decisioni del proprietario del 2026-10-25 registrate qui: **A2** (PyInstaller), **A6** (firma ad hoc, nessuna
 > notarizzazione per la prima beta; Developer ID rinviata), Python di uv, forma della versione, icona fornita dal
 > proprietario.
@@ -262,13 +263,38 @@ Ogni controllo ha un nome (V1…V9) che compare nel rapporto con l'esito.
 - La finestra About di oggi (che mostra tutto `THIRD_PARTY_LICENSES`) diventa: nome, versione, build, copyright,
   una riga di licenza, il pulsante Licenses….
 
-### 3.10 Parte B — immagine disco `.dmg` (sprint 60b, da completare)
+### 3.10 Parte B — immagine disco `.dmg` (sprint 60b, scritta il 2026-11-10)
 
-Da scrivere prima del codice dello sprint 60b. Punti già noti: strumento di creazione del `.dmg` (orientamento di
-A2 del 2026-10-09: `dmgbuild`, **da decidere** in 60b); stessa firma ad hoc dell'app, nessuna notarizzazione (A6);
-nel `.dmg` l'app e un collegamento ad Applicazioni; testo "Apri comunque" per il sito; sorgente di AstroTwo
-(D60-1) decisa prima di una distribuzione pubblica; verifica del marchio "AstroTwo" (`01` §6.1 punto 7) prima della
-distribuzione pubblica.
+**Decisione del proprietario del 2026-11-10:** strumento **`hdiutil`** (già in macOS, nessuna dipendenza nuova;
+supera l'orientamento `dmgbuild` di A2 del 2026-10-09), con uno script come quello della firma: **senza
+`--execute` stampa solo i comandi** (prova a secco, testabile senza costruire l'app).
+
+**Strumento:** `scripts/make_dmg.py` (fuori dal pacchetto, non incluso nell'app). Passi, nell'ordine:
+
+1. cartella di lavoro **nuova** `build/dmg-root/` (si cancella solo se sta dentro `build/`, altrimenti
+   `DMG_STAGING_UNSAFE`);
+2. copia di `dist/AstroTwo.app` con **`ditto`** (conserva firme, attributi estesi e collegamenti simbolici) e
+   collegamento simbolico **`Applications` → `/Applications`** (l'utente trascina l'app sul collegamento);
+3. `hdiutil create -volname "AstroTwo <versione>" -srcfolder build/dmg-root -fs HFS+ -format UDZO
+   dist/AstroTwo-<versione>.dmg`; `<versione>` è la forma SemVer di `astrotwo.__version__` (DC4), come i `.dmg`
+   delle beta fatti a mano (`AstroTwo-0.1.0-beta.5.dmg`);
+4. `hdiutil verify` dell'immagine;
+5. impronta SHA-256 in `dist/AstroTwo-<versione>.dmg.sha256` (`<impronta>  <nome>`, formato di `shasum -a 256`),
+   calcolata dallo script e da pubblicare con il rilascio (`63` passi 12 e 16).
+
+**Con `--signed`** (firma Developer ID, A6-b, §3.12) lo script prende i piani di `scripts/sign_notarize.py`
+e li mette nell'ordine giusto: **firma dell'app prima della copia** (passo 2), **firma e notarizzazione del
+`.dmg` dopo `hdiutil verify`** e prima dell'impronta (il ticket cambia il file). Senza `--signed` l'app resta con
+la firma ad hoc di `build_app.py` (A6) e il sito spiega «Apri comunque». Le credenziali restano nel Portachiavi:
+le opzioni di credenziali sono rifiutate come in `sign_notarize.py` (`SIGN_CREDENTIALS_REFUSED`); in prova a
+secco il Portachiavi non si legge.
+
+**Regole:** un `.dmg` con lo stesso nome **non si sovrascrive mai** (`DMG_EXISTS`: si cancella a mano o si
+cambia versione); senza app costruita la prova a secco stampa comunque i comandi con una nota, `--execute` si
+ferma (`DMG_APP_MISSING`); nessuna personalizzazione dell'aspetto della finestra del `.dmg` (sfondo, posizioni
+delle icone): Finder mostra l'app e il collegamento (D60-7). Punti già noti che restano: sorgente di AstroTwo
+(D60-1) decisa prima di una distribuzione pubblica; verifica del marchio «AstroTwo» (`01` §6.1 punto 7) prima
+della distribuzione pubblica; testo «Apri comunque» sul sito (`63` passo 16).
 
 ### 3.11 Verifiche da fare prima del codice
 
@@ -306,8 +332,8 @@ esegue niente**: stampa i comandi (prova a secco) e non legge il Portachiavi. Tr
    prima firma vera (T19); nessun `disable-library-validation` (stesso certificato per tutto) e nessun
    `get-task-allow`. Poi `codesign --verify --deep --strict` e `codesign -dv` (autorità, Team ID, runtime, marca
    temporale) nel rapporto.
-2. **`dmg DMG`** — firma il `.dmg` con lo stesso certificato (`--timestamp`). Il `.dmg` lo crea il proprietario
-   come oggi (60b non ancora specificato: lo strumento del `.dmg` resta da decidere lì), **dopo** il passo 1.
+2. **`dmg DMG`** — firma il `.dmg` con lo stesso certificato (`--timestamp`). Il `.dmg` lo crea
+   `scripts/make_dmg.py` (§3.10) **dopo** il passo 1; `make_dmg.py --signed` esegue i tre passi nell'ordine.
 3. **`notarize DMG`** — `xcrun notarytool submit DMG --keychain-profile astrotwo-notary --wait`; con esito
    `Accepted`: `xcrun stapler staple DMG` (ticket nel `.dmg`), `xcrun stapler validate`, `spctl --assess --type
    open --context context:primary-signature`. Esito rifiutato: il registro di Apple (`notarytool log`) in
@@ -347,12 +373,14 @@ conversazione):**
    `xcrun notarytool history --keychain-profile astrotwo-notary` (elenco degli invii, vuoto la prima volta).
 6. Dire a Claude Code che l'account è pronto: si esegue la sequenza sotto e la prova T19.
 
-**Quando l'account è pronto (sequenza):** `build_app.py` → `sign_notarize.py --execute app` → `.dmg` a mano →
-`sign_notarize.py --execute dmg <dmg>` → `sign_notarize.py --execute notarize <dmg>` → prova T19 → `A6-b` decisa.
+**Quando l'account è pronto (sequenza):** `build_app.py` → `make_dmg.py --signed` (prova a secco) →
+`make_dmg.py --signed --execute` (firma dell'app, `.dmg`, firma e notarizzazione del `.dmg`, impronta; §3.10) →
+prova T19 → `A6-b` decisa. I sottocomandi di `sign_notarize.py` restano usabili uno per uno.
 
 ## 4. Cosa NON fa
 
-- Non crea il `.dmg` (60b, §3.10) e non pubblica niente: né sito, né server, né GitHub.
+- Non pubblica niente: né sito, né server, né GitHub (passi del rilascio: `63`). Il `.dmg` lo crea
+  `scripts/make_dmg.py` (§3.10) solo con `--execute`.
 - Non firma con un certificato Developer ID e non notarizza (A6, rinviata): `scripts/sign_notarize.py` è
   preparato (§3.12) ma **non eseguito** finché l'account Apple Developer non è pronto (decisione del 2026-11-10).
 - Non produce app per Intel, `universal2`, Windows o Linux.
@@ -407,6 +435,11 @@ conversazione):**
 (codice da firmare dall'interno verso l'esterno), **`app_plan`**, **`dmg_plan`**, **`notarize_plan`** (comandi),
 **`developer_identities`** e **`choose_identity`** (certificato dall'uscita di `security find-identity`),
 **`check_no_credentials`**, **`ENTITLEMENTS`**, **`KEYCHAIN_PROFILE`** (`astrotwo-notary`).
+
+**Immagine disco** — `scripts/make_dmg.py` (§3.10; fuori dal pacchetto): **`main`** (`--execute`, `--app`,
+`--signed`, `--identity`, `--profile`; senza `--execute` prova a secco), **`version`**, **`dmg_path`**,
+**`volume_name`**, **`create_steps`**, **`build_plan`** (con i piani di `sign_notarize.py` se `signed`),
+**`run_plan`**, **`sha256_file`**, **`FILESYSTEM`** (`HFS+`), **`FORMAT`** (`UDZO`).
 
 **Nel pacchetto** — `src/astrotwo/app_bundle.py` (nuovo file, corrispondenza di questo `.md` nel codice dell'app):
 
@@ -523,6 +556,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | T16 | Qt non modificato (V5) | binari Qt dell'app contro la ruota, tolte le firme | identici | costruzione |
 | T18 | Icona | `make_iconset` su `assets/icon/AstroNew.svg` in una cartella temporanea | dieci PNG con le dimensioni di `iconutil`, non vuote; `.icns` creato | test (salta se `iconutil` manca) |
 | T19 | Firma Developer ID e notarizzazione (§3.12) | test (sempre): identità dall'uscita di `security`, ordine di firma su un'app finta, opzioni `--options runtime --timestamp` senza `--deep`, diritti minimi, profilo del Portachiavi e nessuna credenziale nei comandi, opzioni di credenziali rifiutate, prova a secco che non esegue né scrive niente; **a mano, con l'account pronto**: la sequenza di §3.12 con `--execute`, poi l'app scaricata da un altro Mac si apre con doppio clic senza «Apri comunque» | test: tutto come atteso, nessun comando eseguito; a mano: `Accepted`, `stapler validate` e `spctl` riusciti; se l'app non parte col runtime rinforzato, il diritto mancante si aggiunge solo con la prova, scritto qui | `tests/test_sign_notarize.py`; prova a mano **non ancora eseguita** |
+| T20 | `.dmg` con `hdiutil` (§3.10) | test (sempre, `tests/test_make_dmg.py`): app finta, nessun comando eseguito; ordine dei passi senza e con `--signed`; prova a secco senza app; `.dmg` esistente mai sovrascritto; credenziali rifiutate; percorso `--execute` con strumenti finti e impronta scritta; cartella di lavoro fuori da `build/` rifiutata. A mano, al primo rilascio (`63` passo 8): `make_dmg.py --execute`, aprire il `.dmg`, trascinare l'app su Applicazioni, avvio | test: tutto come atteso; a mano: `.dmg` montabile con l'app e il collegamento, `shasum -a 256 -c` sull'impronta | test e prova a mano |
 | T17 | Ripetibilità | due costruzioni di seguito dallo stesso commit | stessi file (stesso elenco e stesse impronte), tranne firma, `BUILD_INFO.json` e file con data | a mano, una volta |
 
 ## 13. Decisioni aperte
@@ -579,13 +613,20 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   corretta sarà disponibile si potrà risalire con una nuova decisione. Il minimo 15.0 sul sito lo aggiorna il
   proprietario dopo la release.
 
-- **D60-6 — Scelte minori della firma Developer ID e della notarizzazione (proposte da Claude Code il
-  2026-11-10, da confermare):** (1) script separato `scripts/sign_notarize.py`, prova a secco senza `--execute`;
+- **D60-6 — Scelte minori della firma Developer ID e della notarizzazione: APPROVATE dal proprietario il
+  2026-11-10** (i diritti minimi si verificano alla prima firma vera, T19; il punto (5) superato dal 60b:
+  `.dmg` creato da `scripts/make_dmg.py`, §3.10). Testo della proposta: (1) script separato `scripts/sign_notarize.py`, prova a secco senza `--execute`;
   (2) diritti minimi: solo `allow-unsigned-executable-memory`, da verificare alla prima firma; (3) si notarizza
   il `.dmg` e il ticket si aggiunge al solo `.dmg` (l'app è coperta dallo stesso invio, verifica in rete alla
   prima apertura); alternativa: notarizzare prima l'app (zip), aggiungere il ticket all'app e poi creare il
   `.dmg`, un invio in più; (4) nome del profilo `astrotwo-notary`; (5) il `.dmg` resta creato a mano finché il 60b
   non decide lo strumento.
+
+- **D60-7 — Scelte minori del `.dmg` (proposte da Claude Code il 2026-11-10, sprint D5c, da confermare):**
+  (1) file system HFS+ e formato UDZO (zlib), leggibili da ogni macOS supportato (APFS e ULFO/ULMO possibili, più
+  recenti); (2) nome `AstroTwo-<versione SemVer>.dmg` e volume «AstroTwo <versione>», come i `.dmg` delle beta;
+  (3) nessuna personalizzazione della finestra del `.dmg` (sfondo, posizioni delle icone, licenza all'apertura);
+  (4) impronta SHA-256 in un file `.sha256` accanto al `.dmg`; (5) un `.dmg` esistente non si sovrascrive mai.
 
 ## 14. Registro modifiche
 
@@ -599,3 +640,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-11-04 | Claude Code | **Sprint A1c, D60-5 decisa:** pin di python-build-standalone da `20261003` (3.12.15) a `20261026` (3.12.16), la release che uv installa oggi per Python 3.12; SHA-256 verificati sull'archivio ufficiale; testi di licenza identici; eliminato il workaround (`UV_PYTHON_INSTALL_DIR`, `BUILD` a mano). §3.3, §3.11, §9, §13 aggiornati. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (A6-b: preparare, non eseguire):** nuovo §3.12 (firma Developer ID dall'interno verso l'esterno con runtime rinforzato e marca temporale, firma del `.dmg`, notarizzazione con `notarytool --keychain-profile`, ticket, controlli; credenziali solo nel Portachiavi, opzioni di credenziali rifiutate), §4, §7, §10 (cinque righe), §12 T19, §13 D60-6 (scelte minori da confermare). Codice: `scripts/sign_notarize.py` (prova a secco senza `--execute`), test `tests/test_sign_notarize.py`; **nessun comando di firma o notarizzazione eseguito**. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D4c (brief del proprietario del 2026-11-10, punto f):** §3.12 — elenco dei passi del proprietario prima della prima firma (Apple Developer Program, strumenti, certificato «Developer ID Application» nel Portachiavi di login, password specifica per l'app, profilo `astrotwo-notary` salvato con `notarytool store-credentials`, controlli senza segreti). Nessun comando eseguito. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D5c (decisioni del proprietario del 2026-11-10):** parte B (60b) scritta: §3.10 con `hdiutil` e `scripts/make_dmg.py` (prova a secco senza `--execute`, collegato a `sign_notarize.py` con `--signed`), §3.12 passo 2 e sequenza, §4, §7, T20; **D60-6 approvata** (diritti minimi da verificare alla prima firma vera); nuova **D60-7** (scelte minori del `.dmg`). Codice: `scripts/make_dmg.py`, `tests/test_make_dmg.py`; nessun `.dmg` creato. Stato `approvato` invariato. |

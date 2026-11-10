@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-10 (sprint D5a): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-24` decisa dal proprietario il 2026-11-10: proposta (a) e regola generale «testo vuoto = valore assente dichiarato», `25` §3.10 e §13, `02` §2; tolta).
+**Dal 2026-11-10 (sprint D5c): 22 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **22** (`D60-6` approvata e tolta; nuove `D60-7` — scelte minori del `.dmg`, `60` §13 —, `D63-1` e `D63-2` — esito del megatest e DOI in `.zenodo.json`, `63` §13).
+
+Prima, **Dal 2026-11-10 (sprint D5a): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-24` decisa dal proprietario il 2026-11-10: proposta (a) e regola generale «testo vuoto = valore assente dichiarato», `25` §3.10 e §13, `02` §2; tolta).
 
 Prima, **Dal 2026-11-10 (sprint D4): 21 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **21** (nuove `D25-24` — tipo spettrale vuoto scritto come `null`, `25` §13 — e `D60-6`, scelte minori della firma Developer ID e della notarizzazione, `60` §13; `A6-b` aggiornata: preparata, non eseguita).
 
@@ -355,10 +357,14 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (20)
+## 5. GRUPPO 3 — rimandabili al momento del codice (22)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| — | (`D60-6` approvata dal proprietario il 2026-11-10; `60` §13) | — |
+| `D60-7` | Scelte minori del `.dmg` (HFS+ e UDZO, nome, nessuna personalizzazione della finestra, file `.sha256`, mai sovrascrivere): **proposte da Claude Code il 2026-11-10, da confermare** | `60` §13 |
+| `D63-1` | Dove si conserva l'esito del megatest: proposta `docs/megatest-runs/<versione>.md` | `63` §13 |
+| `D63-2` | DOI in `.zenodo.json`: raccomandato il DOI «concept» in `related_identifiers` (`isVersionOf`), mai la chiave `doi` | `63` §13 |
 | — | (`D25-24` decisa dal proprietario il 2026-11-10: proposta (a), regola generale del testo vuoto; `25` §13, `02` §2) | — |
 | — | (`DD-3` confermata, `D25-23` e `D14-16` decise, `D62-1` approvata dal proprietario il 2026-11-10; `panoramica.md` §2 e §5, `25` §13, `14` §13, `62` §13) | — |
 | — | (`DD-1` decisa — lettura (b) — e `DD-2` approvata in tutti i punti dal proprietario il 2026-11-10; `panoramica.md` §2 e §5) | — |
@@ -371,7 +377,6 @@ gruppi successivi, A8 dopo il livello 1).
 | `D40-10` | **Voce futura (proprietario, 2026-11-05):** pulizia delle tabelle SAMP ricevute, che oggi si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/` (D40-9 (3)); per esempio un pulsante nelle Impostazioni con lo spazio occupato. Da decidere: posizione del comando, sessioni che citano file cancellati, conferma | `40-ui-finestra-principale.md` §13 |
 | — | (`D60-4` decisa (b) dal proprietario il 2026-11-04, `60` §13: riga tolta dalla tabella il 2026-11-10, sprint D4c, perché già fuori dal conteggio) | — |
 | `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **preparate il 2026-11-10, non eseguite** (decisione del proprietario: specifica `60` §3.12 e `scripts/sign_notarize.py` pronti, esecuzione quando l'account Apple Developer è pronto; credenziali solo nel Portachiavi, profilo `notarytool`); si chiude con la prova T19 del `60` | `60-distribuzione-dmg.md` §3.12, §13 |
-| `D60-6` | Scelte minori della firma Developer ID e della notarizzazione (**proposte da Claude Code il 2026-11-10, da confermare**): script separato con prova a secco, diritti minimi (`allow-unsigned-executable-memory`, da verificare), ticket aggiunto al solo `.dmg`, profilo `astrotwo-notary`, `.dmg` creato a mano finché il 60b non decide lo strumento | `60` §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
@@ -507,3 +512,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-10 | Claude Code | **Sprint D4 (decisioni del proprietario del 2026-11-10):** `A6-b` aggiornata (firma Developer ID e notarizzazione preparate, non eseguite); nuove **`D60-6`** (`60` §13) e **`D25-24`** (`25` §13), Gruppo 3, scritte prima nei file di origine. **21 aperte.** |
 | 2026-11-10 | Claude Code | **Sprint D4c (controllo dei file di stato):** tolta dalla tabella del Gruppo 3 la riga di `D60-4`, decisa il 2026-11-04 e già fuori dal conteggio (la tabella aveva 22 righe per 21 aperte); conteggio invariato: **21 aperte**. |
 | 2026-11-10 | Claude Code | **Sprint D5a (decisione del proprietario del 2026-11-10):** `D25-24` decisa (proposta (a); regola generale: un testo vuoto di una fonte è un valore assente dichiarato), tolta dal Gruppo 3; scritta prima nel file di origine (`25` §3.10 e §13, `02` §2). **20 aperte.** |
+| 2026-11-10 | Claude Code | **Sprint D5c:** `D60-6` approvata e tolta; nuove `D60-7` (`60` §13), `D63-1` e `D63-2` (`63` §13), scritte prima nei file di origine. **22 aperte.** |
