@@ -328,6 +328,15 @@ J2000 con `coo_err_maj`/`coo_err_min`/`coo_err_angle`, `coo_qual`,
 `coo_bibcode`; identificativi raggruppati per catalogo (prima parola
 dell'identificativo, `NAME` = nomi propri, `*`/`**`/`V*` = nomi di stelle);
 collegamento alla pagina SIMBAD del server che ha risposto.
+**Tipo spettrale assente (D25-24, decisa il 2026-11-10):** quando SIMBAD non
+ha un tipo spettrale (testo vuoto `''`, solo spazi, o colonna nulla) il
+profilo **non scrive** il valore `sp_type` (nessuna riga, nessun `null`) e
+mette nei dettagli dell'Identità `details["absent"]` = `[{"quantity":
+"sp_type", "note": "SIMBAD has no spectral type"}]` (nota in inglese alla
+fonte, come le altre note dopo DD-3 (a)); l'interfaccia (`43`) e il PDF
+(§3.15) la mostrano sotto i valori dell'Identità, l'ECSV non ha la riga.
+Regola generale del `02` §2 («Testo vuoto = valore assente dichiarato»).
+Profili già registrati con `sp_type` `null`: risultato invariato (D25-20 (7)).
 
 **Sezione Astrometria:** dal `source_id`, `gaiadr3.gaia_source` dell'archivio
 Gaia ESA: `ra`, `dec` (con `ra_error`, `dec_error` in mas) a `ref_epoch`,
@@ -1615,6 +1624,7 @@ cambiano).
 | T35 | Archivio Gaia già fermo nel profilo e Astrometria 35 s (§3.17, D25-22) | archivio Gaia simulato che risponde HTTP 503 dopo 0,3 s; poi lo stesso con `gaia_source` e Bailer-Jones già in cache; poi Gaia di nuovo su | 2 sole richieste Gaia inviate (le 2 in corso), le altre `PROFILE_GAIA_SKIPPED` `gaia_down` con la prova, `skipped_services["gaia"]`, Astrometria con i valori SIMBAD; con le copie in cache Astrometria `done` dalla cache; il profilo successivo riprova; tempo massimo dell'Astrometria 35 s | richieste per servizio, errori, metadati |
 | T36 | Lingua del PDF (DD-1, DD-3 (a); sprint D2) | profili di 51 Peg, Vega, eta Tau e TRAPPIST-1 dalle risposte registrate, anche con l'archivio Gaia o il NASA Exoplanet Archive giù; PDF con `language = en`, di nuovo `en`, poi `it`; ECSV | ogni testo scritto nelle pagine del PDF inglese senza **nessuna parola italiana** (vocabolario: parole presenti solo nei testi `it` del catalogo dei messaggi e delle intestazioni, più le parole italiane comuni); i due PDF inglesi identici byte per byte; il PDF italiano diverso, con parole italiane; note, servizi, formule e intervalli dell'ECSV in inglese; avvisi ed errori = `message_text` del catalogo nella lingua scelta | `tests/analysis/test_profile_language.py` |
 | T37 | Pianeti: assenza solo dopo una richiesta (D25-23, decisa il 2026-11-10) | Vega con SIMBAD giù (risolutore di nomi); bersaglio per coordinate con SIMBAD giù e nessuna sorgente Gaia; 51 Peg con SIMBAD giù e ospite trovato per nome; sezioni registrate prima del 2026-11-10 (senza `checked`); vista Pianeti del 43 con `done`/`checked`, `not_applicable`, `error` | Vega: una richiesta `hostname IN ('Vega')`, `done`, `checked` vero, «nessun pianeta» con la richiesta nella sezione; coordinate: `not_applicable`, nessuna richiesta all'archivio, `PROFILE_PLANETS_NOT_CHECKED` `simbad_unavailable`, mai «nessun pianeta»; 51 Peg: pianeti con `PROFILE_PLANETS_BY_WRITTEN_NAME` (in inglese nel PDF `en`); registrate: «nessun pianeta» solo se `query_by` o le interrogazioni del passo `exoplanet` della catena provano la richiesta, altrimenti «Not checked»; vista: «No planet in the archive» solo con `checked`, «Not checked» senza, niente in errore | `tests/analysis/test_object_profile.py`, `test_profile_language.py`, `test_messages_object_profile.py`, `tests/ui/test_profiles.py` |
+| T38 | Tipo spettrale assente (D25-24) | Identità con `sp_type` `''`, `'  '` e nullo; poi `G2IV` | nessun valore `sp_type`, `details["absent"]` con «SIMBAD has no spectral type»; con `G2IV` il valore e nessuna nota; PDF con la nota | confronto |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
 | T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`); dallo sprint C7 con `refresh=False` sulla cache vuota del test (§3.16 C7-f); dallo sprint C8 con la partenza (`started`) di ogni sezione nel riepilogo | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
 
@@ -1921,8 +1931,10 @@ Nessuna decisione aperta.
   vuole i pianeti anche con SIMBAD giù. (Il proprietario ha scelto una
   forma di (b) più la regola generale.)
 
-- **D25-24 — Tipo spettrale vuoto in SIMBAD scritto come assente: da decidere (aperta il 2026-11-10, sprint
-  D4, misure di validazione).** **Fatto osservato** (seconda misura del 2026-11-10, riferimento: mirror di
+- **D25-24 — Tipo spettrale vuoto in SIMBAD scritto come assente: DECISA dal proprietario il 2026-11-10
+  (proposta (a) approvata; regola generale: un testo vuoto di una fonte è un valore assente dichiarato, mai un
+  valore, `02` §2; la validazione confronta così; tolleranze invariate; applicata nello sprint D5a, §3.10, T38).**
+  Testo della proposta (aperta il 2026-11-10, sprint D4, misure di validazione): **Fatto osservato** (seconda misura del 2026-11-10, riferimento: mirror di
   Harvard): per 3C 273 e M 13 la colonna `sp_type` di `basic` è un testo vuoto (`''`); il profilo scrive il
   valore `sp_type` con `value = null` (il motore trasforma il testo vuoto in assente). Per la tolleranza dei
   valori letti («identici», `docs/validation.md` §2.1) le due righe sono **fail**: AstroTwo cambia un valore
@@ -1958,3 +1970,4 @@ Nessuna decisione aperta.
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 **confermata** (proposta (a)) e approvate le modifiche del D2 (§3.15, T36); **D25-23 decisa** (regola generale delle assenze): nuovo §3.18, §3.4 punto 6, §3.10, §3.13, §3.15 (PDF: riga «Not checked»; permessi del file esportato secondo l'umask, decisione del 2026-11-10), §10 (quattro righe), §12 T37, §13. Codice: `object_profile.py` (`_typed_names`, `_exoplanet_by_hostname`, `profile_planets` con `checked`, `planets_absence_shown`, `PLANETS_NOT_CHECKED_NOTE`), `profile_export.py` (riga «Not checked», `export_temp_file` del 14), catalogo dei messaggi (`PROFILE_PLANETS_NOT_CHECKED`, `PROFILE_PLANETS_BY_WRITTEN_NAME`), `ui/profiles.py` (43). Ricerca degli altri punti con lo stesso difetto scritta in §3.18. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** §3.18 — intestazione «Not checked» / «Non controllata» per ogni sezione con `checked` falso (`section_not_checked`), riga di stato del PDF «not checked» solo con `checked` esplicito; approvati il cambio della sola riga Pianeti nei PDF dei profili vecchi e la correzione di `scripts/validate_profiles.py`. Codice: `object_profile.py` (`section_not_checked`), `profile_export.py` (`_status_lines`); test in `test_object_profile.py` e `test_profile_export.py` (`test_pdf_planets_not_checked_and_old_profiles`). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D4 (seconda misura di validazione, SIMBAD contro il mirror di Harvard):** nuova **D25-24** (§13): `sp_type` vuoto in SIMBAD scritto come `null` nel profilo, 2 fail (3C 273, M 13); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D5a (decisione del proprietario del 2026-11-10):** D25-24 **decisa** (proposta (a), §13); §3.10 tipo spettrale assente non scritto, nota «SIMBAD has no spectral type» in `details["absent"]`, mostrata nell'interfaccia e nel PDF; regola generale nel `02` §2; nuovo T38. Stato `approvato` invariato. |

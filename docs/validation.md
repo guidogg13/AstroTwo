@@ -1,6 +1,6 @@
 # Validation of AstroTwo
 
-> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows pass and 2 fail (spectral type, section 7), and every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0.
+> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows passed and 2 failed (empty spectral type); after the project owner's rule on empty text (decision D25-24, 2026-11-10) the saved rows were **recompared without network** and all 131 pass (section 5.1, «Correction»). Every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0.
 
 ## 1. Purpose
 
@@ -100,7 +100,7 @@ AstroTwo values are of two kinds, and the ECSV export says which one each value 
 
 AstroTwo 0.1.0-beta.5 with the code of commit `68dbe7c` (sprint D3b: since sprint D3a an HTTP 404 from the CDS sends AstroTwo to the SIMBAD mirror at Harvard). The values compared do not depend on the uncommitted changes present during the run (error messages of HiPS surveys and the Harvard note of the validation script). Tolerances unchanged (section 2.1).
 
-**Summary: 175 values within tolerance, 2 outside, 85 not measured.**
+**Summary as measured: 175 values within tolerance, 2 outside, 85 not measured. After the recomparison of the 2 empty spectral types (D25-24, below): 177 within tolerance, 0 outside, 85 not measured.**
 
 | Object | Within tolerance | Outside | Not measured |
 |---|---|---|---|
@@ -109,9 +109,11 @@ AstroTwo 0.1.0-beta.5 with the code of commit `68dbe7c` (sprint D3b: since sprin
 | eta Tau | 24 | 0 | 10 |
 | TRAPPIST-1 | 28 | 0 | 14 |
 | Barnard's Star | 28 | 0 | 14 |
-| 3C 273 | 26 | 1 | 14 |
-| M 13 | 23 | 1 | 8 |
-| **Total** | **175** | **2** | **85** |
+| 3C 273 | 26 (27 after D25-24) | 1 (0 after D25-24) | 14 |
+| M 13 | 23 (24 after D25-24) | 1 (0 after D25-24) | 8 |
+| **Total** | **175** (**177** after D25-24) | **2** (**0** after D25-24) | **85** |
+
+**Correction after decision D25-24 (2026-11-10, recomputed without network).** For 3C 273 and M 13 SIMBAD has no spectral type: the reference answer has an empty text (`''`) and AstroTwo's result had no value (`null`). The comparison counted «one side empty» as a fail. The project owner then decided (D25-24) that **an empty text returned by a source is a value declared absent by the source, never a value**, and that the validation compares it that way; the tolerances (section 2.1) are **unchanged**. The two saved rows were recomputed from the files of this run with `uv run python scripts/validate_profiles.py --recompare docs/validation-runs/2026-11-10-run2` (no network, no new measurement): both become **pass** («both empty»), no other row changes. The measured files (`results.json`, `results.md`) are kept as they were; the recomparison is in `results-recompared.json` and `results-recompared.md` next to them, with the rule and the changed rows in its `meta`. Since the same decision, AstroTwo no longer writes a spectral type that SIMBAD declares absent: the Identity section has no `sp_type` row and shows the note «SIMBAD has no spectral type»; the validation script compares this note-only case with the reference in the same way (pass only if the reference is empty or missing).
 
 **State of the services during the run** (checked by hand at 19:21 UTC and recorded in each row):
 
@@ -123,7 +125,7 @@ AstroTwo 0.1.0-beta.5 with the code of commit `68dbe7c` (sprint D3b: since sprin
 
 **What was measured.**
 
-- **SIMBAD (129 pass, 2 fail):** main identifier, object type, spectral type, number of references, position and its errors, parallax, proper motion and radial velocity with errors, compared digit for digit with the same `basic` row read from the **Harvard mirror**. Every row says «reference: Harvard mirror, to be repeated against CDS». The 2 fails are explained in section 7 (spectral type of 3C 273 and M 13).
+- **SIMBAD (129 pass, 2 fail as measured; 131 pass after D25-24):** main identifier, object type, spectral type, number of references, position and its errors, parallax, proper motion and radial velocity with errors, compared digit for digit with the same `basic` row read from the **Harvard mirror**. Every row says «reference: Harvard mirror, to be repeated against CDS». The 2 fails were the empty spectral type of 3C 273 and M 13: see «Correction» above and section 7.
 - **Distance as 1/parallax (5 pass):** from the SIMBAD parallax (also Harvard), relative difference within 1 × 10⁻¹².
 - **Fν from 2MASS and AllWISE magnitudes (41 pass):** conversion recomputed with the zero point declared by AstroTwo, relative difference 0.
 
@@ -327,7 +329,7 @@ AstroTwo 0.1.0-beta.5 with the code of commit `68dbe7c` (sprint D3b: since sprin
 | 3C 273 | Identity | main_id | 3C 273 | 3C 273 | simbad.harvard.edu · 2026-11-10T20:01:53Z | text | pass (reference: Harvard mirror, to be repeated against CDS) |
 | 3C 273 | Identity | main_id (SIMBAD) | 3C 273 | '3C 273' | simbad.harvard.edu · 2026-11-10T20:01:53Z | text | pass (reference: Harvard mirror, to be repeated against CDS) |
 | 3C 273 | Identity | otype (SIMBAD) | BLL | 'BLL' | simbad.harvard.edu · 2026-11-10T20:01:53Z | text | pass (reference: Harvard mirror, to be repeated against CDS) |
-| 3C 273 | Identity | sp_type (SIMBAD) |  | '' | simbad.harvard.edu · 2026-11-10T20:01:53Z | one is empty | fail (reference: Harvard mirror, to be repeated against CDS) |
+| 3C 273 | Identity | sp_type (SIMBAD) |  | '' | simbad.harvard.edu · 2026-11-10T20:01:53Z | one is empty | fail as measured → **pass** after the D25-24 recomparison (both empty; reference: Harvard mirror, to be repeated against CDS) |
 | 3C 273 | Identity | nbref (SIMBAD) | 6064 | 6064 | simbad.harvard.edu · 2026-11-10T20:01:53Z | Δ = 0.0 | pass (reference: Harvard mirror, to be repeated against CDS) |
 | 3C 273 | Identity | ra (SIMBAD) | 187.27791594049 deg | 187.27791594049 deg | simbad.harvard.edu · 2026-11-10T20:01:53Z | Δ = 0.0 | pass (reference: Harvard mirror, to be repeated against CDS) |
 | 3C 273 | Identity | dec (SIMBAD) | 2.05238823055 deg | 2.05238823055 deg | simbad.harvard.edu · 2026-11-10T20:01:53Z | Δ = 0.0 | pass (reference: Harvard mirror, to be repeated against CDS) |
@@ -368,7 +370,7 @@ AstroTwo 0.1.0-beta.5 with the code of commit `68dbe7c` (sprint D3b: since sprin
 | M 13 | Identity | main_id | M  13 | M  13 | simbad.harvard.edu · 2026-11-10T20:04:00Z | text | pass (reference: Harvard mirror, to be repeated against CDS) |
 | M 13 | Identity | main_id (SIMBAD) | M  13 | 'M  13' | simbad.harvard.edu · 2026-11-10T20:04:00Z | text | pass (reference: Harvard mirror, to be repeated against CDS) |
 | M 13 | Identity | otype (SIMBAD) | GlC | 'GlC' | simbad.harvard.edu · 2026-11-10T20:04:00Z | text | pass (reference: Harvard mirror, to be repeated against CDS) |
-| M 13 | Identity | sp_type (SIMBAD) |  | '' | simbad.harvard.edu · 2026-11-10T20:04:00Z | one is empty | fail (reference: Harvard mirror, to be repeated against CDS) |
+| M 13 | Identity | sp_type (SIMBAD) |  | '' | simbad.harvard.edu · 2026-11-10T20:04:00Z | one is empty | fail as measured → **pass** after the D25-24 recomparison (both empty; reference: Harvard mirror, to be repeated against CDS) |
 | M 13 | Identity | nbref (SIMBAD) | 2316 | 2316 | simbad.harvard.edu · 2026-11-10T20:04:00Z | Δ = 0.0 | pass (reference: Harvard mirror, to be repeated against CDS) |
 | M 13 | Identity | ra (SIMBAD) | 250.42347499999994 deg | 250.42347499999994 deg | simbad.harvard.edu · 2026-11-10T20:04:00Z | Δ = 0.0 | pass (reference: Harvard mirror, to be repeated against CDS) |
 | M 13 | Identity | dec (SIMBAD) | 36.46131944444445 deg | 36.46131944444445 deg | simbad.harvard.edu · 2026-11-10T20:04:00Z | Δ = 0.0 | pass (reference: Harvard mirror, to be repeated against CDS) |
@@ -509,7 +511,7 @@ A first run the same day (15:48–16:03 UTC, before the change of the profile no
 ## 6. Files for reproduction
 
 - **Script:** [`scripts/validate_profiles.py`](../scripts/validate_profiles.py). Run it from the repository with `uv run python scripts/validate_profiles.py` (all seven objects) or with object names as arguments. It uses the network, so it is **not** part of the automatic test suite. It writes into `docs/validation-runs/<date>/`.
-- **Second run of 2026-11-10:** [`docs/validation-runs/2026-11-10-run2/`](validation-runs/2026-11-10-run2/), same files as below (rows of section 5.2).
+- **Second run of 2026-11-10:** [`docs/validation-runs/2026-11-10-run2/`](validation-runs/2026-11-10-run2/), same files as below (rows of section 5.2), plus `results-recompared.json` and `results-recompared.md`: the same rows recompared without network with the empty-text rule of D25-24 (`--recompare`, section 5.1).
 - **First run of 2026-11-10:** [`docs/validation-runs/2026-11-10/`](validation-runs/2026-11-10/)
   - `<object>-result.json`: the result of the `object.profile` command, with values, provenance, warnings and errors (thumbnail images removed);
   - `<object>-profile.ecsv`: the ECSV export of the same profile (values with provenance);
@@ -518,7 +520,7 @@ A first run the same day (15:48–16:03 UTC, before the change of the profile no
 
 ## 7. Known limits and findings
 
-- **Spectral type empty in SIMBAD: 2 fails (second run).** For 3C 273 and M 13 SIMBAD has no spectral type: the reference reads an empty text (`''`), while AstroTwo writes the value as absent (`null`) in its result. The tolerance for text is «identical», so these 2 rows are **fail**: AstroTwo changes a read value (empty text → absent), which the rule for read values does not allow. The meaning is the same (no spectral type), but the fix is a decision of the project owner: open question **D25-24** (`mdfiles/25-analisi-profilo-oggetto.md`). The tolerance is not changed.
+- **Spectral type empty in SIMBAD: 2 fails as measured, resolved by decision D25-24 (second run).** For 3C 273 and M 13 SIMBAD has no spectral type: the reference reads an empty text (`''`), while AstroTwo wrote the value as absent (`null`) in its result. With the text tolerance «identical» these 2 rows were **fail**. **Decided on 2026-11-10 (D25-24, `mdfiles/25-analisi-profilo-oggetto.md`):** an empty text from a source is a value declared absent, never a value; AstroTwo does not write it and adds the note «SIMBAD has no spectral type»; the validation compares empty text and missing value as the same outcome. The tolerances are not changed. Recomputed without network from the saved files: both rows pass (section 5.1, «Correction»).
 - **Gaia archive unstable during the second run.** It answered a check by hand, then timed out or answered HTTP 503 whenever AstroTwo asked it, so no Gaia value could be compared. To redo.
 - **Services down on 2026-11-10.** Most rows of the first run are not measured (section 5.3). They are not failures of AstroTwo and not passes: they stay to be redone.
 - **SIMBAD mirror not used for HTTP 404.** During the CDS outage, the main SIMBAD server answered HTTP 404 with an HTML page instead of not answering. AstroTwo switches to the Harvard mirror only for time-outs, connection errors, HTTP 5xx and 429, never for a 404 (rule D14-14), so the profiles had no SIMBAD data. The name resolver did switch to the mirror. Open question D14-16 (`mdfiles/14-core-protocolli-vo.md`). **Decided and fixed on 2026-11-10 (after this run):** an HTTP 404 from a service address now counts as a failure, and AstroTwo switches to the mirror with the usual notice; an object not found in a valid answer stays «not found».

@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-10 — **sprint D4c:** `.zenodo.json` coerente con `CITATION.cff` (file fuori da `mdfiles/`); `60` §3.12 con i passi del proprietario per la firma; file di stato controllati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **21 aperte.**
+**Ultimo aggiornamento:** 2026-11-10 — **sprint D5a:** D25-24 decisa e in codice (`25`, `02` §2, `43`); seconda misura ricalcolata senza rete (177 pass, 0 fail, 85 non misurati). Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **20 aperte.**
+
+Prima, 2026-11-10 — **sprint D4c:** `.zenodo.json` coerente con `CITATION.cff` (file fuori da `mdfiles/`); `60` §3.12 con i passi del proprietario per la firma; file di stato controllati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **21 aperte.**
 
 Prima, 2026-11-10 — **sprint D4:** errore dei survey HiPS con il messaggio del primo server (`12`); seconda misura di validazione (SIMBAD contro il mirror di Harvard: 175 pass, 2 fail, 85 non misurati; nuova D25-24 nel `25`); firma Developer ID e notarizzazione preparate e non eseguite (`60` §3.12, D60-6); `62` prova A4. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **21 aperte.**
 

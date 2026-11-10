@@ -16,11 +16,17 @@ A service that does not answer gives rows ``not measured`` with the server, the 
 stay to be redone. Usage::
 
     uv run python scripts/validate_profiles.py [--out docs/validation-runs/<date>] [OBJECT ...]
+
+**Empty text** (decision D25-24 of the project owner, 2026-11-10): an empty text returned by a source (``''`` or
+only spaces) is a **value declared absent** by the source, never a value; on both sides it compares like a missing
+value. ``--recompare DIR`` applies this rule, **without network**, to the rows of a run already saved in ``DIR``
+(``results.json``) and writes ``results-recompared.json`` and ``.md`` next to it; the saved files stay unchanged.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as dt
 import io
 import json
@@ -224,11 +230,18 @@ def unit_of(value):
     return value.get("unit") if isinstance(value, dict) else None
 
 
+def declared_absent(value) -> bool:
+    """D25-24: no value, or an empty text (``''`` or only spaces), is a value declared absent by the source."""
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
 def same_read(astro_value, ref_value, ref_dtype) -> tuple[bool, str]:
-    """Read value: identical; ``float32`` columns compared after rounding both values to ``float32``."""
+    """Read value: identical; ``float32`` columns compared after rounding both values to ``float32``; an empty text
+    on either side is a value declared absent (D25-24), never a value."""
     a = number(astro_value)
-    if ref_value is None or a is None:
-        return (a is None and ref_value is None), "both empty" if a is None and ref_value is None else "one is empty"
+    if declared_absent(ref_value) or declared_absent(a):
+        both = declared_absent(a) and declared_absent(ref_value)
+        return both, "both empty" if both else "one is empty"
     if isinstance(ref_value, str) or isinstance(a, str):
         return str(a).strip() == str(ref_value).strip(), "text"
     if ref_dtype is not None and np.dtype(ref_dtype) == np.float32:
@@ -289,6 +302,7 @@ def compare(name: str, astro: dict, ref: dict) -> list[dict]:
     for section in astro.get("sections") or []:
         for v in section.get("values") or []:
             out.extend(compare_value(name, section, v, astro, ref))
+        out.extend(absent_rows(name, section, ref))
         for err in section.get("errors") or []:  # values AstroTwo could not read: the rows stay to be redone
             server = (err.get("params") or {}).get("url") or ""
             out.append(row(name, AREAS.get(section.get("name"), section.get("name")),
@@ -296,6 +310,49 @@ def compare(name: str, astro: dict, ref: dict) -> list[dict]:
                            None, None, now(), None, "not measured",
                            f"AstroTwo side: {english(err)}" + (f" [{server}]" if server and server not in
                                                                english(err) else "")))
+    return out
+
+
+def absent_rows(name, section, ref) -> list[dict]:
+    """Values the profile does not write because the source declares them absent (``details["absent"]``, D25-24):
+    pass when the reference is empty or missing too, fail when the reference has a value."""
+    rows = []
+    area = AREAS.get(section.get("name"), section.get("name"))
+    for item in (section.get("details") or {}).get("absent") or []:
+        quantity = item.get("quantity")
+        if section.get("name") != "identity" or quantity not in SIMBAD_COLUMNS:
+            continue
+        part = ref.get("simbad") or {}
+        shown = f"(not written: {item.get('note')})"
+        if part.get("table") is None or not len(part["table"]):
+            rows.append(not_measured(name, area, f"{quantity} (SIMBAD)", shown, part))
+            continue
+        ref_value = cell(part["table"], SIMBAD_COLUMNS[quantity])
+        ok = declared_absent(ref_value)
+        rows.append(row(name, area, f"{quantity} (SIMBAD)", shown, repr(ref_value), part["server"], part["query"],
+                        part["retrieved_at"], "both empty" if ok else "one is empty", "pass" if ok else "fail",
+                        "declared absent (D25-24)"))
+    return rows
+
+
+def recompare(rows: list[dict]) -> list[dict]:
+    """Offline recomparison of saved rows with the empty-text rule (D25-24): only the rows that failed because one
+    side was empty change; every other row stays as measured. The reference is read back from its saved ``repr``."""
+    out = []
+    for r in rows:
+        if r.get("outcome") != "fail" or r.get("difference") != "one is empty":
+            out.append(r)
+            continue
+        text = str(r.get("reference") or "")
+        try:
+            ref_value = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            out.append(r)
+            continue
+        astro = r.get("astrotwo")
+        ok, how = same_read(None if declared_absent(astro) else astro, ref_value, None)
+        note = "; ".join(x for x in (r.get("note"), "recomputed offline with the empty-text rule (D25-24)") if x)
+        out.append({**r, "difference": how, "outcome": "pass" if ok else "fail", "note": note})
     return out
 
 
@@ -480,13 +537,35 @@ def markdown(rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def recompare_run(run: Path) -> int:
+    """``--recompare``: reads ``run/results.json``, writes ``results-recompared.json`` and ``.md``; no network."""
+    saved = json.loads((run / "results.json").read_text())
+    rows = recompare(saved["rows"])
+    changed = [(a["object"], a["quantity"], a["outcome"], b["outcome"]) for a, b in zip(saved["rows"], rows,
+                                                                                       strict=True) if a != b]
+    meta = {**saved["meta"], "recompared": {"date": now(), "rule": "D25-24: empty text = value declared absent",
+                                            "changed": [list(c) for c in changed]}}
+    (run / "results-recompared.json").write_text(json.dumps({"meta": meta, "rows": rows}, indent=1,
+                                                            ensure_ascii=False, default=str))
+    (run / "results-recompared.md").write_text(markdown(rows))
+    for c in changed:
+        print(f"{c[0]} · {c[1]}: {c[2]} → {c[3]}", file=sys.stderr)
+    total = {k: sum(r["outcome"] == k for r in rows) for k in ("pass", "fail", "not measured")}
+    print(f"total: {total}; written {run / 'results-recompared.json'}", file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     import astrotwo
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("objects", nargs="*", default=list(OBJECTS))
     parser.add_argument("--out", type=Path, default=Path("docs/validation-runs") / dt.date.today().isoformat())
+    parser.add_argument("--recompare", type=Path, metavar="DIR",
+                        help="recompare the saved rows of DIR/results.json with the empty-text rule (no network)")
     args = parser.parse_args()
+    if args.recompare is not None:
+        return recompare_run(args.recompare)
     args.out = args.out.resolve()
     args.out.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []

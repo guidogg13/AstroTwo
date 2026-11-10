@@ -235,7 +235,8 @@ unità come la dà il risultato (D43-7); sempre il punto decimale (40 §3.9).
 Ogni numero è un collegamento al suo riquadro (§3.8).
 
 **Identità** (a sinistra): `main_id`; tipo `otype` con la descrizione di
-`otypedef`; tipo spettrale con il bibcode; citazioni `nbref`; posizione ICRS
+`otypedef`; tipo spettrale con il bibcode (se SIMBAD non lo ha, nessuna riga e, sotto i
+valori, la nota di `details["absent"]`: «sp_type: SIMBAD has no spectral type», D25-24); citazioni `nbref`; posizione ICRS
 J2000 con errore ellittico, qualità e bibcode; **identificativi raggruppati
 per catalogo** (gruppi chiusi oltre 8 voci, D43-6); tabella della **catena
 degli identificativi** (catalogo, identificativo, metodo `simbad_identifier`
@@ -637,3 +638,4 @@ decisione aperta.
 | 2026-11-08 | Claude Code | Creazione del file (stato: bozza), sprint C5, decisione D25-7 del proprietario (specifica dell'interfaccia del profilo nel `43`): finestra Profili non modale con una scheda per profilo, aperture (menu Data, «Vai a», cielo, puntatore SIMBAD, tabella con riconoscimento degli identificativi), scheletro e stati delle sezioni, arrivo progressivo (proposta: `detail` di `ProgressReport`), «Riprova questa sezione», corpo delle sezioni con miniature e crediti (testo di STScI per DSS, D25-17 (3)), grafico della SED del 20, riquadro della provenienza; decisioni D43-1…D43-10 (D43-9: conflitto tra il brief e D20-9 (3)). |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 confermata e approvate le modifiche del D2 a questo file (§3.10, T17); **D25-23** (assenze solo dopo una richiesta vera): §3 Pianeti con «Not checked» e nessuna riga in errore, T10 esteso; permessi normali del PDF (`02` §2). Codice: `PlanetsView` in `ui/profiles.py` (prima scriveva «No planet in the archive» anche sotto un errore), traduzione «Non controllato» in `astrotwo_it.ts`/`.qm`. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (sprint D3b):** intestazione «Not checked» / «Non controllata» per ogni sezione con `checked` falso (tabella degli stati in §3); codice `SectionView` in `ui/profiles.py` (stato `not_checked`), traduzione in `astrotwo_it.ts`/`.qm`; test `test_planets_view_absence_only_after_a_request`, `test_any_section_with_checked_false_says_not_checked`. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D5a (D25-24, decisione del proprietario del 2026-11-10):** §3 Identità: tipo spettrale assente senza riga, con la nota di `details["absent"]` sotto i valori. Stato `approvato` invariato. |

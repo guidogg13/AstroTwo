@@ -1202,6 +1202,10 @@ def _simbad_link(record: SimbadRecord) -> str:
     return f"{parsed.scheme}://{parsed.netloc}/simbad/sim-id?Ident={urllib.parse.quote(record.main_id)}"
 
 
+#: Nota dell'Identità quando SIMBAD non ha un tipo spettrale (D25-24, decisa il 2026-11-10; inglese alla fonte, DD-3)
+SP_TYPE_ABSENT_NOTE = "SIMBAD has no spectral type"
+
+
 def profile_identity(resolved: ResolvedTarget) -> ProfileSection:
     """Sezione Identità dai dati SIMBAD già letti da ``simbad_object`` (25 §3.10): nessuna nuova richiesta."""
     section = ProfileSection("identity")
@@ -1225,7 +1229,12 @@ def profile_identity(resolved: ResolvedTarget) -> ProfileSection:
 
     read("main_id", record.main_id)
     read("otype", basic.get("otype"), note=record.otype_description)
-    read("sp_type", basic.get("sp_type"), reference=basic.get("sp_bibcode"))
+    absent = []
+    sp_type = basic.get("sp_type")
+    if isinstance(sp_type, str) and sp_type.strip():
+        read("sp_type", sp_type, reference=basic.get("sp_bibcode"))
+    else:  # D25-24: testo vuoto o nullo = valore assente dichiarato da SIMBAD, mai un valore (02 §2)
+        absent.append({"quantity": "sp_type", "note": SP_TYPE_ABSENT_NOTE})
     read("nbref", basic.get("nbref"))
     read("ra", basic.get("ra"), reference=basic.get("coo_bibcode"), note="ICRS, epoch J2000")
     read("dec", basic.get("dec"), reference=basic.get("coo_bibcode"), note="ICRS, epoch J2000")
@@ -1240,6 +1249,8 @@ def profile_identity(resolved: ResolvedTarget) -> ProfileSection:
                        "identifiers_provenance": _provenance(ident_req, _record_service(record), "ident",
                                                              ident_req.arguments.get("adql"), record.main_id,
                                                              "simbad_identifier").as_dict()}
+    if absent:
+        section.details["absent"] = absent
     section.requests.extend(record.requests[:2])
     section.status = "done"
     return section

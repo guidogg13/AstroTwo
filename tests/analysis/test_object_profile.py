@@ -94,6 +94,34 @@ def test_t1_identity_of_51_peg(services, cache):
 
 
 # =============================================================================
+# T38 — tipo spettrale assente (D25-24, decisa il 2026-11-10)
+
+
+@pytest.mark.parametrize("empty", ["", "   ", None])
+def test_t38_empty_spectral_type_is_declared_absent(services, cache, empty):
+    """Un testo vuoto di SIMBAD è un valore assente dichiarato: nessun valore ``sp_type``, la nota nei dettagli e nel
+    PDF (``02`` §2, ``25`` §3.10)."""
+    import dataclasses
+
+    from astrotwo.analysis import profile_export as pe
+
+    resolved = resolve_target(ProfileTarget(name="51 Peg"), cache=cache)
+    record = resolved.simbad
+    basic = dict(record.basic, sp_type=empty)
+    sec = op.profile_identity(dataclasses.replace(resolved, simbad=dataclasses.replace(record, basic=basic)))
+    assert sec.status == "done" and "sp_type" not in values(sec)
+    assert all(v.value is not None or v.quantity != "sp_type" for v in sec.values)
+    assert sec.details["absent"] == [{"quantity": "sp_type", "note": "SIMBAD has no spectral type"}]
+    data = {"target": {"name": "51 Peg"}, "sections": [dict(sec.as_dict(), command_id=1)]}
+    for lang in ("en", "it"):
+        texts = [t.get_text() for t in pe._identity_page(data, pe._LABELS[lang], "x").fig.texts]
+        assert "sp_type: SIMBAD has no spectral type" in texts
+    # con un tipo spettrale vero: il valore, nessuna nota
+    full = op.profile_identity(resolved)
+    assert values(full)["sp_type"].value == "G2IV" and "absent" not in full.details
+
+
+# =============================================================================
 # T2 — catena degli identificativi di 51 Peg
 
 

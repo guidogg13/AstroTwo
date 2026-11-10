@@ -481,6 +481,8 @@ class IdentityView(SectionView):
         if details.get("note"):
             self.add(_label(str(details["note"])))
         super().fill_body(data)
+        for absent in details.get("absent") or []:  # D25-24: valore dichiarato assente dalla fonte, con la nota
+            self.add(_label(f"{absent.get('quantity')}: {absent.get('note')}"))
         groups = details.get("identifiers") or {}
         if groups:
             lines = []

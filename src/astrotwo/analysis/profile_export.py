@@ -664,6 +664,8 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
                    [r[:4] for r in _value_rows(section.get("values") or [])], (1.1, 1.6, 0.8, 0.9 if images else 2.0),
                    more=label["more"])
         details = section.get("details") or {}
+        for absent in details.get("absent") or []:  # D25-24: valore che la fonte dichiara assente, con la nota
+            page.text(f"{absent.get('quantity')}: {absent.get('note')}", size=7, color="0.35", width=left_width)
         groups = details.get("identifiers") or {}
         if groups:
             page.text(label["identifiers"].replace("{count}", str(details.get("identifier_count", ""))), size=8,

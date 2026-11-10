@@ -41,6 +41,15 @@ documenti e implementazioni siano coerenti e confrontabili con la letteratura.
   richiesta nel risultato (applicazione nel profilo: `25` §3.18). Un HTTP
   404 sull'indirizzo di un servizio è un guasto, non un'assenza (D14-16,
   `14` §3).
+- **Testo vuoto = valore assente dichiarato (D25-24, regola generale del
+  proprietario del 2026-11-10, per tutta l'app):** un testo vuoto (`''`,
+  anche solo spazi) restituito da una fonte vale come **valore assente
+  dichiarato** dalla fonte, mai come valore: non si scrive come valore
+  (nessuna riga con il testo vuoto né con `null` al suo posto); dove serve
+  si scrive una nota che dice che la fonte non ha quel valore (es. «SIMBAD
+  has no spectral type»). La pagina di validazione confronta così: testo
+  vuoto della fonte e valore non scritto da AstroTwo sono lo stesso esito.
+  Applicazione nel profilo: `25` §3.4 (Identità).
 - **Stato in testa:** ogni file dichiara `bozza`, `in revisione` o `approvato`.
   Solo `approvato` autorizza il codice del corrispondente modulo.
 - **Numerazione file:**
@@ -357,3 +366,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-11-10 | Claude Code | §8 punto 9 (istruzione del proprietario del 2026-11-10, dopo una suite rimasta ferma un'ora nel commit C8b): tempo massimo complessivo e stdin chiuso per pytest in `scripts/commit_checked.py`; controllo in `tests/conftest.py` che fa fallire ogni test di default che prova la rete vera. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **DD-1 (decisione del proprietario del 2026-11-10):** §2 nuova regola «Lingua dei file esportati» (sempre possibile in inglese, inglese di default nel dialogo, lingua parametro registrato, stesso contenuto nella stessa lingua = stesso file byte per byte, vale per ogni esportazione futura). Modifica a un file approvato che registra una decisione del proprietario; da confermare insieme a DD-3. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 confermata e approvata la modifica del D2 a questo file («Lingua dei file esportati»); §2 nuove regole «Permessi dei file esportati» (0666 meno l'umask, mai 0600) e «Assenze solo dopo una richiesta vera» (D25-23, regola generale; 404 sull'indirizzo di un servizio = guasto, D14-16). Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **D25-24 (decisione del proprietario del 2026-11-10):** §2 nuova regola «Testo vuoto = valore assente dichiarato» (regola generale, confronto della validazione). Modifica a un file approvato che registra una decisione del proprietario. Stato `approvato` invariato. |
