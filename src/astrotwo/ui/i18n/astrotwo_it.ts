@@ -1941,6 +1941,10 @@
         <translation>Nessun pianeta nell&apos;archivio</translation>
     </message>
     <message>
+        <source>Not checked</source>
+        <translation>Non controllato</translation>
+    </message>
+    <message>
         <source>Period</source>
         <translation>Periodo</translation>
     </message>

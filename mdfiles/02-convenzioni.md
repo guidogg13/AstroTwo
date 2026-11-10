@@ -25,6 +25,22 @@ documenti e implementazioni siano coerenti e confrontabili con la letteratura.
   ogni esportazione futura; oggi la applica il PDF della scheda del profilo
   (`25` §3.15, `43` §3.10). I file solo di dati (ECSV, VOTable, PNG senza
   testo tradotto) non dipendono dalla lingua.
+- **Permessi dei file esportati (decisione del proprietario del
+  2026-11-10):** ogni file esportato ha i permessi normali dell'utente,
+  0666 meno l'umask (di solito 0644), mai 0600. Le esportazioni scritte in
+  un file temporaneo e poi rinominate (nessun file a metà) creano il
+  temporaneo con `export_temp_file` del `14` §7, non con
+  `tempfile.mkstemp`.
+- **Assenze solo dopo una richiesta vera (D25-23, regola generale del
+  proprietario del 2026-11-10, per tutta l'app):** un'assenza («nessun
+  pianeta», «nessun oggetto», «nessuna riga») si mostra solo dopo una
+  richiesta vera, andata a buon fine, alla fonte giusta (anche una copia in
+  cache di quella risposta, dichiarata). Se la richiesta non c'è stata o è
+  fallita, si scrive «non controllato» con il motivo (o l'errore), mai
+  un'assenza. Ogni modulo che afferma un'assenza conserva la prova della
+  richiesta nel risultato (applicazione nel profilo: `25` §3.18). Un HTTP
+  404 sull'indirizzo di un servizio è un guasto, non un'assenza (D14-16,
+  `14` §3).
 - **Stato in testa:** ogni file dichiara `bozza`, `in revisione` o `approvato`.
   Solo `approvato` autorizza il codice del corrispondente modulo.
 - **Numerazione file:**
@@ -340,3 +356,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-25 | Claude Code | DC4: forma della pre-release `0.1.0-beta.1` / `0.1.0b1` (decisione del proprietario del 2026-10-25, `60` §3.2). |
 | 2026-11-10 | Claude Code | §8 punto 9 (istruzione del proprietario del 2026-11-10, dopo una suite rimasta ferma un'ora nel commit C8b): tempo massimo complessivo e stdin chiuso per pytest in `scripts/commit_checked.py`; controllo in `tests/conftest.py` che fa fallire ogni test di default che prova la rete vera. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **DD-1 (decisione del proprietario del 2026-11-10):** §2 nuova regola «Lingua dei file esportati» (sempre possibile in inglese, inglese di default nel dialogo, lingua parametro registrato, stesso contenuto nella stessa lingua = stesso file byte per byte, vale per ogni esportazione futura). Modifica a un file approvato che registra una decisione del proprietario; da confermare insieme a DD-3. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 confermata e approvata la modifica del D2 a questo file («Lingua dei file esportati»); §2 nuove regole «Permessi dei file esportati» (0666 meno l'umask, mai 0600) e «Assenze solo dopo una richiesta vera» (D25-23, regola generale; 404 sull'indirizzo di un servizio = guasto, D14-16). Stato `approvato` invariato. |

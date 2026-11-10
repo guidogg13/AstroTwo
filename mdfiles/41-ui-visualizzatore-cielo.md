@@ -552,6 +552,8 @@ Nel PNG si disegnano anche l'indicatore del nord e la barra di scala
   (`VIEW_UNDEFINED`). Il disegno fuori schermo e la scrittura del file li fa la finestra nel thread principale
   quando il comando è `ok`; un errore di scrittura è un messaggio `EXPORT_FAILED` nel pannello Messaggi, non un
   comando fallito. Il file è scritto in un file temporaneo e poi rinominato: mai un PNG a metà.
+  Il temporaneo si crea con `export_temp_file` del 14: il PNG ha i permessi normali dell'utente (0666
+  meno l'umask, di solito 0644), non 0600 (decisione del proprietario del 2026-11-10, `02` §2).
 - **Immagine.** Pixel fisici del disegno (`render_offscreen` del renderer: sfondo, immagine, MOC, simboli, griglia,
   indicatore e barra, nella modalità normale o notte del momento). **Le misure (§3.19) e la scheda della sorgente non
   sono nel PNG** (scelta minore 2): sono sopra il cielo come widget, non nel disegno del renderer.
@@ -1156,3 +1158,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-11-05 | Claude Code | **Sprint B1 — SAMP nell'interfaccia** (decisioni del proprietario del 2026-11-05, D40-8): nuova §3.20 (menu contestuale del cielo con i puntamenti SAMP; puntamento ricevuto = `view.set_center` di origine `samp`); T38 (§12). Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3:** §3 "Catalogo nel campo" — centro e raggio della vista della `ViewGeometry` del 10 usati anche da Cone search… (centro e raggio proposti) e da "Inserisci centro e raggio della vista" della query ADQL (`42` §3.8); "Catalog in view…" invariato (D41-10). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint B4 — puntatore Simbad con il CDS giù** (regole del proprietario del 2026-11-07, D14-14 del 14; autorizzazione esplicita ad aggiornare il 41): §3.19 — riquadro con l'avviso `SERVICE_MIRROR_FALLBACK` e l'origine del server che ha risposto; collegamento alla pagina SIMBAD del server che ha risposto (prefissi CDS e Harvard; D14-15 (9) da confermare). Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (permessi dei file esportati):** §3.15 — PNG della vista con i permessi normali (0666 meno l'umask), temporaneo creato con `export_temp_file` del 14 invece di `tempfile.mkstemp` (che dava 0600). Codice: `write_png` in `ui/export_view.py`; test `test_png_follows_the_umask`. Stato `approvato` invariato. |

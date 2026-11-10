@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-10 (sprint D2): 23 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **23** (`DD-3` applicata con la proposta (a) e ora **da confermare**; nuove `D25-23` — Pianeti «nessun pianeta» senza avere interrogato l'archivio, `25` §13 —, `D14-16` — CDS guasto con HTTP 404 senza ripiego sul mirror, `14` §13 — e `D62-1` — scelte minori del megatest, `62` §13).
+**Dal 2026-11-10 (decisioni del proprietario dopo D2b): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`DD-3` confermata — proposta (a) —, `D25-23` decisa — regola generale: assenze solo dopo una richiesta vera, `25` §3.18, `02` §2 —, `D14-16` decisa — 404 sull'indirizzo di un servizio = guasto, ripiego sul mirror, `14` §3 —, `D62-1` approvata; tutte tolte).
+
+Prima, **Dal 2026-11-10 (sprint D2): 23 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **23** (`DD-3` applicata con la proposta (a) e ora **da confermare**; nuove `D25-23` — Pianeti «nessun pianeta» senza avere interrogato l'archivio, `25` §13 —, `D14-16` — CDS guasto con HTTP 404 senza ripiego sul mirror, `14` §13 — e `D62-1` — scelte minori del megatest, `62` §13).
 
 Prima, **Dal 2026-11-10 (decisioni del proprietario dopo D1b): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`DD-1` decisa — lettura (b) — e `DD-2` approvata in tutti i punti dal proprietario il 2026-11-10, tolte; nuova `DD-3`, testi italiani del motore nel PDF «in inglese», da decidere; file di origine `panoramica.md` §2 «Fase D»).
 
@@ -349,14 +351,11 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (23)
+## 5. GRUPPO 3 — rimandabili al momento del codice (19)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `DD-3` | PDF «in inglese» con testi italiani del motore (**proposta (a) applicata nello sprint D2 il 2026-11-10, da confermare**): avvisi ed errori del PDF dal catalogo dei messaggi nella lingua scelta, note, fonte della posizione, nomi dei servizi e fonti dei punti zero in inglese nel risultato; profili già registrati invariati. Alternative ancora possibili: (b) note con codice e `params`, (c) PDF senza note né testi degli avvisi | `panoramica.md` §2 «Fase D», `25` §3.15 |
-| `D25-23` | Sezione Pianeti `done` con «no planet in the archive» **senza nessuna richiesta** all'archivio quando SIMBAD non risponde e manca il `source_id` di Gaia (osservato il 2026-11-10 per 51 Peg, TRAPPIST-1, Barnard's Star): (a) sezione `not_applicable` con un avviso nuovo e nessun «nessun pianeta», (b) come (a) più una ricerca per `hostname` col nome scritto, (c) lasciare così. **Raccomandazione di Claude Code: (a)** | `25` §13 |
-| `D14-16` | Il CDS guasto risponde **HTTP 404 HTML** e la regola D14-14 (a) non passa al mirror di Harvard (osservato il 2026-11-10): (a) ripiego per un 404 senza VOTable su un endpoint TAP verificato, (b) ripiego per ogni 404, (c) lasciare così. **Raccomandazione di Claude Code: (a)** | `14` §13 |
-| `D62-1` | Scelte minori del megatest (**proposte da Claude Code il 2026-11-10, da confermare**): numero 62, prove sull'app dal `.dmg`, rilascio con zero KO o KO dichiarati non bloccanti, servizio giù = «non fatta», confronti con TOPCAT dentro il megatest | `62` §13 |
+| — | (`DD-3` confermata, `D25-23` e `D14-16` decise, `D62-1` approvata dal proprietario il 2026-11-10; `panoramica.md` §2 e §5, `25` §13, `14` §13, `62` §13) | — |
 | — | (`DD-1` decisa — lettura (b) — e `DD-2` approvata in tutti i punti dal proprietario il 2026-11-10; `panoramica.md` §2 e §5) | — |
 | — | (`D25-22` decisa dal proprietario il 2026-11-09: approvate le due proposte del punto (12); `25` §13, §3.17) | — |
 | — | (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti; `25` §13, §3.17) | — |
@@ -498,3 +497,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-10 | Claude Code | **Sprint D1b (Fase D):** nuova **`DD-2`** (Gruppo 3), scelte minori dello sprint D1 da confermare; scritta prima in `panoramica.md` §2 «Fase D» e §6. **21 aperte.** |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10:** `DD-1` decisa (lettura (b)) e `DD-2` approvata, tolte; nuova **`DD-3`** (Gruppo 3), testi italiani del motore nel PDF «in inglese»; scritta prima in `panoramica.md` §2 «Fase D» e §6. **20 aperte.** |
 | 2026-11-10 | Claude Code | **Sprint D2:** `DD-3` applicata con la proposta (a), da confermare; nuove `D25-23` (`25` §13), `D14-16` (`14` §13), `D62-1` (`62` §13), tutte nel Gruppo 3; scritte prima nei file di origine. **23 aperte.** |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** `DD-3` confermata (proposta (a)), `D25-23` decisa (regola generale delle assenze; Pianeti con il nome scritto o l'ID Gaia, altrimenti «non controllato»), `D14-16` decisa (404 sull'indirizzo di un servizio = guasto), `D62-1` approvata; tutte tolte dal Gruppo 3, scritte prima nei file di origine (`panoramica.md` §2, `25` §3.18 e §13, `14` §3 e §13, `12` §3, `02` §2, `62` §13). **19 aperte.** |

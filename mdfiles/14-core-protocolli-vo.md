@@ -354,8 +354,16 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     (`SERVICE_ERROR` con `status`, anche quando il corpo è un VOTable
     d'errore) o **risposta non valida** (una risposta 2xx che non è un
     VOTable: `VOTABLE_INVALID` `unreadable_response`; una risposta HTTP di
-    errore senza VOTable con stato 5xx o 429). **Mai** per un 404 o un altro
-    4xx (`SERVICE_ERROR` con stato 4xx, `AUTH_REQUIRED`), **mai** per un
+    errore senza VOTable con stato 5xx o 429) e, **dal 2026-11-10 (D14-16,
+    decisione del proprietario)**, HTTP **404 sull'indirizzo del servizio**
+    (endpoint TAP, servizio di fotometria di VizieR, `properties` di un HiPS
+    con mirror e simili: l'indirizzo è verificato, quindi un 404 vuol dire
+    server guasto — il CDS guasto del 2026-11-10 rispondeva 404 HTML), con
+    o senza VOTable, con il solito avviso `SERVICE_MIRROR_FALLBACK`
+    (`http_status`, `status` 404). **Mai** per gli altri 4xx (`SERVICE_ERROR`
+    con stato 4xx diverso da 404 e 429, `AUTH_REQUIRED`); un oggetto non
+    trovato con una risposta valida resta «non trovato» (`NAME_NOT_FOUND`,
+    tabella vuota) e non passa al mirror; **mai** per un
     errore dell'ADQL (`ADQL_INVALID`, anche quando è il servizio a
     rifiutarla), **mai** per "nessun risultato" (una risposta valida senza
     righe è un risultato), né per `QUERY_CANCELLED`, `MAX_ROWS_INVALID` e gli
@@ -514,6 +522,15 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 - **`read_votable(path, *, table=None)`** / **`write_votable(table, path,
   overwrite=False)`** (P1) — I/O VOTable; la lettura passa da `read_table`
   del 13 (D14-9 punto 5); la scrittura è `export_table(..., "votable")`.
+- **`export_temp_file(directory, prefix, suffix="")`** (2026-11-10, decisione
+  del proprietario sui permessi dei file esportati) — crea un file
+  temporaneo vuoto con nome casuale (`O_EXCL`) e permessi **0666 meno
+  l'umask** (di solito 0644), non 0600 come `tempfile.mkstemp`: le
+  esportazioni scritte in un temporaneo e poi rinominate (PDF, ECSV, PNG e
+  VOTable del profilo del 25, PNG della vista del 41) conservano così i
+  permessi normali. Le altre esportazioni (`export_table`, `save_fits`,
+  `write_moc`, sessioni) aprono il file per nome e hanno già i permessi
+  secondo l'umask.
 - **`export_table(table, path, format, overwrite=False)`** (P1, D13) —
   `format` in `csv`, `ecsv`, `votable`, `fits`; provenienza come in §3; file
   esistente senza `overwrite=True` → `FILE_EXISTS`. Restituisce
@@ -771,7 +788,8 @@ funzione di rete accetta `cache` (`SharedCache`, default la cache comune),
 | Voce dell'elenco dei server inesistente o con protocollo diverso da quello richiesto | rifiuto con le voci ammesse | `SERVER_UNKNOWN` |
 | Spettro, immagine o risultato servito dalla cache | dato restituito con origine e data della copia | avviso `FROM_CACHE` |
 | Servizio del CDS con mirror che non risponde (timeout, connessione, 5xx, 429, risposta non valida; sprint B4) | si passa al mirror successivo; il servizio resta sul mirror per la sessione | avviso `SERVICE_MIRROR_FALLBACK` (una volta per servizio e sessione) |
-| Servizio con mirror: risposta 404 o altro 4xx, ADQL rifiutata, nessun risultato | nessun cambio di server: errore o risultato del server in uso | codice del caso (`SERVICE_ERROR`, `ADQL_INVALID`, …) |
+| Servizio con mirror: risposta 404 sull'indirizzo del servizio (D14-16, dal 2026-11-10) | guasto: si passa al mirror con l'avviso; tutti giù → `NET_TIMEOUT` `service_servers` | `SERVICE_MIRROR_FALLBACK` (`http_status`, 404) |
+| Servizio con mirror: altro 4xx, ADQL rifiutata, nessun risultato, oggetto non trovato con risposta valida | nessun cambio di server: errore o risultato del server in uso | codice del caso (`SERVICE_ERROR`, `ADQL_INVALID`, `NAME_NOT_FOUND`, …) |
 | Tutti i server di un servizio giù (sprint B4) | nessun risultato; copia in cache se c'è (dichiarata) | `NET_TIMEOUT` (`service_servers`) |
 | MocServer giù senza copia in cache (sprint B4) | nessun elenco; il messaggio dice che non ci sono copie fuori da Strasburgo | `NET_TIMEOUT` (`mocserver_no_mirror`) |
 
@@ -946,7 +964,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | T19 | DataLink (H8, D14-3) | `links` su un documento DataLink simulato con un descrittore di servizio; `call_service` | link con semantica, URL e content-type; chiamata con i parametri del descrittore | servizio simulato |
 | T20 | Validazione ADQL minima | testi vuoti, senza `SELECT`, con virgolette o parentesi non chiuse, e validi | esiti e posizioni attesi; nessuna richiesta di rete | test di unità |
 | T21 | Cache delle interrogazioni | stessa query due volte, poi con `refresh=True`, poi con il servizio spento | la seconda dalla cache (origine e data), la terza dal servizio, la quarta dalla cache con avviso | servizio simulato |
-| T27 | Ripiego sui mirror (sprint B4, 2026-11-07) | servizi simulati: SIMBAD principale giù (connessione, HTTP 503, 429, risposta 2xx non VOTable) → mirror per `tap_query("cds-simbad-tap")` e per `simbad_pointer` (regione e magnitudini); 404, ADQL rifiutata e risposta senza righe → nessun cambio; principale e mirror giù → `NET_TIMEOUT` `service_servers` con 2 server; copia vecchia in cache e tutti giù → copia dichiarata; avviso dopo il primo cambio, non al secondo; richiesta successiva subito al mirror; `refresh=True` → di nuovo il principale; URL scritto → nessun ripiego; MocServer giù con e senza copia in cache | ordine e conteggio delle richieste ai server finti; `RequestRecord.url` e `source` = server che ha risposto; avvisi; codici | test di unità con server finti; test di rete (marcatore `network`, non nel commit) per il mirror di SIMBAD |
+| T27 | Ripiego sui mirror (sprint B4, 2026-11-07) | servizi simulati: SIMBAD principale giù (connessione, HTTP 503, 429, risposta 2xx non VOTable) → mirror per `tap_query("cds-simbad-tap")` e per `simbad_pointer` (regione e magnitudini); dal 2026-11-10 (D14-16) anche HTTP 404 HTML del principale → mirror con `SERVICE_MIRROR_FALLBACK` `http_status` 404, e TAPVizieR 404 → archivio originale di Gaia; altro 4xx, ADQL rifiutata e risposta senza righe → nessun cambio; principale e mirror giù → `NET_TIMEOUT` `service_servers` con 2 server; copia vecchia in cache e tutti giù → copia dichiarata; avviso dopo il primo cambio, non al secondo; richiesta successiva subito al mirror; `refresh=True` → di nuovo il principale; URL scritto → nessun ripiego; MocServer giù con e senza copia in cache | ordine e conteggio delle richieste ai server finti; `RequestRecord.url` e `source` = server che ha risposto; avvisi; codici | test di unità con server finti; test di rete (marcatore `network`, non nel commit) per il mirror di SIMBAD |
 | T29 | Turno della CPU (sprint C4, 2026-11-07) | due thread con lo stesso `cpu_turn`, servizio simulato lento | durante l'attesa di una richiesta l'altro thread lavora (turno lasciato); fuori dalle richieste mai due thread insieme; senza turno `network_wait` non fa nulla | test di unità (`tests/core/test_vo_cpu_turn.py`) |
 | T28 | `simbad_object` (sprint C2, 2026-11-07) | servizio SIMBAD simulato con le risposte registrate dal mirror di Harvard il 2026-11-07 (51 Peg, eta Tau); nome sconosciuto; principale giù | campi di `basic` con unità, 46/62 identificativi, magnitudini; `NAME_NOT_FOUND` `simbad_identifier` senza ripiego; con il principale giù risponde il mirror e la provenienza è il mirror | confronto con le risposte registrate; test di unità con server finti |
 | T26 | Commenti ADQL e annullamento (sprint B3, 2026-11-06) | `validate_adql` con commenti `--` (con apostrofo, prima di `SELECT`, dentro una stringa); `tap_query` sincrona con commenti su un servizio simulato; asincrona su un lavoro UWS simulato che non finisce, con `cancel` che diventa vero | posizioni del testo scritto; `--` dentro le virgolette non è un commento; `QUERY` inviata senza commenti e senza righe vuote, `adql` scritto negli argomenti registrati; `QUERY_CANCELLED` entro 1 s, `ABORT` inviato e lavoro eliminato | test di unità |
@@ -1142,8 +1160,14 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
   pagina SIMBAD del server che ha risposto (CDS o Harvard).
 
 - **D14-16 — Ripiego sul mirror quando il server principale risponde HTTP
-  404 per un guasto: da decidere (aperta il 2026-11-10, sprint D2, misure
-  di validazione).** **Fatto osservato** il 2026-11-10 (15:48–16:20 UTC):
+  404 per un guasto: DECISA dal proprietario il 2026-11-10** (aperta lo
+  stesso giorno, sprint D2). **Esito:** un HTTP 404 sull'indirizzo di un
+  servizio (endpoint TAP, sim-id e simili) vale come guasto: si passa al
+  mirror con il solito avviso. Un oggetto non trovato con una risposta
+  valida resta «non trovato» e non passa al mirror. Applicata in §3
+  (`is_failover_error`), §10, §12 T27 e, per i HiPS, nel `12` §3
+  (`properties` 404 di un survey con mirror; un tile 404 resta un tile non
+  fornito, come ammette lo standard). Testo della domanda, invariato: **Fatto osservato** il 2026-11-10 (15:48–16:20 UTC):
   durante il guasto del CDS `https://simbad.cds.unistra.fr/simbad/sim-tap/sync`
   risponde **HTTP 404 con una pagina HTML** (non un VOTable), mentre il
   mirror di Harvard risponde. Per la regola D14-14 (a) un 404 **non** fa
@@ -1157,13 +1181,14 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
   del principale; (c) lasciare D14-14 com'è. **Raccomandazione di Claude
   Code: (a)**: un endpoint TAP verificato che risponde 404 HTML è un server
   giù, non una domanda sbagliata; l'errore di chi chiama resta un 4xx con
-  VOTable. Nessun codice cambiato finché il proprietario non decide (il `14`
-  è `approvato`).
+  VOTable. (Il proprietario ha scelto la forma più ampia, vicina a (b):
+  ogni 404 sull'indirizzo del servizio.)
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10:** **D14-16 decisa** (404 sull'indirizzo di un servizio = guasto, ripiego sul mirror con l'avviso; oggetto non trovato con risposta valida = «non trovato»): §3 regola del cambio di server, §10 (due righe), §12 T27, §13. Codice: `is_failover_error` (`_server_down_status`: 5xx, 404, 429) in `vo_protocols.py`; effetto anche sul ripiego di TAPVizieR sugli archivi originali (`13`) e sulla copia vecchia del puntatore SIMBAD. Nuova **`export_temp_file`** (§7) per i permessi normali dei file esportati (decisione del proprietario del 2026-11-10, `02` §2). Test: `tests/core/test_cds_mirrors.py` (404 HTML → mirror, VizieR 404 → archivio originale, regole di `is_failover_error`). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D14-16** (§13): il CDS guasto risponde HTTP 404 HTML e la regola D14-14 (a) non passa al mirror di Harvard; proposte (a)–(c), raccomandata (a) (404 senza VOTable su un endpoint TAP verificato = server giù). Nessun codice cambiato; stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Correzioni trovate con il controllo della rete nei test (istruzione del proprietario del 2026-11-10):** (1) **SAMP solo locale:** `pyvo.samp` provava `http://google.com` a ogni avvio dell'hub e a ogni collegamento di un client (`internet_on`) e, se rispondeva, chiamava `socket.getfqdn()` senza tempo massimo; ora `use_internet = False` (`_samp_local_only`): hub e client su `127.0.0.1`, nessun contatto esterno per SAMP; (2) **registro VO:** `search_registry` costruiva l'ADQL con `get_RegTAP_query` senza servizio, e pyvo leggeva le capacità di `http://reg.g-vo.org` (in HTTP, senza tempo massimo, registro diverso da quello scelto); ora le capacità si leggono dal registro usato con i timeout del 04, un guasto dà `NET_TIMEOUT` `url`. Test T18 e test SAMP aggiornati. Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8b del `25` (decisioni del proprietario del 2026-11-09):** le modifiche del 14 per i punti (2) e (3) di D25-21 (riga sotto) **approvate dal proprietario** come parte di D25-21; nuova `tap_query_cached` (§7) per D25-22 del `25` (archivio Gaia già fermo nel profilo: copia in cache senza rete). Stato `approvato` invariato. |

@@ -122,13 +122,21 @@ def test_t27_principal_closed_connection_error(pair, cache):
     assert next(w for w in result.warnings if w[0] == "SERVICE_MIRROR_FALLBACK").params["reason"] == "network"
 
 
-def test_t27_no_switch_for_404_adql_or_empty_result(pair, cache):
+def test_t27_404_on_service_address_switches(pair, cache):
+    """D14-16 (decisione del proprietario del 2026-11-10): un 404 sull'indirizzo del servizio TAP è un guasto (il
+    CDS guasto rispondeva 404 HTML): si passa al mirror con il solito avviso."""
     primary, mirror = pair
     mirror.routes["/tap/sync"] = ok(2)
-    # 404: il server è vivo (nessuna rotta: "not found").
-    with pytest.raises(VoProtocolsError) as err:
-        query(cache=cache)
-    assert err.value.code == "SERVICE_ERROR" and err.value.params["status"] == 404
+    primary.routes["/tap/sync"] = status(404, "<html><body>Not Found</body></html>", "text/html")
+    result = query(cache=cache)
+    assert result.request.url.startswith(mirror.url) and result.table.rows == 2
+    fallback = next(w for w in result.warnings if w[0] == "SERVICE_MIRROR_FALLBACK")
+    assert fallback.params["reason"] == "http_status" and fallback.params["status"] == 404
+
+
+def test_t27_no_switch_for_adql_or_empty_result(pair, cache):
+    primary, mirror = pair
+    mirror.routes["/tap/sync"] = ok(2)
     # ADQL rifiutata dal servizio (HTTP 400 con VOTable d'errore).
     primary.routes["/tap/sync"] = status(400, ERROR.format(text="Unknown table basicx"), "application/x-votable+xml")
     with pytest.raises(VoProtocolsError) as err:
@@ -195,7 +203,10 @@ def test_t27_is_failover_error_rules():
     assert not is_failover_error(err("NET_TIMEOUT", reason="async_deadline"))
     assert is_failover_error(err("SERVICE_ERROR", reason="http_status", status=500))
     assert is_failover_error(err("SERVICE_ERROR", reason="http_status", status=429))
-    assert not is_failover_error(err("SERVICE_ERROR", reason="http_status", status=404))
+    assert is_failover_error(err("SERVICE_ERROR", reason="http_status", status=404))  # D14-16
+    assert is_failover_error(err("SERVICE_ERROR", reason="http_no_votable", status=404))
+    assert not is_failover_error(err("SERVICE_ERROR", reason="http_status", status=400))
+    assert not is_failover_error(err("SERVICE_ERROR", reason="http_status", status=410))
     assert not is_failover_error(err("SERVICE_ERROR", reason="service_rejected"))
     assert is_failover_error(err("VOTABLE_INVALID", reason="unreadable_response"))
     for code in ("ADQL_INVALID", "AUTH_REQUIRED", "QUERY_CANCELLED", "MAX_ROWS_INVALID"):
@@ -203,7 +214,8 @@ def test_t27_is_failover_error_rules():
     assert is_failover_error(requests.exceptions.ConnectionError("refused"))
     assert is_failover_error(pyvo.dal.DALServiceError("down"))
     assert is_failover_error(pyvo.dal.DALServiceError("bad gateway", code=502))
-    assert not is_failover_error(pyvo.dal.DALServiceError("not found", code=404))
+    assert is_failover_error(pyvo.dal.DALServiceError("not found", code=404))  # D14-16
+    assert not is_failover_error(pyvo.dal.DALServiceError("bad request", code=400))
 
 
 # --- Puntatore SIMBAD: regione (astroquery) e magnitudini (TAP) dallo stesso servizio ---------------------------
@@ -392,12 +404,20 @@ def test_t36_2mass_from_irsa_without_coosys(archives, cache):
     assert "CATALOG_ORIGINAL_ARCHIVE" in dict(table.warnings) and table.origin.startswith(irsa.url)
 
 
-def test_t36_no_archive_for_404_or_adql(archives, cache):
+def test_t36_vizier_404_goes_to_original_archive(archives, cache):
+    """D14-16: TAPVizieR che risponde 404 (indirizzo del servizio) è giù: Gaia DR3 dall'archivio originale."""
     vizier, gaia, irsa = archives
-    vizier.routes["/viz/sync"] = status(404)
+    vizier.routes["/viz/sync"] = status(404, "<html>Not Found</html>", "text/html")
+    table = load_catalog("I/355/gaiadr3", region=(CENTER, 1 * u.arcmin), cache=cache, timeouts=FAST)
+    assert table.origin.startswith(gaia.url) and "CATALOG_ORIGINAL_ARCHIVE" in dict(table.warnings)
+
+
+def test_t36_no_archive_for_4xx_or_adql(archives, cache):
+    vizier, gaia, irsa = archives
+    vizier.routes["/viz/sync"] = status(403)
     with pytest.raises(VoProtocolsError) as err:
         load_catalog("I/355/gaiadr3", region=(CENTER, 1 * u.arcmin), cache=cache, timeouts=FAST)
-    assert err.value.code == "SERVICE_ERROR"
+    assert err.value.code in ("SERVICE_ERROR", "AUTH_REQUIRED")
     vizier.routes["/viz/sync"] = status(400, ERROR.format(text="no such table"), "application/x-votable+xml")
     with pytest.raises(CatalogsError) as err:
         load_catalog("I/355/gaiadr3", cache=cache, timeouts=FAST)

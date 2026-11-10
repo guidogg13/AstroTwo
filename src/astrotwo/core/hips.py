@@ -394,9 +394,12 @@ def read_service(url: str, *, cache=None, refresh: bool = False, timeouts=None) 
     try:
         response = vo._http("hips", target, cache=cache, refresh=refresh, timeouts=timeouts)
     except vo.VoProtocolsError as exc:
-        if _switch_cause(exc.code, exc.params) is not None:
+        status = (exc.params or {}).get("status")
+        if _switch_cause(exc.code, exc.params) is not None and status != 404:
             raise _net(exc) from exc  # HTTP 5xx/429: guasto del server, non "non è un servizio" (12 §3, D12-9)
-        if exc.code == "SERVICE_ERROR":  # altri 4xx (es. 404): all'URL non c'è un file properties
+        # 4xx: all'URL non c'è un file properties. Un 404 per un survey con mirror verificati fa cambiare server
+        # (``_switch_cause`` lo legge nella causa, D14-16); con un solo server resta "non è un servizio".
+        if exc.code == "SERVICE_ERROR":
             raise HiPSError("HIPS_NOT_A_SERVICE", f"{target}: {exc.message}; non è un servizio HiPS",
                             url=target, params={"reason": "service_error", "url": target,
                                                 "cause": _message_of(exc)}) from exc
@@ -477,16 +480,21 @@ def _server_order(primary: str | None, mirrors) -> tuple[str, ...]:
 
 def _switch_cause(code, params) -> dict | None:
     """Causa "di rete" che fa passare al server successivo (12 §3) come ``{"reason": …}`` di
-    ``HIPS_MIRROR_FALLBACK``; ``None`` per gli errori che non la giustificano (404, altri 4xx, metadati, …)."""
+    ``HIPS_MIRROR_FALLBACK``; ``None`` per gli errori che non la giustificano (altri 4xx, metadati, …). Un 404
+    sull'indirizzo del servizio (``properties``, MocServer) è un guasto dal 2026-11-10 (D14-16 del 14); un tile
+    assente (``HIPS_TILE_MISSING``) resta un tile assente."""
     params = params or {}
+    status = params.get("status")
     if code == "NET_TIMEOUT":
         return {"reason": "network"}
     if code == "SERVICE_ERROR":
-        status = params.get("status")
-        if isinstance(status, int) and not isinstance(status, bool) and (status >= 500 or status == 429):
+        if isinstance(status, int) and not isinstance(status, bool) and (status >= 500 or status in (404, 429)):
             return {"reason": "http_status", "status": status}
         return {"reason": "invalid_response"} if params.get("reason") == "unreadable_response" else None
-    if code == "HIPS_NOT_A_SERVICE":  # ``service_error`` è un 4xx diverso da 429: nessun cambio
+    if code == "HIPS_NOT_A_SERVICE":  # ``service_error``: un 4xx; solo il 404 fa cambiare server (D14-16)
+        cause = params.get("cause") if isinstance(params.get("cause"), Mapping) else {}
+        if params.get("reason") == "service_error" and (cause.get("params") or {}).get("status") == 404:
+            return {"reason": "http_status", "status": 404}
         return {"reason": "invalid_response"} if params.get("reason") in _INVALID_PROPERTIES else None
     if code == "HIPS_BAD_TILE":
         return {"reason": "invalid_response"}

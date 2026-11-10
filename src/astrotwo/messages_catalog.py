@@ -3481,6 +3481,22 @@ _add("PROFILE_PLANETS_COMPOSITE",
      "{count} planets from {table}: the parameters may come from different works ({references} distinct references).",
      "{count} pianeti da {table}: i parametri possono venire da lavori diversi ({references} riferimenti distinti).",
      "count:int references:int table")
+_add("PROFILE_PLANETS_NOT_CHECKED",
+     "Planets not checked: no SIMBAD identifier, no written name and no Gaia DR3 source_id to ask the archive for.",
+     "Pianeti non controllati: nessun identificativo SIMBAD, nessun nome scritto e nessun source_id di Gaia DR3 da "
+     "chiedere all'archivio.", "",
+     simbad_unavailable=("Planets not checked: SIMBAD did not answer and there is no written name or Gaia DR3 "
+                         "source_id to ask the archive for.",
+                         "Pianeti non controllati: SIMBAD non ha risposto e non c'è un nome scritto o un source_id di "
+                         "Gaia DR3 da chiedere all'archivio.", ""),
+     no_identifiers=("Planets not checked: no SIMBAD identifier, no written name and no Gaia DR3 source_id to ask "
+                     "the archive for.",
+                     "Pianeti non controllati: nessun identificativo SIMBAD, nessun nome scritto e nessun source_id "
+                     "di Gaia DR3 da chiedere all'archivio.", ""))
+_add("PROFILE_PLANETS_BY_WRITTEN_NAME",
+     "Planet host {host} found by the written name (SIMBAD unavailable): identity not verified.",
+     "Ospite dei pianeti {host} trovato per il nome scritto (SIMBAD non disponibile): identità non verificata.",
+     "host!")
 _add("PROFILE_PLANET_HOST_MISMATCH",
      "Planet host: the search by name and the one by {gaia_dr3_id} disagree; planets shown for the search by name.",
      "Ospite dei pianeti: la ricerca per nome e quella per {gaia_dr3_id} non coincidono; pianeti mostrati per la "

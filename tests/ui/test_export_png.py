@@ -76,6 +76,24 @@ def test_path_validation(tmp_path):
     assert caught.value.code == "EXPORT_PATH_INVALID"
 
 
+def test_png_follows_the_umask(qtbot, tmp_path):
+    """Decisione del proprietario del 2026-11-10: PNG esportato con i permessi normali (0666 meno l'umask)."""
+    import os
+    import stat
+
+    from PySide6.QtGui import QImage
+
+    image = QImage(8, 6, QImage.Format.Format_RGB32)
+    image.fill(0)
+    previous = os.umask(0o022)
+    try:
+        ev.write_png(image, tmp_path / "v.png", {"Software": "test"}, "Credits: test")
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE((tmp_path / "v.png").stat().st_mode) == 0o644
+    assert [p.name for p in tmp_path.iterdir()] == ["v.png"]
+
+
 def test_metadata_is_latin1_and_needs_a_view():
     with pytest.raises(Exception) as caught:
         ev.compose_metadata(WorkspaceState(), night=False)

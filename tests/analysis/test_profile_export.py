@@ -208,6 +208,28 @@ def test_t26_pdf_and_png(cache, services, tmp_path):  # noqa: F811
     assert shown.shape[:2] == mpimg.imread(io.BytesIO(base64.b64decode(thumb["png"])), format="png").shape[:2]
 
 
+@pytest.mark.parametrize("umask", [0o022, 0o077])
+def test_exported_files_follow_the_umask(cache, services, tmp_path, umask):  # noqa: F811
+    """Decisione del proprietario del 2026-11-10: i file esportati hanno i permessi normali (0666 meno l'umask, di
+    solito 0644), non 0600; nessun file temporaneo rimasto."""
+    import os
+    import stat
+
+    session = session_with_export(cache)
+    number, result = profile(session, {"name": "TRAPPIST-1"})
+    data = merge_profile_results([(number, values_of(result))])
+    out = tmp_path / "out"
+    out.mkdir()
+    previous = os.umask(umask)
+    try:
+        for name, fmt in (("p.ecsv", "ecsv"), ("p.pdf", "pdf"), ("s.png", "sed_png"), ("s.xml", "sed_votable")):
+            export_profile(data, out / name, fmt)
+            assert stat.S_IMODE((out / name).stat().st_mode) == 0o666 & ~umask, name
+    finally:
+        os.umask(previous)
+    assert sorted(p.name for p in out.iterdir()) == ["p.ecsv", "p.pdf", "s.png", "s.xml"]
+
+
 # =============================================================================
 # T27 — comando object.export
 

@@ -864,6 +864,21 @@ def _host_names(resolved: ResolvedTarget) -> list[str]:
     return out
 
 
+def _typed_names(resolved: ResolvedTarget) -> list[str]:
+    """Nome scritto dall'utente (o ``simbad_id`` già noto), ridotto come gli identificativi SIMBAD (25 §3.10), per
+    la ricerca dell'ospite dei pianeti quando SIMBAD non ha risposto (D25-23, decisione del 2026-11-10)."""
+    out = []
+    for written in (resolved.target.simbad_id, resolved.target.name):
+        text = " ".join(str(written or "").split())
+        for prefix in _NAME_PREFIXES:
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                break
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
 def _adql_text(text: str) -> str:
     return "'" + text.replace("'", "''") + "'"
 
@@ -1050,10 +1065,11 @@ class _ExoplanetAsk:
         self.notes.extend(w for w in result.warnings if w[0] == "FROM_CACHE")
         return result.table.table
 
-    def found(self, identifier: str | None, official=None, **kw) -> CrossIdentification:
-        return CrossIdentification("exoplanet", identifier, None if identifier is None else "simbad_identifier",
-                                   official=official, warnings=tuple(self.notes), requests=tuple(self.requests),
-                                   queries=tuple(self.queries), **kw)
+    def found(self, identifier: str | None, official=None, method: str = "simbad_identifier",
+              **kw) -> CrossIdentification:
+        return CrossIdentification("exoplanet", identifier, None if identifier is None else method,
+                                   official=official, warnings=tuple(self.notes) + tuple(kw.pop("extra", ())),
+                                   requests=tuple(self.requests), queries=tuple(self.queries), **kw)
 
 
 def _exoplanet_by_gaia(gaia: CrossIdentification, ask: _ExoplanetAsk) -> CrossIdentification | None:
@@ -1065,19 +1081,41 @@ def _exoplanet_by_gaia(gaia: CrossIdentification, ask: _ExoplanetAsk) -> CrossId
     return ask.found(_value(rows[0], "hostname"), official={"gaia_dr3_id": gaia.identifier})
 
 
+#: Nota dell'ospite non cercato (D25-23): nessuna richiesta all'archivio, quindi nessuna assenza affermata.
+PLANETS_NOT_CHECKED_NOTE = "not checked: no SIMBAD identifier, no written name and no Gaia DR3 source_id"
+
+
+def _planets_not_checked(resolved: ResolvedTarget) -> ModuleWarning:
+    reason = "simbad_unavailable" if resolved.simbad_error is not None else "no_identifiers"
+    return ModuleWarning("PROFILE_PLANETS_NOT_CHECKED", "pianeti non controllati: nessun identificativo SIMBAD, "
+                         "nessun nome scritto e nessun source_id di Gaia DR3 da chiedere all'archivio",
+                         {"reason": reason})
+
+
 def _exoplanet_by_hostname(resolved: ResolvedTarget, ask: _ExoplanetAsk) -> CrossIdentification:
-    """Ospite per ``hostname`` uguale a un identificativo SIMBAD (25 §3.10); nessuno → «nessun ospite»."""
-    names = _host_names(resolved)
+    """Ospite per ``hostname`` uguale a un identificativo SIMBAD (25 §3.10); senza SIMBAD, uguale al nome scritto
+    dall'utente (D25-23). Nessun ospite dopo la richiesta → «nessun ospite»; nessun nome da chiedere e nessuna
+    richiesta fatta → «non controllato» con ``PROFILE_PLANETS_NOT_CHECKED``, mai un'assenza (D25-23)."""
+    names, method = _host_names(resolved), "simbad_identifier"
+    if not names and resolved.simbad is None:
+        names, method = _typed_names(resolved), "written_name"
     if names:
         rows = ask("SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ("
                    + ", ".join(_adql_text(n) for n in names) + ")")
         hosts = sorted({str(_value(r, "hostname")) for r in rows})
+        source = "the SIMBAD identifiers" if method == "simbad_identifier" else "the written name"
         if len(hosts) == 1:
-            return ask.found(hosts[0], official={"hostname": hosts[0]})
+            return ask.found(hosts[0], official={"hostname": hosts[0]}, method=method,
+                             note=None if method == "simbad_identifier" else
+                             "host found by the written name (SIMBAD unavailable): identity not verified")
         if len(hosts) > 1:
             return ask.found(None, candidates=tuple({"hostname": h} for h in hosts),
-                             note="several archive hosts match the SIMBAD identifiers: none chosen")
-    return ask.found(None, note="no host in the archive")
+                             note=f"several archive hosts match {source}: none chosen")
+        return ask.found(None, note="no host in the archive" + ("" if method == "simbad_identifier" else
+                                                                 " (searched by the written name)"))
+    if ask.requests:  # già chiesto per gaia_dr3_id, nessuna riga: l'assenza viene da una richiesta vera
+        return ask.found(None, note="no host in the archive")
+    return ask.found(None, note=PLANETS_NOT_CHECKED_NOTE, extra=(_planets_not_checked(resolved),))
 
 
 def _exoplanet_host(resolved: ResolvedTarget, gaia: CrossIdentification, *, cache, refresh, timeouts):
@@ -1778,15 +1816,27 @@ def profile_planets(resolved: ResolvedTarget, host: CrossIdentification | None, 
                     refresh: bool = False, timeouts: NetworkTimeouts = NETWORK_TIMEOUTS,
                     cancel: Callable[[], bool] | None = None) -> ProfileSection:
     """Sezione Pianeti (25 §3.13): ``pscomppars`` per ``gaia_dr3_id`` o ``hostname`` (come l'ospite è stato trovato);
-    parametri letti con errori, limite e riferimento; nessun ospite → ``done`` «nessun pianeta nell'archivio»."""
+    parametri letti con errori, limite e riferimento. «Nessun pianeta nell'archivio» solo dopo una richiesta vera e
+    riuscita all'archivio (``details["checked"]``, D25-23); senza richiesta → ``not_applicable`` «non controllato»
+    con ``PROFILE_PLANETS_NOT_CHECKED``; richiesta fallita → ``error``."""
     section = ProfileSection("planets")
     if host is None or host.identifier is None:
         if host is not None and host.error is not None:
             section.errors.append({**host.error, "catalog": "exoplanet"})
+            section.details = {"planets": [], "checked": False}
             section.status = "error"
             return section
-        section.details = {"planets": [], "note": "no planet in the archive"
-                           + (f" ({host.note})" if host is not None and host.note else "")}
+        if host is None or not host.requests:
+            warning = next((w for w in (host.warnings if host is not None else ()) if
+                            w[0] == "PROFILE_PLANETS_NOT_CHECKED"), None) or _planets_not_checked(resolved)
+            section.warnings.append(warning)
+            section.details = {"planets": [], "checked": False, "note": PLANETS_NOT_CHECKED_NOTE}
+            section.status = "not_applicable"
+            return section
+        section.requests.extend(host.requests)  # le richieste che danno l'assenza (D25-23)
+        section.warnings.extend(_network_notes(host.warnings))
+        section.details = {"planets": [], "checked": True, "note": "no planet in the archive"
+                           + (f" ({host.note})" if host.note else "")}
         section.status = "done"
         return section
     official = dict(host.official or {})
@@ -1841,7 +1891,11 @@ def profile_planets(resolved: ResolvedTarget, host: CrossIdentification | None, 
                                                note=note))
         planets.append(planet)
     section.details = {"planets": planets, "host": host.identifier, "query_by": where.split(" =")[0],
-                       "note": None if planets else "no planet in the archive"}
+                       "checked": True, "note": None if planets else "no planet in the archive"}
+    if host.method == "written_name":
+        section.warnings.append(ModuleWarning(
+            "PROFILE_PLANETS_BY_WRITTEN_NAME", f"ospite {host.identifier} trovato per il nome scritto (SIMBAD non "
+            "disponibile): identità non verificata", {"host": host.identifier}))
     if planets:
         section.warnings.append(ModuleWarning(
             "PROFILE_PLANETS_COMPOSITE", f"{len(planets)} pianeti da pscomppars: i parametri possono venire da lavori "
@@ -1849,6 +1903,23 @@ def profile_planets(resolved: ResolvedTarget, host: CrossIdentification | None, 
             {"count": len(planets), "references": len(references), "table": "pscomppars"}))
     section.status = "done"
     return section
+
+
+def planets_absence_shown(section: Mapping | None, chain: Sequence[Mapping] = ()) -> bool:
+    """Vero se la sezione Pianeti (forma JSON) può dire «nessun pianeta nell'archivio» (D25-23): sezione ``done`` o
+    ``partial``, nessun pianeta, e una richiesta vera e riuscita all'archivio. Risultati registrati prima del
+    2026-11-10 (senza ``checked``): la richiesta si riconosce da ``query_by`` o dalle interrogazioni del passo
+    ``exoplanet`` della catena (``chain``); altrimenti «non controllato»."""
+    if not section or section.get("status") not in ("done", "partial"):
+        return False
+    details = section.get("details") or {}
+    if details.get("planets"):
+        return False
+    if "checked" in details:
+        return bool(details["checked"])
+    if details.get("query_by"):
+        return True
+    return any(c.get("catalog") == "exoplanet" and c.get("queries") and not c.get("error") for c in chain)
 
 
 # --------------------------------------------------------------------------

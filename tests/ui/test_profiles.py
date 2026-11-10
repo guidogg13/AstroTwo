@@ -172,6 +172,32 @@ def test_t4_error_and_retry_this_section(qtbot, win, services, monkeypatch):  # 
     assert not planets.retry_button.isVisible()
 
 
+def test_planets_view_absence_only_after_a_request(qtbot):
+    """D25-23: «No planet in the archive» solo dopo una richiesta vera e riuscita; senza richiesta «Not checked»
+    (il motivo è nell'avviso); una sezione in errore non afferma niente."""
+    from PySide6.QtWidgets import QLabel
+
+    from astrotwo.ui.profiles import PlanetsView
+
+    def shown(data):
+        view = PlanetsView("planets", "Planets", ("exoplanet",))
+        qtbot.addWidget(view)
+        view.show_section({"name": "planets", "values": [], "servers": [], **data}, 1)
+        return {w.objectName() for w in view.findChildren(QLabel)}
+
+    checked = shown({"status": "done", "details": {"planets": [], "checked": True}})
+    assert "noPlanets" in checked and "planetsNotChecked" not in checked
+    unchecked = shown({"status": "not_applicable", "details": {"planets": [], "checked": False},
+                       "warnings": [{"code": "PROFILE_PLANETS_NOT_CHECKED", "text": "x",
+                                     "params": {"reason": "simbad_unavailable"}}]})
+    assert "planetsNotChecked" in unchecked and "noPlanets" not in unchecked
+    failed = shown({"status": "error", "details": {"planets": [], "checked": False},
+                    "errors": [{"code": "SERVICE_ERROR", "text": "giù", "params": {}}]})
+    assert "noPlanets" not in failed and "planetsNotChecked" not in failed
+    old = shown({"status": "done", "details": {"planets": [], "note": "no planet in the archive"}})  # prima del 2026-11-10
+    assert "noPlanets" not in old and "planetsNotChecked" in old
+
+
 def test_section_view_states_text(qtbot):
     view = SectionView("astrometry", "Astrometry and distance", ("gaia",))
     qtbot.addWidget(view)

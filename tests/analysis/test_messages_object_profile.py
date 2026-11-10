@@ -170,8 +170,21 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
     # SIMBAD giù: PROFILE_NO_IDENTIFIERS (nome e posizione), PROFILE_NO_PROPER_MOTION (moto proprio, epoca)
     services.overrides[("simbad", "")] = lambda q: (503, "text/plain", "giù")
     services.overrides[("gaia", "CONTAINS")] = lambda q: votable(GAIA_CONE, [])
+    # D25-23: con SIMBAD giù l'ospite dei pianeti si cerca con il nome scritto (PROFILE_PLANETS_BY_WRITTEN_NAME)
+    services.overrides[("exoplanet", "hostname IN ('Vega')")] = lambda q: votable(HOSTS, [["Ospite scritto", ""]])
+    services.overrides[("exoplanet", "hostname = 'Ospite scritto'")] = lambda q: votable([("pl_name", "char", None)],
+                                                                                        [])
     stub_resolver(monkeypatch)
     seen.profile(build(ProfileTarget(name="Vega"), cache=cache, refresh=True))
+    # D25-23: nessun nome, nessun identificativo, nessun source_id → «non controllato», con le due ragioni
+    where = at(*VEGA, epoch=None)
+    for error in ({"code": "SERVICE_ERROR", "text": "giù", "params": {}}, None):
+        target = op.ResolvedTarget(ProfileTarget(position=where), None, where, "coordinates as written", "position",
+                                   simbad_error=error)
+        host = op._exoplanet_by_hostname(target, op._ExoplanetAsk(cache=cache, refresh=False,
+                                                                  timeouts=op.NETWORK_TIMEOUTS))
+        assert host.requests == () and host.note == op.PLANETS_NOT_CHECKED_NOTE
+        seen.notes(host.warnings)
     seen.profile(build(ProfileTarget(position=at(*VEGA, epoch=None)), sections=("identity",), cache=cache,
                        refresh=True))
     services.overrides.clear()

@@ -131,6 +131,7 @@ __all__ = [
     "reset_mirror_state",
     "service_servers",
     "tap_query_cached",
+    "export_temp_file",
     "vizier_photometry_cached",
     "VOTABLE_VERSION",
     "VoProtocolsError",
@@ -322,6 +323,26 @@ def _write_ecsv_file(table: CatalogTable, target: Path, info: dict[str, str]) ->
 def _has_units(table: CatalogTable) -> bool:
     return any(table.table[n].unit is not None or table.table[n].meta.get("unit_unrecognized")
                for n in table.table.colnames)
+
+
+def export_temp_file(directory, prefix: str, suffix: str = "") -> Path:
+    """File temporaneo vuoto in ``directory`` per scrivere un'esportazione e poi rinominarla (mai un file a metà).
+
+    Permessi normali dell'utente: 0666 meno l'umask (di solito 0644), applicati dal sistema all'apertura; non 0600
+    come ``tempfile.mkstemp``, che il file esportato conserverebbe dopo la rinomina (decisione del proprietario del
+    2026-11-10). Nome casuale, creato in modo esclusivo (``O_EXCL``)."""
+    import secrets
+
+    folder = Path(directory)
+    for _ in range(100):
+        candidate = folder / f"{prefix}{secrets.token_hex(8)}{suffix}"
+        try:
+            handle = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        except FileExistsError:
+            continue
+        os.close(handle)
+        return candidate
+    raise FileExistsError(f"{folder}: nessun nome libero per il file temporaneo dell'esportazione")
 
 
 def export_table(table: CatalogTable, path, format: str, overwrite: bool = False) -> ExportResult:
@@ -1176,25 +1197,32 @@ def _http_status_of(exc) -> int | None:
     return status if isinstance(status, int) else None
 
 
+def _server_down_status(status) -> bool:
+    """Stato HTTP di un server guasto: 5xx, 429 e, dal 2026-11-10, 404 sull'indirizzo del servizio (D14-16)."""
+    return isinstance(status, int) and not isinstance(status, bool) and (status >= 500 or status in (404, 429))
+
+
 def is_failover_error(exc: BaseException) -> bool:
-    """Vero per le cause del cambio di server (D14-14 a): timeout o connessione, HTTP 5xx o 429, risposta non
-    valida. Mai per 404 o altri 4xx, ADQL rifiutata, nessun risultato o errori di chi chiama."""
+    """Vero per le cause del cambio di server (D14-14 a, D14-16): timeout o connessione, HTTP 5xx o 429, HTTP 404
+    sull'indirizzo del servizio (l'indirizzo è verificato: un 404 vuol dire server guasto, osservato con il CDS il
+    2026-11-10), risposta non valida. Mai per gli altri 4xx, ADQL rifiutata, nessun risultato (un oggetto non trovato
+    con una risposta valida resta «non trovato») o errori di chi chiama."""
     if isinstance(exc, VoProtocolsError):
         params = exc.params or {}
         reason, status = params.get("reason"), params.get("status")
         if exc.code == "NET_TIMEOUT":
             return reason != "async_deadline"
         if exc.code == "SERVICE_ERROR":
-            return isinstance(status, int) and (status >= 500 or status == 429)
+            return _server_down_status(status)
         if exc.code == "VOTABLE_INVALID":
             return reason == "unreadable_response"
         return False
     if isinstance(exc, requests.exceptions.HTTPError):
         status = _http_status_of(exc)
-        return status is None or status >= 500 or status == 429
+        return status is None or _server_down_status(status)
     if isinstance(exc, pyvo.dal.DALServiceError):
         status = getattr(exc, "code", None)
-        return not isinstance(status, int) or status >= 500 or status == 429
+        return not isinstance(status, int) or _server_down_status(status)
     return isinstance(exc, (requests.exceptions.RequestException, OSError))
 
 

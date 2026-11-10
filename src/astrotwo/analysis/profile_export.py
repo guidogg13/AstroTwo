@@ -21,7 +21,6 @@ import io
 import json
 import os
 import re
-import tempfile
 import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -32,6 +31,7 @@ import numpy as np
 from astropy.table import MaskedColumn, Table
 
 import astrotwo
+from astrotwo.analysis.object_profile import planets_absence_shown
 from astrotwo.analysis.photometry import sed_rows_png
 from astrotwo.messages_catalog import message_text
 
@@ -467,7 +467,8 @@ _LABELS = {
            "quality": "Quality", "lambda": "λ", "fnu": "Fν", "plot": "In plot", "yes": "yes", "no": "no",
            "arrow": "arrow (upper limit)", "identifiers": "Identifiers ({count})", "chain": "Identifier chain",
            "more": "… {count} more rows: full table in the ECSV", "more_groups": "… {count} more: full list in the tab",
-           "no_planets": "No planet in the archive", "planet": "Planet", "discovery": "Discovery",
+           "no_planets": "No planet in the archive", "not_checked": "Not checked",
+           "planet": "Planet", "discovery": "Discovery",
            "period": "Period", "semi_major_axis": "Semi-major axis", "eccentricity": "Eccentricity", "mass": "Mass",
            "radius": "Radius", "equilibrium_temperature": "Eq. temperature", "fov": "field", "center": "center",
            "tiles": "tiles from", "credits": "Survey credits", "zero_points": "Zero points used",
@@ -483,6 +484,7 @@ _LABELS = {
            "arrow": "freccia (limite superiore)", "identifiers": "Identificativi ({count})",
            "chain": "Catena degli identificativi", "more": "… {count} righe in più: tabella completa nell'ECSV",
            "more_groups": "… {count} in più: elenco completo nella scheda", "no_planets": "Nessun pianeta nell'archivio",
+           "not_checked": "Non controllato",
            "planet": "Pianeta", "discovery": "Scoperta", "period": "Periodo", "semi_major_axis": "Semiasse",
            "eccentricity": "Eccentricità", "mass": "Massa", "radius": "Raggio",
            "equilibrium_temperature": "Temp. di equilibrio", "fov": "campo", "center": "centro",
@@ -763,14 +765,23 @@ def _photometry_page(data: Mapping, label: dict, title: str) -> _Page:
     return page
 
 
+def _chain(data: Mapping) -> list:
+    """Passi della catena degli identificativi (forma unita o sezione Identità), per i risultati già registrati."""
+    identity = _section(data, "identity") or {}
+    return list(data.get("cross_identifications") or (identity.get("details") or {}).get("cross_identifications")
+                or [])
+
+
 def _planets_page(data: Mapping, label: dict, title: str) -> _Page:
     page = _Page(label["planets"], title)
     section = _section(data, "planets")
     _status_lines(page, section, label)
     if section is not None:
         planets = (section.get("details") or {}).get("planets") or []
-        if not planets and section.get("status") in ("done", "partial"):
+        if not planets and planets_absence_shown(section, _chain(data)):  # D25-23: assenza solo dopo una richiesta
             page.text(label["no_planets"], size=9)
+        elif not planets and section.get("status") != "error":
+            page.text(label["not_checked"], size=9)
         rows = []
         for planet in planets:
             cells = [str(planet.get("pl_name") or ""),
@@ -863,9 +874,9 @@ def export_profile(data: Mapping, path: str | os.PathLike, format: str, *, langu
     target = check_export_path(str(path), format)
     if format in ("sed_png", "sed_votable") and not _has_sed(data):
         raise _invalid("no_sed", "la sezione Fotometria non ha punti della SED")
-    handle, temporary = tempfile.mkstemp(prefix=".astrotwo-export-", suffix=target.suffix, dir=target.parent)
-    os.close(handle)
-    temp = Path(temporary)
+    from astrotwo.core.vo_protocols import export_temp_file
+
+    temp = export_temp_file(target.parent, ".astrotwo-export-", target.suffix)  # permessi secondo l'umask, non 0600
     rows = pages = None
     warnings: tuple = ()
     try:

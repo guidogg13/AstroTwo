@@ -179,6 +179,9 @@ dell'app usate da un astrofisico.
 | D3 | Survey HiPS con il CDS giù (D1 o D2) | Il survey si apre da un mirror ufficiale, dichiarato |
 | D4 | Rete spenta: *Go to* `M 31` dopo averlo già visitato | Tile dalla cache, con l'indicazione della cache; nomi non in cache → messaggio chiaro |
 | D5 | Rete spenta: profilo nuovo | Sezioni in errore con il motivo; nessun valore inventato; l'app resta usabile |
+| D6 | SIMBAD irraggiungibile (bloccare `simbad.cds.unistra.fr` e `simbad.harvard.edu` nel file `/etc/hosts`): profilo di `51 Peg` | La sezione Pianeti mostra il pianeta 51 Peg b trovato con il nome scritto, con l'avviso «identity not verified»; **mai** «No planet in the archive» se l'archivio dei pianeti non è stato interrogato (D25-23) |
+| D7 | Come D6, bloccando anche l'archivio Gaia (`gea.esac.esa.int`): profilo da coordinate `346.6223 -5.0414` | Pianeti «Not checked» con il motivo, non «No planet in the archive» |
+| D8 | Esportare un PDF e un PNG (E2, E6), poi `ls -l` sui file | Permessi `-rw-r--r--` (0644 con l'umask normale), non `-rw-------` |
 
 ## 4. Cosa NON fa
 
@@ -246,8 +249,9 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 
 ## 13. Decisioni aperte
 
-- **D62-1 — Scelte minori del megatest (proposte da Claude Code il
-  2026-11-10, da confermare):** (1) numero 62 (il 61 resta alla strategia
+- **D62-1 — Scelte minori del megatest: APPROVATE dal proprietario il
+  2026-11-10** (proposte da Claude Code lo stesso giorno, approvate così
+  come sono): (1) numero 62 (il 61 resta alla strategia
   dei test); (2) prove sull'app costruita dal `.dmg`, non su `uv run`;
   (3) rilascio con zero KO o con i KO dichiarati non bloccanti dal
   proprietario nelle note di rilascio; (4) servizio esterno giù = «non
@@ -259,3 +263,4 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-11-10 | Claude Code | Creazione del file (stato: bozza), sprint D2, brief del proprietario del 2026-11-10 punto (d): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese, byte per byte), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 aperta. |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** D62-1 **approvata** (§13; scelte già scritte in §3.1). Nuove prove D6 e D7 (D25-23, assenze solo dopo una richiesta) e D8 (permessi dei file esportati, decisione del 2026-11-10). Stato `bozza` invariato. |

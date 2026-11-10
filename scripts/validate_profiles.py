@@ -153,7 +153,8 @@ def reference(name: str, astro: dict) -> dict:
     host = None
     for section in astro.get("sections") or []:
         if section.get("name") == "planets":
-            host = ((section.get("details") or {}).get("host") or {}).get("identifier")
+            host = (section.get("details") or {}).get("host")  # testo: l'ospite trovato (25 §3.13)
+            host = host.get("identifier") if isinstance(host, dict) else host
     planets = [v for s in astro.get("sections") or [] if s.get("name") == "planets" for v in s.get("values") or []]
     if planets or host:
         hostname = host or name

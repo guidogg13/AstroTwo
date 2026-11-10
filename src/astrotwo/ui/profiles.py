@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from astrotwo.analysis.object_profile import planets_absence_shown
 from astrotwo.analysis.profile_export import STSCI_DSS_TEXT, STSCI_DSS_URL  # testo di STScI (01 §6.1), anche nel PDF
 from astrotwo.core.commands import CancelToken, Command, Outcome, RequestedBy, ResultMessage
 from astrotwo.ui.message_view import shown_line, shown_text
@@ -615,7 +616,12 @@ class PlanetsView(SectionView):
         details = data.get("details") or {}
         planets = details.get("planets") or []
         if not planets:
-            self.add(_label(self.tr("No planet in the archive"), name="noPlanets"))
+            # D25-23: «nessun pianeta» solo dopo una richiesta vera e riuscita all'archivio; altrimenti «non controllato»
+            # (il motivo è nell'avviso o nell'errore della sezione); una sezione in errore non afferma niente.
+            if planets_absence_shown(data):
+                self.add(_label(self.tr("No planet in the archive"), name="noPlanets"))
+            elif data.get("status") != "error":
+                self.add(_label(self.tr("Not checked"), name="planetsNotChecked"))
             return
         values = self.values()
         titles = {"period": self.tr("Period"), "semi_major_axis": self.tr("Semi-major axis"),

@@ -20,7 +20,7 @@ from matplotlib.figure import Figure
 from astrotwo.analysis import profile_export as pe
 from astrotwo.analysis.profile_export import export_profile, merge_profile_results
 from astrotwo.messages_catalog import CATALOG
-from tests.analysis.profile_fakes import services, votable  # noqa: F401
+from tests.analysis.profile_fakes import INDEX, recorded, services, votable  # noqa: F401
 from tests.analysis.test_profile_export import profile, session_with_export, values_of
 
 _WORD = re.compile(r"[A-Za-zÀ-ÿ'_0-9]+")  # «r_lo_geo» è una parola sola
@@ -140,6 +140,13 @@ def test_t36_simbad_down_name_resolver_path_is_english(cache, services, tmp_path
     monkeypatch.setattr(op, "resolve_name", lambda name, **kw: ResolvedName(
         name, "* 51 Peg", coords, source, "https://simbad.harvard.edu/simbad/sim-tap", Time.now().datetime, False,
         None, None, None, None, service="simbad_harvard"))
+    # D25-23: con SIMBAD giù i pianeti si cercano con il nome scritto; risposta sintetica dell'ospite, pianeti dalla
+    # risposta vera registrata per 51 Peg (stesse righe di pscomppars)
+    services.overrides[("exoplanet", "hostname IN ('51 Peg')")] = lambda q: votable(
+        [("hostname", "char", None), ("gaia_dr3_id", "char", None)], [["51 Peg", "Gaia DR3 2835207319109249920"]])
+    services.overrides[("exoplanet", "WHERE hostname = '51 Peg'")] = lambda q: recorded("exoplanet", next(
+        k.split("|", 1)[1] for k in INDEX if k.startswith("exoplanet|SELECT pl_name")
+        and "2835207319109249920" in k))
     session = session_with_export(cache)
     number, result = profile(session, {"name": "51 Peg", "sections": ["identity", "astrometry", "planets"]})
     assert result.status == "ok", result.error
@@ -152,3 +159,6 @@ def test_t36_simbad_down_name_resolver_path_is_english(cache, services, tmp_path
     export_profile(data, tmp_path / "en.pdf", "pdf", language="en")
     vocabulary = italian_words()
     assert any("PROFILE_NO_IDENTIFIERS" in t for t in texts) and italian_in(texts, vocabulary) == []
+    # D25-23: ospite trovato con il nome scritto, dichiarato in inglese; i pianeti di 51 Peg nel PDF
+    assert any("PROFILE_PLANETS_BY_WRITTEN_NAME: Planet host 51 Peg found by the written name" in t for t in texts)
+    assert any("51 Peg b" in t for t in texts)

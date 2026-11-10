@@ -290,7 +290,11 @@ limite superiore» (non sono punti della serie misurata). Funzione del 20:
 sezione (stato `partial`), il resto del grafico presente.
 
 **Pianeti:** «Nessun pianeta nell'archivio» quando non ce ne sono (non è un
-errore); altrimenti una tabella con una riga per pianeta (nome, metodo e
+errore), **solo dopo una richiesta vera e riuscita all'archivio**
+(`planets_absence_shown` del `25` §3.18, D25-23 decisa il 2026-11-10); senza
+richiesta «Non controllato» / «Not checked» (il motivo è nell'avviso
+`PROFILE_PLANETS_NOT_CHECKED` della sezione); con la sezione in errore
+nessuna delle due righe (solo l'errore); altrimenti una tabella con una riga per pianeta (nome, metodo e
 anno di scoperta, periodo, semiasse, eccentricità, massa con `pl_bmassprov`,
 raggio, temperatura di equilibrio), ogni parametro con **errore superiore e
 inferiore così come dati** (`+a / −b`) e il segno di limite (`<`, `>`)
@@ -363,7 +367,9 @@ non manda messaggi da sé. Regole dei file e dei comandi nel `25` §3.15.
   a un articolo); la scelta va in `language`. Per ECSV e PNG, che non
   dipendono dalla lingua, nessuna scelta e `language = en`. Stesso profilo
   nella stessa lingua = stesso file byte per byte (`25` §3.15); quanto del
-  testo del PDF segue la lingua scelta è in DD-3 (`panoramica.md` §2). Esito: messaggio nel pannello
+  testo del PDF segue la lingua scelta è in DD-3 (`panoramica.md` §2; proposta
+  (a) confermata dal proprietario il 2026-11-10). File scritto con i permessi
+  normali (0666 meno l'umask, `02` §2). Esito: messaggio nel pannello
   Messaggi del 40 come gli altri comandi; errori (`PROFILE_EXPORT_INVALID`,
   `PROFILE_EXPORT_FAILED`) in una finestra «The export was not written» /
   «L'esportazione non è stata scritta» con il messaggio del catalogo.
@@ -547,7 +553,7 @@ T13 con l'apertura dalla tabella e dal riquadro del puntatore.
 | T7 | Nessun numero calcolato | ogni numero mostrato nella scheda di 51 Peg | ogni testo numerico è la rappresentazione di un valore del risultato | confronto con `result.values` |
 | T8 | Candidati | coordinate di eta Tau | **dialogo** con la stella e `GN 03.44.2`, nessuno scelto e pulsante spento; la scelta mette in coda `object.profile` con la stessa posizione e `simbad_id` in una scheda nuova | comando registrato |
 | T9 | Crediti delle miniature | 51 Peg | ogni miniatura con titolo, server, crediti del survey; DSS2 con il testo di STScI del `01` | testi |
-| T10 | Pianeti | TRAPPIST-1; Vega | tabella di 7 pianeti con errori `+a / −b` e `PROFILE_PLANETS_COMPOSITE`; Vega «Nessun pianeta nell'archivio» | testi |
+| T10 | Pianeti | TRAPPIST-1; Vega; sezioni `not_applicable` (`checked` falso), `error`, registrata prima del 2026-11-10 senza prova della richiesta | tabella di 7 pianeti con errori `+a / −b` e `PROFILE_PLANETS_COMPOSITE`; Vega «Nessun pianeta nell'archivio»; `not_applicable` e registrata senza prova «Not checked»; `error` nessuna delle due righe (D25-23) | testi (`test_planets_view_absence_only_after_a_request`) |
 | T11 | Grafico | TRAPPIST-1 | figura incorporata con assi in µm e Jy logaritmici, serie per catalogo, **limite superiore AllWISE W4 come freccia** (D43-9, anche nel PNG del risultato) e fuori dalla serie dei punti | proprietà della figura |
 | T12 | Riconoscimento delle righe | livello Gaia DR3 (origine `gaiadr3.gaia_source`) e livello sconosciuto con una colonna `source_id` | il primo dà `name = "Gaia DR3 <id>"`, il secondo `layer` + `row` | comando registrato |
 | T13 | Puntatore SIMBAD | collegamento «Profilo di <main_id>» nel riquadro | `object.profile` con `name` e `simbad_id` = `main_id` | comando registrato |
@@ -628,3 +634,4 @@ decisione aperta.
 | 2026-11-08 | Claude Code | **Sprint C5b:** §12 con i file di test reali (`test_profiles.py`, `test_profiles_open.py`) e T8, T11 come provati (dialogo dei candidati, freccia del limite superiore di TRAPPIST-1 W4); test dei pulsanti della scheda e della chiusura di una scheda in corso. |
 | 2026-11-08 | Claude Code | **Codice dello sprint C5 (istruzione del proprietario del 2026-11-08, punti a–h):** `src/astrotwo/ui/profiles.py` (finestra, schede, sezioni, riquadro della provenienza, dialoghi dei candidati e del profilo), aggancio nel 40 (menu Data e Window, pulsante «Profilo» del «Vai a», coda), 41 (clic destro e riquadro del puntatore SIMBAD), 42 (clic destro su una riga), 05 (`ProgressReport.detail`), 25 (`on_resolved` ed eventi `resolved`/`section`), 20 (`plot_sed_rows`); §3.4 bersaglio ambiguo in un dialogo (punto e); §3.7 e D43-9: frecce dei limiti superiori solo nel grafico della finestra (istruzione più recente del proprietario, da confermare). Il file resta `bozza`. |
 | 2026-11-08 | Claude Code | Creazione del file (stato: bozza), sprint C5, decisione D25-7 del proprietario (specifica dell'interfaccia del profilo nel `43`): finestra Profili non modale con una scheda per profilo, aperture (menu Data, «Vai a», cielo, puntatore SIMBAD, tabella con riconoscimento degli identificativi), scheletro e stati delle sezioni, arrivo progressivo (proposta: `detail` di `ProgressReport`), «Riprova questa sezione», corpo delle sezioni con miniature e crediti (testo di STScI per DSS, D25-17 (3)), grafico della SED del 20, riquadro della provenienza; decisioni D43-1…D43-10 (D43-9: conflitto tra il brief e D20-9 (3)). |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 confermata e approvate le modifiche del D2 a questo file (§3.10, T17); **D25-23** (assenze solo dopo una richiesta vera): §3 Pianeti con «Not checked» e nessuna riga in errore, T10 esteso; permessi normali del PDF (`02` §2). Codice: `PlanetsView` in `ui/profiles.py` (prima scriveva «No planet in the archive» anche sotto un errore), traduzione «Non controllato» in `astrotwo_it.ts`/`.qm`. Stato `approvato` invariato. |

@@ -344,6 +344,9 @@ def test_simbad_down_falls_back_to_the_name_resolver_by_position(services, cache
     monkeypatch.setattr(op, "resolve_name", lambda name, **kw: ResolvedName(
         name, "VEGA", coords, "NED (test)", "ned://test", Time.now().datetime, False, None, None, None, None,
         service="ned"))
+    asked = []
+    services.overrides[("exoplanet", "hostname IN")] = lambda q: (asked.append(q), votable(
+        [("hostname", "char", None), ("gaia_dr3_id", "char", None)], []))[1]
     prof = profile("Vega", cache)
     assert prof.resolved.method == "name_resolver" and prof.resolved.simbad is None
     assert codes(prof.warnings)[0] == "PROFILE_NO_IDENTIFIERS"
@@ -352,6 +355,42 @@ def test_simbad_down_falls_back_to_the_name_resolver_by_position(services, cache
     assert identity.status == "error" and identity.errors[0]["code"] == "SERVICE_ERROR"
     astrometry = section(prof, "astrometry")
     assert "PROFILE_NO_PROPER_MOTION" in codes(astrometry.warnings)  # nessun moto proprio senza SIMBAD
+    # D25-23 (decisione del 2026-11-10): l'archivio dei pianeti si interroga comunque con il nome scritto; «nessun
+    # pianeta» solo dopo quella richiesta, riuscita, con la richiesta nella sezione
+    assert asked == ["SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ('Vega')"]
+    planets = section(prof, "planets")
+    assert planets.status == "done" and planets.details["checked"] is True and planets.requests
+    assert planets.details["note"] == "no planet in the archive (no host in the archive (searched by the written name))"
+    assert op.planets_absence_shown(planets.as_dict())
+
+
+def test_planets_not_checked_without_any_request(services, cache, monkeypatch):
+    """D25-23: bersaglio per coordinate, SIMBAD giù, nessuna sorgente Gaia: nessun nome né source_id da chiedere
+    all'archivio → sezione «non controllata» con il motivo, nessuna richiesta, mai «nessun pianeta»."""
+    services.overrides[("simbad", "")] = lambda q: (503, "text/plain", "giù")
+    services.overrides[("gaia", "CONTAINS")] = lambda q: votable(
+        [("source_id", "long", None), ("ra", "double", "deg"), ("dec", "double", "deg"),
+         ("phot_g_mean_mag", "float", "mag")], [])
+    prof = op.build_profile(op.ProfileTarget(position=at(*VEGA_J2000)), sections=("planets",), cache=cache)
+    planets = section(prof, "planets")
+    assert planets.status == "not_applicable" and planets.requests == [] and planets.details["checked"] is False
+    assert planets.details["note"] == op.PLANETS_NOT_CHECKED_NOTE
+    warning = next(w for w in planets.warnings if w[0] == "PROFILE_PLANETS_NOT_CHECKED")
+    assert warning.params == {"reason": "simbad_unavailable"}
+    assert not op.planets_absence_shown(planets.as_dict())
+    assert services.count("exoplanet") == 0
+
+
+def test_planets_absence_rule_for_recorded_results():
+    """Risultati registrati prima del 2026-11-10 (senza ``checked``): «nessun pianeta» solo se la richiesta
+    all'archivio risulta dalla sezione o dalla catena (D25-23)."""
+    old = {"status": "done", "details": {"planets": [], "note": "no planet in the archive (no host in the archive)"}}
+    asked = [{"catalog": "exoplanet", "queries": ["SELECT DISTINCT hostname ..."], "error": None}]
+    assert not op.planets_absence_shown(old)
+    assert not op.planets_absence_shown(old, [{"catalog": "exoplanet", "queries": [], "error": None}])
+    assert op.planets_absence_shown(old, asked)
+    assert op.planets_absence_shown({"status": "done", "details": {"planets": [], "query_by": "hostname"}})
+    assert not op.planets_absence_shown({"status": "error", "details": {"planets": [], "checked": True}})
 
 
 def test_sections_arrive_once_in_order_and_cancel_returns_none(services, cache):

@@ -117,6 +117,20 @@ def test_t19_primary_properties_503_switches_to_mirror(service, cache, monkeypat
                                                  "primary": service.url + "/hips", "mirror": mirror}
 
 
+def test_t19_primary_properties_404_switches_to_mirror(service, cache, monkeypatch):
+    """D14-16 (decisione del proprietario del 2026-11-10): HTTP 404 al ``properties`` del principale di un survey con
+    mirror = guasto del server, si passa al mirror con l'avviso; con un solo server resta ``HIPS_NOT_A_SERVICE``."""
+    mirror = serve(service, "/mirror")
+    service.routes["/hips/properties"] = lambda request: (404, "text/html", "<html>Not Found</html>")
+    mocserver(service, monkeypatch, {"ID": HIPS_ID, "hips_service_url": service.url + "/hips",
+                                     "hips_service_url_1": mirror})
+    got = add_hips(HIPS_ID, cache=cache, timeouts=FAST)
+    assert got.server == mirror
+    note = [w for w in got.warnings if w[0] == "HIPS_MIRROR_FALLBACK"]
+    assert len(note) == 1 and note[0].params == {"reason": "http_status", "status": 404, "hips_id": HIPS_ID,
+                                                 "primary": service.url + "/hips", "mirror": mirror}
+
+
 @pytest.mark.parametrize("status", [500, 503, 504, 429])
 def test_t19_properties_5xx_429_is_service_error(service, cache, status):
     """Un solo server: 5xx/429 al ``properties`` → ``SERVICE_ERROR`` con lo stato; 404 resta ``HIPS_NOT_A_SERVICE``."""

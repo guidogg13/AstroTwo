@@ -149,7 +149,9 @@ mostra l'errore e il resto del profilo arriva comunque.
    raggio, temperatura di equilibrio, ciascuno con errori superiore e inferiore
    e **riferimento per parametro** (`*_reflink`, testo esterno: se ne legge solo
    il bibcode/URL ADS, §9). Nessun pianeta: «nessun pianeta nell'archivio» (non
-   è un errore).
+   è un errore), **solo dopo una richiesta vera e riuscita all'archivio**;
+   senza richiesta o con la richiesta fallita: «non controllato» con il motivo
+   (D25-23, decisa il 2026-11-10, §3.18).
 
 ### 3.5 Tempi e parallelismo
 
@@ -315,7 +317,10 @@ negli sprint C3–C4.
   identificativo SIMBAD (confronto sugli identificativi senza i prefissi
   SIMBAD `*`, `**`, `V*`, `NAME` e con gli spazi ridotti a uno). Nessuna
   riga: «nessun ospite nell'archivio», non è un errore. In C2 la catena dà
-  solo l'ospite; i pianeti sono dello sprint C4.
+  solo l'ospite; i pianeti sono dello sprint C4. **Senza SIMBAD** (dal
+  2026-11-10, D25-23, §3.18): `hostname` uguale al **nome scritto**
+  dall'utente, ridotto allo stesso modo; nessun nome, nessun identificativo e
+  nessun `source_id` → «non controllato», nessuna richiesta.
 
 **Sezione Identità:** `main_id`, `otype` con la descrizione della tabella
 `otypedef` di SIMBAD, `sp_type` con `sp_bibcode`, `nbref`, posizione ICRS
@@ -601,8 +606,10 @@ Fotometria, Pianeti (§3.4).
 - Dall'esito Exoplanet della catena (§3.10): ospite trovato per
   `gaia_dr3_id` → `WHERE gaia_dr3_id = 'Gaia DR3 <source_id>'`; trovato per
   `hostname` → `WHERE hostname = '<ospite>'`; tabella **`pscomppars`**,
-  ordine `pl_name`. Nessun ospite: sezione **`done`** con «nessun pianeta
-  nell'archivio» (non è un errore) e nessuna richiesta.
+  ordine `pl_name`. Nessun ospite **dopo una richiesta riuscita**: sezione
+  **`done`** con «nessun pianeta nell'archivio» (non è un errore) e le
+  richieste della ricerca dell'ospite nella sezione; nessuna richiesta
+  possibile: `not_applicable` «non controllato» (§3.18, D25-23).
 - Per ogni pianeta: `pl_name`, `pl_letter`, `discoverymethod`, `disc_year`
   (letti) e i parametri **periodo** (`pl_orbper`), **semiasse**
   (`pl_orbsmax`), **eccentricità** (`pl_orbeccen`), **massa** (`pl_bmasse`
@@ -717,8 +724,8 @@ che non cambia il file). **Lingua e riproducibilità (DD-1, D25-20 (7)):**
 lo stesso profilo (stessi comandi, stessi risultati registrati) nella stessa
 lingua dà sempre lo stesso file, byte per byte; la lingua fa parte dei
 parametri registrati, quindi Riesegui riscrive il file nella lingua scelta
-allora. **Testi del PDF (DD-3, proposta (a), applicata nello sprint D2 il
-2026-11-10, da confermare dal proprietario; `panoramica.md` §2 «Fase D»):**
+allora. **Testi del PDF (DD-3, proposta (a), applicata nello sprint D2 e
+confermata dal proprietario il 2026-11-10; `panoramica.md` §2 «Fase D»):**
 (1) intestazioni da `_LABELS` nella lingua scelta; (2) **avvisi ed errori**
 (del bersaglio, delle sezioni, della catena degli identificativi) scritti
 come `codice: testo` con il testo **dal catalogo dei messaggi** con codice e
@@ -736,7 +743,10 @@ inglese del catalogo. Effetti dichiarati: il PDF inglese non ha nessuna
 parola italiana (T36); il PDF italiano ha intestazioni e avvisi in
 italiano e note in inglese; i profili **già registrati** prima del
 2026-11-10 conservano le note italiane del loro risultato, che non si
-riscrive mai: il loro PDF resta quello di prima, byte per byte. Come `view.export_png` del 41 è un
+riscrive mai: il loro PDF resta quello di prima, byte per byte, **tranne**
+la riga della sezione Pianeti quando il risultato registrato non prova una
+richiesta all'archivio (D25-23, §3.18: «Not checked» al posto di «No planet
+in the archive»). Come `view.export_png` del 41 è un
 comando registrato in cronologia, **rieseguibile** con Riesegui del 40
 (riscrive lo stesso file dagli stessi risultati registrati: stesso
 contenuto, byte per byte) e, come ogni comando `application`, **non
@@ -753,7 +763,10 @@ percorso assoluto con l'estensione del formato (`.ecsv`, `.pdf`, `.png`,
 Un file esistente si sovrascrive (la conferma è del dialogo di salvataggio
 del 43). Errore di scrittura (disco pieno, permessi) → `PROFILE_EXPORT_FAILED`
 con il percorso e il motivo, nessun file a metà (scrittura in un file
-temporaneo nella stessa cartella e rinomina). Risultato: `path`, `format`,
+temporaneo nella stessa cartella e rinomina). **Permessi del file scritto**
+(decisione del proprietario del 2026-11-10, `02` §2): quelli normali
+dell'utente, 0666 meno l'umask (di solito 0644), non 0600; il file
+temporaneo si crea con `export_temp_file` del 14 (§7.2). Risultato: `path`, `format`,
 `commands`, `sha256` e dimensione del file scritto, `rows` (ECSV, VOTable)
 o `pages` (PDF).
 
@@ -1261,6 +1274,62 @@ Fotometria `partial` solo per VizieR. **Obiettivo di 60 s raggiunto** su
 tutti e quattro, con il margine più piccolo su 51 Peg (primo profilo della
 sessione, che paga i 10 s del CDS giù per SIMBAD).
 
+### 3.18 Assenze solo dopo una richiesta vera (D25-23, decisa il 2026-11-10)
+
+**Regola del proprietario (2026-11-10), valida per tutta l'app (`02` §2):**
+un'assenza («nessun pianeta», «nessun oggetto», «nessuna riga») si mostra
+solo dopo una richiesta vera, andata a buon fine, alla fonte giusta. Se la
+richiesta non c'è stata o è fallita: «non controllato» con il motivo, mai
+un'assenza. Nel profilo:
+
+- **Ospite dei pianeti** (`_exoplanet_by_hostname`): prima `gaia_dr3_id`
+  se il `source_id` è noto (§3.10); poi `hostname` uguale agli
+  identificativi SIMBAD; **se SIMBAD non ha risposto**, `hostname` uguale al
+  **nome scritto** dall'utente (o al `simbad_id` già registrato), ridotto
+  come gli identificativi (prefissi `*`, `**`, `V*`, `NAME` tolti, spazi
+  ridotti), metodo `written_name`. Un ospite trovato così porta la nota
+  «host found by the written name (SIMBAD unavailable): identity not
+  verified» e, nella sezione Pianeti, l'avviso
+  `PROFILE_PLANETS_BY_WRITTEN_NAME` (`host`): nessuna identità affermata
+  senza SIMBAD. Nessuna riga per il nome scritto: «no host in the archive
+  (searched by the written name)», un'assenza vera (richiesta riuscita).
+- **Nessuna richiesta possibile** (nessun identificativo SIMBAD, nessun nome
+  scritto — bersaglio per coordinate —, nessun `source_id` di Gaia): nota
+  «not checked: no SIMBAD identifier, no written name and no Gaia DR3
+  source_id»; sezione Pianeti **`not_applicable`** con
+  `details["checked"] = false`, la stessa nota e l'avviso
+  `PROFILE_PLANETS_NOT_CHECKED` (`simbad_unavailable` se SIMBAD non ha
+  risposto, `no_identifiers` se ha risposto senza un oggetto). Mai
+  «nessun pianeta».
+- **Richiesta fallita** (ricerca dell'ospite o dei pianeti): sezione
+  `error` con l'errore del 14, `checked` falso, nessuna assenza.
+- **Assenza vera:** sezione `done` con `details["checked"] = true` e, dal
+  2026-11-10, le richieste della ricerca dell'ospite nelle richieste della
+  sezione (prima non c'erano).
+- **Chi mostra la sezione** (finestra del 43, PDF di §3.15) usa
+  `planets_absence_shown(sezione, catena)`: «No planet in the archive»
+  solo con `done`/`partial`, nessun pianeta e `checked` vero; per i
+  risultati **registrati prima del 2026-11-10** (senza `checked`) solo se la
+  richiesta risulta da `query_by` o dalle interrogazioni del passo
+  `exoplanet` della catena degli identificativi; altrimenti «Not checked»
+  («Non controllato»); in `error` nessuna delle due righe. Il risultato
+  registrato non si riscrive mai (D25-20 (7)): cambia solo come si mostra.
+
+**Altri punti verificati nel codice il 2026-11-10 (ricerca chiesta dal
+proprietario):** l'Identità «no SIMBAD object for this position» e la fonte
+«coordinate scritte (nessun oggetto SIMBAD entro …)» nascono solo dopo la
+ricerca dei candidati riuscita (SIMBAD giù → errore della sezione e
+`PROFILE_NO_IDENTIFIERS`); `PROFILE_NO_GAIA` (`no_counterpart`,
+`not_in_archive`), `PROFILE_NO_PHOTOMETRY`, «no 2MASS/AllWISE source within …»
+e `SIMBAD_NO_OBJECT` del 14 vengono da una risposta (anche dalla cache,
+dichiarata con `FROM_CACHE`); un servizio fermo dà sempre un errore o
+`PROFILE_GAIA_SKIPPED`/`PROFILE_VIZIER_SKIPPED`, mai un'assenza; un
+identificativo SIMBAD non trovato con una risposta valida resta
+`NAME_NOT_FOUND`; un tile HiPS 404 resta «tile non fornito» (lo standard
+lo ammette, `12`). Difetti trovati e corretti: solo quelli della sezione
+Pianeti sopra (motore, finestra del 43 che scriveva «No planet in the
+archive» anche sotto un errore, PDF).
+
 ## 4. Cosa NON fa
 
 - Non sceglie mai in silenzio tra più candidati né tra identificativi in
@@ -1351,10 +1420,14 @@ sessione, che paga i 10 s del CDS giù per SIMBAD).
   del risultato completo di `object.profile` al riassunto per il modello
   (32 §3.7bis): stessi percorsi, nessun numero cambiato.
 - **`export_profile(data, path, format, *, language="en")`** (`language`
-  = lingua del PDF, DD-1; testi del PDF secondo DD-3, da decidere) — scrive
+  = lingua del PDF, DD-1; testi del PDF secondo DD-3 (a), confermata il
+  2026-11-10) — scrive
   ECSV, PDF, PNG della SED o VOTable dei punti (§3.15) dalla forma JSON
   unita; restituisce `ProfileExport` (percorso, formato, SHA-256, byte,
   righe o pagine). Scrittura atomica (file temporaneo e rinomina).
+- **`planets_absence_shown(section, chain=())`** (D25-23, 2026-11-10) — vero
+  se la sezione Pianeti (forma JSON) può dire «nessun pianeta nell'archivio»
+  (§3.18); la usano la finestra del 43 e il PDF.
 - **`profile_values_table(data)`** — tabella Astropy dei valori con
   provenienza (colonne di §3.15, punto 1).
 - **`sed_catalog_table(data)`** — `CatalogTable` del 13 con i punti della
@@ -1376,6 +1449,9 @@ sessione, che paga i 10 s del CDS giù per SIMBAD).
   `flux`, `flux_err`, `system`, `qual`, `bibcode`) per un identificativo; con
   i server di `SIMBAD_SERVERS` (D14-14). Nessun risultato → `NAME_NOT_FOUND`
   (mai ripiego).
+- `14` **`export_temp_file(directory, prefix, suffix)`** (2026-11-10) — file
+  temporaneo per le esportazioni con i permessi normali (0666 meno l'umask),
+  scritto nel `14` §7.
 - `14` voce **`nasa-exoplanet-tap`** nell'elenco dei server (URL e pagina
   ufficiale da citare nella voce; servizio provato il 2026-11-07).
 - `12` **miniatura**: campionamento di un survey su una griglia TAN centrata
@@ -1455,7 +1531,10 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 | Survey HiPS non disponibile su alcun server | miniatura mancante con messaggio | `NET_TIMEOUT` `hips_servers` |
 | Tempo massimo di una sezione superato (§3.12 regola 5) | quella sezione in errore, le altre continuano; risposte tardive scartate | `PROFILE_SECTION_TIMEOUT` |
 | Annulla (§3.12 regole 7–8) | sezioni in corso `cancelled`, arrivate conservate; nessuna nuova richiesta | `COMMAND_CANCELLED` (`partial` con sezioni arrivate, altrimenti `discarded`) |
-| Nessun pianeta | sezione `done` con «nessun pianeta nell'archivio», non errore | — |
+| Nessun pianeta dopo una richiesta riuscita all'archivio | sezione `done` con «nessun pianeta nell'archivio» (`checked` vero), non errore | — |
+| Pianeti: nessuna richiesta possibile (nessun identificativo SIMBAD, nessun nome scritto, nessun `source_id`; D25-23) | sezione `not_applicable`, `checked` falso, «non controllato» con il motivo, mai «nessun pianeta» | `PROFILE_PLANETS_NOT_CHECKED` (`simbad_unavailable`, `no_identifiers`) |
+| Pianeti: richiesta all'archivio fallita | sezione `error`, `checked` falso, nessuna assenza affermata | errore del 14 |
+| Pianeti: SIMBAD giù, ospite trovato con il nome scritto (D25-23) | pianeti mostrati, identità dell'ospite non verificata, dichiarato | `PROFILE_PLANETS_BY_WRITTEN_NAME` |
 | Pianeti trovati (`pscomppars`) | parametri con il loro riferimento, avviso che possono venire da lavori diversi | `PROFILE_PLANETS_COMPOSITE` |
 | Ospite trovato subito per `hostname` (§3.14) e poi diverso per `gaia_dr3_id` (o trovato solo per `gaia_dr3_id`) | pianeti dell'esito per `hostname`, l'altro ospite mostrato, nessuna scelta | `PROFILE_PLANET_HOST_MISMATCH` (`different`, `only_gaia`) |
 | Epoca della survey non nota (osservazioni più lunghe di un anno) | miniatura centrata sulla posizione SIMBAD J2000, dichiarato | — (`center_note`) |
@@ -1525,6 +1604,7 @@ cambiano).
 | T34 | Due richieste per servizio (§3.17 punto 5) | archivio Gaia simulato fermo; più richieste Gaia del profilo insieme | mai più di 2 richieste Gaia in corso; Immagini, Pianeti e Identità continuano; richiesta Gaia della fotometria partita prima degli esiti di 2MASS/AllWISE; Bailer-Jones partita insieme a `gaia_source` e scartata se `gaia_source` non dà la riga | massimo di richieste contemporanee per servizio, istanti di partenza |
 | T35 | Archivio Gaia già fermo nel profilo e Astrometria 35 s (§3.17, D25-22) | archivio Gaia simulato che risponde HTTP 503 dopo 0,3 s; poi lo stesso con `gaia_source` e Bailer-Jones già in cache; poi Gaia di nuovo su | 2 sole richieste Gaia inviate (le 2 in corso), le altre `PROFILE_GAIA_SKIPPED` `gaia_down` con la prova, `skipped_services["gaia"]`, Astrometria con i valori SIMBAD; con le copie in cache Astrometria `done` dalla cache; il profilo successivo riprova; tempo massimo dell'Astrometria 35 s | richieste per servizio, errori, metadati |
 | T36 | Lingua del PDF (DD-1, DD-3 (a); sprint D2) | profili di 51 Peg, Vega, eta Tau e TRAPPIST-1 dalle risposte registrate, anche con l'archivio Gaia o il NASA Exoplanet Archive giù; PDF con `language = en`, di nuovo `en`, poi `it`; ECSV | ogni testo scritto nelle pagine del PDF inglese senza **nessuna parola italiana** (vocabolario: parole presenti solo nei testi `it` del catalogo dei messaggi e delle intestazioni, più le parole italiane comuni); i due PDF inglesi identici byte per byte; il PDF italiano diverso, con parole italiane; note, servizi, formule e intervalli dell'ECSV in inglese; avvisi ed errori = `message_text` del catalogo nella lingua scelta | `tests/analysis/test_profile_language.py` |
+| T37 | Pianeti: assenza solo dopo una richiesta (D25-23, decisa il 2026-11-10) | Vega con SIMBAD giù (risolutore di nomi); bersaglio per coordinate con SIMBAD giù e nessuna sorgente Gaia; 51 Peg con SIMBAD giù e ospite trovato per nome; sezioni registrate prima del 2026-11-10 (senza `checked`); vista Pianeti del 43 con `done`/`checked`, `not_applicable`, `error` | Vega: una richiesta `hostname IN ('Vega')`, `done`, `checked` vero, «nessun pianeta» con la richiesta nella sezione; coordinate: `not_applicable`, nessuna richiesta all'archivio, `PROFILE_PLANETS_NOT_CHECKED` `simbad_unavailable`, mai «nessun pianeta»; 51 Peg: pianeti con `PROFILE_PLANETS_BY_WRITTEN_NAME` (in inglese nel PDF `en`); registrate: «nessun pianeta» solo se `query_by` o le interrogazioni del passo `exoplanet` della catena provano la richiesta, altrimenti «Not checked»; vista: «No planet in the archive» solo con `checked`, «Not checked» senza, niente in errore | `tests/analysis/test_object_profile.py`, `test_profile_language.py`, `test_messages_object_profile.py`, `tests/ui/test_profiles.py` |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
 | T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`); dallo sprint C7 con `refresh=False` sulla cache vuota del test (§3.16 C7-f); dallo sprint C8 con la partenza (`started`) di ogni sezione nel riepilogo | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
 
@@ -1803,8 +1883,15 @@ Nessuna decisione aperta.
   sera (§3.17, misure con l'archivio Gaia che risponde).
 
 - **D25-23 — Pianeti «nessun pianeta nell'archivio» senza avere interrogato
-  l'archivio: da decidere (aperta il 2026-11-10, sprint D2, misure di
-  validazione).** **Fatto osservato** (misure del 2026-11-10, CDS che
+  l'archivio: DECISA dal proprietario il 2026-11-10** (aperta lo stesso
+  giorno, sprint D2, misure di validazione). **Esito:** regola generale per
+  tutta l'app — un'assenza si mostra solo dopo una richiesta vera, andata a
+  buon fine, alla fonte giusta; altrimenti «non controllato» con il motivo
+  (`02` §2). Per i Pianeti: con SIMBAD giù si interroga comunque l'archivio
+  con il nome scritto o con l'ID Gaia già noto; se non si può, «non
+  controllato». Cercare nel codice altri punti con lo stesso difetto.
+  Applicata in §3.18 (codice e T37 nello stesso giorno). Testo della
+  domanda, invariato: **Fatto osservato** (misure del 2026-11-10, CDS che
   risponde HTTP 404, `docs/validation.md` §7): quando SIMBAD non risponde,
   il bersaglio si risolve per nome (risolutore del 10) senza identificativi
   SIMBAD; se anche l'archivio Gaia non dà il `source_id`, la ricerca
@@ -1821,8 +1908,8 @@ Nessuna decisione aperta.
   scritto dall'utente (ridotto come in §3.10), dichiarata come incrocio per
   nome non verificato; (c) lasciare così. **Raccomandazione di Claude Code:
   (a)**, semplice e senza un incrocio nuovo; (b) solo se il proprietario
-  vuole i pianeti anche con SIMBAD giù. Nessun codice cambiato finché il
-  proprietario non decide.
+  vuole i pianeti anche con SIMBAD giù. (Il proprietario ha scelto una
+  forma di (b) più la regola generale.)
 
 ## 14. Registro modifiche
 
@@ -1844,3 +1931,4 @@ Nessuna decisione aperta.
 | 2026-11-10 | Claude Code | **DD-1 decisa dal proprietario il 2026-11-10 (lettura (b)); modifica a un file approvato da approvare insieme a DD-3:** §3.15 — `language` scelta dall'utente nel dialogo del PDF con l'inglese di default, qualunque sia la lingua dell'app; stesso profilo nella stessa lingua = stesso file byte per byte; limite verificato sul codice (avvisi, errori e note del motore in italiano anche nel PDF `en`) rinviato a **DD-3** (`panoramica.md` §2); §7.1 `export_profile`. Nessun codice scritto. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D2 (brief del proprietario del 2026-11-10, punto a): codice di DD-1 con DD-3 (a)** (applicata la raccomandazione perché il brief chiede un PDF inglese senza nessuna parola italiana; da confermare): §3.15 (testi del PDF: avvisi ed errori dal catalogo dei messaggi nella lingua scelta, note, fonte della posizione, nomi dei servizi e fonti dei punti zero in inglese nel risultato, profili già registrati invariati), §12 T36. Codice: `object_profile.py` (note e nomi dei servizi in inglese, `_record_service`, `_resolver_source`, `_english`), `photometry.py` del 20 (fonti dei punti zero e nota di `jdate` in inglese), `profile_export.py` (`_message_line`), `ui/profiles.py` (`PdfExportDialog`, 43 §3.10). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D25-23** (§13): sezione Pianeti `done` con «no planet in the archive» senza nessuna richiesta all'archivio quando SIMBAD non risponde e manca il `source_id` di Gaia (osservato per 51 Peg, TRAPPIST-1, Barnard's Star); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 **confermata** (proposta (a)) e approvate le modifiche del D2 (§3.15, T36); **D25-23 decisa** (regola generale delle assenze): nuovo §3.18, §3.4 punto 6, §3.10, §3.13, §3.15 (PDF: riga «Not checked»; permessi del file esportato secondo l'umask, decisione del 2026-11-10), §10 (quattro righe), §12 T37, §13. Codice: `object_profile.py` (`_typed_names`, `_exoplanet_by_hostname`, `profile_planets` con `checked`, `planets_absence_shown`, `PLANETS_NOT_CHECKED_NOTE`), `profile_export.py` (riga «Not checked», `export_temp_file` del 14), catalogo dei messaggi (`PROFILE_PLANETS_NOT_CHECKED`, `PROFILE_PLANETS_BY_WRITTEN_NAME`), `ui/profiles.py` (43). Ricerca degli altri punti con lo stesso difetto scritta in §3.18. Stato `approvato` invariato. |

@@ -533,9 +533,15 @@ server** e passa al successivo quando quello in uso non risponde.
   `properties` valido o per un 4xx diverso da 429), **risposta non valida** (`properties` che non è un file
   `properties`: `HIPS_NOT_A_SERVICE` con `bad_line`, `no_properties`,
   `not_utf8`, `no_mandatory_keys`; tile ancora corrotto dopo la nuova
-  richiesta: `HIPS_BAD_TILE`; risposta non leggibile). **Mai** per un 404
-  (`HIPS_TILE_MISSING`: un tile assente è normale, e un server che risponde
-  404 è vivo) né per gli altri 4xx.
+  richiesta: `HIPS_BAD_TILE`; risposta non leggibile). **Mai** per un tile
+  404 (`HIPS_TILE_MISSING`: un tile assente è normale, lo standard lo
+  ammette) né per gli altri 4xx. **Dal 2026-11-10 (D14-16 del 14, decisione
+  del proprietario):** un HTTP **404 sul `properties` del principale** di un
+  survey con mirror (indirizzo del servizio) è un guasto: si passa al
+  mirror con `HIPS_MIRROR_FALLBACK` (`http_status`, `status` 404); con un
+  solo server (URL scritto, nessun mirror) resta `HIPS_NOT_A_SERVICE`
+  `service_error`. Un 404 del MocServer vale come guasto (copia del record
+  in cache, se c'è).
 - **Regola del cambio (D12-9, sotto):** il cambio vale per **tutto il
   survey**. (a) `properties`: se quello del principale non si legge per una
   causa di rete (né dalla rete né dalla cache) si passa **subito** al
@@ -1074,6 +1080,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **D14-16 decisa dal proprietario il 2026-11-10** (404 sull'indirizzo di un servizio = guasto; modifica al file approvato per decisione del proprietario): §3 «Ripiego sui mirror» — 404 sul `properties` del principale di un survey con mirror → mirror con `HIPS_MIRROR_FALLBACK` `http_status` 404; un solo server → `HIPS_NOT_A_SERVICE` come prima; un tile 404 resta `HIPS_TILE_MISSING`. Codice: `_switch_cause` e `read_service` in `hips.py`; test `test_t19_primary_properties_404_switches_to_mirror`. Stato `approvato` invariato. |
 | 2026-10-04 | agente di sviluppo | Creazione del file (stato: bozza). |
 | 2026-10-04 | agente di sviluppo | **C3 inclusa per decisione del proprietario:** aggiunta la funzione "aggiunta di un HiPS da identificativo o URL" (§3), `add_hips` (§7), righe input/output (§6), errori `NET_TIMEOUT`/`HIPS_NOT_A_SERVICE`/`HIPS_METADATA_INVALID` (§10), strumento IA (§11), test T7–T8 (§12); D12-2 chiusa come decisa (§13). Riga C3 in `03-parita-aladin.md` passata a `inclusa (decisione del proprietario)`. |
 | 2026-10-04 | agente di sviluppo | **Decisioni del proprietario: D12-5 passata da aperta a decisa** — dati/computazioni HEALPix nel 16, servizio dei tile nel 12 (§3; pari a D16-5 in `16-core-moc.md`); **cache su disco con limite di default 5 GB** (D11-3 di `11-core-immagini-fits.md`, §3/§9). Decisioni riportate in `decisioni-aperte.md`. |

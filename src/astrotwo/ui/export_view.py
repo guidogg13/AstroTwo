@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -195,9 +194,11 @@ def write_png(image: QImage, path: Path, metadata: Mapping[str, str], line: str)
     info = PngInfo()
     for key, value in metadata.items():
         info.add_text(key, value)
-    handle, temporary = tempfile.mkstemp(suffix=".png.part", dir=path.parent)
+    from astrotwo.core.vo_protocols import export_temp_file
+
+    temporary = export_temp_file(path.parent, ".astrotwo-export-", ".png.part")  # permessi secondo l'umask, non 0600
     try:
-        with os.fdopen(handle, "wb") as stream:
+        with open(temporary, "wb") as stream:
             picture.save(stream, format="PNG", pnginfo=info)
         os.replace(temporary, path)
     except BaseException:
