@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-10 (decisioni del proprietario dopo D2b): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`DD-3` confermata — proposta (a) —, `D25-23` decisa — regola generale: assenze solo dopo una richiesta vera, `25` §3.18, `02` §2 —, `D14-16` decisa — 404 sull'indirizzo di un servizio = guasto, ripiego sul mirror, `14` §3 —, `D62-1` approvata; tutte tolte).
+**Dal 2026-11-10 (sprint D4): 21 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **21** (nuove `D25-24` — tipo spettrale vuoto scritto come `null`, `25` §13 — e `D60-6`, scelte minori della firma Developer ID e della notarizzazione, `60` §13; `A6-b` aggiornata: preparata, non eseguita).
+
+Prima, **Dal 2026-11-10 (decisioni del proprietario dopo D2b): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`DD-3` confermata — proposta (a) —, `D25-23` decisa — regola generale: assenze solo dopo una richiesta vera, `25` §3.18, `02` §2 —, `D14-16` decisa — 404 sull'indirizzo di un servizio = guasto, ripiego sul mirror, `14` §3 —, `D62-1` approvata; tutte tolte).
 
 Prima, **Dal 2026-11-10 (sprint D2): 23 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **23** (`DD-3` applicata con la proposta (a) e ora **da confermare**; nuove `D25-23` — Pianeti «nessun pianeta» senza avere interrogato l'archivio, `25` §13 —, `D14-16` — CDS guasto con HTTP 404 senza ripiego sul mirror, `14` §13 — e `D62-1` — scelte minori del megatest, `62` §13).
 
@@ -351,7 +353,7 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (19)
+## 5. GRUPPO 3 — rimandabili al momento del codice (21)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
@@ -365,7 +367,9 @@ gruppi successivi, A8 dopo il livello 1).
 | `D42-1` | Scelte minori dell'incrocio nell'interfaccia (sprint B2, **proposte da Claude Code il 2026-11-05, da confermare**): (1) Data → Cross-match catalogs… più il menu contestuale della scheda; (2) report in finestra non modale (alla fine dell'incrocio chiesto dall'utente, riapribile dal menu contestuale) più i dettagli del comando; (3) nessuna voce "in arrivo" per incrocio per campo ed ellissi; (4) unità `mas`, `arcsec`, `arcmin`, `deg`; (5) sistemi ICRS e Galattico; (6) nome del livello «A × B · modalità»; (7) livello creato anche senza coppie (`NO_MATCH`) | `42-ui-pannello-cataloghi.md` §13, §3.7 |
 | `D40-10` | **Voce futura (proprietario, 2026-11-05):** pulizia delle tabelle SAMP ricevute, che oggi si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/` (D40-9 (3)); per esempio un pulsante nelle Impostazioni con lo spazio occupato. Da decidere: posizione del comando, sessioni che citano file cancellati, conferma | `40-ui-finestra-principale.md` §13 |
 | `D60-4` | **DECISA il 2026-11-04 (b): PySide6 6.11.3, minimo macOS 15.0.** (Prima:) macOS minimo dell'app 26.0: i moduli di collegamento della ruota di PySide6/shiboken6 6.12.0 hanno `minos 26.0` (ruota etichettata `macosx_14_0`); su macOS 14/15 l'app con ogni probabilità non parte (da verificare). Opzioni: (a) macOS 26 minimo per la beta, (b) altra versione di PySide6 (aggiornamento di dipendenza su richiesta), (c) segnalazione a Qt for Python; raccomandazione (a) + (c). Non blocca il 60a, conta per il 60b | `60-distribuzione-dmg.md` §3.1, §13 |
-| `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **rinviate** (decisione del proprietario del 2026-10-25: la prima beta è firmata solo ad hoc); da riprendere prima di una versione non beta | `60-distribuzione-dmg.md` §13 |
+| `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **preparate il 2026-11-10, non eseguite** (decisione del proprietario: specifica `60` §3.12 e `scripts/sign_notarize.py` pronti, esecuzione quando l'account Apple Developer è pronto; credenziali solo nel Portachiavi, profilo `notarytool`); si chiude con la prova T19 del `60` | `60-distribuzione-dmg.md` §3.12, §13 |
+| `D60-6` | Scelte minori della firma Developer ID e della notarizzazione (**proposte da Claude Code il 2026-11-10, da confermare**): script separato con prova a secco, diritti minimi (`allow-unsigned-executable-memory`, da verificare), ticket aggiunto al solo `.dmg`, profilo `astrotwo-notary`, `.dmg` creato a mano finché il 60b non decide lo strumento | `60` §13 |
+| `D25-24` | Tipo spettrale vuoto in SIMBAD scritto come `null` nel profilo (2 fail della seconda misura del 2026-11-10, 3C 273 e M 13): (a) nessun valore `sp_type` con una nota, (b) testo vuoto così come arriva, (c) lasciare così e cambiare la regola di confronto solo per le misure future. **Raccomandazione di Claude Code: (a)** | `25` §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
@@ -498,3 +502,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10:** `DD-1` decisa (lettura (b)) e `DD-2` approvata, tolte; nuova **`DD-3`** (Gruppo 3), testi italiani del motore nel PDF «in inglese»; scritta prima in `panoramica.md` §2 «Fase D» e §6. **20 aperte.** |
 | 2026-11-10 | Claude Code | **Sprint D2:** `DD-3` applicata con la proposta (a), da confermare; nuove `D25-23` (`25` §13), `D14-16` (`14` §13), `D62-1` (`62` §13), tutte nel Gruppo 3; scritte prima nei file di origine. **23 aperte.** |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** `DD-3` confermata (proposta (a)), `D25-23` decisa (regola generale delle assenze; Pianeti con il nome scritto o l'ID Gaia, altrimenti «non controllato»), `D14-16` decisa (404 sull'indirizzo di un servizio = guasto), `D62-1` approvata; tutte tolte dal Gruppo 3, scritte prima nei file di origine (`panoramica.md` §2, `25` §3.18 e §13, `14` §3 e §13, `12` §3, `02` §2, `62` §13). **19 aperte.** |
+| 2026-11-10 | Claude Code | **Sprint D4 (decisioni del proprietario del 2026-11-10):** `A6-b` aggiornata (firma Developer ID e notarizzazione preparate, non eseguite); nuove **`D60-6`** (`60` §13) e **`D25-24`** (`25` §13), Gruppo 3, scritte prima nei file di origine. **21 aperte.** |

@@ -245,7 +245,14 @@ def english(message: dict) -> str:
     return f"{code}: {message_text(code, message.get('params') or {}, 'en', text=message.get('text'))}"
 
 
+#: Rule of the owner (2026-11-10): while the CDS is down, SIMBAD is compared with the Harvard mirror and every such
+#: row says so; these rows are repeated against the CDS when it answers again.
+HARVARD_NOTE = "reference: Harvard mirror, to be repeated against CDS"
+
+
 def row(obj, area, quantity, astro, ref, server, query, when, diff, outcome, note=""):
+    if server and "harvard" in server and HARVARD_NOTE not in note:
+        note = f"{note}; {HARVARD_NOTE}" if note else HARVARD_NOTE
     return {"object": obj, "area": area, "quantity": quantity, "astrotwo": astro, "reference": ref, "server": server,
             "query": query, "retrieved_at": when, "difference": diff, "outcome": outcome, "note": note}
 
@@ -465,7 +472,8 @@ def markdown(rows: list[dict]) -> str:
     for r in rows:
         server = f"{urllib.parse.urlparse(r['server']).hostname} · {r['retrieved_at']}" if r["server"] else \
             f"— · {r['retrieved_at']}"
-        outcome = r["outcome"] + (f" ({r['note']})" if r["note"] and r["outcome"] != "pass" else "")
+        shown_note = r["note"] and (r["outcome"] != "pass" or HARVARD_NOTE in r["note"])
+        outcome = r["outcome"] + (f" ({r['note']})" if shown_note else "")
         lines.append("| " + " | ".join(str(x).replace("|", "\\|") for x in (
             r["object"], r["area"], r["quantity"], r["astrotwo"], r["reference"] or "—", server,
             r["difference"] or "—", outcome)) + " |")

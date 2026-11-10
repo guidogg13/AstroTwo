@@ -1092,9 +1092,11 @@ _add("HIPS_MIRROR_REJECTED",
                  "{hips_id}: mirror {mirror} scartato, properties non leggibile ({cause}).",
                  "hips_id mirror cause:msg"))
 _extend("NET_TIMEOUT",
-        hips_servers=("{hips_id}: no server of the survey answers (tried {servers}: {tried}); last error: {last}",
-                      "{hips_id}: nessun server del survey risponde (provati {servers}: {tried}); ultimo errore: "
-                      "{last}", "hips_id servers:int tried:list last:msg"))
+        hips_servers=("{hips_id}: no server of the survey answers (tried {servers}: {tried}); first error "
+                      "({first_server}): {first}; last error: {last}",
+                      "{hips_id}: nessun server del survey risponde (provati {servers}: {tried}); primo errore "
+                      "({first_server}): {first}; ultimo errore: {last}",
+                      "hips_id servers:int tried:list first_server first:msg last:msg"))
 _add("HIPS_ALREADY_LISTED",
      "{hips_id} is already in the list (read from {origin} on {retrieved_at}); refresh=True to read it again.",
      "{hips_id} già in elenco (letto da {origin} il {retrieved_at}); refresh=True per rileggerlo.",

@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-10 — **sprint D3b:** 404 con VOTable d'errore → mirror, messaggio del primo server quando cadono tutti, intestazione «Not checked» delle sezioni non controllate; registri di `13`, `14`, `25`, `43`, `62` aggiornati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **19 aperte.**
+**Ultimo aggiornamento:** 2026-11-10 — **sprint D4:** errore dei survey HiPS con il messaggio del primo server (`12`); seconda misura di validazione (SIMBAD contro il mirror di Harvard: 175 pass, 2 fail, 85 non misurati; nuova D25-24 nel `25`); firma Developer ID e notarizzazione preparate e non eseguite (`60` §3.12, D60-6); `62` prova A4. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **21 aperte.**
+
+Prima, 2026-11-10 — **sprint D3b:** 404 con VOTable d'errore → mirror, messaggio del primo server quando cadono tutti, intestazione «Not checked» delle sezioni non controllate; registri di `13`, `14`, `25`, `43`, `62` aggiornati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **19 aperte.**
 
 Prima, 2026-11-10 — **decisioni del proprietario dopo D2b (sprint D3):** DD-3 confermata, D25-23 e D14-16 decise (codice e test), D62-1 approvata, permessi normali dei file esportati; modifiche del D2 a `25`, `43`, `20`, `02` approvate; registri di `02`, `12`, `14`, `20`, `25`, `41`, `43`, `62` aggiornati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **19 aperte** (Gruppo 3 = 19).
 

@@ -47,6 +47,7 @@ dell'app usate da un astrofisico.
 | A1 | Aprire il `.dmg`, trascinare AstroTwo in Applicazioni, primo avvio con «Apri comunque» (`docs/installation.md`) | L'app si apre; nessun messaggio di errore; **AstroTwo → About AstroTwo** dice la versione 1.0 candidata |
 | A2 | Chiudere e riaprire l'app | Si riapre con le stesse preferenze; nessuna finestra di errore |
 | A3 | **Help → Licenses…** | Elenco delle licenze di terze parti, Qt (LGPL) compresa; si chiude senza errori |
+| A4 | Solo se il `.dmg` candidato è firmato Developer ID e notarizzato (A6-b, `60` §3.12; altrimenti «non fatta»): scaricarlo su un altro Mac, aprirlo, primo avvio con doppio clic; poi `spctl --assess --type execute -vv /Applications/AstroTwo.app` | L'app si apre **senza** «Apri comunque»; `spctl` dice `accepted` e `source=Notarized Developer ID` |
 
 ### 3.3 Atlante HiPS (H)
 
@@ -266,3 +267,4 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 | 2026-11-10 | Claude Code | Creazione del file (stato: bozza), sprint D2, brief del proprietario del 2026-11-10 punto (d): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese, byte per byte), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 aperta. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** D62-1 **approvata** (§13; scelte già scritte in §3.1). Nuove prove D6 e D7 (D25-23, assenze solo dopo una richiesta) e D8 (permessi dei file esportati, decisione del 2026-11-10). Stato `bozza` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** D7 con l'intestazione «Not checked» e la riga di stato del PDF; nuova prova D9 (messaggio del primo server quando cadono tutti). Stato `bozza` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D4 (decisioni del proprietario del 2026-11-10):** nuova prova A4 (app firmata Developer ID e notarizzata, solo se la candidata lo è; firma preparata in `60` §3.12, non ancora eseguita). Stato `bozza` invariato. |

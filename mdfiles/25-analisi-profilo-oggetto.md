@@ -1921,6 +1921,20 @@ Nessuna decisione aperta.
   vuole i pianeti anche con SIMBAD giù. (Il proprietario ha scelto una
   forma di (b) più la regola generale.)
 
+- **D25-24 — Tipo spettrale vuoto in SIMBAD scritto come assente: da decidere (aperta il 2026-11-10, sprint
+  D4, misure di validazione).** **Fatto osservato** (seconda misura del 2026-11-10, riferimento: mirror di
+  Harvard): per 3C 273 e M 13 la colonna `sp_type` di `basic` è un testo vuoto (`''`); il profilo scrive il
+  valore `sp_type` con `value = null` (il motore trasforma il testo vuoto in assente). Per la tolleranza dei
+  valori letti («identici», `docs/validation.md` §2.1) le due righe sono **fail**: AstroTwo cambia un valore
+  letto. Il significato è lo stesso (nessun tipo spettrale), ma la regola dice che un valore letto non si
+  cambia. **Proposte:** (a) quando SIMBAD non ha un tipo spettrale (testo vuoto o assente) il profilo **non
+  scrive** il valore `sp_type` (nessuna riga, come per gli altri valori mancanti), con la nota «no spectral
+  type in SIMBAD» nei dettagli dell'Identità; (b) il profilo scrive il testo così come arriva (`''`); (c)
+  lasciare così e dichiarare nella pagina di validazione che testo vuoto e assente sono la stessa cosa (cambio
+  della regola di confronto: vietato dopo le misure, quindi solo per le misure future). **Raccomandazione di
+  Claude Code: (a)**: niente valore inventato né cambiato, e la tabella dei valori non mostra una riga vuota.
+  Nessun codice cambiato; tolleranze invariate.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -1943,3 +1957,4 @@ Nessuna decisione aperta.
 | 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D25-23** (§13): sezione Pianeti `done` con «no planet in the archive» senza nessuna richiesta all'archivio quando SIMBAD non risponde e manca il `source_id` di Gaia (osservato per 51 Peg, TRAPPIST-1, Barnard's Star); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 **confermata** (proposta (a)) e approvate le modifiche del D2 (§3.15, T36); **D25-23 decisa** (regola generale delle assenze): nuovo §3.18, §3.4 punto 6, §3.10, §3.13, §3.15 (PDF: riga «Not checked»; permessi del file esportato secondo l'umask, decisione del 2026-11-10), §10 (quattro righe), §12 T37, §13. Codice: `object_profile.py` (`_typed_names`, `_exoplanet_by_hostname`, `profile_planets` con `checked`, `planets_absence_shown`, `PLANETS_NOT_CHECKED_NOTE`), `profile_export.py` (riga «Not checked», `export_temp_file` del 14), catalogo dei messaggi (`PROFILE_PLANETS_NOT_CHECKED`, `PROFILE_PLANETS_BY_WRITTEN_NAME`), `ui/profiles.py` (43). Ricerca degli altri punti con lo stesso difetto scritta in §3.18. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** §3.18 — intestazione «Not checked» / «Non controllata» per ogni sezione con `checked` falso (`section_not_checked`), riga di stato del PDF «not checked» solo con `checked` esplicito; approvati il cambio della sola riga Pianeti nei PDF dei profili vecchi e la correzione di `scripts/validate_profiles.py`. Codice: `object_profile.py` (`section_not_checked`), `profile_export.py` (`_status_lines`); test in `test_object_profile.py` e `test_profile_export.py` (`test_pdf_planets_not_checked_and_old_profiles`). Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D4 (seconda misura di validazione, SIMBAD contro il mirror di Harvard):** nuova **D25-24** (§13): `sp_type` vuoto in SIMBAD scritto come `null` nel profilo, 2 fail (3C 273, M 13); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. Stato `approvato` invariato. |

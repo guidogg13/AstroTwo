@@ -285,10 +285,52 @@ distribuzione pubblica.
 - V-e: disposizione di PyInstaller 6 dentro `.app` (dati in `Resources/`, collegamenti da `Frameworks/`) e se
   PyInstaller riscrive i percorsi nelle intestazioni dei `.framework` di Qt (V5).
 
+### 3.12 Firma Developer ID e notarizzazione (A6-b: preparate il 2026-11-10, non eseguite)
+
+**Decisione del proprietario del 2026-11-10:** specifica e script si preparano oggi, **ma non si eseguono**
+finché l'account Apple Developer non è pronto. Le credenziali stanno **solo nel Portachiavi** (profilo salvato
+di `notarytool`), mai in file, script, log o repository (regola d'oro 5). La beta resta firmata ad hoc (A6);
+questa sezione vale dalla prima versione firmata Developer ID.
+
+**Strumento:** `scripts/sign_notarize.py` (fuori dal pacchetto, non incluso nell'app). **Senza `--execute` non
+esegue niente**: stampa i comandi (prova a secco) e non legge il Portachiavi. Tre sottocomandi, nell'ordine:
+
+1. **`app`** — firma `dist/AstroTwo.app` (uscita di `build_app.py`, firmata ad hoc) con il certificato «Developer
+   ID Application: …» del Portachiavi di login: **dall'interno verso l'esterno**, mai `codesign --deep` per
+   firmare (Apple lo sconsiglia): prima ogni file Mach-O fuori dai `.framework` (librerie `.dylib` e moduli `.so`,
+   riconosciuti dal numero magico, collegamenti simbolici esclusi), dal più profondo; poi ogni `.framework` di Qt;
+   poi l'eseguibile `Contents/MacOS/AstroTwo`; poi l'app. Ogni firma: `--options runtime` (runtime rinforzato,
+   obbligatorio per la notarizzazione), `--timestamp` (marca temporale di Apple), `--force`. I **diritti**
+   (`ENTITLEMENTS`, scritti in `build/entitlements.plist` solo con `--execute`) vanno sull'eseguibile e sull'app:
+   oggi il solo `com.apple.security.cs.allow-unsigned-executable-memory` (ctypes e cffi), **da verificare** alla
+   prima firma vera (T19); nessun `disable-library-validation` (stesso certificato per tutto) e nessun
+   `get-task-allow`. Poi `codesign --verify --deep --strict` e `codesign -dv` (autorità, Team ID, runtime, marca
+   temporale) nel rapporto.
+2. **`dmg DMG`** — firma il `.dmg` con lo stesso certificato (`--timestamp`). Il `.dmg` lo crea il proprietario
+   come oggi (60b non ancora specificato: lo strumento del `.dmg` resta da decidere lì), **dopo** il passo 1.
+3. **`notarize DMG`** — `xcrun notarytool submit DMG --keychain-profile astrotwo-notary --wait`; con esito
+   `Accepted`: `xcrun stapler staple DMG` (ticket nel `.dmg`), `xcrun stapler validate`, `spctl --assess --type
+   open --context context:primary-signature`. Esito rifiutato: il registro di Apple (`notarytool log`) in
+   `dist/notary-log.json` e uscita 1. Si notarizza il `.dmg` (che contiene l'app firmata): il ticket copre anche
+   l'app, che Gatekeeper verifica in rete alla prima apertura; il ticket si aggiunge al solo `.dmg` (D60-6 (3)).
+
+**Credenziali (una volta, a mano, dal proprietario):** `xcrun notarytool store-credentials astrotwo-notary`
+(chiede Apple ID, Team ID e una password specifica per l'app creata su appleid.apple.com, oppure una chiave API di
+App Store Connect, e le salva nel Portachiavi); il certificato «Developer ID Application» si importa nel
+Portachiavi di login. Lo script conosce solo il **nome** del profilo e del certificato: rifiuta le opzioni
+`--password`, `--apple-id`, `--team-id`, `--key`, `--key-id`, `--issuer` (`SIGN_CREDENTIALS_REFUSED`), non legge
+variabili d'ambiente né file di credenziali, non scrive credenziali nel rapporto `dist/sign-report.json` (comandi
+ed esiti) né nel terminale. Il nome del certificato (nome e Team ID) non è un segreto ma è personale: non si
+scrive nel repository; si passa con `--identity` o si trova da solo se ce n'è uno solo.
+
+**Quando l'account è pronto (sequenza):** `build_app.py` → `sign_notarize.py --execute app` → `.dmg` a mano →
+`sign_notarize.py --execute dmg <dmg>` → `sign_notarize.py --execute notarize <dmg>` → prova T19 → `A6-b` decisa.
+
 ## 4. Cosa NON fa
 
 - Non crea il `.dmg` (60b, §3.10) e non pubblica niente: né sito, né server, né GitHub.
-- Non firma con un certificato Developer ID e non notarizza (A6, rinviata).
+- Non firma con un certificato Developer ID e non notarizza (A6, rinviata): `scripts/sign_notarize.py` è
+  preparato (§3.12) ma **non eseguito** finché l'account Apple Developer non è pronto (decisione del 2026-11-10).
 - Non produce app per Intel, `universal2`, Windows o Linux.
 - Non cambia `uv.lock` né aggiorna dipendenze, salvo aggiungere il gruppo `build` (PyInstaller).
 - Non installa niente nel sistema dell'utente e non scrive dentro l'app costruita.
@@ -335,6 +377,12 @@ distribuzione pubblica.
 - **`minimum_macos`** — massimo dei `minos` dei Mach-O di una cartella.
 - **`check_bundle`** — controlli V1–V9 su un'app; restituisce l'elenco degli esiti (nome, `ok`/`failed`/`not_run`,
   dettaglio). Usabile anche da solo su un'app già costruita (`--check-only dist/AstroTwo.app`).
+
+**Firma e notarizzazione** — `scripts/sign_notarize.py` (§3.12; fuori dal pacchetto): **`main`** (sottocomandi
+`app`, `dmg`, `notarize`; `--execute`, `--identity`, `--profile`; senza `--execute` prova a secco), **`signing_order`**
+(codice da firmare dall'interno verso l'esterno), **`app_plan`**, **`dmg_plan`**, **`notarize_plan`** (comandi),
+**`developer_identities`** e **`choose_identity`** (certificato dall'uscita di `security find-identity`),
+**`check_no_credentials`**, **`ENTITLEMENTS`**, **`KEYCHAIN_PROFILE`** (`astrotwo-notary`).
 
 **Nel pacchetto** — `src/astrotwo/app_bundle.py` (nuovo file, corrispondenza di questo `.md` nel codice dell'app):
 
@@ -416,6 +464,10 @@ messaggi dell'app); l'app costruita usa il catalogo (`40` §3.7.1).
 | Nell'app: voce dell'autocontrollo fallita | rapporto con la voce `failed` e il dettaglio, uscita 1 | — (rapporto JSON) |
 | Prima apertura di una chiave salvata da un altro programma (es. il `.venv` di sviluppo) o da una costruzione precedente | macOS chiede all'utente di permettere l'accesso al Portachiavi: la firma ad hoc cambia a ogni costruzione, quindi la richiesta torna dopo ogni nuova app. Non è un errore del `31`; si spiega nel testo del sito (60b) | — |
 | App scaricata (con l'attributo di quarantena) | Gatekeeper la blocca: "Apri comunque" (A6, 60b) | — |
+| Firma (§3.12): opzione di credenziali sulla riga di comando | rifiutata, nessun comando eseguito, uscita 2 | `SIGN_CREDENTIALS_REFUSED` (script) |
+| Firma: nessun certificato «Developer ID Application», più di uno senza `--identity`, o nome non valido/assente | si ferma, uscita 2 | `SIGN_IDENTITY_MISSING`, `SIGN_IDENTITY_AMBIGUOUS`, `SIGN_IDENTITY_INVALID` (script) |
+| Firma: app non costruita o `.dmg` assente | si ferma, uscita 2 | `SIGN_APP_MISSING`, `SIGN_DMG_MISSING` (script) |
+| Firma: un comando fallisce (`codesign`, `notarytool`, `stapler`, `spctl`) | si ferma al primo, uscita 1, uscita del comando nel rapporto; notarizzazione rifiutata → registro di Apple in `dist/notary-log.json` | — (rapporto) |
 
 ## 11. Esposizione all'IA
 
@@ -446,6 +498,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | T15 | Nessuna scrittura (V6) | impronte prima/dopo V4 e V7 | identiche | costruzione |
 | T16 | Qt non modificato (V5) | binari Qt dell'app contro la ruota, tolte le firme | identici | costruzione |
 | T18 | Icona | `make_iconset` su `assets/icon/AstroNew.svg` in una cartella temporanea | dieci PNG con le dimensioni di `iconutil`, non vuote; `.icns` creato | test (salta se `iconutil` manca) |
+| T19 | Firma Developer ID e notarizzazione (§3.12) | test (sempre): identità dall'uscita di `security`, ordine di firma su un'app finta, opzioni `--options runtime --timestamp` senza `--deep`, diritti minimi, profilo del Portachiavi e nessuna credenziale nei comandi, opzioni di credenziali rifiutate, prova a secco che non esegue né scrive niente; **a mano, con l'account pronto**: la sequenza di §3.12 con `--execute`, poi l'app scaricata da un altro Mac si apre con doppio clic senza «Apri comunque» | test: tutto come atteso, nessun comando eseguito; a mano: `Accepted`, `stapler validate` e `spctl` riusciti; se l'app non parte col runtime rinforzato, il diritto mancante si aggiunge solo con la prova, scritto qui | `tests/test_sign_notarize.py`; prova a mano **non ancora eseguita** |
 | T17 | Ripetibilità | due costruzioni di seguito dallo stesso commit | stessi file (stesso elenco e stesse impronte), tranne firma, `BUILD_INFO.json` e file con data | a mano, una volta |
 
 ## 13. Decisioni aperte
@@ -502,6 +555,14 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   corretta sarà disponibile si potrà risalire con una nuova decisione. Il minimo 15.0 sul sito lo aggiorna il
   proprietario dopo la release.
 
+- **D60-6 — Scelte minori della firma Developer ID e della notarizzazione (proposte da Claude Code il
+  2026-11-10, da confermare):** (1) script separato `scripts/sign_notarize.py`, prova a secco senza `--execute`;
+  (2) diritti minimi: solo `allow-unsigned-executable-memory`, da verificare alla prima firma; (3) si notarizza
+  il `.dmg` e il ticket si aggiunge al solo `.dmg` (l'app è coperta dallo stesso invio, verifica in rete alla
+  prima apertura); alternativa: notarizzare prima l'app (zip), aggiungere il ticket all'app e poi creare il
+  `.dmg`, un invio in più; (4) nome del profilo `astrotwo-notary`; (5) il `.dmg` resta creato a mano finché il 60b
+  non decide lo strumento.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -512,3 +573,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-10-25 | Claude Code | **Costruzione e verifica dello sprint 60a (commit `3b697a7`, albero pulito, nessuna opzione):** 943 test di default passati in `build/env` (Python 3.12.15 di python-build-standalone); V1–V9 tutti `ok`: firma ad hoc, nessun riferimento esterno, autocontrollo in ambiente vuoto, 14 binari di Qt uguali alla ruota (tolta la firma, D60-3), nessuna scrittura nell'app, avvio, licenze. **Dimensione 248,1 MB** (260 100 096 byte; PySide6 82,7 MB di cui Qt 50,3, scipy 32,8, Pillow 11,5). **Avvio fino alla prima vista: 2,59 s a freddo, 1,96 s a caldo** (eseguibile, ambiente vuoto con HOME temporanea, cache vuota, iMac di sviluppo); lancio con `open` riuscito. Prove a mano: T13 — `.venv` rinominato, `uv` fuori dal `PATH`, app copiata fuori dal progetto e aperta con `open`: scaricati in HTTPS i 12 tile di ordine 0 di DSS2 (cielo intero), `properties` e `Moc.fits`; copia identica prima e dopo (1951 file); T14 — `--self-check-keychain` con il Portachiavi di login: `keychain_roundtrip` ok, nessuna voce rimasta. Controlli V4 e V7 con HOME temporanea (con la HOME vera l'app leggeva la chiave del profilo IA e macOS chiedeva il permesso, §10). Aperta D60-4 (macOS minimo 26.0 per la ruota di PySide6). T17 (ripetibilità) non ancora eseguito. Stato `approvato` invariato. |
 | 2026-11-04 | Claude Code | **Sprint A1b, D60-4 decisa (b):** PySide6/shiboken6 6.12.0 → **6.11.3** per portare il minimo reale a macOS 15.0 (§3.1, §3.7, §13); sorgenti e SHA-256 6.11.3 verificati (MD5 uguali a `md5sums.txt` per `qtbase` e `qtsvg`); avvisi di Qt rigenerati (7 versioni cambiate, XSVG tolta); D60-3 riconfermata. Stato `approvato` invariato. |
 | 2026-11-04 | Claude Code | **Sprint A1c, D60-5 decisa:** pin di python-build-standalone da `20261003` (3.12.15) a `20261026` (3.12.16), la release che uv installa oggi per Python 3.12; SHA-256 verificati sull'archivio ufficiale; testi di licenza identici; eliminato il workaround (`UV_PYTHON_INSTALL_DIR`, `BUILD` a mano). §3.3, §3.11, §9, §13 aggiornati. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (A6-b: preparare, non eseguire):** nuovo §3.12 (firma Developer ID dall'interno verso l'esterno con runtime rinforzato e marca temporale, firma del `.dmg`, notarizzazione con `notarytool --keychain-profile`, ticket, controlli; credenziali solo nel Portachiavi, opzioni di credenziali rifiutate), §4, §7, §10 (cinque righe), §12 T19, §13 D60-6 (scelte minori da confermare). Codice: `scripts/sign_notarize.py` (prova a secco senza `--execute`), test `tests/test_sign_notarize.py`; **nessun comando di firma o notarizzazione eseguito**. Stato `approvato` invariato. |

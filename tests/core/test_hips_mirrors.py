@@ -270,6 +270,9 @@ def test_t19_all_servers_down(service, cache, monkeypatch):
         assert err.value.code == "NET_TIMEOUT" and err.value.params["reason"] == "hips_servers"
         assert err.value.params["servers"] == 2 and err.value.params["tried"] == [primary, DEAD + "/mirror"]
         assert err.value.params["last"]["code"] == "SERVICE_ERROR"
+        # messaggio del primo server (decisione del proprietario del 2026-11-10): il 503 del principale
+        assert err.value.params["first_server"] == primary and err.value.params["first"]["params"]["status"] == 503
+        assert "primo errore (" + primary + ")" in err.value.message
     notes = got.servers.take_notes()
     assert codes(notes) == ["HIPS_MIRROR_REJECTED"] and notes[0].params["reason"] == "unreadable"
 
@@ -280,6 +283,10 @@ def test_t19_all_down_at_open(service, cache, monkeypatch):
     with pytest.raises(HiPSError) as err:
         add_hips(HIPS_ID, cache=cache, timeouts=FAST)
     assert err.value.code == "NET_TIMEOUT" and err.value.params["servers"] == 3
+    assert err.value.params["first_server"] == DEAD + "/hips" and err.value.params["first"]["code"] == "NET_TIMEOUT"
+    from astrotwo.messages_catalog import message_text
+
+    assert f"first error ({DEAD}/hips)" in message_text("NET_TIMEOUT", err.value.params, "en")
 
 
 def test_t19_in_flight_failure_retried_on_new_server(service, cache, monkeypatch):

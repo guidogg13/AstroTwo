@@ -628,6 +628,7 @@ class HiPSServers:
         self.reference = reference
         self.primary_known = primary_known
         self.failures = 0  # tile consecutivi falliti per cause di rete sul server in uso
+        self.first_error: tuple[str, object] | None = None  # (server, errore) del primo guasto, per all_failed
         self.switches = 0
         self.exhausted = False
         self._notice_given = notice_given
@@ -681,14 +682,24 @@ class HiPSServers:
             self.exhausted = True
             return None
 
-    def all_failed(self, last) -> HiPSError:
-        """``NET_TIMEOUT`` (``hips_servers``) con il numero dei server provati e l'ultimo errore."""
+    def remember_failure(self, server: str, exc) -> None:
+        """Conserva il primo guasto del survey (server ed errore): lo riporta ``all_failed``."""
+        with self._lock:
+            if self.first_error is None:
+                self.first_error = (server, exc)
+
+    def all_failed(self, last, first: tuple[str, object] | None = None) -> HiPSError:
+        """``NET_TIMEOUT`` (``hips_servers``) con il numero dei server provati, il messaggio del **primo** server
+        (decisione del proprietario del 2026-11-10, come ``service_servers`` del 14) e l'ultimo errore."""
         n = len(self.servers)
+        first_server, first_exc = first or self.first_error or (self.servers[0], last)
         return HiPSError("NET_TIMEOUT", f"{self.hips_id}: nessun server del survey risponde (provati {n}: "
-                         f"{', '.join(self.servers)}); ultimo errore {last.code}: {last.message}",
+                         f"{', '.join(self.servers)}); primo errore ({first_server}) {first_exc.code}: "
+                         f"{first_exc.message}; ultimo errore {last.code}: {last.message}",
                          hips_id=self.hips_id,
                          params={"reason": "hips_servers", "hips_id": self.hips_id, "servers": n,
-                                 "tried": list(self.servers), "last": _message_of(last)})
+                                 "tried": list(self.servers), "first_server": first_server,
+                                 "first": _message_of(first_exc), "last": _message_of(last)})
 
 
 def _open_service(hips_id: str, servers: tuple[str, ...], *, primary_known: bool, cause: Mapping | None = None,
@@ -696,6 +707,11 @@ def _open_service(hips_id: str, servers: tuple[str, ...], *, primary_known: bool
     """Legge il ``properties`` del survey dal primo server che risponde (12 §3): il principale, poi i mirror
     equivalenti. Con un solo server il comportamento è quello di ``read_service``."""
     notes: list = []
+    # primo guasto (server, errore): ``last`` in ingresso è il MocServer non raggiungibile (unico chiamante che lo
+    # passa), altrimenti il primo server che fallisce qui
+    from astrotwo.core import vo_protocols as vo
+
+    first = None if last is None else (vo.MOCSERVER_URL, last)
     for index, base in enumerate(servers):
         if index == 0 and primary_known:
             try:
@@ -707,12 +723,15 @@ def _open_service(hips_id: str, servers: tuple[str, ...], *, primary_known: bool
                 if _strasbourg(base):
                     _note_cds_down("hips_failover", hips_id=hips_id, server=base)
                 last = exc
+                first = first or (base, exc)
                 continue
         else:
             service, note, exc = _check_mirror(hips_id, base, None, cache=cache, refresh=refresh, timeouts=timeouts)
             if service is None:
                 notes.append(note)
                 last = exc or last
+                if exc is not None:
+                    first = first or (base, exc)
                 continue
             notes.append(_fallback_note(hips_id, servers[0] if primary_known else None, base, cause))
         if len(servers) == 1:  # un solo server: nessuno stato del ripiego, solo gli avvisi
@@ -722,7 +741,7 @@ def _open_service(hips_id: str, servers: tuple[str, ...], *, primary_known: bool
     if last is None or len(servers) == 1:
         raise last
     probe = HiPSServers(hips_id, servers, 0, None, primary_known=primary_known)
-    raise probe.all_failed(last)
+    raise probe.all_failed(last, first)
 
 
 def _legacy_record(hips_id: str, cache):
@@ -1270,6 +1289,7 @@ def fetch_tile(service: HiPSService, order: int, index: int, *, format: str | No
                 if servers is not None and exc.code == "HIPS_TILE_MISSING":
                     servers.succeeded(server)  # un server che risponde 404 è vivo
                 raise
+            servers.remember_failure(server, exc)
             retry = servers.failed(server, cause, cache=cache, timeouts=timeouts)
             if retry is None:
                 if servers.exhausted:

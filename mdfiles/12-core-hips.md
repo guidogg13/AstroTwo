@@ -565,7 +565,9 @@ server** e passa al successivo quando quello in uso non risponde.
   sopra). Un mirror diverso, o il cui `properties` non si legge, è
   **scartato** con l'avviso `HIPS_MIRROR_REJECTED` e si passa al successivo.
 - **Se cadono tutti:** con più di un server, `NET_TIMEOUT` con `reason =
-  hips_servers`: identificativo, **numero dei server provati**, i loro URL e
+  hips_servers`: identificativo, **numero dei server provati**, i loro URL, il
+  **messaggio del primo server** (`first_server`, `first`: decisione del proprietario del 2026-11-10, come
+  per i servizi del 14 e i cataloghi del 13; il MocServer se il guasto è cominciato lì) e
   l'ultimo errore (messaggio annidato); nel visualizzatore un solo messaggio
   per survey. Con un solo server (nessun mirror noto) il comportamento è
   quello di prima (errore del tile o del `properties`).
@@ -877,7 +879,7 @@ servizio (`header`, `expected`) e le risposte dei moduli 14, 16 e 19 non ancora 
 | `SERVICE_ERROR` | `unreadable_response` | `url` (string), `detail` (string, esterno) |
 | `HIPS_FORMAT_UNAVAILABLE` | (generale) | `hips_id` (string), `format` (string), `offered` (list) |
 | `NET_TIMEOUT` | `url` | `url` (string), `connect` (quantity), `read` (quantity), `detail` (string, esterno) — voce già del 10 e dell'11 |
-| `NET_TIMEOUT` | `hips_servers` (sprint 10b) | `hips_id` (string), `servers` (integer: server provati), `tried` (list: URL di base), `last` (message: ultimo errore del 12 o del 14) |
+| `NET_TIMEOUT` | `hips_servers` (sprint 10b; `first_server` e `first` dal 2026-11-10) | `hips_id` (string), `servers` (integer: server provati), `tried` (list: URL di base), `first_server` (string: primo server che ha fallito, o il MocServer), `first` (message: suo errore), `last` (message: ultimo errore del 12 o del 14) |
 | `HIPS_MIRROR_FALLBACK` (avviso, sprint 10b) | `network` | `hips_id` (string), `primary` (string), `mirror` (string) |
 | `HIPS_MIRROR_FALLBACK` | `http_status` | `hips_id` (string), `primary` (string), `mirror` (string), `status` (integer) |
 | `HIPS_MIRROR_FALLBACK` | `invalid_response` | `hips_id` (string), `primary` (string), `mirror` (string) |
@@ -993,7 +995,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 | T12 | Valore del pixel su HiPS (H27) | leggere il valore sotto il cursore su un tile FITS in cache | valore uguale a quello del tile FITS letto con `astropy.io.fits` | confronto diretto |
 | T17 | Campionamento della vista (P6) | survey FITS simulato; finestre `TAN` e `AIT` (`make_view_wcs` del 10) a scale diverse, anche a cavallo di più tile e del bordo dell'`AIT` | per ogni pixel della finestra valore uguale a `pixel_values` nel suo centro (ricalcolo nel test); tile necessari = insieme dei tile di quei pixel; pixel fuori dal cielo "nessun dato"; nessuna fascia vuota tra tile adiacenti | ricalcolo con `pixel_values` e `astropy-healpix` |
 | T20 | Miniatura (sprint C4 del `25`) | survey JPEG simulato con le risposte vere di ESASky registrate il 2026-11-07 (DSS2, 2MASS, AllWISE colore attorno a 51 Peg); tile 404; tutti i server giù | immagine 256 × 256 composta da `fill_view` per tutti i pixel; `wcs.pixel_to_world` = `window_to_sky`; `servers` = server dei tile; crediti dal `properties`; epoca solo per AllWISE; PNG con il nord in alto; 404 → pixel senza dati dichiarati; tutti giù → `NET_TIMEOUT` `hips_servers` | test di unità (`tests/core/test_hips_thumbnail.py`) |
-| T19 | Ripiego sui mirror (sprint 10b) | servizi simulati: principale giù → mirror dichiarato dal MocServer; MocServer giù con un record in cache senza mirror (anche quello di prima dello sprint) → `MIRROR_FALLBACKS`; MocServer giù senza cache → mirror della tabella (`reason = mocserver`); mirror con `hips_order` diverso → scartato (`HIPS_MIRROR_REJECTED`) e si usa il successivo; tile 404 → nessun cambio; 2 tile falliti → nessun cambio, il terzo → cambio e tile servito dal mirror; HTTP 503 e 429 → cambio; tutti giù → `NET_TIMEOUT` `hips_servers` con il numero dei server; `refresh=True` → di nuovo il principale; avviso emesso una volta sola; tile in cache dal principale letto dopo il cambio; ordine fuori/dentro Strasburgo | ordine e conteggio delle richieste ai server finti, server in uso, avvisi, chiavi della cache | test di unità con server finti; test di rete (non nel commit) per i mirror di `MIRROR_FALLBACKS` |
+| T19 | Ripiego sui mirror (sprint 10b) | servizi simulati: principale giù → mirror dichiarato dal MocServer; MocServer giù con un record in cache senza mirror (anche quello di prima dello sprint) → `MIRROR_FALLBACKS`; MocServer giù senza cache → mirror della tabella (`reason = mocserver`); mirror con `hips_order` diverso → scartato (`HIPS_MIRROR_REJECTED`) e si usa il successivo; tile 404 → nessun cambio; 2 tile falliti → nessun cambio, il terzo → cambio e tile servito dal mirror; HTTP 503 e 429 → cambio; tutti giù → `NET_TIMEOUT` `hips_servers` con il numero dei server e il messaggio del primo (dal 2026-11-10); `refresh=True` → di nuovo il principale; avviso emesso una volta sola; tile in cache dal principale letto dopo il cambio; ordine fuori/dentro Strasburgo | ordine e conteggio delle richieste ai server finti, server in uso, avvisi, chiavi della cache | test di unità con server finti; test di rete (non nel commit) per i mirror di `MIRROR_FALLBACKS` |
 | T18 | Riempimento progressivo e colori (P6) | tile arrivati in ordine diverso; survey JPEG simulato | stesso risultato finale in qualunque ordine; colori uguali a quelli del tile letti con Pillow e capovolti come in `fetch_tile` | confronto diretto |
 
 ## 13. Decisioni aperte
@@ -1080,6 +1082,7 @@ Nessun altro strumento: l'IA non scarica né interpreta pixel.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (sprint D4):** se cadono tutti i server di un survey, `NET_TIMEOUT` `hips_servers` contiene anche il messaggio del primo server (`first_server`, `first`), all'apertura (`properties`, MocServer) e durante i tile (`HiPSServers.remember_failure`); §3, parametri dei messaggi, T19. Codice `hips.py`, catalogo dei messaggi; test `test_t19_all_servers_down`, `test_t19_all_down_at_open`. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **D14-16 decisa dal proprietario il 2026-11-10** (404 sull'indirizzo di un servizio = guasto; modifica al file approvato per decisione del proprietario): §3 «Ripiego sui mirror» — 404 sul `properties` del principale di un survey con mirror → mirror con `HIPS_MIRROR_FALLBACK` `http_status` 404; un solo server → `HIPS_NOT_A_SERVICE` come prima; un tile 404 resta `HIPS_TILE_MISSING`. Codice: `_switch_cause` e `read_service` in `hips.py`; test `test_t19_primary_properties_404_switches_to_mirror`. Stato `approvato` invariato. |
 | 2026-10-04 | agente di sviluppo | Creazione del file (stato: bozza). |
 | 2026-10-04 | agente di sviluppo | **C3 inclusa per decisione del proprietario:** aggiunta la funzione "aggiunta di un HiPS da identificativo o URL" (§3), `add_hips` (§7), righe input/output (§6), errori `NET_TIMEOUT`/`HIPS_NOT_A_SERVICE`/`HIPS_METADATA_INVALID` (§10), strumento IA (§11), test T7–T8 (§12); D12-2 chiusa come decisa (§13). Riga C3 in `03-parita-aladin.md` passata a `inclusa (decisione del proprietario)`. |
