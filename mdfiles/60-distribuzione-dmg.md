@@ -323,6 +323,30 @@ variabili d'ambiente né file di credenziali, non scrive credenziali nel rapport
 ed esiti) né nel terminale. Il nome del certificato (nome e Team ID) non è un segreto ma è personale: non si
 scrive nel repository; si passa con `--identity` o si trova da solo se ce n'è uno solo.
 
+**Cosa fa il proprietario prima della prima firma (elenco del 2026-11-10, sprint D4c; ogni passo a mano, nel
+proprio Terminale, mai dentro una sessione dell'assistente, perché una password scritta lì finirebbe nella
+conversazione):**
+
+1. **Account:** iscrizione all'**Apple Developer Program** (developer.apple.com/programs) con un Apple ID con
+   autenticazione a due fattori; come persona fisica (il nome che appare nel certificato è quello della persona)
+   o come organizzazione (serve il numero D-U-N-S). Quota annuale: **da verificare** sul sito al momento
+   dell'iscrizione. Solo il titolare dell'account («Account Holder») può creare i certificati Developer ID.
+2. **Strumenti:** Xcode o i Command Line Tools (`xcode-select --install`), che contengono `codesign`,
+   `notarytool` e `stapler`; controllo: `xcrun notarytool --version`.
+3. **Certificato «Developer ID Application»:** in Xcode → Settings → Accounts → Manage Certificates → «+» →
+   **Developer ID Application** (oppure da developer.apple.com → Certificates, con una richiesta creata da
+   Accesso Portachiavi). Il certificato con la sua chiave privata va nel **Portachiavi di login** di questo Mac;
+   controllo: `security find-identity -v -p codesigning` mostra una riga `"Developer ID Application: <nome>
+   (<TEAMID>)"`. Una copia di riserva della chiave privata (file `.p12` con password) va tenuta fuori dal
+   repository.
+4. **Password specifica per l'app:** account.apple.com → Accesso e sicurezza → Password specifiche per le app →
+   nuova password (per esempio «AstroTwo notarytool»). Non si scrive in nessun file.
+5. **Profilo nel Portachiavi:** `xcrun notarytool store-credentials astrotwo-notary --apple-id <Apple ID>
+   --team-id <TEAMID>`; il comando **chiede** la password specifica (non scriverla sulla riga di comando) e
+   salva tutto nel Portachiavi di login con il nome `astrotwo-notary`. Controllo senza segreti:
+   `xcrun notarytool history --keychain-profile astrotwo-notary` (elenco degli invii, vuoto la prima volta).
+6. Dire a Claude Code che l'account è pronto: si esegue la sequenza sotto e la prova T19.
+
 **Quando l'account è pronto (sequenza):** `build_app.py` → `sign_notarize.py --execute app` → `.dmg` a mano →
 `sign_notarize.py --execute dmg <dmg>` → `sign_notarize.py --execute notarize <dmg>` → prova T19 → `A6-b` decisa.
 
@@ -574,3 +598,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-11-04 | Claude Code | **Sprint A1b, D60-4 decisa (b):** PySide6/shiboken6 6.12.0 → **6.11.3** per portare il minimo reale a macOS 15.0 (§3.1, §3.7, §13); sorgenti e SHA-256 6.11.3 verificati (MD5 uguali a `md5sums.txt` per `qtbase` e `qtsvg`); avvisi di Qt rigenerati (7 versioni cambiate, XSVG tolta); D60-3 riconfermata. Stato `approvato` invariato. |
 | 2026-11-04 | Claude Code | **Sprint A1c, D60-5 decisa:** pin di python-build-standalone da `20261003` (3.12.15) a `20261026` (3.12.16), la release che uv installa oggi per Python 3.12; SHA-256 verificati sull'archivio ufficiale; testi di licenza identici; eliminato il workaround (`UV_PYTHON_INSTALL_DIR`, `BUILD` a mano). §3.3, §3.11, §9, §13 aggiornati. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (A6-b: preparare, non eseguire):** nuovo §3.12 (firma Developer ID dall'interno verso l'esterno con runtime rinforzato e marca temporale, firma del `.dmg`, notarizzazione con `notarytool --keychain-profile`, ticket, controlli; credenziali solo nel Portachiavi, opzioni di credenziali rifiutate), §4, §7, §10 (cinque righe), §12 T19, §13 D60-6 (scelte minori da confermare). Codice: `scripts/sign_notarize.py` (prova a secco senza `--execute`), test `tests/test_sign_notarize.py`; **nessun comando di firma o notarizzazione eseguito**. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D4c (brief del proprietario del 2026-11-10, punto f):** §3.12 — elenco dei passi del proprietario prima della prima firma (Apple Developer Program, strumenti, certificato «Developer ID Application» nel Portachiavi di login, password specifica per l'app, profilo `astrotwo-notary` salvato con `notarytool store-credentials`, controlli senza segreti). Nessun comando eseguito. Stato `approvato` invariato. |

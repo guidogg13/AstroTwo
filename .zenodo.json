@@ -1,0 +1,28 @@
+{
+  "title": "AstroTwo",
+  "description": "AstroTwo is a macOS application for astrophysicists: a HiPS sky atlas with FITS images, catalogues, Virtual Observatory queries (cone search, ADQL), cross-match and sourced object profiles. It works alongside Aladin, TOPCAT and DS9 through SAMP. An optional AI assistant runs AstroTwo commands and never produces numbers by itself.",
+  "upload_type": "software",
+  "creators": [
+    {
+      "name": "Ratti, Guido"
+    }
+  ],
+  "license": "GPL-3.0-or-later",
+  "keywords": [
+    "astronomy",
+    "astrophysics",
+    "sky atlas",
+    "HiPS",
+    "Virtual Observatory",
+    "SAMP",
+    "macOS"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/guidogg13/AstroTwo",
+      "relation": "isSupplementTo",
+      "resource_type": "software",
+      "scheme": "url"
+    }
+  ]
+}

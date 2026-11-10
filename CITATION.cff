@@ -1,5 +1,7 @@
 # Citation metadata for AstroTwo (Citation File Format 1.2.0, https://citation-file-format.github.io/).
 # Kept in step with src/astrotwo/__init__.py (version) by tests/test_citation_cff.py.
+# .zenodo.json repeats title, author, licence, keywords, abstract and repository: kept in step by
+# tests/test_zenodo_json.py.
 cff-version: 1.2.0
 message: "If you use AstroTwo in your research, please cite it using these metadata."
 type: software
