@@ -391,6 +391,13 @@ def test_planets_absence_rule_for_recorded_results():
     assert op.planets_absence_shown(old, asked)
     assert op.planets_absence_shown({"status": "done", "details": {"planets": [], "query_by": "hostname"}})
     assert not op.planets_absence_shown({"status": "error", "details": {"planets": [], "checked": True}})
+    # sezione non controllata (intestazione «Not checked», decisione del 2026-11-10)
+    assert op.section_not_checked({"name": "astrometry", "status": "not_applicable", "details": {"checked": False}})
+    assert not op.section_not_checked({"name": "planets", "status": "error", "details": {"checked": False}})
+    assert not op.section_not_checked({"name": "planets", "status": "done", "details": {"checked": True}})
+    assert op.section_not_checked({"name": "planets", **old}) and not op.section_not_checked(
+        {"name": "planets", **old}, asked)
+    assert not op.section_not_checked({"name": "identity", "status": "done", "details": {}})
 
 
 def test_sections_arrive_once_in_order_and_cancel_returns_none(services, cache):

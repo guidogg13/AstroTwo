@@ -208,6 +208,44 @@ def test_t26_pdf_and_png(cache, services, tmp_path):  # noqa: F811
     assert shown.shape[:2] == mpimg.imread(io.BytesIO(base64.b64decode(thumb["png"])), format="png").shape[:2]
 
 
+def test_pdf_planets_not_checked_and_old_profiles(cache, services, tmp_path):  # noqa: F811
+    """D25-23 e decisioni del 2026-11-10: nel PDF una sezione con ``checked`` falso dice «Status: not checked» e
+    «Not checked»; un profilo registrato prima (senza ``checked``) cambia solo nella riga dei Pianeti."""
+    from astrotwo.analysis import profile_export as pe
+
+    session = session_with_export(cache)
+    number, result = profile(session, {"name": "Vega"})
+    data = merge_profile_results([(number, values_of(result))])
+    planets = next(s for s in data["sections"] if s["name"] == "planets")
+    assert planets["details"]["checked"] is True
+
+    def texts(d, lang="en"):
+        return [t.get_text() for t in pe._planets_page(d, pe._LABELS[lang], "x").fig.texts]
+
+    assert "No planet in the archive" in texts(data) and not any("not checked" in t for t in texts(data))
+    unchecked = json.loads(json.dumps(data))
+    sec = next(s for s in unchecked["sections"] if s["name"] == "planets")
+    sec.update(status="not_applicable", servers=[])
+    sec["details"] = {"planets": [], "checked": False, "note": "not checked"}
+    shown = texts(unchecked)
+    assert "Not checked" in shown and any(t.startswith("Status: not checked") for t in shown)
+    assert any(t.startswith("Stato: non controllata") for t in texts(unchecked, "it"))
+    # profilo registrato prima del 2026-11-10 senza prova della richiesta: solo la riga dei Pianeti cambia
+    old = json.loads(json.dumps(data))
+    sec = next(s for s in old["sections"] if s["name"] == "planets")
+    sec["details"] = {"planets": [], "note": "no planet in the archive (no host in the archive)"}
+    for c in old.get("cross_identifications") or []:
+        if c.get("catalog") == "exoplanet":
+            c["queries"] = []
+    for s in old["sections"]:
+        for c in (s.get("details") or {}).get("cross_identifications") or []:
+            if c.get("catalog") == "exoplanet":
+                c["queries"] = []
+    shown = texts(old)
+    assert "Not checked" in shown and "No planet in the archive" not in shown
+    assert any(t.startswith("Status: done") for t in shown)  # intestazione invariata per i profili vecchi
+
+
 @pytest.mark.parametrize("umask", [0o022, 0o077])
 def test_exported_files_follow_the_umask(cache, services, tmp_path, umask):  # noqa: F811
     """Decisione del proprietario del 2026-11-10: i file esportati hanno i permessi normali (0666 meno l'umask, di

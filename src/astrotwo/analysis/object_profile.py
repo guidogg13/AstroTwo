@@ -1922,6 +1922,21 @@ def planets_absence_shown(section: Mapping | None, chain: Sequence[Mapping] = ()
     return any(c.get("catalog") == "exoplanet" and c.get("queries") and not c.get("error") for c in chain)
 
 
+def section_not_checked(section: Mapping | None, chain: Sequence[Mapping] = ()) -> bool:
+    """Vero se la sezione (forma JSON) non è stata controllata: ``details["checked"]`` falso e nessun errore né
+    annullamento (decisione del proprietario del 2026-11-10: intestazione «Not checked» / «Non controllata», per
+    ogni sezione con ``checked`` falso). Sezione Pianeti registrata prima del 2026-11-10 (senza ``checked``) e
+    senza prova della richiesta: non controllata (D25-23, ``planets_absence_shown``)."""
+    if not section or section.get("status") in ("error", "cancelled"):
+        return False
+    details = section.get("details") or {}
+    if "checked" in details:
+        return details["checked"] is False
+    if section.get("name") == "planets" and not details.get("planets"):
+        return not planets_absence_shown(section, chain)
+    return False
+
+
 # --------------------------------------------------------------------------
 # Profilo completo (25 §7.1)
 # --------------------------------------------------------------------------

@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-10 — **decisioni del proprietario dopo D2b (sprint D3):** DD-3 confermata, D25-23 e D14-16 decise (codice e test), D62-1 approvata, permessi normali dei file esportati; modifiche del D2 a `25`, `43`, `20`, `02` approvate; registri di `02`, `12`, `14`, `20`, `25`, `41`, `43`, `62` aggiornati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **19 aperte** (Gruppo 3 = 19).
+**Ultimo aggiornamento:** 2026-11-10 — **sprint D3b:** 404 con VOTable d'errore → mirror, messaggio del primo server quando cadono tutti, intestazione «Not checked» delle sezioni non controllate; registri di `13`, `14`, `25`, `43`, `62` aggiornati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **19 aperte.**
+
+Prima, 2026-11-10 — **decisioni del proprietario dopo D2b (sprint D3):** DD-3 confermata, D25-23 e D14-16 decise (codice e test), D62-1 approvata, permessi normali dei file esportati; modifiche del D2 a `25`, `43`, `20`, `02` approvate; registri di `02`, `12`, `14`, `20`, `25`, `41`, `43`, `62` aggiornati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **19 aperte** (Gruppo 3 = 19).
 
 Prima, 2026-11-10 — **sprint D2 (Fase D):** nuovo `62-megatest-1-0.md` (`bozza`, D62-1); DD-1 in codice con DD-3 (a) da confermare (`25` §3.15 e T36, `43` §3.10 e T17, registri di `20`, `43`, `25`); nuove D25-23 (`25` §13) e D14-16 (`14` §13) dalle misure di validazione (`docs/validation.md`: 22 dentro tolleranza, 0 fuori, 49 non misurati per servizi giù). Nessun cambio di stato; riepilogo: approvato 28, bozza 6, non esiste 11, totale 45. **23 aperte** (Gruppo 3 = 23).
 

@@ -2704,14 +2704,17 @@ def _vizier_no_mirror(vo, catalog_id: str, exc) -> CatalogsError:
                                  "cause": vo._message_of(exc)})
 
 
-def _catalog_servers_down(vo, catalog_id: str, server: str, archive: OriginalArchive, last) -> CatalogsError:
-    """TAPVizieR e archivio originale giù (sprint B4): numero dei server provati e ultimo errore."""
+def _catalog_servers_down(vo, catalog_id: str, server: str, archive: OriginalArchive, first, last) -> CatalogsError:
+    """TAPVizieR e archivio originale giù (sprint B4): numero dei server provati, messaggio del primo server
+    (TAPVizieR, decisione del proprietario del 2026-11-10) e ultimo errore."""
     tried = [vo.service_url(server, "tap"), vo.service_url(archive.server, "tap")]
     return CatalogsError("NET_TIMEOUT", f"catalogo {catalog_id!r}: nessun server risponde (provati {len(tried)}: "
-                         f"{', '.join(tried)}); ultimo errore {last.code}: {last.message}. I dati già scaricati restano "
-                         "nella cache; riprovare più tardi",
+                         f"{', '.join(tried)}); primo errore ({tried[0]}) {first.code}: {first.message}; ultimo "
+                         f"errore {last.code}: {last.message}. I dati già scaricati restano nella cache; riprovare "
+                         "più tardi",
                          params={"reason": "catalog_servers", "catalog_id": catalog_id, "servers": len(tried),
-                                 "tried": tried, "last": vo._message_of(last)})
+                                 "tried": tried, "first_server": tried[0], "first": vo._message_of(first),
+                                 "last": vo._message_of(last)})
 
 
 def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, allow_partial: bool = False,
@@ -2766,9 +2769,9 @@ def load_catalog(catalog_id: str, *, region=None, max_rows: int | None = None, a
                     except vo.VoProtocolsError as exc3:
                         if not vo.is_failover_error(exc3):
                             raise
-                        raise _catalog_servers_down(vo, catalog_id, server, archive, exc2) from exc2
+                        raise _catalog_servers_down(vo, catalog_id, server, archive, exc, exc2) from exc2
                 else:
-                    raise _catalog_servers_down(vo, catalog_id, server, archive, exc2) from exc2
+                    raise _catalog_servers_down(vo, catalog_id, server, archive, exc, exc2) from exc2
     except vo.VoProtocolsError as exc:
         if exc.code == "ADQL_INVALID":  # il servizio rifiuta la tabella: catalogo sconosciuto
             where = archive.server if original is not None else server

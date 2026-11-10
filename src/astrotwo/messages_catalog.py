@@ -3339,9 +3339,11 @@ _add("SERVICE_MIRROR_FALLBACK",
                        "{service}: server {primary} ha dato una risposta non valida; risponde il mirror {mirror} (per "
                        "il resto della sessione).", "service primary mirror"))
 _extend("NET_TIMEOUT",
-        service_servers=("{service}: no server answers (tried {servers}: {tried}); last error: {last}",
-                         "{service}: nessun server risponde (provati {servers}: {tried}); ultimo errore: {last}",
-                         "service servers:int tried:list last:msg"),
+        service_servers=("{service}: no server answers (tried {servers}: {tried}); first error ({first_server}): "
+                         "{first}; last error: {last}",
+                         "{service}: nessun server risponde (provati {servers}: {tried}); primo errore "
+                         "({first_server}): {first}; ultimo errore: {last}",
+                         "service servers:int tried:list first_server first:msg last:msg"),
         mocserver_no_mirror=("The CDS MocServer ({url}) is not reachable and there is no local copy of the list of "
                              "collections; the MocServer has no copy outside Strasbourg. Typed identifiers can still "
                              "be used (Gaia DR3 and 2MASS fall back to their original archives): {cause}",
@@ -3357,11 +3359,13 @@ _extend("NET_TIMEOUT",
                           "fuori da Strasburgo. Gaia DR3 (I/355/gaiadr3) e 2MASS (II/246/out) hanno il ripiego sugli "
                           "archivi originali; per altri cataloghi usa Data → Query ADQL sull'archivio originale del "
                           "catalogo, se esiste (es. l'archivio Gaia dell'ESA): {cause}", "catalog_id url cause:msg"),
-        catalog_servers=("Catalogue '{catalog_id}': no server answers (tried {servers}: {tried}); last error: {last}. "
-                         "Data already downloaded stay in the cache; try again later.",
-                         "Catalogo '{catalog_id}': nessun server risponde (provati {servers}: {tried}); ultimo "
-                         "errore: {last}. I dati già scaricati restano nella cache; riprova più tardi.",
-                         "catalog_id servers:int tried:list last:msg"))
+        catalog_servers=("Catalogue '{catalog_id}': no server answers (tried {servers}: {tried}); first error "
+                         "({first_server}): {first}; last error: {last}. Data already downloaded stay in the cache; "
+                         "try again later.",
+                         "Catalogo '{catalog_id}': nessun server risponde (provati {servers}: {tried}); primo errore "
+                         "({first_server}): {first}; ultimo errore: {last}. I dati già scaricati restano nella cache; "
+                         "riprova più tardi.",
+                         "catalog_id servers:int tried:list first_server first:msg last:msg"))
 _add("CATALOG_ORIGINAL_ARCHIVE",
      "{catalog_id}: TAPVizieR not reachable ({cause}); data from the original archive {archive}, table {table} "
      "({url}). The column names are those of the archive, not VizieR's.",

@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from astrotwo.analysis.object_profile import planets_absence_shown
+from astrotwo.analysis.object_profile import planets_absence_shown, section_not_checked
 from astrotwo.analysis.profile_export import STSCI_DSS_TEXT, STSCI_DSS_URL  # testo di STScI (01 §6.1), anche nel PDF
 from astrotwo.core.commands import CancelToken, Command, Outcome, RequestedBy, ResultMessage
 from astrotwo.ui.message_view import shown_line, shown_text
@@ -380,6 +380,8 @@ class SectionView(QFrame):
             return QCoreApplication.translate("SectionView", "Cancelled")
         if self.state == "error":
             return QCoreApplication.translate("SectionView", "Error")
+        if self.state == "not_checked":
+            return QCoreApplication.translate("SectionView", "Not checked")
         data = self.data or {}
         servers = sorted({urllib.parse.urlparse(s).hostname or s for s in data.get("servers") or []})
         source = ", ".join(servers) if servers else QCoreApplication.translate("SectionView", "no request")
@@ -422,6 +424,8 @@ class SectionView(QFrame):
         status = data.get("status", "done")
         self.state = {"done": "done", "not_applicable": "done", "partial": "partial", "error": "error",
                       "cancelled": "cancelled"}.get(status, "done")
+        if section_not_checked(data):  # checked falso: «Not checked», non «Arrived» (decisione del 2026-11-10)
+            self.state = "not_checked"
         errors = [shown_line(message_of(e)) for e in data.get("errors") or []]
         self.errors_label.setText("\n".join(errors))
         self.errors_label.setVisible(bool(errors))

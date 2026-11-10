@@ -134,6 +134,27 @@ def test_t27_404_on_service_address_switches(pair, cache):
     assert fallback.params["reason"] == "http_status" and fallback.params["status"] == 404
 
 
+def test_t27_404_votable_error_then_mirror_down_keeps_the_first_message(pair, cache):
+    """Decisione del proprietario del 2026-11-10: un 404 con un VOTable d'errore fa passare al mirror; se anche il
+    mirror fallisce, l'errore mostrato contiene il messaggio del primo server (il testo del VOTable d'errore)."""
+    primary, mirror = pair
+    primary.routes["/tap/sync"] = status(404, ERROR.format(text="Service temporarily moved"),
+                                         "application/x-votable+xml")
+    mirror.routes["/tap/sync"] = status(502)
+    with pytest.raises(VoProtocolsError) as err:
+        query(cache=cache)
+    params = err.value.params
+    assert err.value.code == "NET_TIMEOUT" and params["reason"] == "service_servers" and params["servers"] == 2
+    assert params["first_server"] == primary.url + "/tap" and params["first"]["code"] == "SERVICE_ERROR"
+    assert params["first"]["params"]["status"] == 404 and "Service temporarily moved" in params["first"]["text"]
+    assert "Service temporarily moved" in err.value.message and params["last"]["params"]["status"] == 502
+    assert mirror.hits("/tap/sync") == 1
+    from astrotwo.messages_catalog import message_text
+
+    shown = message_text(err.value.code, params, "en")
+    assert "first error (" + primary.url + "/tap)" in shown and "Service temporarily moved" in shown
+
+
 def test_t27_no_switch_for_adql_or_empty_result(pair, cache):
     primary, mirror = pair
     mirror.routes["/tap/sync"] = ok(2)
@@ -160,6 +181,8 @@ def test_t27_all_down_counts_servers_and_stale_copy(pair, cache):
     assert err.value.code == "NET_TIMEOUT" and err.value.params["reason"] == "service_servers"
     assert err.value.params["servers"] == 2 and err.value.params["tried"] == [primary.url + "/tap", mirror.url + "/tap"]
     assert err.value.params["last"]["code"] == "SERVICE_ERROR"
+    assert err.value.params["first_server"] == primary.url + "/tap" and err.value.params["first"]["params"][
+        "status"] == 503  # messaggio del primo server (decisione del 2026-11-10)
     # Copia vecchia in cache: con la rete giù (refresh=True) si usa, dichiarata; mai con use_stale_cache=False.
     primary.close()
     mirror.close()
@@ -433,6 +456,8 @@ def test_t36_everything_down_and_other_identifiers(archives, cache):
         load_catalog("I/355/gaiadr3", region=(CENTER, 1 * u.arcmin), cache=cache, timeouts=FAST)
     assert err.value.code == "NET_TIMEOUT" and err.value.params["reason"] == "catalog_servers"
     assert err.value.params["servers"] == 2 and err.value.params["tried"] == [vizier.url + "/viz", gaia.url + "/tap"]
+    assert err.value.params["first_server"] == vizier.url + "/viz" and err.value.params["first"]["params"][
+        "status"] == 503 and err.value.params["last"]["params"]["status"] == 502  # primo server (2026-11-10)
     with pytest.raises(CatalogsError) as err:
         load_catalog("I/239/hip_main", region=(CENTER, 1 * u.arcmin), cache=cache, timeouts=FAST)
     assert err.value.params["reason"] == "vizier_no_mirror" and err.value.params["url"] == vizier.url + "/viz"

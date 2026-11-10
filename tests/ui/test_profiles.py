@@ -179,10 +179,13 @@ def test_planets_view_absence_only_after_a_request(qtbot):
 
     from astrotwo.ui.profiles import PlanetsView
 
+    headers = []
+
     def shown(data):
         view = PlanetsView("planets", "Planets", ("exoplanet",))
         qtbot.addWidget(view)
         view.show_section({"name": "planets", "values": [], "servers": [], **data}, 1)
+        headers.append(view.header.text())
         return {w.objectName() for w in view.findChildren(QLabel)}
 
     checked = shown({"status": "done", "details": {"planets": [], "checked": True}})
@@ -196,6 +199,17 @@ def test_planets_view_absence_only_after_a_request(qtbot):
     assert "noPlanets" not in failed and "planetsNotChecked" not in failed
     old = shown({"status": "done", "details": {"planets": [], "note": "no planet in the archive"}})  # prima del 2026-11-10
     assert "noPlanets" not in old and "planetsNotChecked" in old
+    # intestazione (decisione del 2026-11-10): «Not checked» per ogni sezione non controllata, non «Arrived»
+    assert headers[0].startswith("Planets · Arrived") and headers[1] == "Planets · Not checked  #1"
+    assert headers[2] == "Planets · Error  #1" and headers[3] == "Planets · Not checked  #1"
+
+
+def test_any_section_with_checked_false_says_not_checked(qtbot):
+    view = SectionView("astrometry", "Astrometry and distance", ("gaia",))
+    qtbot.addWidget(view)
+    view.show_section({"name": "astrometry", "status": "not_applicable", "values": [], "servers": [],
+                       "details": {"checked": False}}, 3)
+    assert view.header.text() == "Astrometry and distance · Not checked  #3"
 
 
 def test_section_view_states_text(qtbot):

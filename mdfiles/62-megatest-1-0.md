@@ -180,7 +180,8 @@ dell'app usate da un astrofisico.
 | D4 | Rete spenta: *Go to* `M 31` dopo averlo già visitato | Tile dalla cache, con l'indicazione della cache; nomi non in cache → messaggio chiaro |
 | D5 | Rete spenta: profilo nuovo | Sezioni in errore con il motivo; nessun valore inventato; l'app resta usabile |
 | D6 | SIMBAD irraggiungibile (bloccare `simbad.cds.unistra.fr` e `simbad.harvard.edu` nel file `/etc/hosts`): profilo di `51 Peg` | La sezione Pianeti mostra il pianeta 51 Peg b trovato con il nome scritto, con l'avviso «identity not verified»; **mai** «No planet in the archive» se l'archivio dei pianeti non è stato interrogato (D25-23) |
-| D7 | Come D6, bloccando anche l'archivio Gaia (`gea.esac.esa.int`): profilo da coordinate `346.6223 -5.0414` | Pianeti «Not checked» con il motivo, non «No planet in the archive» |
+| D7 | Come D6, bloccando anche l'archivio Gaia (`gea.esac.esa.int`): profilo da coordinate `346.6223 -5.0414` | Intestazione della sezione Pianeti «Planets · Not checked» (non «Arrived»), avviso con il motivo, mai «No planet in the archive»; nel PDF «Status: not checked» |
+| D9 | Bloccare solo il mirror di Harvard (`simbad.harvard.edu`) in `/etc/hosts` in un giorno in cui il CDS risponde 404 (o bloccare entrambi): profilo di `Vega` | Errore della sezione Identità «no server answers (tried 2 …)» che riporta anche il **primo errore** (il messaggio del server del CDS) |
 | D8 | Esportare un PDF e un PNG (E2, E6), poi `ls -l` sui file | Permessi `-rw-r--r--` (0644 con l'umask normale), non `-rw-------` |
 
 ## 4. Cosa NON fa
@@ -264,3 +265,4 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 |---|---|---|
 | 2026-11-10 | Claude Code | Creazione del file (stato: bozza), sprint D2, brief del proprietario del 2026-11-10 punto (d): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese, byte per byte), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 aperta. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** D62-1 **approvata** (§13; scelte già scritte in §3.1). Nuove prove D6 e D7 (D25-23, assenze solo dopo una richiesta) e D8 (permessi dei file esportati, decisione del 2026-11-10). Stato `bozza` invariato. |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** D7 con l'intestazione «Not checked» e la riga di stato del PDF; nuova prova D9 (messaggio del primo server quando cadono tutti). Stato `bozza` invariato. |

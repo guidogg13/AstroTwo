@@ -2304,6 +2304,10 @@
 <context>
     <name>SectionView</name>
     <message>
+        <source>Not checked</source>
+        <translation>Non controllata</translation>
+    </message>
+    <message>
         <source>Retry this section</source>
         <translation>Riprova questa sezione</translation>
     </message>

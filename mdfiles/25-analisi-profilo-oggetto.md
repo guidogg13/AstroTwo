@@ -1314,6 +1314,16 @@ un'assenza. Nel profilo:
   `exoplanet` della catena degli identificativi; altrimenti «Not checked»
   («Non controllato»); in `error` nessuna delle due righe. Il risultato
   registrato non si riscrive mai (D25-20 (7)): cambia solo come si mostra.
+  Il cambio della sola riga dei Pianeti nei PDF dei profili vecchi è
+  **approvato dal proprietario** (2026-11-10).
+- **Intestazione «non controllata»** (decisione del proprietario del
+  2026-11-10): ogni sezione con `details["checked"]` falso, non in errore
+  né annullata, si presenta come «Not checked» / «Non controllata», mai
+  «arrivata»: `section_not_checked(sezione, catena)` per la finestra del 43
+  (vale anche per una sezione Pianeti registrata prima senza prova della
+  richiesta); nel PDF la riga di stato dice «Status: not checked» / «Stato:
+  non controllata» solo con `checked` esplicitamente falso, quindi i PDF
+  dei profili vecchi cambiano solo nella riga dei Pianeti.
 
 **Altri punti verificati nel codice il 2026-11-10 (ricerca chiesta dal
 proprietario):** l'Identità «no SIMBAD object for this position» e la fonte
@@ -1932,3 +1942,4 @@ Nessuna decisione aperta.
 | 2026-11-10 | Claude Code | **Sprint D2 (brief del proprietario del 2026-11-10, punto a): codice di DD-1 con DD-3 (a)** (applicata la raccomandazione perché il brief chiede un PDF inglese senza nessuna parola italiana; da confermare): §3.15 (testi del PDF: avvisi ed errori dal catalogo dei messaggi nella lingua scelta, note, fonte della posizione, nomi dei servizi e fonti dei punti zero in inglese nel risultato, profili già registrati invariati), §12 T36. Codice: `object_profile.py` (note e nomi dei servizi in inglese, `_record_service`, `_resolver_source`, `_english`), `photometry.py` del 20 (fonti dei punti zero e nota di `jdate` in inglese), `profile_export.py` (`_message_line`), `ui/profiles.py` (`PdfExportDialog`, 43 §3.10). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D25-23** (§13): sezione Pianeti `done` con «no planet in the archive» senza nessuna richiesta all'archivio quando SIMBAD non risponde e manca il `source_id` di Gaia (osservato per 51 Peg, TRAPPIST-1, Barnard's Star); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 **confermata** (proposta (a)) e approvate le modifiche del D2 (§3.15, T36); **D25-23 decisa** (regola generale delle assenze): nuovo §3.18, §3.4 punto 6, §3.10, §3.13, §3.15 (PDF: riga «Not checked»; permessi del file esportato secondo l'umask, decisione del 2026-11-10), §10 (quattro righe), §12 T37, §13. Codice: `object_profile.py` (`_typed_names`, `_exoplanet_by_hostname`, `profile_planets` con `checked`, `planets_absence_shown`, `PLANETS_NOT_CHECKED_NOTE`), `profile_export.py` (riga «Not checked», `export_temp_file` del 14), catalogo dei messaggi (`PROFILE_PLANETS_NOT_CHECKED`, `PROFILE_PLANETS_BY_WRITTEN_NAME`), `ui/profiles.py` (43). Ricerca degli altri punti con lo stesso difetto scritta in §3.18. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** §3.18 — intestazione «Not checked» / «Non controllata» per ogni sezione con `checked` falso (`section_not_checked`), riga di stato del PDF «not checked» solo con `checked` esplicito; approvati il cambio della sola riga Pianeti nei PDF dei profili vecchi e la correzione di `scripts/validate_profiles.py`. Codice: `object_profile.py` (`section_not_checked`), `profile_export.py` (`_status_lines`); test in `test_object_profile.py` e `test_profile_export.py` (`test_pdf_planets_not_checked_and_old_profiles`). Stato `approvato` invariato. |

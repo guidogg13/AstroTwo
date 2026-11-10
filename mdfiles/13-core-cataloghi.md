@@ -610,8 +610,9 @@ suo VOTable.
   **prima** di una copia vecchia di VizieR (`use_stale_cache=False` del
   14), che resta l'ultima possibilità (dichiarata con `FROM_CACHE`).
   **Se cadono tutti:** `NET_TIMEOUT` con `reason = catalog_servers`
-  (identificativo, **numero dei server provati** = 2, i loro nomi, ultimo
-  errore). **Altri identificativi VizieR** con TAPVizieR giù:
+  (identificativo, **numero dei server provati** = 2, i loro nomi, il
+  **messaggio del primo server**, TAPVizieR — `first_server`, `first`,
+  decisione del proprietario del 2026-11-10 —, ultimo errore). **Altri identificativi VizieR** con TAPVizieR giù:
   `NET_TIMEOUT` con `reason = vizier_no_mirror` (URL, causa), il cui testo
   dice che TAPVizieR non ha copie fuori da Strasburgo e suggerisce le voci
   fisse Gaia DR3 e 2MASS o la **Query ADQL sull'archivio originale** del
@@ -1045,7 +1046,7 @@ dà le tabelle che cominciano con l'identificativo (`_candidates_limited` se l'e
 | `POPULARITY_MISSING` | (generale) | `count` (integer) |
 | `CATALOG_ORIGINAL_ARCHIVE` (avviso, sprint B4) | (generale) | `catalog_id` (string), `archive` (string), `table` (string), `url` (string), `cause` (message) |
 | `REGION` | `archive_icrs_circle` (sprint B4) | `lon` (string, esterno), `lat` (string, esterno), `center_lon` (quantity), `center_lat` (quantity), `radius` (quantity), `archive` (string) |
-| `NET_TIMEOUT` | `catalog_servers` (sprint B4) | `catalog_id` (string), `servers` (integer), `tried` (list), `last` (message) |
+| `NET_TIMEOUT` | `catalog_servers` (sprint B4; `first_server` e `first` dal 2026-11-10) | `catalog_id` (string), `servers` (integer), `tried` (list), `first_server` (string), `first` (message), `last` (message) |
 | `NET_TIMEOUT` | `vizier_no_mirror` (sprint B4) | `catalog_id` (string), `url` (string), `cause` (message) |
 
 ## 11. Esposizione all'IA
@@ -1336,3 +1337,4 @@ connessione o timeout, dichiarate nel risultato) e regola dei commit in
 | 2026-10-25 | Claude Code | **Sprint 9:** aperta **D13-22** (colonne di moto proprio prese come posizioni quando le posizioni non hanno UCD), §13. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 9b (D13-22 decisa dal proprietario, opzione (a)):** per le posizioni conta solo la prima parola dell'UCD (§3, `TAP_SCHEMA` compreso); T35c. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint B4 — ripiego di Gaia DR3 e 2MASS sugli archivi originali** (regole del proprietario del 2026-11-07, D14-14 del 14; scelte minori D14-15 (5)–(7) da confermare; autorizzazione esplicita ad aggiornare il 13): `load_catalog` con TAPVizieR giù per una causa di cambio del 14 carica Gaia DR3 dall'archivio Gaia dell'ESA (`gaiadr3.gaia_source`, ICRS J2016.0 dal `COOSYS`) e 2MASS dall'IRSA (`fp_psc`, nessun `COOSYS`: regione con `CIRCLE('ICRS', …)` dichiarata, posizioni da confermare), stessa regione e `max_rows`, colonne dagli UCD e non rinominate, avviso `CATALOG_ORIGINAL_ARCHIVE`; tutti giù → `NET_TIMEOUT` `catalog_servers`; altri identificativi → `vizier_no_mirror`; `simbad` con il mirror del 14; `FixedCollection.archive`; verifiche reali del 2026-11-07 (UCD, `COOSYS`, Alcyone = Gaia DR3 66714384142368256 e 2MASS J03472908+2406184, uguali a SIMBAD di Harvard); §7, §10, T36. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (sprint D3b):** TAPVizieR e archivio originale giù → `NET_TIMEOUT` `catalog_servers` con il messaggio del primo server (TAPVizieR, `first_server`, `first`); dal D3a (D14-16) un 404 di TAPVizieR fa passare all'archivio originale. Codice: `_catalog_servers_down` in `catalogs.py`; test T36 del 14. Stato `approvato` invariato. |

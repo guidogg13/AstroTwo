@@ -468,6 +468,7 @@ _LABELS = {
            "arrow": "arrow (upper limit)", "identifiers": "Identifiers ({count})", "chain": "Identifier chain",
            "more": "… {count} more rows: full table in the ECSV", "more_groups": "… {count} more: full list in the tab",
            "no_planets": "No planet in the archive", "not_checked": "Not checked",
+           "status_not_checked": "not checked",
            "planet": "Planet", "discovery": "Discovery",
            "period": "Period", "semi_major_axis": "Semi-major axis", "eccentricity": "Eccentricity", "mass": "Mass",
            "radius": "Radius", "equilibrium_temperature": "Eq. temperature", "fov": "field", "center": "center",
@@ -484,7 +485,7 @@ _LABELS = {
            "arrow": "freccia (limite superiore)", "identifiers": "Identificativi ({count})",
            "chain": "Catena degli identificativi", "more": "… {count} righe in più: tabella completa nell'ECSV",
            "more_groups": "… {count} in più: elenco completo nella scheda", "no_planets": "Nessun pianeta nell'archivio",
-           "not_checked": "Non controllato",
+           "not_checked": "Non controllato", "status_not_checked": "non controllata",
            "planet": "Pianeta", "discovery": "Scoperta", "period": "Periodo", "semi_major_axis": "Semiasse",
            "eccentricity": "Eccentricità", "mass": "Massa", "radius": "Raggio",
            "equilibrium_temperature": "Temp. di equilibrio", "fov": "campo", "center": "centro",
@@ -624,7 +625,10 @@ def _status_lines(page: _Page, section: Mapping | None, label: dict) -> None:
     if section is None:
         page.text(label["not_requested"], size=9, color="0.35")
         return
-    page.text(f"{label['status']}: {section.get('status')}  ·  {label['section_command']} "
+    status = section.get("status")
+    if (section.get("details") or {}).get("checked") is False and status not in ("error", "cancelled"):
+        status = label["status_not_checked"]  # decisione del 2026-11-10; profili vecchi (senza checked) invariati
+    page.text(f"{label['status']}: {status}  ·  {label['section_command']} "
               f"#{section.get('command_id')}", size=8, color="0.35")
     for line in _messages(section, label):
         page.text("⚠ " + line, size=7)

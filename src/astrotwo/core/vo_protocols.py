@@ -831,7 +831,9 @@ def _parse_results(response: _Response, results_class, *, hint: str = ""):
     except pyvo.dal.DALQueryError as exc:
         message = str(exc)
         extra = hint if hint and _DURATION_WORDS.search(message) else ""
-        if http_status is not None and (http_status.startswith("5") or http_status == "429"):
+        # 5xx, 429 e 404 (indirizzo del servizio, D14-16 e decisione del 2026-11-10 sul 404 con VOTable d'errore):
+        # guasto del server con il messaggio del servizio, causa del ripiego sul mirror; mai "ADQL rifiutata"
+        if http_status is not None and (http_status.startswith("5") or http_status in ("404", "429")):
             raise VoProtocolsError("SERVICE_ERROR", f"{response.url}: HTTP {http_status}: {message}{extra}",
                                    url=response.url,
                                    params={"reason": "http_message_async_hint" if extra else "http_message",
@@ -1246,12 +1248,17 @@ def _fallback_warning(entry: ServiceMirrors, primary: str, mirror: str, cause) -
                          f"{mirror} (per il resto della sessione)", params)
 
 
-def _all_servers_down(entry: ServiceMirrors, tried: Sequence[str], last: VoProtocolsError) -> VoProtocolsError:
-    """``NET_TIMEOUT`` (``service_servers``) con il numero dei server provati e l'ultimo errore (D14-14 e)."""
+def _all_servers_down(entry: ServiceMirrors, tried: Sequence[str], first_server: str, first: VoProtocolsError,
+                      last: VoProtocolsError) -> VoProtocolsError:
+    """``NET_TIMEOUT`` (``service_servers``) con il numero dei server provati, il messaggio del **primo** server
+    provato (decisione del proprietario del 2026-11-10: dopo un 404 con VOTable d'errore e un mirror che fallisce,
+    l'utente vede che cosa ha detto il principale) e l'ultimo errore (D14-14 e)."""
     return VoProtocolsError("NET_TIMEOUT", f"{entry.label}: nessun server risponde (provati {len(tried)}: "
-                            f"{', '.join(tried)}); ultimo errore {last.code}: {last.message}",
+                            f"{', '.join(tried)}); primo errore ({first_server}) {first.code}: {first.message}; "
+                            f"ultimo errore {last.code}: {last.message}",
                             params={"reason": "service_servers", "service": entry.label, "servers": len(tried),
-                                    "tried": list(tried), "last": _message_of(last)})
+                                    "tried": list(tried), "first_server": first_server, "first": _message_of(first),
+                                    "last": _message_of(last)})
 
 
 def _with_mirrors(entry: ServiceMirrors, servers: Sequence[str], attempt, cached, *, refresh: bool,
@@ -1295,13 +1302,18 @@ def _with_mirrors(entry: ServiceMirrors, servers: Sequence[str], attempt, cached
             hit = cached(server, last)
             if hit is not None:
                 return hit, ()
-    if not isinstance(last, VoProtocolsError):
-        last = as_error(failures[-1][0], last) if as_error is not None else _net_error(
-            failures[-1][0], last, NETWORK_TIMEOUTS)
+
+    def as_vo(server: str, exc: BaseException) -> VoProtocolsError:
+        if isinstance(exc, VoProtocolsError):
+            return exc
+        return as_error(server, exc) if as_error is not None else _net_error(server, exc, NETWORK_TIMEOUTS)
+
+    last = as_vo(*failures[-1])
+    first_server, first = failures[0][0], as_vo(*failures[0])  # il primo server provato in questa richiesta
     tried = [server for server, _ in failures]
     if start > 0:  # server saltati perché già caduti in questa sessione: contano tra i provati
         tried = list(servers[:start]) + tried
-    raise _all_servers_down(entry, tried, last) from failures[-1][1]
+    raise _all_servers_down(entry, tried, first_server, first, last) from failures[-1][1]
 
 
 def _cached_response(protocol: str, method: str, url: str, params, cache: SharedCache | None,

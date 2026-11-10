@@ -359,7 +359,9 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     (endpoint TAP, servizio di fotometria di VizieR, `properties` di un HiPS
     con mirror e simili: l'indirizzo è verificato, quindi un 404 vuol dire
     server guasto — il CDS guasto del 2026-11-10 rispondeva 404 HTML), con
-    o senza VOTable, con il solito avviso `SERVICE_MIRROR_FALLBACK`
+    o senza VOTable (con un VOTable d'errore: approvato dal proprietario il
+    2026-11-10; è `SERVICE_ERROR` `http_message` con lo stato e il testo del
+    servizio, mai `ADQL_INVALID`), con il solito avviso `SERVICE_MIRROR_FALLBACK`
     (`http_status`, `status` 404). **Mai** per gli altri 4xx (`SERVICE_ERROR`
     con stato 4xx diverso da 404 e 429, `AUTH_REQUIRED`); un oggetto non
     trovato con una risposta valida resta «non trovato» (`NAME_NOT_FOUND`,
@@ -419,8 +421,12 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     richiesta.
   - **Se cadono tutti (D14-14 e):** con più di un server, `NET_TIMEOUT`
     con `reason = service_servers`: servizio, **numero dei server provati**,
-    i loro URL e l'ultimo errore (messaggio annidato); con un solo server
-    (nessun mirror) l'errore di prima.
+    i loro URL, il **messaggio del primo server** provato in quella
+    richiesta (`first_server`, `first`: decisione del proprietario del
+    2026-11-10, così dopo un 404 con VOTable d'errore e un mirror che
+    fallisce si vede che cosa ha detto il principale) e l'ultimo errore
+    (messaggio annidato); con un solo server (nessun mirror) l'errore di
+    prima.
 
   **Mirror verificati il 2026-11-07** (fonte dell'elenco dei mirror VizieR:
   pagina del mirror ufficiale `https://vizier.cfa.harvard.edu/viz-bin/VizieR`,
@@ -913,7 +919,7 @@ sincrona termina con il suggerimento `tap_query(..., mode='async')`: nel catalog
 | `SERVICE_MIRROR_FALLBACK` (avviso, sprint B4) | `network` | `service` (string), `primary` (string), `mirror` (string) |
 | `SERVICE_MIRROR_FALLBACK` | `http_status` | `service` (string), `primary` (string), `mirror` (string), `status` (integer) |
 | `SERVICE_MIRROR_FALLBACK` | `invalid_response` | `service` (string), `primary` (string), `mirror` (string) |
-| `NET_TIMEOUT` | `service_servers` (sprint B4) | `service` (string), `servers` (integer), `tried` (list), `last` (message) |
+| `NET_TIMEOUT` | `service_servers` (sprint B4; `first_server` e `first` dal 2026-11-10) | `service` (string), `servers` (integer), `tried` (list), `first_server` (string), `first` (message), `last` (message) |
 | `NET_TIMEOUT` | `mocserver_no_mirror` (sprint B4) | `url` (string), `cause` (message) |
 
 `CACHE_FULL` (avviso della cache comune, `04`) passa tale e quale con il codice, il testo e i `params` che ha: il `04`
@@ -1188,6 +1194,7 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** 404 con VOTable d'errore → mirror **approvato** (§3; il codice lo classificava come `ADQL_INVALID` — servizio che rifiuta la richiesta — e non passava al mirror: ora `SERVICE_ERROR` `http_message` con lo stato 404, come 5xx e 429); se anche il mirror fallisce, `NET_TIMEOUT` `service_servers` contiene il **messaggio del primo server** (`first_server`, `first`; §3, parametri dei messaggi, catalogo dei messaggi). Test T27 (`test_t27_404_votable_error_then_mirror_down_keeps_the_first_message`). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10:** **D14-16 decisa** (404 sull'indirizzo di un servizio = guasto, ripiego sul mirror con l'avviso; oggetto non trovato con risposta valida = «non trovato»): §3 regola del cambio di server, §10 (due righe), §12 T27, §13. Codice: `is_failover_error` (`_server_down_status`: 5xx, 404, 429) in `vo_protocols.py`; effetto anche sul ripiego di TAPVizieR sugli archivi originali (`13`) e sulla copia vecchia del puntatore SIMBAD. Nuova **`export_temp_file`** (§7) per i permessi normali dei file esportati (decisione del proprietario del 2026-11-10, `02` §2). Test: `tests/core/test_cds_mirrors.py` (404 HTML → mirror, VizieR 404 → archivio originale, regole di `is_failover_error`). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D14-16** (§13): il CDS guasto risponde HTTP 404 HTML e la regola D14-14 (a) non passa al mirror di Harvard; proposte (a)–(c), raccomandata (a) (404 senza VOTable su un endpoint TAP verificato = server giù). Nessun codice cambiato; stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Correzioni trovate con il controllo della rete nei test (istruzione del proprietario del 2026-11-10):** (1) **SAMP solo locale:** `pyvo.samp` provava `http://google.com` a ogni avvio dell'hub e a ogni collegamento di un client (`internet_on`) e, se rispondeva, chiamava `socket.getfqdn()` senza tempo massimo; ora `use_internet = False` (`_samp_local_only`): hub e client su `127.0.0.1`, nessun contatto esterno per SAMP; (2) **registro VO:** `search_registry` costruiva l'ADQL con `get_RegTAP_query` senza servizio, e pyvo leggeva le capacità di `http://reg.g-vo.org` (in HTTP, senza tempo massimo, registro diverso da quello scelto); ora le capacità si leggono dal registro usato con i timeout del 04, un guasto dà `NET_TIMEOUT` `url`. Test T18 e test SAMP aggiornati. Stato `approvato` invariato. |
