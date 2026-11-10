@@ -26,7 +26,7 @@ import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
@@ -93,7 +93,7 @@ from astrotwo.ai.provider_adapter import (
 )
 from astrotwo.ai.tool_registry import ToolRegistry
 from astrotwo.core.commands import ResultMessage
-from astrotwo.ui.message_view import ValueProblem, shown_exception, shown_line, shown_text
+from astrotwo.ui.message_view import ValueProblem, counted, shown_exception, shown_line, shown_text
 
 __all__ = [
     "AiPanel",
@@ -130,6 +130,14 @@ ASSISTANT_DEFAULTS: dict[str, str] = {
 
 _PROFILE_FIELDS = ("preset", "kind", "base_url", "model", "max_output_tokens", "max_tokens_field",
                    "price_input", "price_output", "currency")
+
+
+def token_counts(tokens: TokenCount) -> str:
+    """«N input tokens, M output tokens» con il plurale giusto (40 §3.9, sprint D5b)."""
+    return (counted(tokens.input_tokens, QCoreApplication.translate("TokenCounts", "%1 input token"),
+                    QCoreApplication.translate("TokenCounts", "%1 input tokens"))
+            + ", " + counted(tokens.output_tokens, QCoreApplication.translate("TokenCounts", "%1 output token"),
+                             QCoreApplication.translate("TokenCounts", "%1 output tokens")))
 
 
 def _profile_from_json(data: Mapping) -> ProviderProfile:
@@ -714,7 +722,8 @@ class ConfirmationCard(QFrame):
         params = {k: v for k, v in request.get("parameters", {}).items() if k != "max_rows"}
         self.params = QLabel(_params_text(params))
         self.params.setObjectName("confirmParams")
-        self.max_rows = QLabel(texts["max_rows"].replace("%1", _value_text(request["max_rows"]))
+        self.max_rows = QLabel((texts["max_rows_one"] if request.get("max_rows") == 1 else texts["max_rows"])
+                               .replace("%1", _value_text(request["max_rows"]))
                                if request.get("max_rows") is not None else "")
         self.max_rows.setObjectName("confirmMaxRows")
         self.max_rows.setVisible(request.get("max_rows") is not None)
@@ -1297,7 +1306,8 @@ class AssistantSettingsDialog(QDialog):
         if result.notice is not None:
             self.models_note.setText(shown_exception(result.notice))
         else:
-            self.models_note.setText(self.tr("%1 models from the provider.").replace("%1", str(len(result.models))))
+            self.models_note.setText(counted(len(result.models), self.tr("%1 model from the provider."),
+                                                     self.tr("%1 models from the provider.")))
 
     def probe(self) -> None:
         try:
@@ -1313,8 +1323,7 @@ class AssistantSettingsDialog(QDialog):
             self.probe_state.setText(shown_exception(error))
             return
         tokens = TokenCount.of(result.usage)
-        tokens_text = (self.tr("%1 input tokens, %2 output tokens").replace("%1", str(tokens.input_tokens))
-                       .replace("%2", str(tokens.output_tokens)) if tokens.declared
+        tokens_text = (token_counts(tokens) if tokens.declared
                        else self.tr("tokens not declared by the provider"))
         if result.error is not None:
             self.probe_state.setText(shown_exception(result.error))
@@ -1423,7 +1432,7 @@ class AiPanel(QWidget):
             "confirmed_conversation": self.tr("confirmed for this conversation"),
             "not_confirmed": self.tr("not confirmed"), "not_executed": self.tr("not executed"),
             "from_cache": self.tr("from the cache"), "confirm_title": self.tr("The assistant asks to run:"),
-            "max_rows": self.tr("at most %1 rows"), "reason": self.tr("Confirmation needed: %1"),
+            "max_rows": self.tr("at most %1 rows"), "max_rows_one": self.tr("at most %1 row"), "reason": self.tr("Confirmation needed: %1"),
             "reason_network": self.tr("uses the network"), "reason_long": self.tr("long command"),
             "reason_layer": self.tr("changes a layer"),
             "reason_external": self.tr("asked after reading external text (%1)"),
@@ -2023,10 +2032,10 @@ class AiPanel(QWidget):
         if m == 0:
             text = self.tr("no number to verify")
         elif bad:
-            text = "⚠ " + self.tr("%1 of %2 numbers do not come from a command").replace("%1", str(bad)) \
+            text = "⚠ " + self.tr("Numbers not from a command: %1 of %2").replace("%1", str(bad)) \
                 .replace("%2", str(m))
         else:
-            text = "✓ " + self.tr("%1 of %2 numbers verified").replace("%1", str(m)).replace("%2", str(m))
+            text = "✓ " + self.tr("Numbers verified: %1 of %2").replace("%1", str(m)).replace("%2", str(m))
         for state, label in (("user_input", self.tr("from your message")),
                              ("command_parameter", self.tr("command parameters")),
                              ("external_text", self.tr("from external text"))):
@@ -2038,8 +2047,8 @@ class AiPanel(QWidget):
         if report.interrupted:
             text += " " + self.tr("(answer interrupted)")
         if report.action_issues:
-            text += " ⛔ " + self.tr("%1 commands without the required confirmation").replace(
-                "%1", str(len(report.action_issues)))
+            text += " ⛔ " + counted(len(report.action_issues), self.tr("%1 command without the required confirmation"),
+                                    self.tr("%1 commands without the required confirmation"))
         return text
 
     def note_text(self, note) -> str:
@@ -2050,8 +2059,7 @@ class AiPanel(QWidget):
         def count(tokens: TokenCount) -> str:
             if not tokens.declared:
                 return self.tr("tokens not declared by the provider")
-            return self.tr("%1 input tokens, %2 output tokens").replace("%1", str(tokens.input_tokens)) \
-                .replace("%2", str(tokens.output_tokens))
+            return token_counts(tokens)
 
         text = self.tr("This answer: %1").replace("%1", count(answer.tokens))
         if answer.cost is not None:

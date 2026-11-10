@@ -564,7 +564,7 @@ def test_t5_highlight_from_the_answer(qtbot, settings_path, cache, closing):  # 
     fmt = next(f for t, *_, f in marked(view) if t == "9.75")
     assert fmt.isAnchor() and fmt.anchorHref() == "https://example.org/p/9.75"
     summary = win.ai_panel.findChild(type(win.ai_panel.privacy), "verifySummary").text()
-    assert summary.startswith("⚠ 3 of 5 numbers do not come from a command") and "+ 1 from your message" in summary
+    assert summary.startswith("⚠ Numbers not from a command: 3 of 5") and "+ 1 from your message" in summary
 
 
 def report_for(text, items):

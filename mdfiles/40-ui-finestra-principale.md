@@ -127,10 +127,19 @@ proiezione dell'immagine base dà `VIEW_CENTER_OUTSIDE_IMAGE` del `05` con il fr
   `cursor.read` (`41`); testo "fuori dal cielo" o "nessun dato" quando il
   modulo non dà un valore.
 - **Attività di rete:** numero di comandi di rete in corso e di tile HiPS
-  in arrivo.
+  in arrivo, con il plurale giusto in entrambe le lingue («Network: 1
+  command, 0 tiles» / «Rete: 1 comando, 0 tile»; §3.9).
 - **Comando in corso:** nome, avanzamento (passo n di m o indeterminato) e
   pulsante **Annulla** per ogni comando lungo (regola del proprietario del
-  2026-10-15).
+  2026-10-15). **Nome leggibile e tradotto (prova a mano del proprietario
+  del 2026-11-10, sprint D5b):** la barra mostra un titolo dell'azione
+  nella lingua dell'interfaccia («Loading catalog…» / «Caricamento
+  catalogo…»), **mai il nome interno** del comando (`catalog.load_region`),
+  che resta nel suggerimento insieme al titolo; ogni comando del registro
+  (e la riapertura di una sessione) ha il suo titolo (test T25). **Spazio:**
+  il titolo prende la larghezza che resta, al più 220 pt, e si accorcia con
+  «…» (testo completo nel suggerimento); **non copre mai** la barra di
+  avanzamento né **Annulla**, a nessuna larghezza della finestra (T25).
 - **SAMP (dal 2026-11-05, §3.12):** «SAMP: off», «SAMP: N apps» oppure
   «SAMP: N apps (own hub)»; **N conta solo i programmi collegati, mai
   l'hub** (sprint B1b, 2026-11-05: con l'hub di TOPCAT l'hub veniva
@@ -183,6 +192,16 @@ proiezione dell'immagine base dà `VIEW_CENTER_OUTSIDE_IMAGE` del `05` con il fr
   **codice sempre visibile e invariato**. Il testo originale del modulo non
   si perde: è il campo `text` del risultato (§3.7.1) e compare nel
   dettaglio della voce ("Copia come JSON" e dettagli del comando).
+- **Messaggi lunghi (prova a mano del proprietario del 2026-11-10, sprint
+  D5b):** un testo che non entra nella colonna si legge tutto in tre modi
+  evidenti: (1) il **suggerimento** di ogni cella mostra il testo completo
+  (comando, codice, testo nella lingua dell'interfaccia, poi testo
+  originale e parametri); (2) sopra la tabella i pulsanti **Details…** /
+  **Dettagli…** e **Copy** / **Copia**, attivi con una riga selezionata;
+  il doppio clic su una riga apre gli stessi dettagli; (3) la finestra dei
+  dettagli mostra il testo completo selezionabile, con **Copy** / **Copia**.
+  Copia mette negli appunti `#N CODICE: testo` più testo originale e
+  parametri, come il suggerimento; ⌘C sulla tabella fa lo stesso.
 
 #### 3.7.1 Catalogo dei messaggi (D40-3)
 
@@ -356,6 +375,25 @@ Architettura approvata dal proprietario il 2026-10-15:
 - **Traduzioni di Qt** per i dialoghi standard (apertura file, conferme).
 - **Lingua presa dal sistema** (`QLocale`), cambiabile nelle preferenze
   (inglese o italiano); il cambio vale al riavvio dell'app.
+- **Nome dell'app nella barra dei menu (prova a mano del proprietario del
+  2026-11-10, sprint D5b):** «AstroTwo». Nell'app costruita lo danno
+  `CFBundleName` e `CFBundleDisplayName` dell'`Info.plist` (`60` §3.2).
+  Avviata dal codice (`uv run astrotwo`) il processo è l'interprete Python
+  e macOS mostrerebbe «python»: prima di creare la `QApplication`, `main`
+  scrive `CFBundleName` = «AstroTwo» nel dizionario del bundle principale
+  in memoria (`NSBundle.mainBundle.infoDictionary`, con `ctypes` e il
+  runtime Objective-C del sistema: nessuna dipendenza nuova, nessun file
+  scritto); fuori da macOS o se la chiamata non riesce non fa niente.
+  Controllo a mano: prova L5 del `62`.
+- **Plurali (prova a mano del proprietario del 2026-11-10, sprint D5b):**
+  ogni testo con un numero di cose usa la forma giusta in inglese e in
+  italiano: singolare solo per 1 («1 command», «1 comando»), plurale per
+  0 e per gli altri numeri. Nell'interfaccia due testi tradotti per ogni
+  conteggio (`counted(n, one, many)`); quando la frase non si piega bene
+  (es. «1 of 1 numbers») si riscrive come etichetta e conteggio («Numbers
+  verified: 1 of 1»). Nel catalogo dei messaggi (§3.7.1) la forma
+  `{n|uno|molti}` sceglie la parola dal parametro intero `n` (anche
+  aggettivi e verbi: «{count|esclusa|escluse}»). Test T26.
 - **Numeri scientifici sempre con il punto decimale, in ogni lingua**:
   l'interfaccia non usa le regole numeriche della lingua per i valori
   scientifici (coordinate, misure, valori dei pixel, parametri), così i
@@ -694,6 +732,8 @@ simulati, in `tests/ui/`.
 | T24 | Riesegui con dati aggiornati (sprint B4) | servizio TAP simulato come voce dell'elenco; Data → Query ADQL… (risposta in cache), poi Riesegui e Riesegui con dati aggiornati; selezione di un comando senza rete e di due comandi misti; servizio spento e Riesegui con dati aggiornati; interfaccia in italiano | pulsante spento senza selezione, con un comando senza rete o con una selezione mista (suggerimento); Riesegui: risposta dalla cache (`FROM_CACHE`); Riesegui con dati aggiornati: nuova richiesta al servizio, comando con `"refresh": true` nel dettaglio, `DATA_REFRESHED` `fresh` nel pannello Messaggi; servizio spento: `DATA_REFRESHED` `cache_used`; «Riesegui con dati aggiornati» e testi italiani | test in `tests/ui/test_vo_queries_ui.py` |
 | T21c | Rifiniture SAMP (sprint B2) | tempo di risposta per tipo; avviso di mancata risposta per tabella e selezione; Tools → SAMP e menu contestuale con 0 e 3 righe selezionate; catalogo incrociato mandato a un client simulato | 60 s per `table.load.votable`, 10 s (o il tempo della finestra) per gli altri, anche quando la selezione manda prima la tabella; `no_reply_table` con "may still arrive"/"potrebbe arrivare comunque" in en/it; voci «Send whole table», «Send only the selected rows (N)» con N giusto, spente con N = 0; VOTable ricevuto con `xmatch_sep` in arcsec | test in `tests/ui/test_samp.py` |
 | T21b | SAMP con un destinatario come TOPCAT (§3.12, sprint B1b, 2026-11-05) | hub con identificativo `hub` (come JSAMP) e client simulato che si comporta come TOPCAT 4.10-8 (carica in differita e risponde a caricamento finito, rifiuta `table-id` già ricevuti e selezioni per tabelle che non ha); due finestre una dopo l'altra (due avvii); catalogo mandato, poi righe selezionate con clic, ordinamento e conferma delle colonne, poi "Send selected rows" a tutti; righe selezionate di una tabella mai mandata; client morto ancora registrato | «SAMP: 1 apps» con hub e un programma, hub nel suggerimento e non tra i destinatari; una sola tabella per avvio nel client, selezione applicata alla tabella giusta con le righe giuste (`table_sent` falso dopo un invio); `table-id` diversi tra i due avvii; client morto in `rejected` con avviso, gli altri raggiunti; un solo avviso di iscrizioni dell'hub al collegamento | test con hub e client simulati, più prova con TOPCAT vero |
+| T25 | Barra di stato (sprint D5b, §3.5) | ogni comando del registro e `session.open`; finestra a 1400 pt e alla larghezza minima, comando lungo in corso | ogni comando ha un titolo tradotto diverso dal nome interno; l'etichetta del comando finisce prima della barra e di Annulla, il suo testo entra nella sua larghezza | test |
+| T26 | Plurali e messaggi lunghi (sprint D5b, §3.7, §3.9) | conteggi 0, 1, 2 in inglese e italiano; voci del catalogo con `{n|uno|molti}`; messaggio lungo nel pannello Messaggi | forme giuste; segnaposto e forme coerenti nelle due lingue; suggerimento con il testo completo, Dettagli… e doppio clic con il testo completo, Copia negli appunti | test |
 | T21 | SAMP (§3.12, sprint B1) | hub e client simulati di `pyvo.samp` nella cartella home temporanea dei test (porta casuale, mai il `~/.samp` vero): Connect con un hub già attivo e senza hub; invio di catalogo, righe selezionate, centro della vista e sorgente selezionata a tutti e a un client; ricezione dei tre tipi; tipo non supportato; tabella sconosciuta; uscita del client e spegnimento dell'hub esterno; Disconnect e chiusura della finestra con hub proprio; hub che non risponde | hub esterno usato (nessun hub proprio) o hub proprio con profilo web spento; contenuti ricevuti dal client uguali a quelli della tabella (colonne, unità, UCD, epoca del `COOSYS`), righe e gradi ICRS ricalcolati con astropy; nuovo catalogo, selezione e centro della vista con comandi in cronologia di origine `samp` e il nome del client; tipo non supportato rifiutato senza azione; `SAMP_TABLE_UNKNOWN`; elenco e stato aggiornati; file di blocco rimosso alla chiusura; con l'hub muto `SAMP_UNAVAILABLE` (`timeout`) e thread principale sempre libero (sonda di latenza) | test con hub e client simulati |
 
 ## 13. Decisioni aperte
@@ -895,3 +935,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL** (decisioni del proprietario del 2026-11-06): §3.3 Data → Cone search… e Query ADQL… (dialoghi del `42` §3.8; ordine D42-2 (1)); §3.10 preferenza `vo/personal_servers` (miei server VO, fuori dalla finestra delle preferenze, scritta dopo l'esito `ok` di `vo.add_server`/`vo.remove_server` del `05`); errori in finestra "The query was not run"; nuovo T23 (§12). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint B4 — Riesegui con dati aggiornati** (richiesta del proprietario del 2026-11-07; scelte minori D14-15 (8) del 14 da confermare; autorizzazione esplicita ad aggiornare il 40): §3.6 — pulsante «Rerun with fresh data» / «Riesegui con dati aggiornati» accanto a Riesegui, comandi in coda con il campo `refresh: true` del `05`, attivo solo se tutti i comandi selezionati usano la rete, avviso `DATA_REFRESHED` nel risultato; supera D42-2 (6); T24. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C2 — comandi del livello 2 nel registro dell'applicazione** (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6): la finestra, quando costruisce il registro con `default_registry`, vi aggiunge i comandi dei livelli 2–4 con `register_analysis_commands` (oggi `object.profile` del `25`, 05 §3.2); nessuna voce di menu nuova (interfaccia del profilo nello sprint C5, `43`): in C2 il comando si dà dal registro (script, sessione salvata) e, se registrato in una sessione, si vede e si riesegue dal pannello Comandi. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D5b (prova a mano del proprietario del 2026-11-10, quattro problemi):** §3.5 titolo leggibile e tradotto del comando in corso (mai il nome interno), mai sopra la barra e Annulla; rete con il plurale giusto; §3.7 messaggi lunghi (suggerimento completo, Dettagli…, doppio clic, Copia); §3.9 plurali (`counted`, forma `{n|uno|molti}` del catalogo) e nome «AstroTwo» nella barra dei menu anche avviando dal codice; T25, T26. Stato `approvato` invariato. |

@@ -38,7 +38,7 @@ from astrotwo.core.commands import shown_order
 #: Testi del pannello (inglese); la finestra principale passa quelli tradotti con ``tr()`` (40 §3.9).
 DEFAULT_TEXTS = {
     "missing": "missing value", "not_drawn": "not drawn in this view", "row": "row %1",
-    "rows": "%1 rows", "sorted": "sorted by %1 (%2)", "ascending": "ascending", "descending": "descending",
+    "rows": "%1 rows", "rows_one": "%1 row", "sorted": "sorted by %1 (%2)", "ascending": "ascending", "descending": "descending",
     "table_order": "table order", "retrieved": "retrieved %1", "ucd": "UCD: %1",
     "record_empty": "Select one row to see the full record.", "record_many": "%1 rows selected.",
     "field": "Field", "value": "Value", "unit": "Unit", "ucd_header": "UCD",
@@ -471,7 +471,7 @@ class CatalogTab(QWidget):
             parts.append(catalog.origin)
         if catalog.retrieved_at is not None:
             parts.append(_t(t["retrieved"], catalog.retrieved_at.isoformat(timespec="seconds")))
-        parts.append(_t(t["rows"], len(catalog.table)))
+        parts.append(_t(t["rows_one" if len(catalog.table) == 1 else "rows"], len(catalog.table)))
         sort = layer.sort
         parts.append(t["table_order"] if sort is None else _t(t["sorted"], sort["column"], t[sort["direction"]]))
         self.info.setText(" · ".join(str(p) for p in parts if p))

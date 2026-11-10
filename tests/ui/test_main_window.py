@@ -243,8 +243,10 @@ def test_t3_t4_responsive_and_cancel(qtbot, window, monkeypatch):
     probe.stop()
     assert max(gaps[1:]) < 100, max(gaps)  # sonda di latenza del thread principale (§9)
     assert win.status.cancel_button.isVisible() and win.status.progress_bar.isVisible()
-    assert "catalog.load_region" in win.status.command_label.text()
-    assert win.status.network_label.text().startswith("Network: 1")
+    assert win.status.command_label.full_text.startswith("Loading catalog…")  # titolo leggibile (§3.5)
+    assert "catalog.load_region" not in win.status.command_label.text()
+    assert "catalog.load_region" in win.status.command_label.toolTip()
+    assert win.status.network_label.text().startswith("Network: 1 command,")
     win.status.cancel_button.click()
     wait_idle(qtbot, win, timeout=10000)
     last = win.session.history.entries[-1]

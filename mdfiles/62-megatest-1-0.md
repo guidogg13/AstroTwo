@@ -170,6 +170,18 @@ dell'app usate da un astrofisico.
 | L2 | Con l'app in italiano, ripetere E2 | Lingua proposta per il PDF: **inglese**; nessuna parola italiana nel PDF |
 | L3 | Provocare un errore (es. F4) con l'app in italiano | Messaggio in italiano, con il codice dell'errore nei dettagli |
 | L4 | Tornare all'inglese, riavvio | Tutto in inglese |
+| L5 | Guardare la barra dei menu di macOS con l'app aperta (dal `.dmg`) | Il primo menu si chiama **AstroTwo**, non «python» (`40` §3.9; chi prova dal codice con `uv run astrotwo` vede lo stesso nome) |
+| L6 | Con l'app in italiano e in inglese, caricare un catalogo con **una sola** riga (es. cone search di 2″ su una stella isolata) e guardare barra di stato e pannello Layers | Singolare giusto: «Rete: 1 comando, …» / «Network: 1 command, …», «1 riga» / «1 row»; mai «1 comandi», «1 apps» (`40` §3.9) |
+
+### 3.14bis Barra di stato e pannello Messaggi (U)
+
+Prove aggiunte dopo la prova a mano del proprietario del 2026-11-10 (app dal codice, M45, CDS giù).
+
+| # | Prova | Risultato atteso |
+|---|---|---|
+| U1 | *Go to* `M 45`, **Data → Catalog in view…** Gaia DR3, e guardare la barra di stato in basso a destra mentre carica | Titolo leggibile e tradotto («Loading catalog…» / «Caricamento catalogo…»), mai il nome interno `catalog.load_region` (che compare solo nel suggerimento); il titolo non copre la barra di avanzamento né **Cancel** / **Annulla** |
+| U2 | Come U1 con la finestra stretta al minimo (trascinare il bordo) | Il titolo si accorcia con «…», **Annulla** resta intero e cliccabile; nessuna scritta sovrapposta |
+| U3 | Provocare un errore con un testo lungo (es. D9, o il CDS giù con un catalogo VizieR) e guardare il pannello **Messages** / **Messaggi** | Passando sopra la riga, il suggerimento mostra tutto il testo; con la riga selezionata **Details…** / **Dettagli…** (o doppio clic) apre una finestra con il testo completo selezionabile; **Copy** / **Copia** (o ⌘C) mette il testo completo negli appunti (incollarlo in TextEdit per controllare) |
 
 ### 3.15 Servizi giù e mirror (D)
 
@@ -268,3 +280,4 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** D62-1 **approvata** (§13; scelte già scritte in §3.1). Nuove prove D6 e D7 (D25-23, assenze solo dopo una richiesta) e D8 (permessi dei file esportati, decisione del 2026-11-10). Stato `bozza` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** D7 con l'intestazione «Not checked» e la riga di stato del PDF; nuova prova D9 (messaggio del primo server quando cadono tutti). Stato `bozza` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D4 (decisioni del proprietario del 2026-11-10):** nuova prova A4 (app firmata Developer ID e notarizzata, solo se la candidata lo è; firma preparata in `60` §3.12, non ancora eseguita). Stato `bozza` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D5b (prova a mano del proprietario del 2026-11-10):** nuove prove L5 (nome «AstroTwo» nella barra dei menu, corretto anche avviando dal codice), L6 (plurali) e §3.14bis U1–U3 (titolo leggibile del comando senza coprire Annulla, finestra stretta, messaggi lunghi con suggerimento, Dettagli…, doppio clic e Copia). Stato `bozza` invariato. |

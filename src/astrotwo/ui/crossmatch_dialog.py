@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from astrotwo.core.commands import CROSSMATCH_DEFAULT_MAX_SEP, ResultMessage, time_text
-from astrotwo.ui.message_view import shown_line
+from astrotwo.ui.message_view import counted, shown_line
 
 __all__ = ["CrossmatchDialog", "CrossmatchReportDialog", "MAX_SEP_UNITS", "epoch_of"]
 
@@ -198,7 +198,8 @@ class CrossmatchReportDialog(QDialog):
         not_declared = self.tr("not declared")
         epochs = [e if e is not None else not_declared for e in report["epochs"]]
         lines = [
-            self.tr("New catalog: %1 (%2 rows)").replace("%1", str(values["layer"])).replace("%2", str(x["rows"])),
+            self.tr("New catalog: %1 (%2)").replace("%1", str(values["layer"])).replace(
+                "%2", counted(x["rows"], self.tr("%1 row"), self.tr("%1 rows"))),
             self.tr("A: %1 · %2").replace("%1", x["layer_a"]).replace("%2", x["name_a"]),
             self.tr("B: %1 · %2").replace("%1", x["layer_b"]).replace("%2", x["name_b"]),
             self.tr("Method: %1").replace("%1", report["method"] + (f" ({report['service']})"

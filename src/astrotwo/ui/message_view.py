@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from astrotwo.core.commands import ResultMessage
 from astrotwo.messages_catalog import LANGUAGES, message_text
 
-__all__ = ["set_language", "language", "shown_text", "shown_line", "message_details", "ValueProblem",
+__all__ = ["counted", "set_language", "language", "shown_text", "shown_line", "message_details", "ValueProblem",
            "exception_message", "shown_exception"]
 
 _language = "en"
@@ -29,6 +29,12 @@ def set_language(lang: str) -> None:
 
 def language() -> str:
     return _language
+
+
+def counted(n: int, one: str, many: str) -> str:
+    """Conteggio con il plurale giusto (40 §3.9, sprint D5b): ``one`` (già tradotto, con ``%1``) solo per 1, ``many``
+    per 0 e per gli altri numeri; in inglese e in italiano il singolare vale solo per 1."""
+    return (one if n == 1 else many).replace("%1", str(n))
 
 
 def shown_text(message: ResultMessage) -> str:

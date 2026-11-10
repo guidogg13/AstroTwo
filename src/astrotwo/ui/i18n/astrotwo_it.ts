@@ -127,6 +127,10 @@
         <translation>Serve la conferma: %1</translation>
     </message>
     <message>
+        <source>at most %1 row</source>
+        <translation>al più %1 riga</translation>
+    </message>
+    <message>
         <source>uses the network</source>
         <translation>usa la rete</translation>
     </message>
@@ -279,12 +283,12 @@
         <translation>nessun numero da verificare</translation>
     </message>
     <message>
-        <source>%1 of %2 numbers do not come from a command</source>
-        <translation>%1 numeri su %2 non vengono da un comando</translation>
+        <source>Numbers not from a command: %1 of %2</source>
+        <translation>Numeri che non vengono da un comando: %1 su %2</translation>
     </message>
     <message>
-        <source>%1 of %2 numbers verified</source>
-        <translation>%1 numeri su %2 verificati</translation>
+        <source>Numbers verified: %1 of %2</source>
+        <translation>Numeri verificati: %1 su %2</translation>
     </message>
     <message>
         <source>from your message</source>
@@ -307,16 +311,16 @@
         <translation>(risposta interrotta)</translation>
     </message>
     <message>
+        <source>%1 command without the required confirmation</source>
+        <translation>%1 comando senza la conferma dovuta</translation>
+    </message>
+    <message>
         <source>%1 commands without the required confirmation</source>
         <translation>%1 comandi senza la conferma dovuta</translation>
     </message>
     <message>
         <source>tokens not declared by the provider</source>
         <translation>token non dichiarati dal provider</translation>
-    </message>
-    <message>
-        <source>%1 input tokens, %2 output tokens</source>
-        <translation>%1 token in ingresso, %2 in uscita</translation>
     </message>
     <message>
         <source>This answer: %1</source>
@@ -454,16 +458,16 @@
         <translation>Richiesta dei modelli al provider…</translation>
     </message>
     <message>
+        <source>%1 model from the provider.</source>
+        <translation>%1 modello dal provider.</translation>
+    </message>
+    <message>
         <source>%1 models from the provider.</source>
         <translation>%1 modelli dal provider.</translation>
     </message>
     <message>
         <source>Testing…</source>
         <translation>Prova in corso…</translation>
-    </message>
-    <message>
-        <source>%1 input tokens, %2 output tokens</source>
-        <translation>%1 token in ingresso, %2 in uscita</translation>
     </message>
     <message>
         <source>tokens not declared by the provider</source>
@@ -772,8 +776,16 @@
         <translation>non dichiarata</translation>
     </message>
     <message>
-        <source>New catalog: %1 (%2 rows)</source>
-        <translation>Nuovo catalogo: %1 (%2 righe)</translation>
+        <source>New catalog: %1 (%2)</source>
+        <translation>Nuovo catalogo: %1 (%2)</translation>
+    </message>
+    <message>
+        <source>%1 row</source>
+        <translation>%1 riga</translation>
+    </message>
+    <message>
+        <source>%1 rows</source>
+        <translation>%1 righe</translation>
     </message>
     <message>
         <source>A: %1 · %2</source>
@@ -1322,6 +1334,10 @@
         <translation>%1 citazioni</translation>
     </message>
     <message>
+        <source>%1 citation</source>
+        <translation>%1 citazione</translation>
+    </message>
+    <message>
         <source>%1 from the pointer</source>
         <translation>%1 dal puntatore</translation>
     </message>
@@ -1332,6 +1348,10 @@
     <message>
         <source>+%1 more magnitudes (in the command result)</source>
         <translation>+%1 altre magnitudini (nel risultato del comando)</translation>
+    </message>
+    <message>
+        <source>+%1 more magnitude (in the command result)</source>
+        <translation>+%1 altra magnitudine (nel risultato del comando)</translation>
     </message>
     <message>
         <source>SIMBAD page</source>
@@ -1348,6 +1368,10 @@
     <message>
         <source>SIMBAD: %1</source>
         <translation>SIMBAD: %1</translation>
+    </message>
+    <message>
+        <source>%1 row</source>
+        <translation>%1 riga</translation>
     </message>
     <message>
         <source>Columns…</source>
@@ -1466,12 +1490,12 @@
         <translation>epoca non nota</translation>
     </message>
     <message>
-        <source>%1 of %2 rows drawn</source>
-        <translation>%1 righe disegnate su %2</translation>
-    </message>
-    <message>
         <source>drawn at epoch %1</source>
         <translation>disegnato all&apos;epoca %1</translation>
+    </message>
+    <message>
+        <source>Rows drawn: %1 of %2</source>
+        <translation>Righe disegnate: %1 su %2</translation>
     </message>
     <message>
         <source>table positions (not propagated)</source>
@@ -1488,6 +1512,10 @@
     <message>
         <source>%1 cells</source>
         <translation>%1 celle</translation>
+    </message>
+    <message>
+        <source>%1 cell</source>
+        <translation>%1 cella</translation>
     </message>
     <message>
         <source>not drawn: %1</source>
@@ -1837,12 +1865,28 @@
         <translation>Messaggio</translation>
     </message>
     <message>
+        <source>Details…</source>
+        <translation>Dettagli…</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>Copia</translation>
+    </message>
+    <message>
+        <source>The whole message: select a row (or double-click it).</source>
+        <translation>Il messaggio intero: seleziona una riga (o fai doppio clic).</translation>
+    </message>
+    <message>
         <source>No messages</source>
         <translation>Nessun messaggio</translation>
     </message>
     <message>
         <source>Errors and warnings of the modules appear here with their code, their unchanged text and the number of the command that produced them; errors in red.</source>
         <translation>Errori e avvisi dei moduli compaiono qui con il loro codice, il loro testo invariato e il numero del comando che li ha prodotti; gli errori in rosso.</translation>
+    </message>
+    <message>
+        <source>Message %1</source>
+        <translation>Messaggio %1</translation>
     </message>
 </context>
 <context>
@@ -2060,7 +2104,7 @@
         <translation>vuota</translation>
     </message>
     <message>
-        <source>Used: %1 bytes of %2 (%3)</source>
+        <source>Used: %1 of %2 bytes (%3)</source>
         <translation>Usati: %1 byte su %2 (%3)</translation>
     </message>
 </context>
@@ -2364,7 +2408,7 @@
     <name>SentDataDialog</name>
     <message>
         <source>What was sent</source>
-        <extracomment>Larghezza di default del pannello (scelta minore 1 del 44: 400 pt, intervallo 380–420). Default delle impostazioni (forma testuale, come le preferenze del 40). Profili e consensi sono JSON. Dialetto GitHub (tabelle, elenchi) senza HTML: con ``MarkdownNoHTML`` i tag restano testo (verificato il 2026-10-22 con Qt 6.12, md4c). Stile di ogni stato del 34 (44 §3.4, §3.11 punto 3); ``excluded`` non ha stile. Proprietà del formato con lo stato (ispezione del documento, T5).</extracomment>
+        <extracomment>Dialetto GitHub (tabelle, elenchi) senza HTML: con ``MarkdownNoHTML`` i tag restano testo (verificato il 2026-10-22 con Qt 6.12, md4c). Stile di ogni stato del 34 (44 §3.4, §3.11 punto 3); ``excluded`` non ha stile. Proprietà del formato con lo stato (ispezione del documento, T5).</extracomment>
         <translation>Cosa è stato inviato</translation>
     </message>
     <message>
@@ -2419,8 +2463,24 @@
         <translation>epoca %1</translation>
     </message>
     <message>
-        <source>Network: %1 commands, %2 tiles</source>
-        <translation>Rete: %1 comandi, %2 tile</translation>
+        <source>Network: %1, %2</source>
+        <translation>Rete: %1, %2</translation>
+    </message>
+    <message>
+        <source>%1 command</source>
+        <translation>%1 comando</translation>
+    </message>
+    <message>
+        <source>%1 commands</source>
+        <translation>%1 comandi</translation>
+    </message>
+    <message>
+        <source>%1 tile</source>
+        <translation>%1 tile</translation>
+    </message>
+    <message>
+        <source>%1 tiles</source>
+        <translation>%1 tile</translation>
     </message>
     <message>
         <source>SAMP: off</source>
@@ -2433,6 +2493,10 @@
     <message>
         <source>SAMP: %1 apps</source>
         <translation>SAMP: %1 programmi</translation>
+    </message>
+    <message>
+        <source>SAMP: %1 app</source>
+        <translation>SAMP: %1 programma</translation>
     </message>
     <message>
         <source>(own hub)</source>
@@ -2459,8 +2523,248 @@
         <translation>Collegati: %1</translation>
     </message>
     <message>
+        <source>Clearing the cache…</source>
+        <translation>Svuotamento della cache…</translation>
+    </message>
+    <message>
+        <source>Calculating coordinates…</source>
+        <translation>Calcolo delle coordinate…</translation>
+    </message>
+    <message>
+        <source>Converting the pixel value…</source>
+        <translation>Conversione del valore del pixel…</translation>
+    </message>
+    <message>
+        <source>Converting the time…</source>
+        <translation>Conversione del tempo…</translation>
+    </message>
+    <message>
+        <source>Converting units…</source>
+        <translation>Conversione delle unità…</translation>
+    </message>
+    <message>
+        <source>Evaluating the expression…</source>
+        <translation>Calcolo dell'espressione…</translation>
+    </message>
+    <message>
+        <source>Running the cone search…</source>
+        <translation>Ricerca a cono…</translation>
+    </message>
+    <message>
+        <source>Cross-matching catalogs…</source>
+        <translation>Incrocio dei cataloghi…</translation>
+    </message>
+    <message>
+        <source>Describing the catalog…</source>
+        <translation>Descrizione del catalogo…</translation>
+    </message>
+    <message>
+        <source>Loading catalog…</source>
+        <translation>Caricamento catalogo…</translation>
+    </message>
+    <message>
+        <source>Opening catalog…</source>
+        <translation>Apertura del catalogo…</translation>
+    </message>
+    <message>
+        <source>Reading catalog rows…</source>
+        <translation>Lettura delle righe del catalogo…</translation>
+    </message>
+    <message>
+        <source>Searching catalogs…</source>
+        <translation>Ricerca dei cataloghi…</translation>
+    </message>
+    <message>
+        <source>Selecting rows…</source>
+        <translation>Selezione delle righe…</translation>
+    </message>
+    <message>
+        <source>Setting position columns…</source>
+        <translation>Impostazione delle colonne di posizione…</translation>
+    </message>
+    <message>
+        <source>Changing the catalog style…</source>
+        <translation>Cambio dello stile del catalogo…</translation>
+    </message>
+    <message>
+        <source>Running the ADQL query…</source>
+        <translation>Esecuzione della query ADQL…</translation>
+    </message>
+    <message>
+        <source>Resolving the name…</source>
+        <translation>Risoluzione del nome…</translation>
+    </message>
+    <message>
+        <source>Reading under the cursor…</source>
+        <translation>Lettura sotto il cursore…</translation>
+    </message>
+    <message>
+        <source>Loading HiPS survey…</source>
+        <translation>Caricamento del survey HiPS…</translation>
+    </message>
+    <message>
+        <source>Opening image…</source>
+        <translation>Apertura dell'immagine…</translation>
+    </message>
+    <message>
+        <source>Changing the image display…</source>
+        <translation>Cambio della visualizzazione dell'immagine…</translation>
+    </message>
+    <message>
+        <source>Listing layers…</source>
+        <translation>Elenco dei livelli…</translation>
+    </message>
+    <message>
+        <source>Moving the layer…</source>
+        <translation>Spostamento del livello…</translation>
+    </message>
+    <message>
+        <source>Removing the layer…</source>
+        <translation>Rimozione del livello…</translation>
+    </message>
+    <message>
+        <source>Changing the opacity…</source>
+        <translation>Cambio dell'opacità…</translation>
+    </message>
+    <message>
+        <source>Changing the visibility…</source>
+        <translation>Cambio della visibilità…</translation>
+    </message>
+    <message>
+        <source>Measuring the distance…</source>
+        <translation>Misura della distanza…</translation>
+    </message>
+    <message>
+        <source>Opening MOC…</source>
+        <translation>Apertura del MOC…</translation>
+    </message>
+    <message>
+        <source>Exporting the profile…</source>
+        <translation>Esportazione del profilo…</translation>
+    </message>
+    <message>
+        <source>Building the object profile…</source>
+        <translation>Profilo dell'oggetto in corso…</translation>
+    </message>
+    <message>
+        <source>Loading the SED points…</source>
+        <translation>Caricamento dei punti della SED…</translation>
+    </message>
+    <message>
+        <source>Saving preferences…</source>
+        <translation>Salvataggio delle preferenze…</translation>
+    </message>
+    <message>
+        <source>Connecting to SAMP…</source>
+        <translation>Connessione a SAMP…</translation>
+    </message>
+    <message>
+        <source>Disconnecting from SAMP…</source>
+        <translation>Disconnessione da SAMP…</translation>
+    </message>
+    <message>
+        <source>Sending the position via SAMP…</source>
+        <translation>Invio della posizione con SAMP…</translation>
+    </message>
+    <message>
+        <source>Sending the selection via SAMP…</source>
+        <translation>Invio della selezione con SAMP…</translation>
+    </message>
+    <message>
+        <source>Sending the table via SAMP…</source>
+        <translation>Invio della tabella con SAMP…</translation>
+    </message>
+    <message>
+        <source>Asking SIMBAD…</source>
+        <translation>Richiesta a SIMBAD…</translation>
+    </message>
+    <message>
+        <source>Sorting the table…</source>
+        <translation>Ordinamento della tabella…</translation>
+    </message>
+    <message>
+        <source>Changing the appearance…</source>
+        <translation>Cambio dell'aspetto…</translation>
+    </message>
+    <message>
+        <source>Changing full screen…</source>
+        <translation>Cambio dello schermo intero…</translation>
+    </message>
+    <message>
+        <source>Changing the panels…</source>
+        <translation>Cambio dei pannelli…</translation>
+    </message>
+    <message>
+        <source>Changing the tool…</source>
+        <translation>Cambio dello strumento…</translation>
+    </message>
+    <message>
+        <source>Exporting the view…</source>
+        <translation>Esportazione della vista…</translation>
+    </message>
+    <message>
+        <source>Going to the target…</source>
+        <translation>Spostamento sul bersaglio…</translation>
+    </message>
+    <message>
+        <source>Moving the view…</source>
+        <translation>Spostamento della vista…</translation>
+    </message>
+    <message>
+        <source>Changing the coordinate display…</source>
+        <translation>Cambio della visualizzazione delle coordinate…</translation>
+    </message>
+    <message>
+        <source>Changing the grid…</source>
+        <translation>Cambio della griglia…</translation>
+    </message>
+    <message>
+        <source>Changing the overlays…</source>
+        <translation>Cambio delle sovrapposizioni…</translation>
+    </message>
+    <message>
+        <source>Zooming…</source>
+        <translation>Zoom…</translation>
+    </message>
+    <message>
+        <source>Adding the VO server…</source>
+        <translation>Aggiunta del server VO…</translation>
+    </message>
+    <message>
+        <source>Removing the VO server…</source>
+        <translation>Rimozione del server VO…</translation>
+    </message>
+    <message>
+        <source>Opening session…</source>
+        <translation>Apertura della sessione…</translation>
+    </message>
+    <message>
+        <source>Working…</source>
+        <translation>In corso…</translation>
+    </message>
+    <message>
         <source>step %1 of %2</source>
         <translation>passo %1 di %2</translation>
+    </message>
+</context>
+<context>
+    <name>TokenCounts</name>
+    <message>
+        <source>%1 input token</source>
+        <extracomment>Larghezza di default del pannello (scelta minore 1 del 44: 400 pt, intervallo 380–420). Default delle impostazioni (forma testuale, come le preferenze del 40). Profili e consensi sono JSON.</extracomment>
+        <translation>%1 token in ingresso</translation>
+    </message>
+    <message>
+        <source>%1 input tokens</source>
+        <translation>%1 token in ingresso</translation>
+    </message>
+    <message>
+        <source>%1 output token</source>
+        <translation>%1 token in uscita</translation>
+    </message>
+    <message>
+        <source>%1 output tokens</source>
+        <translation>%1 token in uscita</translation>
     </message>
 </context>
 <context>

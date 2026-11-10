@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-10 — **sprint D5a:** D25-24 decisa e in codice (`25`, `02` §2, `43`); seconda misura ricalcolata senza rete (177 pass, 0 fail, 85 non misurati). Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **20 aperte.**
+**Ultimo aggiornamento:** 2026-11-10 — **sprint D5b:** quattro problemi della prova a mano corretti (`40` §3.5, §3.7, §3.9; `62` L5, L6, U1–U3). Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **20 aperte.**
+
+Prima, 2026-11-10 — **sprint D5a:** D25-24 decisa e in codice (`25`, `02` §2, `43`); seconda misura ricalcolata senza rete (177 pass, 0 fail, 85 non misurati). Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **20 aperte.**
 
 Prima, 2026-11-10 — **sprint D4c:** `.zenodo.json` coerente con `CITATION.cff` (file fuori da `mdfiles/`); `60` §3.12 con i passi del proprietario per la firma; file di stato controllati. Nessun cambio di stato; riepilogo invariato: approvato 28, bozza 6, non esiste 11, totale 45. **21 aperte.**
 

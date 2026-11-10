@@ -55,6 +55,7 @@ from PySide6.QtGui import (
     QFontDatabase,
     QIcon,
     QKeySequence,
+    QShortcut,
     QPainter,
     QPalette,
     QPixmap,
@@ -127,6 +128,7 @@ from astrotwo.ui.licenses_dialog import LicensesDialog
 from astrotwo.ui.samp_link import SampLink, SampStatus
 from astrotwo.ui.message_view import (
     ValueProblem,
+    counted,
     exception_message,
     message_details,
     set_language,
@@ -898,6 +900,39 @@ class GoToField(QLineEdit):
             self.goTo.emit(text)
 
 
+class ElidedLabel(QLabel):
+    """Etichetta che si accorcia con «…» alla larghezza che il layout le dà (40 §3.5, sprint D5b): larghezza minima
+    0, preferita = testo intero fino a ``maximumWidth``; il testo completo resta in ``full_text`` e nel suggerimento.
+    Il layout non le dà mai più spazio di quello che ha, quindi non disegna sopra i vicini (barra e Annulla)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.full_text = ""
+        self.minimum_shown = 80  # pt: l'inizio del titolo resta leggibile anche nella finestra più stretta
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+
+    def set_full_text(self, text: str) -> None:
+        self.full_text = text
+        self.setToolTip(text)
+        self.updateGeometry()
+        self._elide()
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(min(self.minimum_shown, self.maximumWidth()), super().minimumSizeHint().height())
+
+    def sizeHint(self) -> QSize:
+        width = QFontMetrics(self.font()).horizontalAdvance(self.full_text) + 4
+        return QSize(min(width, self.maximumWidth()), super().sizeHint().height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - nome di Qt
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self) -> None:
+        super().setText(QFontMetrics(self.font()).elidedText(self.full_text, Qt.TextElideMode.ElideRight,
+                                                             max(self.width() - 2, 0)))
+
+
 class StatusBar(QStatusBar):
     """Barra di stato di una riga (§3.5): sotto il mouse, attività di rete, comando in corso con Annulla."""
 
@@ -914,7 +949,8 @@ class StatusBar(QStatusBar):
         self.network_label = QLabel()
         self.samp_label = QLabel()  # stato SAMP (§3.5, §3.12)
         self.samp_label.setObjectName("sampStatus")
-        self.command_label = QLabel()
+        self.command_label = ElidedLabel()  # titolo leggibile del comando in corso (§3.5, sprint D5b)
+        self.command_label.setObjectName("runningCommand")
         for label in (self.cursor_label, self.value_label, self.network_label, self.samp_label, self.command_label):
             label.setFont(font)
         # Il testo sotto il mouse cambia a ogni movimento: non deve mai cambiare la larghezza minima della finestra
@@ -930,8 +966,9 @@ class StatusBar(QStatusBar):
         self._value_text = ""
         self._fits_text = ""
         self._value_unit = self._value_source = ""
-        self.command_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        self.command_label.setFixedWidth(220)
+        # Al più 220 pt, meno se la finestra è stretta: prima era larga 220 fissi con la politica «Ignored», il layout
+        # le dava pochi punti e il testo finiva sopra la barra e Annulla (prova a mano del 2026-11-10).
+        self.command_label.setMaximumWidth(220)
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedSize(90, 4)
         self.progress_bar.setTextVisible(False)
@@ -1050,8 +1087,10 @@ class StatusBar(QStatusBar):
         return [f"{head} ({epoch_text})", head]
 
     def show_network(self, commands: int, tiles: int) -> None:
-        self.network_label.setText(self.tr("Network: %1 commands, %2 tiles").replace("%1", str(commands))
-                                   .replace("%2", str(tiles)))
+        """«Network: 1 command, 0 tiles» con il plurale giusto (§3.5, §3.9)."""
+        self.network_label.setText(self.tr("Network: %1, %2").replace(
+            "%1", counted(commands, self.tr("%1 command"), self.tr("%1 commands"))).replace(
+            "%2", counted(tiles, self.tr("%1 tile"), self.tr("%1 tiles"))))
 
     def show_samp(self, status: SampStatus) -> None:
         """«SAMP: off», «SAMP: N apps» o «SAMP: N apps (own hub)»; nel suggerimento hub e nomi dei client (§3.12)."""
@@ -1059,7 +1098,7 @@ class StatusBar(QStatusBar):
             self.samp_label.setText(self.tr("SAMP: off"))
             self.samp_label.setToolTip(self.tr("Not connected to a SAMP hub (Tools → SAMP → Connect)."))
             return
-        text = self.tr("SAMP: %1 apps").replace("%1", str(len(status.clients)))
+        text = counted(len(status.clients), self.tr("SAMP: %1 app"), self.tr("SAMP: %1 apps"))
         if status.own_hub:
             text += " " + self.tr("(own hub)")
         self.samp_label.setText(text)
@@ -1070,26 +1109,83 @@ class StatusBar(QStatusBar):
         connected = self.tr("Connected: %1").replace("%1", names)  # fuori dalla f-string: lupdate la vede
         self.samp_label.setToolTip(f"{hub} {connected}")
 
+    def command_title(self, name: str) -> str:
+        """Titolo leggibile e tradotto di un comando (§3.5, sprint D5b): mai il nome interno; un comando senza titolo
+        (non deve esistere, test T25) mostra «Working…»."""
+        titles = {
+            "cache.clear": self.tr("Clearing the cache…"),
+            "calc.calculate_coordinates": self.tr("Calculating coordinates…"),
+            "calc.convert_pixel_value": self.tr("Converting the pixel value…"),
+            "calc.convert_time": self.tr("Converting the time…"),
+            "calc.convert_units": self.tr("Converting units…"),
+            "calc.evaluate_expression": self.tr("Evaluating the expression…"),
+            "catalog.cone_search": self.tr("Running the cone search…"),
+            "catalog.crossmatch": self.tr("Cross-matching catalogs…"),
+            "catalog.describe": self.tr("Describing the catalog…"),
+            "catalog.load_region": self.tr("Loading catalog…"),
+            "catalog.open_file": self.tr("Opening catalog…"),
+            "catalog.rows": self.tr("Reading catalog rows…"),
+            "catalog.search": self.tr("Searching catalogs…"),
+            "catalog.select": self.tr("Selecting rows…"),
+            "catalog.set_columns": self.tr("Setting position columns…"),
+            "catalog.set_style": self.tr("Changing the catalog style…"),
+            "catalog.tap_query": self.tr("Running the ADQL query…"),
+            "coords.resolve_name": self.tr("Resolving the name…"),
+            "cursor.read": self.tr("Reading under the cursor…"),
+            "hips.set_survey": self.tr("Loading HiPS survey…"),
+            "image.open": self.tr("Opening image…"),
+            "image.set_display": self.tr("Changing the image display…"),
+            "layer.list": self.tr("Listing layers…"),
+            "layer.move": self.tr("Moving the layer…"),
+            "layer.remove": self.tr("Removing the layer…"),
+            "layer.set_opacity": self.tr("Changing the opacity…"),
+            "layer.set_visible": self.tr("Changing the visibility…"),
+            "measure.distance": self.tr("Measuring the distance…"),
+            "moc.open": self.tr("Opening MOC…"),
+            "object.export": self.tr("Exporting the profile…"),
+            "object.profile": self.tr("Building the object profile…"),
+            "object.send_sed": self.tr("Loading the SED points…"),
+            "prefs.set": self.tr("Saving preferences…"),
+            "samp.connect": self.tr("Connecting to SAMP…"),
+            "samp.disconnect": self.tr("Disconnecting from SAMP…"),
+            "samp.point_at": self.tr("Sending the position via SAMP…"),
+            "samp.send_selection": self.tr("Sending the selection via SAMP…"),
+            "samp.send_table": self.tr("Sending the table via SAMP…"),
+            "simbad.pointer": self.tr("Asking SIMBAD…"),
+            "table.sort": self.tr("Sorting the table…"),
+            "ui.set_appearance": self.tr("Changing the appearance…"),
+            "ui.set_fullscreen": self.tr("Changing full screen…"),
+            "ui.set_panel": self.tr("Changing the panels…"),
+            "ui.set_tool": self.tr("Changing the tool…"),
+            "view.export_png": self.tr("Exporting the view…"),
+            "view.go_to": self.tr("Going to the target…"),
+            "view.set_center": self.tr("Moving the view…"),
+            "view.set_coordinate_display": self.tr("Changing the coordinate display…"),
+            "view.set_grid": self.tr("Changing the grid…"),
+            "view.set_overlays": self.tr("Changing the overlays…"),
+            "view.set_zoom": self.tr("Zooming…"),
+            "vo.add_server": self.tr("Adding the VO server…"),
+            "vo.remove_server": self.tr("Removing the VO server…"),
+            "session.open": self.tr("Opening session…"),
+        }
+        return titles.get(name, self.tr("Working…"))
+
     def show_running(self, name: str, report: ProgressReport | None = None) -> None:
+        title = self.command_title(name)
         if report is not None and report.total:
             self.progress_bar.setRange(0, report.total)
             self.progress_bar.setValue(report.step)
             step = self.tr("step %1 of %2").replace("%1", str(report.step)).replace("%2", str(report.total))
-            self._set_command(f"{name} · {step}")
+            title = f"{title} · {step}"
         else:
             self.progress_bar.setRange(0, 0)  # indeterminato
-            self._set_command(name)
         for w in (self.command_label, self.progress_bar, self.cancel_button):
             w.setVisible(True)
-
-    def _set_command(self, text: str) -> None:
-        """Comando in corso a larghezza fissa: tagliato con "…", per intero nel tooltip."""
-        self.command_label.setText(QFontMetrics(self.command_label.font()).elidedText(
-            text, Qt.TextElideMode.ElideRight, self.command_label.width() - 2))
-        self.command_label.setToolTip(text)
+        self.command_label.set_full_text(title)
+        self.command_label.setToolTip(f"{title}\n{name}")  # il nome interno solo nel suggerimento
 
     def show_idle(self) -> None:
-        self.command_label.clear()
+        self.command_label.set_full_text("")
         for w in (self.command_label, self.progress_bar, self.cancel_button):
             w.setVisible(False)
 
@@ -1257,7 +1353,10 @@ class HistoryPanel(QWidget):
 
 
 class MessagesPanel(QWidget):
-    """Pannello Messaggi (§3.7): errori e avvisi con codice e testo dei moduli invariati e numero del comando."""
+    """Pannello Messaggi (§3.7): errori e avvisi con codice e testo dei moduli invariati e numero del comando.
+
+    Messaggi lunghi (sprint D5b): testo completo nel suggerimento di ogni cella, pulsanti Dettagli… e Copia, doppio
+    clic = Dettagli…, ⌘C = Copia."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -1269,31 +1368,97 @@ class MessagesPanel(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table.setWordWrap(True)
+        self.details_button = QPushButton(self.tr("Details…"))
+        self.details_button.setObjectName("messageDetails")
+        self.copy_button = QPushButton(self.tr("Copy"))
+        self.copy_button.setObjectName("messageCopy")
+        for b in (self.details_button, self.copy_button):
+            b.setEnabled(False)
+            b.setToolTip(self.tr("The whole message: select a row (or double-click it)."))
         self.empty = EmptyState("message-square-warning", self.tr("No messages"), self.tr(
             "Errors and warnings of the modules appear here with their code, their unchanged text and the "
             "number of the command that produced them; errors in red."))
-        self.empty.cover(self.table)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.addWidget(self.table)
+        self.empty.cover(body)
+        bar = QHBoxLayout()
+        bar.setContentsMargins(8, 8, 8, 0)
+        bar.setSpacing(8)
+        bar.addStretch(1)
+        bar.addWidget(self.details_button)
+        bar.addWidget(self.copy_button)
         _as_panel(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.table)
+        layout.setSpacing(8)
+        layout.addLayout(bar)
+        layout.addWidget(body)
         self.messages: list[tuple[str, str, str, bool]] = []  # (comando, codice, testo, errore)
+        self.full_texts: list[str] = []  # testo completo di ogni riga (suggerimento, Dettagli…, Copia)
+        self.table.itemSelectionChanged.connect(self._selection_changed)
+        self.table.itemDoubleClicked.connect(lambda _item: self.show_details())
+        self.details_button.clicked.connect(self.show_details)
+        self.copy_button.clicked.connect(self.copy_selected)
+        copy = QShortcut(QKeySequence.StandardKey.Copy, self.table)
+        copy.setContext(Qt.ShortcutContext.WidgetShortcut)
+        copy.activated.connect(self.copy_selected)
+        self.last_dialog: QDialog | None = None  # per i test
 
     def add(self, number: int | None, message: ResultMessage, *, error: bool) -> None:
         ref = "—" if number is None else f"#{number}"
         shown = shown_text(message)
         self.messages.append((ref, message.code, shown, error))
+        full = f"{ref} {message.code}: {shown}\n\n{message_details(message)}"
+        self.full_texts.append(full)
         row = self.table.rowCount()
         self.table.insertRow(row)
         for col, text in enumerate((ref, message.code, shown)):
             item = QTableWidgetItem(text)
-            if col == 2:  # dettaglio: testo originale del modulo e parametri (40 §3.7)
-                item.setToolTip(message_details(message))
+            item.setToolTip(full)  # testo completo e dettagli su ogni cella (40 §3.7)
             if error:
                 item.setForeground(QColor(_TOKENS[_current_tokens()]["error"]))
             self.table.setItem(row, col, item)
         self.empty.hide()
         self.table.scrollToBottom()
+
+    def selected_row(self) -> int | None:
+        rows = self.table.selectionModel().selectedRows()
+        return rows[0].row() if rows else None
+
+    def _selection_changed(self) -> None:
+        on = self.selected_row() is not None
+        self.details_button.setEnabled(on)
+        self.copy_button.setEnabled(on)
+
+    def copy_selected(self) -> None:
+        row = self.selected_row()
+        if row is not None:
+            QApplication.clipboard().setText(self.full_texts[row])
+
+    def show_details(self) -> None:
+        """Finestra con il testo completo selezionabile e Copia (non modale: l'app resta usabile)."""
+        row = self.selected_row()
+        if row is None:
+            return
+        dialog = QDialog(self)
+        dialog.setObjectName("messageDetailsDialog")
+        dialog.setWindowTitle(self.tr("Message %1").replace("%1", self.messages[row][0]))
+        text = QPlainTextEdit(self.full_texts[row])
+        text.setReadOnly(True)
+        text.setMinimumSize(520, 220)
+        copy = QPushButton(self.tr("Copy"))
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(self.full_texts[row]))
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.addButton(copy, QDialogButtonBox.ButtonRole.ActionRole)
+        buttons.rejected.connect(dialog.close)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(text)
+        layout.addWidget(buttons)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.last_dialog = dialog
+        dialog.show()
 
 
 _CURRENT_APPEARANCE = ["dark"]
@@ -1521,7 +1686,7 @@ class PreferencesDialog(QDialog):
             self.cache_usage.setText(shown_exception(exc))
             return
         modules = ", ".join(f"{m}: {b}" for m, b in sorted(usage.by_module.items())) or self.tr("empty")
-        self.cache_usage.setText(self.tr("Used: %1 bytes of %2 (%3)").replace("%1", str(usage.total_bytes))
+        self.cache_usage.setText(self.tr("Used: %1 of %2 bytes (%3)").replace("%1", str(usage.total_bytes))
                                  .replace("%2", str(usage.limit_bytes)).replace("%3", modules))
 
     def values(self) -> dict[str, str]:
@@ -1686,9 +1851,11 @@ class MainWindow(QMainWindow):
             "snap_needs_image": self.tr("Needs an image as the base of the view"), "box": self.tr("Box (px)"),
             "box_tip": self.tr("Centroid box size in pixels (odd, 3 or more)"),
             "simbad_none": self.tr("No SIMBAD object within %1"), "simbad_citations": self.tr("%1 citations"),
+            "simbad_citations_one": self.tr("%1 citation"),
             "simbad_separation": self.tr("%1 from the pointer"),
             "simbad_system_unknown": self.tr("system not declared"),
             "simbad_more": self.tr("+%1 more magnitudes (in the command result)"),
+            "simbad_more_one": self.tr("+%1 more magnitude (in the command result)"),
             "simbad_link": self.tr("SIMBAD page"), "simbad_profile": self.tr("Profile of %1"), "simbad_retrieved": self.tr("retrieved %1"),
             "simbad_from": self.tr("source %1"), "simbad_error": self.tr("SIMBAD: %1")}
         for key, pref in TOOL_PREFERENCES.items():  # opzioni ricordate dello strumento di distanza
@@ -1791,7 +1958,7 @@ class MainWindow(QMainWindow):
         panel = CatalogPanel(self.submit, self.sky, self.empty_states["table"])
         panel.texts = {
             "missing": self.tr("missing value"), "not_drawn": self.tr("not drawn in this view"),
-            "row": self.tr("row %1"), "rows": self.tr("%1 rows"), "sorted": self.tr("sorted by %1 (%2)"),
+            "row": self.tr("row %1"), "rows": self.tr("%1 rows"), "rows_one": self.tr("%1 row"), "sorted": self.tr("sorted by %1 (%2)"),
             "ascending": self.tr("ascending"), "descending": self.tr("descending"),
             "table_order": self.tr("table order"), "retrieved": self.tr("retrieved %1"), "ucd": self.tr("UCD: %1"),
             "record_empty": self.tr("Select one row to see the full record."),
@@ -1894,9 +2061,9 @@ class MainWindow(QMainWindow):
             "body": self.tr("body %1"), "body_unknown": self.tr("body unknown (%1)"),
             "forced": self.tr("overlay forced (force_body)"), "retrieved": self.tr("retrieved %1"),
             "epoch": self.tr("epoch %1"), "epoch_unknown": self.tr("epoch unknown"),
-            "drawn": self.tr("%1 of %2 rows drawn"), "propagated": self.tr("drawn at epoch %1"),
+            "drawn": self.tr("Rows drawn: %1 of %2"), "propagated": self.tr("drawn at epoch %1"),
             "not_propagated": self.tr("table positions (not propagated)"), "order": self.tr("drawn at order %1"),
-            "by_excess": self.tr("drawn at order %1, by excess (MOC order %2)"), "cells": self.tr("%1 cells"),
+            "by_excess": self.tr("drawn at order %1, by excess (MOC order %2)"), "cells": self.tr("%1 cells"), "cells_one": self.tr("%1 cell"),
             "not_drawn": self.tr("not drawn: %1"), "server": self.tr("Server: %1")}
         return panel
 
@@ -3175,6 +3342,48 @@ class _DockHeader(QWidget):
         self.close_button.setIcon(themed_icon("x", quiet, 14))
 
 
+def set_macos_app_name(name: str = "AstroTwo") -> bool:
+    """Nome dell'app nella barra dei menu di macOS anche avviando dal codice (40 §3.9, sprint D5b).
+
+    Con ``uv run astrotwo`` il processo è l'interprete Python e macOS mostrerebbe «python»: si scrive ``CFBundleName``
+    nel dizionario del bundle principale **in memoria** (``NSBundle.mainBundle.infoDictionary``, mutabile) prima di
+    creare la ``QApplication``, con ``ctypes`` e il runtime Objective-C del sistema: nessuna dipendenza nuova, nessun
+    file scritto. Nell'app costruita il nome è già nell'``Info.plist`` (60 §3.2) e la chiamata lo riscrive uguale.
+    Restituisce ``True`` se il nome è scritto; fuori da macOS o se qualcosa non riesce, ``False`` e nient'altro."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        import ctypes
+        import ctypes.util
+
+        objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("objc"))
+        ctypes.cdll.LoadLibrary(ctypes.util.find_library("Foundation"))
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+        def send(receiver, selector: bytes, *args, restype=ctypes.c_void_p, argtypes=()):
+            function = ctypes.CFUNCTYPE(restype, ctypes.c_void_p, ctypes.c_void_p, *argtypes)(
+                ("objc_msgSend", objc))
+            return function(receiver, objc.sel_registerName(selector), *args)
+
+        def nsstring(text: str):
+            return send(objc.objc_getClass(b"NSString"), b"stringWithUTF8String:", text.encode(),
+                        argtypes=(ctypes.c_char_p,))
+
+        info = send(send(objc.objc_getClass(b"NSBundle"), b"mainBundle"), b"infoDictionary")
+        if not info or not send(info, b"respondsToSelector:", objc.sel_registerName(b"setObject:forKey:"),
+                                restype=ctypes.c_bool, argtypes=(ctypes.c_void_p,)):
+            return False
+        send(info, b"setObject:forKey:", nsstring(name), nsstring("CFBundleName"),
+             argtypes=(ctypes.c_void_p, ctypes.c_void_p))
+        value = send(info, b"objectForKey:", nsstring("CFBundleName"), argtypes=(ctypes.c_void_p,))
+        return bool(value) and ctypes.string_at(send(value, b"UTF8String")).decode() == name
+    except Exception:  # noqa: BLE001 - solo il nome nella barra dei menu: mai un errore all'avvio
+        return False
+
+
 def main(argv: list[str] | None = None, *,
          on_first_view: Callable[[QApplication, MainWindow], None] | None = None) -> int:
     """Avvio con ``uv run astrotwo`` (e dall'app costruita, ``app_bundle.main``).
@@ -3187,6 +3396,7 @@ def main(argv: list[str] | None = None, *,
     from astrotwo.ui.sky_renderer_gl import surface_format
 
     QSurfaceFormat.setDefaultFormat(surface_format())  # OpenGL 4.1 core profile prima della QApplication (41)
+    set_macos_app_name("AstroTwo")  # prima della QApplication: barra dei menu «AstroTwo», non «python» (§3.9)
     app = QApplication(sys.argv if argv is None else argv)
     app.setOrganizationDomain("pages.dev")  # impostazioni in dev.pages.astrotwo (01 §6)
     app.setApplicationName("astrotwo")

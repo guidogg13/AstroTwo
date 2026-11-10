@@ -393,7 +393,7 @@ def test_every_error_and_warning_has_code_params_and_catalog_entry(service, cach
     for (rows, problem), expected in diagnoses:
         assert rows is None and problem["code"] == "HIPS_TILE_PROBLEM" and problem["text"].startswith(expected)
         seen.pairs.add(check_message(problem["code"], problem["params"], problem["text"]))
-    assert mc.message_text("HIPS_TILE_PROBLEM", diagnoses[7][0][1]["params"], "en") == "row 2: 1 fields instead of 2"
+    assert mc.message_text("HIPS_TILE_PROBLEM", diagnoses[7][0][1]["params"], "en") == "row 2: 1 field instead of 2"
 
     missing = required_combinations() - seen.pairs
     assert not missing, f"errori e avvisi del 12 mai provocati nel test: {sorted(missing, key=str)}"

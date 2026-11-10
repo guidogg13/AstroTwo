@@ -146,7 +146,7 @@ def test_t21_external_hub_send_and_receive(qtbot, window, peer, tmp_path):
     values = connect(qtbot, win)
     assert values == {"hub": "external", "web_profile": False,
                       "clients": [{"id": peer.get_public_id(), "name": PEER}]}  # nessun hub proprio
-    assert win.status.samp_label.text() == "SAMP: 1 apps" and PEER in win.status.samp_label.toolTip()
+    assert win.status.samp_label.text() == "SAMP: 1 app" and PEER in win.status.samp_label.toolTip()
     win._fill_samp_menu()
     apps = submenu(win.samp_menu, "Connected applications")
     assert [a.text() for a in apps.actions()] == [PEER]
@@ -277,7 +277,7 @@ def test_t21_own_hub_and_clean_close(qtbot, settings_path, cache, tmp_path):
     assert lockfile.exists() and win.status.samp_label.text() == "SAMP: 0 apps (own hub)"
     client = make_peer()  # un programma che arriva dopo usa l'hub di AstroTwo
     try:
-        qtbot.waitUntil(lambda: bool(win.status.samp_label.text() == "SAMP: 1 apps (own hub)"), timeout=5000)
+        qtbot.waitUntil(lambda: bool(win.status.samp_label.text() == "SAMP: 1 app (own hub)"), timeout=5000)
         assert win.status.samp_label.toolTip().startswith("Hub started by AstroTwo.")
         layer = open_catalog(qtbot, win, tmp_path)
         win.submit("samp.send_table", {"layer": layer, "recipient": client.get_public_id()})
@@ -477,7 +477,7 @@ def test_t21b_hub_is_not_counted(qtbot, window, topcat):
     win = window
     values = connect(qtbot, win)
     assert values["clients"] == [{"id": topcat.id, "name": "topcat"}]
-    assert win.status.samp_label.text() == "SAMP: 1 apps"
+    assert win.status.samp_label.text() == "SAMP: 1 app"
     tip = win.status.samp_label.toolTip()
     assert "Hub of another application." in tip and "Hub: PyVO SAMP Hub." in tip and "Connected: topcat" in tip
     win._fill_samp_menu()

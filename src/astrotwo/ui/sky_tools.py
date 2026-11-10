@@ -60,9 +60,10 @@ DISTANCE_DEFAULTS = {"unit": "arcmin", "snap": False, "box_size": 15}
 DEFAULT_TOOL_TEXTS = {
     "unit": "Unit", "snap": "Snap to centroid", "snap_needs_image": "Needs an image as the base of the view",
     "box": "Box (px)", "box_tip": "Centroid box size in pixels (odd, 3 or more)",
-    "simbad_none": "No SIMBAD object within %1", "simbad_citations": "%1 citations",
+    "simbad_none": "No SIMBAD object within %1", "simbad_citations": "%1 citations", "simbad_citations_one": "%1 citation",
     "simbad_separation": "%1 from the pointer", "simbad_system_unknown": "system not declared",
-    "simbad_more": "+%1 more magnitudes (in the command result)", "simbad_link": "SIMBAD page",
+    "simbad_more": "+%1 more magnitudes (in the command result)",
+    "simbad_more_one": "+%1 more magnitude (in the command result)", "simbad_link": "SIMBAD page",
     "simbad_retrieved": "retrieved %1", "simbad_from": "source %1", "simbad_error": "SIMBAD: %1",
     "simbad_profile": "Profile of %1",
 }
@@ -456,7 +457,7 @@ class SimbadPointerTool:
             lat = format_coordinates(values=q["lat"], frame=position["frame"], axis="lat", style=style).lat[0]
             lines.append(esc(f"{position['frame'].upper()} {lon} {lat}"))
             if obj.get("nbref") is not None:
-                lines.append(esc(t["simbad_citations"].replace("%1", str(obj["nbref"]))))
+                lines.append(esc(t["simbad_citations_one" if obj["nbref"] == 1 else "simbad_citations"].replace("%1", str(obj["nbref"]))))
             separation = obj["separation"]
             lines.append(esc(t["simbad_separation"].replace("%1", f"{separation['value']:.3g} {separation['unit']}")))
             shown = obj.get("magnitudes", [])[:SIMBAD_MAX_MAGNITUDES]
@@ -468,7 +469,7 @@ class SimbadPointerTool:
                 lines.append(esc(text))
             hidden = len(obj.get("magnitudes", [])) - len(shown)
             if hidden > 0:
-                lines.append(esc(t["simbad_more"].replace("%1", str(hidden))))
+                lines.append(esc(t["simbad_more_one" if hidden == 1 else "simbad_more"].replace("%1", str(hidden))))
             origin = next((str(src["origin"]) for src in result.provenance if src.get("origin")), None)
             url = simbad_url(obj["main_id"], origin)
             lines.append(f'<a href="{esc(url, quote=True)}">{esc(t["simbad_link"])}</a>')

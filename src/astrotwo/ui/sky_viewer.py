@@ -96,8 +96,8 @@ DEFAULT_PANEL_TEXTS = {
     "visible": "Visible", "opacity": "Opacity", "up": "Move up", "down": "Move down", "remove": "Remove layer",
     "body": "body %1", "body_unknown": "body unknown (%1)", "forced": "overlay forced (force_body)",
     "retrieved": "retrieved %1", "epoch": "epoch %1", "epoch_unknown": "epoch unknown",
-    "drawn": "%1 of %2 rows drawn", "propagated": "drawn at epoch %1", "not_propagated": "table positions (not propagated)",
-    "order": "drawn at order %1", "by_excess": "drawn at order %1, by excess (MOC order %2)", "cells": "%1 cells",
+    "drawn": "Rows drawn: %1 of %2", "propagated": "drawn at epoch %1", "not_propagated": "table positions (not propagated)",
+    "order": "drawn at order %1", "by_excess": "drawn at order %1, by excess (MOC order %2)", "cells": "%1 cells", "cells_one": "%1 cell",
     "not_drawn": "not drawn: %1", "server": "Server: %1",
 }
 #: Tolleranza minima del clic su un simbolo, pixel logici (41 §3.8, scelta minore 5).
@@ -1927,7 +1927,7 @@ class LayerPanel(QWidget):
             if shapes is not None:
                 key = "order" if shapes.order >= shapes.moc_order else "by_excess"
                 parts.append(t[key].replace("%1", str(shapes.order)).replace("%2", str(shapes.moc_order)))
-                parts.append(t["cells"].replace("%1", str(shapes.cells)))
+                parts.append(t["cells_one" if shapes.cells == 1 else "cells"].replace("%1", str(shapes.cells)))
             elif error is not None:
                 parts.append(t["not_drawn"].replace("%1", error.code))
         if layer.force_body:

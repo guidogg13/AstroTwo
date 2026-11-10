@@ -69,7 +69,9 @@ LAYER_KINDS = {"catalog": ("Catalog layer", "Livello catalogo"), "moc": ("MOC la
                "image": ("Image layer", "Livello immagine"), "hips": ("HiPS layer", "Livello HiPS")}
 
 #: Segnaposto ``{nome}``; ``{{`` e ``}}`` sono le graffe scritte nel testo (es. ``${{...}}`` per ``${...}``).
-_PLACEHOLDER = re.compile(r"\{\{|\}\}|\{([A-Za-z_][A-Za-z0-9_]*)\}")
+#: Forma plurale ``{nome|uno|molti}`` (40 §3.9, sprint D5b): la parola ``uno`` se il parametro intero ``nome`` vale 1,
+#: altrimenti ``molti`` (0 compreso), in inglese e in italiano; il valore non si inserisce (lo fa ``{nome}``).
+_PLACEHOLDER = re.compile(r"\{\{|\}\}|\{([A-Za-z_][A-Za-z0-9_]*)(?:\|([^|{}]*)\|([^|{}]*))?\}")
 _TYPE_ABBREVIATIONS = {"str": "string", "num": "number", "int": "integer", "bool": "boolean", "qty": "quantity",
                        "list": "list", "obj": "object", "msg": "message", "msgs": "messages"}
 
@@ -153,7 +155,12 @@ def has_message(code: str) -> bool:
 
 def placeholders(text: str) -> frozenset[str]:
     """Nomi dei segnaposto ``{nome}`` di un testo."""
-    return frozenset(name for name in _PLACEHOLDER.findall(text) if name)
+    return frozenset(name for name, *_forms in _PLACEHOLDER.findall(text) if name)
+
+
+def plural_form(value: object, one: str, many: str) -> str:
+    """Forma ``{nome|uno|molti}``: ``one`` solo per il numero 1 (mai per ``True``), ``many`` per tutti gli altri."""
+    return one if isinstance(value, (int, float)) and not isinstance(value, bool) and value == 1 else many
 
 
 def _is_quantity(value: object) -> bool:
@@ -231,6 +238,8 @@ def message_text(code: str, params: Mapping[str, object] | None, lang: str, *, t
         if name not in params:
             LOG.warning("messaggio %s: parametro %r assente", code, name)
             return match.group(0)
+        if match.group(2) is not None:  # forma plurale (40 §3.9): solo la parola, il numero è nel suo segnaposto
+            return plural_form(params[name], match.group(2), match.group(3))
         if mask_external and name in external:
             return f"<{name}>"
         if name in nested and _is_message(params[name]):
@@ -536,8 +545,8 @@ _add("CALIB_INCONSISTENT",
      "Al centro del campo la soluzione si scosta dalla TAN di {deviation} "
      "(limite {factor} × RMS TAN = {limit}).", "deviation:qty factor:num limit:qty")
 _add("CALIB_TOO_FEW_STARS",
-     "{n_stars} stars given, minimum {minimum} for projection {projection}.",
-     "{n_stars} stelle date, minimo {minimum} per la proiezione {projection}.", "n_stars:int minimum:int projection",
+     "{n_stars} {n_stars|star|stars} given, minimum {minimum} for projection {projection}.",
+     "{n_stars} {n_stars|stella data|stelle date}, minimo {minimum} per la proiezione {projection}.", "n_stars:int minimum:int projection",
      count_mismatch=("The number of pixel positions ({pixel_positions}) differs from the number of sky positions "
                      "({sky_positions}).",
                      "Il numero di posizioni pixel ({pixel_positions}) è diverso da quello delle posizioni "
@@ -665,8 +674,8 @@ _add("RGB_INPUT_INVALID",
                                  "Servono immagini monocrome (FitsImage).", ""),
      mode_unknown=("Mode '{mode}': allowed are 'rgb' and 'rgb_diff'.", "Modalità '{mode}': ammesse 'rgb' e 'rgb_diff'.",
                    "mode"),
-     image_count=("{count} images for {mode}: 2 or 3 are needed (2 for rgb_diff).",
-                  "{count} immagini per {mode}: servono 2 o 3 (2 per rgb_diff).", "count:int mode"),
+     image_count=("{count} {count|image|images} for {mode}: 2 or 3 are needed (2 for rgb_diff).",
+                  "{count} {count|immagine|immagini} per {mode}: servono 2 o 3 (2 per rgb_diff).", "count:int mode"),
      wavelengths=("wavelengths: one wavelength (Quantity) per image.",
                   "wavelengths: una lunghezza d'onda (Quantity) per immagine.", ""),
      display_required=("rgb: (vmin, vmax, transfer function) are needed for each component.",
@@ -936,7 +945,7 @@ _add("REGION_INVALID",
      conversion_window=("Pixels of the window: {detail}", "Pixel della finestra: {detail}", "detail:msg"))
 _add("HIPS_OUT_OF_COVERAGE",
      "Outside the coverage of the survey: no tile.", "Fuori dalla copertura del survey: nessun tile.",
-     field=("The field is outside the coverage of the service ({outside} tiles outside): no tile.",
+     field=("The field is outside the coverage of the service ({outside} {outside|tile|tiles} outside): no tile.",
             "Campo fuori dalla copertura del servizio ({outside} tile fuori): nessun tile.", "outside:int"),
      tile=("{hips_id}: tile {index} at order {order} is outside the coverage of the service; no tile.",
            "{hips_id}: tile {index} all'ordine {order} fuori dalla copertura del servizio; nessun tile.",
@@ -991,8 +1000,8 @@ _add("HIPS_PIXEL_UNAVAILABLE",
                     "hips_id formats:list"))
 _add("HIPS_OUT_OF_TILE",
      "The position is outside the given tile.", "La posizione è fuori dal tile dato.",
-     positions=("{count} positions outside tile {index} (order {order}).",
-                "{count} posizioni fuori dal tile {index} (ordine {order}).", "count:int index:int order:int"),
+     positions=("{count} {count|position|positions} outside tile {index} (order {order}).",
+                "{count} {count|posizione|posizioni} fuori dal tile {index} (ordine {order}).", "count:int index:int order:int"),
      order_mismatch=("Tile at order {tile_order}, sampling at order {sampling_order}.",
                      "Tile all'ordine {tile_order}, campionamento all'ordine {sampling_order}.",
                      "tile_order:int sampling_order:int"),
@@ -1131,7 +1140,7 @@ _add("HIPS_TILE_PROBLEM",  # diagnosi, solo come messaggio annidato (D40-7) di H
      no_header=("no header row", "nessuna riga di intestazione", ""),
      columns_mismatch=("columns {header} differ from metadata.xml {expected}",
                        "colonne {header} diverse da metadata.xml {expected}", "header! expected!"),
-     bad_row=("row {line}: {fields} fields instead of {expected}", "riga {line}: {fields} campi invece di {expected}",
+     bad_row=("row {line}: {fields} {fields|field|fields} instead of {expected}", "riga {line}: {fields} {fields|campo|campi} invece di {expected}",
               "line:int fields:int expected:int"))
 _add("HIPS_COVERAGE_UNKNOWN",
      "The coverage is not known.", "Copertura non nota.",
@@ -1319,8 +1328,8 @@ _add("COLUMN_TYPE_UNSUPPORTED",
                  ""),
      record_out_of_range=("Record {index} is outside 0…{last}.", "Record {index} fuori da 0…{last}.",
                           "index last:int"),
-     selection_mask=("Selection: a boolean mask of {rows} values is required.",
-                     "Selezione: serve una maschera booleana di {rows} valori.", "rows:int"),
+     selection_mask=("Selection: a boolean mask of {rows} {rows|value|values} is required.",
+                     "Selezione: serve una maschera booleana di {rows} {rows|valore|valori}.", "rows:int"),
      argument_column_missing=("{argument}: column '{column}' does not exist.",
                               "{argument}: la colonna '{column}' non esiste.", "argument column"),
      argument_not_numeric=("{argument}: column '{column}' is not numeric.",
@@ -1425,8 +1434,8 @@ _add("EXPRESSION_INVALID",
      prefix_needs_selection=("prefix '{prefix}': the current selection (selection) is required.",
                              "prefisso '{prefix}': serve la selezione corrente (selection).",
                              "position:int prefix"),
-     selection_shape=("selection: a mask of {rows} values is required.",
-                      "selection: serve una maschera di {rows} valori.", "position:int rows:int"))
+     selection_shape=("selection: a mask of {rows} {rows|value|values} is required.",
+                      "selection: serve una maschera di {rows} {rows|valore|valori}.", "position:int rows:int"))
 _add("COLUMN_EXPRESSION_INVALID",
      "The column expression is not valid.", "L'espressione di colonna non è valida.",
      name_required=("The name of the column is required.", "Nome della colonna obbligatorio.", "position:int"),
@@ -1464,7 +1473,7 @@ _add("PLOT_RULE_INVALID",
 _add("FILE_EXISTS", "{path}: already exists; use overwrite=True.", "{path}: esiste già; usare overwrite=True.", "path")
 _add("INPLACE",
      "The given table was modified in place.", "La tabella data è stata modificata in posto.",
-     subset=("Subset: {kept} records out of {total}: given table modified in place (inplace=True).",
+     subset=("Subset: {kept} {kept|record|records} out of {total}: given table modified in place (inplace=True).",
              "Sottoinsieme: {kept} record su {total}: tabella data modificata in posto (inplace=True).",
              "kept:int total:int"),
      calculated=("Calculated column '{name}' = {expression}: given table modified.",
@@ -1473,9 +1482,9 @@ _add("INPLACE",
                       "Colonna calcolata '{name}' = {expression} [{unit}]: tabella data modificata.",
                       "name! expression unit"))
 _add("PROPER_MOTION_ROW_MISSING",
-     "{missing} rows without proper motion (or position or epoch): propagated position missing, a null proper "
+     "{missing} {missing|row|rows} without proper motion (or position or epoch): propagated position missing, a null proper "
      "motion is never assumed.",
-     "{missing} righe senza moto proprio (o posizione o epoca): posizione propagata mancante, mai moto proprio nullo "
+     "{missing} {missing|riga|righe} senza moto proprio (o posizione o epoca): posizione propagata mancante, mai moto proprio nullo "
      "assunto.", "missing:int")
 
 _add("XML_UNSAFE",
@@ -1487,8 +1496,8 @@ _add("ASTRORES_UNREADABLE",
      root_unexpected=("{path}: root '{root}', ASTRO expected.", "{path}: radice '{root}', attesa ASTRO.",
                       "path root!"),
      no_data=("{path}: DATA without CSV, TABLEDATA or LINK.", "{path}: DATA senza CSV, TABLEDATA o LINK.", "path"),
-     row_fields=("{path}: row {row} with {values} values for {fields} fields.",
-                 "{path}: riga {row} con {values} valori per {fields} campi.",
+     row_fields=("{path}: row {row} with {values} {values|value|values} for {fields} {fields|field|fields}.",
+                 "{path}: riga {row} con {values} {values|valore|valori} per {fields} {fields|campo|campi}.",
                  "path row:int values:int fields:int"),
      no_fields=("{path}: table {index} without FIELD.", "{path}: tabella {index} senza FIELD.", "path index:int"),
      duplicate_field=("{path}: two fields with the same name '{name}'.",
@@ -1611,14 +1620,14 @@ _add("CATALOG_UNKNOWN",
                                    "{max_candidates}).",
                                    "catalog_id server detail! candidates:list! max_candidates:int"))
 _add("REGION_REQUIRED",
-     "Catalogue '{catalog_id}': more than {max_rows} rows ({declared}); indicate a region with the "
+     "Catalogue '{catalog_id}': more than {max_rows} {max_rows|row|rows} ({declared}); indicate a region with the "
      "region=(centre, radius) parameter, or allow_partial=True for the first rows.",
-     "Catalogo '{catalog_id}': più di {max_rows} righe ({declared}); indicare una regione con il parametro "
+     "Catalogo '{catalog_id}': più di {max_rows} {max_rows|riga|righe} ({declared}); indicare una regione con il parametro "
      "region=(centro, raggio), oppure allow_partial=True per le prime righe.", "catalog_id max_rows:int declared:msg")
 _add("REGION_TOO_LARGE",
-     "Catalogue '{catalog_id}': more than {max_rows} rows in the region ({declared}); reduce the radius or use "
+     "Catalogue '{catalog_id}': more than {max_rows} {max_rows|row|rows} in the region ({declared}); reduce the radius or use "
      "allow_partial=True.",
-     "Catalogo '{catalog_id}': più di {max_rows} righe nella regione ({declared}); ridurre il raggio o usare "
+     "Catalogo '{catalog_id}': più di {max_rows} {max_rows|riga|righe} nella regione ({declared}); ridurre il raggio o usare "
      "allow_partial=True.", "catalog_id max_rows:int declared:msg")
 _add("REGION",
      "Region: circle of radius {radius} around ({center_lon}, {center_lat}) in the system of the columns "
@@ -1661,11 +1670,11 @@ _add("COLLECTION_SKIPPED",
      more=("Non-VizieR records excluded from the tree: {ids} …", "Record non VizieR esclusi dall'albero: {ids} …",
            "ids:list!"))
 _add("POPULARITY_INVALID",
-     "{count} records with a non-integer vizier_popularity: treated as absent.",
-     "{count} record con vizier_popularity non intera: trattati come assenti.", "count:int")
+     "{count} {count|record|records} with a non-integer vizier_popularity: treated as absent.",
+     "{count} record con vizier_popularity non intera: {count|trattato come assente|trattati come assenti}.", "count:int")
 _add("POPULARITY_MISSING",
-     "{count} collections without vizier_popularity: after the others, in natural order.",
-     "{count} collezioni senza vizier_popularity: dopo le altre, in ordine naturale.", "count:int")
+     "{count} {count|collection|collections} without vizier_popularity: after the others, in natural order.",
+     "{count} {count|collezione|collezioni} senza vizier_popularity: dopo le altre, in ordine naturale.", "count:int")
 
 # --- Modulo 14 (protocolli VO, sprint 8d) ----------------------------------------------------------------------
 _ASYNC_HINT_EN = " — for long queries use tap_query(..., mode='async')"
@@ -1988,8 +1997,8 @@ _add("MOC_BODY_UNSUPPORTED",
 _extend("REGION_INVALID",
         conversion=("{what}: {cause}", "{what}: {cause}", "what cause:msg"),
         not_finite=("{what}: coordinates not finite.", "{what}: coordinate non finite.", "what"),
-        polygon_vertices=("Polygon with {count} vertices: at least 3 are required.",
-                          "Poligono con {count} vertici: ne servono almeno 3.", "count:int"),
+        polygon_vertices=("Polygon with {count} {count|vertex|vertices}: at least 3 are required.",
+                          "Poligono con {count} {count|vertice|vertici}: ne servono almeno 3.", "count:int"),
         polygon_mocpy=("Polygon not valid for mocpy: {detail}", "Poligono non valido per mocpy: {detail}", "detail!"))
 _extend("NO_COORD_COLUMNS",
         no_positions=("{what} ({origin}): no position column (module 13).",
@@ -2019,8 +2028,8 @@ _add("TIME_RANGE_INVALID",
      different_counts=("Start and end with different numbers of values.",
                        "Inizio e fine con numeri di valori diversi.", ""),
      end_before_start=("Interval with the end before the start.", "Intervallo con fine prima dell'inizio.", ""),
-     counts_mismatch=("{times} times and {positions} positions: one position per observation is required.",
-                      "{times} tempi e {positions} posizioni: serve una posizione per osservazione.",
+     counts_mismatch=("{times} {times|time|times} and {positions} {positions|position|positions}: one position per observation is required.",
+                      "{times} {times|tempo|tempi} e {positions} {positions|posizione|posizioni}: serve una posizione per osservazione.",
                       "times:int positions:int"),
      invalid_intervals=("Intervals not valid (different numbers or end before the start).",
                         "Intervalli non validi (numeri diversi o fine prima dell'inizio).", ""))
@@ -2099,15 +2108,15 @@ _add("MOC_NONSTANDARD_EXTENSION",
             "formato IVOA MOC 2.0 (D19-7); COORDSYS resta 'C' come richiesto dal formato: un lettore senza "
             "l'estensione vede un MOC celeste.", "path body keyword"))
 _add("ROWS_EXCLUDED",
-     "{count} rows without a position excluded.", "{count} righe senza posizione escluse.", "count:int",
-     never_selected=("{count} rows without a position: never selected.",
-                     "{count} righe senza posizione: mai selezionate.", "count:int"))
+     "{count} {count|row|rows} without a position excluded.", "{count} {count|riga|righe} senza posizione {count|esclusa|escluse}.", "count:int",
+     never_selected=("{count} {count|row|rows} without a position: never selected.",
+                     "{count} {count|riga|righe} senza posizione: mai {count|selezionata|selezionate}.", "count:int"))
 _add("VALUES_EXCLUDED",
-     "{count} rows with {column} missing excluded.", "{count} righe con {column} mancante escluse.",
+     "{count} {count|row|rows} with {column} missing excluded.", "{count} {count|riga|righe} con {column} mancante {count|esclusa|escluse}.",
      "count:int column!")
 _add("POINTS_OUTSIDE_PROJECTION",
-     "{count} sampling points without a position on the sky (outside the projection) excluded.",
-     "{count} punti di campionamento senza posizione sul cielo (fuori dalla proiezione) esclusi.", "count:int")
+     "{count} sampling {count|point|points} without a position on the sky (outside the projection) excluded.",
+     "{count} {count|punto|punti} di campionamento senza posizione sul cielo (fuori dalla proiezione) {count|escluso|esclusi}.", "count:int")
 _add("ORDER_DEGRADED",
      "Map at order {map_order}: region brought to order {order} by excess (larger cells containing the region).",
      "Mappa all'ordine {map_order}: regione portata all'ordine {order} per eccesso (celle più grandi che "
@@ -2248,7 +2257,7 @@ _add("PLANETARY_CONVENTIONS",
      "Coordinate planetocentriche, longitudine positiva verso est in 0–360° (EPN-TAP 2.0, spatial_frame_type = "
      "body).")
 _add("PDS_SPECIAL_CONSTANTS",
-     "{count} pixels with special constants of the label → NaN.",
+     "{count} {count|pixel|pixels} with special constants of the label → NaN.",
      "{count} pixel con costanti speciali dell'etichetta → NaN.", "count:int")
 _add("PDS_DOWNLOADED",
      "PDS4 product from a URL (D19-9): {sources}", "Prodotto PDS4 da URL (D19-9): {sources}", "sources:msgs")
@@ -2333,8 +2342,8 @@ _add("ERROR_ELLIPSE_INVALID",
      minor_larger=("Table {which}, row {row}, columns {major}/{minor}: minor axis larger than the major axis.",
                    "Tabella {which}, riga {row}, colonne {major}/{minor}: asse minore maggiore dell'asse maggiore.",
                    "which row:int major! minor!"),
-     singular=("{count} candidate pairs with a singular combined covariance: excluded.",
-               "{count} coppie candidate con covarianza combinata singolare: escluse.", "count:int"))
+     singular=("{count} candidate {count|pair|pairs} with a singular combined covariance: excluded.",
+               "{count} {count|coppia candidata|coppie candidate} con covarianza combinata singolare: {count|esclusa|escluse}.", "count:int"))
 _extend("SERVICE_ERROR",
         echo_mismatch=("{url}: row {row} of the response does not match the positions uploaded for index {index}.",
                        "{url}: la riga {row} della risposta non corrisponde alle posizioni caricate per l'indice "
@@ -2355,11 +2364,11 @@ _add("COORD_MISSING",
 _add("NO_MATCH",
      "No pair within the criterion ({criterion}).", "Nessuna coppia entro il criterio ({criterion}).", "criterion")
 _add("BEST_TIE",
-     "{count} rows of A with more rows of B at the same distance: the lowest index in B was chosen.",
-     "{count} righe di A con più righe di B alla stessa distanza: scelto l'indice più basso in B.", "count:int")
+     "{count} {count|row|rows} of A with more rows of B at the same distance: the lowest index in B was chosen.",
+     "{count} {count|riga|righe} di A con più righe di B alla stessa distanza: scelto l'indice più basso in B.", "count:int")
 _add("B_REUSED",
-     "{count} rows of B chosen as the best by more rows of A (non-symmetric crossmatch).",
-     "{count} righe di B scelte come migliori da più righe di A (incrocio non simmetrico).", "count:int")
+     "{count} {count|row|rows} of B chosen as the best by more rows of A (non-symmetric crossmatch).",
+     "{count} {count|riga|righe} di B {count|scelta come migliore|scelte come migliori} da più righe di A (incrocio non simmetrico).", "count:int")
 _add("COLUMNS_RENAMED",
      "Renamed: {renames}", "Rinomine: {renames}", "renames:list!")
 _add("UCD_CONFLICT",
@@ -2372,8 +2381,8 @@ _add("KEY_MISSING",
      "Missing keys (never coinciding): A {missing_a}, B {missing_b}.",
      "Chiavi mancanti (mai coincidenti): A {missing_a}, B {missing_b}.", "missing_a:int missing_b:int")
 _add("KEY_REPEATED",
-     "{count} pairs from repeated keys (all combinations).",
-     "{count} coppie da chiavi ripetute (tutte le combinazioni).", "count:int")
+     "{count} {count|pair|pairs} from repeated keys (all combinations).",
+     "{count} {count|coppia|coppie} da chiavi ripetute (tutte le combinazioni).", "count:int")
 _add("NO_REQUEST",
      "A table has no rows with a position: no request.", "Una tabella non ha righe con posizione: nessuna richiesta.")
 
@@ -2449,8 +2458,8 @@ _add("SHAPE_INVALID",
                    "radius:qty"),
      semiaxes=("semi-axes a = {a}, b = {b}: 0° < b ≤ a < 90° is required.",
                "semiassi a = {a}, b = {b}: serve 0° < b ≤ a < 90°.", "a:qty b:qty"),
-     few_vertices=("vertices: {count} distinct vertices, at least 3 are required.",
-                   "vertices: {count} vertici distinti, ne servono almeno 3.", "count:int"),
+     few_vertices=("vertices: {count} distinct {count|vertex|vertices}, at least 3 are required.",
+                   "vertices: {count} {count|vertice distinto|vertici distinti}, ne servono almeno 3.", "count:int"),
      self_intersects=("vertices: the polygon intersects itself.", "vertices: il poligono si interseca da solo.", ""),
      degenerate=("vertices: degenerate polygon (area {area}; vertices on a great circle?).",
                  "vertices: poligono degenere (area {area}; vertici su un cerchio massimo?).", "area:qty"),
@@ -2482,7 +2491,7 @@ _extend("EPOCH_REQUIRED",
                         "moto proprio nullo assunto.", "what"),
         epoch_invalid=("{what}: {cause}", "{what}: {cause}", "what cause:msg"))
 _add("SELECTION_NOT_TWO_SOURCES",
-     "{count} sources selected: 2 are required.", "Selezionate {count} sorgenti: ne servono 2.", "count:int")
+     "{count} {count|source|sources} selected: 2 are required.", "{count|Selezionata|Selezionate} {count} {count|sorgente|sorgenti}: ne servono 2.", "count:int")
 _extend("BODY_UNKNOWN",
         measure_sources=("Body not declared in one of the tables: no measure.",
                          "Corpo non dichiarato in una delle tabelle: nessuna misura.", ""))
@@ -2490,10 +2499,10 @@ _extend("BODY_MISMATCH",
         sources=("Sources of different bodies ({body_a}, {body_b}).", "Sorgenti di corpi diversi ({body_a}, {body_b}).",
                  "body_a body_b"))
 _extend("NONFINITE_PIXELS",
-        window=("{count} non-finite values returned as such, never replaced.",
-                "{count} valori non finiti restituiti come tali, mai sostituiti.", "count:int"),
-        samples=("{count} samples with a non-finite neighbour: NaN, never replaced.",
-                 "{count} campioni con un vicino non finito: NaN, mai sostituiti.", "count:int"))
+        window=("{count} non-finite {count|value|values} returned as such, never replaced.",
+                "{count} {count|valore non finito restituito come tale, mai sostituito|valori non finiti restituiti come tali, mai sostituiti}.", "count:int"),
+        samples=("{count} {count|sample|samples} with a non-finite neighbour: NaN, never replaced.",
+                 "{count} {count|campione|campioni} con un vicino non finito: NaN, mai sostituiti.", "count:int"))
 
 # --- Modulo 18 (calcolatrici, sprint 8d) -----------------------------------------------------------------------
 _add("CALC_SYNTAX_ERROR",
@@ -2519,8 +2528,8 @@ _add("CALC_SYNTAX_ERROR",
      positional_only=("{function}: positional arguments only (character {position}): '{expression}'.",
                       "{function}: solo argomenti posizionali (carattere {position}): '{expression}'.",
                       "function position:int expression!"),
-     arity=("{function}: {expected} arguments are required, not {count} (character {position}): '{expression}'.",
-            "{function}: servono {expected} argomenti, non {count} (carattere {position}): '{expression}'.",
+     arity=("{function}: {expected} {expected|argument is|arguments are} required, not {count} (character {position}): '{expression}'.",
+            "{function}: {expected|serve|servono} {expected} {expected|argomento|argomenti}, non {count} (carattere {position}): '{expression}'.",
             "function expected:int count:int position:int expression!"),
      arity_min=("{function}: at least 2 arguments are required, not {count} (character {position}): "
                 "'{expression}'.",
@@ -3136,9 +3145,9 @@ _add("ACTION_WITHOUT_CONFIRMATION",
      "number:int command")
 _add("AI_TOOL_LIMIT", "The limit of commands for this answer was reached.",
      "Il limite di comandi per questa risposta è stato raggiunto.",
-     note=("Limit of {max_calls} commands reached.", "Limite di {max_calls} comandi raggiunto.", "max_calls:int"),
-     not_executed=("Limit of {max_calls} commands for this answer reached: command not executed.",
-                   "Limite di {max_calls} comandi per questa risposta raggiunto: comando non eseguito.",
+     note=("Limit of {max_calls} {max_calls|command|commands} reached.", "Limite di {max_calls} {max_calls|comando|comandi} raggiunto.", "max_calls:int"),
+     not_executed=("Limit of {max_calls} {max_calls|command|commands} for this answer reached: command not executed.",
+                   "Limite di {max_calls} {max_calls|comando|comandi} per questa risposta raggiunto: comando non eseguito.",
                    "max_calls:int"))
 _add("AI_TIME_LIMIT", "Limit of {limit} reached.", "Limite di {limit} raggiunto.", "limit:qty")
 _add("AI_CANCELLED", "The answer was interrupted.", "La risposta è stata interrotta.",
@@ -3480,12 +3489,12 @@ _add("PROFILE_TARGET_CHANGED",
      "'{name}': SIMBAD indica oggi {found}, il comando registrato {recorded}; profilo dell'oggetto di oggi.",
      "name recorded! found!")
 _add("PROFILE_PLANETS_EXCLUDED",
-     "{count} SIMBAD objects of the Planet family excluded from the candidates: {names}.",
-     "{count} oggetti SIMBAD della famiglia dei pianeti esclusi dai candidati: {names}.",
+     "{count} SIMBAD {count|object|objects} of the Planet family excluded from the candidates: {names}.",
+     "{count} {count|oggetto|oggetti} SIMBAD della famiglia dei pianeti {count|escluso|esclusi} dai candidati: {names}.",
      "count:int names:list!")
 _add("PROFILE_PLANETS_COMPOSITE",
-     "{count} planets from {table}: the parameters may come from different works ({references} distinct references).",
-     "{count} pianeti da {table}: i parametri possono venire da lavori diversi ({references} riferimenti distinti).",
+     "{count} {count|planet|planets} from {table}: the parameters may come from different works ({references} distinct references).",
+     "{count} {count|pianeta|pianeti} da {table}: i parametri possono venire da lavori diversi ({references} riferimenti distinti).",
      "count:int references:int table")
 _add("PROFILE_PLANETS_NOT_CHECKED",
      "Planets not checked: no SIMBAD identifier, no written name and no Gaia DR3 source_id to ask the archive for.",
