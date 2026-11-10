@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-09 (sprint C8b): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D25-22` decisa dal proprietario il 2026-11-09 — approvate le due proposte del punto (12): richieste Gaia non inviate con l'archivio già fermo nel profilo, Astrometria 35 s — e tolta; file di origine `25` §13 e §3.17).
+**Dal 2026-11-10 (sprint D1): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (nuova `DD-1`, «report in inglese» della Fase D non definito in `mdfiles/`: proposta da decidere; file di origine `panoramica.md` §2 «Fase D»).
+
+Prima, **Dal 2026-11-09 (sprint C8b): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D25-22` decisa dal proprietario il 2026-11-09 — approvate le due proposte del punto (12): richieste Gaia non inviate con l'archivio già fermo nel profilo, Astrometria 35 s — e tolta; file di origine `25` §13 e §3.17).
 
 Prima, **Dal 2026-11-09 (sprint C8): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti e tolta; nuova `D25-22`, scelte minori dello sprint C8 e due proposte nate dalle misure, da confermare; file di origine `25` §13 e §3.17).
 
@@ -341,10 +343,11 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (19)
+## 5. GRUPPO 3 — rimandabili al momento del codice (20)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| `DD-1` | «Report in inglese» della Fase D (**aperta il 2026-11-10, sprint D1, da decidere**): nessun file lo definisce. (a) altro nome della documentazione in inglese → niente da aggiungere; (b) report esportati per le pubblicazioni (oggi il PDF della scheda del profilo, che ha già `language` con default `en`; il report dell'incrocio se diventa esportabile) sempre disponibili in inglese, qualunque sia la lingua dell'app, con una scelta nel dialogo di esportazione; (c) solo il rapporto delle misure di validazione (D2) in inglese. **Raccomandazione di Claude Code: (b)**, da specificare nel `25` e nel `43` prima del codice; non implementata | `panoramica.md` §2 «Fase D» |
 | — | (`D25-22` decisa dal proprietario il 2026-11-09: approvate le due proposte del punto (12); `25` §13, §3.17) | — |
 | — | (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti; `25` §13, §3.17) | — |
 | — | (`D25-20` e `D32-4` confermate dal proprietario il 2026-11-08 così come proposte; `25` §13, `32` §13) | — |
@@ -481,3 +484,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-08 | Claude Code | **Sprint C7 (decisioni del proprietario del 2026-11-08):** **`D25-20` confermata** così com'è e **`D32-4` confermata** (limite di 20 kB anche per `object__profile`, nessun limite più alto), scritte prima nel `25` §13 e nel `32` §13 e tolte da qui; nuova **`D25-21`** (tempi del profilo, da decidere) nel Gruppo 3, scritta prima nel `25` §13 e §3.16. Aperte 21 → **20**. |
 | 2026-11-09 | Claude Code | **Sprint C8 (decisioni del proprietario del 2026-11-09):** **`D25-21` approvata** in tutti e 5 i punti, scritta prima nel `25` §13 e §3.17 e tolta dal Gruppo 3; nuova **`D25-22`** (scelte minori dello sprint C8 e due proposte nate dalle misure con l'archivio Gaia fermo) nel Gruppo 3. Aperte invariate: **20** (Gruppo 3 = 20). |
 | 2026-11-09 | Claude Code | **Sprint C8b (decisioni del proprietario del 2026-11-09):** **`D25-22` decisa** (le due proposte del punto (12) approvate), scritta prima nel `25` §13 e §3.17 e tolta dal Gruppo 3. Aperte 20 → **19**. |
+| 2026-11-10 | Claude Code | **Sprint D1a (Fase D):** nuova **`DD-1`** (Gruppo 3), «report in inglese» non definito in `mdfiles/`: proposte (a)–(c), raccomandata (b); scritta prima in `panoramica.md` §2 «Fase D» e §6. **20 aperte.** |

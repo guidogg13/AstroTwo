@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-09 — **sprint C8b: D25-22 decisa e applicata** (Gaia non richiesta con l'archivio già fermo nel profilo, Astrometria 35 s; `tap_query_cached` del `14`); `panoramica.md` con il piano dei rilasci (niente beta 6, beta 5 → 1.0 con megatest) e la Fase D registrata. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
+**Ultimo aggiornamento:** 2026-11-10 — **Fase D avviata** (decisioni del proprietario: 1.0 citabile e verificabile, AstroTwo complementare ad Aladin, TOPCAT e DS9, megatest a mano; modifiche del C8b approvate), registrata in `panoramica.md`. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
+
+Prima, 2026-11-09 — **sprint C8b: D25-22 decisa e applicata** (Gaia non richiesta con l'archivio già fermo nel profilo, Astrometria 35 s; `tap_query_cached` del `14`); `panoramica.md` con il piano dei rilasci (niente beta 6, beta 5 → 1.0 con megatest) e la Fase D registrata. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
 
 Prima, 2026-11-09 — **sprint C8: tempi del profilo, D25-21 approvata e applicata.** `25` §3.17 (Cone Search di IRSA, `refresh` una volta per profilo, VizieR saltata con il CDS giù, tempo di sezione dalla partenza, 2 richieste per servizio), T30–T34, D25-22 nuova; `14` §3/§7 e `12` §7 aggiornati (modifiche limitate, annotate nei registri). Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
 
