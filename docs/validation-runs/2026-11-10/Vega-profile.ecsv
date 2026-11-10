@@ -1,0 +1,55 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: section, datatype: string}
+# - {name: quantity, datatype: string}
+# - {name: value, datatype: float64, description: 'numeric value as in the result (empty for texts, booleans and integers not exact in
+#     float64)'}
+# - {name: value_text, datatype: string, description: 'value exactly as in the result (shortest repr of the float64, integer digits, text)'}
+# - {name: unit, datatype: string}
+# - {name: error, datatype: float64}
+# - {name: error_lower, datatype: float64}
+# - {name: error_upper, datatype: float64}
+# - {name: interval_lower, datatype: float64}
+# - {name: interval_upper, datatype: float64}
+# - {name: interval_kind, datatype: string}
+# - {name: band, datatype: string}
+# - {name: system, datatype: string}
+# - {name: upper_limit, datatype: bool, description: 'SED point that is an upper limit: never a measurement'}
+# - {name: method, datatype: string}
+# - {name: formula, datatype: string}
+# - {name: service, datatype: string}
+# - {name: server, datatype: string, description: URL of the server that actually answered (also a mirror)}
+# - {name: table, datatype: string}
+# - {name: query, datatype: string}
+# - {name: identifier, datatype: string}
+# - {name: match, datatype: string}
+# - {name: reference, datatype: string}
+# - {name: note, datatype: string}
+# - {name: retrieved_at, datatype: string}
+# - {name: from_cache, datatype: string}
+# - {name: command_id, datatype: int64, description: number of the object.profile command that produced the value}
+# meta: !!omap
+# - {A2VERS: AstroTwo 0.1.0-beta.5}
+# - {A2KIND: object_profile}
+# - target: {name: Vega, origin: null, position: null, simbad_id: null}
+# - {main_id: null}
+# - position:
+#     epoch: J2000.000
+#     epoch_reason: null
+#     equinox: null
+#     frame: icrs
+#     lat: {unit: deg, value: 38.783688956244}
+#     lon: {unit: deg, value: 279.234734787025}
+#     obstime: null
+# - {position_source: 'SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all''epoca J2000 (documentazione di SIMBAD), name
+#     resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)'}
+# - commands: [1]
+# schema: astropy-2.0
+section quantity value value_text unit error error_lower error_upper interval_lower interval_upper interval_kind band system upper_limit method formula service server table query identifier match reference note retrieved_at from_cache command_id
+photometry "2MASS J magnitude" -0.177 -0.177 mag 0.206 "" "" "" "" "" J Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556 "2MASS J18365633+3847012" position 2006AJ....131.1163S "system Vega; quality C" 2026-11-10T16:14:02.654113+00:00 false 1
+photometry "2MASS J flux_nu" 1876.239682504227 1876.239682504227 Jy 357.4853746902539 "" "" "" "" "" J Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556 "2MASS J18365633+3847012" position 2003AJ....126.1090C "zero point 2MASS J (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.235 um" 2026-11-10T16:14:02.654113+00:00 false 1
+photometry "2MASS H magnitude" -0.029 -0.029 mag 0.146 "" "" "" "" "" H Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556 "2MASS J18365633+3847012" position 2006AJ....131.1163S "system Vega; quality B" 2026-11-10T16:14:02.654113+00:00 false 1
+photometry "2MASS H flux_nu" 1051.7195735309126 1051.7195735309126 Jy 142.90973363474941 "" "" "" "" "" H Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556 "2MASS J18365633+3847012" position 2003AJ....126.1090C "zero point 2MASS H (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.662 um" 2026-11-10T16:14:02.654113+00:00 false 1
+photometry "2MASS Ks magnitude" 0.129 0.129 mag 0.186 "" "" "" "" "" Ks Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556 "2MASS J18365633+3847012" position 2006AJ....131.1163S "system Vega; quality C" 2026-11-10T16:14:02.654113+00:00 false 1
+photometry "2MASS Ks flux_nu" 592.0119253334886 592.0119253334886 Jy 102.03422828452749 "" "" "" "" "" Ks Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=38.783688956244&RA=279.234734787025&SR=0.0005555555555555556 "2MASS J18365633+3847012" position 2003AJ....126.1090C "zero point 2MASS Ks (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 2.159 um" 2026-11-10T16:14:02.654113+00:00 false 1

@@ -132,7 +132,7 @@ def test_t3_alcyone_two_parameter_solution(services, cache):
     d = v["distance_parallax"]
     assert d.method == "computed" and d.value == (8.09 * u.mas).to(u.pc, u.parallax())
     assert d.interval == ((8.51 * u.mas).to(u.pc, u.parallax()), (7.67 * u.mas).to(u.pc, u.parallax()))
-    assert "zero point" in d.note and d.reference == "2007A&A...474..653V"
+    assert "zero-point" in d.note and d.reference == "2007A&A...474..653V"
     assert sec.status == "done"
 
 
@@ -181,7 +181,7 @@ def test_t5_bailer_jones_distance(services, cache):
     assert d.value == 15.514698 * u.pc and d.interval == (15.494703 * u.pc, 15.533528 * u.pc)
     assert d.provenance.table == "external.gaiaedr3_distance" and d.interval_kind == "16th-84th percentile"
     assert "distance_parallax" not in v  # con Bailer-Jones nessun 1/ϖ
-    assert v["ruwe"].value == pytest.approx(1.0572765, abs=0) and "senza soglia" in v["ruwe"].note
+    assert v["ruwe"].value == pytest.approx(1.0572765, abs=0) and "without a threshold" in v["ruwe"].note
     assert v["parallax"].provenance.table == "gaiadr3.gaia_source"
 
 

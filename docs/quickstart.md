@@ -62,7 +62,7 @@ An object profile collects what public archives know about one object, with the 
 - **Sky view:** **File → Export view as PNG…** saves the view with the data credits and provenance metadata.
 - **Object profile** (**Export…** button in the Profiles window):
   - values with provenance (**ECSV**);
-  - a profile sheet (**PDF**);
+  - a profile sheet (**PDF**), in English or Italian: the save dialog proposes English, whatever the language of the app, so the file can be attached to a paper. The same profile in the same language always gives the same file, byte for byte;
   - the SED plot (**PNG**).
 - **SED as a catalogue:** **Load SED points as catalog** turns the SED into a catalogue layer.
 - **Sessions:** **File → Save session…** saves the recorded commands so that the work can be replayed.

@@ -58,13 +58,13 @@ VIZIER_SED_RADIUS = 2.0 * u.arcsec
 #: Intervallo per l'avviso di moto proprio elevato della serie VizieR: J2000 → J2016 (20 §3.5, D25-14 (5)).
 _HIGH_PM_SPAN = 16.0 * u.yr
 
-_GAIA_SOURCE = ("«Gaia (E)DR3 passbands and zero points», file zeropt.dat versione 2 (ESA, "
-                "cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: documentazione di "
-                "Gaia DR3 §5.4.1, Tabella 5.4")
-_TMASS_SOURCE = ("2MASS All-Sky Explanatory Supplement §VI.4a, Tabella 1 (Cohen, Wheaton & Megeath 2003, AJ 126, "
+_GAIA_SOURCE = ("«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, "
+                "cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 "
+                "documentation §5.4.1, Table 5.4")
+_TMASS_SOURCE = ("2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, "
                  "1090)")
-_WISE_SOURCE = ("WISE All-Sky Explanatory Supplement §IV.4.h, Tabelle 1 e 9 (Wright et al. 2010; Jarrett et al. "
-                "2011, ApJ 735, 112); valida per AllWISE (AllWISE Explanatory Supplement §V.3.e)")
+_WISE_SOURCE = ("WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. "
+                "2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)")
 
 
 @dataclass(frozen=True)
@@ -274,7 +274,7 @@ def _jdate_text(jdate) -> str | None:
     if jdate is None:
         return None
     value = float(jdate.to_value(u.d)) if isinstance(jdate, u.Quantity) else float(jdate)
-    return f"JD {value!r} (jdate; scala non dichiarata dal servizio, trattata come UTC)"
+    return f"JD {value!r} (jdate; time scale not declared by the service, taken as UTC)"
 
 
 def sed_points_from(table, catalog: str, *, identifier: str | None = None, match: str | None = None,

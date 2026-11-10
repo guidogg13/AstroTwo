@@ -23,6 +23,7 @@ from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -648,8 +649,35 @@ VIEWS = {"identity": IdentityView, "images": ImagesView, "astrometry": SectionVi
 
 
 # --------------------------------------------------------------------------
-# Scheda di un profilo (43 §3.4)
+# Scheda di un profilo (43 §3.4); dialogo della lingua del PDF (DD-1, 43 §3.10)
 # --------------------------------------------------------------------------
+
+
+class PdfExportDialog(QFileDialog):
+    """Dialogo di salvataggio della scheda del profilo (PDF) con la scelta della lingua (DD-1, 43 §3.10).
+
+    La lingua proposta è **sempre l'inglese** a ogni apertura, qualunque sia la lingua dell'app: il PDF è il file da
+    allegare a un articolo. Dialogo di Qt (non quello di sistema), perché quello di macOS non accetta controlli in più."""
+
+    LANGUAGES = (("en", "English"), ("it", "Italiano"))
+
+    def __init__(self, parent, title: str, proposed: str) -> None:
+        super().__init__(parent, title, proposed, "PDF (*.pdf)")
+        self.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        self.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        self.setDefaultSuffix("pdf")
+        self.selectFile(proposed)
+        self.language_box = QComboBox(self)
+        for code, name in self.LANGUAGES:
+            self.language_box.addItem(name, code)
+        self.language_box.setCurrentIndex(0)
+        layout = self.layout()  # QGridLayout del dialogo di Qt: una riga in più sotto i tipi di file
+        row = layout.rowCount()
+        layout.addWidget(QLabel(self.tr("PDF language:"), self), row, 0)
+        layout.addWidget(self.language_box, row, 1)
+
+    def language(self) -> str:
+        return str(self.language_box.currentData() or "en")
 
 
 class ProfileTab(QWidget):
@@ -966,15 +994,20 @@ class ProfileTab(QWidget):
         proposed = sed_catalog_path(self.main_id(), 0).name.replace("-sed-0.xml", suffix[0])
         titles = {"ecsv": self.tr("Export values with provenance"), "pdf": self.tr("Export profile sheet"),
                   "sed_png": self.tr("Export SED plot")}
+        if fmt == "pdf":  # lingua del PDF scelta nel dialogo, inglese di default (DD-1, 43 §3.10)
+            dialog = PdfExportDialog(self, titles[fmt], proposed)
+            if dialog.exec() and dialog.selectedFiles():
+                self.export(fmt, dialog.selectedFiles()[0], language=dialog.language())
+            return
         path, _ = QFileDialog.getSaveFileName(self, titles[fmt], proposed, suffix[1])
         if path:
             self.export(fmt, path)
 
-    def export(self, fmt: str, path: str, *, then: str | None = None) -> int:
-        """Mette in coda ``object.export`` (25 §3.15) con i comandi della scheda e la lingua dell'app."""
+    def export(self, fmt: str, path: str, *, then: str | None = None, language: str = "en") -> int:
+        """Mette in coda ``object.export`` (25 §3.15) con i comandi della scheda; ``language`` = lingua del PDF scelta
+        nel dialogo (DD-1), ``en`` per gli altri formati, che non dipendono dalla lingua."""
         from pathlib import Path
 
-        language = getattr(self.owner.main, "language", "en")
         params = {"commands": self.export_commands(), "format": fmt, "path": str(Path(path).resolve()),
                   "language": language if language in ("en", "it") else "en"}
         job = self.owner.main.submit("object.export", params, source="menu")

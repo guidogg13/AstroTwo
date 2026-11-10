@@ -1141,10 +1141,30 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
   all'IA. (9) riquadro del puntatore SIMBAD (`41` §3.19): collegamento alla
   pagina SIMBAD del server che ha risposto (CDS o Harvard).
 
+- **D14-16 — Ripiego sul mirror quando il server principale risponde HTTP
+  404 per un guasto: da decidere (aperta il 2026-11-10, sprint D2, misure
+  di validazione).** **Fatto osservato** il 2026-11-10 (15:48–16:20 UTC):
+  durante il guasto del CDS `https://simbad.cds.unistra.fr/simbad/sim-tap/sync`
+  risponde **HTTP 404 con una pagina HTML** (non un VOTable), mentre il
+  mirror di Harvard risponde. Per la regola D14-14 (a) un 404 **non** fa
+  passare al mirror, quindi il profilo (`25`) resta senza SIMBAD
+  (`SERVICE_ERROR`, `http_no_votable`, stato 404) per tutti e 7 gli oggetti
+  della validazione; il risolutore di nomi del `10` (astroquery) è invece
+  passato al mirror di Harvard. **Proposte:** (a) passare al mirror anche per
+  un 404 **senza VOTable** (pagina HTML di un server giù) sul percorso
+  `sync`/`async` di un servizio TAP verificato, mai per un 404 con un
+  VOTable d'errore né per gli altri 4xx; (b) passare al mirror per ogni 404
+  del principale; (c) lasciare D14-14 com'è. **Raccomandazione di Claude
+  Code: (a)**: un endpoint TAP verificato che risponde 404 HTML è un server
+  giù, non una domanda sbagliata; l'errore di chi chiama resta un 4xx con
+  VOTable. Nessun codice cambiato finché il proprietario non decide (il `14`
+  è `approvato`).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D14-16** (§13): il CDS guasto risponde HTTP 404 HTML e la regola D14-14 (a) non passa al mirror di Harvard; proposte (a)–(c), raccomandata (a) (404 senza VOTable su un endpoint TAP verificato = server giù). Nessun codice cambiato; stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Correzioni trovate con il controllo della rete nei test (istruzione del proprietario del 2026-11-10):** (1) **SAMP solo locale:** `pyvo.samp` provava `http://google.com` a ogni avvio dell'hub e a ogni collegamento di un client (`internet_on`) e, se rispondeva, chiamava `socket.getfqdn()` senza tempo massimo; ora `use_internet = False` (`_samp_local_only`): hub e client su `127.0.0.1`, nessun contatto esterno per SAMP; (2) **registro VO:** `search_registry` costruiva l'ADQL con `get_RegTAP_query` senza servizio, e pyvo leggeva le capacità di `http://reg.g-vo.org` (in HTTP, senza tempo massimo, registro diverso da quello scelto); ora le capacità si leggono dal registro usato con i timeout del 04, un guasto dà `NET_TIMEOUT` `url`. Test T18 e test SAMP aggiornati. Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8b del `25` (decisioni del proprietario del 2026-11-09):** le modifiche del 14 per i punti (2) e (3) di D25-21 (riga sotto) **approvate dal proprietario** come parte di D25-21; nuova `tap_query_cached` (§7) per D25-22 del `25` (archivio Gaia già fermo nel profilo: copia in cache senza rete). Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8 del `25` (D25-21 approvata dal proprietario il 2026-11-09; modifica del 14 limitata a quanto serve ai punti (2) e (3)):** §3 «Servizio in uso per la sessione» — dentro un giro con dati aggiornati (`refresh_once()`) riparte dal principale solo la prima richiesta di ogni servizio, con la prova del CDS giù raccolta nel giro; §7 nuove `vizier_photometry_cached`, `refresh_once`, `refresh_scope_cds_down`. D14-15 (1) invariata fuori dall'ambito. Il Cone Search di IRSA del profilo usa `cone_search` così com'è (URL scritto). Stato `approvato` invariato. |

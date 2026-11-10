@@ -1881,6 +1881,13 @@
     </message>
 </context>
 <context>
+    <name>PdfExportDialog</name>
+    <message>
+        <source>PDF language:</source>
+        <translation>Lingua del PDF:</translation>
+    </message>
+</context>
+<context>
     <name>PhotometryView</name>
     <message>
         <source>Catalog</source>
@@ -2160,7 +2167,7 @@
     </message>
     <message>
         <source>Asked by the assistant</source>
-        <translation>Chiesto dall'assistente</translation>
+        <translation>Chiesto dall&apos;assistente</translation>
     </message>
     <message>
         <source>The export was not written</source>

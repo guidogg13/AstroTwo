@@ -1,0 +1,593 @@
+{
+ "status": "ok",
+ "error": null,
+ "values": {
+  "target": {
+   "name": "Barnard's Star",
+   "position": null,
+   "simbad_id": null,
+   "origin": null
+  },
+  "resolved": {
+   "method": "name_resolver",
+   "main_id": null,
+   "position": {
+    "lon": {
+     "value": 269.4520769586187,
+     "unit": "deg"
+    },
+    "lat": {
+     "value": 4.693364966576667,
+     "unit": "deg"
+    },
+    "frame": "icrs",
+    "equinox": null,
+    "obstime": null,
+    "epoch": "J2000.000",
+    "epoch_reason": null
+   },
+   "position_source": "SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+   "separation": null,
+   "simbad_error": {
+    "code": "SERVICE_ERROR",
+    "text": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync: risposta HTTP 404 senza VOTable",
+    "params": {
+     "reason": "http_no_votable",
+     "url": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",
+     "status": 404
+    }
+   }
+  },
+  "options": {
+   "sections": [
+    "identity",
+    "images",
+    "astrometry",
+    "photometry",
+    "planets"
+   ],
+   "match_radius": {
+    "value": 10.0,
+    "unit": "arcsec"
+   },
+   "crossmatch_radius": {
+    "value": 2.0,
+    "unit": "arcsec"
+   },
+   "surveys": [
+    "CDS/P/DSS2/color",
+    "CDS/P/2MASS/color",
+    "CDS/P/allWISE/color"
+   ],
+   "thumbnail_fov": {
+    "value": 5.0,
+    "unit": "arcmin"
+   },
+   "thumbnail_size": 256
+  },
+  "cross_identifications": [
+   {
+    "catalog": "gaia_dr3",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "cross-match failed",
+    "warnings": [],
+    "servers": [],
+    "queries": [],
+    "error": {
+     "code": "SERVICE_ERROR",
+     "text": "https://gea.esac.esa.int/tap-server/tap/sync: risposta HTTP 503 senza VOTable",
+     "params": {
+      "reason": "http_no_votable",
+      "url": "https://gea.esac.esa.int/tap-server/tap/sync",
+      "status": 503
+     }
+    }
+   },
+   {
+    "catalog": "2mass",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": {
+     "source": "J2000.000",
+     "target": "jdate della riga (UTC)"
+    },
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "no 2MASS source within 2.0 arcsec of the propagated position",
+    "warnings": [
+     {
+      "code": "PROFILE_NO_PROPER_MOTION",
+      "text": "moto proprio del bersaglio non noto: posizione confrontata con 2MASS senza propagazione",
+      "params": {
+       "reason": "target_pm_unknown",
+       "catalog": "2MASS"
+      }
+     }
+    ],
+    "servers": [
+     "https://irsa.ipac.caltech.edu/SCS?table=fp_psc"
+    ],
+    "queries": [
+     "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=4.693364966576667&RA=269.4520769586187&SR=0.0005555555555555556"
+    ],
+    "error": null
+   },
+   {
+    "catalog": "allwise",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": {
+     "source": "J2000.000",
+     "target": "MJD 55400.0 UTC (J2010.556)"
+    },
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "no AllWISE source within 2.0 arcsec of the propagated position",
+    "warnings": [
+     {
+      "code": "PROFILE_NO_PROPER_MOTION",
+      "text": "moto proprio del bersaglio non noto: posizione confrontata con AllWISE senza propagazione",
+      "params": {
+       "reason": "target_pm_unknown",
+       "catalog": "AllWISE"
+      }
+     }
+    ],
+    "servers": [
+     "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd"
+    ],
+    "queries": [
+     "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=4.693364966576667&RA=269.4520769586187&SR=0.0005555555555555556"
+    ],
+    "error": null
+   },
+   {
+    "catalog": "exoplanet",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "no host in the archive",
+    "warnings": [],
+    "servers": [],
+    "queries": [],
+    "error": null
+   }
+  ],
+  "sections": [
+   {
+    "name": "identity",
+    "status": "error",
+    "values": [],
+    "details": {},
+    "warnings": [],
+    "errors": [
+     {
+      "code": "SERVICE_ERROR",
+      "text": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync: risposta HTTP 404 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",
+       "status": 404
+      }
+     }
+    ],
+    "servers": [],
+    "elapsed": {
+     "value": 0.005377374996896833,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.0,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "images",
+    "status": "done",
+    "values": [],
+    "details": {
+     "thumbnails": [
+      {
+       "hips_id": "CDS/P/DSS2/color",
+       "title": "DSS colored",
+       "size": 256,
+       "order": 9,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 269.4520769586187,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 4.693364966576667,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/DSSColor"
+       ],
+       "tiles": [
+        {
+         "index": 2033997,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir2030000/Npix2033997.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:18:49.181192+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 2034008,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir2030000/Npix2034008.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:18:49.885098+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 2034010,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir2030000/Npix2034010.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:18:50.481421+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "DSS colored",
+        "obs_ack": "The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. Government grant NAG W-2166. The images of these surveys are based on photographic data obtained using the Oschin Schmidt Telescope on Palomar Mountain and the UK Schmidt Telescope. The plates were processed into the present compressed digital form with the permission of these institutions. The National Geographic Society - Palomar Observatory Sky Atlas (POSS-I) was made by the California Institute of Technology with grants from the National Geographic Society. The Second Palomar Observatory Sky Survey (POSS-II) was made by the California Institute of Technology with funds from the National Science Foundation, the National Geographic Society, the Sloan Foundation, the Samuel Oschin Foundation, and the Eastman Kodak Corporation. The Oschin Schmidt Telescope is operated by the California Institute of Technology and Palomar Observatory. The UK Schmidt Telescope was operated by the Royal Observatory Edinburgh, with funding from the UK Science and Engineering Research Council (later the UK Particle Physics and Astronomy Research Council), until 1988 June, and thereafter by the Anglo-Australian Observatory. The blue plates of the southern Sky Atlas and its Equatorial Extension (together known as the SERC-J), as well as the Equatorial Red (ER), and the Second Epoch [red] Survey (SES) were all taken with the UK Schmidt. Supplemental funding for sky-survey work at the ST ScI is provided by the European Southern Observatory.",
+        "obs_copyright": "Digitized Sky Survey - STScI/NASA, Colored & Healpixed by CDS",
+        "obs_copyright_url": "http://archive.stsci.edu/dss/copyright.html"
+       },
+       "epoch": null,
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      269.45207695862 / [deg] Coordinate value at reference point      \nCRVAL2  =      4.6933649665767 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =      4.6933649665767 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/DSS2/color all'ordine 9: 3 tile da https://skies.esac.esa.int/DSSColor; 3 tile di CDS/P/DSS2/color all'ordine 9 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch not known (observations longer than one year, or t_min/t_max missing): centre = SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+       "png": "<png omitted>"
+      },
+      {
+       "hips_id": "CDS/P/2MASS/color",
+       "title": "2MASS color J (1.23um), H (1.66um), K (2.16um)",
+       "size": 256,
+       "order": 9,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 269.4520769586187,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 4.693364966576667,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/2MASSColor"
+       ],
+       "tiles": [
+        {
+         "index": 2033997,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir2030000/Npix2033997.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:18:49.284934+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 2034008,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir2030000/Npix2034008.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:18:50.004480+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 2034010,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir2030000/Npix2034010.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:18:50.544170+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "2MASS color J (1.23um), H (1.66um), K (2.16um)",
+        "obs_ack": "University of Massachusetts & IPAC/Caltech",
+        "obs_copyright": "University of Massachusetts & IPAC/Caltech",
+        "obs_copyright_url": "http://www.ipac.caltech.edu/2mass/"
+       },
+       "epoch": null,
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      269.45207695862 / [deg] Coordinate value at reference point      \nCRVAL2  =      4.6933649665767 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =      4.6933649665767 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/2MASS/color all'ordine 9: 3 tile da https://skies.esac.esa.int/2MASSColor; 3 tile di CDS/P/2MASS/color all'ordine 9 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch not known (observations longer than one year, or t_min/t_max missing): centre = SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+       "png": "<png omitted>"
+      },
+      {
+       "hips_id": "CDS/P/allWISE/color",
+       "title": "AllWISE color  Red (W4) , Green (W2) , Blue (W1) from raw Atlas Images",
+       "size": 256,
+       "order": 8,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 269.4520769586187,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 4.693364966576667,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/AllWISEColor"
+       ],
+       "tiles": [
+        {
+         "index": 508499,
+         "url": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir500000/Npix508499.jpg",
+         "server": "https://skies.esac.esa.int/AllWISEColor",
+         "retrieved_at": "2026-11-10T16:18:51.156046+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 508502,
+         "url": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir500000/Npix508502.jpg",
+         "server": "https://skies.esac.esa.int/AllWISEColor",
+         "retrieved_at": "2026-11-10T16:18:51.609216+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "AllWISE color  Red (W4) , Green (W2) , Blue (W1) from raw Atlas Images",
+        "obs_ack": "This Progressive Survey distribution makes use of data products from the Wide-field Infrared Survey Explorer, which is a joint project of the University of California, Los Angeles, and the Jet Propulsion Laboratory/California Institute of Technology, and NEOWISE, which is a project of the Jet Propulsion Laboratory/California Institute of Technology. WISE and NEOWISE are funded by the National Aeronautics and Space Administration.",
+        "obs_copyright": "IPAC/NASA",
+        "obs_copyright_url": "http://wise2.ipac.caltech.edu/docs/release/allsky/"
+       },
+       "epoch": {
+        "mjd": 55396.0,
+        "jyear": 2010.5448323066394,
+        "t_min": 55378.0,
+        "t_max": 55414.0,
+        "scale": "utc",
+        "note": "punto medio di t_min e t_max del properties (MJD, scala non dichiarata: trattata come UTC)"
+       },
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      269.45207695862 / [deg] Coordinate value at reference point      \nCRVAL2  =      4.6933649665767 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =      4.6933649665767 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/allWISE/color all'ordine 8: 2 tile da https://skies.esac.esa.int/AllWISEColor; 2 tile di CDS/P/allWISE/color all'ordine 8 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch np.float64(2010.5448323066394) without a known proper motion: centre = SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+       "png": "<png omitted>"
+      }
+     ],
+     "surveys": [
+      "CDS/P/DSS2/color",
+      "CDS/P/2MASS/color",
+      "CDS/P/allWISE/color"
+     ],
+     "fov": {
+      "value": 5.0,
+      "unit": "arcmin"
+     },
+     "size": 256
+    },
+    "warnings": [
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/DSS2/color: CDS già non raggiungibile in questa sessione (mocserver): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/DSSColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/DSS2/color",
+       "mirror": "https://skies.esac.esa.int/DSSColor",
+       "evidence": "mocserver"
+      }
+     },
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/2MASS/color: CDS già non raggiungibile in questa sessione (mocserver): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/2MASSColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/2MASS/color",
+       "mirror": "https://skies.esac.esa.int/2MASSColor",
+       "evidence": "mocserver"
+      }
+     },
+     {
+      "code": "PROFILE_NO_PROPER_MOTION",
+      "text": "moto proprio del bersaglio non noto: posizione confrontata con la miniatura senza propagazione",
+      "params": {
+       "reason": "target_pm_unknown",
+       "catalog": "la miniatura"
+      }
+     },
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/allWISE/color: CDS già non raggiungibile in questa sessione (mocserver): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/AllWISEColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/allWISE/color",
+       "mirror": "https://skies.esac.esa.int/AllWISEColor",
+       "evidence": "mocserver"
+      }
+     }
+    ],
+    "errors": [],
+    "servers": [
+     "https://skies.esac.esa.int/2MASSColor/properties",
+     "https://skies.esac.esa.int/AllWISEColor/properties",
+     "https://skies.esac.esa.int/DSSColor/properties"
+    ],
+    "elapsed": {
+     "value": 3.368453707982553,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.0,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "astrometry",
+    "status": "error",
+    "values": [],
+    "details": {},
+    "warnings": [],
+    "errors": [
+     {
+      "code": "SERVICE_ERROR",
+      "text": "https://gea.esac.esa.int/tap-server/tap/sync: risposta HTTP 503 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "status": 503
+      }
+     }
+    ],
+    "servers": [],
+    "elapsed": {
+     "value": 0.4962914999923669,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.4916870419983752,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "photometry",
+    "status": "error",
+    "values": [],
+    "details": {
+     "points": [],
+     "vizier": null,
+     "zero_points": [],
+     "vizier_sed": {
+      "skipped": true,
+      "reason": "cds_down",
+      "evidence": "mocserver"
+     },
+     "vizier_center": {
+      "ra": {
+       "value": 269.4520769586187,
+       "unit": "deg"
+      },
+      "dec": {
+       "value": 4.693364966576667,
+       "unit": "deg"
+      },
+      "epoch": "J2000.000",
+      "radius": {
+       "value": 2.0,
+       "unit": "arcsec"
+      }
+     },
+     "plot_png": null
+    },
+    "warnings": [],
+    "errors": [
+     {
+      "code": "PROFILE_VIZIER_SKIPPED",
+      "text": "serie SED di VizieR non chiesta: il CDS risulta già non raggiungibile (mocserver); nessuna copia in cache",
+      "params": {
+       "reason": "cds_down",
+       "evidence": "mocserver"
+      },
+      "catalog": "vizier_sed"
+     }
+    ],
+    "servers": [],
+    "elapsed": {
+     "value": 1.6044625419890508,
+     "unit": "s"
+    },
+    "started": {
+     "value": 1.6043084579869173,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "planets",
+    "status": "done",
+    "values": [],
+    "details": {
+     "planets": [],
+     "note": "no planet in the archive (no host in the archive)"
+    },
+    "warnings": [],
+    "errors": [],
+    "servers": [],
+    "elapsed": {
+     "value": 0.496333416987909,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.4919485419814009,
+     "unit": "s"
+    }
+   }
+  ],
+  "warnings": [
+   {
+    "code": "PROFILE_NO_IDENTIFIERS",
+    "text": "SIMBAD non raggiungibile (SERVICE_ERROR): 'Barnard's Star' risolto da SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), profilo per posizione senza identificativi",
+    "params": {
+     "reason": "simbad_unreachable",
+     "name": "Barnard's Star",
+     "service": "SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD)",
+     "cause": {
+      "code": "SERVICE_ERROR",
+      "text": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync: risposta HTTP 404 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",
+       "status": 404
+      }
+     }
+    }
+   },
+   {
+    "code": "NAME_RESOLVER_FALLBACK",
+    "text": "SIMBAD (Harvard mirror) ha risposto al posto di: SIMBAD (CDS): DALServiceError: Unable to access the capabilities endpoint at: - https://simbad.cds.unistra.fr/simbad/sim-tap/capabilities: 404 Not Found - https://simbad.cds.unistra.fr/simbad/capabilities: 404 Not Found This could mean: 1. The service URL is incorrect 2. The service is temporarily unavailable 3. The service doesn't support this protocol 4. If a 503 was encountered, retry after the suggested delay.",
+    "params": {
+     "service": "SIMBAD (Harvard mirror)",
+     "failed": "SIMBAD (CDS): DALServiceError: Unable to access the capabilities endpoint at: - https://simbad.cds.unistra.fr/simbad/sim-tap/capabilities: 404 Not Found - https://simbad.cds.unistra.fr/simbad/capabilities: 404 Not Found This could mean: 1. The service URL is incorrect 2. The service is temporarily unavailable 3. The service doesn't support this protocol 4. If a 503 was encountered, retry after the suggested delay."
+    }
+   }
+  ],
+  "cancelled": false,
+  "elapsed": {
+   "value": 4.281567583995638,
+   "unit": "s"
+  },
+  "skipped_services": {},
+  "match_radius": {
+   "value": 10.0,
+   "unit": "arcsec"
+  }
+ }
+}

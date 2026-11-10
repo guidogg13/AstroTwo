@@ -1,0 +1,1150 @@
+{
+ "status": "ok",
+ "error": null,
+ "values": {
+  "target": {
+   "name": "51 Peg",
+   "position": null,
+   "simbad_id": null,
+   "origin": null
+  },
+  "resolved": {
+   "method": "name_resolver",
+   "main_id": null,
+   "position": {
+    "lon": {
+     "value": 344.36658535524,
+     "unit": "deg"
+    },
+    "lat": {
+     "value": 20.768832511140005,
+     "unit": "deg"
+    },
+    "frame": "icrs",
+    "equinox": null,
+    "obstime": null,
+    "epoch": "J2000.000",
+    "epoch_reason": null
+   },
+   "position_source": "SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+   "separation": null,
+   "simbad_error": {
+    "code": "SERVICE_ERROR",
+    "text": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync: risposta HTTP 404 senza VOTable",
+    "params": {
+     "reason": "http_no_votable",
+     "url": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",
+     "status": 404
+    }
+   }
+  },
+  "options": {
+   "sections": [
+    "identity",
+    "images",
+    "astrometry",
+    "photometry",
+    "planets"
+   ],
+   "match_radius": {
+    "value": 10.0,
+    "unit": "arcsec"
+   },
+   "crossmatch_radius": {
+    "value": 2.0,
+    "unit": "arcsec"
+   },
+   "surveys": [
+    "CDS/P/DSS2/color",
+    "CDS/P/2MASS/color",
+    "CDS/P/allWISE/color"
+   ],
+   "thumbnail_fov": {
+    "value": 5.0,
+    "unit": "arcmin"
+   },
+   "thumbnail_size": 256
+  },
+  "cross_identifications": [
+   {
+    "catalog": "gaia_dr3",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "cross-match failed",
+    "warnings": [],
+    "servers": [],
+    "queries": [],
+    "error": {
+     "code": "SERVICE_ERROR",
+     "text": "https://gea.esac.esa.int/tap-server/tap/sync: risposta HTTP 503 senza VOTable",
+     "params": {
+      "reason": "http_no_votable",
+      "url": "https://gea.esac.esa.int/tap-server/tap/sync",
+      "status": 503
+     }
+    }
+   },
+   {
+    "catalog": "2mass",
+    "identifier": "2MASS J22572795+2046077",
+    "method": "position",
+    "separation": {
+     "value": 0.29864810026190597,
+     "unit": "arcsec"
+    },
+    "epochs": {
+     "source": "J2000.000",
+     "target": "jdate della riga (UTC)"
+    },
+    "candidates": [
+     {
+      "identifier": "2MASS J22572795+2046077",
+      "separation": {
+       "value": 0.29864810026190597,
+       "unit": "arcsec"
+      }
+     }
+    ],
+    "conflict": null,
+    "official": null,
+    "note": null,
+    "warnings": [
+     {
+      "code": "PROFILE_NO_PROPER_MOTION",
+      "text": "moto proprio del bersaglio non noto: posizione confrontata con 2MASS senza propagazione",
+      "params": {
+       "reason": "target_pm_unknown",
+       "catalog": "2MASS"
+      }
+     },
+     {
+      "code": "PROFILE_POSITIONAL_MATCH",
+      "text": "2MASS per posizione: 2MASS J22572795+2046077 a 0.29864810026190597 arcsec (raggio 2.0 arcsec, epoche J2000.000 → jdate della riga (UTC))",
+      "params": {
+       "reason": "catalog_match",
+       "catalog": "2MASS",
+       "identifier": "2MASS J22572795+2046077",
+       "separation": {
+        "value": 0.29864810026190597,
+        "unit": "arcsec"
+       },
+       "radius": {
+        "value": 2.0,
+        "unit": "arcsec"
+       },
+       "source_epoch": "J2000.000",
+       "target_epoch": "jdate della riga (UTC)"
+      }
+     }
+    ],
+    "servers": [
+     "https://irsa.ipac.caltech.edu/SCS?table=fp_psc"
+    ],
+    "queries": [
+     "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556"
+    ],
+    "error": null
+   },
+   {
+    "catalog": "allwise",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": {
+     "source": "J2000.000",
+     "target": "MJD 55400.0 UTC (J2010.556)"
+    },
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "no AllWISE source within 2.0 arcsec of the propagated position",
+    "warnings": [
+     {
+      "code": "PROFILE_NO_PROPER_MOTION",
+      "text": "moto proprio del bersaglio non noto: posizione confrontata con AllWISE senza propagazione",
+      "params": {
+       "reason": "target_pm_unknown",
+       "catalog": "AllWISE"
+      }
+     }
+    ],
+    "servers": [
+     "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd"
+    ],
+    "queries": [
+     "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556"
+    ],
+    "error": null
+   },
+   {
+    "catalog": "exoplanet",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "no host in the archive",
+    "warnings": [],
+    "servers": [],
+    "queries": [],
+    "error": null
+   }
+  ],
+  "sections": [
+   {
+    "name": "identity",
+    "status": "error",
+    "values": [],
+    "details": {},
+    "warnings": [],
+    "errors": [
+     {
+      "code": "SERVICE_ERROR",
+      "text": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync: risposta HTTP 404 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",
+       "status": 404
+      }
+     }
+    ],
+    "servers": [],
+    "elapsed": {
+     "value": 0.006795209017582238,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.0,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "images",
+    "status": "done",
+    "values": [],
+    "details": {
+     "thumbnails": [
+      {
+       "hips_id": "CDS/P/DSS2/color",
+       "title": "DSS colored",
+       "size": 256,
+       "order": 9,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 344.36658535524,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 20.768832511140005,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/DSSColor"
+       ],
+       "tiles": [
+        {
+         "index": 1289300,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289300.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:12:39.829598+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1289301,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289301.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:12:40.285171+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1289302,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289302.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:12:40.647007+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1289303,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1280000/Npix1289303.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-10T16:12:41.082207+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "DSS colored",
+        "obs_ack": "The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. Government grant NAG W-2166. The images of these surveys are based on photographic data obtained using the Oschin Schmidt Telescope on Palomar Mountain and the UK Schmidt Telescope. The plates were processed into the present compressed digital form with the permission of these institutions. The National Geographic Society - Palomar Observatory Sky Atlas (POSS-I) was made by the California Institute of Technology with grants from the National Geographic Society. The Second Palomar Observatory Sky Survey (POSS-II) was made by the California Institute of Technology with funds from the National Science Foundation, the National Geographic Society, the Sloan Foundation, the Samuel Oschin Foundation, and the Eastman Kodak Corporation. The Oschin Schmidt Telescope is operated by the California Institute of Technology and Palomar Observatory. The UK Schmidt Telescope was operated by the Royal Observatory Edinburgh, with funding from the UK Science and Engineering Research Council (later the UK Particle Physics and Astronomy Research Council), until 1988 June, and thereafter by the Anglo-Australian Observatory. The blue plates of the southern Sky Atlas and its Equatorial Extension (together known as the SERC-J), as well as the Equatorial Red (ER), and the Second Epoch [red] Survey (SES) were all taken with the UK Schmidt. Supplemental funding for sky-survey work at the ST ScI is provided by the European Southern Observatory.",
+        "obs_copyright": "Digitized Sky Survey - STScI/NASA, Colored & Healpixed by CDS",
+        "obs_copyright_url": "http://archive.stsci.edu/dss/copyright.html"
+       },
+       "epoch": null,
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      344.36658535524 / [deg] Coordinate value at reference point      \nCRVAL2  =       20.76883251114 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =       20.76883251114 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/DSS2/color all'ordine 9: 4 tile da https://skies.esac.esa.int/DSSColor; 4 tile di CDS/P/DSS2/color all'ordine 9 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch not known (observations longer than one year, or t_min/t_max missing): centre = SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+       "png": "<png omitted>"
+      },
+      {
+       "hips_id": "CDS/P/2MASS/color",
+       "title": "2MASS color J (1.23um), H (1.66um), K (2.16um)",
+       "size": 256,
+       "order": 9,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 344.36658535524,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 20.768832511140005,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/2MASSColor"
+       ],
+       "tiles": [
+        {
+         "index": 1289300,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289300.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:12:42.001906+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1289301,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289301.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:12:42.660588+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1289302,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289302.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:12:43.280006+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1289303,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1280000/Npix1289303.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-10T16:12:44.028569+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "2MASS color J (1.23um), H (1.66um), K (2.16um)",
+        "obs_ack": "University of Massachusetts & IPAC/Caltech",
+        "obs_copyright": "University of Massachusetts & IPAC/Caltech",
+        "obs_copyright_url": "http://www.ipac.caltech.edu/2mass/"
+       },
+       "epoch": null,
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      344.36658535524 / [deg] Coordinate value at reference point      \nCRVAL2  =       20.76883251114 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =       20.76883251114 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/2MASS/color all'ordine 9: 4 tile da https://skies.esac.esa.int/2MASSColor; 4 tile di CDS/P/2MASS/color all'ordine 9 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch not known (observations longer than one year, or t_min/t_max missing): centre = SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+       "png": "<png omitted>"
+      },
+      {
+       "hips_id": "CDS/P/allWISE/color",
+       "title": "AllWISE color  Red (W4) , Green (W2) , Blue (W1) from raw Atlas Images",
+       "size": 256,
+       "order": 8,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 344.36658535524,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 20.768832511140005,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/AllWISEColor"
+       ],
+       "tiles": [
+        {
+         "index": 322325,
+         "url": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir320000/Npix322325.jpg",
+         "server": "https://skies.esac.esa.int/AllWISEColor",
+         "retrieved_at": "2026-11-10T16:12:41.613891+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "AllWISE color  Red (W4) , Green (W2) , Blue (W1) from raw Atlas Images",
+        "obs_ack": "This Progressive Survey distribution makes use of data products from the Wide-field Infrared Survey Explorer, which is a joint project of the University of California, Los Angeles, and the Jet Propulsion Laboratory/California Institute of Technology, and NEOWISE, which is a project of the Jet Propulsion Laboratory/California Institute of Technology. WISE and NEOWISE are funded by the National Aeronautics and Space Administration.",
+        "obs_copyright": "IPAC/NASA",
+        "obs_copyright_url": "http://wise2.ipac.caltech.edu/docs/release/allsky/"
+       },
+       "epoch": {
+        "mjd": 55396.0,
+        "jyear": 2010.5448323066394,
+        "t_min": 55378.0,
+        "t_max": 55414.0,
+        "scale": "utc",
+        "note": "punto medio di t_min e t_max del properties (MJD, scala non dichiarata: trattata come UTC)"
+       },
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      344.36658535524 / [deg] Coordinate value at reference point      \nCRVAL2  =       20.76883251114 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =       20.76883251114 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/allWISE/color all'ordine 8: 1 tile da https://skies.esac.esa.int/AllWISEColor; 1 tile di CDS/P/allWISE/color all'ordine 8 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch np.float64(2010.5448323066394) without a known proper motion: centre = SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), name resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)",
+       "png": "<png omitted>"
+      }
+     ],
+     "surveys": [
+      "CDS/P/DSS2/color",
+      "CDS/P/2MASS/color",
+      "CDS/P/allWISE/color"
+     ],
+     "fov": {
+      "value": 5.0,
+      "unit": "arcmin"
+     },
+     "size": 256
+    },
+    "warnings": [
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/DSS2/color: MocServer non raggiungibile, server principale non noto; survey servito dal mirror https://skies.esac.esa.int/DSSColor",
+      "params": {
+       "reason": "mocserver",
+       "hips_id": "CDS/P/DSS2/color",
+       "mirror": "https://skies.esac.esa.int/DSSColor"
+      }
+     },
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/2MASS/color: CDS già non raggiungibile in questa sessione (mocserver): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/2MASSColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/2MASS/color",
+       "mirror": "https://skies.esac.esa.int/2MASSColor",
+       "evidence": "mocserver"
+      }
+     },
+     {
+      "code": "PROFILE_NO_PROPER_MOTION",
+      "text": "moto proprio del bersaglio non noto: posizione confrontata con la miniatura senza propagazione",
+      "params": {
+       "reason": "target_pm_unknown",
+       "catalog": "la miniatura"
+      }
+     },
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/allWISE/color: CDS già non raggiungibile in questa sessione (mocserver): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/AllWISEColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/allWISE/color",
+       "mirror": "https://skies.esac.esa.int/AllWISEColor",
+       "evidence": "mocserver"
+      }
+     }
+    ],
+    "errors": [],
+    "servers": [
+     "https://skies.esac.esa.int/2MASSColor/properties",
+     "https://skies.esac.esa.int/AllWISEColor/properties",
+     "https://skies.esac.esa.int/DSSColor/properties"
+    ],
+    "elapsed": {
+     "value": 14.990256959019462,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.0,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "astrometry",
+    "status": "error",
+    "values": [],
+    "details": {},
+    "warnings": [],
+    "errors": [
+     {
+      "code": "SERVICE_ERROR",
+      "text": "https://gea.esac.esa.int/tap-server/tap/sync: risposta HTTP 503 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "status": 503
+      }
+     }
+    ],
+    "servers": [],
+    "elapsed": {
+     "value": 0.605347000004258,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.6012696670077275,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "photometry",
+    "status": "partial",
+    "values": [
+     {
+      "quantity": "2MASS J magnitude",
+      "value": {
+       "value": 4.655,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.296,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality D",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS J flux_nu",
+      "value": {
+       "value": 21.90222908169949,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 5.98332437967421,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2003AJ....126.1090C",
+      "note": "zero point 2MASS J (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.235 um; 2MASS J: quality D (ph_qual), out of the plot.",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS H magnitude",
+      "value": {
+       "value": 4.234,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.27,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality D",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS H flux_nu",
+      "value": {
+       "value": 20.734805058872933,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 5.172193500369236,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2003AJ....126.1090C",
+      "note": "zero point 2MASS H (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.662 um; 2MASS H: quality D (ph_qual), out of the plot.",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS Ks magnitude",
+      "value": {
+       "value": 3.911,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.021,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS Ks flux_nu",
+      "value": {
+       "value": 18.177345212012884,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.49155393647609785,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2003AJ....126.1090C",
+      "note": "zero point 2MASS Ks (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 2.159 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+       "from_cache": false
+      }
+     }
+    ],
+    "details": {
+     "points": [
+      {
+       "catalog": "2MASS",
+       "table": "fp_psc",
+       "band": "J",
+       "label": "2MASS J",
+       "zero_point": "2MASS J",
+       "system": "Vega",
+       "magnitude": {
+        "value": 4.655,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.296,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "D",
+       "flags": {
+        "ph_qual": "DDA",
+        "rd_flg": "3",
+        "cc_flg": "0"
+       },
+       "epoch": "JD 2451099.7776 (jdate; time scale not declared by the service, taken as UTC)",
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "flux": {
+        "value": 21.90222908169949,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 5.98332437967421,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.235,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "2MASS J",
+         "catalog": "2MASS",
+         "band": "J",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 1594.0,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 27.8,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 1.235,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.006,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+         "reference": "2003AJ....126.1090C",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_LOW_QUALITY",
+         "text": "2MASS J: qualità D (ph_qual), fuori dal grafico",
+         "params": {
+          "catalog": "2MASS",
+          "band": "J",
+          "quality": "D"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+        "table": "fp_psc",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+        "identifier": "2MASS J22572795+2046077",
+        "match": "position",
+        "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "2MASS",
+       "table": "fp_psc",
+       "band": "H",
+       "label": "2MASS H",
+       "zero_point": "2MASS H",
+       "system": "Vega",
+       "magnitude": {
+        "value": 4.234,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.27,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "D",
+       "flags": {
+        "ph_qual": "DDA",
+        "rd_flg": "3",
+        "cc_flg": "0"
+       },
+       "epoch": "JD 2451099.7776 (jdate; time scale not declared by the service, taken as UTC)",
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "flux": {
+        "value": 20.734805058872933,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 5.172193500369236,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.662,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "2MASS H",
+         "catalog": "2MASS",
+         "band": "H",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 1024.0,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 20.0,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 1.662,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.009,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+         "reference": "2003AJ....126.1090C",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_LOW_QUALITY",
+         "text": "2MASS H: qualità D (ph_qual), fuori dal grafico",
+         "params": {
+          "catalog": "2MASS",
+          "band": "H",
+          "quality": "D"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+        "table": "fp_psc",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+        "identifier": "2MASS J22572795+2046077",
+        "match": "position",
+        "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "2MASS",
+       "table": "fp_psc",
+       "band": "Ks",
+       "label": "2MASS Ks",
+       "zero_point": "2MASS Ks",
+       "system": "Vega",
+       "magnitude": {
+        "value": 3.911,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.021,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "DDA",
+        "rd_flg": "1",
+        "cc_flg": "0"
+       },
+       "epoch": "JD 2451099.7776 (jdate; time scale not declared by the service, taken as UTC)",
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "2MASS J22572795+2046077",
+       "match": "position",
+       "flux": {
+        "value": 18.177345212012884,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.49155393647609785,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 2.159,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "2MASS Ks",
+         "catalog": "2MASS",
+         "band": "Ks",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 666.7,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 12.6,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 2.159,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.011,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+         "reference": "2003AJ....126.1090C",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+        "table": "fp_psc",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=20.768832511140005&RA=344.36658535524&SR=0.0005555555555555556",
+        "identifier": "2MASS J22572795+2046077",
+        "match": "position",
+        "retrieved_at": "2026-11-10T16:12:30.391612+00:00",
+        "from_cache": false
+       }
+      }
+     ],
+     "vizier": null,
+     "zero_points": [
+      {
+       "key": "2MASS H",
+       "catalog": "2MASS",
+       "band": "H",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 1024.0,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 20.0,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.662,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.009,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+       "reference": "2003AJ....126.1090C",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "2MASS J",
+       "catalog": "2MASS",
+       "band": "J",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 1594.0,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 27.8,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.235,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.006,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+       "reference": "2003AJ....126.1090C",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "2MASS Ks",
+       "catalog": "2MASS",
+       "band": "Ks",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 666.7,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 12.6,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 2.159,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.011,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+       "reference": "2003AJ....126.1090C",
+       "verified": "2026-11-07"
+      }
+     ],
+     "vizier_center": {
+      "ra": {
+       "value": 344.36658535524,
+       "unit": "deg"
+      },
+      "dec": {
+       "value": 20.768832511140005,
+       "unit": "deg"
+      },
+      "epoch": "J2000.000",
+      "radius": {
+       "value": 2.0,
+       "unit": "arcsec"
+      }
+     },
+     "plot_png": {
+      "format": "image/png",
+      "encoding": "base64",
+      "quantity": "fnu",
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAoAAAAG4CAYAAADVDFZ+AAAACXBIWXMAAA9hAAAPYQGoP6dpAABKpklEQVR4nO3dB5QUVf728d/AAJJzULKCgAhKUgERV8QcEAVhRQVFhWVRzFkWFyMCBgyoiAoiKEgyy4qIGcWAJBclSJIchzzznuf+t/rtmekJzHTP9Mz9fs6ZM93V3VW3qis8dW/d6oSUlJQUAwAAgDeK5HcBAAAAkLcIgAAAAJ4hAAIAAHiGAAgAAOAZAiAAAIBnCIAAAACeIQACAAB4hgAIAADgGQIgAACAZwiAAAAAniEAAgAAeIYACAAA4BkCIAAAgGcS87sAiI7k5GRbu3atlS1b1hISElisAAAUYikpKbZz50476qijrEiRw6/PIwAWEgp/tWvXzu9iAACAPPTnn39arVq1DvtzBMBCQjV/snLlSjt06JBVrFgxR2cEmdUwbt26NerjReHDusJyLMzrSjyWOT/LlJfTjvW0kmMw/liWeceOHa7iJzj+Hy4CYCERNPuWK1fODh486P5HOwDGYrwofFhXWI6FeV2JxzLnZ5nyctqxnlZyDMafF8snp5d9xcfaCwAAgDxDAAQAAPAMTcAAACBPe6+qWVTXqx9uc+qBAwds7969MWsCPhDl8UdjnMWKFbOiRYtatBEAAQBAnti/f7+tW7fOkpKSchQcg04VsbjdWUoMxh+Ncepz6uVbpkwZiyYCIAAAiDkFoeXLl7vaLN27rnjx4ocVioKaw8TExJgFwINRHn9ux6nPb9y40VavXm0NGzaMak0gARAAAORJ7Z9CoG5dUqpUqcP+vI8BUKpWrWorVqxwTckEQAAAUCAd7rVwBzZssIMbN5qlmB08dNASiyaaJZglVq1qxapVs8IuIUa/7kUNIAAAiFvbJr1lm559Nt3wKgMGWNWB/8yXMhUG3AYGAADErQqXd7ejhj8Rel7uwgut5jPPuOHRaKJ9+eWXrVGjRlahQgXr0qWLrVmzJvR6lSpVXJN1eI/lF154wdXKjRo1KjRs8+bNVqJECRs0aFC6abz55pt23HHHWenSpa19+/Y2Z86c0GsTJkywJk2aRHwt1giAAAAgbu2e+4Wtvf2O0PMd779va266yXZ/8WWux718+XL77rvvbObMme46O/1ix8CBA1O9p379+vbuu++Gnr/00ksurIUbP368nXfeeTZp0iR3rWNA4+zXr58NHz7cNm3aZCNGjHCBM3itb9++blja1/ICARAAAMSl/StW2Lr771cX4v8/ULVxycm27r77bP/Klbka/9FHH20vvviiHXvssa4GsHv37qlqAEUBbvTo0e7xt99+a9WrV7d69eqles/YsWPtjjvusNatW9uMGTNCw9evX2/VqlWzc88910qWLGknn3yyjRs3LsvX8gIBEAAAxKVtU95RL4jILyYk2LbJU6I2reTkZFcD17Nnz1TD27Vr58KaauzU/KtAGG7+/PnuRs9t27a13r172yuvvBJ6rU2bNta0aVM788wz7bHHHnNNvEFzsl5r1qyZderUKd1reYEACCDfqZffnoUL0/1pOAB/HVBtXEpK5BdTUv7v9ShISUlxwU63XLnpppvSvX7dddfZsGHD7KuvvrLzzz8/Xe2fgp9ceOGF9v3334dqEXXblmnTptnTTz/txj1y5EjXfLxnzx73mpqen3nmmXSv5QUCIIC46OW34tLL0v1pOAB/FatZM9MaQPd6Lh06dMgFOP1Xc3Ck26706tXLNc/+/e9/T3Uvvn379rmOHHfffbf7nDqC6MbNr732WqrPqxPINddc48Lgjh077OOPP87Wa7FEAASQ79Sbr+4b40PP9bjelMlR6eUHoOCqcGnXTGsAK1x2aa7Gf/DgQRfq9Kskav7N6J57ZcuWdeFs8ODBqYZPnz7dGjdu7GoQgz815apWUL788ku79dZbbcmSJa6ZeNasWbZy5UqrUaOGe029hiO9lhe4DyCAfKebuRYN+53LI5o0sSI5+KUAAIVL8Xr17MihQ12Hj1BHENXApaS44cXr1s3V+H/99Vd7663/a2kIeuDWrFnT/fRadijoqXYwXIcOHVxt4ueff+6uC1ST8KWXXup6HOuWMo888ojr8KHwqesHu3btmu61vJCQoriKAk9nJuXLl3c/OK2VqlKlSod9t/WsLo7dsmVL1MeLwien60pyUpItbdnKPW40/wfvA6AP21xBnMd4LHN+lulwpq1aLgUd3VbliCOOOKzp7F2y1JZ36eIeV+zd2yr17JHr8FdQfgouo+UWHPe3b9/ubl9zuOJj7QUAAIhAncGSd+8KPS975pl2aNcuOonlEgEQAADELXUGW3nF/29mXdWrF53EooBrAAEAQNxSZ7AyZ/zNLMXs4KGDllg00SzBLLFq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2S655BL3v3jx4nbKKafYiBEj7G9/+xtLFgCALBxxxBG2d+9ey2s0AcPmzJlj33zzjXXu3NlatmyZbons2rXLZs6caX/99Zc1a9bMOnXqFHrt22+/tXPOOcf9BJ106dLFjYsACAAorFJSUuyTTz5xNXhNmjSxgQMHpnvPnj17bOzYsbZo0SI78sgjrXfv3nF1mRQB0GNff/219e3b1ypVquR++7B06dLpAuCaNWusQ4cOVrFiRffao48+aqeffrq9+eablpCQ4G5yWaZMmdD79XjTpk35MDcAAMTepk2brF27dlanTh33eNWqVekC4L59+6xjx47u/xVXXOGae0eOHOmOuw0bNoyLr4kA6DEFvrfffttdv1ehQoWI77nrrrtc+NNKqyZenck0b97cunfvbl27dnVnM6oFDPzxxx/ubAgAgMKoZMmS9v7771uDBg2sR48erpUsrZdfftkWL15sK1assMqVK9ttt91m7du3t3vvvdfeeustiwd0AvGYgpzCX0YOHTpkU6dOtauvvtqFP9H7Tz31VBcc5dxzz7XZs2e7au5Jkya5FVvXBAIAUFgrTxo0aJDpe3TZ1FlnneXCnxQpUsSFxffee8+Sk5PdMFWeTJw40T3X//nz51teIgAiQ6rW3r17tzVq1CjVcD3XmY2o5lAr+vTp023cuHFuJY6naxwAAMhry5Yts3r16qUaVr9+fUtKSrJ169a55wp8uoZQrWn6r86UeYkmYGQoqNbWD1mHU+gLr/Ju27atW3kBAIC5DiBB58hA8FyvSf/+/d1ffqEGEJlWc4s6eoTbvn176DUAAJBauXLlbOvWramGbdmyJfRaPCAAIkPq4aT7E6kqO5yeH3vssSw5AAAiOP74412nyXALFy60qlWrWrVq1SweEACRocTERLvgggts/PjxrkNI0MtX9w3UNQsAACC9nj172meffWYLFiwItaS9/vrrbni84JdAPLZ+/Xp79dVX3eMhQ4a4Hku6nq9x48buhs6yfPlyd78jdfw46aSTXC9f9QR+9913Xa8mAAB8c/PNN9vOnTvdXTAOHDjgjp9qMRs1alToPbrP7pQpU+yMM85wHT7UI3jWrFkZ3nYtrxEAPaabPD/zzDPphuvXPnTjysDmzZvdLV6CXwJR7R/hDwDgq/Hjx6f7+bZixYq526aFU/BT069+CUQ/oqCWtXhBAAQAAPAMbXgAAACeIQACAAB4hgAIAADgGQIgAACAZwiAAAAAniEAAgAAeIYACAAA4BkCIADkoVdeecWeeOIJW7169WHdtP3hhx+2WNu3b5/df//9tnv37phPC0D+IgACQB4qVaqU+ylF/cRi2l8SyMhtt91mBw8ejHnZSpQoYatWrbKHHnoo5tMCkL/4JRAAyGP6YfhatWrZmDFjrFu3bpm+d9GiRdaqVStXC1ipUqWYl+2nn36y9u3bu+nFy2+WAog+agABII+VK1fOLr74Yhs3blyW7x09erSde+65ofCn8HjXXXfZxo0bU71v8ODBLiyKagv1nmXLltmMGTNcjd6LL77omnb1mn7be8iQITZhwgRLTk5ONZ4TTzzR6tatm62yASi4qAEEgHzQrFkzW7p0qa1du9aqVKmS4fsaN25sN9xwg918883uua4drF27ti1evNi9FihTpoz7gfouXbq4puWSJUtanTp1rHXr1takSRMX9qpVq+bepzDZsGFDe/311124VDgM179/f9cU/N5778VwCQDIT9QAAkAe++STT+zXX391tW+qjcuIaut+++03a9CgQY6mo1rGKVOm2NChQ13Y+/bbb61ly5b21ltvuVrBl156yXVKSXstoqa3YMGCHE0TQMFAAASAPPbkk0+6TiCXX365q7XLiJp7U1JSrGzZsjmazvnnnx96rFrASMMOHTqUrkeymqi3bduWo2kCKBgS87sAAOCT//73v/bBBx/YtGnTXI/gzp07u2v1ItXylS9f3hISEmz79u05mlbp0qVDj4sWLZrhsLQ9jDW9vOhwAiD/UAMIAHnoqaeecjVvF154oXXq1Ml1uMioFlABTe/VtYJpqeYuoKbk/fv3R62Mml7z5s2jNj4A8YcACAB5RDVrr732mt1xxx2uZk9/vXv3zrQZ+JxzzrE5c+akG/7999+HHs+dO9cOHDjgmouj4fPPP3edQwAUXgRAAMgj6nRRsWJF+/vf/x4apgD4xx9/2FdffRXxM/369bNZs2bZX3/9lWr4sGHD7JprrrHrrrvO9RJWz+Cnn37aNSfnxrx581zP5CuuuCJX4wEQ3wiAAJBHatSoYWPHjrVixYqFhtWrV8/dhiWj2jvdrkVhbOTIkamGv/rqq+76wVNOOcVmz57tbtnSvXt3d0sZjf+RRx5x4w7otjAaphtQh19jqGG6PUxA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"
+     }
+    },
+    "warnings": [],
+    "errors": [
+     {
+      "code": "SERVICE_ERROR",
+      "text": "https://vizier.cds.unistra.fr/viz-bin/sed: risposta HTTP 404 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://vizier.cds.unistra.fr/viz-bin/sed",
+       "status": 404
+      },
+      "catalog": "vizier_sed"
+     }
+    ],
+    "servers": [
+     "https://irsa.ipac.caltech.edu/SCS?table=fp_psc"
+    ],
+    "elapsed": {
+     "value": 2.282871333998628,
+     "unit": "s"
+    },
+    "started": {
+     "value": 2.088004875025945,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "planets",
+    "status": "done",
+    "values": [],
+    "details": {
+     "planets": [],
+     "note": "no planet in the archive (no host in the archive)"
+    },
+    "warnings": [],
+    "errors": [],
+    "servers": [],
+    "elapsed": {
+     "value": 0.6055057920166291,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.6053159590228461,
+     "unit": "s"
+    }
+   }
+  ],
+  "warnings": [
+   {
+    "code": "PROFILE_NO_IDENTIFIERS",
+    "text": "SIMBAD non raggiungibile (SERVICE_ERROR): '51 Peg' risolto da SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD), profilo per posizione senza identificativi",
+    "params": {
+     "reason": "simbad_unreachable",
+     "name": "51 Peg",
+     "service": "SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all'epoca J2000 (documentazione di SIMBAD)",
+     "cause": {
+      "code": "SERVICE_ERROR",
+      "text": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync: risposta HTTP 404 senza VOTable",
+      "params": {
+       "reason": "http_no_votable",
+       "url": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",
+       "status": 404
+      }
+     }
+    }
+   },
+   {
+    "code": "NAME_RESOLVER_FALLBACK",
+    "text": "SIMBAD (Harvard mirror) ha risposto al posto di: SIMBAD (CDS): DALServiceError: Unable to access the capabilities endpoint at: - https://simbad.cds.unistra.fr/simbad/sim-tap/capabilities: 404 Not Found - https://simbad.cds.unistra.fr/simbad/capabilities: 404 Not Found This could mean: 1. The service URL is incorrect 2. The service is temporarily unavailable 3. The service doesn't support this protocol 4. If a 503 was encountered, retry after the suggested delay.",
+    "params": {
+     "service": "SIMBAD (Harvard mirror)",
+     "failed": "SIMBAD (CDS): DALServiceError: Unable to access the capabilities endpoint at: - https://simbad.cds.unistra.fr/simbad/sim-tap/capabilities: 404 Not Found - https://simbad.cds.unistra.fr/simbad/capabilities: 404 Not Found This could mean: 1. The service URL is incorrect 2. The service is temporarily unavailable 3. The service doesn't support this protocol 4. If a 503 was encountered, retry after the suggested delay."
+    }
+   }
+  ],
+  "cancelled": false,
+  "elapsed": {
+   "value": 15.971039750002092,
+   "unit": "s"
+  },
+  "skipped_services": {},
+  "match_radius": {
+   "value": 10.0,
+   "unit": "arcsec"
+  }
+ }
+}

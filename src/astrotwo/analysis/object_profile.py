@@ -184,8 +184,8 @@ _GAIA_PHOT_COLUMNS = ("source_id", "phot_g_mean_mag", "phot_g_mean_flux", "phot_
 _OFFICIAL = {"2mass": "gaiadr3.tmass_psc_xsc_best_neighbour", "allwise": "gaiadr3.allwise_best_neighbour"}
 _SIMBAD_PREFIX = {"gaia_dr3": "Gaia DR3 ", "2mass": "2MASS J", "allwise": "WISEA "}
 _NAME_PREFIXES = ("NAME ", "V* ", "** ", "* ")
-_ZERO_POINT_NOTE = "nessuna correzione dello zero point di parallasse (D25-10)"
-_RUWE_NOTE = "RUWE senza soglia: nessuna soglia da fonte ufficiale Gaia verificata (D25-11)"
+_ZERO_POINT_NOTE = "no parallax zero-point correction (D25-10)"
+_RUWE_NOTE = "RUWE without a threshold: no threshold from a verified official Gaia source (D25-11)"
 
 
 class ObjectProfileError(Exception):
@@ -288,12 +288,40 @@ def _provenance(request: RequestRecord, service: str, table: str | None, query: 
                       match=match, retrieved_at=request.retrieved_at, from_cache=request.from_cache)
 
 
+def _record_service(record) -> str:
+    """Servizio di un oggetto SIMBAD del 14 con il nome inglese del profilo (DD-3 (a)): dal server che ha risposto,
+    non dall'etichetta del modulo sotto."""
+    return _service_name(record.requests[0].url) if record.requests else str(record.source)
+
+
+def _resolver_label(resolved) -> str:
+    """Nome del servizio che ha risolto il nome (etichetta inglese del 10, prima di «via astroquery» o
+    «ObjectLookup»), senza la nota sul sistema scritta dal 10 in italiano (DD-3 (a))."""
+    return re.split(r" via astroquery| ObjectLookup", str(resolved.source))[0].strip() or str(resolved.source)
+
+
+def _resolver_source(resolved) -> str:
+    """Fonte della posizione da un risolutore di nomi del 10, in inglese (DD-3 (a)): servizio, sistema ed epoca come
+    li dichiara il 10 (SIMBAD: ICRS J2000; NED: FK5 J2000, epoca non dichiarata), server che ha risposto."""
+    servers = re.findall(r"https?://[^\s)]+", str(resolved.origin))
+    frame = resolved.coords.frame_name
+    system = "ICRS J2000" if frame == "icrs" else f"{frame.upper()} J2000, epoch not declared"
+    return f"{_resolver_label(resolved)}, name resolver, {system}" + (f" ({servers[-1]})" if servers else "")
+
+
+def _english(note) -> str:
+    """Testo inglese di un avviso (codice e ``params``) dal catalogo dei messaggi (DD-3 (a), D40-5)."""
+    from astrotwo.messages_catalog import message_text
+
+    return message_text(note[0], dict(getattr(note, "params", None) or {}), "en", text=note[1])
+
+
 def _service_name(url: str) -> str:
     host = urllib.parse.urlparse(url).hostname or url
     if "simbad" in host:
-        return "SIMBAD (mirror di Harvard)" if "harvard" in host else "SIMBAD (CDS)"
+        return "SIMBAD (Harvard mirror)" if "harvard" in host else "SIMBAD (CDS)"
     if "gea.esac.esa.int" in host:
-        return "Archivio Gaia (ESA)"
+        return "Gaia archive (ESA)"
     if "skies.esac.esa.int" in host:
         return "ESASky (ESA)"
     if "exoplanetarchive" in host:
@@ -629,9 +657,9 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
             resolved = _network(None, resolve_name, identifier, cache=cache, refresh=refresh)
             note = ModuleWarning("PROFILE_NO_IDENTIFIERS", f"SIMBAD non raggiungibile ({exc.code}): '{identifier}' "
                                  f"risolto da {resolved.source}, profilo per posizione senza identificativi",
-                                 {"reason": "simbad_unreachable", "name": identifier, "service": resolved.source,
+                                 {"reason": "simbad_unreachable", "name": identifier, "service": _resolver_label(resolved),
                                   "cause": _message(exc)})
-            return ResolvedTarget(target, None, resolved.coords, f"{resolved.source} ({resolved.origin})",
+            return ResolvedTarget(target, None, resolved.coords, _resolver_source(resolved),
                                   "name_resolver", simbad_error=_message(exc),
                                   warnings=(note,) + tuple(resolved.warnings))
         notes = _network_notes(record.warnings)
@@ -639,7 +667,7 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
             notes += (ModuleWarning("PROFILE_TARGET_CHANGED", f"'{target.name}': SIMBAD indica oggi "
                                     f"{record.main_id}, il comando registrato {target.simbad_id}",
                                     {"name": target.name, "recorded": target.simbad_id, "found": record.main_id}),)
-        return ResolvedTarget(target, record, record.coords, f"{record.source}, ICRS J2000 (coo_bibcode "
+        return ResolvedTarget(target, record, record.coords, f"{_record_service(record)}, ICRS J2000 (coo_bibcode "
                               f"{record.basic.get('coo_bibcode')})", "simbad_identifier", warnings=notes,
                               requests=record.requests)
     position = target.position
@@ -656,13 +684,13 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
         note = ModuleWarning("PROFILE_NO_IDENTIFIERS", f"SIMBAD non raggiungibile ({exc.code}): profilo per "
                              "posizione senza identificativi",
                              {"reason": "simbad_unreachable_position", "cause": _message(exc)})
-        return ResolvedTarget(target, None, position, "coordinate scritte", "position", simbad_error=_message(exc),
+        return ResolvedTarget(target, None, position, "coordinates as written", "position", simbad_error=_message(exc),
                               warnings=notes + (note,))
     excluded = tuple(w for w in cand_notes if w[0] == "PROFILE_PLANETS_EXCLUDED")
     if len(candidates) > 1:
         return TargetCandidates(target, match_radius, candidates, (request,), excluded)
     if not candidates:
-        return ResolvedTarget(target, None, position, "coordinate scritte (nessun oggetto SIMBAD entro "
+        return ResolvedTarget(target, None, position, "coordinates as written (no SIMBAD object within "
                               f"{float(match_radius.to_value(u.arcsec)):g} arcsec)", "position",
                               warnings=notes + _network_notes(cand_notes) + excluded, requests=(request,))
     chosen = candidates[0]
@@ -674,7 +702,7 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
                          {"reason": "simbad_candidate", "main_id": record.main_id, "separation": _qj(sep),
                           "radius": _qj(match_radius, "arcsec"),
                           "epoch": "—" if position.epoch is None else str(position.epoch.jyear_str)})
-    return ResolvedTarget(target, record, record.coords, f"{record.source}, ICRS J2000", "simbad_candidate",
+    return ResolvedTarget(target, record, record.coords, f"{_record_service(record)}, ICRS J2000", "simbad_candidate",
                           separation=sep, warnings=notes + _network_notes(cand_notes) + excluded + (note,)
                           + _network_notes(record.warnings),
                           requests=(request,) + record.requests)
@@ -879,7 +907,7 @@ def cross_identify(resolved: ResolvedTarget, catalog: str, *, gaia: CrossIdentif
                                  {"catalog": label, "simbad": simbad, "official": str(official["designation"])})
             return CrossIdentification(catalog, None, None, conflict=conflict, warnings=notes + (note,), **common)
         return CrossIdentification(catalog, simbad, "simbad_identifier", warnings=notes,
-                                   note="confermato dall'incrocio ufficiale di Gaia", **common)
+                                   note="confirmed by the official Gaia cross-match", **common)
     if simbad is not None:
         return CrossIdentification(catalog, simbad, "simbad_identifier", warnings=notes, **common)
     if official is not None:
@@ -986,7 +1014,7 @@ def _catalog_by_position(resolved: ResolvedTarget, catalog: str, radius: u.Quant
     r_arcsec = float(radius.to_value(u.arcsec))
     if not found:
         return CrossIdentification(catalog, None, None, warnings=warnings,
-                                   note=f"nessuna sorgente {label} entro {r_arcsec!r} arcsec dalla posizione propagata",
+                                   note=f"no {label} source within {r_arcsec!r} arcsec of the propagated position",
                                    **common)
     if len(found) > 1:
         note = ModuleWarning("PROFILE_POSITIONAL_MATCH", f"{len(found)} sorgenti {label} entro {r_arcsec!r} arcsec: "
@@ -1048,8 +1076,8 @@ def _exoplanet_by_hostname(resolved: ResolvedTarget, ask: _ExoplanetAsk) -> Cros
             return ask.found(hosts[0], official={"hostname": hosts[0]})
         if len(hosts) > 1:
             return ask.found(None, candidates=tuple({"hostname": h} for h in hosts),
-                             note="più ospiti dell'archivio corrispondono agli identificativi SIMBAD: nessuna scelta")
-    return ask.found(None, note="nessun ospite nell'archivio")
+                             note="several archive hosts match the SIMBAD identifiers: none chosen")
+    return ask.found(None, note="no host in the archive")
 
 
 def _exoplanet_host(resolved: ResolvedTarget, gaia: CrossIdentification, *, cache, refresh, timeouts):
@@ -1083,7 +1111,7 @@ def check_exoplanet_host(early: CrossIdentification, gaia: CrossIdentification, 
     merged = dict(requests=early.requests + tuple(ask.requests), queries=early.queries + tuple(ask.queries),
                   warnings=early.warnings + tuple(ask.notes))
     if by_gaia is None or by_gaia.identifier == early.identifier:
-        note = early.note if by_gaia is None else "confermato da gaia_dr3_id"
+        note = early.note if by_gaia is None else "confirmed by gaia_dr3_id"
         return dataclasses.replace(early, note=note, **merged)
     params = {"gaia_dr3_id": gaia.identifier, "by_gaia": by_gaia.identifier}
     if early.identifier is None:
@@ -1146,14 +1174,14 @@ def profile_identity(resolved: ResolvedTarget) -> ProfileSection:
             section.errors.append(resolved.simbad_error)
         else:
             section.status = "not_applicable"
-            section.details["note"] = "nessun oggetto SIMBAD per questa posizione"
+            section.details["note"] = "no SIMBAD object for this position"
         return section
     basic = record.basic
     req = record.requests[0]
     query = req.arguments.get("adql")
 
     def read(name: str, value, *, error=None, reference=None, note=None):
-        section.values.append(ProfileValue(name, value, _provenance(req, record.source, "basic", query,
+        section.values.append(ProfileValue(name, value, _provenance(req, _record_service(record), "basic", query,
                                                                     record.identifier, "simbad_identifier"),
                                            error=error, reference=reference, note=note))
 
@@ -1161,8 +1189,8 @@ def profile_identity(resolved: ResolvedTarget) -> ProfileSection:
     read("otype", basic.get("otype"), note=record.otype_description)
     read("sp_type", basic.get("sp_type"), reference=basic.get("sp_bibcode"))
     read("nbref", basic.get("nbref"))
-    read("ra", basic.get("ra"), reference=basic.get("coo_bibcode"), note="ICRS, epoca J2000")
-    read("dec", basic.get("dec"), reference=basic.get("coo_bibcode"), note="ICRS, epoca J2000")
+    read("ra", basic.get("ra"), reference=basic.get("coo_bibcode"), note="ICRS, epoch J2000")
+    read("dec", basic.get("dec"), reference=basic.get("coo_bibcode"), note="ICRS, epoch J2000")
     for name in ("coo_err_maj", "coo_err_min", "coo_err_angle", "coo_qual"):
         read(name, basic.get(name), reference=basic.get("coo_bibcode"))
     groups: dict[str, list[str]] = {}
@@ -1171,7 +1199,7 @@ def profile_identity(resolved: ResolvedTarget) -> ProfileSection:
     ident_req = record.requests[1]
     section.details = {"identifiers": {k: groups[k] for k in sorted(groups)}, "identifier_count":
                        len(record.identifiers), "simbad_url": _simbad_link(record),
-                       "identifiers_provenance": _provenance(ident_req, record.source, "ident",
+                       "identifiers_provenance": _provenance(ident_req, _record_service(record), "ident",
                                                              ident_req.arguments.get("adql"), record.main_id,
                                                              "simbad_identifier").as_dict()}
     section.requests.extend(record.requests[:2])
@@ -1183,7 +1211,8 @@ def _simbad_astrometry(section: ProfileSection, record: SimbadRecord) -> Profile
     """Parallasse, moto proprio e velocità radiale di SIMBAD con i loro bibcode; restituisce la parallasse."""
     basic = record.basic
     req = record.requests[0]
-    prov = _provenance(req, record.source, "basic", req.arguments.get("adql"), record.main_id, "simbad_identifier")
+    prov = _provenance(req, _record_service(record), "basic", req.arguments.get("adql"), record.main_id,
+                       "simbad_identifier")
     parallax = None
     if basic.get("plx_value") is not None:
         parallax = ProfileValue("parallax", basic["plx_value"], prov, error=basic.get("plx_err"),
@@ -1192,7 +1221,7 @@ def _simbad_astrometry(section: ProfileSection, record: SimbadRecord) -> Profile
     for name in ("pmra", "pmdec"):
         if basic.get(name) is not None:
             section.values.append(ProfileValue(name, basic[name], prov, reference=basic.get("pm_bibcode"),
-                                               note="SIMBAD; errore come ellisse (pm_err_maj, pm_err_min, "
+                                               note="SIMBAD; error as an ellipse (pm_err_maj, pm_err_min, "
                                                     "pm_err_angle)"))
     for name in ("pm_err_maj", "pm_err_min", "pm_err_angle"):
         if basic.get(name) is not None:
@@ -1293,7 +1322,7 @@ def _gaia_values(section: ProfileSection, row, request: RequestRecord, adql: str
     """Valori di ``gaiadr3.gaia_source`` con errori e indicatori; restituisce la parallasse (``None`` a 2 parametri)."""
     prov = _provenance(request, _service_name(request.url), _GAIA_SOURCE, adql, gaia.identifier, gaia.method)
     epoch = _value(row, "ref_epoch")
-    epoch_note = None if epoch is None else f"epoca di riferimento {_plain_number(epoch)} (ref_epoch, TCB)"
+    epoch_note = None if epoch is None else f"reference epoch {_plain_number(epoch)} (ref_epoch, TCB)"
     add = section.values.append
     add(ProfileValue("source_id", _value(row, "source_id"), prov))
     add(ProfileValue("ref_epoch", epoch, prov))
@@ -1302,7 +1331,7 @@ def _gaia_values(section: ProfileSection, row, request: RequestRecord, adql: str
     solved = _value(row, "astrometric_params_solved")
     n_params = None if solved is None else _bits(solved)
     add(ProfileValue("astrometric_params_solved", solved, prov,
-                     note=None if n_params is None else f"{n_params} parametri"))
+                     note=None if n_params is None else f"{n_params} parameters"))
     parallax = None
     if n_params == 2:
         section.warnings.append(ModuleWarning(
@@ -1320,7 +1349,7 @@ def _gaia_values(section: ProfileSection, row, request: RequestRecord, adql: str
         add(ProfileValue("radial_velocity", rv, prov, error=_value(row, "radial_velocity_error")))
     ruwe = _value(row, "ruwe")
     add(ProfileValue("ruwe", ruwe, prov, note=_RUWE_NOTE if ruwe is not None else
-                     "nullo per le soluzioni a 2 parametri (modello dei dati Gaia DR3)"))
+                     "null for 2-parameter solutions (Gaia DR3 data model)"))
     add(ProfileValue("duplicated_source", _value(row, "duplicated_source"), prov))
     add(ProfileValue("ipd_frac_multi_peak", _value(row, "ipd_frac_multi_peak"), prov))
     return parallax
@@ -1348,7 +1377,7 @@ def distance_from(bailer_jones, parallax: ProfileValue | None) -> tuple[tuple[Pr
             out.append(ProfileValue(f"distance_{kind}", med, prov,
                                     interval=None if lo is None or hi is None else (lo, hi),
                                     interval_kind="16th-84th percentile", reference=BAILER_JONES_REFERENCE,
-                                    note=f"Bailer-Jones et al. (2021), mediana {'geometrica' if kind == 'geo' else 'fotogeometrica'}"
+                                    note=f"Bailer-Jones et al. (2021), {'geometric' if kind == 'geo' else 'photogeometric'} median"
                                          + (f"; flag {flag}" if flag is not None else "")))
         if out:
             return tuple(out), ()
@@ -1375,7 +1404,7 @@ def distance_from(bailer_jones, parallax: ProfileValue | None) -> tuple[tuple[Pr
     value = ProfileValue("distance_parallax", distance, parallax.provenance, interval=(near, far),
                          interval_kind="1/(parallax +/- error)", method="computed",
                          formula="parallax.to(u.pc, u.parallax()) (astropy.units)", reference=parallax.reference,
-                         note=f"1/parallasse da {source}; parallasse/errore = {ratio!r} >= {PARALLAX_SNR_MIN!r}; "
+                         note=f"1/parallax from {source}; parallax/error = {ratio!r} >= {PARALLAX_SNR_MIN!r}; "
                               f"{_ZERO_POINT_NOTE}")
     return (value,), ()
 
@@ -1437,11 +1466,11 @@ def _vizier_center(resolved: ResolvedTarget) -> tuple[SkyFrame, tuple]:
 def _point_values(point, prov: Provenance) -> list[ProfileValue]:
     """Valori della sezione per un punto: letto (magnitudine, flusso in e⁻/s) e calcolato (Fν), con provenienza."""
     out = []
-    note = "; ".join(n[1] for n in point.notes) or None
+    note = "; ".join(_english(n) for n in point.notes) or None
     if point.magnitude is not None:
         out.append(ProfileValue(f"{point.label} magnitude", point.magnitude, prov, error=point.magnitude_error,
                                 reference=point.reference,
-                                note=f"sistema {point.system or 'non dichiarato'}; qualità {point.quality or '—'}"))
+                                note=f"system {point.system or 'not declared'}; quality {point.quality or '—'}"))
     if point.count_rate is not None:
         out.append(ProfileValue(f"{point.label} count_rate", point.count_rate, prov, error=point.count_rate_error,
                                 reference=point.reference))
@@ -1449,7 +1478,7 @@ def _point_values(point, prov: Provenance) -> list[ProfileValue]:
         zp = point.conversion["zero_point"]
         out.append(ProfileValue(f"{point.label} flux_nu", point.flux, prov, error=point.flux_error, method="computed",
                                 formula=point.conversion["formula"], reference=zp["reference"],
-                                note=f"punto zero {zp['key']} ({zp['source']}); λ {zp['wavelength_kind']} "
+                                note=f"zero point {zp['key']} ({zp['source']}); λ {zp['wavelength_kind']} "
                                      f"{zp['wavelength']['value']!r} {zp['wavelength']['unit']}"
                                      + (f"; {note}" if note else "")))
     return out
@@ -1567,7 +1596,8 @@ def profile_photometry(resolved: ResolvedTarget,
     record = resolved.simbad
     if record is not None and len(record.requests) > 2:
         req = record.requests[2]
-        prov = _provenance(req, record.source, "flux", req.arguments.get("adql"), record.main_id, "simbad_identifier")
+        prov = _provenance(req, _record_service(record), "flux", req.arguments.get("adql"), record.main_id,
+                           "simbad_identifier")
         add(sed_points_from(record.magnitudes, "simbad", identifier=record.main_id, match="simbad_identifier",
                             provenance=prov.as_dict()), prov)
         section.requests.append(req)
@@ -1625,16 +1655,16 @@ def _thumbnail_center(resolved: ResolvedTarget, epoch: dict | None) -> tuple[Sky
     """Centro della miniatura: all'epoca della survey se nota (con il moto proprio SIMBAD), altrimenti la posizione
     del bersaglio così com'è (SIMBAD J2000 o coordinate scritte), dichiarato."""
     position = resolved.position
-    where = "posizione SIMBAD (ICRS J2000)" if resolved.simbad is not None else resolved.position_source
+    where = "SIMBAD position (ICRS J2000)" if resolved.simbad is not None else resolved.position_source
     if epoch is None:
-        return position, (f"epoca della survey non nota (osservazioni più lunghe di un anno o t_min/t_max assenti): "
-                          f"centro = {where}"), ()
+        return position, (f"survey epoch not known (observations longer than one year, or t_min/t_max missing): "
+                          f"centre = {where}"), ()
     target = Time(epoch["mjd"], format="mjd", scale="utc")
     moved, notes = _propagated(resolved, target, "la miniatura")
     if notes:
-        return position, f"epoca della survey {epoch['jyear']!r} senza moto proprio noto: centro = {where}", notes
-    return moved, (f"centro portato all'epoca della survey (MJD {epoch['mjd']!r} UTC, {epoch['jyear']!r}) con il moto "
-                   f"proprio SIMBAD da {where} (propagate_position del 10)"), ()
+        return position, f"survey epoch {epoch['jyear']!r} without a known proper motion: centre = {where}", notes
+    return moved, (f"centre moved to the survey epoch (MJD {epoch['mjd']!r} UTC, {epoch['jyear']!r}) with the SIMBAD "
+                   f"proper motion from {where} (propagate_position of module 10)"), ()
 
 
 def profile_images(resolved: ResolvedTarget, *, surveys: Sequence[str] = IMAGE_SURVEYS,
@@ -1755,7 +1785,7 @@ def profile_planets(resolved: ResolvedTarget, host: CrossIdentification | None, 
             section.errors.append({**host.error, "catalog": "exoplanet"})
             section.status = "error"
             return section
-        section.details = {"planets": [], "note": "nessun pianeta nell'archivio"
+        section.details = {"planets": [], "note": "no planet in the archive"
                            + (f" ({host.note})" if host is not None and host.note else "")}
         section.status = "done"
         return section
@@ -1804,14 +1834,14 @@ def profile_planets(resolved: ResolvedTarget, host: CrossIdentification | None, 
             if key == "mass" and planet["pl_bmassprov"]:
                 note = f"pl_bmassprov = {planet['pl_bmassprov']}"
             if entry["limit"] in ("upper", "lower"):
-                note = "; ".join(x for x in (note, f"limite {'superiore' if entry['limit'] == 'upper' else 'inferiore'}"
+                note = "; ".join(x for x in (note, f"{'upper' if entry['limit'] == 'upper' else 'lower'} limit"
                                              f" ({column}lim = {limit})") if x)
             section.values.append(ProfileValue(f"{name} {key}", value, prov, error_upper=upper, error_lower=lower,
                                                reference=None if ref is None else (ref["bibcode"] or ref["text"]),
                                                note=note))
         planets.append(planet)
     section.details = {"planets": planets, "host": host.identifier, "query_by": where.split(" =")[0],
-                       "note": None if planets else "nessun pianeta nell'archivio"}
+                       "note": None if planets else "no planet in the archive"}
     if planets:
         section.warnings.append(ModuleWarning(
             "PROFILE_PLANETS_COMPOSITE", f"{len(planets)} pianeti da pscomppars: i parametri possono venire da lavori "
@@ -1873,7 +1903,7 @@ def _section_limit(name: str) -> u.Quantity:
 
 
 def _cross_failed(catalog: str, exc: VoProtocolsError) -> CrossIdentification:
-    return CrossIdentification(catalog, None, None, note="incrocio non riuscito", error=_message(exc))
+    return CrossIdentification(catalog, None, None, note="cross-match failed", error=_message(exc))
 
 
 def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
@@ -1978,7 +2008,7 @@ def build_profile(target: ProfileTarget, *, sections: Sequence[str] = SECTIONS,
                 try:
                     return check_exoplanet_host(early, gaia, **net)
                 except VoProtocolsError as exc:  # verifica non riuscita: resta l'esito per hostname, con l'errore
-                    return dataclasses.replace(early, error=_message(exc), note="verifica con gaia_dr3_id non riuscita")
+                    return dataclasses.replace(early, error=_message(exc), note="check with gaia_dr3_id failed")
             submit_step("exoplanet_hostname", host_by_name)
         for catalog in CATALOGS[1:]:
             if catalog == "exoplanet" and early_host:

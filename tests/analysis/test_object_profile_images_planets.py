@@ -81,7 +81,7 @@ def test_t9_no_planet_is_not_an_error(services, cache, name):
     prof = build_profile(ProfileTarget(name=name), sections=("planets",), cache=cache)
     sec = section(prof, "planets")
     assert sec.status == "done" and not sec.errors and not sec.values
-    assert sec.details["planets"] == [] and sec.details["note"].startswith("nessun pianeta nell'archivio")
+    assert sec.details["planets"] == [] and sec.details["note"].startswith("no planet in the archive")
     assert not any("ORDER BY pl_name" in q for s, q in services.queries if s == "exoplanet")
 
 
@@ -107,7 +107,7 @@ def test_t25_vega_planets_do_not_wait_for_a_slow_gaia_archive(services, cache):
                          on_section=lambda s: seen.append((s.name, time.monotonic() - started)))
     assert seen[0][0] == "planets" and seen[0][1] < 2.0  # prima della risposta di Gaia (3 s)
     sec = section(prof, "planets")
-    assert sec.status == "done" and sec.details["note"].startswith("nessun pianeta nell'archivio")
+    assert sec.status == "done" and sec.details["note"].startswith("no planet in the archive")
     assert not sec.errors
     asked = [q for s, q in services.queries if s == "exoplanet"]
     assert len(asked) == 1 and "WHERE hostname IN (" in asked[0]
@@ -170,11 +170,11 @@ def test_t24_thumbnails_of_51_peg(services, cache):
     simbad = prof.resolved.position.coord.icrs
     for hips_id in ("CDS/P/DSS2/color", "CDS/P/2MASS/color"):
         t = thumbs[hips_id]
-        assert t["epoch"] is None and t["center_note"].startswith("epoca della survey non nota")
+        assert t["epoch"] is None and t["center_note"].startswith("survey epoch not known")
         assert t["center"]["ra"]["value"] == pytest.approx(simbad.ra.deg, abs=1e-12)
     # AllWISE: epoca 2010,545 (MJD 55396), centro portato all'epoca con il moto proprio SIMBAD
     allwise = thumbs["CDS/P/allWISE/color"]
-    assert allwise["epoch"]["mjd"] == 55396.0 and allwise["center_note"].startswith("centro portato all'epoca")
+    assert allwise["epoch"]["mjd"] == 55396.0 and allwise["center_note"].startswith("centre moved to the survey epoch")
     basic = prof.resolved.simbad.basic
     plx = basic["plx_value"]
     moved = propagate_position(prof.resolved.position, pm_ra_cosdec=basic["pmra"], pm_dec=basic["pmdec"],

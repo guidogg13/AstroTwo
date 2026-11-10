@@ -1,0 +1,49 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: section, datatype: string}
+# - {name: quantity, datatype: string}
+# - {name: value, datatype: float64, description: 'numeric value as in the result (empty for texts, booleans and integers not exact in
+#     float64)'}
+# - {name: value_text, datatype: string, description: 'value exactly as in the result (shortest repr of the float64, integer digits, text)'}
+# - {name: unit, datatype: string}
+# - {name: error, datatype: float64}
+# - {name: error_lower, datatype: float64}
+# - {name: error_upper, datatype: float64}
+# - {name: interval_lower, datatype: float64}
+# - {name: interval_upper, datatype: float64}
+# - {name: interval_kind, datatype: string}
+# - {name: band, datatype: string}
+# - {name: system, datatype: string}
+# - {name: upper_limit, datatype: bool, description: 'SED point that is an upper limit: never a measurement'}
+# - {name: method, datatype: string}
+# - {name: formula, datatype: string}
+# - {name: service, datatype: string}
+# - {name: server, datatype: string, description: URL of the server that actually answered (also a mirror)}
+# - {name: table, datatype: string}
+# - {name: query, datatype: string}
+# - {name: identifier, datatype: string}
+# - {name: match, datatype: string}
+# - {name: reference, datatype: string}
+# - {name: note, datatype: string}
+# - {name: retrieved_at, datatype: string}
+# - {name: from_cache, datatype: string}
+# - {name: command_id, datatype: int64, description: number of the object.profile command that produced the value}
+# meta: !!omap
+# - {A2VERS: AstroTwo 0.1.0-beta.5}
+# - {A2KIND: object_profile}
+# - target: {name: Barnard's Star, origin: null, position: null, simbad_id: null}
+# - {main_id: null}
+# - position:
+#     epoch: J2000.000
+#     epoch_reason: null
+#     equinox: null
+#     frame: icrs
+#     lat: {unit: deg, value: 4.693364966576667}
+#     lon: {unit: deg, value: 269.4520769586187}
+#     obstime: null
+# - {position_source: 'SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all''epoca J2000 (documentazione di SIMBAD), name
+#     resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)'}
+# - commands: [1]
+# schema: astropy-2.0
+section quantity value value_text unit error error_lower error_upper interval_lower interval_upper interval_kind band system upper_limit method formula service server table query identifier match reference note retrieved_at from_cache command_id

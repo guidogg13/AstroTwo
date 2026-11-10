@@ -1,0 +1,63 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: section, datatype: string}
+# - {name: quantity, datatype: string}
+# - {name: value, datatype: float64, description: 'numeric value as in the result (empty for texts, booleans and integers not exact in
+#     float64)'}
+# - {name: value_text, datatype: string, description: 'value exactly as in the result (shortest repr of the float64, integer digits, text)'}
+# - {name: unit, datatype: string}
+# - {name: error, datatype: float64}
+# - {name: error_lower, datatype: float64}
+# - {name: error_upper, datatype: float64}
+# - {name: interval_lower, datatype: float64}
+# - {name: interval_upper, datatype: float64}
+# - {name: interval_kind, datatype: string}
+# - {name: band, datatype: string}
+# - {name: system, datatype: string}
+# - {name: upper_limit, datatype: bool, description: 'SED point that is an upper limit: never a measurement'}
+# - {name: method, datatype: string}
+# - {name: formula, datatype: string}
+# - {name: service, datatype: string}
+# - {name: server, datatype: string, description: URL of the server that actually answered (also a mirror)}
+# - {name: table, datatype: string}
+# - {name: query, datatype: string}
+# - {name: identifier, datatype: string}
+# - {name: match, datatype: string}
+# - {name: reference, datatype: string}
+# - {name: note, datatype: string}
+# - {name: retrieved_at, datatype: string}
+# - {name: from_cache, datatype: string}
+# - {name: command_id, datatype: int64, description: number of the object.profile command that produced the value}
+# meta: !!omap
+# - {A2VERS: AstroTwo 0.1.0-beta.5}
+# - {A2KIND: object_profile}
+# - target: {name: 3C 273, origin: null, position: null, simbad_id: null}
+# - {main_id: null}
+# - position:
+#     epoch: J2000.000
+#     epoch_reason: null
+#     equinox: null
+#     frame: icrs
+#     lat: {unit: deg, value: 2.05238823055}
+#     lon: {unit: deg, value: 187.27791594049}
+#     obstime: null
+# - {position_source: 'SIMBAD (Harvard mirror) via astroquery; coordinate SIMBAD: ICRS all''epoca J2000 (documentazione di SIMBAD), name
+#     resolver, ICRS J2000 (https://simbad.harvard.edu/simbad/sim-tap)'}
+# - commands: [1]
+# schema: astropy-2.0
+section quantity value value_text unit error error_lower error_upper interval_lower interval_upper interval_kind band system upper_limit method formula service server table query identifier match reference note retrieved_at from_cache command_id
+photometry "2MASS J magnitude" 11.766 11.766 mag 0.027 "" "" "" "" "" J Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "2MASS J12290669+0203085" position 2006AJ....131.1163S "system Vega; quality A" 2026-11-10T16:20:55.622467+00:00 false 1
+photometry "2MASS J flux_nu" 0.03133922966403283 0.03133922966403283 Jy 0.0009518983418211702 "" "" "" "" "" J Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "2MASS J12290669+0203085" position 2003AJ....126.1090C "zero point 2MASS J (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.235 um" 2026-11-10T16:20:55.622467+00:00 false 1
+photometry "2MASS H magnitude" 11.047 11.047 mag 0.027 "" "" "" "" "" H Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "2MASS J12290669+0203085" position 2006AJ....131.1163S "system Vega; quality A" 2026-11-10T16:20:55.622467+00:00 false 1
+photometry "2MASS H flux_nu" 0.039039114353080225 0.039039114353080225 Jy 0.0012344530454933445 "" "" "" "" "" H Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "2MASS J12290669+0203085" position 2003AJ....126.1090C "zero point 2MASS H (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.662 um" 2026-11-10T16:20:55.622467+00:00 false 1
+photometry "2MASS Ks magnitude" 9.976 9.976 mag 0.023 "" "" "" "" "" Ks Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "2MASS J12290669+0203085" position 2006AJ....131.1163S "system Vega; quality A" 2026-11-10T16:20:55.622467+00:00 false 1
+photometry "2MASS Ks flux_nu" 0.06816013707001028 0.06816013707001028 Jy 0.0019349880674359083 "" "" "" "" "" Ks Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=fp_psc fp_psc https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "2MASS J12290669+0203085" position 2003AJ....126.1090C "zero point 2MASS Ks (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 2.159 um" 2026-11-10T16:20:55.622467+00:00 false 1
+photometry "AllWISE W1 magnitude" 8.395 8.395 mag 0.023 "" "" "" "" "" W1 Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2014yCat.2328....0C "system Vega; quality A" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W1 flux_nu" 0.13574279218926905 0.13574279218926905 Jy 0.0035080253491988037 "" "" "" "" "" W1 Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2011ApJ...735..112J "zero point WISE W1 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 3.3526 um" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W2 magnitude" 7.425 7.425 mag 0.019 "" "" "" "" "" W2 Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2014yCat.2328....0C "system Vega; quality A" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W2 flux_nu" 0.18407308688885263 0.18407308688885263 Jy 0.004200514958060857 "" "" "" "" "" W2 Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2011ApJ...735..112J "zero point WISE W2 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 4.6028 um" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W3 magnitude" 5.147 5.147 mag 0.014 "" "" "" "" "" W3 Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2014yCat.2328....0C "system Vega; quality A" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W3 flux_nu" 0.27663231578353836 0.27663231578353836 Jy 0.005307543232864907 "" "" "" "" "" W3 Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2011ApJ...735..112J "zero point WISE W3 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 11.5608 um" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W4 magnitude" 2.942 2.942 mag 0.021 "" "" "" "" "" W4 Vega False read "" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2014yCat.2328....0C "system Vega; quality A" 2026-11-10T16:20:55.950983+00:00 false 1
+photometry "AllWISE W4 flux_nu" 0.5566242164419136 0.5566242164419136 Jy 0.013565518444309891 "" "" "" "" "" W4 Vega False computed "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)" "IRSA (NASA/IPAC)" https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd allwise_p3as_psd https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.05238823055&RA=187.27791594049&SR=0.0005555555555555556 "WISEA J122906.69+020308.6" position 2011ApJ...735..112J "zero point WISE W4 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 22.0883 um" 2026-11-10T16:20:55.950983+00:00 false 1

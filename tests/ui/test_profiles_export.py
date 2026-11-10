@@ -39,6 +39,22 @@ def save_as(monkeypatch, path) -> list:
     return asked
 
 
+def save_pdf_as(monkeypatch, path, language=None) -> list:
+    """Dialogo del PDF (DD-1): registra titolo, nome proposto e lingua proposta; ``language`` = scelta dell'utente
+    (``None``: lascia quella proposta)."""
+    asked = []
+
+    def run(dialog):
+        asked.append((dialog.windowTitle(), dialog.selectedFiles(), dialog.language()))
+        if language is not None:
+            dialog.language_box.setCurrentIndex(dialog.language_box.findData(language))
+        dialog.selectFile(str(path))
+        return 1
+
+    monkeypatch.setattr(profiles_module.PdfExportDialog, "exec", run)
+    return asked
+
+
 # =============================================================================
 # T21 — pulsanti attivi solo con un profilo
 
@@ -70,19 +86,40 @@ def test_t17_export_menu_queues_registered_commands(qtbot, win, services, tmp_pa
     tab = win.open_profile({"name": "TRAPPIST-1"})
     qtbot.waitUntil(lambda: finished(win, tab), timeout=60000)
     number = tab.command_number
+    win.language = "it"  # app in italiano: la lingua proposta per il PDF resta l'inglese (DD-1)
     for fmt, action, name in (("ecsv", tab.act_export_ecsv, "t.ecsv"), ("pdf", tab.act_export_pdf, "t.pdf"),
                               ("sed_png", tab.act_export_png, "t.png")):
-        asked = save_as(monkeypatch, tmp_path / name)
+        asked = save_pdf_as(monkeypatch, tmp_path / name) if fmt == "pdf" else save_as(monkeypatch, tmp_path / name)
         action.trigger()
         wait_idle(qtbot, win, 60000)
-        assert asked[0][1] == {"ecsv": "TRAPPIST-1-profile.ecsv", "pdf": "TRAPPIST-1-profile.pdf",
-                               "sed_png": "TRAPPIST-1-sed.png"}[fmt]
+        proposed = asked[0][1][0].rsplit("/", 1)[-1] if fmt == "pdf" else asked[0][1]
+        assert proposed == {"ecsv": "TRAPPIST-1-profile.ecsv", "pdf": "TRAPPIST-1-profile.pdf",
+                            "sed_png": "TRAPPIST-1-sed.png"}[fmt]
+        if fmt == "pdf":
+            assert asked[0][2] == "en"
         entry = entries(win, "object.export")[-1]
         assert entry.command.parameters == {"commands": [number], "format": fmt, "path": str(tmp_path / name),
                                             "language": "en"}
         assert entry.result.status == "ok", entry.result.error
         assert entry.command.requested_by.source == "menu" and (tmp_path / name).stat().st_size > 0
     assert len(Table.read(tmp_path / "t.ecsv", format="ascii.ecsv")) > 50
+    # PDF di nuovo in inglese (lingua proposta), poi in italiano scelto nel dialogo (DD-1, 43 §3.10)
+    save_pdf_as(monkeypatch, tmp_path / "t2.pdf")
+    tab.act_export_pdf.trigger()
+    wait_idle(qtbot, win, 60000)
+    assert (tmp_path / "t2.pdf").read_bytes() == (tmp_path / "t.pdf").read_bytes()  # stesso file, byte per byte
+    asked = save_pdf_as(monkeypatch, tmp_path / "t-it.pdf", language="it")
+    tab.act_export_pdf.trigger()
+    wait_idle(qtbot, win, 60000)
+    italian = entries(win, "object.export")[-1]
+    assert asked[0][2] == "en" and italian.command.parameters["language"] == "it"
+    first = (tmp_path / "t-it.pdf").read_bytes()
+    assert first != (tmp_path / "t.pdf").read_bytes()
+    # Riesegui dalla cronologia: stesso comando, stessa lingua, stesso file
+    win.rerun([italian])
+    wait_idle(qtbot, win, 60000)
+    assert entries(win, "object.export")[-1].command.parameters["language"] == "it"
+    assert (tmp_path / "t-it.pdf").read_bytes() == first
     # esportazione non valida: finestra con il messaggio, nessun file
     win.modals.clear()
     tab.export("ecsv", str(tmp_path / "manca" / "x.ecsv"))

@@ -717,10 +717,26 @@ che non cambia il file). **Lingua e riproducibilità (DD-1, D25-20 (7)):**
 lo stesso profilo (stessi comandi, stessi risultati registrati) nella stessa
 lingua dà sempre lo stesso file, byte per byte; la lingua fa parte dei
 parametri registrati, quindi Riesegui riscrive il file nella lingua scelta
-allora. **Da decidere prima del codice (DD-3, `panoramica.md` §2 «Fase
-D»):** oggi `language` traduce solo le intestazioni; avvisi, errori e note
-scritti dal motore nel risultato sono in italiano e finiscono così nel PDF
-(e nell'ECSV), quindi un PDF `en` non è ancora tutto in inglese. Come `view.export_png` del 41 è un
+allora. **Testi del PDF (DD-3, proposta (a), applicata nello sprint D2 il
+2026-11-10, da confermare dal proprietario; `panoramica.md` §2 «Fase D»):**
+(1) intestazioni da `_LABELS` nella lingua scelta; (2) **avvisi ed errori**
+(del bersaglio, delle sezioni, della catena degli identificativi) scritti
+come `codice: testo` con il testo **dal catalogo dei messaggi** con codice e
+`params` nella lingua scelta (`message_text` di `messages_catalog.py`,
+modulo neutro senza dipendenze, D40-5: il `25` lo importa senza rompere le
+dipendenze verso il basso); il testo originale del modulo solo come ripiego
+del catalogo (codice senza voce o senza `params`, sessioni scritte prima di
+D40-3); (3) **note dei valori e delle sezioni, fonte della posizione, nomi
+dei servizi** («Gaia archive (ESA)», «SIMBAD (Harvard mirror)», dal server
+che ha risposto e non dall'etichetta del modulo sotto) e **fonti dei punti
+zero** del `20`: scritti dal motore **in inglese** nel risultato, quindi
+uguali nel PDF inglese, nel PDF italiano e nell'ECSV; le note di un punto
+della SED che riportano un avviso del `20` (`SED_*`) usano il testo
+inglese del catalogo. Effetti dichiarati: il PDF inglese non ha nessuna
+parola italiana (T36); il PDF italiano ha intestazioni e avvisi in
+italiano e note in inglese; i profili **già registrati** prima del
+2026-11-10 conservano le note italiane del loro risultato, che non si
+riscrive mai: il loro PDF resta quello di prima, byte per byte. Come `view.export_png` del 41 è un
 comando registrato in cronologia, **rieseguibile** con Riesegui del 40
 (riscrive lo stesso file dagli stessi risultati registrati: stesso
 contenuto, byte per byte) e, come ogni comando `application`, **non
@@ -1508,6 +1524,7 @@ cambiano).
 | T33 | Tempo di sezione dalla partenza (§3.17 punto 4) | tempi dei servizi ridotti nel test; incrocio Gaia simulato più lento del tempo dell'Astrometria, poi `gaia_source` veloce; poi `gaia_source` più lento del tempo | primo caso: Astrometria `done` (nessuna scadenza durante l'attesa dell'esito), `started` ≈ fine dell'incrocio; secondo caso: `PROFILE_SECTION_TIMEOUT` a `started` + tempo massimo, non prima | istanti e stati |
 | T34 | Due richieste per servizio (§3.17 punto 5) | archivio Gaia simulato fermo; più richieste Gaia del profilo insieme | mai più di 2 richieste Gaia in corso; Immagini, Pianeti e Identità continuano; richiesta Gaia della fotometria partita prima degli esiti di 2MASS/AllWISE; Bailer-Jones partita insieme a `gaia_source` e scartata se `gaia_source` non dà la riga | massimo di richieste contemporanee per servizio, istanti di partenza |
 | T35 | Archivio Gaia già fermo nel profilo e Astrometria 35 s (§3.17, D25-22) | archivio Gaia simulato che risponde HTTP 503 dopo 0,3 s; poi lo stesso con `gaia_source` e Bailer-Jones già in cache; poi Gaia di nuovo su | 2 sole richieste Gaia inviate (le 2 in corso), le altre `PROFILE_GAIA_SKIPPED` `gaia_down` con la prova, `skipped_services["gaia"]`, Astrometria con i valori SIMBAD; con le copie in cache Astrometria `done` dalla cache; il profilo successivo riprova; tempo massimo dell'Astrometria 35 s | richieste per servizio, errori, metadati |
+| T36 | Lingua del PDF (DD-1, DD-3 (a); sprint D2) | profili di 51 Peg, Vega, eta Tau e TRAPPIST-1 dalle risposte registrate, anche con l'archivio Gaia o il NASA Exoplanet Archive giù; PDF con `language = en`, di nuovo `en`, poi `it`; ECSV | ogni testo scritto nelle pagine del PDF inglese senza **nessuna parola italiana** (vocabolario: parole presenti solo nei testi `it` del catalogo dei messaggi e delle intestazioni, più le parole italiane comuni); i due PDF inglesi identici byte per byte; il PDF italiano diverso, con parole italiane; note, servizi, formule e intervalli dell'ECSV in inglese; avvisi ed errori = `message_text` del catalogo nella lingua scelta | `tests/analysis/test_profile_language.py` |
 | T16 | Testi esterni | `*_reflink` con HTML | solo URL ADS e testo estratti; nessun tag eseguito; marcati esterni verso l'IA | |
 | T17 | Rete (marcato `network`) | 3 oggetti veri; dallo sprint C6 anche il profilo completo dei 4 oggetti (51 Peg, Vega, eta Tau, TRAPPIST-1) con i tempi per sezione (`tests/analysis/test_profile_network.py`); dallo sprint C7 con `refresh=False` sulla cache vuota del test (§3.16 C7-f); dallo sprint C8 con la partenza (`started`) di ogni sezione nel riepilogo | struttura e identificativi come T1–T9; tempo totale registrato (obiettivo 60 s); un servizio giù resta nella sua sezione | non nel commit (`--no-network`) |
 
@@ -1785,6 +1802,28 @@ Nessuna decisione aperta.
   entrambe, ma sono regole nuove (proprietario). (11) fatta il 2026-11-09
   sera (§3.17, misure con l'archivio Gaia che risponde).
 
+- **D25-23 — Pianeti «nessun pianeta nell'archivio» senza avere interrogato
+  l'archivio: da decidere (aperta il 2026-11-10, sprint D2, misure di
+  validazione).** **Fatto osservato** (misure del 2026-11-10, CDS che
+  risponde HTTP 404, `docs/validation.md` §7): quando SIMBAD non risponde,
+  il bersaglio si risolve per nome (risolutore del 10) senza identificativi
+  SIMBAD; se anche l'archivio Gaia non dà il `source_id`, la ricerca
+  dell'ospite (§3.10) non ha nomi né `gaia_dr3_id` da chiedere e la sezione
+  Pianeti finisce **`done`** con la nota «no planet in the archive (no host
+  in the archive)», **senza nessuna richiesta** al NASA Exoplanet Archive
+  (`requests` vuoto). È successo per 51 Peg, TRAPPIST-1 e Barnard's Star,
+  che hanno pianeti noti: l'app afferma una cosa falsa invece di dire che
+  non ha potuto cercare. **Proposte:** (a) in quel caso la sezione finisce
+  `not_applicable` (o `error`) con un avviso nuovo, per esempio
+  `PROFILE_PLANETS_NOT_SEARCHED` («host not searched: no SIMBAD identifiers
+  and no Gaia DR3 source_id»), e il PDF e la finestra non scrivono «nessun
+  pianeta»; (b) come (a) e in più una richiesta per `hostname` con il nome
+  scritto dall'utente (ridotto come in §3.10), dichiarata come incrocio per
+  nome non verificato; (c) lasciare così. **Raccomandazione di Claude Code:
+  (a)**, semplice e senza un incrocio nuovo; (b) solo se il proprietario
+  vuole i pianeti anche con SIMBAD giù. Nessun codice cambiato finché il
+  proprietario non decide.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -1803,3 +1842,5 @@ Nessuna decisione aperta.
 | 2026-11-09 | Claude Code | **Sprint C8 (decisioni del proprietario del 2026-11-09: D25-21 approvata in tutti e 5 i punti; modifiche ai file approvati 12 e 14 limitate a quanto serve, annotate nei loro registri):** nuovo §3.17 con le definizioni esatte scritte prima del codice — (1) 2MASS e AllWISE con il Cone Search di IRSA (condizione verificata il 2026-11-09: stesse righe, colonne, unità, tipi e valori del TAP su 4 coni, anche M 13), (2) `refresh=True` dal principale una volta per profilo (`refresh_once` del 14) e scorciatoia delle miniature con una prova del profilo, (3) VizieR saltata con il CDS già giù (`PROFILE_VIZIER_SKIPPED`, `details["vizier_sed"]`; copia in cache usata), (4) tempo di sezione contato dalla partenza (fine dell'ultimo esito della catena che la sezione aspetta; `started` nel risultato), (5) al più 2 richieste per servizio dentro le 4, ripristinate Gaia della fotometria appena noto Gaia e Bailer-Jones insieme a `gaia_source`; §3.11, §3.12 (regole 3 e 5), §3.16 con i rimandi; §7.2 nuove funzioni del 14 e del 12; §10 riga nuova; §12 T17 precisato, nuovi T30–T34; §13 D25-21 decisa, nuova D25-22 (scelte minori e due proposte, da confermare); misure del 2026-11-09 (archivio Gaia fermo tutto il giorno). Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8b (decisioni del proprietario del 2026-11-09):** D25-22 **decisa** (approvate le due proposte del punto (12); le modifiche al 12 e al 14 dei punti (2) e (3) approvate come parte di D25-21); §3.17 con le definizioni esatte di (a) archivio Gaia già fermo nel profilo → le altre richieste Gaia non partono (copia in cache se c'è, altrimenti `PROFILE_GAIA_SKIPPED` `gaia_down`, `skipped_services` nel risultato) e (b) Astrometria 35 s (`SECTION_TIME_LIMITS`); §7.2 `tap_query_cached` del 14; §10 riga nuova; §12 T35; §13 senza decisioni aperte. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **DD-1 decisa dal proprietario il 2026-11-10 (lettura (b)); modifica a un file approvato da approvare insieme a DD-3:** §3.15 — `language` scelta dall'utente nel dialogo del PDF con l'inglese di default, qualunque sia la lingua dell'app; stesso profilo nella stessa lingua = stesso file byte per byte; limite verificato sul codice (avvisi, errori e note del motore in italiano anche nel PDF `en`) rinviato a **DD-3** (`panoramica.md` §2); §7.1 `export_profile`. Nessun codice scritto. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D2 (brief del proprietario del 2026-11-10, punto a): codice di DD-1 con DD-3 (a)** (applicata la raccomandazione perché il brief chiede un PDF inglese senza nessuna parola italiana; da confermare): §3.15 (testi del PDF: avvisi ed errori dal catalogo dei messaggi nella lingua scelta, note, fonte della posizione, nomi dei servizi e fonti dei punti zero in inglese nel risultato, profili già registrati invariati), §12 T36. Codice: `object_profile.py` (note e nomi dei servizi in inglese, `_record_service`, `_resolver_source`, `_english`), `photometry.py` del 20 (fonti dei punti zero e nota di `jdate` in inglese), `profile_export.py` (`_message_line`), `ui/profiles.py` (`PdfExportDialog`, 43 §3.10). Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **Sprint D2 (misure di validazione):** nuova **D25-23** (§13): sezione Pianeti `done` con «no planet in the archive» senza nessuna richiesta all'archivio quando SIMBAD non risponde e manca il `source_id` di Gaia (osservato per 51 Peg, TRAPPIST-1, Barnard's Star); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. |

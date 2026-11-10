@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-10 — **decisioni del proprietario dopo D1b:** DD-1 decisa (esportazioni per le pubblicazioni sempre possibili in inglese; PDF della scheda del profilo con scelta di lingua, inglese di default) e scritta in `25` §3.15, `43` §3.10 e `02` §2 (modifiche a file approvati da approvare insieme a DD-3; stati invariati); DD-2 approvata; regola delle tolleranze in `docs/validation.md`; nuova **DD-3** (testi italiani del motore nel PDF «inglese»). Nessun file nuovo, nessun cambio di stato. **20 aperte** (Gruppo 3 = 20).
+**Ultimo aggiornamento:** 2026-11-10 — **sprint D2 (Fase D):** nuovo `62-megatest-1-0.md` (`bozza`, D62-1); DD-1 in codice con DD-3 (a) da confermare (`25` §3.15 e T36, `43` §3.10 e T17, registri di `20`, `43`, `25`); nuove D25-23 (`25` §13) e D14-16 (`14` §13) dalle misure di validazione (`docs/validation.md`: 22 dentro tolleranza, 0 fuori, 49 non misurati per servizi giù). Nessun cambio di stato; riepilogo: approvato 28, bozza 6, non esiste 11, totale 45. **23 aperte** (Gruppo 3 = 23).
+
+Prima, 2026-11-10 — **decisioni del proprietario dopo D1b:** DD-1 decisa (esportazioni per le pubblicazioni sempre possibili in inglese; PDF della scheda del profilo con scelta di lingua, inglese di default) e scritta in `25` §3.15, `43` §3.10 e `02` §2 (modifiche a file approvati da approvare insieme a DD-3; stati invariati); DD-2 approvata; regola delle tolleranze in `docs/validation.md`; nuova **DD-3** (testi italiani del motore nel PDF «inglese»). Nessun file nuovo, nessun cambio di stato. **20 aperte** (Gruppo 3 = 20).
 
 Prima, 2026-11-10 — **sprint D1 (Fase D):** documentazione in inglese per gli utenti (`README.md`, `docs/installation.md`, `docs/quickstart.md`), `CITATION.cff` validato, struttura della pagina di validazione (`docs/validation.md`, nessuna misura); nuove DD-1 e DD-2 (21 aperte). File fuori da `mdfiles/`: nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
 
@@ -424,13 +426,14 @@ Dove si trovano le decisioni:
 |---|---|---|
 | `60-distribuzione-dmg.md` | Costruzione, firma, notarizzazione e consegna del `.dmg`; **requisiti di licenza registrati il 2026-10-17 in `01` §6.1** (finestra Licenze, Qt sostituibile e non modificato, sorgente di PySide6/Qt, nessun divieto di reverse engineering, note PSF e Qt, crediti nelle immagini esportate, verifica del marchio); **bundle identifier `dev.pages.astrotwo`** (decisione del proprietario del 2026-10-16, `01` §6); **vincolo (2026-10-09): WCSLIB, incluso in astropy, è LGPL-3** — obblighi di distribuzione da rispettare nel `.dmg`; **vincolo (2026-10-15): PySide6 e Qt sono LGPL-3** (interfaccia), stessi obblighi; **dal 2026-10-13 il `.dmg` deve includere `THIRD_PARTY_LICENSES`** (avvisi di tutte le dipendenze, compresi QD/LBNL, NAIF, LGPL-3 con la GPL-3 per riferimento; testo di `pims` da recuperare) — **creato il 2026-10-25 (sprint 60a):** parte A `AstroTwo.app` con PyInstaller (A2), firma ad hoc senza notarizzazione (A6), Python di uv, finestra Licenze; parte B `.dmg` da completare (60b) — **approvato il 2026-10-25**; app costruita e verificata (V1–V9), D60-4 aperta | approvato |
 | `61-strategia-test.md` | Strategia dei test: unitari, integrazione, confronto con riferimenti; qui vanno definiti gli obiettivi di prestazioni **almeno pari ad Aladin** (righe di catalogo, dimensione di immagini e cubi — §8 di `01-architettura.md`) | non esiste |
+| `62-megatest-1-0.md` | Megatest a mano prima della 1.0 (sprint D2, Fase D): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 aperta | bozza |
 
 ## Riepilogo
 
 | Stato | Quanti |
 |---|---|
-| bozza | 5 |
+| bozza | 6 |
 | in revisione | 0 |
 | approvato | 28 |
 | non esiste | 11 |
-| **Totale file in `mdfiles/`** | **44** |
+| **Totale file in `mdfiles/`** | **45** |

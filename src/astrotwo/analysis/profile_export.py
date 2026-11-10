@@ -33,6 +33,7 @@ from astropy.table import MaskedColumn, Table
 
 import astrotwo
 from astrotwo.analysis.photometry import sed_rows_png
+from astrotwo.messages_catalog import message_text
 
 __all__ = [
     "EXPORT_EXTENSIONS",
@@ -472,7 +473,7 @@ _LABELS = {
            "tiles": "tiles from", "credits": "Survey credits", "zero_points": "Zero points used",
            "queries": "Queries", "sources_line": "Sources", "cache": "cache", "not_requested": "Section not requested",
            "target": "Target as written", "position": "Position", "section_command": "command",
-           "warnings": "Warnings"},
+           "warnings": "Warnings", "lang": "en"},
     "it": {"title": "Profilo di {name}", "identity": "Identità", "images": "Immagini",
            "astrometry": "Astrometria e distanza", "photometry": "Fotometria", "planets": "Pianeti",
            "sources": "Fonti e crediti", "status": "Stato", "quantity": "Grandezza", "value": "Valore",
@@ -488,7 +489,7 @@ _LABELS = {
            "tiles": "tile da", "credits": "Crediti dei survey", "zero_points": "Punti zero usati",
            "queries": "Interrogazioni", "sources_line": "Fonti", "cache": "cache",
            "not_requested": "Sezione non richiesta", "target": "Bersaglio come scritto", "position": "Posizione",
-           "section_command": "comando", "warnings": "Avvisi"},
+           "section_command": "comando", "warnings": "Avvisi", "lang": "it"},
 }
 
 
@@ -578,11 +579,17 @@ class _Page:
             y -= 5.5 * 1.3 / 72
 
 
-def _messages(section: Mapping) -> list[str]:
-    out = []
-    for item in list(section.get("errors") or []) + list(section.get("warnings") or []):
-        out.append(f"{item.get('code', '')}: {item.get('text', '')}")
-    return out
+def _message_line(item: Mapping, label: dict) -> str:
+    """Avviso o errore del risultato come ``codice: testo``, testo dal catalogo dei messaggi nella lingua del PDF
+    (codice e ``params``, D40-3; DD-3 (a)); il testo originale del modulo solo come ripiego del catalogo."""
+    code = str(item.get("code") or "")
+    params = item.get("params") if isinstance(item.get("params"), Mapping) else {}
+    return f"{code}: {message_text(code, params, label['lang'], text=item.get('text'))}"
+
+
+def _messages(section: Mapping, label: dict) -> list[str]:
+    return [_message_line(item, label) for item in list(section.get("errors") or []) +
+            list(section.get("warnings") or [])]
 
 
 def _sources(section: Mapping, label: dict) -> str:
@@ -617,7 +624,7 @@ def _status_lines(page: _Page, section: Mapping | None, label: dict) -> None:
         return
     page.text(f"{label['status']}: {section.get('status')}  ·  {label['section_command']} "
               f"#{section.get('command_id')}", size=8, color="0.35")
-    for line in _messages(section):
+    for line in _messages(section, label):
         page.text("⚠ " + line, size=7)
 
 
@@ -644,7 +651,7 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
         page.text(f"{label['position']}: {resolved['position_source']}", size=7, width=left_width)
     warnings = data.get("warnings") or []
     for w in warnings:
-        page.text(f"⚠ {w.get('code')}: {w.get('text')}", size=7, width=left_width)
+        page.text("⚠ " + _message_line(w, label), size=7, width=left_width)
     _status_lines(page, section, label)
     if section is not None:
         page.table([label["quantity"], label["value"], label["error"], label["unit"]],
@@ -673,7 +680,7 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
                 if c.get("conflict"):
                     notes.append(", ".join(f"{k}: {v}" for k, v in c["conflict"].items()))
                 if c.get("error"):
-                    notes.append(f"{c['error'].get('code')}: {c['error'].get('text')}")
+                    notes.append(_message_line(c["error"], label))
                 rows.append([str(c.get("catalog") or ""), str(c.get("identifier") or "—"), str(c.get("method") or "—"),
                              _with_unit(c.get("separation")), "; ".join(n for n in notes if n)])
             page.table([label["catalog"], label["identifier"], label["method"], label["separation"], label["notes"]],
@@ -686,7 +693,7 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
         status = f"{label['images']}: {images.get('status')}  ·  #{images.get('command_id')}"
         page.fig.text(x / _W, y / _H, status, fontsize=7, color="0.35", va="top")
         y -= 0.2
-        for line in _messages(images):
+        for line in _messages(images, label):
             for piece in textwrap.wrap(line, 52) or []:
                 page.fig.text(x / _W, y / _H, piece, fontsize=5.5, va="top")
                 y -= 5.5 * 1.3 / 72

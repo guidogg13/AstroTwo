@@ -356,9 +356,10 @@ non manda messaggi da sé. Regole dei file e dei comandi nel `25` §3.15.
   **`object.export`** con `commands`, `format` (`ecsv`, `pdf`, `sed_png`),
   `path` e `language`. **Lingua del PDF (DD-1, decisa dal proprietario il
   2026-11-10):** solo per «Scheda del profilo (PDF)…» il dialogo di
-  salvataggio ha una scelta «PDF language: English / Italian» / «Lingua del
-  PDF: inglese / italiano», con **inglese proposto di default a ogni
-  apertura**, qualunque sia la lingua dell'app (il PDF è il file da allegare
+  salvataggio (quello di Qt, non quello di sistema: il dialogo di macOS non
+  accetta controlli in più) ha una riga «PDF language:» / «Lingua del
+  PDF:» con le voci «English» e «Italiano» (ogni lingua col suo nome), con
+  **inglese proposto di default a ogni apertura**, qualunque sia la lingua dell'app (il PDF è il file da allegare
   a un articolo); la scelta va in `language`. Per ECSV e PNG, che non
   dipendono dalla lingua, nessuna scelta e `language = en`. Stesso profilo
   nella stessa lingua = stesso file byte per byte (`25` §3.15); quanto del
@@ -620,6 +621,7 @@ decisione aperta.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **Codice di DD-1 (sprint D2, brief del proprietario del 2026-11-10, punto a):** `PdfExportDialog` in `ui/profiles.py` (dialogo di salvataggio di Qt, non quello di sistema perché quello di macOS non accetta controlli in più, con la riga «PDF language: English / Italiano», inglese a ogni apertura); ECSV e PNG con `language = en`; traduzione «Lingua del PDF:» in `astrotwo_it.ts`/`.qm`; T17 esteso in `tests/ui/test_profiles_export.py` (app in italiano → inglese proposto, due PDF inglesi identici, PDF italiano diverso, Riesegui identico). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **DD-1 decisa dal proprietario il 2026-11-10 (lettura (b)); modifica a un file approvato da approvare insieme a DD-3:** §3.10 — scelta «Lingua del PDF» nel dialogo di «Scheda del profilo (PDF)…», inglese di default a ogni apertura qualunque sia la lingua dell'app; ECSV e PNG con `language = en`; T17 esteso (default inglese, byte per byte per lingua). Nessun codice scritto. Stato `approvato` invariato. |
 | 2026-11-08 | Claude Code | **Sprint C6b (brief del proprietario del 2026-11-08, punto d):** nuovo §3.11 (scheda per i profili chiesti dall'assistente, nessun secondo comando), §3.1, §4, §11, T22. Stato `approvato` invariato (autorizzazione D25-12, brief di C6). |
 | 2026-11-08 | Claude Code | **Sprint C6 (decisioni del proprietario del 2026-11-08):** file **approvato** dal proprietario; D43-1…D43-8 e D43-10 confermate; D43-9 decisa (limiti superiori come frecce verso il basso ovunque: finestra, PNG del 20, esportazione del 25). Nuovo §3.10 (pulsanti «Esporta…» con ECSV, PDF e PNG della SED, «Carica i punti SED come catalogo», «Invia con SAMP», tutti comandi registrati: `object.export`, `catalog.open_file`, `object.send_sed` del 25 §3.15; elenco `commands` della scheda con le sezioni riprovate); §3.1, §3.7, §4, §5, §6, §7, §10, §11 (strumento `object__profile` non nel brief di C6), §12 (T11 precisato, nuovi T17–T21), §13. |
