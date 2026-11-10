@@ -354,7 +354,15 @@ non manda messaggi da sé. Regole dei file e dei comandi nel `25` §3.15.
   Qt (nome proposto `<main_id ridotto>-profile.ecsv`, `-profile.pdf`,
   `-sed.png`, conferma della sovrascrittura del dialogo), poi in coda
   **`object.export`** con `commands`, `format` (`ecsv`, `pdf`, `sed_png`),
-  `path` e `language` = lingua dell'app. Esito: messaggio nel pannello
+  `path` e `language`. **Lingua del PDF (DD-1, decisa dal proprietario il
+  2026-11-10):** solo per «Scheda del profilo (PDF)…» il dialogo di
+  salvataggio ha una scelta «PDF language: English / Italian» / «Lingua del
+  PDF: inglese / italiano», con **inglese proposto di default a ogni
+  apertura**, qualunque sia la lingua dell'app (il PDF è il file da allegare
+  a un articolo); la scelta va in `language`. Per ECSV e PNG, che non
+  dipendono dalla lingua, nessuna scelta e `language = en`. Stesso profilo
+  nella stessa lingua = stesso file byte per byte (`25` §3.15); quanto del
+  testo del PDF segue la lingua scelta è in DD-3 (`panoramica.md` §2). Esito: messaggio nel pannello
   Messaggi del 40 come gli altri comandi; errori (`PROFILE_EXPORT_INVALID`,
   `PROFILE_EXPORT_FAILED`) in una finestra «The export was not written» /
   «L'esportazione non è stata scritta» con il messaggio del catalogo.
@@ -545,7 +553,7 @@ T13 con l'apertura dalla tabella e dal riquadro del puntatore.
 | T14 | Più schede e coda | due profili chiesti insieme | due schede subito; la seconda «In coda» finché la prima non finisce | stati |
 | T15 | Testi esterni | `main_id` e crediti con `<b>` e un URL non ammesso | mostrati come testo, nessun collegamento non ammesso | testi |
 | T16 | Messaggi | ogni messaggio mostrato dalla finestra | voce del catalogo nelle due lingue (D40-3) | `check_message` |
-| T17 | Esporta (sprint C6) | 51 Peg finito; «Esporta…» → ECSV, PDF, PNG con il dialogo di salvataggio simulato | tre `object.export` in cronologia con `commands = [#n]`, `format`, `path`, `language`; tre file scritti; voce PNG spenta senza punti | comandi registrati, file |
+| T17 | Esporta (sprint C6; lingua del PDF DD-1, 2026-11-10) | 51 Peg finito; «Esporta…» → ECSV, PDF, PNG con il dialogo di salvataggio simulato; app in italiano, PDF esportato due volte con la scelta di default e una volta con «italiano» | tre `object.export` in cronologia con `commands = [#n]`, `format`, `path`, `language`; tre file scritti; voce PNG spenta senza punti; **scelta di default = inglese** anche con l'app in italiano (`language = en`); i due PDF inglesi **identici byte per byte**, il PDF italiano diverso; Riesegui del PDF italiano lo riscrive identico | comandi registrati, file, SHA-256 |
 | T18 | Esporta dopo «Riprova» | astrometria in errore, «Riprova questa sezione» riuscito, poi ECSV | `commands = [#n, #m]`; le righe dell'astrometria con `command_id = m` | ECSV |
 | T19 | Carica i punti SED come catalogo | 51 Peg | `object.export` `sed_votable` nella cartella `Profiles/` (sostituita nel test), poi `catalog.open_file`; nuovo livello `SED * 51 Peg` con posizioni riconosciute e una riga per punto | cronologia, spazio di lavoro |
 | T20 | Invia con SAMP | hub e client simulati; senza collegamento | pulsante spento senza collegamento; con un client `object.send_sed` con `recipient`, tabella ricevuta con le righe dei punti | messaggi SAMP |
@@ -612,6 +620,7 @@ decisione aperta.
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
+| 2026-11-10 | Claude Code | **DD-1 decisa dal proprietario il 2026-11-10 (lettura (b)); modifica a un file approvato da approvare insieme a DD-3:** §3.10 — scelta «Lingua del PDF» nel dialogo di «Scheda del profilo (PDF)…», inglese di default a ogni apertura qualunque sia la lingua dell'app; ECSV e PNG con `language = en`; T17 esteso (default inglese, byte per byte per lingua). Nessun codice scritto. Stato `approvato` invariato. |
 | 2026-11-08 | Claude Code | **Sprint C6b (brief del proprietario del 2026-11-08, punto d):** nuovo §3.11 (scheda per i profili chiesti dall'assistente, nessun secondo comando), §3.1, §4, §11, T22. Stato `approvato` invariato (autorizzazione D25-12, brief di C6). |
 | 2026-11-08 | Claude Code | **Sprint C6 (decisioni del proprietario del 2026-11-08):** file **approvato** dal proprietario; D43-1…D43-8 e D43-10 confermate; D43-9 decisa (limiti superiori come frecce verso il basso ovunque: finestra, PNG del 20, esportazione del 25). Nuovo §3.10 (pulsanti «Esporta…» con ECSV, PDF e PNG della SED, «Carica i punti SED come catalogo», «Invia con SAMP», tutti comandi registrati: `object.export`, `catalog.open_file`, `object.send_sed` del 25 §3.15; elenco `commands` della scheda con le sezioni riprovate); §3.1, §3.7, §4, §5, §6, §7, §10, §11 (strumento `object__profile` non nel brief di C6), §12 (T11 precisato, nuovi T17–T21), §13. |
 | 2026-11-08 | Claude Code | **Sprint C5b:** §12 con i file di test reali (`test_profiles.py`, `test_profiles_open.py`) e T8, T11 come provati (dialogo dei candidati, freccia del limite superiore di TRAPPIST-1 W4); test dei pulsanti della scheda e della chiusura di una scheda in corso. |

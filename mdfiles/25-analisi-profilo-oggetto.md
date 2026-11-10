@@ -709,8 +709,18 @@ dall'interfaccia: `bound_by = 43`, perché la cronologia è della finestra
 principale; definito in `command_specs()` di questo modulo). Parametri:
 `commands` (elenco di interi ≥ 1, almeno uno), `format` (`ecsv`, `pdf`,
 `sed_png`, `sed_votable`), `path` (percorso assoluto del file da scrivere),
-`language` (`en`, `it`: lingua delle intestazioni del PDF, default `en`;
-l'interfaccia passa la lingua dell'app). Come `view.export_png` del 41 è un
+`language` (`en`, `it`: lingua del PDF, default `en`; **scelta
+dall'utente nel dialogo di esportazione del PDF, con l'inglese proposto di
+default, qualunque sia la lingua dell'app** — DD-1, decisa dal proprietario
+il 2026-11-10, `43` §3.10; per gli altri formati l'interfaccia passa `en`,
+che non cambia il file). **Lingua e riproducibilità (DD-1, D25-20 (7)):**
+lo stesso profilo (stessi comandi, stessi risultati registrati) nella stessa
+lingua dà sempre lo stesso file, byte per byte; la lingua fa parte dei
+parametri registrati, quindi Riesegui riscrive il file nella lingua scelta
+allora. **Da decidere prima del codice (DD-3, `panoramica.md` §2 «Fase
+D»):** oggi `language` traduce solo le intestazioni; avvisi, errori e note
+scritti dal motore nel risultato sono in italiano e finiscono così nel PDF
+(e nell'ECSV), quindi un PDF `en` non è ancora tutto in inglese. Come `view.export_png` del 41 è un
 comando registrato in cronologia, **rieseguibile** con Riesegui del 40
 (riscrive lo stesso file dagli stessi risultati registrati: stesso
 contenuto, byte per byte) e, come ogni comando `application`, **non
@@ -1324,7 +1334,8 @@ sessione, che paga i 10 s del CDS giù per SIMBAD).
 - **`model_view(full)`** (sprint C6, §11) — da `{"values", "provenance"}`
   del risultato completo di `object.profile` al riassunto per il modello
   (32 §3.7bis): stessi percorsi, nessun numero cambiato.
-- **`export_profile(data, path, format, *, language="en")`** — scrive
+- **`export_profile(data, path, format, *, language="en")`** (`language`
+  = lingua del PDF, DD-1; testi del PDF secondo DD-3, da decidere) — scrive
   ECSV, PDF, PNG della SED o VOTable dei punti (§3.15) dalla forma JSON
   unita; restituisce `ProfileExport` (percorso, formato, SHA-256, byte,
   righe o pagine). Scrittura atomica (file temporaneo e rinomina).
@@ -1791,3 +1802,4 @@ Nessuna decisione aperta.
 | 2026-11-08 | Claude Code | **Sprint C7 (brief del proprietario del 2026-11-08, autorizzazione D25-12):** D25-20 **confermata** così com'è. Nuovo §3.16 (diagnosi dei tempi con la traccia di ogni richiesta: `refresh=True` dal principale a ogni richiesta, difetto di `cds_down_in_session` del 12 — chiave del 14 sbagliata —, AllWISE/2MASS interrogati due volte, IRSA TAP lento lato server, richieste in fila, VizieR con il CDS giù, tempi di sezione e catene, semaforo comune bloccato da un servizio fermo); correzioni C7-a (riga della catena riusata), C7-b (VizieR subito), C7-d (una sola prova del MocServer), C7-e (difetto del 12 corretto nel codice, la specifica del 12 era già giusta), C7-f (T17 senza `refresh=True`), C7-g (24 thread); C7-c provata e tolta; §12 T17 precisato, nuovo T29; nuova **D25-21** (cinque scelte sui tempi, da decidere, nessuna applicata). Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8 (decisioni del proprietario del 2026-11-09: D25-21 approvata in tutti e 5 i punti; modifiche ai file approvati 12 e 14 limitate a quanto serve, annotate nei loro registri):** nuovo §3.17 con le definizioni esatte scritte prima del codice — (1) 2MASS e AllWISE con il Cone Search di IRSA (condizione verificata il 2026-11-09: stesse righe, colonne, unità, tipi e valori del TAP su 4 coni, anche M 13), (2) `refresh=True` dal principale una volta per profilo (`refresh_once` del 14) e scorciatoia delle miniature con una prova del profilo, (3) VizieR saltata con il CDS già giù (`PROFILE_VIZIER_SKIPPED`, `details["vizier_sed"]`; copia in cache usata), (4) tempo di sezione contato dalla partenza (fine dell'ultimo esito della catena che la sezione aspetta; `started` nel risultato), (5) al più 2 richieste per servizio dentro le 4, ripristinate Gaia della fotometria appena noto Gaia e Bailer-Jones insieme a `gaia_source`; §3.11, §3.12 (regole 3 e 5), §3.16 con i rimandi; §7.2 nuove funzioni del 14 e del 12; §10 riga nuova; §12 T17 precisato, nuovi T30–T34; §13 D25-21 decisa, nuova D25-22 (scelte minori e due proposte, da confermare); misure del 2026-11-09 (archivio Gaia fermo tutto il giorno). Stato `approvato` invariato. |
 | 2026-11-09 | Claude Code | **Sprint C8b (decisioni del proprietario del 2026-11-09):** D25-22 **decisa** (approvate le due proposte del punto (12); le modifiche al 12 e al 14 dei punti (2) e (3) approvate come parte di D25-21); §3.17 con le definizioni esatte di (a) archivio Gaia già fermo nel profilo → le altre richieste Gaia non partono (copia in cache se c'è, altrimenti `PROFILE_GAIA_SKIPPED` `gaia_down`, `skipped_services` nel risultato) e (b) Astrometria 35 s (`SECTION_TIME_LIMITS`); §7.2 `tap_query_cached` del 14; §10 riga nuova; §12 T35; §13 senza decisioni aperte. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **DD-1 decisa dal proprietario il 2026-11-10 (lettura (b)); modifica a un file approvato da approvare insieme a DD-3:** §3.15 — `language` scelta dall'utente nel dialogo del PDF con l'inglese di default, qualunque sia la lingua dell'app; stesso profilo nella stessa lingua = stesso file byte per byte; limite verificato sul codice (avvisi, errori e note del motore in italiano anche nel PDF `en`) rinviato a **DD-3** (`panoramica.md` §2); §7.1 `export_profile`. Nessun codice scritto. Stato `approvato` invariato. |

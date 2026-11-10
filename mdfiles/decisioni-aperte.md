@@ -37,7 +37,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-10 (sprint D1b): 21 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **21** (nuova `DD-2`, scelte minori dello sprint D1 da confermare; file di origine `panoramica.md` §2 «Fase D»).
+**Dal 2026-11-10 (decisioni del proprietario dopo D1b): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (`DD-1` decisa — lettura (b) — e `DD-2` approvata in tutti i punti dal proprietario il 2026-11-10, tolte; nuova `DD-3`, testi italiani del motore nel PDF «in inglese», da decidere; file di origine `panoramica.md` §2 «Fase D»).
+
+Prima, **Dal 2026-11-10 (sprint D1b): 21 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **21** (nuova `DD-2`, scelte minori dello sprint D1 da confermare; file di origine `panoramica.md` §2 «Fase D»).
 
 Prima, **Dal 2026-11-10 (sprint D1a): 20 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **20** (nuova `DD-1`, «report in inglese» della Fase D non definito in `mdfiles/`: proposta da decidere; file di origine `panoramica.md` §2 «Fase D»).
 
@@ -345,12 +347,12 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (21)
+## 5. GRUPPO 3 — rimandabili al momento del codice (20)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `DD-2` | Scelte minori dello sprint D1 (**proposte da Claude Code il 2026-11-10, da confermare**): (1) documentazione utente in `docs/` più `README.md`, solo in inglese; (2) `CITATION.cff` con la versione SemVer dell'app `0.1.0-beta.5` e `date-released` = data del tag della beta 5 (2026-11-05), `abstract` e `keywords`; (3) controllo del commit con un sottoinsieme dello schema CFF scritto nel test, senza dipendenze nuove, più `cffconvert --validate` a parte; (4) oggetti di validazione in più: Barnard's Star, 3C 273, M 13; (5) tolleranze fissate all'inizio del D2, valori copiati da un catalogo uguali cifra per cifra; (6) crediti del README estesi ai servizi già usati (WISE/AllWISE, IRSA, NASA Exoplanet Archive, XMatch) | `panoramica.md` §2 «Fase D» |
-| `DD-1` | «Report in inglese» della Fase D (**aperta il 2026-11-10, sprint D1, da decidere**): nessun file lo definisce. (a) altro nome della documentazione in inglese → niente da aggiungere; (b) report esportati per le pubblicazioni (oggi il PDF della scheda del profilo, che ha già `language` con default `en`; il report dell'incrocio se diventa esportabile) sempre disponibili in inglese, qualunque sia la lingua dell'app, con una scelta nel dialogo di esportazione; (c) solo il rapporto delle misure di validazione (D2) in inglese. **Raccomandazione di Claude Code: (b)**, da specificare nel `25` e nel `43` prima del codice; non implementata | `panoramica.md` §2 «Fase D» |
+| `DD-3` | PDF «in inglese» con testi italiani del motore (**aperta il 2026-11-10, da decidere prima del codice di DD-1**): `language` traduce solo le intestazioni; avvisi ed errori (con codice e `params`) e note dei valori (testo libero) sono in italiano nel risultato e finiscono così nel PDF e nell'ECSV. (a) note del motore in inglese alla fonte, avvisi ed errori del PDF dal catalogo dei messaggi nella lingua scelta (il `25` importa `messages_catalog.py`, neutro); sessioni già salvate invariate; (b) note con codice e `params`, tradotte in entrambe le lingue; (c) PDF senza note né testi degli avvisi, rimando all'ECSV. **Raccomandazione di Claude Code: (a)** | `panoramica.md` §2 «Fase D» |
+| — | (`DD-1` decisa — lettura (b) — e `DD-2` approvata in tutti i punti dal proprietario il 2026-11-10; `panoramica.md` §2 e §5) | — |
 | — | (`D25-22` decisa dal proprietario il 2026-11-09: approvate le due proposte del punto (12); `25` §13, §3.17) | — |
 | — | (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti; `25` §13, §3.17) | — |
 | — | (`D25-20` e `D32-4` confermate dal proprietario il 2026-11-08 così come proposte; `25` §13, `32` §13) | — |
@@ -489,3 +491,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-09 | Claude Code | **Sprint C8b (decisioni del proprietario del 2026-11-09):** **`D25-22` decisa** (le due proposte del punto (12) approvate), scritta prima nel `25` §13 e §3.17 e tolta dal Gruppo 3. Aperte 20 → **19**. |
 | 2026-11-10 | Claude Code | **Sprint D1a (Fase D):** nuova **`DD-1`** (Gruppo 3), «report in inglese» non definito in `mdfiles/`: proposte (a)–(c), raccomandata (b); scritta prima in `panoramica.md` §2 «Fase D» e §6. **20 aperte.** |
 | 2026-11-10 | Claude Code | **Sprint D1b (Fase D):** nuova **`DD-2`** (Gruppo 3), scelte minori dello sprint D1 da confermare; scritta prima in `panoramica.md` §2 «Fase D» e §6. **21 aperte.** |
+| 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10:** `DD-1` decisa (lettura (b)) e `DD-2` approvata, tolte; nuova **`DD-3`** (Gruppo 3), testi italiani del motore nel PDF «in inglese»; scritta prima in `panoramica.md` §2 «Fase D» e §6. **20 aperte.** |

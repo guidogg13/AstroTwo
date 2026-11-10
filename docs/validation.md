@@ -22,7 +22,8 @@ AstroTwo works alongside Aladin, TOPCAT and DS9. Comparing results with these to
 3. **Reference side.** The same values are read directly from the reference source, by its web interface, TAP/ADQL or TOPCAT, and the query is written down.
 4. **Comparison.**
    - Values copied from a catalogue must match the catalogue digit for digit, with the same unit.
-   - Values AstroTwo computes, such as unit conversions, fluxes from magnitudes, separations and propagated positions, are compared with an independent computation within a stated tolerance. The tolerances are to be defined in D2 and written in this page before the measurements.
+   - Values AstroTwo computes, such as unit conversions, fluxes from magnitudes, separations and propagated positions, are compared with an independent computation within a stated tolerance.
+   - **Tolerances are fixed before measuring.** They are written in this page and committed to the repository before any measurement is made. They are never changed afterwards to make a result pass: a value outside its tolerance is reported as such, with an explanation.
 5. **Record.** Each row of the results tables reports:
    - the date and the AstroTwo version;
    - the data release, for example Gaia DR3;
@@ -30,6 +31,36 @@ AstroTwo works alongside Aladin, TOPCAT and DS9. Comparing results with these to
    - the AstroTwo value, the reference value and the difference;
    - the outcome: pass, fail, or explained difference.
 6. **Reproducibility.** The session files and exports used for each measurement are listed in section 6, so anyone can rerun them.
+
+### 2.1 Tolerances (fixed on 2026-11-10, before any measurement)
+
+These tolerances were committed to the repository **before** the first measurement. They will not be changed to make a result pass. A value outside its tolerance is written in section 5 as **fail** or **explained difference**, with the reason.
+
+AstroTwo values are of two kinds, and the ECSV export says which one each value is (`method` column):
+
+- **read**: copied from a service (SIMBAD, Gaia archive, VizieR, IRSA, NASA Exoplanet Archive). AstroTwo must not change them at all.
+- **computed**: calculated by AstroTwo from read values, with the formula written next to the value (`formula` column).
+
+| Quantity | Kind | Tolerance | Why |
+|---|---|---|---|
+| Position (RA, Dec) and its epoch | read | **Identical**: difference 0 in the native type of the column; same epoch | AstroTwo copies the catalogue position and declares its epoch. Any difference, even in the last bit, would mean that AstroTwo changed a value it should only copy. |
+| Parallax and its error | read | **Identical** (difference 0) | Same reason: copied value. |
+| Proper motion (pmRA, pmDec) and errors | read | **Identical** (difference 0) | Copied value. |
+| Radial velocity and error | read | **Identical** (difference 0) | Copied value. |
+| Magnitudes (Gaia G, BP, RP; 2MASS J, H, Ks; AllWISE W1–W4) and errors | read | **Identical in the native precision of the column**: for a `float32` column (Gaia photometry), equal after rounding both values to `float32`; for `float64` and decimal text, difference 0 | Gaia stores magnitudes as `float32`; the same number written as `float32` or as `float64` may print differently but is the same value. Any other difference is an error. |
+| Distance, Bailer-Jones et al. (2021) median and 16th–84th percentiles | read | **Identical** (difference 0) | Copied from `external.gaiaedr3_distance`. |
+| Distance as 1/parallax (only when declared, parallax/error ≥ 5) | computed | **Relative difference ≤ 1 × 10⁻¹²** against `1000 / parallax[mas]` pc computed independently | One division in `float64`: the only possible difference is rounding, about 10⁻¹⁶. 10⁻¹² leaves room for a different but correct order of operations and still catches any real mistake (wrong unit, wrong column). |
+| Planet parameters (orbital period, semi-major axis, eccentricity, radius, mass, equilibrium temperature) and their errors | read | **Identical** (difference 0), same unit | Copied from `pscomppars`. |
+| Identifiers (SIMBAD main identifier, Gaia DR3, 2MASS, AllWISE designations, planet names) | read | **Identical text** | A different identifier means a different object. |
+| SED flux from a magnitude | computed | **Relative difference ≤ 1 × 10⁻¹⁰** against `F0 × 10^(−0.4 m)` computed independently with the zero point that AstroTwo declares for that band | Two `float64` operations; the zero point itself is a declared choice, checked separately against its published source, not against this tolerance. |
+| Angular separations (cross-match to 2MASS and AllWISE) | computed | **≤ 1 µas** (10⁻⁶ arcsec) against an independent Astropy computation from the same two positions | Separations are about 1 arcsec; `float64` rounding is far below 1 µas, and 1 µas is far below any catalogue error. |
+
+**Outcomes.**
+
+- **pass**: within the tolerance.
+- **fail**: outside the tolerance with no explanation. It is a defect of AstroTwo until shown otherwise.
+- **explained difference**: outside the tolerance for a reason that is not a defect of AstroTwo, written in the row. The only accepted reasons are a different data release or a catalogue updated between the two queries (shown by the query dates), and a value that the reference service returns differently on two identical queries.
+- **not measured**: the service did not answer. The row records the service, the time and the error, and stays to be redone.
 
 ## 3. Reference objects
 
@@ -39,11 +70,9 @@ AstroTwo works alongside Aladin, TOPCAT and DS9. Comparing results with these to
 | **Vega** | Photometric standard; very bright, so it tests saturated or missing survey photometry and the SED |
 | **eta Tau** (Alcyone) | Bright member of a crowded cluster field (Pleiades): identification and cross-match among close neighbours |
 | **TRAPPIST-1** | Faint, very red, high proper motion star with seven planets: epoch handling and infrared SED |
-| *Barnard's Star* (proposed) | Highest known proper motion: tests propagation between epochs (J2000.0, J2016.0) and the 2MASS epoch |
-| *3C 273* (proposed) | Extragalactic object (quasar): no meaningful parallax, so the distance must be declared as unavailable rather than invented |
-| *M 13* (proposed) | Dense globular-cluster field: cone search and cross-match row counts against TOPCAT |
-
-The three proposed objects are to be confirmed by the project owner.
+| **Barnard's Star** | Highest known proper motion: tests propagation between epochs (J2000.0, J2016.0) and the 2MASS epoch |
+| **3C 273** | Extragalactic object (quasar): no meaningful parallax, so the distance must be declared as unavailable rather than invented |
+| **M 13** | Dense globular-cluster field: cone search and cross-match row counts against TOPCAT |
 
 ## 4. Values compared and reference sources
 

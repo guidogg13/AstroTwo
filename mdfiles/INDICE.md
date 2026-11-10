@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-10 — **sprint D1 (Fase D):** documentazione in inglese per gli utenti (`README.md`, `docs/installation.md`, `docs/quickstart.md`), `CITATION.cff` validato, struttura della pagina di validazione (`docs/validation.md`, nessuna misura); nuove DD-1 e DD-2 (21 aperte). File fuori da `mdfiles/`: nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
+**Ultimo aggiornamento:** 2026-11-10 — **decisioni del proprietario dopo D1b:** DD-1 decisa (esportazioni per le pubblicazioni sempre possibili in inglese; PDF della scheda del profilo con scelta di lingua, inglese di default) e scritta in `25` §3.15, `43` §3.10 e `02` §2 (modifiche a file approvati da approvare insieme a DD-3; stati invariati); DD-2 approvata; regola delle tolleranze in `docs/validation.md`; nuova **DD-3** (testi italiani del motore nel PDF «inglese»). Nessun file nuovo, nessun cambio di stato. **20 aperte** (Gruppo 3 = 20).
+
+Prima, 2026-11-10 — **sprint D1 (Fase D):** documentazione in inglese per gli utenti (`README.md`, `docs/installation.md`, `docs/quickstart.md`), `CITATION.cff` validato, struttura della pagina di validazione (`docs/validation.md`, nessuna misura); nuove DD-1 e DD-2 (21 aperte). File fuori da `mdfiles/`: nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
 
 Prima, 2026-11-10 — **Fase D avviata** (decisioni del proprietario: 1.0 citabile e verificabile, AstroTwo complementare ad Aladin, TOPCAT e DS9, megatest a mano; modifiche del C8b approvate), registrata in `panoramica.md`. Nessun cambio di stato. Riepilogo invariato: approvato 28, bozza 5, non esiste 11, totale 44.
 

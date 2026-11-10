@@ -15,6 +15,16 @@ documenti e implementazioni siano coerenti e confrontabili con la letteratura.
   nello stesso ordine, nessuna sezione omessa (se non pertinente: "non applicabile").
 - **Autosufficienza:** chi legge un file di modulo deve capirlo senza leggere
   il codice né altri file, salvo i rimandi espliciti.
+- **Lingua dei file esportati (DD-1, decisione del proprietario del
+  2026-11-10):** ogni esportazione che contiene testo destinato a chi legge
+  (intestazioni, etichette, avvisi, note) si può **sempre** fare in inglese,
+  qualunque sia la lingua dell'app: il dialogo di esportazione propone
+  l'inglese di default e la lingua è un parametro registrato del comando.
+  **Lo stesso contenuto nella stessa lingua dà sempre lo stesso file, byte
+  per byte** (nessuna data di esportazione nel file, D25-20 (7)). Vale per
+  ogni esportazione futura; oggi la applica il PDF della scheda del profilo
+  (`25` §3.15, `43` §3.10). I file solo di dati (ECSV, VOTable, PNG senza
+  testo tradotto) non dipendono dalla lingua.
 - **Stato in testa:** ogni file dichiara `bozza`, `in revisione` o `approvato`.
   Solo `approvato` autorizza il codice del corrispondente modulo.
 - **Numerazione file:**
@@ -329,3 +339,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-10-16 | Claude Code | **Decisioni del proprietario del 2026-10-16** (proposta della fase 1 sull'IA nella v1, autorizzazione esplicita a modificare il file approvato): §3 — righe della tabella specifica ↔ codice per 30, 31, 32, 34, 35 e 44; §8 punto 4 — test del livello 3 con servizi simulati delle due API, adattatore finto e Portachiavi simulato, provider reali solo nella lista di controllo manuale. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | DC4: forma della pre-release `0.1.0-beta.1` / `0.1.0b1` (decisione del proprietario del 2026-10-25, `60` §3.2). |
 | 2026-11-10 | Claude Code | §8 punto 9 (istruzione del proprietario del 2026-11-10, dopo una suite rimasta ferma un'ora nel commit C8b): tempo massimo complessivo e stdin chiuso per pytest in `scripts/commit_checked.py`; controllo in `tests/conftest.py` che fa fallire ogni test di default che prova la rete vera. Stato `approvato` invariato. |
+| 2026-11-10 | Claude Code | **DD-1 (decisione del proprietario del 2026-11-10):** §2 nuova regola «Lingua dei file esportati» (sempre possibile in inglese, inglese di default nel dialogo, lingua parametro registrato, stesso contenuto nella stessa lingua = stesso file byte per byte, vale per ogni esportazione futura). Modifica a un file approvato che registra una decisione del proprietario; da confermare insieme a DD-3. Stato `approvato` invariato. |
