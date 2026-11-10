@@ -1,0 +1,30 @@
+# Citation metadata for AstroTwo (Citation File Format 1.2.0, https://citation-file-format.github.io/).
+# Kept in step with src/astrotwo/__init__.py (version) by tests/test_citation_cff.py.
+cff-version: 1.2.0
+message: "If you use AstroTwo in your research, please cite it using these metadata."
+type: software
+title: "AstroTwo"
+abstract: >-
+  AstroTwo is a macOS application for astrophysicists: a HiPS sky atlas with FITS images,
+  catalogues, Virtual Observatory queries (cone search, ADQL), cross-match and sourced
+  object profiles. It works alongside Aladin, TOPCAT and DS9 through SAMP. An optional
+  AI assistant runs AstroTwo commands and never produces numbers by itself.
+authors:
+  - given-names: "Guido"
+    family-names: "Ratti"
+    # ORCID: not available yet. Add it here when it exists, e.g.
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+version: "0.1.0-beta.5"
+date-released: "2026-11-05"
+license: "GPL-3.0-or-later"
+repository-code: "https://github.com/guidogg13/AstroTwo"
+# DOI: to be added after the first archive on Zenodo, e.g.
+# doi: "10.5281/zenodo.0000000"
+keywords:
+  - astronomy
+  - astrophysics
+  - sky atlas
+  - HiPS
+  - Virtual Observatory
+  - SAMP
+  - macOS
