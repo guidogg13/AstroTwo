@@ -9,9 +9,41 @@
 
 ## Install the app
 
-1. Download the latest `AstroTwo-….dmg` from the [Releases](https://github.com/guidogg13/AstroTwo/releases) page.
-2. Open the `.dmg` and drag **AstroTwo** to *Applications*. Python and all the libraries AstroTwo needs are inside the app. You do not need to install anything else.
-3. Start AstroTwo from *Applications*.
+1. From the [Releases](https://github.com/guidogg13/AstroTwo/releases) page, download both files of the latest version into the same folder, for example *Downloads*:
+   - `AstroTwo-<version>.dmg`, the disk image;
+   - `AstroTwo-<version>.dmg.sha256`, its SHA-256 checksum.
+2. Check the download (see [Verify the download](#verify-the-download) below).
+3. Double-click the `.dmg`. A window named **AstroTwo <version>** opens with two items: **AstroTwo** and a shortcut to **Applications**.
+4. Drag **AstroTwo** onto the **Applications** shortcut in the same window. This copies the app into your *Applications* folder. Python and all the libraries AstroTwo needs are inside the app. You do not need to install anything else.
+5. Eject the disk image: click the eject button next to **AstroTwo <version>** in the Finder sidebar. You can then delete the `.dmg`.
+6. Start AstroTwo from *Applications*. Do not run it from inside the disk image.
+
+### Verify the download
+
+The `.sha256` file holds the SHA-256 checksum of the `.dmg` as published with the release. If the two match, the file you downloaded is exactly the published one: not damaged and not changed.
+
+1. Open **Terminal** (in *Applications → Utilities*).
+2. Go to the folder with the two files, for example:
+
+   ```bash
+   cd ~/Downloads
+   ```
+
+3. Run, with the version you downloaded:
+
+   ```bash
+   shasum -a 256 -c AstroTwo-<version>.dmg.sha256
+   ```
+
+4. The answer must be one line ending in **OK**:
+
+   ```text
+   AstroTwo-<version>.dmg: OK
+   ```
+
+   If it says **FAILED**, or that the file is missing, do not open the `.dmg`. Delete it and download it again. If it fails again, please open an issue on GitHub.
+
+`-c` makes `shasum` read the checksum and the file name from the `.sha256` file and compare. You can also print the checksum with `shasum -a 256 AstroTwo-<version>.dmg` and compare it by eye with the one on the release page.
 
 ### First launch
 

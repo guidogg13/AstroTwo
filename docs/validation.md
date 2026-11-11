@@ -1,6 +1,6 @@
 # Validation of AstroTwo
 
-> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows passed and 2 failed (empty spectral type); after the project owner's rule on empty text (decision D25-24, 2026-11-10) the saved rows were **recompared without network** and all 131 pass (section 5.1, «Correction»). Every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0.
+> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows passed and 2 failed (empty spectral type); after the project owner's rule on empty text (decision D25-24, 2026-11-10) the saved rows were **recompared without network** and all 131 pass (section 5.1, «Correction»). Every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0. On 2026-11-11 the services were checked again and no new run was made, because the CDS and the Gaia archive were still down (section 5.0).
 
 ## 1. Purpose
 
@@ -95,6 +95,24 @@ AstroTwo values are of two kinds, and the ECSV export says which one each value 
 | Propagated positions | Position at another epoch from proper motion | Independent computation with Astropy (`SkyCoord.apply_space_motion`); TOPCAT |
 
 ## 5. Results
+
+### 5.0 Service check of 2026-11-11 (05:53–05:57 UTC): no new run
+
+A new run is made only when the CDS, the Gaia archive and the NASA Exoplanet Archive all answer. They were checked twice with one small TAP query each (plain HTTP, no AstroTwo code), at 05:53 and at 05:57 UTC:
+
+| Service | Address | Answer (both checks) |
+|---|---|---|
+| SIMBAD at the CDS | `simbad.cds.unistra.fr` (TAP) | HTTP 404 |
+| TAPVizieR at the CDS | `tapvizier.cds.unistra.fr` | no answer within 40 s (first check) |
+| Gaia archive of ESA | `gea.esac.esa.int` (TAP) | HTTP 503 |
+| NASA Exoplanet Archive | `exoplanetarchive.ipac.caltech.edu` (TAP) | HTTP 200 |
+
+**No measurement was made**, and the counts of section 5.1 are unchanged (177 within tolerance after D25-24, 0 outside, 85 not measured). These sections stay **not measured**, to redo when the three services answer:
+
+- **Gaia DR3** (astrometry, photometry, Bailer-Jones distances): the Gaia archive answered HTTP 503;
+- **2MASS and AllWISE magnitudes against VizieR** and the **VizieR SED series**: the CDS was down;
+- **every SIMBAD row against the CDS** (all SIMBAD rows so far use the Harvard mirror): SIMBAD at the CDS answered HTTP 404;
+- **planets** (NASA Exoplanet Archive): the archive answered, but the run is made only with all three services up (instruction of the project owner, 2026-11-11), so these rows were not measured either.
 
 ### 5.1 Second run of 2026-11-10 (19:46–20:04 UTC): SIMBAD against the Harvard mirror
 

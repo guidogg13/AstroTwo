@@ -1,6 +1,6 @@
 # 63-checklist-rilascio.md — Checklist di ogni rilascio di AstroTwo
 
-**Stato:** bozza
+**Stato:** approvato
 
 > Creato il 2026-11-10 (sprint D5c) su decisione del proprietario: «Il rilascio
 > della 1.0 segue una checklist scritta in `mdfiles/`, uguale per ogni rilascio
@@ -41,21 +41,28 @@ a non dimenticare niente e a rendere ogni rilascio uguale al precedente.
 |---|---|---|---|
 | 1 | **Stato pulito** sul ramo `main`, ultimo commit atteso, nessuna modifica in sospeso | Claude Code | `git status --short` (vuoto); `git log -1 --oneline` |
 | 2 | **Testi coerenti con il posizionamento** (AstroTwo complementare ad Aladin, TOPCAT e DS9, mai sostituto: `panoramica.md` §2 «Fase D») in `README.md`, `docs/`, `CITATION.cff`, `.zenodo.json`, descrizione in `pyproject.toml`, testi dell'app (About) | Claude Code | `grep -rn -i "successor\|successore\|replace\|sostitu" README.md docs CITATION.cff .zenodo.json pyproject.toml src/astrotwo/ui` e correzione di ogni riga trovata |
-| 3 | **Versione 1.0.0** in tutti i punti: `pyproject.toml` (`version = "1.0.0"`, forma PEP 440), `src/astrotwo/__init__.py` (`__version__ = "1.0.0"`, forma SemVer, DC4), `[tool.astrotwo.bundle] build` +1 (`60` §3.2), `CITATION.cff` (`version: "1.0.0"`, `date-released:` = data del tag del passo 10, ISO 8601) | Claude Code | modifica dei quattro file; controllo: `uv run python -m pytest -q tests/test_citation_cff.py tests/test_zenodo_json.py` |
+| 3 | **Versione 1.0.0** in tutti i punti: `pyproject.toml` (`version = "1.0.0"`, forma PEP 440), `src/astrotwo/__init__.py` (`__version__ = "1.0.0"`, forma SemVer, DC4), `[tool.astrotwo.bundle] build` +1 (`60` §3.2), `CITATION.cff` (`version: "1.0.0"`, `date-released:` = **data del commit della versione del passo 5**, ISO 8601, cioè il giorno in cui si fa quel commit; se il tag del passo 10 arriva in un altro giorno, si corregge al passo 14) | Claude Code | modifica dei quattro file; controllo: `uv run python -m pytest -q tests/test_citation_cff.py tests/test_zenodo_json.py` |
 | 4 | **`uv lock` prima di `git add`** (il lockfile contiene la versione del progetto) | Claude Code | `uv lock` poi `git add pyproject.toml uv.lock src/astrotwo/__init__.py CITATION.cff` |
 | 5 | **Suite completa** (test di default, ruff, poi i test di rete) e commit della versione | Claude Code | `uv run ruff check .`; `uv run python scripts/commit_checked.py -m "Release 1.0.0: versione"` (senza `--no-network`: esegue anche i test di rete; un test di rete fallito per un servizio giù si scrive nelle note di rilascio, non si nasconde) |
 | 6 | **Costruzione dell'app** | Claude Code | `uv run python scripts/build_app.py` (controlli di `60` §3.8; nome «AstroTwo» nell'`Info.plist`) |
 | 7 | **Firma Developer ID e notarizzazione** (solo con l'account Apple Developer pronto, A6-b; altrimenti firma ad hoc e il sito spiega «Apri comunque») — passi una tantum del proprietario in `60` §3.12 | Claude Code (credenziali già nel Portachiavi del proprietario) | prova a secco: `uv run python scripts/make_dmg.py --signed`; poi `uv run python scripts/make_dmg.py --signed --execute` (firma dell'app, `.dmg`, firma e notarizzazione del `.dmg`, impronta) |
 | 8 | **`.dmg`** (se il passo 7 non si fa: senza firma Developer ID) | Claude Code | `uv run python scripts/make_dmg.py` (prova a secco), poi `uv run python scripts/make_dmg.py --execute` → `dist/AstroTwo-1.0.0.dmg` e `dist/AstroTwo-1.0.0.dmg.sha256` |
-| 9 | **Megatest `62` superato** sull'app installata dal `.dmg` del passo 7 o 8 (zero KO, o KO dichiarati non bloccanti dal proprietario) | Proprietario | §3 del `62`; esito con data, versione (About) e macOS in `docs/megatest-runs/1.0.0.md` (D63-1), messo nel repository da Claude Code |
+| 9 | **Megatest `62` superato** sull'app installata dal `.dmg` del passo 7 o 8 (zero KO, o KO dichiarati non bloccanti dal proprietario) | Proprietario | §3 del `62`; esito con data, versione (About) e macOS in `docs/megatest-runs/1.0.0.md` (D63-1, approvata il 2026-11-11: copia del `62` con OK / KO / non fatta per ogni prova), messo nel repository da Claude Code con un commit di sola documentazione |
 | 10 | **Tag** annotato della versione, sul commit del passo 5 (nessun commit di codice dopo) | Claude Code, dopo il via del proprietario | `git tag -a v1.0.0 -m "AstroTwo 1.0.0"`; `git push origin main`; `git push origin v1.0.0` |
 | 11 | **Zenodo collegato a GitHub prima della release** (Zenodo archivia solo le release create **dopo** l'attivazione del repository) | Proprietario | zenodo.org → GitHub → attivare `guidogg13/AstroTwo` (una volta sola, al primo rilascio); il codice di licenza `GPL-3.0-or-later` di `.zenodo.json` da verificare lì (D4c) |
 | 12 | **Release su GitHub** con il `.dmg`, la sua impronta e le note di rilascio | Claude Code, dopo il via del proprietario | `gh release create v1.0.0 dist/AstroTwo-1.0.0.dmg dist/AstroTwo-1.0.0.dmg.sha256 --title "AstroTwo 1.0.0" --notes-file dist/release-notes-1.0.0.md` |
-| 13 | **Note di rilascio** (testo del passo 12): novità, KO non bloccanti del megatest, servizi giù durante i test di rete, firma (Developer ID o ad hoc con «Apri comunque»), impronta SHA-256, link a `docs/validation.md` e a `docs/installation.md` | Claude Code scrive, proprietario approva | `dist/release-notes-1.0.0.md` (fuori dal repository fino all'approvazione) |
-| 14 | **DOI di Zenodo** nei file del progetto, quando Zenodo ha archiviato la release (DOI della versione e DOI «concept» di tutte le versioni) | Proprietario legge i DOI su Zenodo; Claude Code scrive | `CITATION.cff`: `doi:` = DOI della versione (tolto il commento); `README.md`: DOI «concept» nella sezione della citazione; `.zenodo.json`: DOI secondo D63-2; poi `uv run python scripts/commit_checked.py --no-network -m "DOI di Zenodo per 1.0.0"` e `git push origin main` (dopo il via) |
+| 13 | **Note di rilascio** (testo del passo 12): novità, KO non bloccanti del megatest, servizi giù durante i test di rete, firma (Developer ID o ad hoc con «Apri comunque»), impronta SHA-256, link a `docs/validation.md`, a `docs/installation.md` e all'esito del megatest `docs/megatest-runs/1.0.0.md` (D63-1) | Claude Code scrive, proprietario approva | `dist/release-notes-1.0.0.md` (fuori dal repository fino all'approvazione) |
+| 14 | **DOI di Zenodo** nei file del progetto, quando Zenodo ha archiviato la release (DOI della versione e DOI «concept» di tutte le versioni) | Proprietario legge i DOI su Zenodo; Claude Code scrive | `CITATION.cff`: `doi:` = DOI della versione (tolto il commento); `README.md`: DOI «concept» nella sezione della citazione; `.zenodo.json`: DOI «concept» in `related_identifiers` con `"relation": "isVersionOf"` e `"scheme": "doi"`, **mai** la chiave `doi` (D63-2; controllo: `uv run python -m pytest -q tests/test_zenodo_json.py`); **`date-released`** in `CITATION.cff` portato alla data del tag del passo 10, solo se il tag è arrivato in un giorno diverso dal commit del passo 5; poi `uv run python scripts/commit_checked.py --no-network -m "DOI di Zenodo per 1.0.0"` e `git push origin main` (dopo il via) |
 | 15 | **ORCID** in `CITATION.cff` e `.zenodo.json`, se il proprietario ne ha uno | Proprietario dà l'ORCID; Claude Code scrive | come il passo 14 (stesso commit) |
 | 16 | **Sito del progetto** (`astrotwo.pages.dev`): pagina di download con il `.dmg` della release e la sua impronta SHA-256, istruzioni d'installazione (con «Apri comunque» se il `.dmg` non è notarizzato), link a validazione, documentazione e citazione (DOI), e il pulsante **«Sostieni AstroTwo»** (solo sul sito, mai nell'app: decisione del proprietario del 2026-11-10) | Proprietario (il sito non è in questo repository) | pubblicazione del sito; controllo dei link e del download da un altro Mac |
 | 17 | **Dopo il rilascio:** file di stato aggiornati (`panoramica.md`, `INDICE.md`, `riassunto.md`), copia spuntata di questa tabella nelle note di rilascio | Claude Code | commit con `scripts/commit_checked.py --no-network` |
+
+**Data di `date-released` (decisione del proprietario del 2026-11-11).** Nel
+commit della versione (passo 5) `date-released` è la data di quel commit. Il
+tag (passo 10) va sullo stesso commit, quindi di solito la data coincide. Se il
+tag arriva in un giorno diverso, la data in `CITATION.cff` si corregge nel
+commit del passo 14, che tocca **solo metadati** (la regola del §9 resta:
+nessun commit di codice dopo il passo 5).
 
 ## 4. Cosa NON fa
 
@@ -101,7 +108,16 @@ nel `60` (`build_app.py`, `make_dmg.py`, `sign_notarize.py`) e nel `05`
 - Regola d'oro 5: nessuna credenziale in file, comandi o note di rilascio.
 - Il tag e la release puntano al commit su cui è stato costruito il `.dmg`
   provato dal megatest: nessun commit di codice tra il passo 5 e il passo 10
-  (i commit dei passi 14–17 toccano solo metadati e documentazione).
+  (i commit dei passi 14–17 toccano solo metadati e documentazione; anche
+  l'esito del megatest del passo 9, `docs/megatest-runs/<versione>.md`, si
+  aggiunge con un commit di sola documentazione).
+- `date-released` in `CITATION.cff` è la data del commit della versione
+  (passo 5); se il tag del passo 10 arriva in un giorno diverso, si corregge
+  nel commit del passo 14 (solo metadati), mai con un commit di codice.
+- In `.zenodo.json` mai la chiave `doi`; il DOI «concept», quando esiste, sta
+  in `related_identifiers` con relazione `isVersionOf` (D63-2, controllato da
+  `tests/test_zenodo_json.py`). Per la 1.0.0 il campo resta assente finché il
+  DOI non esiste.
 - Il `.dmg` non si sovrascrive mai (`make_dmg.py` rifiuta, `DMG_EXISTS`): un
   nuovo candidato ha un nuovo numero di build e si ricostruisce dal passo 3.
 
@@ -125,26 +141,27 @@ Non applicabile: procedura di rilascio, non una funzione dell'app.
 |---|---|---|---|---|
 | T1 | Checklist completa | rileggere §3.2 | ci sono tutti i passi chiesti dal proprietario il 2026-11-10 (versione e data, `uv lock` prima di `git add`, suite completa, megatest, build, firma e notarizzazione, `.dmg`, tag, release, DOI in `CITATION.cff`, `.zenodo.json` e README, sito con «Sostieni AstroTwo»), ciascuno con chi e comando | lettura |
 | T2 | Comandi senza effetti in prova | `uv run python scripts/make_dmg.py` e `uv run python scripts/sign_notarize.py app` senza `--execute` | stampano i comandi, non eseguono niente | test `tests/test_make_dmg.py`, `tests/test_sign_notarize.py` |
+| T3 | Regola del DOI in `.zenodo.json` (D63-2) | `uv run python -m pytest -q tests/test_zenodo_json.py` | fallisce se c'è la chiave `doi` o se un DOI in `related_identifiers` non ha relazione `isVersionOf` | test |
 
 ## 13. Decisioni aperte
 
-- **D63-1 — Dove si conserva l'esito del megatest (proposta di Claude Code
-  del 2026-11-10, da confermare):** `docs/megatest-runs/<versione>.md`
-  (copia del `62` con OK / KO / non fatta per ogni prova, data, versione,
-  macOS), nel repository, linkato dalle note di rilascio. Alternativa: solo
-  nelle note di rilascio.
-- **D63-2 — DOI in `.zenodo.json` (da decidere, proposta di Claude Code del
-  2026-11-10):** il proprietario chiede il DOI anche in `.zenodo.json`. Un
-  campo `doi` in quel file fa usare a Zenodo **quel** DOI per il prossimo
-  archivio (da verificare con la documentazione di Zenodo al momento), quindi
-  il DOI di una versione già archiviata non va lì. **Raccomandazione:** in
-  `.zenodo.json` il DOI «concept» come `related_identifiers` con relazione
-  `isVersionOf` (ogni nuova versione dichiara di essere una versione di
-  AstroTwo), mai la chiave `doi`; il test `tests/test_zenodo_json.py` lo
-  controllerà. Alternativa: nessun DOI in `.zenodo.json`.
+Nessuna aperta. Decise:
+
+- **D63-1 — Dove si conserva l'esito del megatest: APPROVATA dal proprietario
+  il 2026-11-11** (proposta di Claude Code del 2026-11-10):
+  `docs/megatest-runs/<versione>.md` (copia del `62` con OK / KO / non fatta
+  per ogni prova, data, versione, macOS), nel repository, con il link nelle
+  note di rilascio (passi 9 e 13).
+- **D63-2 — DOI in `.zenodo.json`: APPROVATA dal proprietario il 2026-11-11**
+  (raccomandazione di Claude Code del 2026-11-10): in `.zenodo.json` il DOI
+  «concept» va in `related_identifiers` con relazione `isVersionOf`, **mai**
+  la chiave `doi` (un campo `doi` farebbe usare a Zenodo quel DOI per il
+  prossimo archivio). Il test `tests/test_zenodo_json.py` lo controlla (T3).
+  Per la 1.0.0 il campo resta assente, finché il DOI non esiste (passo 14).
 
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
 |---|---|---|
 | 2026-11-10 | Claude Code | Creazione del file (stato: bozza), sprint D5c, decisioni del proprietario del 2026-11-10 (checklist in `mdfiles/` uguale per ogni rilascio; pulsante «Sostieni AstroTwo» solo sul sito, passo 16; `.dmg` con `hdiutil`, passi 7–8). Megatest dopo il `.dmg` candidato (D62-1 (2)). Aperte D63-1, D63-2. |
+| 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** **approvato dal proprietario** (stato `approvato`) con una correzione: `date-released` = data del commit della versione (passo 5), corretta nel commit del passo 14 (solo metadati) se il tag del passo 10 arriva in un giorno diverso (passi 3 e 14, nota in §3.2, §9). **D63-1 approvata** (passi 9 e 13, §9); **D63-2 approvata** (passo 14, §9, T3, `tests/test_zenodo_json.py`). §13 senza decisioni aperte. |

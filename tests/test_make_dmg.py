@@ -132,6 +132,8 @@ def test_execute_with_fake_tools_writes_the_checksum(project, monkeypatch, capsy
 
     def fake_run(command, **kwargs):
         seen.append(command)
+        if command[0] == "mkdir":
+            Path(command[-1]).mkdir(parents=True, exist_ok=True)
         if command[:2] == ["hdiutil", "create"]:
             Path(command[-1]).write_bytes(b"fake dmg")
         return subprocess.CompletedProcess(command, 0, "", "")
@@ -139,7 +141,7 @@ def test_execute_with_fake_tools_writes_the_checksum(project, monkeypatch, capsy
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert md.main(["--execute"]) == 0
     assert not (build / "dmg-root" / "old").exists()  # cartella di lavoro nuova
-    assert [c[0] for c in seen] == ["mkdir", "ditto", "ln", "hdiutil", "hdiutil"]
+    assert [c[0] for c in seen] == ["mkdir", "ditto", "hdiutil", "hdiutil"]  # il collegamento lo crea lo script
     checksum = Path(f"{dmg}.sha256").read_text()
     assert checksum == f"{hashlib.sha256(b'fake dmg').hexdigest()}  {dmg.name}\n"
 
@@ -150,3 +152,34 @@ def test_staging_outside_build_is_refused(project, tmp_path):
     with pytest.raises(md.DmgError) as err:
         md.run_plan(plan, execute=True, staging=tmp_path / "elsewhere")
     assert err.value.code == "DMG_STAGING_UNSAFE"
+
+
+def test_staged_folder_holds_only_the_app_and_the_applications_link(project, monkeypatch):
+    """D60-7 (2026-11-11): la cartella data a ``hdiutil create -srcfolder`` contiene **solo** ``AstroTwo.app`` e il
+    collegamento simbolico ``Applications`` → ``/Applications`` (l'utente trascina l'app lì); nessun file di aspetto
+    della finestra (``.background``, ``.DS_Store``). ``mkdir`` e ``ditto`` sono finti ma fanno davvero il loro lavoro
+    nella cartella temporanea; il collegamento lo crea lo script."""
+    import shutil
+
+    dist, build, app = project
+    staged = {}
+
+    def fake_run(command, **kwargs):
+        if command[0] == "mkdir":
+            Path(command[-1]).mkdir(parents=True, exist_ok=True)
+        elif command[0] == "ditto":
+            shutil.copytree(command[1], command[2], symlinks=True)
+        elif command[:2] == ["hdiutil", "create"]:
+            src = Path(command[command.index("-srcfolder") + 1])
+            staged.update({p.name: p for p in src.iterdir()})
+            staged["_links"] = {p.name: str(p.readlink()) for p in src.iterdir() if p.is_symlink()}
+            Path(command[-1]).write_bytes(b"fake dmg")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert md.main(["--execute"]) == 0
+    links = staged.pop("_links")
+    assert sorted(staged) == ["Applications", "AstroTwo.app"]
+    assert links == {"Applications": "/Applications"}  # destinazione assoluta, non relativa
+    assert (staged["AstroTwo.app"] / "Contents" / "MacOS" / "AstroTwo").is_file()
+    assert not staged["AstroTwo.app"].is_symlink()  # l'app è copiata, non collegata

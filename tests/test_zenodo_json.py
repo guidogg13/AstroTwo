@@ -7,6 +7,10 @@ dire la stessa cosa. Titolo, autore, licenza, parole chiave, descrizione in ingl
 la versione non sta in ``.zenodo.json`` (Zenodo la prende dal tag del rilascio, che è la stessa di ``CITATION.cff``,
 controllata da ``test_citation_cff.py``), così non c'è un secondo numero da tenere allineato. Il DOI non c'è ancora
 (arriva con il primo archivio su Zenodo) e non sta in nessuno dei due file finché non esiste.
+
+**D63-2 (decisione del proprietario del 2026-11-11):** ``.zenodo.json`` non ha **mai** la chiave ``doi`` (Zenodo
+userebbe quel DOI per il prossimo archivio). Il DOI «concept» di tutte le versioni, quando esiste, sta in
+``related_identifiers`` con ``relation`` = ``isVersionOf`` e ``scheme`` = ``doi``; per la 1.0.0 è assente.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,10 +29,44 @@ ZENODO = json.loads((ROOT / ".zenodo.json").read_text(encoding="utf-8"))
 KEYS = {"title", "description", "upload_type", "creators", "license", "keywords", "related_identifiers"}
 
 
+def doi_problems(data: dict) -> list[str]:
+    """Violazioni di D63-2 in un contenuto di ``.zenodo.json`` (lista vuota = conforme)."""
+    problems = []
+    if "doi" in data:
+        problems.append("chiave 'doi' presente: il DOI «concept» va in related_identifiers (isVersionOf)")
+    for item in data.get("related_identifiers", []):
+        is_doi = item.get("scheme") == "doi" or str(item.get("identifier", "")).lower().startswith(
+            ("10.", "doi:", "https://doi.org/"))
+        if is_doi and item.get("relation") != "isVersionOf":
+            problems.append(f"DOI {item.get('identifier')} con relazione {item.get('relation')!r}, non 'isVersionOf'")
+        if is_doi and item.get("scheme") != "doi":
+            problems.append(f"DOI {item.get('identifier')} senza scheme 'doi'")
+    return problems
+
+
 def test_only_known_keys_and_software():
     assert set(ZENODO) == KEYS
     assert ZENODO["upload_type"] == "software" and CFF["type"] == "software"
-    assert "version" not in ZENODO and "doi" not in ZENODO and "doi" not in CFF
+    assert "version" not in ZENODO and "doi" not in CFF
+
+
+def test_doi_rule_d63_2():
+    assert doi_problems(ZENODO) == []
+    dois = [r for r in ZENODO["related_identifiers"] if r.get("scheme") == "doi"]
+    assert len(dois) <= 1  # al più il DOI «concept»; per la 1.0.0 nessuno, finché non esiste
+
+
+@pytest.mark.parametrize(("extra", "ok"), [
+    ({"doi": "10.5281/zenodo.1"}, False),
+    ({"related_identifiers": [{"identifier": "10.5281/zenodo.1", "relation": "isVersionOf", "scheme": "doi"}]},
+     True),
+    ({"related_identifiers": [{"identifier": "10.5281/zenodo.1", "relation": "isSupplementTo", "scheme": "doi"}]},
+     False),
+    ({"related_identifiers": [{"identifier": "https://doi.org/10.5281/zenodo.1", "relation": "isVersionOf",
+                               "scheme": "url"}]}, False),
+])
+def test_doi_rule_rejects_wrong_forms(extra, ok):
+    assert (doi_problems({**ZENODO, **extra}) == []) is ok
 
 
 def test_title_license_keywords_match():
@@ -54,6 +93,6 @@ def test_description_is_the_english_abstract():
 
 
 def test_repository_matches():
-    urls = [r["identifier"] for r in ZENODO["related_identifiers"]]
-    assert urls == [CFF["repository-code"]]
-    assert ZENODO["related_identifiers"][0]["scheme"] == "url"
+    urls = [r for r in ZENODO["related_identifiers"] if r.get("scheme") != "doi"]
+    assert [r["identifier"] for r in urls] == [CFF["repository-code"]]
+    assert urls[0]["scheme"] == "url"

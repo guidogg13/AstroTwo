@@ -18,13 +18,20 @@ dell'app usate da un astrofisico.
 
 ### 3.1 Come si fa il megatest
 
-- **Chi:** il proprietario o una persona da lui indicata, sul Mac, con l'app
-  costruita dal `.dmg` candidato alla 1.0 (non da `uv run`).
+- **Chi:** il proprietario o una persona da lui indicata, sul Mac.
+- **Su quale app:** il megatest si fa **sull'app installata dal `.dmg`
+  candidato** (`63` passo 9): il `.dmg` prodotto da `scripts/make_dmg.py`
+  (`63` passo 7 o 8), controllato con le prove K1–K3, e AstroTwo trascinata
+  in `/Applications`. Mai con `uv run astrotwo` né aprendo direttamente
+  `dist/AstroTwo.app`.
 - **Prima di cominciare:**
   - Mac con macOS 15 o successivo, Apple silicon (`docs/installation.md`);
   - **TOPCAT** installato (per SAMP e per i confronti);
   - per l'assistente: **Ollama** o **LM Studio** con un modello scaricato, e
     una chiave API di un provider cloud;
+  - il `.dmg` candidato **e** il suo file `.sha256`, nella stessa cartella
+    (per esempio *Downloads*), e nessuna copia precedente di AstroTwo in
+    `/Applications` (spostarla nel Cestino prima di cominciare);
   - un file FITS con WCS (per esempio un'immagine DSS scaricata da SkyView) e
     un catalogo VOTable o CSV con colonne di posizione;
   - cache vuota: **AstroTwo → Settings… → Clear cache**.
@@ -40,11 +47,22 @@ dell'app usate da un astrofisico.
 - **Esito della 1.0:** si rilascia solo con **zero KO**, oppure con i KO
   che il proprietario dichiara non bloccanti, scritti nelle note di rilascio.
 
+### 3.1bis Il `.dmg` candidato (K)
+
+Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
+2026-11-11). Si fanno per prime, nell'ordine.
+
+| # | Prova | Risultato atteso |
+|---|---|---|
+| K1 | Nel Terminale, nella cartella del `.dmg`: `shasum -a 256 -c AstroTwo-<versione>.dmg.sha256` | Una riga `AstroTwo-<versione>.dmg: OK`; nessun `FAILED` (`docs/installation.md`) |
+| K2 | Doppio clic sul `.dmg` | Si monta il volume **«AstroTwo <versione>»**; la finestra del Finder mostra **solo** due voci: **AstroTwo** e il collegamento **Applications** (icona con la freccia del collegamento); nessuno sfondo né disposizione speciale delle icone (D60-7) |
+| K3 | Trascinare **AstroTwo** sul collegamento **Applications** della stessa finestra, poi espellere il volume | AstroTwo è copiata in `/Applications` (`ls -d /Applications/AstroTwo.app` la trova); il volume si espelle senza errori |
+
 ### 3.2 Avvio e installazione (A)
 
 | # | Prova | Risultato atteso |
 |---|---|---|
-| A1 | Aprire il `.dmg`, trascinare AstroTwo in Applicazioni, primo avvio con «Apri comunque» (`docs/installation.md`) | L'app si apre; nessun messaggio di errore; **AstroTwo → About AstroTwo** dice la versione 1.0 candidata |
+| A1 | Primo avvio di AstroTwo da `/Applications` (installata in K3), con «Apri comunque» se il `.dmg` non è notarizzato (`docs/installation.md`) | L'app si apre; nessun messaggio di errore; **AstroTwo → About AstroTwo** dice la versione 1.0 candidata |
 | A2 | Chiudere e riaprire l'app | Si riapre con le stesse preferenze; nessuna finestra di errore |
 | A3 | **Help → Licenses…** | Elenco delle licenze di terze parti, Qt (LGPL) compresa; si chiude senza errori |
 | A4 | Solo se il `.dmg` candidato è firmato Developer ID e notarizzato (A6-b, `60` §3.12; altrimenti «non fatta»): scaricarlo su un altro Mac, aprirlo, primo avvio con doppio clic; poi `spctl --assess --type execute -vv /Applications/AstroTwo.app` | L'app si apre **senza** «Apri comunque»; `spctl` dice `accepted` e `source=Notarized Developer ID` |
@@ -170,12 +188,16 @@ dell'app usate da un astrofisico.
 | L2 | Con l'app in italiano, ripetere E2 | Lingua proposta per il PDF: **inglese**; nessuna parola italiana nel PDF |
 | L3 | Provocare un errore (es. F4) con l'app in italiano | Messaggio in italiano, con il codice dell'errore nei dettagli |
 | L4 | Tornare all'inglese, riavvio | Tutto in inglese |
-| L5 | Guardare la barra dei menu di macOS con l'app aperta (dal `.dmg`) | Il primo menu si chiama **AstroTwo**, non «python» (`40` §3.9; chi prova dal codice con `uv run astrotwo` vede lo stesso nome) |
-| L6 | Con l'app in italiano e in inglese, caricare un catalogo con **una sola** riga (es. cone search di 2″ su una stella isolata) e guardare barra di stato e pannello Layers | Singolare giusto: «Rete: 1 comando, …» / «Network: 1 command, …», «1 riga» / «1 row»; mai «1 comandi», «1 apps» (`40` §3.9) |
+| L5 | Guardare la barra dei menu di macOS con l'app **installata in `/Applications`** dal `.dmg` (K3) aperta (correzione del D5b) | Il primo menu si chiama **AstroTwo**, non «python» (`40` §3.9; chi prova dal codice con `uv run astrotwo` vede lo stesso nome) |
+| L6 | (Correzione del D5b.) Con l'app in italiano e in inglese, caricare un catalogo con **una sola** riga (es. cone search di 2″ su una stella isolata) e guardare barra di stato e pannello Layers | Singolare giusto: «Rete: 1 comando, …» / «Network: 1 command, …», «1 riga» / «1 row»; mai «1 comandi», «1 apps» (`40` §3.9) |
 
 ### 3.14bis Barra di stato e pannello Messaggi (U)
 
 Prove aggiunte dopo la prova a mano del proprietario del 2026-11-10 (app dal codice, M45, CDS giù).
+Insieme a L5 e L6 controllano, **sull'app installata dal `.dmg`**, le quattro
+correzioni dello sprint D5b: barra in basso che non copre **Annulla** e mostra
+un testo leggibile (U1, U2); «Rete: 1 comando» al singolare (L6); errore lungo
+che si legge tutto (U3); nome **AstroTwo** nella barra dei menu (L5).
 
 | # | Prova | Risultato atteso |
 |---|---|---|
@@ -203,7 +225,8 @@ Prove aggiunte dopo la prova a mano del proprietario del 2026-11-10 (app dal cod
   misure della pagina di validazione (`docs/validation.md`).
 - Non misura i tempi in modo preciso: i tempi del profilo sono nel `25`
   §3.17; qui si scrive solo un ritardo evidente.
-- Non prova la costruzione del `.dmg` (`60`): parte dal `.dmg` già costruito.
+- Non prova la costruzione del `.dmg` (`60`): parte dal `.dmg` già costruito;
+  ne controlla solo l'impronta e il contenuto (K1–K3).
 
 ## 5. Livello e dipendenze
 
@@ -215,7 +238,7 @@ Prove aggiunte dopo la prova a mano del proprietario del 2026-11-10 (app dal cod
 
 | Direzione | Nome | Tipo | Unità / formato | Note |
 |---|---|---|---|---|
-| in | `.dmg` candidato alla 1.0 | file | — | costruito con `scripts/build_app.py` |
+| in | `.dmg` candidato alla 1.0 e il suo `.sha256` | file | — | app costruita con `scripts/build_app.py`, `.dmg` e impronta con `scripts/make_dmg.py` (`63` passi 6–8) |
 | in | file di prova | FITS, VOTable/CSV, MOC | — | §3.1 |
 | out | esito del megatest | testo | una riga per prova: OK / KO / non fatta | con data, versione dell'app e di macOS |
 
@@ -229,11 +252,12 @@ Non applicabile: è un elenco di prove a mano, senza codice.
 |---|---|---|
 | TOPCAT | confronto di incroci e query (X2, Q2), prove SAMP (S1–S6) | programma di riferimento della comunità, indipendente da AstroTwo |
 | SAMP 1.3 (IVOA) | prove S1–S6 | standard dei collegamenti tra programmi VO |
-| `shasum -a 256` (macOS) | E3, R3 | confronto byte per byte dei file esportati |
+| `shasum -a 256` (macOS) | K1, E3, R3 | impronta del `.dmg` (K1); confronto byte per byte dei file esportati |
 
 ## 9. Regole e vincoli
 
-- Le prove si fanno sull'app costruita, non sul codice.
+- Le prove si fanno sull'app installata in `/Applications` dal `.dmg`
+  candidato (`63` passo 9), non sul codice né su `dist/AstroTwo.app`.
 - Un risultato atteso che dipende da un servizio esterno si giudica solo se il
   servizio risponde; altrimenti «non fatta», con il servizio e l'ora.
 - Ogni KO si scrive con la prova, cosa si è visto e, se possibile, il file di
@@ -249,6 +273,7 @@ Non applicabile: è un elenco di prove a mano, senza codice.
 | TOPCAT non installato | prove S e X2, Q2 «non fatte» | — |
 | Nessun modello locale o nessuna chiave | prove I1–I2 o I3–I6 «non fatte» | — |
 | L'app si chiude da sola | KO bloccante, con la prova in corso | — |
+| K1 dà `FAILED` o K2 mostra altre voci | KO bloccante: il `.dmg` non è il candidato giusto; si ricostruisce (`63` passo 7 o 8) | — |
 
 ## 11. Esposizione all'IA
 
@@ -281,3 +306,4 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** D7 con l'intestazione «Not checked» e la riga di stato del PDF; nuova prova D9 (messaggio del primo server quando cadono tutti). Stato `bozza` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D4 (decisioni del proprietario del 2026-11-10):** nuova prova A4 (app firmata Developer ID e notarizzata, solo se la candidata lo è; firma preparata in `60` §3.12, non ancora eseguita). Stato `bozza` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5b (prova a mano del proprietario del 2026-11-10):** nuove prove L5 (nome «AstroTwo» nella barra dei menu, corretto anche avviando dal codice), L6 (plurali) e §3.14bis U1–U3 (titolo leggibile del comando senza coprire Annulla, finestra stretta, messaggi lunghi con suggerimento, Dettagli…, doppio clic e Copia). Stato `bozza` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** il megatest si fa sull'app installata dal `.dmg` candidato (`63` passo 9; §3.1, §9); nuove prove **K1–K3** del `.dmg` (impronta con `shasum -a 256 -c`, volume con sole due voci AstroTwo e Applications, trascinamento in `/Applications`; D60-7), A1 riscritta di conseguenza; le quattro correzioni del D5b richiamate in §3.14bis (U1, U2, U3) e in L5, L6, L5 sull'app installata; §4, §6, §8, §10 aggiornati. Stato `bozza` invariato. |

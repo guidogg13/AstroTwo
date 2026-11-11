@@ -274,7 +274,10 @@ supera l'orientamento `dmgbuild` di A2 del 2026-10-09), con uno script come quel
 1. cartella di lavoro **nuova** `build/dmg-root/` (si cancella solo se sta dentro `build/`, altrimenti
    `DMG_STAGING_UNSAFE`);
 2. copia di `dist/AstroTwo.app` con **`ditto`** (conserva firme, attributi estesi e collegamenti simbolici) e
-   collegamento simbolico **`Applications` → `/Applications`** (l'utente trascina l'app sul collegamento);
+   collegamento simbolico **`Applications` → `/Applications`** (destinazione assoluta), creato dallo script in
+   Python e non da una shell (l'utente trascina l'app sul collegamento; D60-7, conferma del proprietario del
+   2026-11-11). La cartella contiene **solo** `AstroTwo.app` e `Applications`: nessun file di aspetto
+   (`.background`, `.DS_Store`);
 3. `hdiutil create -volname "AstroTwo <versione>" -srcfolder build/dmg-root -fs HFS+ -format UDZO
    dist/AstroTwo-<versione>.dmg`; `<versione>` è la forma SemVer di `astrotwo.__version__` (DC4), come i `.dmg`
    delle beta fatti a mano (`AstroTwo-0.1.0-beta.5.dmg`);
@@ -292,7 +295,7 @@ secco il Portachiavi non si legge.
 **Regole:** un `.dmg` con lo stesso nome **non si sovrascrive mai** (`DMG_EXISTS`: si cancella a mano o si
 cambia versione); senza app costruita la prova a secco stampa comunque i comandi con una nota, `--execute` si
 ferma (`DMG_APP_MISSING`); nessuna personalizzazione dell'aspetto della finestra del `.dmg` (sfondo, posizioni
-delle icone): Finder mostra l'app e il collegamento (D60-7). Punti già noti che restano: sorgente di AstroTwo
+delle icone): Finder mostra l'app e il collegamento (D60-7, approvata il 2026-11-11). Punti già noti che restano: sorgente di AstroTwo
 (D60-1) decisa prima di una distribuzione pubblica; verifica del marchio «AstroTwo» (`01` §6.1 punto 7) prima
 della distribuzione pubblica; testo «Apri comunque» sul sito (`63` passo 16).
 
@@ -556,7 +559,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | T16 | Qt non modificato (V5) | binari Qt dell'app contro la ruota, tolte le firme | identici | costruzione |
 | T18 | Icona | `make_iconset` su `assets/icon/AstroNew.svg` in una cartella temporanea | dieci PNG con le dimensioni di `iconutil`, non vuote; `.icns` creato | test (salta se `iconutil` manca) |
 | T19 | Firma Developer ID e notarizzazione (§3.12) | test (sempre): identità dall'uscita di `security`, ordine di firma su un'app finta, opzioni `--options runtime --timestamp` senza `--deep`, diritti minimi, profilo del Portachiavi e nessuna credenziale nei comandi, opzioni di credenziali rifiutate, prova a secco che non esegue né scrive niente; **a mano, con l'account pronto**: la sequenza di §3.12 con `--execute`, poi l'app scaricata da un altro Mac si apre con doppio clic senza «Apri comunque» | test: tutto come atteso, nessun comando eseguito; a mano: `Accepted`, `stapler validate` e `spctl` riusciti; se l'app non parte col runtime rinforzato, il diritto mancante si aggiunge solo con la prova, scritto qui | `tests/test_sign_notarize.py`; prova a mano **non ancora eseguita** |
-| T20 | `.dmg` con `hdiutil` (§3.10) | test (sempre, `tests/test_make_dmg.py`): app finta, nessun comando eseguito; ordine dei passi senza e con `--signed`; prova a secco senza app; `.dmg` esistente mai sovrascritto; credenziali rifiutate; percorso `--execute` con strumenti finti e impronta scritta; cartella di lavoro fuori da `build/` rifiutata. A mano, al primo rilascio (`63` passo 8): `make_dmg.py --execute`, aprire il `.dmg`, trascinare l'app su Applicazioni, avvio | test: tutto come atteso; a mano: `.dmg` montabile con l'app e il collegamento, `shasum -a 256 -c` sull'impronta | test e prova a mano |
+| T20 | `.dmg` con `hdiutil` (§3.10) | test (sempre, `tests/test_make_dmg.py`): app finta, nessun comando eseguito; ordine dei passi senza e con `--signed`; prova a secco senza app; `.dmg` esistente mai sovrascritto; credenziali rifiutate; percorso `--execute` con strumenti finti e impronta scritta; cartella di lavoro fuori da `build/` rifiutata; cartella data a `hdiutil` con **solo** `AstroTwo.app` (copiata) e il collegamento `Applications` → `/Applications` (D60-7). A mano, al primo rilascio (`63` passo 8): `make_dmg.py --execute`, aprire il `.dmg`, trascinare l'app su Applicazioni, avvio | test: tutto come atteso; a mano: `.dmg` montabile con l'app e il collegamento, `shasum -a 256 -c` sull'impronta | test e prova a mano |
 | T17 | Ripetibilità | due costruzioni di seguito dallo stesso commit | stessi file (stesso elenco e stesse impronte), tranne firma, `BUILD_INFO.json` e file con data | a mano, una volta |
 
 ## 13. Decisioni aperte
@@ -622,7 +625,11 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   `.dmg`, un invio in più; (4) nome del profilo `astrotwo-notary`; (5) il `.dmg` resta creato a mano finché il 60b
   non decide lo strumento.
 
-- **D60-7 — Scelte minori del `.dmg` (proposte da Claude Code il 2026-11-10, sprint D5c, da confermare):**
+- **D60-7 — Scelte minori del `.dmg`: APPROVATE dal proprietario il 2026-11-11** (proposte da Claude Code il
+  2026-11-10, sprint D5c, confermate tutte e cinque così come sono; in più il proprietario chiede che dentro il
+  `.dmg` ci sia il collegamento simbolico ad `/Applications`, già creato da `make_dmg.py`, ora controllato da un
+  test sul contenuto della cartella preparata per `hdiutil`, §3.10 punto 2, T20; nessuna finestra
+  personalizzata):
   (1) file system HFS+ e formato UDZO (zlib), leggibili da ogni macOS supportato (APFS e ULFO/ULMO possibili, più
   recenti); (2) nome `AstroTwo-<versione SemVer>.dmg` e volume «AstroTwo <versione>», come i `.dmg` delle beta;
   (3) nessuna personalizzazione della finestra del `.dmg` (sfondo, posizioni delle icone, licenza all'apertura);
@@ -641,3 +648,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (A6-b: preparare, non eseguire):** nuovo §3.12 (firma Developer ID dall'interno verso l'esterno con runtime rinforzato e marca temporale, firma del `.dmg`, notarizzazione con `notarytool --keychain-profile`, ticket, controlli; credenziali solo nel Portachiavi, opzioni di credenziali rifiutate), §4, §7, §10 (cinque righe), §12 T19, §13 D60-6 (scelte minori da confermare). Codice: `scripts/sign_notarize.py` (prova a secco senza `--execute`), test `tests/test_sign_notarize.py`; **nessun comando di firma o notarizzazione eseguito**. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D4c (brief del proprietario del 2026-11-10, punto f):** §3.12 — elenco dei passi del proprietario prima della prima firma (Apple Developer Program, strumenti, certificato «Developer ID Application» nel Portachiavi di login, password specifica per l'app, profilo `astrotwo-notary` salvato con `notarytool store-credentials`, controlli senza segreti). Nessun comando eseguito. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5c (decisioni del proprietario del 2026-11-10):** parte B (60b) scritta: §3.10 con `hdiutil` e `scripts/make_dmg.py` (prova a secco senza `--execute`, collegato a `sign_notarize.py` con `--signed`), §3.12 passo 2 e sequenza, §4, §7, T20; **D60-6 approvata** (diritti minimi da verificare alla prima firma vera); nuova **D60-7** (scelte minori del `.dmg`). Codice: `scripts/make_dmg.py`, `tests/test_make_dmg.py`; nessun `.dmg` creato. Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D6 (decisione del proprietario del 2026-11-11):** **D60-7 approvata** (HFS+ UDZO, nome `AstroTwo-<versione>.dmg`, nessuna personalizzazione della finestra, impronta nel file `.sha256`, mai sovrascrivere). Collegamento `Applications` → `/Applications` dentro il `.dmg` confermato: §3.10 punto 2 (creato dallo script in Python, cartella con sole due voci), T20 con il nuovo test `test_staged_folder_holds_only_the_app_and_the_applications_link`. Nessun `.dmg` creato. Stato `approvato` invariato. |

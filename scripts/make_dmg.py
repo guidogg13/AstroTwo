@@ -7,8 +7,8 @@ con uno script come quello della firma: **senza ``--execute`` non esegue niente*
 Passi:
 
 1. cartella di lavoro ``build/dmg-root/`` nuova: copia di ``dist/AstroTwo.app`` con ``ditto`` (conserva firme,
-   attributi estesi e collegamenti) e collegamento simbolico ``Applications`` → ``/Applications`` (si trascina l'app
-   sul collegamento per installarla);
+   attributi estesi e collegamenti) e collegamento simbolico ``Applications`` → ``/Applications`` creato da questo
+   script (si trascina l'app sul collegamento per installarla); la cartella contiene **solo** queste due voci;
 2. ``hdiutil create`` con volume «AstroTwo <versione>», file system HFS+, formato compresso UDZO, in
    ``dist/AstroTwo-<versione>.dmg`` (versione SemVer di ``astrotwo.__version__``, DC4);
 3. ``hdiutil verify`` dell'immagine;
@@ -41,10 +41,14 @@ BUILD = ROOT / "build"
 APP = DIST / "AstroTwo.app"
 STAGING = BUILD / "dmg-root"
 APP_NAME = "AstroTwo"
-#: File system e formato dell'immagine (60 §3.10, D60-7 da confermare): HFS+ e UDZO (zlib), leggibili da ogni
-#: macOS supportato; nessuna opzione di aspetto (sfondo, posizioni delle icone): Finder mostra app e collegamento.
+#: File system e formato dell'immagine (60 §3.10, D60-7 approvata dal proprietario il 2026-11-11): HFS+ e UDZO
+#: (zlib), leggibili da ogni macOS supportato; nessuna opzione di aspetto (sfondo, posizioni delle icone): Finder
+#: mostra app e collegamento.
 FILESYSTEM = "HFS+"
 FORMAT = "UDZO"
+#: Collegamento simbolico dentro il ``.dmg`` (D60-7): nome nella cartella e destinazione assoluta.
+APPLICATIONS_LINK = "Applications"
+APPLICATIONS_TARGET = "/Applications"
 
 
 class DmgError(Exception):
@@ -59,7 +63,7 @@ class Step:
 
     command: list[str]
     purpose: str
-    action: str | None = None  # "clean_staging", "sha256": eseguite da questo script, non da una shell
+    action: str | None = None  # "clean_staging", "symlink", "sha256": eseguite da questo script, non da una shell
 
 
 @dataclass
@@ -98,7 +102,8 @@ def create_steps(app: Path, dmg: Path, ver: str, staging: Path | None = None) ->
     plan.add(["rm", "-rf", staging], "cartella di lavoro nuova (solo build/dmg-root)", action="clean_staging")
     plan.add(["mkdir", "-p", staging], "cartella di lavoro")
     plan.add(["ditto", app, staging / app.name], "copia dell'app con firme e attributi")
-    plan.add(["ln", "-s", "/Applications", staging / "Applications"], "collegamento ad Applicazioni")
+    plan.add(["ln", "-s", APPLICATIONS_TARGET, staging / APPLICATIONS_LINK], "collegamento ad Applicazioni",
+             action="symlink")
     plan.add(["hdiutil", "create", "-volname", volume_name(ver), "-srcfolder", staging, "-fs", FILESYSTEM,
               "-format", FORMAT, dmg], "creazione del .dmg")
     plan.add(["hdiutil", "verify", dmg], "verifica dell'immagine")
@@ -149,6 +154,9 @@ def run_plan(plan: Plan, *, execute: bool, staging: Path | None = None) -> int:
                 raise DmgError("DMG_STAGING_UNSAFE", f"{staging}: la cartella di lavoro deve stare in build/")
             if staging.exists():
                 shutil.rmtree(staging)
+            continue
+        if step.action == "symlink":
+            Path(step.command[-1]).symlink_to(step.command[-2])
             continue
         if step.action == "sha256":
             dmg = Path(step.command[-1])
