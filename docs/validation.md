@@ -1,6 +1,6 @@
 # Validation of AstroTwo
 
-> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows passed and 2 failed (empty spectral type); after the project owner's rule on empty text (decision D25-24, 2026-11-10) the saved rows were **recompared without network** and all 131 pass (section 5.1, «Correction»). Every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0. On 2026-11-11 the services were checked three more times (05:53–05:57, 13:21–13:25 and 14:21–14:37 UTC) and no new run was made, because the CDS and the Gaia archive were still down (section 5.0). By decision of the project owner (2026-11-11), version 1.0 is not released while these rows are not measured, unless the owner decides otherwise.
+> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. **Third run, 2026-11-11, on the 1.0.0 candidate (section 5.0bis): 343 values within tolerance, 36 outside, 48 not measured.** The Gaia DR3 sections (astrometry, photometry, Bailer-Jones distances) and the planets were measured for the first time and all Gaia values are within tolerance. The 36 values outside are all planet periods, masses and radii: the **numbers are identical** to the NASA Exoplanet Archive, but the **unit is written differently** (section 5.0bis); they stay «fail» until the project owner decides (decision D05-6), and the tolerances do not change. Still **not measured**: 2MASS and AllWISE magnitudes against VizieR and the VizieR SED series (TAPVizieR of the CDS not answering). All SIMBAD values were compared with the **Harvard mirror** (SIMBAD at the CDS answered HTTP 404) and are **to be repeated against the CDS**. The earlier runs of 2026-11-10 are in sections 5.1–5.4.
 
 ## 1. Purpose
 
@@ -96,7 +96,7 @@ AstroTwo values are of two kinds, and the ECSV export says which one each value 
 
 ## 5. Results
 
-### 5.0 Service checks of 2026-11-11 (05:53–05:57, 13:21–13:25 and 14:21–14:37 UTC): no new run
+### 5.0 Service checks of 2026-11-11 (05:53–05:57, 13:21–13:25 and 14:21–14:37 UTC): no run at those times
 
 A new run is made only when the CDS, the Gaia archive and the NASA Exoplanet Archive all answer. They were checked twice with one small TAP query each (plain HTTP, no AstroTwo code), at 05:53 and at 05:57 UTC:
 
@@ -137,6 +137,41 @@ The services did not answer in a stable way, so `scripts/validate_profiles.py` w
 | 14:37:09 | HTTP 503, four requests in a row (`gaia_source` and `external.gaiaedr3_distance`) | — |
 
 The Gaia archive alternated between 200 and 503 within seconds (during the same hour a network test received «Error 503: Server overloaded: synchronous job rejected due to maximum number of synchronous queued jobs (150) reached»). That is not a stable answer, so `scripts/validate_profiles.py` was **not** run: a run against a service that answers only some requests would give a mix of measured and «not measured» rows for the same object. The counts stay **177 within tolerance, 0 outside, 85 not measured**.
+
+### 5.0bis Third run of 2026-11-11 (15:54–16:04 UTC): AstroTwo 1.0.0 candidate
+
+**Service checks before the run.** 15:09 and 15:11 UTC: SIMBAD at the CDS HTTP 404, TAPVizieR no answer within 40 s, VizieR photometry service HTTP 404, Gaia archive HTTP 200, NASA Exoplanet Archive HTTP 200. Between 15:10 and 15:22 UTC the Gaia network tests passed. 15:42 UTC: the same answers, Gaia also for `external.gaiaedr3_distance`; 15:54 UTC: Gaia HTTP 200. The Gaia archive answered steadily for more than 30 minutes, so the run was made (instruction of the project owner, 2026-11-11: measure the Gaia DR3 sections when the archive is stable, and the other services when they are back). The CDS was still down.
+
+**Run.** `uv run python scripts/validate_profiles.py --out docs/validation-runs/2026-11-11`, AstroTwo **1.0.0** (build 6) with the code of commit `8e08ddb`, the commit of the `.dmg` candidate; tolerances unchanged (section 2.1). Reference servers that answered: Gaia archive (`gea.esac.esa.int`, 159 rows), **SIMBAD mirror at Harvard** (`simbad.harvard.edu`, 107 rows, «to be repeated against CDS»), NASA Exoplanet Archive (72 rows). Files: `docs/validation-runs/2026-11-11/` (`results.json`, `results.md`, and the result and ECSV of each object).
+
+| Object | Within tolerance | Outside | Not measured |
+|---|---|---|---|
+| 51 Peg | 57 | 3 | 8 |
+| Vega | 28 | 0 | 8 |
+| eta Tau | 46 | 0 | 4 |
+| TRAPPIST-1 | 70 | 21 | 8 |
+| Barnard's Star | 66 | 12 | 8 |
+| 3C 273 | 52 | 0 | 8 |
+| M 13 | 24 | 0 | 4 |
+| **Total** | **343** | **36** | **48** |
+
+| Area | Within tolerance | Outside | Not measured |
+|---|---|---|---|
+| Identity (SIMBAD, Harvard mirror) | 77 | 0 | 0 |
+| Astrometry (Gaia DR3, SIMBAD) | 105 | 0 | 0 |
+| Distance (Bailer-Jones et al. 2021) | 24 | 0 | 0 |
+| Photometry | 101 | 0 | 48 |
+| Planets (NASA Exoplanet Archive) | 36 | 36 | 0 |
+
+**The 36 values outside the tolerance (all planets).** For the 12 planets (51 Peg b, TRAPPIST-1 b–h, Barnard's Star b–e) the orbital period, the mass and the radius are outside the tolerance «identical, same unit» (section 2.1), with **difference 0 in the number** in every row:
+
+- **period (12 rows):** AstroTwo writes the unit `d`, the archive `days`. They are the same unit; the comparison script compares the unit **text**.
+- **mass (12 rows):** AstroTwo writes the unit `5.9721679e+24kg`, the archive `Earth Mass`. AstroTwo reads the value in Earth masses, but the JSON and ECSV form of a quantity (FITS units, else VOUnit, rule D18-2 of the `05`) has no Earth mass, so the unit is written as kilograms with a factor rounded to 8 digits. The written unit is therefore **not exactly** the Earth mass of Astropy (relative difference 5.4 × 10⁻⁹), and it is hard to read. This is a **defect of AstroTwo's output**, not of the value read.
+- **radius (12 rows):** AstroTwo writes `6378100m`, the archive `Earth Radius`. The factor is exact (the nominal Earth radius), but the text differs and is hard to read.
+
+None of the accepted reasons for an «explained difference» (section 2.1) applies, so these rows are **fail**. The tolerances are not changed. How to write these units, and whether the comparison should read units as Astropy units instead of text, is decision **D05-6**, open for the project owner (`mdfiles/05-comandi-sessione.md` §13). Correcting the output changes the code and needs a new candidate.
+
+**The 48 values not measured (all photometry):** 30 rows because TAPVizieR (the reference for 2MASS and AllWISE) did not answer; 7 because AstroTwo did not request the VizieR SED series (the CDS was down; AstroTwo note `PROFILE_VIZIER_SKIPPED`); 8 and 3 because SIMBAD has no AllWISE or 2MASS designation for the object (no reference row to compare).
 
 ### 5.1 Second run of 2026-11-10 (19:46–20:04 UTC): SIMBAD against the Harvard mirror
 

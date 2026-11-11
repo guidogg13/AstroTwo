@@ -1,0 +1,4343 @@
+{
+ "status": "ok",
+ "error": null,
+ "values": {
+  "target": {
+   "name": "3C 273",
+   "position": null,
+   "simbad_id": null,
+   "origin": null
+  },
+  "resolved": {
+   "method": "simbad_identifier",
+   "main_id": "3C 273",
+   "position": {
+    "lon": {
+     "value": 187.27791594049,
+     "unit": "deg"
+    },
+    "lat": {
+     "value": 2.05238823055,
+     "unit": "deg"
+    },
+    "frame": "icrs",
+    "equinox": null,
+    "obstime": null,
+    "epoch": "J2000.000",
+    "epoch_reason": null
+   },
+   "position_source": "SIMBAD (Harvard mirror), ICRS J2000 (coo_bibcode 2020yCat.1350....0G)",
+   "separation": null,
+   "simbad_error": null
+  },
+  "options": {
+   "sections": [
+    "identity",
+    "images",
+    "astrometry",
+    "photometry",
+    "planets"
+   ],
+   "match_radius": {
+    "value": 10.0,
+    "unit": "arcsec"
+   },
+   "crossmatch_radius": {
+    "value": 2.0,
+    "unit": "arcsec"
+   },
+   "surveys": [
+    "CDS/P/DSS2/color",
+    "CDS/P/2MASS/color",
+    "CDS/P/allWISE/color"
+   ],
+   "thumbnail_fov": {
+    "value": 5.0,
+    "unit": "arcmin"
+   },
+   "thumbnail_size": 256
+  },
+  "cross_identifications": [
+   {
+    "catalog": "gaia_dr3",
+    "identifier": "Gaia DR3 3700386905605055360",
+    "method": "simbad_identifier",
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": null,
+    "warnings": [],
+    "servers": [],
+    "queries": [],
+    "error": null
+   },
+   {
+    "catalog": "2mass",
+    "identifier": "2MASS J12290669+0203085",
+    "method": "simbad_identifier",
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": {
+     "table": "gaiadr3.tmass_psc_xsc_best_neighbour",
+     "designation": "12290669+0203085",
+     "angular_distance": {
+      "value": 0.06828341,
+      "unit": "arcsec"
+     },
+     "number_of_neighbours": 2,
+     "xm_flag": 8
+    },
+    "note": "confirmed by the official Gaia cross-match",
+    "warnings": [],
+    "servers": [
+     "https://gea.esac.esa.int/tap-server/tap/sync"
+    ],
+    "queries": [
+     "SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.tmass_psc_xsc_best_neighbour WHERE source_id = 3700386905605055360"
+    ],
+    "error": null
+   },
+   {
+    "catalog": "allwise",
+    "identifier": "WISEA J122906.69+020308.6",
+    "method": "simbad_identifier",
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": {
+     "table": "gaiadr3.allwise_best_neighbour",
+     "designation": "J122906.69+020308.6",
+     "angular_distance": {
+      "value": 0.03672145,
+      "unit": "arcsec"
+     },
+     "number_of_neighbours": 1,
+     "xm_flag": 8
+    },
+    "note": "confirmed by the official Gaia cross-match",
+    "warnings": [],
+    "servers": [
+     "https://gea.esac.esa.int/tap-server/tap/sync"
+    ],
+    "queries": [
+     "SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.allwise_best_neighbour WHERE source_id = 3700386905605055360"
+    ],
+    "error": null
+   },
+   {
+    "catalog": "exoplanet",
+    "identifier": null,
+    "method": null,
+    "separation": null,
+    "epochs": null,
+    "candidates": [],
+    "conflict": null,
+    "official": null,
+    "note": "no host in the archive",
+    "warnings": [],
+    "servers": [
+     "https://exoplanetarchive.ipac.caltech.edu/TAP/sync",
+     "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+    ],
+    "queries": [
+     "SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 3700386905605055360'",
+     "SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ('0FGL J1229.1+0202', '1AGL J1228+0142', '1CG 291+65', '1ES 1226+02.3', '1FGL J1229.1+0203', '1FLE J1227+0218', '1H 1226+022', '1Jy 1226+02', '1Jy 1226+023', '1RXS J122906.5+020311', '1eRASS J122906.7+020308', '2A 1225+022', '2AGL J1228+0154', '2CG 289+64', '2E 2729', '2E 1226.5+0219', '2EG J1229+0206', '2EUVE J1229+02.0', '2FGL J1229.1+0202', '2MASS J12290669+0203085', '2MASX J12290674+0203083', '2U 1224+02', '2XMM J122906.6+020308', '2XMMi J122906.6+020308', '3A 1226+023', '3C 273', '3C 273.0', '3C 273B', '3C 273C', '3CR 273', '3EG J1229+0210', '3FGL J1229.1+0202', '3FHL J1229.2+0201', '3U 1224+02', '4C 02.32', '4FGL J1229.0+0202', '4FGL J1229.1+0202', '4U 1226+02', '87GB 122633.1+021928', '9Y-MST J1229+0200', 'AAVSO 1224+02', 'AKARI-FIS-V1 J1229071+020309', 'Balloon 110607001', 'CGRaBS J1229+0203', 'CTA 53', 'CWISE J122906.70+020308.6', 'CWISEP J122906.70+020308.6', 'DA 324', 'EGR J1229+0203', 'EPIC 229151988', 'EUVE J1229+02.0', 'FL8Y J1229.0+0202', 'GB6 B1226+0219', 'GB6 J1229+0202', 'GLEAM J122906+020251', 'GRA B1226+02', 'GSC 00282-00202', 'Gaia DR1 3700386901308864384', 'Gaia DR2 3700386905605055360', 'Gaia DR3 3700386905605055360', 'H 1226+023', 'HE 1226+0219', 'HIC 60936', 'HIP 60936', 'ICRF J122906.6+020308', 'IERS B1226+023', 'IGR J12291+0203', 'INTREF 500', 'IRAS 12265+0219', 'IRAS F12265+0219', 'JCMTSE J122906.7+020308', 'JCMTSF J122906.7+020308', 'JVAS B1226+023', 'JVAS J1229+0203', 'LAMOST J122906.41+020305.1', 'LAMOST J122906.69+020308.6', 'LAMOST J122906.70+020308.6', 'LAMOST J122906.96+020307.60', 'LEDA 41121', 'MRC 1226+023', 'MSH 12+0-08', 'NEWPS5 J1229+0203', 'NRAO 400', 'NVSS J122906+020305', 'NVSS J122906+020308', 'OHIO N 044', 'PBC J1229.1+0202', 'PCCS2 143 G289.94+64.36', 'PG 1226+02', 'PG 1226+023', 'PKS 1226+02', 'PKS 1226+023', 'PKS J1229+0203', 'PLCKERC -857 G289.96+64.35', 'PLX 2877.01', 'PMN J1229+0203', 'PSCz Q12265+0219', 'QSO B1226+0219', 'QSO B1226+023', 'QSO J1229+0203', 'RBPL J1229+0203', 'RBS 1114', 'RGB J1229.1+0203', 'RORF 1226+023', 'RX J1229.1+0203', 'RX J122906+02031', 'SDSS J122906.69+020308.5', 'SDSS J122906.69+020308.6', 'SIM 1226+02.0', 'SRGA J122906.1+020316', 'SWIFT J1229.1+0202', 'SWIFT J1229.1+0203', 'TYC 282-202-1', 'USNO 731', 'UVQS J122906.69+020308.6', 'VSOP J1229+0202', 'VSOP J1229+0203', 'WB 1226+0219', 'WISE J122906.70+020308.6', 'WISEA J122906.69+020308.6', 'WMAP 170', 'WMAP J1229+0202', 'WMAP J1229+0203', 'WMAP J1229+0204', 'XSS J12288+0200', '[BAG2012] 187.2817+02.04932', '[BDW2002] q1226+0219', '[CGL99] 11', '[CMG2008] 188.75+3.14', '[DGT2001] B1226+023', '[DGW65] 56', '[DML87] 295', '[GGR94] 1226+023', '[GR92] 1226+023', '[GW2008] CoNFIG 137', '[HB93] 1226+023', '[HSN2016] J187.27+02.05', '[IN88] 1226+023', '[KRL2007b] 118', '[MGL2009] BZQ J1229+0203', '[MML2015] 5BZQ J1229+0203', '[POS96] 8', '[PUC81] 3C 273 B', '[PUC81] 3C 273 C', '[S77] 207', '[VV2000] J122906.7+020308', '[VV2003] J122906.7+020308', '[VV2006] J122906.7+020308', '[VV2010] J122906.7+020308', '[VV96] J122906.7+020308', '[VV98] J122906.7+020308', '[VYP98] 1226+023', '[WCO2009] J122908+020306', '[WTW94] 1226+023', '[WZX98] 12265+0219', '[ZEH2003] RX J1229.1+0203 1')"
+    ],
+    "error": null
+   }
+  ],
+  "sections": [
+   {
+    "name": "identity",
+    "status": "done",
+    "values": [
+     {
+      "quantity": "main_id",
+      "value": "3C 273",
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "otype",
+      "value": "BLL",
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": "BL Lac",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "nbref",
+      "value": 6064,
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "ra",
+      "value": {
+       "value": 187.27791594049,
+       "unit": "deg"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": "ICRS, epoch J2000",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "dec",
+      "value": {
+       "value": 2.05238823055,
+       "unit": "deg"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": "ICRS, epoch J2000",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "coo_err_maj",
+      "value": {
+       "value": 0.0181,
+       "unit": "mas"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": null,
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "coo_err_min",
+      "value": {
+       "value": 0.0129,
+       "unit": "mas"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": null,
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "coo_err_angle",
+      "value": {
+       "value": 90.0,
+       "unit": "deg"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": null,
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "coo_qual",
+      "value": "A",
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": null,
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "basic",
+       "query": "SELECT b.oid, b.main_id, b.otype, b.sp_type, b.sp_bibcode, b.nbref, b.ra, b.dec, b.coo_err_maj, b.coo_err_min, b.coo_err_angle, b.coo_qual, b.coo_bibcode, b.plx_value, b.plx_err, b.plx_bibcode, b.pmra, b.pmdec, b.pm_err_maj, b.pm_err_min, b.pm_err_angle, b.pm_bibcode, b.rvz_radvel, b.rvz_err, b.rvz_bibcode, d.description FROM basic AS b JOIN ident AS i ON i.oidref = b.oid LEFT OUTER JOIN otypedef AS d ON d.otype = b.otype WHERE i.id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.047706+00:00",
+       "from_cache": false
+      }
+     }
+    ],
+    "details": {
+     "identifiers": {
+      "0FGL": [
+       "0FGL J1229.1+0202"
+      ],
+      "1AGL": [
+       "1AGL J1228+0142"
+      ],
+      "1CG": [
+       "1CG 291+65"
+      ],
+      "1ES": [
+       "1ES 1226+02.3"
+      ],
+      "1FGL": [
+       "1FGL J1229.1+0203"
+      ],
+      "1FLE": [
+       "1FLE J1227+0218"
+      ],
+      "1H": [
+       "1H 1226+022"
+      ],
+      "1Jy": [
+       "1Jy 1226+02",
+       "1Jy 1226+023"
+      ],
+      "1RXS": [
+       "1RXS J122906.5+020311"
+      ],
+      "1eRASS": [
+       "1eRASS J122906.7+020308"
+      ],
+      "2A": [
+       "2A 1225+022"
+      ],
+      "2AGL": [
+       "2AGL J1228+0154"
+      ],
+      "2CG": [
+       "2CG 289+64"
+      ],
+      "2E": [
+       "2E  2729",
+       "2E 1226.5+0219"
+      ],
+      "2EG": [
+       "2EG J1229+0206"
+      ],
+      "2EUVE": [
+       "2EUVE J1229+02.0"
+      ],
+      "2FGL": [
+       "2FGL J1229.1+0202"
+      ],
+      "2MASS": [
+       "2MASS J12290669+0203085"
+      ],
+      "2MASX": [
+       "2MASX J12290674+0203083"
+      ],
+      "2U": [
+       "2U 1224+02"
+      ],
+      "2XMM": [
+       "2XMM J122906.6+020308"
+      ],
+      "2XMMi": [
+       "2XMMi J122906.6+020308"
+      ],
+      "3A": [
+       "3A 1226+023"
+      ],
+      "3C": [
+       "3C 273",
+       "3C 273.0",
+       "3C 273B",
+       "3C 273C"
+      ],
+      "3CR": [
+       "3CR 273"
+      ],
+      "3EG": [
+       "3EG J1229+0210"
+      ],
+      "3FGL": [
+       "3FGL J1229.1+0202"
+      ],
+      "3FHL": [
+       "3FHL J1229.2+0201"
+      ],
+      "3U": [
+       "3U 1224+02"
+      ],
+      "4C": [
+       "4C 02.32"
+      ],
+      "4FGL": [
+       "4FGL J1229.0+0202",
+       "4FGL J1229.1+0202"
+      ],
+      "4U": [
+       "4U 1226+02"
+      ],
+      "87GB": [
+       "87GB 122633.1+021928"
+      ],
+      "9Y-MST": [
+       "9Y-MST J1229+0200"
+      ],
+      "AAVSO": [
+       "AAVSO 1224+02"
+      ],
+      "AKARI-FIS-V1": [
+       "AKARI-FIS-V1 J1229071+020309"
+      ],
+      "Balloon": [
+       "Balloon 110607001"
+      ],
+      "CGRaBS": [
+       "CGRaBS J1229+0203"
+      ],
+      "CTA": [
+       "CTA  53"
+      ],
+      "CWISE": [
+       "CWISE J122906.70+020308.6"
+      ],
+      "CWISEP": [
+       "CWISEP J122906.70+020308.6"
+      ],
+      "DA": [
+       "DA 324"
+      ],
+      "EGR": [
+       "EGR J1229+0203"
+      ],
+      "EPIC": [
+       "EPIC 229151988"
+      ],
+      "EUVE": [
+       "EUVE J1229+02.0"
+      ],
+      "FL8Y": [
+       "FL8Y J1229.0+0202"
+      ],
+      "GB6": [
+       "GB6 B1226+0219",
+       "GB6 J1229+0202"
+      ],
+      "GLEAM": [
+       "GLEAM J122906+020251"
+      ],
+      "GRA": [
+       "GRA B1226+02"
+      ],
+      "GSC": [
+       "GSC 00282-00202"
+      ],
+      "Gaia": [
+       "Gaia DR1 3700386901308864384",
+       "Gaia DR2 3700386905605055360",
+       "Gaia DR3 3700386905605055360"
+      ],
+      "H": [
+       "H 1226+023"
+      ],
+      "HE": [
+       "HE 1226+0219"
+      ],
+      "HIC": [
+       "HIC  60936"
+      ],
+      "HIP": [
+       "HIP 60936"
+      ],
+      "ICRF": [
+       "ICRF J122906.6+020308"
+      ],
+      "IERS": [
+       "IERS B1226+023"
+      ],
+      "IGR": [
+       "IGR J12291+0203"
+      ],
+      "INTREF": [
+       "INTREF   500"
+      ],
+      "IRAS": [
+       "IRAS 12265+0219",
+       "IRAS F12265+0219"
+      ],
+      "JCMTSE": [
+       "JCMTSE J122906.7+020308"
+      ],
+      "JCMTSF": [
+       "JCMTSF J122906.7+020308"
+      ],
+      "JVAS": [
+       "JVAS B1226+023",
+       "JVAS J1229+0203"
+      ],
+      "LAMOST": [
+       "LAMOST J122906.41+020305.1",
+       "LAMOST J122906.69+020308.6",
+       "LAMOST J122906.70+020308.6",
+       "LAMOST J122906.96+020307.60"
+      ],
+      "LEDA": [
+       "LEDA   41121"
+      ],
+      "MRC": [
+       "MRC 1226+023"
+      ],
+      "MSH": [
+       "MSH 12+0-08"
+      ],
+      "NEWPS5": [
+       "NEWPS5 J1229+0203"
+      ],
+      "NRAO": [
+       "NRAO 400"
+      ],
+      "NVSS": [
+       "NVSS J122906+020305",
+       "NVSS J122906+020308"
+      ],
+      "OHIO": [
+       "OHIO N 044"
+      ],
+      "PBC": [
+       "PBC J1229.1+0202"
+      ],
+      "PCCS2": [
+       "PCCS2 143 G289.94+64.36"
+      ],
+      "PG": [
+       "PG 1226+02",
+       "PG 1226+023"
+      ],
+      "PKS": [
+       "PKS 1226+02",
+       "PKS 1226+023",
+       "PKS J1229+0203"
+      ],
+      "PLCKERC": [
+       "PLCKERC -857 G289.96+64.35"
+      ],
+      "PLX": [
+       "PLX 2877.01"
+      ],
+      "PMN": [
+       "PMN J1229+0203"
+      ],
+      "PSCz": [
+       "PSCz Q12265+0219"
+      ],
+      "QSO": [
+       "QSO B1226+0219",
+       "QSO B1226+023",
+       "QSO J1229+0203"
+      ],
+      "RBPL": [
+       "RBPL J1229+0203"
+      ],
+      "RBS": [
+       "RBS  1114"
+      ],
+      "RGB": [
+       "RGB J1229.1+0203"
+      ],
+      "RORF": [
+       "RORF 1226+023"
+      ],
+      "RX": [
+       "RX J1229.1+0203",
+       "RX J122906+02031"
+      ],
+      "SDSS": [
+       "SDSS J122906.69+020308.5",
+       "SDSS J122906.69+020308.6"
+      ],
+      "SIM": [
+       "SIM 1226+02.0"
+      ],
+      "SRGA": [
+       "SRGA J122906.1+020316"
+      ],
+      "SWIFT": [
+       "SWIFT J1229.1+0202",
+       "SWIFT J1229.1+0203"
+      ],
+      "TYC": [
+       "TYC  282-202-1"
+      ],
+      "USNO": [
+       "USNO 731"
+      ],
+      "UVQS": [
+       "UVQS J122906.69+020308.6"
+      ],
+      "VSOP": [
+       "VSOP J1229+0202",
+       "VSOP J1229+0203"
+      ],
+      "WB": [
+       "WB 1226+0219"
+      ],
+      "WISE": [
+       "WISE J122906.70+020308.6"
+      ],
+      "WISEA": [
+       "WISEA J122906.69+020308.6"
+      ],
+      "WMAP": [
+       "WMAP 170",
+       "WMAP J1229+0202",
+       "WMAP J1229+0203",
+       "WMAP J1229+0204"
+      ],
+      "XSS": [
+       "XSS J12288+0200"
+      ],
+      "[BAG2012]": [
+       "[BAG2012] 187.2817+02.04932"
+      ],
+      "[BDW2002]": [
+       "[BDW2002] q1226+0219"
+      ],
+      "[CGL99]": [
+       "[CGL99] 11"
+      ],
+      "[CMG2008]": [
+       "[CMG2008] 188.75+3.14"
+      ],
+      "[DGT2001]": [
+       "[DGT2001] B1226+023"
+      ],
+      "[DGW65]": [
+       "[DGW65]  56"
+      ],
+      "[DML87]": [
+       "[DML87] 295"
+      ],
+      "[GGR94]": [
+       "[GGR94] 1226+023"
+      ],
+      "[GR92]": [
+       "[GR92] 1226+023"
+      ],
+      "[GW2008]": [
+       "[GW2008] CoNFIG 137"
+      ],
+      "[HB93]": [
+       "[HB93] 1226+023"
+      ],
+      "[HSN2016]": [
+       "[HSN2016] J187.27+02.05"
+      ],
+      "[IN88]": [
+       "[IN88] 1226+023"
+      ],
+      "[KRL2007b]": [
+       "[KRL2007b] 118"
+      ],
+      "[MGL2009]": [
+       "[MGL2009] BZQ J1229+0203"
+      ],
+      "[MML2015]": [
+       "[MML2015] 5BZQ J1229+0203"
+      ],
+      "[POS96]": [
+       "[POS96]  8"
+      ],
+      "[PUC81]": [
+       "[PUC81] 3C 273 B",
+       "[PUC81] 3C 273 C"
+      ],
+      "[S77]": [
+       "[S77] 207"
+      ],
+      "[VV2000]": [
+       "[VV2000] J122906.7+020308"
+      ],
+      "[VV2003]": [
+       "[VV2003] J122906.7+020308"
+      ],
+      "[VV2006]": [
+       "[VV2006] J122906.7+020308"
+      ],
+      "[VV2010]": [
+       "[VV2010] J122906.7+020308"
+      ],
+      "[VV96]": [
+       "[VV96] J122906.7+020308"
+      ],
+      "[VV98]": [
+       "[VV98] J122906.7+020308"
+      ],
+      "[VYP98]": [
+       "[VYP98] 1226+023"
+      ],
+      "[WCO2009]": [
+       "[WCO2009] J122908+020306"
+      ],
+      "[WTW94]": [
+       "[WTW94] 1226+023"
+      ],
+      "[WZX98]": [
+       "[WZX98] 12265+0219"
+      ],
+      "[ZEH2003]": [
+       "[ZEH2003] RX J1229.1+0203  1"
+      ]
+     },
+     "identifier_count": 156,
+     "simbad_url": "https://simbad.harvard.edu/simbad/sim-id?Ident=3C%20273",
+     "identifiers_provenance": {
+      "service": "SIMBAD (Harvard mirror)",
+      "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+      "table": "ident",
+      "query": "SELECT id FROM ident WHERE oidref = 1940765",
+      "identifier": "3C 273",
+      "match": "simbad_identifier",
+      "retrieved_at": "2026-11-11T16:02:22.423748+00:00",
+      "from_cache": false
+     },
+     "absent": [
+      {
+       "quantity": "sp_type",
+       "note": "SIMBAD has no spectral type"
+      }
+     ],
+     "cross_identifications": [
+      {
+       "catalog": "gaia_dr3",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "method": "simbad_identifier",
+       "separation": null,
+       "epochs": null,
+       "candidates": [],
+       "conflict": null,
+       "official": null,
+       "note": null,
+       "warnings": [],
+       "servers": [],
+       "queries": [],
+       "error": null
+      },
+      {
+       "catalog": "2mass",
+       "identifier": "2MASS J12290669+0203085",
+       "method": "simbad_identifier",
+       "separation": null,
+       "epochs": null,
+       "candidates": [],
+       "conflict": null,
+       "official": {
+        "table": "gaiadr3.tmass_psc_xsc_best_neighbour",
+        "designation": "12290669+0203085",
+        "angular_distance": {
+         "value": 0.06828341,
+         "unit": "arcsec"
+        },
+        "number_of_neighbours": 2,
+        "xm_flag": 8
+       },
+       "note": "confirmed by the official Gaia cross-match",
+       "warnings": [],
+       "servers": [
+        "https://gea.esac.esa.int/tap-server/tap/sync"
+       ],
+       "queries": [
+        "SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.tmass_psc_xsc_best_neighbour WHERE source_id = 3700386905605055360"
+       ],
+       "error": null
+      },
+      {
+       "catalog": "allwise",
+       "identifier": "WISEA J122906.69+020308.6",
+       "method": "simbad_identifier",
+       "separation": null,
+       "epochs": null,
+       "candidates": [],
+       "conflict": null,
+       "official": {
+        "table": "gaiadr3.allwise_best_neighbour",
+        "designation": "J122906.69+020308.6",
+        "angular_distance": {
+         "value": 0.03672145,
+         "unit": "arcsec"
+        },
+        "number_of_neighbours": 1,
+        "xm_flag": 8
+       },
+       "note": "confirmed by the official Gaia cross-match",
+       "warnings": [],
+       "servers": [
+        "https://gea.esac.esa.int/tap-server/tap/sync"
+       ],
+       "queries": [
+        "SELECT source_id, original_ext_source_id, angular_distance, number_of_neighbours, xm_flag FROM gaiadr3.allwise_best_neighbour WHERE source_id = 3700386905605055360"
+       ],
+       "error": null
+      },
+      {
+       "catalog": "exoplanet",
+       "identifier": null,
+       "method": null,
+       "separation": null,
+       "epochs": null,
+       "candidates": [],
+       "conflict": null,
+       "official": null,
+       "note": "no host in the archive",
+       "warnings": [],
+       "servers": [
+        "https://exoplanetarchive.ipac.caltech.edu/TAP/sync",
+        "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+       ],
+       "queries": [
+        "SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE gaia_dr3_id = 'Gaia DR3 3700386905605055360'",
+        "SELECT DISTINCT hostname, gaia_dr3_id FROM pscomppars WHERE hostname IN ('0FGL J1229.1+0202', '1AGL J1228+0142', '1CG 291+65', '1ES 1226+02.3', '1FGL J1229.1+0203', '1FLE J1227+0218', '1H 1226+022', '1Jy 1226+02', '1Jy 1226+023', '1RXS J122906.5+020311', '1eRASS J122906.7+020308', '2A 1225+022', '2AGL J1228+0154', '2CG 289+64', '2E 2729', '2E 1226.5+0219', '2EG J1229+0206', '2EUVE J1229+02.0', '2FGL J1229.1+0202', '2MASS J12290669+0203085', '2MASX J12290674+0203083', '2U 1224+02', '2XMM J122906.6+020308', '2XMMi J122906.6+020308', '3A 1226+023', '3C 273', '3C 273.0', '3C 273B', '3C 273C', '3CR 273', '3EG J1229+0210', '3FGL J1229.1+0202', '3FHL J1229.2+0201', '3U 1224+02', '4C 02.32', '4FGL J1229.0+0202', '4FGL J1229.1+0202', '4U 1226+02', '87GB 122633.1+021928', '9Y-MST J1229+0200', 'AAVSO 1224+02', 'AKARI-FIS-V1 J1229071+020309', 'Balloon 110607001', 'CGRaBS J1229+0203', 'CTA 53', 'CWISE J122906.70+020308.6', 'CWISEP J122906.70+020308.6', 'DA 324', 'EGR J1229+0203', 'EPIC 229151988', 'EUVE J1229+02.0', 'FL8Y J1229.0+0202', 'GB6 B1226+0219', 'GB6 J1229+0202', 'GLEAM J122906+020251', 'GRA B1226+02', 'GSC 00282-00202', 'Gaia DR1 3700386901308864384', 'Gaia DR2 3700386905605055360', 'Gaia DR3 3700386905605055360', 'H 1226+023', 'HE 1226+0219', 'HIC 60936', 'HIP 60936', 'ICRF J122906.6+020308', 'IERS B1226+023', 'IGR J12291+0203', 'INTREF 500', 'IRAS 12265+0219', 'IRAS F12265+0219', 'JCMTSE J122906.7+020308', 'JCMTSF J122906.7+020308', 'JVAS B1226+023', 'JVAS J1229+0203', 'LAMOST J122906.41+020305.1', 'LAMOST J122906.69+020308.6', 'LAMOST J122906.70+020308.6', 'LAMOST J122906.96+020307.60', 'LEDA 41121', 'MRC 1226+023', 'MSH 12+0-08', 'NEWPS5 J1229+0203', 'NRAO 400', 'NVSS J122906+020305', 'NVSS J122906+020308', 'OHIO N 044', 'PBC J1229.1+0202', 'PCCS2 143 G289.94+64.36', 'PG 1226+02', 'PG 1226+023', 'PKS 1226+02', 'PKS 1226+023', 'PKS J1229+0203', 'PLCKERC -857 G289.96+64.35', 'PLX 2877.01', 'PMN J1229+0203', 'PSCz Q12265+0219', 'QSO B1226+0219', 'QSO B1226+023', 'QSO J1229+0203', 'RBPL J1229+0203', 'RBS 1114', 'RGB J1229.1+0203', 'RORF 1226+023', 'RX J1229.1+0203', 'RX J122906+02031', 'SDSS J122906.69+020308.5', 'SDSS J122906.69+020308.6', 'SIM 1226+02.0', 'SRGA J122906.1+020316', 'SWIFT J1229.1+0202', 'SWIFT J1229.1+0203', 'TYC 282-202-1', 'USNO 731', 'UVQS J122906.69+020308.6', 'VSOP J1229+0202', 'VSOP J1229+0203', 'WB 1226+0219', 'WISE J122906.70+020308.6', 'WISEA J122906.69+020308.6', 'WMAP 170', 'WMAP J1229+0202', 'WMAP J1229+0203', 'WMAP J1229+0204', 'XSS J12288+0200', '[BAG2012] 187.2817+02.04932', '[BDW2002] q1226+0219', '[CGL99] 11', '[CMG2008] 188.75+3.14', '[DGT2001] B1226+023', '[DGW65] 56', '[DML87] 295', '[GGR94] 1226+023', '[GR92] 1226+023', '[GW2008] CoNFIG 137', '[HB93] 1226+023', '[HSN2016] J187.27+02.05', '[IN88] 1226+023', '[KRL2007b] 118', '[MGL2009] BZQ J1229+0203', '[MML2015] 5BZQ J1229+0203', '[POS96] 8', '[PUC81] 3C 273 B', '[PUC81] 3C 273 C', '[S77] 207', '[VV2000] J122906.7+020308', '[VV2003] J122906.7+020308', '[VV2006] J122906.7+020308', '[VV2010] J122906.7+020308', '[VV96] J122906.7+020308', '[VV98] J122906.7+020308', '[VYP98] 1226+023', '[WCO2009] J122908+020306', '[WTW94] 1226+023', '[WZX98] 12265+0219', '[ZEH2003] RX J1229.1+0203 1')"
+       ],
+       "error": null
+      }
+     ]
+    },
+    "warnings": [],
+    "errors": [],
+    "servers": [
+     "https://exoplanetarchive.ipac.caltech.edu/TAP/sync",
+     "https://gea.esac.esa.int/tap-server/tap/sync",
+     "https://simbad.harvard.edu/simbad/sim-tap/sync"
+    ],
+    "elapsed": {
+     "value": 3.3670387500314973,
+     "unit": "s"
+    },
+    "started": {
+     "value": 3.365295291005168,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "images",
+    "status": "done",
+    "values": [],
+    "details": {
+     "thumbnails": [
+      {
+       "hips_id": "CDS/P/DSS2/color",
+       "title": "DSS colored",
+       "size": 256,
+       "order": 9,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 187.27791594049,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 2.05238823055,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/DSSColor"
+       ],
+       "tiles": [
+        {
+         "index": 1682718,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1680000/Npix1682718.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-11T16:02:23.448895+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1682719,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1680000/Npix1682719.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-11T16:02:23.942209+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1682740,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1680000/Npix1682740.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-11T16:02:24.411880+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1682741,
+         "url": "https://skies.esac.esa.int/DSSColor/Norder9/Dir1680000/Npix1682741.jpg",
+         "server": "https://skies.esac.esa.int/DSSColor",
+         "retrieved_at": "2026-11-11T16:02:24.984829+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "DSS colored",
+        "obs_ack": "The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. Government grant NAG W-2166. The images of these surveys are based on photographic data obtained using the Oschin Schmidt Telescope on Palomar Mountain and the UK Schmidt Telescope. The plates were processed into the present compressed digital form with the permission of these institutions. The National Geographic Society - Palomar Observatory Sky Atlas (POSS-I) was made by the California Institute of Technology with grants from the National Geographic Society. The Second Palomar Observatory Sky Survey (POSS-II) was made by the California Institute of Technology with funds from the National Science Foundation, the National Geographic Society, the Sloan Foundation, the Samuel Oschin Foundation, and the Eastman Kodak Corporation. The Oschin Schmidt Telescope is operated by the California Institute of Technology and Palomar Observatory. The UK Schmidt Telescope was operated by the Royal Observatory Edinburgh, with funding from the UK Science and Engineering Research Council (later the UK Particle Physics and Astronomy Research Council), until 1988 June, and thereafter by the Anglo-Australian Observatory. The blue plates of the southern Sky Atlas and its Equatorial Extension (together known as the SERC-J), as well as the Equatorial Red (ER), and the Second Epoch [red] Survey (SES) were all taken with the UK Schmidt. Supplemental funding for sky-survey work at the ST ScI is provided by the European Southern Observatory.",
+        "obs_copyright": "Digitized Sky Survey - STScI/NASA, Colored & Healpixed by CDS",
+        "obs_copyright_url": "http://archive.stsci.edu/dss/copyright.html"
+       },
+       "epoch": null,
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      187.27791594049 / [deg] Coordinate value at reference point      \nCRVAL2  =        2.05238823055 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =        2.05238823055 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/DSS2/color all'ordine 9: 4 tile da https://skies.esac.esa.int/DSSColor; 4 tile di CDS/P/DSS2/color all'ordine 9 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch not known (observations longer than one year, or t_min/t_max missing): centre = SIMBAD position (ICRS J2000)",
+       "png": "<png omitted>"
+      },
+      {
+       "hips_id": "CDS/P/2MASS/color",
+       "title": "2MASS color J (1.23um), H (1.66um), K (2.16um)",
+       "size": 256,
+       "order": 9,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 187.27791594049,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 2.05238823055,
+         "unit": "deg"
+        },
+        "epoch": "J2000.000"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/2MASSColor"
+       ],
+       "tiles": [
+        {
+         "index": 1682718,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1680000/Npix1682718.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-11T16:02:24.184309+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1682719,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1680000/Npix1682719.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-11T16:02:24.829206+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1682740,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1680000/Npix1682740.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-11T16:02:25.450960+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 1682741,
+         "url": "https://skies.esac.esa.int/2MASSColor/Norder9/Dir1680000/Npix1682741.jpg",
+         "server": "https://skies.esac.esa.int/2MASSColor",
+         "retrieved_at": "2026-11-11T16:02:26.071995+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "2MASS color J (1.23um), H (1.66um), K (2.16um)",
+        "obs_ack": "University of Massachusetts & IPAC/Caltech",
+        "obs_copyright": "University of Massachusetts & IPAC/Caltech",
+        "obs_copyright_url": "http://www.ipac.caltech.edu/2mass/"
+       },
+       "epoch": null,
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      187.27791594049 / [deg] Coordinate value at reference point      \nCRVAL2  =        2.05238823055 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =        2.05238823055 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/2MASS/color all'ordine 9: 4 tile da https://skies.esac.esa.int/2MASSColor; 4 tile di CDS/P/2MASS/color all'ordine 9 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "survey epoch not known (observations longer than one year, or t_min/t_max missing): centre = SIMBAD position (ICRS J2000)",
+       "png": "<png omitted>"
+      },
+      {
+       "hips_id": "CDS/P/allWISE/color",
+       "title": "AllWISE color  Red (W4) , Green (W2) , Blue (W1) from raw Atlas Images",
+       "size": 256,
+       "order": 8,
+       "format": "jpeg",
+       "fov": {
+        "value": 5.0,
+        "unit": "arcmin"
+       },
+       "center": {
+        "ra": {
+         "value": 187.27791587307698,
+         "unit": "deg"
+        },
+        "dec": {
+         "value": 2.0523885176038257,
+         "unit": "deg"
+        },
+        "epoch": "J2010.545"
+       },
+       "servers": [
+        "https://skies.esac.esa.int/AllWISEColor"
+       ],
+       "tiles": [
+        {
+         "index": 420679,
+         "url": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir420000/Npix420679.jpg",
+         "server": "https://skies.esac.esa.int/AllWISEColor",
+         "retrieved_at": "2026-11-11T16:02:26.549609+00:00",
+         "from_cache": false
+        },
+        {
+         "index": 420685,
+         "url": "https://skies.esac.esa.int/AllWISEColor/Norder8/Dir420000/Npix420685.jpg",
+         "server": "https://skies.esac.esa.int/AllWISEColor",
+         "retrieved_at": "2026-11-11T16:02:26.806840+00:00",
+         "from_cache": false
+        }
+       ],
+       "missing": [],
+       "credits": {
+        "obs_title": "AllWISE color  Red (W4) , Green (W2) , Blue (W1) from raw Atlas Images",
+        "obs_ack": "This Progressive Survey distribution makes use of data products from the Wide-field Infrared Survey Explorer, which is a joint project of the University of California, Los Angeles, and the Jet Propulsion Laboratory/California Institute of Technology, and NEOWISE, which is a project of the Jet Propulsion Laboratory/California Institute of Technology. WISE and NEOWISE are funded by the National Aeronautics and Space Administration.",
+        "obs_copyright": "IPAC/NASA",
+        "obs_copyright_url": "http://wise2.ipac.caltech.edu/docs/release/allsky/"
+       },
+       "epoch": {
+        "mjd": 55396.0,
+        "jyear": 2010.5448323066394,
+        "t_min": 55378.0,
+        "t_max": 55414.0,
+        "scale": "utc",
+        "note": "punto medio di t_min e t_max del properties (MJD, scala non dichiarata: trattata come UTC)"
+       },
+       "wcs": "WCSAXES =                    2 / Number of coordinate axes                      \nCRPIX1  =                128.5 / Pixel coordinate of reference point            \nCRPIX2  =      128.50000000001 / Pixel coordinate of reference point            \nCDELT1  = -0.00032552083333333 / [deg] Coordinate increment at reference point  \nCDELT2  =  0.00032552083333333 / [deg] Coordinate increment at reference point  \nCUNIT1  = 'deg'                / Units of coordinate increment and value        \nCUNIT2  = 'deg'                / Units of coordinate increment and value        \nCTYPE1  = 'RA---TAN'           / Right ascension, gnomonic projection           \nCTYPE2  = 'DEC--TAN'           / Declination, gnomonic projection               \nCRVAL1  =      187.27791587308 / [deg] Coordinate value at reference point      \nCRVAL2  =      2.0523885176038 / [deg] Coordinate value at reference point      \nLONPOLE =                180.0 / [deg] Native longitude of celestial pole       \nLATPOLE =      2.0523885176038 / [deg] Native latitude of celestial pole        \nMJDREF  =                  0.0 / [d] MJD of fiducial time                       \nRADESYS = 'ICRS'               / Equatorial coordinate system                   \nEND",
+       "description": "miniatura TAN 256 × 256 pixel, campo np.float64(5.0) arcmin, di CDS/P/allWISE/color all'ordine 8: 2 tile da https://skies.esac.esa.int/AllWISEColor; 2 tile di CDS/P/allWISE/color all'ordine 8 per una finestra di 256 × 256 pixel; 0 pixel senza dati (fuori dalla proiezione o dalla copertura); frame icrs; metodo nearest: pixel HiPS che contiene il centro di ogni pixel della finestra (astropy-healpix, disposizione dei pixel verificata)",
+       "pixels_with_data": 65536,
+       "center_note": "centre moved to the survey epoch (MJD 55396.0 UTC, np.float64(2010.5448323066394)) with the SIMBAD proper motion from SIMBAD position (ICRS J2000) (propagate_position of module 10)",
+       "png": "<png omitted>"
+      }
+     ],
+     "surveys": [
+      "CDS/P/DSS2/color",
+      "CDS/P/2MASS/color",
+      "CDS/P/allWISE/color"
+     ],
+     "fov": {
+      "value": 5.0,
+      "unit": "arcmin"
+     },
+     "size": 256
+    },
+    "warnings": [
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/DSS2/color: CDS già non raggiungibile in questa sessione (simbad_failover): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/DSSColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/DSS2/color",
+       "mirror": "https://skies.esac.esa.int/DSSColor",
+       "evidence": "simbad_failover"
+      }
+     },
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/2MASS/color: CDS già non raggiungibile in questa sessione (simbad_failover): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/2MASSColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/2MASS/color",
+       "mirror": "https://skies.esac.esa.int/2MASSColor",
+       "evidence": "simbad_failover"
+      }
+     },
+     {
+      "code": "HIPS_MIRROR_FALLBACK",
+      "text": "CDS/P/allWISE/color: CDS già non raggiungibile in questa sessione (simbad_failover): MocServer non interrogato, survey servito dal mirror verificato https://skies.esac.esa.int/AllWISEColor",
+      "params": {
+       "reason": "cds_down",
+       "hips_id": "CDS/P/allWISE/color",
+       "mirror": "https://skies.esac.esa.int/AllWISEColor",
+       "evidence": "simbad_failover"
+      }
+     }
+    ],
+    "errors": [],
+    "servers": [
+     "https://skies.esac.esa.int/2MASSColor/properties",
+     "https://skies.esac.esa.int/AllWISEColor/properties",
+     "https://skies.esac.esa.int/DSSColor/properties"
+    ],
+    "elapsed": {
+     "value": 4.03107062500203,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.0,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "astrometry",
+    "status": "done",
+    "values": [
+     {
+      "quantity": "source_id",
+      "value": 3700386905605055360,
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "ref_epoch",
+      "value": {
+       "value": 2016.0,
+       "unit": "yr"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "ra",
+      "value": {
+       "value": 187.2779158387138,
+       "unit": "deg"
+      },
+      "error": {
+       "value": 0.018106548,
+       "unit": "mas"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": "reference epoch 2016.0 (ref_epoch, TCB)",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "dec",
+      "value": {
+       "value": 2.052388668185861,
+       "unit": "deg"
+      },
+      "error": {
+       "value": 0.012910717,
+       "unit": "mas"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": "reference epoch 2016.0 (ref_epoch, TCB)",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "astrometric_params_solved",
+      "value": 31,
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": "5 parameters",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "parallax",
+      "value": {
+       "value": -0.015950290834234743,
+       "unit": "mas"
+      },
+      "error": {
+       "value": 0.020795885,
+       "unit": "mas"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "pmra",
+      "value": {
+       "value": -0.022885672495060565,
+       "unit": "mas yr-1"
+      },
+      "error": {
+       "value": 0.02731354,
+       "unit": "mas yr-1"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "pmdec",
+      "value": {
+       "value": 0.09846797908921764,
+       "unit": "mas yr-1"
+      },
+      "error": {
+       "value": 0.018074965,
+       "unit": "mas yr-1"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "ruwe",
+      "value": 1.1057829,
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": "RUWE without a threshold: no threshold from a verified official Gaia source (D25-11)",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "duplicated_source",
+      "value": false,
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "ipd_frac_multi_peak",
+      "value": 0,
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": null,
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, ref_epoch, ra, ra_error, dec, dec_error, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error, radial_velocity, radial_velocity_error, ruwe, astrometric_params_solved, duplicated_source, ipd_frac_multi_peak FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.789445+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "distance_geo",
+      "value": {
+       "value": 17119.412,
+       "unit": "pc"
+      },
+      "error": null,
+      "interval": [
+       {
+        "value": 13370.816,
+        "unit": "pc"
+       },
+       {
+        "value": 24594.191,
+        "unit": "pc"
+       }
+      ],
+      "interval_kind": "16th-84th percentile",
+      "method": "read",
+      "formula": null,
+      "reference": "2021AJ....161..147B",
+      "note": "Bailer-Jones et al. (2021), geometric median; flag 10122",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "external.gaiaedr3_distance",
+       "query": "SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:27.414540+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "distance_photogeo",
+      "value": {
+       "value": 20992.53,
+       "unit": "pc"
+      },
+      "error": null,
+      "interval": [
+       {
+        "value": 13562.379,
+        "unit": "pc"
+       },
+       {
+        "value": 25378.406,
+        "unit": "pc"
+       }
+      ],
+      "interval_kind": "16th-84th percentile",
+      "method": "read",
+      "formula": null,
+      "reference": "2021AJ....161..147B",
+      "note": "Bailer-Jones et al. (2021), photogeometric median; flag 10122",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "external.gaiaedr3_distance",
+       "query": "SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, r_med_photogeo, r_lo_photogeo, r_hi_photogeo, flag FROM external.gaiaedr3_distance WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:27.414540+00:00",
+       "from_cache": false
+      }
+     }
+    ],
+    "details": {
+     "gaia": {
+      "catalog": "gaia_dr3",
+      "identifier": "Gaia DR3 3700386905605055360",
+      "method": "simbad_identifier",
+      "separation": null,
+      "epochs": null,
+      "candidates": [],
+      "conflict": null,
+      "official": null,
+      "note": null,
+      "warnings": [],
+      "servers": [],
+      "queries": [],
+      "error": null
+     }
+    },
+    "warnings": [],
+    "errors": [],
+    "servers": [
+     "https://gea.esac.esa.int/tap-server/tap/sync"
+    ],
+    "elapsed": {
+     "value": 4.625967166037299,
+     "unit": "s"
+    },
+    "started": {
+     "value": 0.0001628330210223794,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "photometry",
+    "status": "partial",
+    "values": [
+     {
+      "quantity": "Gaia DR3 G magnitude",
+      "value": {
+       "value": 12.8440895,
+       "unit": "mag"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2023A&A...674A...1G",
+      "note": "system Vega; quality —",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 G count_rate",
+      "value": {
+       "value": 137186.30449442088,
+       "unit": "electron.s**-1"
+      },
+      "error": {
+       "value": 273.68634,
+       "unit": "electron.s**-1"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2023A&A...674A...1G",
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 G flux_nu",
+      "value": {
+       "value": 0.023817320426837707,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 7.694733036467795e-05,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) erg/s/cm2/Hz (u.ABflux); sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
+      "reference": "2021A&A...649A...3R",
+      "note": "zero point Gaia DR3 G («Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4); λ pivot 0.62179 um",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 BP magnitude",
+      "value": {
+       "value": 12.989387,
+       "unit": "mag"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2023A&A...674A...1G",
+      "note": "system Vega; quality —",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 BP count_rate",
+      "value": {
+       "value": 87028.66883644936,
+       "unit": "electron.s**-1"
+      },
+      "error": {
+       "value": 583.9352,
+       "unit": "electron.s**-1"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2023A&A...674A...1G",
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 BP flux_nu",
+      "value": {
+       "value": 0.02280762786910861,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.00016051953772262101,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) erg/s/cm2/Hz (u.ABflux); sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
+      "reference": "2021A&A...649A...3R",
+      "note": "zero point Gaia DR3 BP («Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4); λ pivot 0.51097 um",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 RP magnitude",
+      "value": {
+       "value": 12.495527,
+       "unit": "mag"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2023A&A...674A...1G",
+      "note": "system Vega; quality —",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 RP count_rate",
+      "value": {
+       "value": 79606.28538932928,
+       "unit": "electron.s**-1"
+      },
+      "error": {
+       "value": 435.36206,
+       "unit": "electron.s**-1"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2023A&A...674A...1G",
+      "note": null,
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "Gaia DR3 RP flux_nu",
+      "value": {
+       "value": 0.02626357630162896,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.00014863214773245766,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) erg/s/cm2/Hz (u.ABflux); sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
+      "reference": "2021A&A...649A...3R",
+      "note": "zero point Gaia DR3 RP («Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4); λ pivot 0.77691 um",
+      "provenance": {
+       "service": "Gaia archive (ESA)",
+       "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+       "table": "gaiadr3.gaia_source",
+       "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS J magnitude",
+      "value": {
+       "value": 11.766,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.027,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS J flux_nu",
+      "value": {
+       "value": 0.03133922966403283,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.0009518983418211702,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2003AJ....126.1090C",
+      "note": "zero point 2MASS J (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.235 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS H magnitude",
+      "value": {
+       "value": 11.047,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.027,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS H flux_nu",
+      "value": {
+       "value": 0.039039114353080225,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.0012344530454933445,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2003AJ....126.1090C",
+      "note": "zero point 2MASS H (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 1.662 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS Ks magnitude",
+      "value": {
+       "value": 9.976,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.023,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "2MASS Ks flux_nu",
+      "value": {
+       "value": 0.06816013707001028,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.0019349880674359083,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2003AJ....126.1090C",
+      "note": "zero point 2MASS Ks (2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)); λ isophotal 2.159 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+       "table": "fp_psc",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W1 magnitude",
+      "value": {
+       "value": 8.395,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.023,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2014yCat.2328....0C",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W1 flux_nu",
+      "value": {
+       "value": 0.13574279218926905,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.0035080253491988037,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2011ApJ...735..112J",
+      "note": "zero point WISE W1 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 3.3526 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W2 magnitude",
+      "value": {
+       "value": 7.425,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.019,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2014yCat.2328....0C",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W2 flux_nu",
+      "value": {
+       "value": 0.18407308688885263,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.004200514958060857,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2011ApJ...735..112J",
+      "note": "zero point WISE W2 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 4.6028 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W3 magnitude",
+      "value": {
+       "value": 5.147,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.014,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2014yCat.2328....0C",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W3 flux_nu",
+      "value": {
+       "value": 0.27663231578353836,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.005307543232864907,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2011ApJ...735..112J",
+      "note": "zero point WISE W3 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 11.5608 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W4 magnitude",
+      "value": {
+       "value": 2.942,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.021,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2014yCat.2328....0C",
+      "note": "system Vega; quality A",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "AllWISE W4 flux_nu",
+      "value": {
+       "value": 0.5566242164419136,
+       "unit": "Jy"
+      },
+      "error": {
+       "value": 0.013565518444309891,
+       "unit": "Jy"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "computed",
+      "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+      "reference": "2011ApJ...735..112J",
+      "note": "zero point WISE W4 (WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)); λ isophotal 22.0883 um",
+      "provenance": {
+       "service": "IRSA (NASA/IPAC)",
+       "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+       "table": "allwise_p3as_psd",
+       "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD B magnitude",
+      "value": {
+       "value": 13.05,
+       "unit": "mag"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2010A&A...518A..10V",
+      "note": "system Vega; quality D",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD G magnitude",
+      "value": {
+       "value": 12.84409,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.003505,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2020yCat.1350....0G",
+      "note": "system Vega; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD H magnitude",
+      "value": {
+       "value": 10.953,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.023,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD J magnitude",
+      "value": {
+       "value": 11.692,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.023,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD K magnitude",
+      "value": {
+       "value": 9.937,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.02,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2006AJ....131.1163S",
+      "note": "system Vega; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD R magnitude",
+      "value": {
+       "value": 14.11,
+       "unit": "mag"
+      },
+      "error": null,
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2008ApJS..175...97H",
+      "note": "system Vega; quality D",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD V magnitude",
+      "value": {
+       "value": 14.83,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.022,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2000A&A...355L..27H",
+      "note": "system Vega; quality D",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD g magnitude",
+      "value": {
+       "value": 12.99,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.002,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2009ApJS..182..543A",
+      "note": "system AB; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD i magnitude",
+      "value": {
+       "value": 12.63,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.002,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2009ApJS..182..543A",
+      "note": "system AB; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD r magnitude",
+      "value": {
+       "value": 12.871,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.002,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2009ApJS..182..543A",
+      "note": "system AB; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD u magnitude",
+      "value": {
+       "value": 13.859,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.005,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2009ApJS..182..543A",
+      "note": "system AB; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     },
+     {
+      "quantity": "SIMBAD z magnitude",
+      "value": {
+       "value": 13.242,
+       "unit": "mag"
+      },
+      "error": {
+       "value": 0.006,
+       "unit": "mag"
+      },
+      "interval": null,
+      "interval_kind": null,
+      "method": "read",
+      "formula": null,
+      "reference": "2009ApJS..182..543A",
+      "note": "system AB; quality C",
+      "provenance": {
+       "service": "SIMBAD (Harvard mirror)",
+       "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+       "table": "flux",
+       "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+       "from_cache": false
+      }
+     }
+    ],
+    "details": {
+     "points": [
+      {
+       "catalog": "Gaia DR3",
+       "table": "gaiadr3.gaia_source",
+       "band": "G",
+       "label": "Gaia DR3 G",
+       "zero_point": "Gaia DR3 G",
+       "system": "Vega",
+       "magnitude": {
+        "value": 12.8440895,
+        "unit": "mag"
+       },
+       "magnitude_error": null,
+       "count_rate": {
+        "value": 137186.30449442088,
+        "unit": "electron / s"
+       },
+       "count_rate_error": {
+        "value": 273.68634,
+        "unit": "electron / s"
+       },
+       "quality": null,
+       "flags": {
+        "phot_variable_flag": "VARIABLE",
+        "phot_bp_rp_excess_factor": 1.2146617
+       },
+       "epoch": "J2016.0 (ref_epoch)",
+       "reference": "2023A&A...674A...1G",
+       "upper_limit": false,
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.023817320426837707,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 7.694733036467795e-05,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 0.62179,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) erg/s/cm2/Hz (u.ABflux); sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
+        "zero_point": {
+         "key": "Gaia DR3 G",
+         "catalog": "Gaia DR3",
+         "band": "G",
+         "system": "AB",
+         "kind": "ab_count_rate",
+         "value": {
+          "value": 25.8010446445,
+          "unit": "mag"
+         },
+         "error": {
+          "value": 0.0027590522,
+          "unit": "mag"
+         },
+         "wavelength": {
+          "value": 0.62179,
+          "unit": "um"
+         },
+         "wavelength_error": null,
+         "wavelength_kind": "pivot",
+         "source": "«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4",
+         "reference": "2021A&A...649A...3R",
+         "verified": "2026-11-07"
+        },
+        "m_ab": {
+         "value": 12.957767751266003,
+         "unit": "mag"
+        },
+        "m_ab_error": {
+         "value": 0.0021660410576758967,
+         "unit": "mag"
+        },
+        "ab_flux_zero": {
+         "value": 3630.7805477010033,
+         "unit": "Jy",
+         "reference": "1983ApJ...266..713O"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "Gaia archive (ESA)",
+        "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+        "table": "gaiadr3.gaia_source",
+        "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+        "identifier": "Gaia DR3 3700386905605055360",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "Gaia DR3",
+       "table": "gaiadr3.gaia_source",
+       "band": "BP",
+       "label": "Gaia DR3 BP",
+       "zero_point": "Gaia DR3 BP",
+       "system": "Vega",
+       "magnitude": {
+        "value": 12.989387,
+        "unit": "mag"
+       },
+       "magnitude_error": null,
+       "count_rate": {
+        "value": 87028.66883644936,
+        "unit": "electron / s"
+       },
+       "count_rate_error": {
+        "value": 583.9352,
+        "unit": "electron / s"
+       },
+       "quality": null,
+       "flags": {
+        "phot_variable_flag": "VARIABLE",
+        "phot_bp_rp_excess_factor": 1.2146617
+       },
+       "epoch": "J2016.0 (ref_epoch)",
+       "reference": "2023A&A...674A...1G",
+       "upper_limit": false,
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.02280762786910861,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.00016051953772262101,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 0.51097,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) erg/s/cm2/Hz (u.ABflux); sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
+        "zero_point": {
+         "key": "Gaia DR3 BP",
+         "catalog": "Gaia DR3",
+         "band": "BP",
+         "system": "AB",
+         "kind": "ab_count_rate",
+         "value": {
+          "value": 25.3539555559,
+          "unit": "mag"
+         },
+         "error": {
+          "value": 0.0023065687,
+          "unit": "mag"
+         },
+         "wavelength": {
+          "value": 0.51097,
+          "unit": "um"
+         },
+         "wavelength_error": null,
+         "wavelength_kind": "pivot",
+         "source": "«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4",
+         "reference": "2021A&A...649A...3R",
+         "verified": "2026-11-07"
+        },
+        "m_ab": {
+         "value": 13.004799704051724,
+         "unit": "mag"
+        },
+        "m_ab_error": {
+         "value": 0.007284950997746934,
+         "unit": "mag"
+        },
+        "ab_flux_zero": {
+         "value": 3630.7805477010033,
+         "unit": "Jy",
+         "reference": "1983ApJ...266..713O"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "Gaia archive (ESA)",
+        "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+        "table": "gaiadr3.gaia_source",
+        "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+        "identifier": "Gaia DR3 3700386905605055360",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "Gaia DR3",
+       "table": "gaiadr3.gaia_source",
+       "band": "RP",
+       "label": "Gaia DR3 RP",
+       "zero_point": "Gaia DR3 RP",
+       "system": "Vega",
+       "magnitude": {
+        "value": 12.495527,
+        "unit": "mag"
+       },
+       "magnitude_error": null,
+       "count_rate": {
+        "value": 79606.28538932928,
+        "unit": "electron / s"
+       },
+       "count_rate_error": {
+        "value": 435.36206,
+        "unit": "electron / s"
+       },
+       "quality": null,
+       "flags": {
+        "phot_variable_flag": "VARIABLE",
+        "phot_bp_rp_excess_factor": 1.2146617
+       },
+       "epoch": "J2016.0 (ref_epoch)",
+       "reference": "2023A&A...674A...1G",
+       "upper_limit": false,
+       "identifier": "Gaia DR3 3700386905605055360",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.02626357630162896,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.00014863214773245766,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 0.77691,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "m_AB = -2.5 log10(F_e) + ZP_AB; F_nu = F_nu(0) * 10**(-0.4 m_AB), F_nu(0) = 10**(-0.4*48.60) erg/s/cm2/Hz (u.ABflux); sigma_F = F_nu * 0.4 ln(10) * sqrt(sigma_m**2 + sigma_ZP**2), sigma_m = 2.5/ln(10) * sigma_Fe/F_e",
+        "zero_point": {
+         "key": "Gaia DR3 RP",
+         "catalog": "Gaia DR3",
+         "band": "RP",
+         "system": "AB",
+         "kind": "ab_count_rate",
+         "value": {
+          "value": 25.1039837393,
+          "unit": "mag"
+         },
+         "error": {
+          "value": 0.0015800349,
+          "unit": "mag"
+         },
+         "wavelength": {
+          "value": 0.77691,
+          "unit": "um"
+         },
+         "wavelength_error": null,
+         "wavelength_kind": "pivot",
+         "source": "«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4",
+         "reference": "2021A&A...649A...3R",
+         "verified": "2026-11-07"
+        },
+        "m_ab": {
+         "value": 12.851615341245523,
+         "unit": "mag"
+        },
+        "m_ab_error": {
+         "value": 0.005937826999568076,
+         "unit": "mag"
+        },
+        "ab_flux_zero": {
+         "value": 3630.7805477010033,
+         "unit": "Jy",
+         "reference": "1983ApJ...266..713O"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "Gaia archive (ESA)",
+        "server": "https://gea.esac.esa.int/tap-server/tap/sync",
+        "table": "gaiadr3.gaia_source",
+        "query": "SELECT source_id, phot_g_mean_mag, phot_g_mean_flux, phot_g_mean_flux_error, phot_bp_mean_mag, phot_bp_mean_flux, phot_bp_mean_flux_error, phot_rp_mean_mag, phot_rp_mean_flux, phot_rp_mean_flux_error, phot_variable_flag, phot_bp_rp_excess_factor FROM gaiadr3.gaia_source WHERE source_id = 3700386905605055360",
+        "identifier": "Gaia DR3 3700386905605055360",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:26.851492+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "2MASS",
+       "table": "fp_psc",
+       "band": "J",
+       "label": "2MASS J",
+       "zero_point": "2MASS J",
+       "system": "Vega",
+       "magnitude": {
+        "value": 11.766,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.027,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAA",
+        "rd_flg": "2",
+        "cc_flg": "0"
+       },
+       "epoch": "JD 2451599.855 (jdate; time scale not declared by the service, taken as UTC)",
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.03133922966403283,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.0009518983418211702,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.235,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "2MASS J",
+         "catalog": "2MASS",
+         "band": "J",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 1594.0,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 27.8,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 1.235,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.006,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+         "reference": "2003AJ....126.1090C",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+        "table": "fp_psc",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "2MASS J12290669+0203085",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "2MASS",
+       "table": "fp_psc",
+       "band": "H",
+       "label": "2MASS H",
+       "zero_point": "2MASS H",
+       "system": "Vega",
+       "magnitude": {
+        "value": 11.047,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.027,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAA",
+        "rd_flg": "2",
+        "cc_flg": "0"
+       },
+       "epoch": "JD 2451599.855 (jdate; time scale not declared by the service, taken as UTC)",
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.039039114353080225,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.0012344530454933445,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.662,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "2MASS H",
+         "catalog": "2MASS",
+         "band": "H",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 1024.0,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 20.0,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 1.662,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.009,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+         "reference": "2003AJ....126.1090C",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+        "table": "fp_psc",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "2MASS J12290669+0203085",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "2MASS",
+       "table": "fp_psc",
+       "band": "Ks",
+       "label": "2MASS Ks",
+       "zero_point": "2MASS Ks",
+       "system": "Vega",
+       "magnitude": {
+        "value": 9.976,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.023,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAA",
+        "rd_flg": "2",
+        "cc_flg": "0"
+       },
+       "epoch": "JD 2451599.855 (jdate; time scale not declared by the service, taken as UTC)",
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "2MASS J12290669+0203085",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.06816013707001028,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.0019349880674359083,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 2.159,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "2MASS Ks",
+         "catalog": "2MASS",
+         "band": "Ks",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 666.7,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 12.6,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 2.159,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.011,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+         "reference": "2003AJ....126.1090C",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+        "table": "fp_psc",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=fp_psc&DEC=2.052361111111111&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "2MASS J12290669+0203085",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:26.330602+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "AllWISE",
+       "table": "allwise_p3as_psd",
+       "band": "W1",
+       "label": "AllWISE W1",
+       "zero_point": "WISE W1",
+       "system": "Vega",
+       "magnitude": {
+        "value": 8.395,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.023,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAAA",
+        "cc_flags": "0",
+        "ext_flg": 4
+       },
+       "epoch": "MJD 55400.0 UTC (AllWISE Explanatory Supplement §II.1)",
+       "reference": "2014yCat.2328....0C",
+       "upper_limit": false,
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.13574279218926905,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.0035080253491988037,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 3.3526,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "WISE W1",
+         "catalog": "WISE",
+         "band": "W1",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 309.54,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 4.582,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 3.3526,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.0132,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+         "reference": "2011ApJ...735..112J",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+        "table": "allwise_p3as_psd",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "WISEA J122906.69+020308.6",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "AllWISE",
+       "table": "allwise_p3as_psd",
+       "band": "W2",
+       "label": "AllWISE W2",
+       "zero_point": "WISE W2",
+       "system": "Vega",
+       "magnitude": {
+        "value": 7.425,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.019,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAAA",
+        "cc_flags": "0",
+        "ext_flg": 4
+       },
+       "epoch": "MJD 55400.0 UTC (AllWISE Explanatory Supplement §II.1)",
+       "reference": "2014yCat.2328....0C",
+       "upper_limit": false,
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.18407308688885263,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.004200514958060857,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 4.6028,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "WISE W2",
+         "catalog": "WISE",
+         "band": "W2",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 171.787,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 2.516,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 4.6028,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.0168,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+         "reference": "2011ApJ...735..112J",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+        "table": "allwise_p3as_psd",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "WISEA J122906.69+020308.6",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "AllWISE",
+       "table": "allwise_p3as_psd",
+       "band": "W3",
+       "label": "AllWISE W3",
+       "zero_point": "WISE W3",
+       "system": "Vega",
+       "magnitude": {
+        "value": 5.147,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.014,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAAA",
+        "cc_flags": "0",
+        "ext_flg": 4
+       },
+       "epoch": "MJD 55400.0 UTC (AllWISE Explanatory Supplement §II.1)",
+       "reference": "2014yCat.2328....0C",
+       "upper_limit": false,
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.27663231578353836,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.005307543232864907,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 11.5608,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "WISE W3",
+         "catalog": "WISE",
+         "band": "W3",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 31.674,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 0.45,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 11.5608,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.0446,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+         "reference": "2011ApJ...735..112J",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+        "table": "allwise_p3as_psd",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "WISEA J122906.69+020308.6",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "AllWISE",
+       "table": "allwise_p3as_psd",
+       "band": "W4",
+       "label": "AllWISE W4",
+       "zero_point": "WISE W4",
+       "system": "Vega",
+       "magnitude": {
+        "value": 2.942,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.021,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "A",
+       "flags": {
+        "ph_qual": "AAAA",
+        "cc_flags": "0",
+        "ext_flg": 4
+       },
+       "epoch": "MJD 55400.0 UTC (AllWISE Explanatory Supplement §II.1)",
+       "reference": "2014yCat.2328....0C",
+       "upper_limit": false,
+       "identifier": "WISEA J122906.69+020308.6",
+       "match": "simbad_identifier",
+       "flux": {
+        "value": 0.5566242164419136,
+        "unit": "Jy"
+       },
+       "flux_error": {
+        "value": 0.013565518444309891,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 22.0883,
+        "unit": "um"
+       },
+       "conversion": {
+        "formula": "F_nu = F_nu(0) * 10**(-0.4 m); sigma_F = F_nu * sqrt((0.4 ln(10) sigma_m)**2 + (sigma_F0/F0)**2)",
+        "zero_point": {
+         "key": "WISE W4",
+         "catalog": "WISE",
+         "band": "W4",
+         "system": "Vega",
+         "kind": "vega_flux",
+         "value": {
+          "value": 8.363,
+          "unit": "Jy"
+         },
+         "error": {
+          "value": 0.124,
+          "unit": "Jy"
+         },
+         "wavelength": {
+          "value": 22.0883,
+          "unit": "um"
+         },
+         "wavelength_error": {
+          "value": 0.1184,
+          "unit": "um"
+         },
+         "wavelength_kind": "isophotal",
+         "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+         "reference": "2011ApJ...735..112J",
+         "verified": "2026-11-07"
+        }
+       },
+       "in_plot": true,
+       "duplicate_of": null,
+       "notes": [],
+       "provenance": {
+        "service": "IRSA (NASA/IPAC)",
+        "server": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+        "table": "allwise_p3as_psd",
+        "query": "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd&DEC=2.052388888888889&RA=187.277875&SR=0.0005555555555555556",
+        "identifier": "WISEA J122906.69+020308.6",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:25.460622+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "B",
+       "label": "SIMBAD B",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 13.05,
+        "unit": "mag"
+       },
+       "magnitude_error": null,
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "D",
+       "flags": {
+        "description": "Magnitude B"
+       },
+       "epoch": null,
+       "reference": "2010A&A...518A..10V",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD B: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "B"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "G",
+       "label": "SIMBAD G",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 12.84409,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.003505,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude Gaia G"
+       },
+       "epoch": null,
+       "reference": "2020yCat.1350....0G",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": "Gaia DR3 G",
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD G: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "G"
+         }
+        },
+        {
+         "code": "SED_DUPLICATE",
+         "text": "SIMBAD G (2020yCat.1350....0G): stesso dato di Gaia DR3 G, una sola volta nel grafico",
+         "params": {
+          "band": "G",
+          "reference": "2020yCat.1350....0G",
+          "duplicate_of": "Gaia DR3 G"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "H",
+       "label": "SIMBAD H",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 10.953,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.023,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude H"
+       },
+       "epoch": null,
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD H: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "H"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "J",
+       "label": "SIMBAD J",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 11.692,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.023,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude J"
+       },
+       "epoch": null,
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD J: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "J"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "K",
+       "label": "SIMBAD K",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 9.937,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.02,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude K"
+       },
+       "epoch": null,
+       "reference": "2006AJ....131.1163S",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD K: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "K"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "R",
+       "label": "SIMBAD R",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 14.11,
+        "unit": "mag"
+       },
+       "magnitude_error": null,
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "D",
+       "flags": {
+        "description": "Magnitude R"
+       },
+       "epoch": null,
+       "reference": "2008ApJS..175...97H",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD R: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "R"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "V",
+       "label": "SIMBAD V",
+       "zero_point": null,
+       "system": "Vega",
+       "magnitude": {
+        "value": 14.83,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.022,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "D",
+       "flags": {
+        "description": "Magnitude V"
+       },
+       "epoch": null,
+       "reference": "2000A&A...355L..27H",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD V: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "V"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "g",
+       "label": "SIMBAD g",
+       "zero_point": null,
+       "system": "AB",
+       "magnitude": {
+        "value": 12.99,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.002,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude SDSS g"
+       },
+       "epoch": null,
+       "reference": "2009ApJS..182..543A",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD g: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "g"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "i",
+       "label": "SIMBAD i",
+       "zero_point": null,
+       "system": "AB",
+       "magnitude": {
+        "value": 12.63,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.002,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude SDSS i"
+       },
+       "epoch": null,
+       "reference": "2009ApJS..182..543A",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD i: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "i"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "r",
+       "label": "SIMBAD r",
+       "zero_point": null,
+       "system": "AB",
+       "magnitude": {
+        "value": 12.871,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.002,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude SDSS r"
+       },
+       "epoch": null,
+       "reference": "2009ApJS..182..543A",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD r: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "r"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "u",
+       "label": "SIMBAD u",
+       "zero_point": null,
+       "system": "AB",
+       "magnitude": {
+        "value": 13.859,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.005,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude SDSS u"
+       },
+       "epoch": null,
+       "reference": "2009ApJS..182..543A",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD u: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "u"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      },
+      {
+       "catalog": "SIMBAD",
+       "table": "flux",
+       "band": "z",
+       "label": "SIMBAD z",
+       "zero_point": null,
+       "system": "AB",
+       "magnitude": {
+        "value": 13.242,
+        "unit": "mag"
+       },
+       "magnitude_error": {
+        "value": 0.006,
+        "unit": "mag"
+       },
+       "count_rate": null,
+       "count_rate_error": null,
+       "quality": "C",
+       "flags": {
+        "description": "Magnitude SDSS z"
+       },
+       "epoch": null,
+       "reference": "2009ApJS..182..543A",
+       "upper_limit": false,
+       "identifier": "3C 273",
+       "match": "simbad_identifier",
+       "flux": null,
+       "flux_error": null,
+       "wavelength": null,
+       "conversion": null,
+       "in_plot": false,
+       "duplicate_of": null,
+       "notes": [
+        {
+         "code": "SED_NO_ZERO_POINT",
+         "text": "SIMBAD z: nessun punto zero ufficiale in tabella, resta in magnitudini",
+         "params": {
+          "catalog": "SIMBAD",
+          "band": "z"
+         }
+        }
+       ],
+       "provenance": {
+        "service": "SIMBAD (Harvard mirror)",
+        "server": "https://simbad.harvard.edu/simbad/sim-tap/sync",
+        "table": "flux",
+        "query": "SELECT f.filter, f.flux, f.flux_err, f.system, f.qual, f.bibcode, fl.description, fl.unit FROM flux AS f JOIN basic AS b ON f.oidref = b.oid LEFT OUTER JOIN filter AS fl ON f.filter = fl.filtername WHERE b.main_id = '3C 273'",
+        "identifier": "3C 273",
+        "match": "simbad_identifier",
+        "retrieved_at": "2026-11-11T16:02:22.787376+00:00",
+        "from_cache": false
+       }
+      }
+     ],
+     "vizier": null,
+     "zero_points": [
+      {
+       "key": "2MASS H",
+       "catalog": "2MASS",
+       "band": "H",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 1024.0,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 20.0,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.662,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.009,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+       "reference": "2003AJ....126.1090C",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "2MASS J",
+       "catalog": "2MASS",
+       "band": "J",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 1594.0,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 27.8,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 1.235,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.006,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+       "reference": "2003AJ....126.1090C",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "2MASS Ks",
+       "catalog": "2MASS",
+       "band": "Ks",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 666.7,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 12.6,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 2.159,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.011,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "2MASS All-Sky Explanatory Supplement §VI.4a, Table 1 (Cohen, Wheaton & Megeath 2003, AJ 126, 1090)",
+       "reference": "2003AJ....126.1090C",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "Gaia DR3 BP",
+       "catalog": "Gaia DR3",
+       "band": "BP",
+       "system": "AB",
+       "kind": "ab_count_rate",
+       "value": {
+        "value": 25.3539555559,
+        "unit": "mag"
+       },
+       "error": {
+        "value": 0.0023065687,
+        "unit": "mag"
+       },
+       "wavelength": {
+        "value": 0.51097,
+        "unit": "um"
+       },
+       "wavelength_error": null,
+       "wavelength_kind": "pivot",
+       "source": "«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4",
+       "reference": "2021A&A...649A...3R",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "Gaia DR3 G",
+       "catalog": "Gaia DR3",
+       "band": "G",
+       "system": "AB",
+       "kind": "ab_count_rate",
+       "value": {
+        "value": 25.8010446445,
+        "unit": "mag"
+       },
+       "error": {
+        "value": 0.0027590522,
+        "unit": "mag"
+       },
+       "wavelength": {
+        "value": 0.62179,
+        "unit": "um"
+       },
+       "wavelength_error": null,
+       "wavelength_kind": "pivot",
+       "source": "«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4",
+       "reference": "2021A&A...649A...3R",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "Gaia DR3 RP",
+       "catalog": "Gaia DR3",
+       "band": "RP",
+       "system": "AB",
+       "kind": "ab_count_rate",
+       "value": {
+        "value": 25.1039837393,
+        "unit": "mag"
+       },
+       "error": {
+        "value": 0.0015800349,
+        "unit": "mag"
+       },
+       "wavelength": {
+        "value": 0.77691,
+        "unit": "um"
+       },
+       "wavelength_error": null,
+       "wavelength_kind": "pivot",
+       "source": "«Gaia (E)DR3 passbands and zero points», file zeropt.dat version 2 (ESA, cosmos.esa.int/web/gaia/edr3-passbands; Riello et al. 2021, A&A 649, A3); λ_p: Gaia DR3 documentation §5.4.1, Table 5.4",
+       "reference": "2021A&A...649A...3R",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "WISE W1",
+       "catalog": "WISE",
+       "band": "W1",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 309.54,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 4.582,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 3.3526,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.0132,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+       "reference": "2011ApJ...735..112J",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "WISE W2",
+       "catalog": "WISE",
+       "band": "W2",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 171.787,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 2.516,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 4.6028,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.0168,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+       "reference": "2011ApJ...735..112J",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "WISE W3",
+       "catalog": "WISE",
+       "band": "W3",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 31.674,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 0.45,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 11.5608,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.0446,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+       "reference": "2011ApJ...735..112J",
+       "verified": "2026-11-07"
+      },
+      {
+       "key": "WISE W4",
+       "catalog": "WISE",
+       "band": "W4",
+       "system": "Vega",
+       "kind": "vega_flux",
+       "value": {
+        "value": 8.363,
+        "unit": "Jy"
+       },
+       "error": {
+        "value": 0.124,
+        "unit": "Jy"
+       },
+       "wavelength": {
+        "value": 22.0883,
+        "unit": "um"
+       },
+       "wavelength_error": {
+        "value": 0.1184,
+        "unit": "um"
+       },
+       "wavelength_kind": "isophotal",
+       "source": "WISE All-Sky Explanatory Supplement §IV.4.h, Tables 1 and 9 (Wright et al. 2010; Jarrett et al. 2011, ApJ 735, 112); valid for AllWISE (AllWISE Explanatory Supplement §V.3.e)",
+       "reference": "2011ApJ...735..112J",
+       "verified": "2026-11-07"
+      }
+     ],
+     "vizier_sed": {
+      "skipped": true,
+      "reason": "cds_down",
+      "evidence": "simbad_failover"
+     },
+     "vizier_center": {
+      "ra": {
+       "value": 187.27791594049,
+       "unit": "deg"
+      },
+      "dec": {
+       "value": 2.05238823055,
+       "unit": "deg"
+      },
+      "epoch": "J2000.000",
+      "radius": {
+       "value": 2.0,
+       "unit": "arcsec"
+      }
+     },
+     "plot_png": {
+      "format": "image/png",
+      "encoding": "base64",
+      "quantity": "fnu",
+      "data": "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fPrpp3L//ffL9evX5fjx4zJp0iTp0KGDqdtavny5jB49Wk6cOCEnT56UgwcPSvHixWMss2fPHmnatKmkTp1aAz/kZf78+dKoUSOdv2jRIunSpUustPPmzStHjhwxNb9EREREjmwCRgCYJ08eOXTokPz000+yc+dOGTJkiHTt2lUDNV/rnDt3zuu8s2fP+twW5r3//vvy5Zdf+lzmqaee0lo/BIe//fab9OzZU6ddvXpV57dr106beD1fDP6IiIjIzmxVA5giRYpYnSU6deok/fv316baAgUKxFrn448/lrFjx8r69eslX758rulz586Vfv36aTCJjhienn32Wf27ZcsWr3nZsWOH7N69W9NHky4gH+PGjZMVK1b4XSOJgPDu3bty7949/T+aho304oLmZbzMgHQQKJuVnpVpm5FeMGkEsq6V5UvOKl+77Uti54fnImvLym7Hl9NE2ax8g82HrQJAbzZu3Kh/S5Uq5XX+M888I6tWrdJ7+BAEovn1s88+kx49esjnn3/uNfjzB2r8oGLFiq5puXLlkvz58+s8fwJADAHjvv3p06fLr7/+qvc1ekIzN14IFOHixYsaOJp1kKDWEgcugmwzmZ22GekFk0Yg61pZvuSs8rXbviR2fngusras7HZ8OU2UzcrXaI10ZACIe/NeeOEFDfKKFSvmdRl0FMF9eW3bttUgsE+fPlpTN2/ePGnZsmXA27506ZJ2CvHszJEjRw6d5w+si1o/fyDfeF25ckWyZMki2bJlk/DwcDHroEWtI9K0IgA0M20z0gsmjUDWtbJ8yVnla7d9Sez88FxkbVnZ7fhymiiblW+wYwvbNgCMiIjQzhaoLfvoo4/iXBadNBYuXCi1atWS//znP7p8mzZtgtp+mjRpNHjDB+7+QaNjCuZZDds08wDDQWt2mlalbUZ6waQRyLpWli85q3ztti+JnR+ei6wtK7sdX04TZqPyDTYPSb8HXqBTB2rz0CFk2bJlki5dunjXwXK4T7By5coaAPrqGOKvokWLavB3+vRp1zQ0z+I95hERERElVynsGvzhfruvv/7a69h8npYuXarDscycOVM2bdqknUXq168v58+fDzgftWvX1qFfFi9e7Jq2evVqbaJ97LHHAk6XiMhJjl45KuO3j5eBGwbqX7wnIvuzVRMwBlVu2LChnDlzRoYOHSpr1651zUNnjIIF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gLRfffVVWbZsmc9lnnrqKa19RHCImkIEge3atZPIyEidj3zimYCer7///tuVxsWLF6VFixbSs2dPeeKJJ/wsBSIiIqIQagIeMWKENGrUSO+XM9SqVcvn8jNmzJDx48fLunXrJGfOnK7p6HDx/PPPay0eml69PXsXtmzZ4jXdXbt2yfbt22XTpk2ux60MHjxYPvzwQ1m5cqUGgvE5evSoBo1jxoyROnXqSEKg6RkvMyAdBKZmpWdl2makF0wagaxrZfmSs8rXbvuS2PnhucjasrLb8eU0UTYr32DzYasA8NatW7Jx40YN6FB798cff2hTcMGCBX2u06VLF+1sUb9+fVm7dq3kyJFDli5dKp06ddLg0Fvw5w/UPELlypVd09C0mz9/fp3nTwA4efJk+fnnn+VRt8FqT58+HauJGCZNmqQvo5MIag5xH6RZB8nVq1f1wDX7+YVmp21GesGkEci6VpYvOat87bYviZ0fnousLSu7HV9OE2Wz8kVeHBMAYtgUBD0IsEaPHi0FChTQGjwEYQsWLIhRw2dApwzU9jVv3lzv6XvxxRe15m/atGnahBsoBGDogJI2bdoY05EHzPPHO++8oy9/oEYSrytXruiwMdmyZZPw8HAx66DFvYlI04oA0My0zUgvmDQCWdfK8iVnla/d9iWx88NzkbVlZbfjy2mibFa+qVKlck4AmDp1av2L5tzdu3drbR6CLfSg7d+/v8yePdvreunSpZOvvvpKm4rR2WLChAlaMxgMBJaokUSkjw/ccP369QT1BA4UDi4zDzDsg9lpWpW2GekFk0Yg61pZvuSs8rXbviR2fngusras7HZ8OU2Yjco32Dwk/R64yZUrl2TMmFFatWqlwR8g0m7Tpo02DccFQePvv/8uZcqUkTlz5silS5eCykvhwoW1Oda9Qweif7zHPCIiIqLkKoXdImt0ADl27FiM6RinL0+ePD7XW716tbRt21YmTpwoW7dulUyZMunQLWhODVTt2rW1ZtG9lzCCTNyb2LBhw4DTJSIiIkpqtmoChjfffFNq1KghQ4YMkZo1a2onis8//1w7eniDoAw1hu+99550795dp61YsUKaNGmiQeCaNWs0IPTWQ/evv/7SWkPAdk6cOCGlSpWS++67T++/Gzp0qLzyyita84c0kKfOnTtL+fLlLS4FIiIiohAKAMuWLatDs6An8Acf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22natKnr/6gF9Dbt3r17sXoko4n60qVLAW2TiJK/VEmdASIipzl48KB88803snTpUu0R3LBhQ71Xz1stX5YsWSQsLEwuX74c0LYyZszo+n/KlCl9TvPsYYztJUaHEyKyJ9YAEhGZbMKECVrz1qxZM6lfv752uPBVC4gADcviXkFPqLkzoCn59u3bpuUR26tQoYJp6RFR8sIAkIjIRKhZmz17tgwcOFBr9vDq1q1bnM3AjRs3lg0bNsSavm3bNtf/f/zxR7lz5442F5vhhx9+0M4hRBSaGAASEZkInS6yZcsmTz31lGsaAsDDhw/LTz/95HWd559/Xr777js5c+ZMjOljx46Vf//739KjRw/tJYyewR988IE2Jwdj69at2jO5U6dOQaVDRMkXA0AiIhPlzZtXZs2aJalTp3ZNK1KkiA7D4qv2DsO1IBh7//33Y0z/5JNP9P7BatWqybp163TIlieffFKHlEH6b7/9tqZtwLAwmIYBqN3vMcQ0DA9jwGPqUEOJjiBEFJo4DiARkQ2cPXtW5s+fL3379vU5DqBZzwJGLeILL7wg6dKlMzVtIko+GAASEdmMlQEgERGwCZiIyGa8NdsSEZmJNYBEREREIYY1gEREREQhhgEgERERUYhhAEhEREQUYhgAEhEREYUYBoBEREREIYYBIBEREVGIYQBIREREFGIYABIRERGFGAaARERERCGGASARERFRiGEASERERBRiGAASERERhRgGgEREREQhhgEgERERUYhhAEhEREQUYhgABuHu3buyb98+r/Pu3bsnf/zxRzDJUxI4cOCAREZGsuyJiMjRUvmacf36dfnpp59iTCtZsqQUKlTI8kxFRUXJ7t27pWLFiqam+9dff8nJkyelSJEiUqBAgaC3/f3330uuXLn0/999951rOqZh/fXr10vhwoUlffr0Oj9FihSSNWtWLcdMmTK51gsLC5MsWbLoOqlTp3ZNT5kypRQrVsxrmXvb3sWLF2Xv3r1y8+ZNuf/++/UFJ06ckMuXL0vZsmVd6+zZs0fKlCkjP//8s37W4eHhuq3s2bPr/M2bN+v0jBkzSqVKlSRdunQ6HftUvXp1SZs2rb6/du2aBsFp0qSR8uXL6z76gnI9e/asZM6cWdPEOocOHZJLly5J5cqVXXnFq1q1avr+zp07snHjRqlbt66+j46O1n08c+aMvq9f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"
+     }
+    },
+    "warnings": [],
+    "errors": [
+     {
+      "code": "PROFILE_VIZIER_SKIPPED",
+      "text": "serie SED di VizieR non chiesta: il CDS risulta già non raggiungibile (simbad_failover); nessuna copia in cache",
+      "params": {
+       "reason": "cds_down",
+       "evidence": "simbad_failover"
+      },
+      "catalog": "vizier_sed"
+     }
+    ],
+    "servers": [
+     "https://gea.esac.esa.int/tap-server/tap/sync",
+     "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
+     "https://irsa.ipac.caltech.edu/SCS?table=fp_psc",
+     "https://simbad.harvard.edu/simbad/sim-tap/sync"
+    ],
+    "elapsed": {
+     "value": 4.154470958048478,
+     "unit": "s"
+    },
+    "started": {
+     "value": 1.6418318330543116,
+     "unit": "s"
+    }
+   },
+   {
+    "name": "planets",
+    "status": "done",
+    "values": [],
+    "details": {
+     "planets": [],
+     "checked": true,
+     "note": "no planet in the archive (no host in the archive)"
+    },
+    "warnings": [],
+    "errors": [],
+    "servers": [
+     "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+    ],
+    "elapsed": {
+     "value": 3.3670740830129944,
+     "unit": "s"
+    },
+    "started": {
+     "value": 3.365295291005168,
+     "unit": "s"
+    }
+   }
+  ],
+  "warnings": [],
+  "cancelled": false,
+  "elapsed": {
+   "value": 5.733449124963954,
+   "unit": "s"
+  },
+  "skipped_services": {},
+  "match_radius": {
+   "value": 10.0,
+   "unit": "arcsec"
+  }
+ }
+}

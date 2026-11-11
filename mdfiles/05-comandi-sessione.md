@@ -1095,6 +1095,30 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   minuti, pulizia una volta per processo); T17 è nei test della cache
   (`tests/core/test_cache.py`, T9 del 04).
 
+- **D05-6 — Unità senza forma FITS nei risultati (masse e raggi dei
+  pianeti): APERTA il 2026-11-11 (sprint D9, validazione), da decidere
+  (Gruppo 3).** **Fatto misurato:** nella misura del 2026-11-11 (`docs/validation.md`
+  §5.0bis) i 12 pianeti hanno valori **identici** al NASA Exoplanet Archive,
+  ma `quantity_json` (§3.1, regola D18-2: FITS, altrimenti VOUnit) scrive
+  `u.M_earth` come `5.9721679e+24kg` e `u.R_earth` come `6378100m`, perché
+  masse e raggi terrestri non hanno forma FITS e la forma VOUnit è kg o m
+  con un fattore. Per la massa il fattore è **troncato a 8 cifre**:
+  `u.Unit("5.9721679e+24kg") != u.earthMass` (scarto relativo 5,4·10⁻⁹: `u.earthMass` = 5,972167867791379·10²⁴ kg);
+  il raggio è esatto. Lo stesso testo va nell'ECSV del profilo e nel comando
+  registrato: si legge male e, per la massa, non torna esattamente
+  all'unità dell'archivio. **Proposte:** (a) per un'unità senza forma FITS
+  che `astropy.units` rilegge esattamente col suo nome (`earthMass`,
+  `earthRad`, `jupiterMass`, `jupiterRad`) si scrive quel nome, eccezione
+  dichiarata a D18-2; (b) si converte in un'unità con forma FITS (kg, m) con
+  tutte le cifre del fattore, valore cambiato (non più «copiato»
+  dall'archivio); (c) si lascia così, dichiarando il troncamento.
+  **Raccomandazione di Claude Code: (a)**, con un test che rilegge l'unità
+  scritta e la confronta con quella originale (uguaglianza esatta).
+  Correggerla tocca il codice e richiede un **nuovo candidato** della 1.0
+  (`63` dal passo 3, build 7): decide il proprietario. Collegata: lo script
+  di validazione confronta il testo delle unità (`d` contro `days` del
+  periodo, 12 righe), da decidere insieme (`docs/validation.md` §5.0bis).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -1132,3 +1156,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): nuovo comando `catalog.crossmatch` (§7: parametri con `max_sep` default 2″ risolto alla registrazione, metodo `local`/`cds`, sistema `icrs`/`galactic`; nuovo livello catalogo con la tabella unita del 15; report `as_dict()` e `describe()` nel risultato; `CROSSMATCH_SERVICE_FAILED` senza ripiego automatico; `confirm`); §5 dipende dal 15; §10.1 `CROSSMATCH_SERVICE_FAILED` e ragione `crossmatch_cds_frame`; T25 (§12). Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL** (decisioni del proprietario del 2026-11-06): nuovi comandi `catalog.cone_search` e `catalog.tap_query` (§7: `service` voce dell'elenco o URL, `url` risolto e scritto nel comando registrato così la riesecuzione rifà la stessa richiesta, `validate_adql` prima della rete, `async_timeout` 600 s risolto alla registrazione, annullamento, nuovo livello catalogo con `query` e provenienza, `POSITION_COLUMNS_REQUIRED` senza colonne determinate; `confirm`; solo la cone search per l'IA) e `vo.add_server`/`vo.remove_server` (classe `application`, esecutori del `40`); `CommandRegistry.servers`; §10.1 ragione `server_already_listed` e `QUERY_CANCELLED` del 14 reso `COMMAND_CANCELLED`; nuovo T26 (§12). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint B4 — dati aggiornati e ripieghi** (richiesta del proprietario del 2026-11-07, D14-14 del 14; forma D14-15 (8) da confermare; autorizzazione esplicita ad aggiornare il 05): §3.1 — campo `refresh` del comando (scritto solo quando vale `true`, solo per i comandi `network`, `COMMAND_PARAMETER_INVALID` `refresh_not_network`), avviso `DATA_REFRESHED` (`fresh`, `cache_used`), non esposto all'IA; §7 — `catalog.load_region` con il mirror di SIMBAD e gli archivi originali di Gaia DR3 e 2MASS, `POSITION_COLUMNS_REQUIRED` senza sistema (2MASS dall'IRSA); §10.1, T27. Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D9 (validazione del candidato 1.0.0):** nuova **D05-6** (§13), unità senza forma FITS nei risultati (`5.9721679e+24kg` per le masse terrestri, fattore troncato), proposte (a)–(c), raccomandata (a); nessuna modifica al codice. |
