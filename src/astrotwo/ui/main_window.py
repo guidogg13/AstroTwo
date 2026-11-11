@@ -755,12 +755,10 @@ def load_translations(language: str, app: QCoreApplication | None = None) -> tup
 
 
 def _quantity(value: Mapping) -> u.Quantity:
-    """``Quantity`` da ``{"value", "unit"}`` dei risultati dei comandi (unità in FITS o VOUnit)."""
-    try:
-        unit = u.Unit(value["unit"], format="fits")
-    except ValueError:
-        unit = u.Unit(value["unit"], format="vounit")
-    return u.Quantity(value["value"], unit)
+    """``Quantity`` da ``{"value", "unit"}`` dei risultati dei comandi (unità di ``unit_json`` del 05, D05-6)."""
+    from astrotwo.core.commands import unit_from_json
+
+    return u.Quantity(value["value"], unit_from_json(value["unit"]))
 
 
 def _format_resolution(value: Mapping) -> str:

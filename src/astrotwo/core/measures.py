@@ -45,6 +45,7 @@ from spherical_geometry import great_circle_arc as sg_arc
 from spherical_geometry import vector as sg_vector
 from spherical_geometry.polygon import SphericalPolygon
 
+from astrotwo.core.commands import unit_text
 from astrotwo.core import catalogs
 from astrotwo.core.catalogs import CatalogsError, CatalogTable, skydist
 from astrotwo.core.coordinates_wcs import (
@@ -315,7 +316,7 @@ def angular_distance(p1, p2, unit) -> AngularDistance:
     value = (np.float64(_separation_deg(a, b)) * u.deg).to(target)
     report = MeasureReport(
         operation="angular_distance", points=(_describe(a), _describe(b)), frame=a.frame_name,
-        unit=target.to_string(), notes=notes + ("calcolo: skydist del modulo 13 (astropy angular_separation)",))
+        unit=unit_text(target), notes=notes + ("calcolo: skydist del modulo 13 (astropy angular_separation)",))
     return AngularDistance(value=value, p1=a, p2=b, report=report)
 
 
@@ -640,7 +641,7 @@ class DistanceWithProfile:
     def to_table(self) -> Table:
         """Tabella del profilo con la distanza e il report nei metadati (grafico esportabile, D17-6)."""
         table = self.profile.to_table()
-        table.meta["distance"] = f"{self.distance.value!r} {self.distance.unit}"
+        table.meta["distance"] = f"{self.distance.value!r} {unit_text(self.distance.unit)}"
         table.meta["report"] = self.report.description
         return table
 
@@ -659,7 +660,7 @@ def distance_with_profile(image, p1, p2, step) -> DistanceWithProfile:
         distance = np.float64(np.hypot(x2 - x1, y2 - y1)) * u.pix
         what = "distanza in pixel (pixel space, nessuna conversione implicita)"
     report = MeasureReport(
-        operation="distance_with_profile", points=profile.report.points, frame=frame, unit=distance.unit.to_string(),
+        operation="distance_with_profile", points=profile.report.points, frame=frame, unit=unit_text(distance.unit),
         image=profile.report.image, notes=(what,) + profile.report.notes, warnings=profile.report.warnings,
         provenance=_PIXEL_PROVENANCE)
     return DistanceWithProfile(distance=distance, angular=angular, profile=profile, report=report)

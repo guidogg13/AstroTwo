@@ -427,6 +427,31 @@ def gaia_column(quantity):
     return None, None
 
 
+#: Units written as words by the NASA Exoplanet Archive in the ``unit`` attribute of its VOTable FIELDs (answers
+#: of 2026-11-11: ``pl_orbper`` «days», ``pl_bmasse`` «Earth Mass», ``pl_rade`` «Earth Radius»), which Astropy does
+#: not read: the Astropy unit each word names. Declared here by hand, not taken from AstroTwo (decision D05-6 of the
+#: project owner, 2026-11-11: units are compared as Astropy units, not as text; tolerances unchanged).
+REFERENCE_UNIT_WORDS = {"days": "d", "Earth Mass": "earthMass", "Earth Radius": "earthRad"}
+
+
+def as_unit(text):
+    """Astropy unit of a unit text (generic format, which also reads FITS and the Astropy names), or ``None``."""
+    from astropy import units as u
+
+    text = REFERENCE_UNIT_WORDS.get(text.strip(), text.strip())
+    unit = u.Unit(text, parse_strict="silent")
+    return None if isinstance(unit, u.UnrecognizedUnit) else unit
+
+
+def same_unit(astro_text, ref_text) -> bool:
+    """Same unit for Astropy (D05-6): exactly equal units, so ``5.9721679e+24kg`` is **not** ``earthMass``. Texts
+    that Astropy cannot read on either side compare as text."""
+    astro, ref = as_unit(astro_text), as_unit(ref_text)
+    if astro is None or ref is None:
+        return astro_text.strip() == ref_text.strip()
+    return astro == ref
+
+
 def read_row(name, area, quantity, astro_value, part, column):
     table = part["table"]
     ref_value = cell(table, column)
@@ -435,8 +460,7 @@ def read_row(name, area, quantity, astro_value, part, column):
     ref_unit = str(table[column].unit) if column in table.colnames and table[column].unit is not None else ""
     unit_ok = True
     if unit_of(astro_value) and ref_unit:
-        from astropy import units as u
-        unit_ok = u.Unit(unit_of(astro_value)) == u.Unit(ref_unit, parse_strict="silent")
+        unit_ok = same_unit(unit_of(astro_value), ref_unit)
     shown_ref = ref_value.item() if isinstance(ref_value, np.generic) else ref_value
     return row(name, area, quantity, show(astro_value), f"{shown_ref!r} {ref_unit}".strip(), part["server"],
                part["query"], part["retrieved_at"], how, "pass" if ok and unit_ok else "fail",

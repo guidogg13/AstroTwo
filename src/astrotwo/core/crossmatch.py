@@ -27,6 +27,7 @@ import numpy as np
 from astropy.coordinates import search_around_sky
 from astropy.table import Table, join
 
+from astrotwo.core.commands import unit_text
 from astrotwo.core.catalogs import CatalogTable, PositionColumns
 from astrotwo.core.cache import NETWORK_TIMEOUTS, NetworkTimeouts
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, ModuleWarning, SkyFrame
@@ -211,8 +212,8 @@ def _check_max_sep(max_sep, limit=180 * u.deg, what: str = "in locale") -> u.Qua
     if not (np.isfinite(value.value) and value.value > 0 and value <= limit):
         raise CrossmatchError("MAX_SEP_INVALID", f"max_sep {max_sep}: ammesso in (0, {limit}] {what}",
                               params={"reason": "range_local" if what == "in locale" else "range_cds",
-                                      "max_sep": {"value": float(max_sep.value), "unit": str(max_sep.unit)},
-                                      "limit": {"value": float(limit.value), "unit": str(limit.unit)}})
+                                      "max_sep": {"value": float(max_sep.value), "unit": unit_text(max_sep.unit)},
+                                      "limit": {"value": float(limit.value), "unit": unit_text(limit.unit)}})
     return max_sep
 
 

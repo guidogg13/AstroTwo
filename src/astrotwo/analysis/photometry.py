@@ -23,6 +23,7 @@ import astropy.units as u
 import numpy as np
 from astropy.table import Table
 
+from astrotwo.core.commands import unit_text
 from astrotwo.core.coordinates_wcs import ModuleWarning
 
 __all__ = [
@@ -90,7 +91,7 @@ class ZeroPoint:
 
     def as_dict(self) -> dict:
         def qj(q):
-            return None if q is None else {"value": float(q.value), "unit": q.unit.to_string()}
+            return None if q is None else {"value": float(q.value), "unit": unit_text(q.unit)}
 
         return {"key": self.key, "catalog": self.catalog, "band": self.band, "system": self.system,
                 "kind": self.kind, "value": qj(self.value), "error": qj(self.error),
@@ -195,7 +196,7 @@ class SedPoint:
 
     def as_dict(self) -> dict:
         def qj(q):
-            return None if q is None else {"value": float(q.value), "unit": q.unit.to_string()}
+            return None if q is None else {"value": float(q.value), "unit": unit_text(q.unit)}
 
         return {"catalog": self.catalog, "table": self.table, "band": self.band, "label": self.label,
                 "zero_point": self.zero_point_key, "system": self.system, "magnitude": qj(self.magnitude),
@@ -212,7 +213,7 @@ class SedPoint:
 
 def _plain(value):
     if isinstance(value, u.Quantity):
-        return {"value": float(value.value), "unit": value.unit.to_string()}
+        return {"value": float(value.value), "unit": unit_text(value.unit)}
     if isinstance(value, (np.bool_, bool)):
         return bool(value)
     if isinstance(value, np.integer):

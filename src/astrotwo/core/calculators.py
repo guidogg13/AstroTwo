@@ -1343,12 +1343,10 @@ def _number_json(value: object) -> float | None:
 
 
 def _unit_json(unit: u.UnitBase) -> str:
-    for fmt in ("fits", "vounit"):
-        try:
-            return unit.to_string(fmt)
-        except (ValueError, u.UnitsError):
-            continue
-    raise ValueError(f"unità {unit} non scrivibile in FITS né in VOUnit (D18-2)")
+    """Testo dell'unità che si rilegge esattamente (05 §3.1, D18-2 con l'eccezione D05-6)."""
+    from astrotwo.core.commands import unit_json
+
+    return unit_json(unit)
 
 
 def _quantity_json(q: u.Quantity | None) -> dict | None:
@@ -1549,12 +1547,12 @@ class _Reader:
         if not isinstance(v, Mapping) or set(v) != {"value", "unit"} or isinstance(v["value"], bool) \
                 or not isinstance(v["value"], (int, float)) or not isinstance(v["unit"], str):
             raise self._fail(name, '{"value": numero, "unit": "unità"}', "expect_quantity")
-        for fmt in ("fits", "vounit"):
-            try:
-                return np.float64(v["value"]) * u.Unit(v["unit"], format=fmt)
-            except ValueError:
-                continue
-        raise self._fail(name, "un'unità valida in FITS o VOUnit (D18-2)", "expect_unit")
+        from astrotwo.core.commands import unit_from_json
+
+        try:
+            return np.float64(v["value"]) * unit_from_json(v["unit"])
+        except ValueError:
+            raise self._fail(name, "un'unità valida in FITS o VOUnit (D18-2)", "expect_unit") from None
 
     def time(self, name: str):
         v = self.p.get(name)

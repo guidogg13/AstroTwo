@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QComboBox, QDial
                                QStackedWidget, QTableView, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
                                QWidget)
 
-from astrotwo.core.commands import shown_order
+from astrotwo.core.commands import shown_order, unit_text
 
 #: Testi del pannello (inglese); la finestra principale passa quelli tradotti con ``tr()`` (40 §3.9).
 DEFAULT_TEXTS = {
@@ -255,7 +255,7 @@ class CatalogTableModel(QAbstractTableModel):
             return ""
         unit = self.table[self.names[col]].unit
         text = _full(value)
-        return f"{text} {unit}" if unit is not None and str(unit) else text
+        return f"{text} {unit_text(unit)}" if unit is not None and unit_text(unit) else text
 
     def header_unit(self, col: int) -> str:
         """Unità nell'intestazione: quella della colonna; per le posizioni quella del testo del 10."""
@@ -268,7 +268,7 @@ class CatalogTableModel(QAbstractTableModel):
             precision = probe.lon_precision if kind[1] == "lon" else probe.lat_precision
             return "h m s" if precision is not None and precision.unit.physical_type == "time" else "° ′ ″"
         unit = self.table[self.names[col]].unit
-        return "" if unit is None else str(unit)
+        return "" if unit is None else unit_text(unit)
 
     # --- QAbstractTableModel --------------------------------------------------------------
 
@@ -318,7 +318,7 @@ class CatalogTableModel(QAbstractTableModel):
             column = self.table[name]
             lines = [name]
             if column.unit is not None:
-                lines[0] += f" [{column.unit}]"
+                lines[0] += f" [{unit_text(column.unit)}]"
             ucd = column.meta.get("ucd")
             if ucd:
                 lines.append(_t(self.texts["ucd"], ucd))

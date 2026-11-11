@@ -382,3 +382,45 @@ def test_t28_sed_points_table_and_catalog_layer(cache, services, tmp_path):  # n
     assert layer.data.body == "celestial"
     assert list(layer.data.table["flux_nu"].filled(np.nan)) == pytest.approx(
         list(sed.table["flux_nu"].filled(np.nan)), nan_ok=True, rel=0, abs=0)
+
+
+#: Unità di testo del NASA Exoplanet Archive (attributo ``unit`` dei FIELD nella risposta registrata) → unità di
+#: ``astropy.units``; dichiarate qui a mano, indipendenti dal codice del 25 (D05-6).
+_ARCHIVE_UNITS = {"days": "d", "Earth Mass": "earthMass", "Earth Radius": "earthRad"}
+
+
+def test_d05_6_planet_units_read_back_from_json_and_ecsv(cache, services, tmp_path):  # noqa: F811
+    """D05-6 (decisione del proprietario del 2026-11-11): periodo, massa e raggio dei pianeti scritti col nome di
+    astropy.units (``d``, ``earthMass``, ``earthRad``), mai in kg o m con un fattore; l'unità riletta dal JSON del
+    risultato e dall'ECSV esportato, convertita nell'unità dell'archivio, dà esattamente il valore della fonte."""
+    import astropy.units as u
+    from astropy.io.votable import parse_single_table
+
+    from astrotwo.core.commands import unit_from_json
+    from tests.analysis.profile_fakes import DATA
+
+    source = parse_single_table(DATA / "exoplanet-88bd9d6a3469.xml").to_table()  # risposta registrata di TRAPPIST-1
+    session = session_with_export(cache)
+    number, result = profile(session, {"name": "TRAPPIST-1"})
+    data = merge_profile_results([(number, values_of(result))])
+    path = tmp_path / "trappist.ecsv"
+    export_profile(data, path, "ecsv")
+    table = Table.read(path, format="ascii.ecsv")
+    assert "sections" in result.values, result.error
+    planets = next(s for s in json.loads(json.dumps(result.values))["sections"] if s["name"] == "planets")
+    checked = 0
+    for key, column, name in (("period", "pl_orbper", "d"), ("mass", "pl_bmasse", "earthMass"),
+                              ("radius", "pl_rade", "earthRad")):
+        archive_unit = u.Unit(_ARCHIVE_UNITS[str(source[column].unit)])
+        for i, planet in enumerate(source["pl_name"]):
+            if np.ma.is_masked(source[column][i]):
+                continue
+            quantity = f"{planet} {key}"
+            value = next(v for v in planets["values"] if v["quantity"] == quantity)["value"]
+            row = table[table["quantity"] == quantity][0]
+            assert value["unit"] == row["unit"] == name  # mai «5.9721679e+24kg» o «6378100m»
+            for number_, text in ((value["value"], value["unit"]), (row["value"], row["unit"])):
+                back = number_ * unit_from_json(text)
+                assert back.to_value(archive_unit) == float(source[column][i])
+            checked += 1
+    assert checked == 21  # 7 pianeti × periodo, massa e raggio

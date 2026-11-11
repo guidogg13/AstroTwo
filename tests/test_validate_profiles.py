@@ -79,3 +79,24 @@ def test_recompare_second_run_of_2026_11_10(tmp_path):
     committed = json.loads((RUN2 / "results-recompared.json").read_text())
     assert committed["rows"] == rows
     assert (RUN2 / "results-recompared.md").read_text() == (run / "results-recompared.md").read_text()
+
+
+@pytest.mark.parametrize(("astro", "ref", "same"), [
+    ("d", "days", True), ("earthMass", "Earth Mass", True), ("earthRad", "Earth Radius", True),
+    ("5.9721679e+24kg", "Earth Mass", False),  # fattore troncato: non è la massa terrestre (D05-6)
+    ("mas yr-1", "mas / yr", True), ("K", "K", True), ("d", "Earth Mass", False), ("", "", True)])
+def test_d05_6_units_compared_as_astropy_units(astro, ref, same):
+    """D05-6 (decisione del proprietario del 2026-11-11): unità confrontate come unità di Astropy, non come testo;
+    le parole del NASA Exoplanet Archive lette con la tabella dichiarata nello script; tolleranze invariate."""
+    assert vp.same_unit(astro, ref) is same
+
+
+def test_d05_6_planet_row_passes_only_with_the_same_unit():
+    table = Table({"pl_bmasse": [193.87532827]})
+    table["pl_bmasse"].unit = "Earth Mass"
+    part = {"table": table, "server": "s", "query": "q", "retrieved_at": "t"}
+    good = vp.read_row("51 Peg", "Planets", "51 Peg b mass", {"value": 193.87532827, "unit": "earthMass"}, part,
+                       "pl_bmasse")
+    bad = vp.read_row("51 Peg", "Planets", "51 Peg b mass", {"value": 193.87532827, "unit": "5.9721679e+24kg"},
+                      part, "pl_bmasse")
+    assert good["outcome"] == "pass" and bad["outcome"] == "fail" and "unit" in bad["note"]

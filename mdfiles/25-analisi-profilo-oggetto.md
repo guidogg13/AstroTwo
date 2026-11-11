@@ -634,6 +634,9 @@ Fotometria, Pianeti (§3.4).
   alcune colonne (`pl_orbsmax`, gli errori di `pl_bmasse`): si usa l'unità
   che lo stesso schema dichiara per le altre colonne della stessa grandezza
   (`pl_orbsmaxerr1` au, `pl_bmasse` masse terrestri), scritto qui.
+  **Nel risultato e nell'ECSV** (D05-6 del `05`, decisa il 2026-11-11) le
+  unità si scrivono `d`, `AU`, `K` e, senza forma FITS, col nome di Astropy
+  `earthMass` ed `earthRad`, mai in kg o m con un fattore.
 - **`*_reflink` è testo esterno (HTML):** si estraggono solo il testo
   visibile (senza tag, entità decodificate) e, se il collegamento è di ADS
   (`adsabs.harvard.edu`), l'URL e il **bibcode** (`/abs/<bibcode>/`); un
@@ -1971,3 +1974,4 @@ Nessuna decisione aperta.
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (sprint D3b):** §3.18 — intestazione «Not checked» / «Non controllata» per ogni sezione con `checked` falso (`section_not_checked`), riga di stato del PDF «not checked» solo con `checked` esplicito; approvati il cambio della sola riga Pianeti nei PDF dei profili vecchi e la correzione di `scripts/validate_profiles.py`. Codice: `object_profile.py` (`section_not_checked`), `profile_export.py` (`_status_lines`); test in `test_object_profile.py` e `test_profile_export.py` (`test_pdf_planets_not_checked_and_old_profiles`). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D4 (seconda misura di validazione, SIMBAD contro il mirror di Harvard):** nuova **D25-24** (§13): `sp_type` vuoto in SIMBAD scritto come `null` nel profilo, 2 fail (3C 273, M 13); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5a (decisione del proprietario del 2026-11-10):** D25-24 **decisa** (proposta (a), §13); §3.10 tipo spettrale assente non scritto, nota «SIMBAD has no spectral type» in `details["absent"]`, mostrata nell'interfaccia e nel PDF; regola generale nel `02` §2; nuovo T38. Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D10a (D05-6 del `05`, decisa dal proprietario il 2026-11-11):** §3.13 unità dei pianeti nel risultato e nell'ECSV col nome di Astropy (`earthMass`, `earthRad`), mai kg o m con un fattore; test di rilettura dal JSON e dall'ECSV (`tests/analysis/test_profile_export.py`). Modifica di un file approvato su decisione del proprietario; il file resta `approvato`. |

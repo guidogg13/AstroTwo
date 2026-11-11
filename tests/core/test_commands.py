@@ -860,3 +860,55 @@ def test_t23_samp_origin_and_commands(cache, tmp_path):
     assert reopened.history.entries[0].command.requested_by == origin
     assert reopened.workspace.state.state_json() == session.workspace.state.state_json()
 
+
+
+# --------------------------------------------------------------------------
+# D05-6 (decisione del proprietario del 2026-11-11): unità senza forma FITS scritte col nome di astropy.units,
+# mai con un fattore troncato
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("unit", "text"), [(u.earthMass, "earthMass"), (u.earthRad, "earthRad"),
+                                            (u.jupiterMass, "jupiterMass"), (u.jupiterRad, "jupiterRad")])
+def test_d05_6_units_without_fits_form_use_the_astropy_name(unit, text):
+    from astrotwo.core.commands import quantity_json, unit_from_json, unit_json
+
+    assert unit_json(unit) == text
+    back = unit_from_json(text)
+    assert back == unit and float(back.to(unit)) == 1.0  # andata e ritorno esatti, nessun fattore
+    q = quantity_json(193.87532827 * unit)
+    assert q == {"value": 193.87532827, "unit": text}  # valore invariato, mai convertito in kg o m
+
+
+@pytest.mark.parametrize(("unit", "text"), [(u.d, "d"), (u.deg, "deg"), (u.mas / u.yr, "mas yr-1"), (u.Jy, "Jy"),
+                                            (u.um, "um"), (u.solMass, "solMass"), (u.km / u.s, "km s-1"),
+                                            (u.percent, "%"), (u.dimensionless_unscaled, "")])
+def test_d05_6_units_with_fits_form_unchanged(unit, text):
+    from astrotwo.core.commands import unit_from_json, unit_json
+
+    assert unit_json(unit) == text and unit_from_json(text) == unit
+
+
+@pytest.mark.filterwarnings("ignore::astropy.units.UnitsWarning")  # unità deprecate in VOUnit, lette lo stesso
+def test_d05_6_no_truncated_factor_for_any_unit():
+    """Ogni unità del registro di astropy.units e unità con fattori arbitrari: il testo si rilegge esattamente."""
+    from astrotwo.core.commands import unit_from_json, unit_json
+
+    units = list(u.get_current_unit_registry().all_units)
+    units += [u.CompositeUnit(5.972167867791379e24, [u.kg], [1]), u.CompositeUnit(1.2345678901234567, [u.m], [1]),
+              u.earthMass / u.solMass, u.jupiterMass / u.yr, 1e-3 * u.mag]
+    for unit in units:
+        if isinstance(unit, u.UnrecognizedUnit):
+            continue
+        text = unit_json(unit)
+        assert unit_from_json(text) == unit, (unit, text)
+    assert unit_json(u.CompositeUnit(5.972167867791379e24, [u.kg], [1])) != "5.9721679e+24kg"
+
+
+def test_d05_6_reader_accepts_only_the_written_name():
+    from astrotwo.core.commands import unit_from_json
+
+    for text in ("Earth Mass", "M_earth", "days", "5.9721679e+24kg x"):
+        with pytest.raises(ValueError):
+            unit_from_json(text)
+    assert unit_from_json("5.9721679e+24kg") != u.earthMass  # forma VOUnit vecchia: letta, ma non è la massa terrestre

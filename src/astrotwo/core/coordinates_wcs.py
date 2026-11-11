@@ -147,6 +147,13 @@ class ModuleWarning(tuple):
         return (self[0], self[1], self.params)
 
 
+def _unit_text(unit) -> str:
+    """Testo dell'unità che si rilegge esattamente (05 §3.1, D05-6)."""
+    from astrotwo.core.commands import unit_text
+
+    return unit_text(unit)
+
+
 def _q(value, unit: str) -> dict:
     """Valore con unità in forma JSON (``params``): numero o elenco di numeri, mai arrotondati."""
     if isinstance(value, (list, tuple, np.ndarray)):
@@ -276,8 +283,8 @@ def _require_angle(value, what: str, argument: str) -> u.Quantity:
         )
     if not value.unit.is_equivalent(u.deg):
         raise CoordinatesWcsError(
-            "COORD_UNIT_MISSING", f"{what} in unità {value.unit}, non angolare",
-            params={"reason": "not_angular", "argument": argument, "unit": str(value.unit)},
+            "COORD_UNIT_MISSING", f"{what} in unità {_unit_text(value.unit)}, non angolare",
+            params={"reason": "not_angular", "argument": argument, "unit": _unit_text(value.unit)},
         )
     return value.to(u.deg).astype(np.float64)
 
@@ -1926,7 +1933,7 @@ def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators:
         else:
             if not precision.unit.is_equivalent(u.deg):
                 raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "nello stile decimal la precisione è un angolo",
-                                          params={"reason": "decimal_needs_angle", "unit": str(precision.unit)})
+                                          params={"reason": "decimal_needs_angle", "unit": _unit_text(precision.unit)})
             p = float(precision.to_value(u.deg))
             decimals = max(0, math.ceil(-math.log10(p) - 1e-12))
             used = precision
@@ -1949,7 +1956,7 @@ def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators:
             p_seconds = float(precision.to_value(u.arcsec)) / 15.0  # 1 s di tempo = 15″
         else:
             raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "precisione dell'ascensione retta senza unità di tempo o angolare",
-                                      params={"reason": "ra_unit", "unit": str(precision.unit)})
+                                      params={"reason": "ra_unit", "unit": _unit_text(precision.unit)})
         p_value = p_seconds
     else:
         unit, sizes, symbols = u.deg, (3600.0, 60.0, 1.0), _DMS_SYMBOLS
@@ -1960,7 +1967,7 @@ def _format_axis(angles: Angle, *, kind: str, style: str, precision, separators:
         else:
             raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", f"precisione di unità non adatta a una {('latitudine' if kind == 'lat' else 'longitudine')}",
                                       params={"reason": "unit_unsuitable", "axis": "lat" if kind == "lat" else "lon",
-                                              "unit": str(precision.unit)})
+                                              "unit": _unit_text(precision.unit)})
     if not (math.isfinite(p_value) and p_value > 0):
         raise CoordinatesWcsError("FORMAT_PRECISION_INVALID", "la precisione deve essere positiva",
                                   params={"reason": "not_positive"})

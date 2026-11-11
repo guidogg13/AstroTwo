@@ -198,10 +198,17 @@ class ObjectProfileError(Exception):
         self.params = dict(params or {})
 
 
+def _unit_text(unit: u.UnitBase) -> str:
+    """Testo dell'unità che si rilegge esattamente (05 §3.1, D05-6)."""
+    from astrotwo.core.commands import unit_text
+
+    return unit_text(unit)
+
+
 def _qj(value: u.Quantity, unit: str | None = None) -> dict:
     """Valore con unità in forma JSON per i ``params``, mai arrotondato."""
     q = value.to(unit) if unit else value
-    return {"value": float(q.value), "unit": q.unit.to_string()}
+    return {"value": float(q.value), "unit": _unit_text(q.unit)}
 
 
 def _iso(moment: datetime | None) -> str | None:
@@ -1437,7 +1444,7 @@ def distance_from(bailer_jones, parallax: ProfileValue | None) -> tuple[tuple[Pr
     source = parallax.note or parallax.provenance.service
     if plx.value <= 0:
         return (), (ModuleWarning("PROFILE_NO_DISTANCE", f"nessuna distanza: parallasse non positiva "
-                                  f"({float(plx.value)!r} {plx.unit})", {"reason": "negative_parallax",
+                                  f"({float(plx.value)!r} {_unit_text(plx.unit)})", {"reason": "negative_parallax",
                                                                   "parallax": _qj(plx), "source": source}),)
     err = parallax.error
     if err is None or err.value <= 0:

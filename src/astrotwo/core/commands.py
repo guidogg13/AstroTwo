@@ -250,12 +250,11 @@ def _unit(text: object, path: str) -> u.UnitBase:
     if not isinstance(text, str) or not text.strip():
         raise _invalid(path, "unit_missing", "unità mancante: un numero per una grandezza con unità non si accetta senza "
                        "unità")
-    for fmt in ("fits", "vounit"):
-        try:
-            return u.Unit(text, format=fmt)
-        except ValueError:
-            continue
-    raise _invalid(path, "unit_invalid", f"unità {text!r} non valida in FITS né in VOUnit (D18-2)", unit=text)
+    try:
+        return unit_from_json(text)
+    except ValueError:
+        raise _invalid(path, "unit_invalid", f"unità {text!r} non valida in FITS né in VOUnit (D18-2)",
+                       unit=text) from None
 
 
 def _finite_number(value: object, path: str) -> float:
@@ -355,20 +354,113 @@ def time_text(value: object) -> str | None:
     return f"{text[:-4] if text.endswith('.000') else text} {t.scale.upper()}"
 
 
+def _named_parts(unit: u.UnitBase) -> tuple[float, list]:
+    """Fattore e nomi delle unità (con le potenze) di un'unità, senza scomporle."""
+    if isinstance(unit, u.CompositeUnit):
+        return float(unit.scale), sorted((b.name, float(p)) for b, p in zip(unit.bases, unit.powers, strict=True))
+    return 1.0, [(unit.name, 1.0)]
+
+
+#: Il parser delle unità di Astropy non è sicuro tra thread (vedi ``cpu_turn`` del 14): la scelta del testo di
+#: un'unità e la sua rilettura avvengono sotto questo lock. Nessuna cache: due unità uguali per Astropy possono avere
+#: nomi o definizioni diverse (unità VOUnit «'electron'» dei VOTable e ``u.electron``).
+_UNIT_TEXT_LOCK = threading.RLock()
+
+
+def _reads_back(text: str, fmt: str, unit: u.UnitBase) -> bool:
+    """``True`` se ``text`` riletto nel formato ``fmt`` è esattamente ``unit`` **con le stesse unità con nome** (D05-6:
+    nessun fattore troncato, e mai una massa terrestre scritta come kg con un fattore anche quando sarebbe esatto)."""
+    try:
+        back = u.Unit(text, format=fmt)
+    except (ValueError, TypeError, u.UnitsError):
+        return False
+    return back == unit and _named_parts(back) == _named_parts(unit)
+
+
+def unit_json(unit) -> str:
+    """Testo di un'unità per risultati, parametri e file (§3.1, D18-2 con l'eccezione D05-6).
+
+    FITS, altrimenti VOUnit, **solo se il testo si rilegge esattamente nella stessa unità e con le stesse unità con
+    nome**; altrimenti il nome di ``astropy.units`` (formato generico: ``earthMass``, ``earthRad``, ``jupiterMass``…),
+    anch'esso solo se si rilegge esattamente; per un'unità con un fattore che nessuna forma scrive per intero, il
+    fattore con tutte le cifre del ``float64`` (``repr``). Mai un fattore troncato: se nessuna forma si rilegge,
+    ``ValueError``. Un'unità non riconosciuta (``UnrecognizedUnit``) resta il testo letto, invariato, come un testo
+    già scritto da un modulo (``str``)."""
+    if isinstance(unit, str):  # testo già scritto da un modulo (es. «non dichiarata» del 12): invariato
+        return unit
+    if isinstance(unit, u.UnrecognizedUnit):
+        return unit.name
+    unit = u.Unit(unit)
+    with _UNIT_TEXT_LOCK:
+        return _unit_text(unit)
+
+
+def _unit_text(unit: u.UnitBase) -> str:
+    """:func:`unit_json` senza lock."""
+    for fmt in ("fits", "vounit", "generic"):
+        try:
+            text = unit.to_string(fmt)
+        except (ValueError, TypeError, u.UnitsError):
+            continue
+        if _reads_back(text, fmt, unit):
+            return text
+    bare = u.CompositeUnit(1.0, unit.bases, unit.powers)
+    text = f"{unit.scale!r} {bare.to_string('generic')}".strip()
+    if _reads_back(text, "generic", unit):
+        return text
+    raise ValueError(f"unità {unit!r} senza una forma testuale che si rilegge esattamente (D05-6)")
+
+
+def unit_text(unit) -> str:
+    """Testo di un'unità nel formato generico di ``astropy.units`` (``str(unit)``, usato per testi, messaggi e
+    campi che lo usavano già) **solo se si rilegge esattamente** con le stesse unità con nome; altrimenti il testo
+    di :func:`unit_json` (D05-6: mai un fattore troncato, il generico scrive 6 cifre). ``None`` → ``"None"`` e un
+    testo (``str``) invariato, come ``str()``."""
+    if unit is None or isinstance(unit, str):
+        return str(unit)
+    if isinstance(unit, u.UnrecognizedUnit):
+        return unit.name
+    unit = u.Unit(unit)
+    with _UNIT_TEXT_LOCK:
+        text = unit.to_string("generic")
+        return text if _reads_back(text, "generic", unit) else _unit_text(unit)
+
+
+def unit_from_json(text: str) -> u.UnitBase:
+    """Unità dal testo di :func:`unit_json`: FITS, poi VOUnit (D18-2), poi il nome di ``astropy.units`` **solo** se è
+    esattamente il testo che :func:`unit_json` scrive per quell'unità (D05-6); altrimenti ``ValueError``."""
+    with _UNIT_TEXT_LOCK:
+        return _unit_from_text(text)
+
+
+def _unit_from_text(text: str) -> u.UnitBase:
+    for fmt in ("fits", "vounit"):
+        try:
+            return u.Unit(text, format=fmt)
+        except ValueError:
+            continue
+    try:
+        unit = u.Unit(text, format="generic")
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"unità {text!r} non valida in FITS, VOUnit né come nome di astropy.units (D05-6)") from exc
+    if isinstance(unit, u.UnrecognizedUnit) or unit_json(unit) != text:
+        raise ValueError(f"unità {text!r} non valida in FITS né in VOUnit (D18-2)")
+    return unit
+
+
 def quantity_json(q) -> dict | None:
-    """Forma JSON di una ``Quantity`` scalare: ``{"value", "unit"}`` con l'unità in FITS o VOUnit."""
+    """Forma JSON di una ``Quantity`` scalare: ``{"value", "unit"}`` con l'unità di :func:`unit_json` (D05-6).
+
+    Il valore resta quello della ``Quantity`` (nessuna conversione) quando l'unità ha una forma che si rilegge
+    esattamente; solo un'unità che non ne ha nessuna si converte (angoli in gradi, il resto in SI)."""
     if q is None:
         return None
     q = u.Quantity(q)
-    for fmt in ("fits", "vounit"):
-        try:
-            text = q.unit.to_string(fmt)
-            break
-        except (ValueError, u.UnitsError):
-            continue
-    else:
+    try:
+        text = unit_json(q.unit)
+    except ValueError:
         q = q.to(u.deg) if q.unit.is_equivalent(u.deg) else q.decompose()
-        text = q.unit.to_string("fits")
+        text = unit_json(q.unit)
     return {"value": float(q.value), "unit": text}
 
 
@@ -953,8 +1045,8 @@ def _json_value(value: object) -> object:
         return [_json_value(v) for v in value]
     if isinstance(value, u.Quantity):
         if value.isscalar:
-            return {"value": float(value.value), "unit": value.unit.to_string()}
-        return {"value": [float(v) for v in value.value.ravel()], "unit": value.unit.to_string()}
+            return {"value": float(value.value), "unit": unit_text(value.unit)}
+        return {"value": [float(v) for v in value.value.ravel()], "unit": unit_text(value.unit)}
     if hasattr(value, "tolist"):  # numpy scalare o array
         return _json_value(value.tolist())
     return str(value)
@@ -1151,12 +1243,7 @@ def _q(value: Mapping | None) -> u.Quantity | None:
     """Quantity dalla forma JSON (già validata)."""
     if value is None:
         return None
-    for fmt in ("fits", "vounit"):
-        try:
-            return np.float64(value["value"]) * u.Unit(value["unit"], format=fmt)
-        except ValueError:
-            continue
-    raise AssertionError(value)  # pragma: no cover - validata prima
+    return np.float64(value["value"]) * unit_from_json(value["unit"])
 
 
 def _sky(value: Mapping | None):
@@ -1269,7 +1356,7 @@ def _display_values(plane, limits=None) -> dict:
            "gamma": float(plane.gamma)}
     if limits is not None:
         out["suggested_limits"] = {"vmin": float(limits.vmin), "vmax": float(limits.vmax),
-                                   "unit": None if limits.unit is None else str(limits.unit), "method": limits.method,
+                                   "unit": None if limits.unit is None else unit_text(limits.unit), "method": limits.method,
                                    "parameters": {k: (float(v) if isinstance(v, (float, np.floating)) else v)
                                                   for k, v in dict(limits.parameters).items()},
                                    "n_pixels": int(limits.n_pixels), "notes": list(limits.notes)}
@@ -1277,7 +1364,7 @@ def _display_values(plane, limits=None) -> dict:
 
 
 def _image_unit(image) -> str | None:
-    return None if image.unit is None else str(image.unit)
+    return None if image.unit is None else unit_text(image.unit)
 
 
 def _frame_image(state: WorkspaceState, layer_id: str) -> tuple[WorkspaceState, dict]:
@@ -2135,7 +2222,7 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
             reading = read_pixel(base.data, PixelPosition(x=np.float64(bx), y=np.float64(by), convention="numpy"))
             fits = convert_pixel_convention(reading.x, reading.y, "numpy", "fits")
             values["pixel"] = {"layer": base.id, "value": float(reading.value),
-                               "unit": None if reading.unit is None else str(reading.unit),
+                               "unit": None if reading.unit is None else unit_text(reading.unit),
                                "unit_label": reading.unit_label, "unit_declared": reading.unit_label != UNDECLARED_UNIT,
                                "fits": {"x": int(np.ravel(fits.x)[0]), "y": int(np.ravel(fits.y)[0])}}
         except Exception as exc:  # noqa: BLE001 - "nessun dato" con il messaggio del modulo
@@ -2155,7 +2242,7 @@ def _exec_cursor_read(ctx: ExecutionContext, p: Mapping) -> Outcome:
                 # tile) (``astropy-healpix``); a ordini bassi non è il pixel originale del survey.
                 nside = 2 ** (read.order + hips[0].data.tile_width.bit_length() - 1)
                 values["pixel"] = {"layer": hips[0].id, "value": float(np.ravel(read.values)[0]),
-                                   "unit": None if read.unit is None else str(read.unit), "order": read.order,
+                                   "unit": None if read.unit is None else unit_text(read.unit), "order": read.order,
                                    "resolution": quantity_json(nside_to_pixel_resolution(nside).to(u.arcsec)),
                                    "survey_order": hips[0].data.order}
                 warnings += _module_warnings(read.warnings)
@@ -2194,7 +2281,7 @@ def _exec_simbad_pointer(ctx: ExecutionContext, p: Mapping) -> Outcome:
 def _jsonable(value: object) -> object:
     """Valori dei moduli in forma JSON: ogni ``Quantity`` con la sua unità, tempi con la scala."""
     if isinstance(value, u.Quantity):
-        return quantity_json(value) if value.isscalar else {"value": value.value.tolist(), "unit": str(value.unit)}
+        return quantity_json(value) if value.isscalar else {"value": value.value.tolist(), "unit": unit_text(value.unit)}
     if isinstance(value, Time):
         return time_json(value)
     if isinstance(value, datetime):
@@ -2258,7 +2345,7 @@ def _exec_catalog_describe(ctx: ExecutionContext, p: Mapping) -> Outcome:
     layer = ctx.state.layer(p["layer"])
     table = layer.data
     columns = [{"name": name, "dtype": str(table.table[name].dtype),
-                "unit": None if table.table[name].unit is None else str(table.table[name].unit),
+                "unit": None if table.table[name].unit is None else unit_text(table.table[name].unit),
                 "ucd": table.table[name].meta.get("ucd"), "description": table.table[name].description}
                for name in table.table.colnames]
     values = _catalog_values(layer.id, table)
@@ -2531,7 +2618,7 @@ def _calculator_value(result) -> object:
         out = {k: _jsonable(getattr(value, k)) for k in ("raw", "physical", "bzero", "bscale", "blank",
                                                          "color_index", "in_memory", "x", "y")}
         out["fits_position"] = None if value.fits_position is None else list(value.fits_position)
-        out["unit"] = str(unit) if isinstance(unit, u.UnitBase) else unit
+        out["unit"] = unit_text(unit) if isinstance(unit, u.UnitBase) else unit
         return out
     if isinstance(value, calc.CoordinatesOutput):
         reps = [{"position": sky_json(r.position), "lon": {"value": float(r.lon_deg), "unit": "deg"},
@@ -2564,7 +2651,7 @@ def _calc_executor(name: str) -> Callable:
         result = run_command({"name": name, "version": 1, "parameters": copy.deepcopy(dict(p))}, layers)
         unit = result.unit
         values = {"calculator": result.calculator, "input": result.input, "value": _calculator_value(result),
-                  "unit": str(unit) if isinstance(unit, u.UnitBase) else unit, "scale": result.scale,
+                  "unit": unit_text(unit) if isinstance(unit, u.UnitBase) else unit, "scale": result.scale,
                   "library": result.library, "notes": list(result.notes),
                   "requested_at": result.requested_at.isoformat(),
                   "iers": None if result.iers is None else result.iers.text}

@@ -46,7 +46,7 @@ from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, Qt, QThreadPool,
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QHBoxLayout, QLabel, QListWidget,
                                QListWidgetItem, QSlider, QToolButton, QVBoxLayout, QWidget)
 
-from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text
+from astrotwo.core.commands import ResultMessage, quantity_json, sky_json, time_text, unit_from_json, unit_text
 from astrotwo.core.hips import DEFAULT_TILE_MEMORY_BYTES, HiPSError, TileMemory, _switch_cause
 from astrotwo.ui.message_view import exception_message, shown_text
 from astrotwo.ui.sky_tools import (
@@ -697,7 +697,7 @@ def format_field(field: Mapping | None) -> str:
     proprietario del 2026-10-17): in gradi con 2 decimali da 1° in su, in primi sotto 1°, in secondi sotto 1′."""
     if field is None:
         return ""
-    q = field["value"] * u.Unit(field["unit"], format="fits")
+    q = field["value"] * unit_from_json(field["unit"])
     for unit, symbol in ((u.deg, "°"), (u.arcmin, "′")):
         if q.to_value(unit) >= 1.0:
             return f"{q.to_value(unit):.2f}{symbol}"
@@ -870,7 +870,7 @@ class SkyViewer(QWidget):
         §3.4). Il campo è quello del risultato del comando (10)."""
         if self.view is None or self.view.scale is None or self.field is None:
             return False
-        field = self.field["value"] * u.Unit(self.field["unit"], format="fits")
+        field = self.field["value"] * unit_from_json(self.field["unit"])
         if field <= GO_TO_FIELD_MAX:
             return False
         # Parametro scelto da noi (non un risultato): a campi piccoli il campo è la diagonale della finestra per la
@@ -1910,7 +1910,7 @@ class LayerPanel(QWidget):
             except Exception as exc:  # noqa: BLE001 - corpo non ricavabile: il codice del 19
                 parts.append(t["body_unknown"].replace("%1", str(getattr(exc, "code", type(exc).__name__))))
         if layer.kind == "measure" and hasattr(data, "value"):  # valore pieno e unità del 17 (41 §3.19)
-            parts.append(f"{float(data.value.value)!r} {data.value.unit}")
+            parts.append(f"{float(data.value.value)!r} {unit_text(data.value.unit)}")
         if layer.kind == "image":
             epoch = None if data is None or data.wcs is None else data.wcs.image_epoch
             parts.append(t["epoch"].replace("%1", time_text(epoch)) if epoch is not None else t["epoch_unknown"])

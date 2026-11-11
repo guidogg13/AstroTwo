@@ -20,7 +20,6 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 
 | ID | Di cosa si tratta | Blocca la 1.0 | Consiglio di Claude Code | Perché |
 |---|---|---|---|---|
-| `D05-6` | Unità senza forma FITS nei risultati: masse e raggi dei pianeti scritti `5.9721679e+24kg` e `6378100m` (fattore della massa troncato, scarto 5,4·10⁻⁹); 36 «fail» della validazione con i numeri identici (`05` §13, `docs/validation.md` §5.0bis) | **da decidere dal proprietario** (aperta il 2026-11-11, sprint D9, dopo il `.dmg` candidato) | **(a)** scrivere il nome che Astropy rilegge esattamente (`earthMass`, `earthRad`), con un test di andata e ritorno; confronto delle unità come unità Astropy nello script di validazione | Valore letto giusto, ma unità illeggibile nell'ECSV e, per la massa, non esattamente quella dell'archivio. Correggerla richiede un nuovo candidato (build 7); lasciarla richiede di dichiararla nelle note di rilascio |
 | `D40-10` | Pulizia delle tabelle SAMP ricevute (`40` §13), voce futura | no | Rinviare a dopo la 1.0 | Le tabelle si accumulano ma non rompono niente; serve una specifica nuova (comando, sessioni che citano file cancellati) |
 | `D10-5` | Catalogo di riferimento e limiti di magnitudine per la calibrazione astrometrica (H6) | no | Rinviare a dopo la 1.0 | La calibrazione astrometrica non è nella 1.0; si decide quando si scrive quella funzione |
 | `A8` | Livello di compatibilità con lo scripting di Aladin | no | Rinviare a dopo la 1.0 | Già rimandata a dopo il livello 1; il modulo `24` non esiste ancora |
@@ -38,7 +37,7 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 | `D32-3` | Risultati più leggeri verso l'IA per provider con pochi token | no | Rinviare a dopo la 1.0 (già deciso) | Rinviata dal proprietario il 2026-10-25 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS | no | Rinviare (bassa priorità, già deciso) | Opzione esplicita, nessun uso nella 1.0 |
 
-**Conteggio (ricontato dalle righe sopra, sprint D9):** 17 aperte; `D05-6` nuova, **da decidere prima del rilascio** (correzione con un nuovo candidato, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D8): 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
+**Conteggio (ricontato dalle righe sopra, sprint D10a):** 16 aperte; **0 bloccano la 1.0** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), e corretta nel codice: `05` §13). Prima (sprint D9): 17 aperte; `D05-6` nuova, **da decidere prima del rilascio** (correzione con un nuovo candidato, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D8): 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
 dopo la 1.0, di cui 3 dichiarate come limiti noti nelle note di rilascio (`AP1`, `D41-7`, `D41-8`, decisione del
 proprietario del 2026-11-11). Prima (sprint D7): 19 aperte, 3 da decidere prima della 1.0 (`D14-15`, `D42-1`,
 `A6-b`).
@@ -78,7 +77,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-11 (sprint D9): 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D05-6`, unità senza forma FITS nei risultati, aperta dalla validazione del candidato 1.0.0; prima nel file di origine `05` §13).
+**Dal 2026-11-11 (sprint D10a): 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a): unità senza forma FITS col nome di Astropy, mai un fattore troncato; confronto delle unità come unità di Astropy nella validazione; prima nel file di origine `05` §13, poi tolta).
+
+Prima, **Dal 2026-11-11 (sprint D9): 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D05-6`, unità senza forma FITS nei risultati, aperta dalla validazione del candidato 1.0.0; prima nel file di origine `05` §13).
 
 Prima, **Dal 2026-11-11 (sprint D8): 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`A6-b` decisa — 1.0 senza firma Developer ID né notarizzazione —, `D14-15` e `D42-1` confermate così come sono nel codice, dal proprietario il 2026-11-11, prima nei file di origine `60` §13, `14` §13, `42` §13, e tolte).
 
@@ -404,11 +405,11 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (17)
+## 5. GRUPPO 3 — rimandabili al momento del codice (16)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
-| `D05-6` | Unità senza forma FITS nei risultati (masse e raggi terrestri dei pianeti scritti in kg e m con un fattore, quello della massa troncato a 8 cifre): (a) nome Astropy rilegibile esattamente, (b) conversione con tutte le cifre, (c) lasciare e dichiarare; aperta il 2026-11-11 (sprint D9) dalla validazione del candidato 1.0.0 | `05-comandi-sessione.md` §13 |
+| — | (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), corretta nel codice nello sprint D10a; `05` §13) | — |
 | — | (`A6-b` decisa, `D14-15` e `D42-1` confermate dal proprietario il 2026-11-11; `60` §13, `14` §13, `42` §13) | — |
 | — | (`D60-6` approvata dal proprietario il 2026-11-10; `60` §13) | — |
 | — | (`D60-7` approvata dal proprietario il 2026-11-11, con il collegamento ad `/Applications` nel `.dmg`; `60` §13) | — |
@@ -562,3 +563,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-11 | Claude Code | **Sprint D7 (richiesta del proprietario del 2026-11-11):** nuova §0, smistamento delle 19 decisioni aperte per la 1.0 (blocca sì/no, consiglio, motivo): 0 bloccanti da sole, 3 da decidere prima (`D14-15`, `D42-1`, `A6-b`), 16 da rinviare. Nessuna decisione chiusa né cambiata. **19 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D8 (decisioni del proprietario del 2026-11-11):** `A6-b` decisa (1.0 senza firma Developer ID né notarizzazione), `D14-15` e `D42-1` confermate così come sono nel codice; scritte prima nei file di origine (`60` §13, `01` §5, `14` §13, `42` §13) e tolte da §0 e §5. `AP1`, `D41-7`, `D41-8` restano aperte (rinviate, limiti noti nelle note di rilascio). **16 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D9 (candidato 1.0.0):** nuova `D05-6` (Gruppo 3; in §0 «da decidere prima del rilascio»), scritta prima nel file di origine (`05` §13), dalla validazione del 2026-11-11 (`docs/validation.md` §5.0bis). **17 aperte.** |
+| 2026-11-11 | Claude Code | **Sprint D10a (decisione del proprietario del 2026-11-11):** `D05-6` **decisa**, proposta (a), scritta prima nel file di origine (`05` §13, anche `18` e `25` nel registro) e corretta nel codice; righe tolte da §0 e §5. **16 aperte**, 0 bloccano la 1.0. |

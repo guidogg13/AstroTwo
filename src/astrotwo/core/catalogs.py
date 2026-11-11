@@ -39,6 +39,7 @@ from astropy.time import Time
 from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import parse as safe_parse_xml
 
+from astrotwo.core.commands import unit_text
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
     ModuleWarning,
@@ -232,7 +233,7 @@ class CatalogTable:
             out.append({
                 "name": name,
                 "dtype": str(col.dtype),
-                "unit": col.unit.to_string() if col.unit is not None else None,
+                "unit": unit_text(col.unit) if col.unit is not None else None,
                 "unit_unrecognized": col.meta.get("unit_unrecognized"),
                 "ucd": col.meta.get("ucd"),
                 "description": col.description,
@@ -323,7 +324,7 @@ def _unit_string(unit) -> str | None:
         return unit.name
     if isinstance(unit, str):
         return unit
-    return unit.to_string()
+    return unit.to_string()  # testo da rileggere in FITS o VOUnit (ingresso, non un'uscita: D05-6 non si applica)
 
 
 def _standard_unit(text: str):
@@ -549,8 +550,8 @@ def confirm_position_columns(table: CatalogTable, lon: str, lat: str, frame: str
     for name in (lon, lat):
         if new[name].unit is None:
             new[name].unit = u.Unit(unit)
-            notes.append(ModuleWarning("UNIT_DECLARED", f"colonna {name!r}: unità {u.Unit(unit)} dichiarata dall'utente",
-                                       {"column": name, "unit": str(u.Unit(unit))}))
+            notes.append(ModuleWarning("UNIT_DECLARED", f"colonna {name!r}: unità {unit_text(u.Unit(unit))} dichiarata dall'utente",
+                                       {"column": name, "unit": unit_text(u.Unit(unit))}))
     # D41-6: stesse colonne e stesso sistema dei metadati (COOSYS, utype MANGO, ECSV) → epoca ed equinozio
     # dichiarati conservati, anche a una conferma ripetuta che li aveva già conservati (sprint 9); altrimenti nessuna
     # epoca (mai assunta).
@@ -1886,9 +1887,9 @@ def _quantity_column(table: Table, name: str, unit, argument: str):
         raise CatalogsError("COLUMN_TYPE_UNSUPPORTED", f"{what}: colonna {name!r} non numerica",
                             params={"reason": "argument_not_numeric", "argument": argument, "column": name})
     if column.unit is None or not column.unit.is_equivalent(unit):
-        raise CatalogsError("UNIT_INCOMPATIBLE", f"{what}: colonna {name!r} in unità {column.unit}, serve {unit}",
+        raise CatalogsError("UNIT_INCOMPATIBLE", f"{what}: colonna {name!r} in unità {unit_text(column.unit)}, serve {unit_text(unit)}",
                             params={"reason": "argument_unit", "argument": argument, "column": name,
-                                    "unit": str(column.unit), "required": str(unit)})
+                                    "unit": unit_text(column.unit), "required": unit_text(unit)})
     values = np.asarray(getattr(column, "data", column), dtype=np.float64)
     valid = _valid_mask(column) & np.isfinite(values)
     return (values * column.unit).to(unit), valid
@@ -1910,9 +1911,9 @@ def _source_epochs(table: CatalogTable, source_epoch) -> tuple[np.ndarray, str]:
         name = columns[0]
         column = t[name]
         if column.unit is None or not column.unit.is_equivalent(u.yr):
-            raise CatalogsError("EPOCH_INVALID", f"colonna d'epoca {name!r} in unità {column.unit}: servono anni "
+            raise CatalogsError("EPOCH_INVALID", f"colonna d'epoca {name!r} in unità {unit_text(column.unit)}: servono anni "
                                 "giuliani; altrimenti source_epoch",
-                                params={"reason": "epoch_column_unit", "column": name, "unit": str(column.unit)})
+                                params={"reason": "epoch_column_unit", "column": name, "unit": unit_text(column.unit)})
         values = np.asarray(getattr(column, "data", column), dtype=np.float64) * column.unit
         out = np.array([None if not ok else float(v) for v, ok in
                         zip(values.to_value(u.yr), _valid_mask(column) & np.isfinite(values.value), strict=True)],
@@ -2333,13 +2334,13 @@ def calculated_column(table: CatalogTable, name: str, expression: str, unit=None
         column.meta["ucd"] = ucd
     if decimals is not None:
         column.format = f".{decimals}f"
-    step = f"colonna calcolata {name!r} = {expression}" + (f" [{column.unit}]" if column.unit is not None else "")
+    step = f"colonna calcolata {name!r} = {expression}" + (f" [{unit_text(column.unit)}]" if column.unit is not None else "")
     if inplace:
         table.table[name] = column
         object.__setattr__(table, "history", table.history + (f"{step} (in posto, inplace=True)",))
         note = ModuleWarning("INPLACE", f"{step}: tabella data modificata",
                              {"reason": "calculated_unit", "name": name, "expression": expression,
-                              "unit": str(column.unit)} if column.unit is not None
+                              "unit": unit_text(column.unit)} if column.unit is not None
                              else {"reason": "calculated", "name": name, "expression": expression})
         object.__setattr__(table, "warnings", table.warnings + (note,))
         return table

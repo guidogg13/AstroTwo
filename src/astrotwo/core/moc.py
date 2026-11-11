@@ -32,6 +32,7 @@ from astropy.io import fits
 from mocpy import MOC, STMOC, TimeMOC
 
 import astrotwo
+from astrotwo.core.commands import unit_text
 from astrotwo.core.coordinates_wcs import ModuleWarning
 
 __all__ = [
@@ -1115,7 +1116,7 @@ def healpix_map(table, order: int, *, column: str | None = None) -> HealpixMap:
         values = values.astype(np.int64)
     description = (f"mappa HEALPix {HEALPIX_SCHEME} in {HEALPIX_FRAME}, ordine {order} (nside {hp.nside}), "
                    f"{'conteggi' if column is None else 'somma di ' + column}"
-                   f"{'' if unit is None else ' [' + str(unit) + ']'} per cella, {lon.size} righe{note} "
+                   f"{'' if unit is None else ' [' + unit_text(unit) + ']'} per cella, {lon.size} righe{note} "
                    f"(calcolo: {_healpix_provenance()})")
     return HealpixMap(values=values, order=order, quantity=quantity, unit=unit, scheme=HEALPIX_SCHEME,
                       frame=HEALPIX_FRAME, origin=f"tabella {table.origin}", description=description,
@@ -1324,8 +1325,8 @@ def read_probability_map(path) -> ProbabilityMap:
         col = table["PROBDENSITY"]
         if col.unit is None or not col.unit.is_equivalent(1 / u.sr):
             raise _invalid_map(path, "density_unit",
-                               f"PROBDENSITY con unità {col.unit!r}: serve una densità per steradiante",
-                               unit=str(col.unit))
+                               f"PROBDENSITY con unità {unit_text(col.unit)!r}: serve una densità per steradiante",
+                               unit=unit_text(col.unit))
         density = np.asarray(col.quantity.to_value(1 / u.sr), dtype=np.float64)
         uniq = np.asarray(table["UNIQ"], dtype=np.uint64)
         layout = "multi-order"

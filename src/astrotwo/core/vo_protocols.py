@@ -50,6 +50,7 @@ from astropy.io.votable import parse as parse_votable
 from astropy.table import Table
 
 import astrotwo
+from astrotwo.core.commands import unit_text
 from astrotwo.core.cache import NETWORK_TIMEOUTS, CacheError, NetworkTimeouts, SharedCache
 from astrotwo.core.coordinates_wcs import CoordinatesWcsError, ModuleWarning, SkyFrame, wcs_from_header
 from astrotwo.core.catalogs import (
@@ -1589,7 +1590,7 @@ def _descriptors(votable, payload: bytes = b"") -> tuple[ServiceDescriptor, ...]
                 value = (text or None) if text is not None else _param_text(entry.value)
                 params.append(ServiceParam(
                     name=entry.name, ref=entry.ref or None, ref_column=fields.get(entry.ref) if entry.ref else None,
-                    value=value, unit=str(entry.unit) if entry.unit is not None else None, ucd=entry.ucd,
+                    value=value, unit=unit_text(entry.unit) if entry.unit is not None else None, ucd=entry.ucd,
                     datatype=entry.datatype,
                     minimum=None if values is None or values.min is None else str(values.min),
                     maximum=None if values is None or values.max is None else str(values.max),
@@ -1719,7 +1720,7 @@ def _band_interval(band) -> u.Quantity:
     try:
         meters = band.to(u.m, equivalencies=u.spectral())  # SIA 2.0: lunghezza d'onda osservata in metri
     except u.UnitConversionError as exc:
-        raise TypeError(f"band: unità non spettrale ({band.unit})") from exc
+        raise TypeError(f"band: unità non spettrale ({unit_text(band.unit)})") from exc
     return np.sort(meters)
 
 

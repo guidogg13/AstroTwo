@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 
 import astropy.units as u
 
+from astrotwo.core.commands import unit_text
 from astrotwo.core.coordinates_wcs import ModuleWarning
 
 __all__ = [
@@ -1064,7 +1065,7 @@ def order_for_resolution(service: HiPSService, resolution) -> tuple[int, tuple[t
     return service.order, (ModuleWarning(
         "HIPS_RESOLUTION_LIMIT", f"{service.hips_id}: risoluzione richiesta {resolution} oltre quella del servizio; "
         f"ordine massimo {service.order}",
-        {"hips_id": service.hips_id, "resolution": _q(resolution.value, str(resolution.unit)),
+        {"hips_id": service.hips_id, "resolution": _q(resolution.value, unit_text(resolution.unit)),
          "max_order": service.order}),)
 
 
