@@ -1,6 +1,6 @@
 # Validation of AstroTwo
 
-> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. **Third run, 2026-11-11, on the 1.0.0 candidate (section 5.0bis): 343 values within tolerance, 36 outside, 48 not measured.** The Gaia DR3 sections (astrometry, photometry, Bailer-Jones distances) and the planets were measured for the first time and all Gaia values are within tolerance. The 36 values outside are all planet periods, masses and radii: the **numbers are identical** to the NASA Exoplanet Archive, but the **unit is written differently** (section 5.0bis); they stay «fail» until the project owner decides (decision D05-6), and the tolerances do not change. Still **not measured**: 2MASS and AllWISE magnitudes against VizieR and the VizieR SED series (TAPVizieR of the CDS not answering). All SIMBAD values were compared with the **Harvard mirror** (SIMBAD at the CDS answered HTTP 404) and are **to be repeated against the CDS**. The earlier runs of 2026-11-10 are in sections 5.1–5.4.
+> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. **Fourth run, 2026-11-11, on the 1.0.0 build 7 candidate (section 5.0ter):** after decision D05-6 the three objects with planets were measured again: **all 72 planet values are within tolerance**, with the tolerances unchanged. Together with the four other objects from the third run (section 5.0bis): **379 values within tolerance, 0 outside, 48 not measured.** Still **not measured**: 2MASS and AllWISE magnitudes against VizieR and the VizieR SED series (TAPVizieR of the CDS not answering), and 11 rows where the object has no 2MASS or AllWISE designation in the Harvard mirror of SIMBAD (to be checked against SIMBAD at the CDS, section 5.0ter). All SIMBAD values were compared with the **Harvard mirror** (SIMBAD at the CDS answered HTTP 404) and are **to be repeated against the CDS**. Earlier runs are in sections 5.0bis–5.4.
 
 ## 1. Purpose
 
@@ -52,12 +52,14 @@ AstroTwo values are of two kinds, and the ECSV export says which one each value 
 | Magnitudes (Gaia G, BP, RP; 2MASS J, H, Ks; AllWISE W1–W4) and errors | read | **Identical in the native precision of the column**: for a `float32` column (Gaia photometry), equal after rounding both values to `float32`; for `float64` and decimal text, difference 0 | Gaia stores magnitudes as `float32`; the same number written as `float32` or as `float64` may print differently but is the same value. Any other difference is an error. |
 | Distance, Bailer-Jones et al. (2021) median and 16th–84th percentiles | read | **Identical** (difference 0) | Copied from `external.gaiaedr3_distance`. |
 | Distance as 1/parallax (only when declared, parallax/error ≥ 10)¹ | computed | **Relative difference ≤ 1 × 10⁻¹²** against `1000 / parallax[mas]` pc computed independently | One division in `float64`: the only possible difference is rounding, about 10⁻¹⁶. 10⁻¹² leaves room for a different but correct order of operations and still catches any real mistake (wrong unit, wrong column). |
-| Planet parameters (orbital period, semi-major axis, eccentricity, radius, mass, equilibrium temperature) and their errors | read | **Identical** (difference 0), same unit | Copied from `pscomppars`. |
+| Planet parameters (orbital period, semi-major axis, eccentricity, radius, mass, equilibrium temperature) and their errors | read | **Identical** (difference 0), same unit² | Copied from `pscomppars`. |
 | Identifiers (SIMBAD main identifier, Gaia DR3, 2MASS, AllWISE designations, planet names) | read | **Identical text** | A different identifier means a different object. |
 | SED flux from a magnitude | computed | **Relative difference ≤ 1 × 10⁻¹⁰** against `F0 × 10^(−0.4 m)` computed independently with the zero point that AstroTwo declares for that band | Two `float64` operations; the zero point itself is a declared choice, checked separately against its published source, not against this tolerance. |
 | Angular separations (cross-match to 2MASS and AllWISE) | computed | **≤ 1 µas** (10⁻⁶ arcsec) against an independent Astropy computation from the same two positions | Separations are about 1 arcsec; `float64` rounding is far below 1 µas, and 1 µas is far below any catalogue error. |
 
 ¹ *Correction made on 2026-11-10, after the commit of the tolerances and before writing the results:* this row said «parallax/error ≥ 5». AstroTwo declares a distance as 1/parallax only when parallax/error ≥ 10 (`PARALLAX_SNR_MIN`, `mdfiles/25-analisi-profilo-oggetto.md`). The ≥ 5 was a mistake in the description of when the row applies. **The tolerance itself (10⁻¹²) is unchanged**, and no measured value depended on this sentence (no 1/parallax distance could be measured on that day).
+
+² *Clarification of 2026-11-11 (decision D05-6 of the project owner), the tolerance itself unchanged:* «same unit» means the same **Astropy unit**, not the same text. The NASA Exoplanet Archive writes its units as words (`days`, `Earth Mass`, `Earth Radius`); the script reads them with a table declared by hand in `scripts/validate_profiles.py` (`REFERENCE_UNIT_WORDS`: `d`, `earthMass`, `earthRad`) and compares the units with Astropy's equality, which is exact: a unit written as kilograms with a rounded factor is **not** the Earth mass.
 
 **Outcomes.**
 
@@ -138,7 +140,30 @@ The services did not answer in a stable way, so `scripts/validate_profiles.py` w
 
 The Gaia archive alternated between 200 and 503 within seconds (during the same hour a network test received «Error 503: Server overloaded: synchronous job rejected due to maximum number of synchronous queued jobs (150) reached»). That is not a stable answer, so `scripts/validate_profiles.py` was **not** run: a run against a service that answers only some requests would give a mix of measured and «not measured» rows for the same object. The counts stay **177 within tolerance, 0 outside, 85 not measured**.
 
-### 5.0bis Third run of 2026-11-11 (15:54–16:04 UTC): AstroTwo 1.0.0 candidate
+### 5.0ter Fourth run of 2026-11-11 (21:28–21:34 UTC): AstroTwo 1.0.0 build 7, objects with planets
+
+**Why.** In the third run (section 5.0bis) the 36 planet periods, masses and radii had identical numbers but a different unit text. The project owner decided D05-6 on 2026-11-11 (`mdfiles/05-comandi-sessione.md` §13): units without a FITS form are written with their **Astropy name** (`earthMass`, `earthRad`; the period stays `d`), never as kilograms or metres with a factor, and the comparison reads units as Astropy units (footnote 2 of section 2.1). The tolerances do not change. The fix is in commit `fe542ff`; the candidate is built from commit `c43d622` (1.0.0, build 7).
+
+**Service checks.** 21:15 and 21:28 UTC: SIMBAD at the CDS HTTP 404, VizieR SED service HTTP 404, TAPVizieR no answer within 40 s; SIMBAD mirror at Harvard, Gaia archive and NASA Exoplanet Archive HTTP 200. The CDS was down at both checks, so only the three objects with planets were measured again (instruction of the project owner: at least the Planets section; the rest only if Gaia and the CDS are both stable).
+
+**Run.** `uv run python scripts/validate_profiles.py --out docs/validation-runs/2026-11-11-run2 "51 Peg" "TRAPPIST-1" "Barnard's Star"`, code of commit `c43d622`. Reference servers that answered: Gaia archive (103 rows), NASA Exoplanet Archive (72 rows), SIMBAD mirror at Harvard (33 rows, «to be repeated against CDS»).
+
+| Object | Within tolerance | Outside | Not measured |
+|---|---|---|---|
+| 51 Peg | 60 | 0 | 8 |
+| TRAPPIST-1 | 91 | 0 | 8 |
+| Barnard's Star | 78 | 0 | 8 |
+| **Total (this run)** | **229** | **0** | **24** |
+| Vega, eta Tau, 3C 273, M 13 (third run, section 5.0bis, unchanged) | 150 | 0 | 24 |
+| **Total, seven objects** | **379** | **0** | **48** |
+
+**Planets: 72 within tolerance, 0 outside.** Every planet row has difference 0 in the number, and now also the same Astropy unit: for example 51 Peg b `193.87532827 earthMass` against `193.87532827 Earth Mass`, `14.1 earthRad` against `14.1 Earth Radius`, `4.2307966 d` against `4.2307966 days`. Compared with the third run, the only rows that change are the **36 rows** «fail» → «pass» (12 periods, 12 masses, 12 radii); every other row of the three objects has the same outcome. The four objects without planets were not measured again: the change of D05-6 does not touch the values compared for them (identity, astrometry, distance, photometry write the same units as before), and their services (Gaia, Harvard mirror) were unchanged.
+
+**The 48 values not measured (all photometry), unchanged:** 30 rows because TAPVizieR (the reference for 2MASS and AllWISE) did not answer; 7 because AstroTwo did not request the VizieR SED series (the CDS was down; note `PROFILE_VIZIER_SKIPPED`); **11 rows** because the reference side found no 2MASS or AllWISE designation for the object: AllWISE for 51 Peg and Vega (4 + 4 rows), 2MASS for M 13 (3 rows).
+
+**The 11 rows without a designation: SIMBAD, or only the mirror?** The reference side takes the designation from the SIMBAD identifiers and looks it up in VizieR. On 2026-11-11 (21:04 UTC) the Harvard mirror lists, for these objects, `2MASS J22572795+2046077` (51 Peg); `2MASS J18365633+3847012` and `WISE J183656.49+384703.9` (Vega; a WISE All-Sky name, not an AllWISE `WISEA` name); nothing for M 13. Whether SIMBAD **at the CDS** has the same identifiers could **not** be checked: SIMBAD at the CDS answered HTTP 404 at 21:04, 21:15 and 21:28 UTC, and the CDS name resolver Sesame answered «Nothing found» for all three objects (21:05–21:07 UTC), so it was not answering from SIMBAD either. The original archives at IRSA do not settle the question: AllWISE has a source within 3″ of 51 Peg and none within 3″ of Vega (bright stars saturate WISE), and the 2MASS point-source catalogue has a source within 3″ of the centre of M 13 (a star of the cluster, not the cluster). Because the absence was seen only in the mirror, **these 11 rows stay «not measured»**, not «not applicable»: they are to be checked against SIMBAD at the CDS when it answers. If SIMBAD at the CDS also has no such designation, they will be classified as «not applicable» with that reason.
+
+### 5.0bis Third run of 2026-11-11 (15:54–16:04 UTC): AstroTwo 1.0.0 candidate (build 6, discarded)
 
 **Service checks before the run.** 15:09 and 15:11 UTC: SIMBAD at the CDS HTTP 404, TAPVizieR no answer within 40 s, VizieR photometry service HTTP 404, Gaia archive HTTP 200, NASA Exoplanet Archive HTTP 200. Between 15:10 and 15:22 UTC the Gaia network tests passed. 15:42 UTC: the same answers, Gaia also for `external.gaiaedr3_distance`; 15:54 UTC: Gaia HTTP 200. The Gaia archive answered steadily for more than 30 minutes, so the run was made (instruction of the project owner, 2026-11-11: measure the Gaia DR3 sections when the archive is stable, and the other services when they are back). The CDS was still down.
 
@@ -169,7 +194,7 @@ The Gaia archive alternated between 200 and 503 within seconds (during the same 
 - **mass (12 rows):** AstroTwo writes the unit `5.9721679e+24kg`, the archive `Earth Mass`. AstroTwo reads the value in Earth masses, but the JSON and ECSV form of a quantity (FITS units, else VOUnit, rule D18-2 of the `05`) has no Earth mass, so the unit is written as kilograms with a factor rounded to 8 digits. The written unit is therefore **not exactly** the Earth mass of Astropy (relative difference 5.4 × 10⁻⁹), and it is hard to read. This is a **defect of AstroTwo's output**, not of the value read.
 - **radius (12 rows):** AstroTwo writes `6378100m`, the archive `Earth Radius`. The factor is exact (the nominal Earth radius), but the text differs and is hard to read.
 
-None of the accepted reasons for an «explained difference» (section 2.1) applies, so these rows are **fail**. The tolerances are not changed. How to write these units, and whether the comparison should read units as Astropy units instead of text, is decision **D05-6**, open for the project owner (`mdfiles/05-comandi-sessione.md` §13). Correcting the output changes the code and needs a new candidate.
+None of the accepted reasons for an «explained difference» (section 2.1) applies, so these rows are **fail**. The tolerances are not changed. How to write these units, and whether the comparison should read units as Astropy units instead of text, was decision **D05-6**, decided by the project owner on 2026-11-11 (proposal (a), `mdfiles/05-comandi-sessione.md` §13): fixed in the code and measured again in section 5.0ter, where all 72 planet rows pass. The build 6 candidate was discarded.
 
 **The 48 values not measured (all photometry):** 30 rows because TAPVizieR (the reference for 2MASS and AllWISE) did not answer; 7 because AstroTwo did not request the VizieR SED series (the CDS was down; AstroTwo note `PROFILE_VIZIER_SKIPPED`); 8 and 3 because SIMBAD has no AllWISE or 2MASS designation for the object (no reference row to compare).
 
@@ -588,6 +613,8 @@ A first run the same day (15:48–16:03 UTC, before the change of the profile no
 ## 6. Files for reproduction
 
 - **Script:** [`scripts/validate_profiles.py`](../scripts/validate_profiles.py). Run it from the repository with `uv run python scripts/validate_profiles.py` (all seven objects) or with object names as arguments. It uses the network, so it is **not** part of the automatic test suite. It writes into `docs/validation-runs/<date>/`.
+- **Fourth run of 2026-11-11 (objects with planets, build 7):** [`docs/validation-runs/2026-11-11-run2/`](validation-runs/2026-11-11-run2/), same files (rows of section 5.0ter).
+- **Third run of 2026-11-11 (build 6):** [`docs/validation-runs/2026-11-11/`](validation-runs/2026-11-11/), same files (rows of section 5.0bis).
 - **Second run of 2026-11-10:** [`docs/validation-runs/2026-11-10-run2/`](validation-runs/2026-11-10-run2/), same files as below (rows of section 5.2), plus `results-recompared.json` and `results-recompared.md`: the same rows recompared without network with the empty-text rule of D25-24 (`--recompare`, section 5.1).
 - **First run of 2026-11-10:** [`docs/validation-runs/2026-11-10/`](validation-runs/2026-11-10/)
   - `<object>-result.json`: the result of the `object.profile` command, with values, provenance, warnings and errors (thumbnail images removed);
