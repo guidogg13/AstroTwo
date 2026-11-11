@@ -25,8 +25,8 @@ SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d
 
 def test_t1_version_semver_and_pep440_are_the_same():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == "0.1.0b5"
-    assert astrotwo.__version__ == "0.1.0-beta.5" and SEMVER.match(astrotwo.__version__)
+    assert project["project"]["version"] == "1.0.0"
+    assert astrotwo.__version__ == "1.0.0" and SEMVER.match(astrotwo.__version__)
     assert Version(project["project"]["version"]) == Version(astrotwo.__version__)
     assert isinstance(project["tool"]["astrotwo"]["bundle"]["build"], int)
 

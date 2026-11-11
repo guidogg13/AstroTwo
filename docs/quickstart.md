@@ -1,6 +1,6 @@
 # AstroTwo quick start
 
-This guide walks through the main functions of AstroTwo 0.1.0-beta.5. Menu names are those of the English interface; AstroTwo is also available in Italian (*Settings → Language*).
+This guide walks through the main functions of AstroTwo 1.0.0. Menu names are those of the English interface; AstroTwo is also available in Italian (*Settings → Language*).
 
 Everything in sections 1–8 works **without the AI assistant**. Section 9 is optional.
 

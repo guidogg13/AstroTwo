@@ -16,8 +16,8 @@ authors:
     family-names: "Ratti"
     # ORCID: not available yet. Add it here when it exists, e.g.
     # orcid: "https://orcid.org/0000-0000-0000-0000"
-version: "0.1.0-beta.5"
-date-released: "2026-11-05"
+version: "1.0.0"
+date-released: "2026-11-11"
 license: "GPL-3.0-or-later"
 repository-code: "https://github.com/guidogg13/AstroTwo"
 # DOI: to be added after the first archive on Zenodo, e.g.
