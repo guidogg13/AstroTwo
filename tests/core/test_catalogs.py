@@ -1412,21 +1412,32 @@ def test_load_catalog_region_simbad_mango(service, cache, monkeypatch):
 
 
 @pytest.mark.network
-def test_t33_load_catalog_region_network(cache):
+def test_t33_load_catalog_region_network(cache, request):
     from astropy.coordinates import FK5, SkyCoord
 
     m31 = SkyCoord(10.6847 * u.deg, 41.2690 * u.deg)
     cat = load_catalog("II/246/out", region=(m31, 30 * u.arcsec), cache=cache)
-    assert cat.rows > 0 and cat.positions.frame == "fk5" and cat.positions.equinox == "J2000"
-    rows = SkyCoord(cat.table["RAJ2000"].quantity, cat.table["DEJ2000"].quantity, frame=FK5(equinox="J2000"))
-    sep = rows.separation(m31.transform_to(FK5(equinox="J2000")))
-    assert sep.max() <= 30 * u.arcsec + 1e-6 * u.arcsec  # tutte le righe nel cerchio (ricalcolo con astropy)
+    warnings = dict(cat.warnings)
+    vizier_down = "CATALOG_ORIGINAL_ARCHIVE" in warnings  # TAPVizieR giù: 2MASS dall'IRSA (D14-15 (6))
+    if vizier_down:
+        # Il ripiego dichiara l'archivio e non inventa il sistema delle colonne (regola d'oro: mai assunto)
+        assert cat.rows > 0 and cat.positions.frame is None and "FRAME_UNKNOWN" in warnings
+    else:
+        assert cat.rows > 0 and cat.positions.frame == "fk5" and cat.positions.equinox == "J2000"
+        rows = SkyCoord(cat.table["RAJ2000"].quantity, cat.table["DEJ2000"].quantity, frame=FK5(equinox="J2000"))
+        sep = rows.separation(m31.transform_to(FK5(equinox="J2000")))
+        assert sep.max() <= 30 * u.arcsec + 1e-6 * u.arcsec  # tutte le righe nel cerchio (ricalcolo con astropy)
     # SIMBAD: sistema ICRS J2000 dall'utype MANGO (D13-20); righe nel cerchio, separazione ricalcolata.
     simbad = load_catalog("simbad", region=(m31, 30 * u.arcsec), cache=cache)
     assert simbad.rows > 0 and (simbad.positions.frame, simbad.positions.epoch) == ("icrs", "J2000")
     assert "POSITIONS_FROM_MANGO" in dict(simbad.warnings)
     sep = SkyCoord(simbad.table["ra"].quantity, simbad.table["dec"].quantity).separation(m31)
     assert sep.max() <= 30 * u.arcsec + 1e-6 * u.arcsec
+    if vizier_down:  # parte FK5 di VizieR non controllata: dichiarato, mai un «passato» pieno (sprint D8)
+        reason = ("servizio giù: TAPVizieR del CDS; 2MASS dall'archivio originale IRSA, controllo FK5 J2000 "
+                  "di VizieR non fatto")
+        request.node.user_properties.append(("network_skipped", reason))  # dichiarato nel commit
+        pytest.skip(reason)
 
 
 DATALINK_RESULT = """<?xml version="1.0" encoding="UTF-8"?>

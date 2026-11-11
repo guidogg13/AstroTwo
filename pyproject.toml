@@ -1,7 +1,7 @@
 [project]
 name = "astrotwo"
 version = "0.1.0b5"
-description = "AstroTwo: successore di Aladin per gli astrofisici"
+description = "A sky atlas and object-profile tool for astrophysicists, with an optional AI assistant that never makes up numbers."
 readme = "CLAUDE.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_LICENSES"]

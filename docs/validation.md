@@ -1,6 +1,6 @@
 # Validation of AstroTwo
 
-> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows passed and 2 failed (empty spectral type); after the project owner's rule on empty text (decision D25-24, 2026-11-10) the saved rows were **recompared without network** and all 131 pass (section 5.1, «Correction»). Every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0. On 2026-11-11 the services were checked twice more (05:53–05:57 and 13:21–13:25 UTC) and no new run was made, because the CDS and the Gaia archive were still down (section 5.0). By decision of the project owner (2026-11-11), version 1.0 is not released while these rows are not measured, unless the owner decides otherwise.
+> **Status: partial measurements.** The tolerances (section 2.1) were fixed and committed on 2026-11-10 before any measurement. Two runs were made the same day (section 5). In the second run (section 5.1) the SIMBAD values were compared with the **Harvard mirror** of SIMBAD, because the CDS was down: 129 SIMBAD rows passed and 2 failed (empty spectral type); after the project owner's rule on empty text (decision D25-24, 2026-11-10) the saved rows were **recompared without network** and all 131 pass (section 5.1, «Correction»). Every one of these rows is **to be repeated against the CDS**. Gaia, VizieR and the NASA Exoplanet Archive rows are still **not measured** and stay to be redone before version 1.0. On 2026-11-11 the services were checked three more times (05:53–05:57, 13:21–13:25 and 14:21–14:37 UTC) and no new run was made, because the CDS and the Gaia archive were still down (section 5.0). By decision of the project owner (2026-11-11), version 1.0 is not released while these rows are not measured, unless the owner decides otherwise.
 
 ## 1. Purpose
 
@@ -96,7 +96,7 @@ AstroTwo values are of two kinds, and the ECSV export says which one each value 
 
 ## 5. Results
 
-### 5.0 Service checks of 2026-11-11 (05:53–05:57 and 13:21–13:25 UTC): no new run
+### 5.0 Service checks of 2026-11-11 (05:53–05:57, 13:21–13:25 and 14:21–14:37 UTC): no new run
 
 A new run is made only when the CDS, the Gaia archive and the NASA Exoplanet Archive all answer. They were checked twice with one small TAP query each (plain HTTP, no AstroTwo code), at 05:53 and at 05:57 UTC:
 
@@ -125,6 +125,18 @@ A new run is made only when the CDS, the Gaia archive and the NASA Exoplanet Arc
 | NASA Exoplanet Archive | `exoplanetarchive.ipac.caltech.edu` (TAP) | HTTP 200 |
 
 The services did not answer in a stable way, so `scripts/validate_profiles.py` was **not** run again and no number on this page changed: **177 within tolerance, 0 outside, 85 not measured** (section 5.1). The four sections listed above stay **not measured**.
+
+**Third check of 2026-11-11 (14:21–14:37 UTC).** The project owner reported that the Gaia archive answered HTTP 200 at about 14:00 UTC, so it was checked again with the same small TAP query (plain HTTP, no AstroTwo code), with the other services:
+
+| Time (UTC) | Gaia archive (`gaiadr3.gaia_source`) | Other services |
+|---|---|---|
+| 14:21 | HTTP 200 | SIMBAD at the CDS 404, TAPVizieR no answer within 40 s, VizieR photometry service 404, NASA Exoplanet Archive 200 |
+| 14:23 | HTTP 503 (also `external.gaiaedr3_distance`) | same; SIMBAD mirror at Harvard 200 |
+| 14:27 | HTTP 503 | SIMBAD at the CDS 404 |
+| 14:37:00 | HTTP 200 | SIMBAD at the CDS 404 |
+| 14:37:09 | HTTP 503, four requests in a row (`gaia_source` and `external.gaiaedr3_distance`) | — |
+
+The Gaia archive alternated between 200 and 503 within seconds (during the same hour a network test received «Error 503: Server overloaded: synchronous job rejected due to maximum number of synchronous queued jobs (150) reached»). That is not a stable answer, so `scripts/validate_profiles.py` was **not** run: a run against a service that answers only some requests would give a mix of measured and «not measured» rows for the same object. The counts stay **177 within tolerance, 0 outside, 85 not measured**.
 
 ### 5.1 Second run of 2026-11-10 (19:46–20:04 UTC): SIMBAD against the Harvard mirror
 

@@ -45,15 +45,22 @@ The `.sha256` file holds the SHA-256 checksum of the `.dmg` as published with th
 
 `-c` makes `shasum` read the checksum and the file name from the `.sha256` file and compare. You can also print the checksum with `shasum -a 256 AstroTwo-<version>.dmg` and compare it by eye with the one on the release page.
 
-### First launch
+### First launch: AstroTwo is not signed by Apple
 
-The app is not yet signed with an Apple Developer ID or notarized, so macOS blocks the first launch. To allow it:
+**Version 1.0 is not signed with an Apple Developer ID and is not notarized by Apple.** The app has only an *ad hoc* signature: macOS can check that the app was not changed after it was built, but Apple has not checked the developer or scanned the app. This is a choice of the project for the first version: signing and notarization need a paid Apple Developer account, and they will come in a later version. Until then, macOS blocks the first launch of the downloaded app, and you allow it once by hand.
 
-1. Try to open AstroTwo once and close the warning.
-2. Open **System Settings → Privacy & Security**.
-3. Next to the message about AstroTwo, click **Open Anyway** and confirm.
+**Before you allow it, check the download** with its SHA-256 checksum ([Verify the download](#verify-the-download)). The checksum is how you know that the app is exactly the one published on the Releases page. Do not open an AstroTwo `.dmg` whose checksum does not match.
 
-You only need to do this once for each version.
+On **macOS 15 (Sequoia) and later**:
+
+1. Copy AstroTwo into *Applications* (steps above) and double-click it once. macOS shows a warning that it could not verify AstroTwo and does not open it. Close the warning (**Done**). Do **not** choose to move the app to the Bin.
+2. Open the **Apple menu → System Settings**, then click **Privacy & Security** in the sidebar.
+3. Scroll down to the **Security** section. There is a message saying that AstroTwo was blocked. Click **Open Anyway** next to it. The button is there for about one hour after you tried to open the app; if it is not there, repeat step 1.
+4. macOS asks again: click **Open Anyway**, then enter your login password and click **OK**.
+
+AstroTwo starts. From then on it opens normally with a double-click. You need to do this once for each new version.
+
+On macOS 15 and later, Control-clicking the app and choosing **Open** no longer skips this check: use **Open Anyway** in System Settings as above.
 
 ## Run from source (for developers)
 

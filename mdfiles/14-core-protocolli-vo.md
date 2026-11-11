@@ -389,7 +389,7 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     di ogni risultato riporta sempre il server che ha davvero risposto:
     `RequestRecord.url` (e quindi `CatalogTable.origin`) è l'URL del mirror;
     `SimbadPointer.source` dice "SIMBAD (mirror di Harvard)".
-  - **Servizio in uso per la sessione (D14-15 (1), da confermare):** dopo
+  - **Servizio in uso per la sessione (D14-15 (1), confermata il 2026-11-11):** dopo
     un cambio il servizio **resta sul mirror per il resto della sessione**
     (come i survey del `12`, D12-9): le richieste successive vanno subito al
     mirror, senza aspettare di nuovo il timeout del principale; il puntatore
@@ -404,7 +404,7 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     nel giro (principale di Strasburgo caduto per una causa di cambio),
     letta dal 12 e dal 25 (`refresh_scope_cds_down()`). Fuori da un ambito
     nulla cambia.
-  - **Cache (D14-15 (2), da confermare):** chiave di ogni risposta TAP =
+  - **Cache (D14-15 (2), confermata il 2026-11-11):** chiave di ogni risposta TAP =
     URL del server che ha risposto (come prima: nessuna chiave nuova).
     Senza `refresh` si cerca prima nella cache di **tutti** i server
     dell'elenco, nell'ordine (una risposta già scaricata da un mirror vale
@@ -413,7 +413,7 @@ T8). Dopo il 14: P6 del `13` (cataloghi da servizio e da URL).
     prima copia in cache nell'ordine dei server (principale prima),
     dichiarata con `FROM_CACHE` (`network_cached`). La regione del puntatore SIMBAD ha
     già una chiave indipendente dal server (`simbad:query_region`).
-  - **Ambito (D14-15 (3), da confermare):** il ripiego vale quando il
+  - **Ambito (D14-15 (3), confermata il 2026-11-11):** il ripiego vale quando il
     servizio è indicato con la **voce dell'elenco** (`cds-simbad-tap`), come
     fanno il puntatore, le magnitudini e il catalogo `simbad` del `13`; un
     **URL scritto** (query ADQL del `05` con l'URL nel comando registrato,
@@ -1138,8 +1138,9 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
   Per Gaia DR3 e 2MASS, se nessun mirror VizieR risponde, ripiego sugli
   archivi originali (`13`, D14-15 (5)–(7)). Applicata in §3, §7, §10, §12.
 - **D14-15 — Scelte minori del ripiego sui mirror e di "Riesegui con dati
-  aggiornati" (sprint B4): PROPOSTE da Claude Code il 2026-11-07, da
-  confermare (Gruppo 3).** (1) dopo un cambio il servizio resta sul mirror
+  aggiornati" (sprint B4): PROPOSTE da Claude Code il 2026-11-07,
+  CONFERMATE dal proprietario il 2026-11-11 così come sono nel codice
+  (tutti i punti (1)–(9)); tolta da `decisioni-aperte.md`.** (1) dopo un cambio il servizio resta sul mirror
   per tutta la sessione (come D12-9), `refresh=True` riparte dal principale;
   (2) cache: prima la cache di tutti i server dell'elenco, poi la rete senza
   copie vecchie, poi la prima copia in cache nell'ordine dei server
@@ -1244,3 +1245,4 @@ viene solo dai servizi e dal codice di questo modulo ed è verificato da
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL nell'interfaccia** (decisioni del proprietario del 2026-11-06; autorizzazione esplicita ad aggiornare il 14 "se cambia qualcosa"): §3 — commenti `--` tolti prima dell'invio (`adql_to_send`; provato il 2026-11-06: Gaia ESA, IRSA e HEASARC rifiutano una query con un commento, MAST la accetta) e contati come spazio da `validate_adql`; annullamento della TAP asincrona (`cancel`, `QUERY_CANCELLED`); §7 firme; §10 `QUERY_CANCELLED`; §11 riscritto: solo `cone_search` esposta all'IA (come `catalog.cone_search` del `05`), `tap_query`/`validate_adql` no (`33` rimandato); §12 nuovo T26. Server personali salvati dal `40` (`vo/personal_servers`). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint C2 (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6):** §7 nuova `simbad_object` (oggetto esatto per identificativo: `basic` + `otypedef`, `ident`, magnitudini, con il ripiego D14-14; `NAME_NOT_FOUND` `simbad_identifier`/`several_objects`); D14-4 nona voce `nasa-exoplanet-tap` (URL dalla pagina ufficiale, provata il 2026-11-07); §10 sotto-voce; §12 T28. Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **Sprint B4 — ripiego sui mirror per SIMBAD e VizieR** (regole decise dal proprietario il 2026-11-07, D14-14; autorizzazione esplicita ad aggiornare il 14): §3 — nuova voce "Ripiego sui mirror dei servizi del CDS" (cause del cambio, ordine, avviso `SERVICE_MIRROR_FALLBACK` una volta per servizio e sessione, provenienza = server reale, servizio in uso per la sessione, cache, ambito, tutti giù → `NET_TIMEOUT` `service_servers`); **mirror verificati il 2026-11-07** con richieste reali (CDS irraggiungibile): SIMBAD TAP di Harvard **entra**; nessun TAPVizieR fuori da Strasburgo (7 mirror ufficiali e registro VO); SED di VizieR su CfA e IDIA parziale e incoerente → **non entra**; MocServer e XMatch senza copie; MocServer giù senza cache → `NET_TIMEOUT` `mocserver_no_mirror`. §7 (`SERVICE_MIRRORS`, `service_servers`, `is_failover_error`, `current_server`, `reset_mirror_state`, `use_stale_cache` di `tap_query`, `SIMBAD_SERVERS`), §10, T27 (§12), D14-14 decisa e D14-15 proposta (§13). Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D8 (decisioni del proprietario del 2026-11-11):** **D14-15 confermata** così come è nel codice, punti (1)–(9) (§3, §13); tolta da `decisioni-aperte.md`. Regola dei test di rete: un 404 del CDS è un servizio giù, come D14-16 (`02` §8, `tests/conftest.py`). Modifica di un file approvato su decisione del proprietario. |

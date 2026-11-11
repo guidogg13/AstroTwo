@@ -288,7 +288,12 @@ supera l'orientamento `dmgbuild` di A2 del 2026-10-09), con uno script come quel
 **Con `--signed`** (firma Developer ID, A6-b, §3.12) lo script prende i piani di `scripts/sign_notarize.py`
 e li mette nell'ordine giusto: **firma dell'app prima della copia** (passo 2), **firma e notarizzazione del
 `.dmg` dopo `hdiutil verify`** e prima dell'impronta (il ticket cambia il file). Senza `--signed` l'app resta con
-la firma ad hoc di `build_app.py` (A6) e il sito spiega «Apri comunque». Le credenziali restano nel Portachiavi:
+la firma ad hoc di `build_app.py` (A6) e il sito spiega «Apri comunque»; **è la strada della 1.0** (A6-b, decisione
+del proprietario del 2026-11-11). La firma ad hoc basta per partire su Apple silicon (macOS non esegue codice arm64
+senza firma): `build_app.py` firma con `codesign --force --deep --sign - AstroTwo.app` e il controllo V1 (§3.8)
+richiede `codesign --verify --deep --strict` riuscito e `Signature=adhoc`; `make_dmg.py` copia l'app con `ditto`,
+che conserva la firma. Senza notarizzazione Gatekeeper blocca il primo avvio dell'app scaricata finché l'utente non
+sceglie «Apri comunque» (`docs/installation.md`). Le credenziali restano nel Portachiavi:
 le opzioni di credenziali sono rifiutate come in `sign_notarize.py` (`SIGN_CREDENTIALS_REFUSED`); in prova a
 secco il Portachiavi non si legge.
 
@@ -314,7 +319,13 @@ della distribuzione pubblica; testo «Apri comunque» sul sito (`63` passo 16).
 - V-e: disposizione di PyInstaller 6 dentro `.app` (dati in `Resources/`, collegamenti da `Frameworks/`) e se
   PyInstaller riscrive i percorsi nelle intestazioni dei `.framework` di Qt (V5).
 
-### 3.12 Firma Developer ID e notarizzazione (A6-b: preparate il 2026-11-10, non eseguite)
+### 3.12 Firma Developer ID e notarizzazione (A6-b: preparate il 2026-11-10, non eseguite; non per la 1.0, decisione del 2026-11-11)
+
+**Decisione del proprietario del 2026-11-11 (A6-b):** la **1.0 esce senza firma Developer ID e senza
+notarizzazione**: si usa il passo 8 della `63` (`.dmg` senza firma Developer ID, app con la firma ad hoc di
+`build_app.py`) e si salta il passo 7. Firma Developer ID e notarizzazione arrivano in una versione successiva;
+`scripts/sign_notarize.py` e `make_dmg.py --signed` restano come sono, pronti per allora. Quello che segue vale
+da quella versione.
 
 **Decisione del proprietario del 2026-11-10:** specifica e script si preparano oggi, **ma non si eseguono**
 finché l'account Apple Developer non è pronto. Le credenziali stanno **solo nel Portachiavi** (profilo salvato
@@ -385,7 +396,8 @@ prova T19 → `A6-b` decisa. I sottocomandi di `sign_notarize.py` restano usabil
 - Non pubblica niente: né sito, né server, né GitHub (passi del rilascio: `63`). Il `.dmg` lo crea
   `scripts/make_dmg.py` (§3.10) solo con `--execute`.
 - Non firma con un certificato Developer ID e non notarizza (A6, rinviata): `scripts/sign_notarize.py` è
-  preparato (§3.12) ma **non eseguito** finché l'account Apple Developer non è pronto (decisione del 2026-11-10).
+  preparato (§3.12) ma **non eseguito** finché l'account Apple Developer non è pronto (decisione del 2026-11-10);
+  la 1.0 esce senza (A6-b, decisione del 2026-11-11).
 - Non produce app per Intel, `universal2`, Windows o Linux.
 - Non cambia `uv.lock` né aggiorna dipendenze, salvo aggiungere il gruppo `build` (PyInstaller).
 - Non installa niente nel sistema dell'utente e non scrive dentro l'app costruita.
@@ -570,6 +582,11 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   Program; firma **ad hoc** soltanto, **nessuna notarizzazione**; il sito spiegherà "Apri comunque". **Firma
   Developer ID e notarizzazione: RINVIATE** (voce `A6-b` in `decisioni-aperte.md`, Gruppo 3), da riprendere prima
   di una versione non beta.
+- **A6-b — Firma Developer ID e notarizzazione per la 1.0: DECISA dal proprietario il 2026-11-11:** la 1.0 esce
+  **senza** firma Developer ID e **senza** notarizzazione (firma ad hoc, «Apri comunque» spiegato in
+  `docs/installation.md` e nelle note di rilascio); passo 8 della `63`, passo 7 saltato. Firma Developer ID e
+  notarizzazione in una versione successiva, con `scripts/sign_notarize.py` e `make_dmg.py --signed` invariati
+  (§3.12, prova T19 allora). Tolta da `decisioni-aperte.md`.
 - **Python dell'app: DECISO il 2026-10-25** dal proprietario: CPython 3.12 di python-build-standalone gestito da uv,
   ambiente separato da `uv.lock`, test eseguiti in quell'ambiente; macOS minimo letto dai binari (15.0 con PySide6 6.11.3).
 - **Versione: DECISA il 2026-10-25** dal proprietario: §3.2.
@@ -649,3 +666,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-11-10 | Claude Code | **Sprint D4c (brief del proprietario del 2026-11-10, punto f):** §3.12 — elenco dei passi del proprietario prima della prima firma (Apple Developer Program, strumenti, certificato «Developer ID Application» nel Portachiavi di login, password specifica per l'app, profilo `astrotwo-notary` salvato con `notarytool store-credentials`, controlli senza segreti). Nessun comando eseguito. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5c (decisioni del proprietario del 2026-11-10):** parte B (60b) scritta: §3.10 con `hdiutil` e `scripts/make_dmg.py` (prova a secco senza `--execute`, collegato a `sign_notarize.py` con `--signed`), §3.12 passo 2 e sequenza, §4, §7, T20; **D60-6 approvata** (diritti minimi da verificare alla prima firma vera); nuova **D60-7** (scelte minori del `.dmg`). Codice: `scripts/make_dmg.py`, `tests/test_make_dmg.py`; nessun `.dmg` creato. Stato `approvato` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D6 (decisione del proprietario del 2026-11-11):** **D60-7 approvata** (HFS+ UDZO, nome `AstroTwo-<versione>.dmg`, nessuna personalizzazione della finestra, impronta nel file `.sha256`, mai sovrascrivere). Collegamento `Applications` → `/Applications` dentro il `.dmg` confermato: §3.10 punto 2 (creato dallo script in Python, cartella con sole due voci), T20 con il nuovo test `test_staged_folder_holds_only_the_app_and_the_applications_link`. Nessun `.dmg` creato. Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D8 (decisione del proprietario del 2026-11-11):** **A6-b decisa**: 1.0 senza firma Developer ID né notarizzazione, passo 8 della `63`, passo 7 saltato, `sign_notarize.py` invariato per una versione successiva (§3.10 con la firma ad hoc che basta su Apple silicon e il controllo V1, §3.12, §4, §13). Modifica di un file approvato su decisione del proprietario. |

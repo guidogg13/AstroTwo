@@ -10,7 +10,10 @@ Uso: ``git add …`` poi ``uv run python scripts/commit_checked.py -m "messaggio
    - falliscono solo per connessione o per un servizio temporaneamente non disponibile
      (HTTP 429, 502, 503, 504; proprietà ``network_final``) → commit, con il messaggio che
      lo dichiara (test e motivo);
-   - un test di rete fallisce per un altro motivo → nessun commit (uscita 1).
+   - un test di rete fallisce per un altro motivo → nessun commit (uscita 1);
+   - un test di rete **saltato** perché il CDS risponde HTTP 404 e la sonda conferma il guasto (decisione del
+     proprietario del 2026-11-11, proprietà ``network_skipped`` di ``tests/conftest.py``) non ferma il commit, ma il
+     messaggio lo dichiara (test e motivo).
    Con ``--no-network`` i test di rete non si eseguono (parti intermedie di un modulo,
    eseguiti alla fine del modulo) e il messaggio di commit lo dichiara.
 """
@@ -59,6 +62,18 @@ def network_failures(junit: Path) -> tuple[list[str], list[str]]:
     return by_connection, other
 
 
+def network_skips(junit: Path) -> list[str]:
+    """Test di rete saltati per un servizio giù (proprietà ``network_skipped``), con il motivo."""
+    out = []
+    for case in ET.parse(junit).getroot().iter("testcase"):
+        if case.find("skipped") is None:
+            continue
+        reasons = [p.get("value") for p in case.iter("property") if p.get("name") == "network_skipped"]
+        if reasons:
+            out.append(f"{case.get('classname')}::{case.get('name')} ({reasons[0]})")
+    return out
+
+
 def with_note(message: str, note: str) -> str:
     """Aggiunge la nota prima delle righe finali di attribuzione (``Co-Authored-By``)."""
     body, sep, trailer = message.rpartition("\n\nCo-Authored-By:")
@@ -90,6 +105,7 @@ def main() -> int:
             print(f"Esecuzione dei test di rete interrotta (codice {code}): nessun commit.", file=sys.stderr)
             return 1
         by_connection, other = network_failures(junit) if junit.exists() else ([], [])
+        skipped = network_skips(junit) if junit.exists() else []
 
     if other:
         print("Test di rete falliti per un motivo diverso dalla connessione o da un servizio temporaneamente "
@@ -98,6 +114,10 @@ def main() -> int:
         return 1
 
     message = args.message
+    if skipped:
+        message = with_note(message, "Test di rete saltati per un servizio giù (HTTP 404 del CDS confermato dalla "
+                            "sonda, decisione del proprietario del 2026-11-11):\n"
+                            + "\n".join(f"- {t}" for t in skipped))
     if by_connection:
         message = with_note(message, "Test di rete falliti solo per connessione o per servizio temporaneamente "
                             "non disponibile (HTTP 429, 502, 503, 504) dopo le ripetizioni "

@@ -4,7 +4,11 @@
 
 ## 0. Smistamento per la 1.0 (sprint D7, 2026-11-11)
 
-Richiesto dal proprietario il 2026-11-11. Per ognuna delle **19 decisioni
+Richiesto dal proprietario il 2026-11-11 (sprint D7). **Aggiornato nello sprint D8:** il proprietario ha deciso
+il 2026-11-11 `A6-b` (la 1.0 esce senza firma Developer ID né notarizzazione, passo 8 della `63`), `D14-15` e
+`D42-1` (confermate così come sono nel codice); righe tolte, esiti nei file di origine (`60` §13, `14` §13,
+`42` §13). `AP1`, `D41-7`, `D41-8` restano aperte, rinviate a dopo la 1.0 e dichiarate come limiti noti nelle
+note di rilascio (decisione del 2026-11-11). Per ognuna delle **16 decisioni
 aperte** (§5, Gruppo 3): se blocca la 1.0 e il consiglio di Claude Code.
 **Nessuna decisione è chiusa qui:** le chiude il proprietario; dopo, si
 aggiornano il file di origine e §5. «Blocca la 1.0» = senza quella decisione
@@ -16,9 +20,6 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 
 | ID | Di cosa si tratta | Blocca la 1.0 | Consiglio di Claude Code | Perché |
 |---|---|---|---|---|
-| `D14-15` | Nove scelte minori del ripiego sui mirror e di «Riesegui con dati aggiornati» (`14` §13), già nel codice come proposte | **no** (ma da chiudere prima) | **Confermare così come sono** | Sono nel codice dal 2026-11-07 e usate nella seconda misura (mirror di Harvard) e nella prova a mano; la 1.0 non dovrebbe uscire con scelte già in uso ma «da confermare» |
-| `D42-1` | Sette scelte minori dell'incrocio nell'interfaccia (`42` §13), già nel codice | **no** (ma da chiudere prima) | **Confermare così come sono** | Nel codice dal 2026-11-05 e coperte dal megatest (X1–X4); stesso motivo di `D14-15` |
-| `A6-b` | Firma Developer ID e notarizzazione (`60` §3.12), preparate e non eseguite | **no** | **Decidere per la 1.0:** con l'account Apple pronto, firmare e notarizzare; altrimenti dichiarare per scritto «1.0 con firma ad hoc e "Apri comunque"» | La checklist `63` ammette i due casi (passi 7–8), ma il passo 7 o 8 dipende da questa scelta; per un programma da citare in articoli la notarizzazione evita il blocco di Gatekeeper sugli altri Mac |
 | `D40-10` | Pulizia delle tabelle SAMP ricevute (`40` §13), voce futura | no | Rinviare a dopo la 1.0 | Le tabelle si accumulano ma non rompono niente; serve una specifica nuova (comando, sessioni che citano file cancellati) |
 | `D10-5` | Catalogo di riferimento e limiti di magnitudine per la calibrazione astrometrica (H6) | no | Rinviare a dopo la 1.0 | La calibrazione astrometrica non è nella 1.0; si decide quando si scrive quella funzione |
 | `A8` | Livello di compatibilità con lo scripting di Aladin | no | Rinviare a dopo la 1.0 | Già rimandata a dopo il livello 1; il modulo `24` non esiste ancora |
@@ -36,11 +37,10 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 | `D32-3` | Risultati più leggeri verso l'IA per provider con pochi token | no | Rinviare a dopo la 1.0 (già deciso) | Rinviata dal proprietario il 2026-10-25 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS | no | Rinviare (bassa priorità, già deciso) | Opzione esplicita, nessun uso nella 1.0 |
 
-**Conteggio (ricontato dalle righe sopra):** 19 aperte; **0 bloccano la
-1.0 da sole**; **3 da decidere prima della 1.0** (`D14-15`, `D42-1` da
-confermare perché già nel codice; `A6-b` per scegliere tra il passo 7 e il
-passo 8 della `63`); 16 da rinviare a dopo la 1.0, di cui 3 da citare
-nelle note di rilascio (`AP1`, `D41-7`, `D41-8`).
+**Conteggio (ricontato dalle righe sopra, sprint D8):** 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
+dopo la 1.0, di cui 3 dichiarate come limiti noti nelle note di rilascio (`AP1`, `D41-7`, `D41-8`, decisione del
+proprietario del 2026-11-11). Prima (sprint D7): 19 aperte, 3 da decidere prima della 1.0 (`D14-15`, `D42-1`,
+`A6-b`).
 
 ## 1. Scopo
 
@@ -77,7 +77,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-11 (sprint D6): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D60-7` — scelte minori del `.dmg`, con il collegamento ad `/Applications` dentro il `.dmg`, `60` §13 —, `D63-1` — esito del megatest in `docs/megatest-runs/<versione>.md` — e `D63-2` — DOI «concept» in `related_identifiers` con `isVersionOf`, mai la chiave `doi`, `63` §13 — decise dal proprietario il 2026-11-11 e tolte).
+**Dal 2026-11-11 (sprint D8): 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`A6-b` decisa — 1.0 senza firma Developer ID né notarizzazione —, `D14-15` e `D42-1` confermate così come sono nel codice, dal proprietario il 2026-11-11, prima nei file di origine `60` §13, `14` §13, `42` §13, e tolte).
+
+Prima, **Dal 2026-11-11 (sprint D6): 19 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **19** (`D60-7` — scelte minori del `.dmg`, con il collegamento ad `/Applications` dentro il `.dmg`, `60` §13 —, `D63-1` — esito del megatest in `docs/megatest-runs/<versione>.md` — e `D63-2` — DOI «concept» in `related_identifiers` con `isVersionOf`, mai la chiave `doi`, `63` §13 — decise dal proprietario il 2026-11-11 e tolte).
 
 Prima, **Dal 2026-11-10 (sprint D5c): 22 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **22** (`D60-6` approvata e tolta; nuove `D60-7` — scelte minori del `.dmg`, `60` §13 —, `D63-1` e `D63-2` — esito del megatest e DOI in `.zenodo.json`, `63` §13).
 
@@ -399,10 +401,11 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (19)
+## 5. GRUPPO 3 — rimandabili al momento del codice (16)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| — | (`A6-b` decisa, `D14-15` e `D42-1` confermate dal proprietario il 2026-11-11; `60` §13, `14` §13, `42` §13) | — |
 | — | (`D60-6` approvata dal proprietario il 2026-11-10; `60` §13) | — |
 | — | (`D60-7` approvata dal proprietario il 2026-11-11, con il collegamento ad `/Applications` nel `.dmg`; `60` §13) | — |
 | — | (`D63-1` e `D63-2` approvate dal proprietario il 2026-11-11; `63` §13) | — |
@@ -413,11 +416,8 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-21` approvata dal proprietario il 2026-11-09 in tutti e 5 i punti; `25` §13, §3.17) | — |
 | — | (`D25-20` e `D32-4` confermate dal proprietario il 2026-11-08 così come proposte; `25` §13, `32` §13) | — |
 | — | (`D43-1`…`D43-8`, `D43-10` e `D25-19` confermate dal proprietario il 2026-11-08, `43` §13 e `25` §13) | — |
-| `D14-15` | Scelte minori del ripiego sui mirror e di «Riesegui con dati aggiornati» (sprint B4, **proposte da Claude Code il 2026-11-07, da confermare**): (1) servizio sul mirror per la sessione, `refresh=True` dal principale; (2) cache di tutti i server prima della rete, copia vecchia solo se tutti giù; (3) ripiego solo per le voci dell'elenco; (4) `SERVICE_MIRROR_FALLBACK`, `NET_TIMEOUT` `service_servers`; (5) colonne di Gaia DR3/2MASS non rinominate; (6) 2MASS dall'IRSA con `CIRCLE('ICRS', …)` e dialogo delle colonne; (7) `vizier_no_mirror`; (8) campo `refresh` e pulsante solo per i comandi di rete, `DATA_REFRESHED`; (9) collegamento SIMBAD al server che ha risposto | `14` §13 | Gruppo 3 |
-| `D42-1` | Scelte minori dell'incrocio nell'interfaccia (sprint B2, **proposte da Claude Code il 2026-11-05, da confermare**): (1) Data → Cross-match catalogs… più il menu contestuale della scheda; (2) report in finestra non modale (alla fine dell'incrocio chiesto dall'utente, riapribile dal menu contestuale) più i dettagli del comando; (3) nessuna voce "in arrivo" per incrocio per campo ed ellissi; (4) unità `mas`, `arcsec`, `arcmin`, `deg`; (5) sistemi ICRS e Galattico; (6) nome del livello «A × B · modalità»; (7) livello creato anche senza coppie (`NO_MATCH`) | `42-ui-pannello-cataloghi.md` §13, §3.7 |
 | `D40-10` | **Voce futura (proprietario, 2026-11-05):** pulizia delle tabelle SAMP ricevute, che oggi si accumulano in `~/Library/Application Support/AstroTwo/SAMP/received/` (D40-9 (3)); per esempio un pulsante nelle Impostazioni con lo spazio occupato. Da decidere: posizione del comando, sessioni che citano file cancellati, conferma | `40-ui-finestra-principale.md` §13 |
 | — | (`D60-4` decisa (b) dal proprietario il 2026-11-04, `60` §13: riga tolta dalla tabella il 2026-11-10, sprint D4c, perché già fuori dal conteggio) | — |
-| `A6-b` | Firma con certificato Developer ID (Apple Developer Program) e notarizzazione dell'app e del `.dmg`: **preparate il 2026-11-10, non eseguite** (decisione del proprietario: specifica `60` §3.12 e `scripts/sign_notarize.py` pronti, esecuzione quando l'account Apple Developer è pronto; credenziali solo nel Portachiavi, profilo `notarytool`); si chiude con la prova T19 del `60` | `60-distribuzione-dmg.md` §3.12, §13 |
 | `D10-5` | Quale catalogo di riferimento e quali limiti di magnitudine per la calibrazione astrometrica (H6)? | `10-core-coordinate-wcs.md` |
 | `A8` | Quale livello di compatibilità con lo scripting di Aladin? (già rimandata: dopo il completamento del livello 1) | `24-analisi-pipeline-riproducibili.md` (e `01-architettura.md`) |
 | `AP1` | Validazione finale della parità: confronto di AstroTwo e Aladin sugli stessi dati (già rimandata: alla fine del progetto) | `03-parita-aladin.md` §6 |
@@ -556,3 +556,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-10 | Claude Code | **Sprint D5c:** `D60-6` approvata e tolta; nuove `D60-7` (`60` §13), `D63-1` e `D63-2` (`63` §13), scritte prima nei file di origine. **22 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** `D60-7` (`60` §13), `D63-1` e `D63-2` (`63` §13) decise e tolte, prima nei file di origine. **19 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D7 (richiesta del proprietario del 2026-11-11):** nuova §0, smistamento delle 19 decisioni aperte per la 1.0 (blocca sì/no, consiglio, motivo): 0 bloccanti da sole, 3 da decidere prima (`D14-15`, `D42-1`, `A6-b`), 16 da rinviare. Nessuna decisione chiusa né cambiata. **19 aperte.** |
+| 2026-11-11 | Claude Code | **Sprint D8 (decisioni del proprietario del 2026-11-11):** `A6-b` decisa (1.0 senza firma Developer ID né notarizzazione), `D14-15` e `D42-1` confermate così come sono nel codice; scritte prima nei file di origine (`60` §13, `01` §5, `14` §13, `42` §13) e tolte da §0 e §5. `AP1`, `D41-7`, `D41-8` restano aperte (rinviate, limiti noti nelle note di rilascio). **16 aperte.** |

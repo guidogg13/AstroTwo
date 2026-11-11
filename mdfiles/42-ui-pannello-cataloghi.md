@@ -396,7 +396,9 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
   selezione, modalità notte rossa).
 
 - **D42-1 — Scelte minori dell'incrocio nell'interfaccia (sprint B2):
-  PROPOSTE da Claude Code il 2026-11-05, da confermare (Gruppo 3).** (1)
+  PROPOSTE da Claude Code il 2026-11-05, CONFERMATE dal proprietario il
+  2026-11-11 così come sono nel codice (tutti i punti (1)–(7)); tolta da
+  `decisioni-aperte.md`.** (1)
   posizione: Data → Cross-match catalogs… (menu dei dati e dei cataloghi,
   nessun menu nuovo) più il menu contestuale della scheda; (2) report in una
   **finestra non modale** aperta alla fine dell'incrocio chiesto
@@ -454,3 +456,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-11-05 | Claude Code | **Sprint B2 — incrocio per posizione e voci SAMP** (decisioni del proprietario del 2026-11-05, D15-10 del `15`): §3.1; nuova §3.7 (dialogo "Cross-match catalogs…" dal menu Data e dal menu contestuale, report in finestra, nuovo catalogo come gli altri, errori); §3.6 voci «Send whole table via SAMP» e «Send only the selected rows (N) via SAMP», spenta con N = 0; T9 (§12); nuova **D42-1** (scelte minori, da confermare). Stato `approvato` invariato. |
 | 2026-11-06 | Claude Code | **Sprint B3 — cone search e query ADQL** (decisioni del proprietario del 2026-11-06): nuovo §3.8 (dialoghi "Cone search…" e "Query ADQL…" del menu Data: servizio dall'elenco del 14 o URL scritto, miei server con `vo.add_server`/`vo.remove_server`, centro della vista/sorgente selezionata/coordinate scritte con sistema ed epoca, raggio con unità, editor a larghezza fissa, esempi, inserimento di centro e raggio della vista, `validate_adql` con la posizione evidenziata, sincrona/asincrona, testo del servizio tale e quale); nuovi T10, T11 (§12); nuova **D42-2** (scelte minori, da confermare). Stato `approvato` invariato. |
 | 2026-11-07 | Claude Code | **D42-2 confermata dal proprietario** (sprint B4, 2026-11-07): punti (1)–(11); il (6) superato da «Riesegui con dati aggiornati» del `40` §3.6. Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D8 (decisione del proprietario del 2026-11-11):** **D42-1 confermata** così come è nel codice, punti (1)–(7) (§13); tolta da `decisioni-aperte.md`. Modifica di un file approvato su decisione del proprietario. |

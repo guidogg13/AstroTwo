@@ -5,7 +5,7 @@
 import pytest
 import requests
 
-from conftest import network_failure, network_reason
+from conftest import cds_down_reason, cds_not_found_host, network_failure, network_reason
 
 
 class _Coded(Exception):
@@ -119,3 +119,69 @@ def test_count():
     assert ("network_final", "servizio temporaneamente non disponibile: HTTP 503 (Unavailable)") in (
         reports["test_unavailable"].user_properties)
     assert not any(name == "network_final" for name, _ in reports["test_not_found"].user_properties)
+
+
+def _not_found(url):
+    response = requests.models.Response()
+    response.status_code, response.url = 404, url
+    return requests.exceptions.HTTPError(f"404 Client Error: Not Found for url: {url}", response=response)
+
+
+def test_gaia_overloaded_text_counts_as_unavailable():
+    # Testo dell'archivio Gaia osservato il 2026-11-11 (sprint D8), senza stato nell'eccezione
+    exc = requests.exceptions.HTTPError("Error 503: Server overloaded: synchronous job rejected")
+    assert network_reason(exc) == "servizio temporaneamente non disponibile: HTTP 503 (HTTPError)"
+    assert not network_failure(requests.exceptions.HTTPError("Error 404: not found"))
+
+
+def test_cds_404_host_is_found_along_the_chain():
+    # Decisione del proprietario del 2026-11-11: il 404 del CDS è un servizio giù (come D14-16)
+    assert cds_not_found_host(_not_found("https://vizier.cds.unistra.fr/catstd/astrores.xml")) == (
+        "vizier.cds.unistra.fr")
+    assert cds_not_found_host(_ModuleError(
+        "SERVICE_ERROR", "https://vizier.cds.unistra.fr/viz-bin/sed: risposta HTTP 404 senza VOTable",
+        status=404)) == "vizier.cds.unistra.fr"
+    pyvo_like = RuntimeError("Unable to access the capabilities endpoint at: - "
+                             "https://simbad.cds.unistra.fr/simbad/sim-tap/capabilities: 404 Not Found")
+    wrapped = _ModuleError("CATALOG_UNAVAILABLE", "SIMBAD")
+    wrapped.__cause__ = pyvo_like
+    assert cds_not_found_host(wrapped) == "simbad.cds.unistra.fr"
+    assert cds_not_found_host(_not_found("https://irsa.ipac.caltech.edu/x")) is None  # non è il CDS
+    assert cds_not_found_host(_ModuleError("SERVICE_ERROR", "https://simbad.cds.unistra.fr: HTTP 400",
+                                           status=400)) is None  # solo il 404
+    assert cds_not_found_host(AssertionError("https://simbad.cds.unistra.fr HTTP 404")) is None  # risultato
+
+
+def test_cds_404_is_skipped_only_when_the_probe_fails():
+    exc = _not_found("https://simbad.cds.unistra.fr/simbad/sim-tap/sync")
+    down = cds_down_reason(exc, probe=lambda host: "sonda x: HTTP 404")
+    assert down == "servizio giù: HTTP 404 (simbad.cds.unistra.fr); sonda x: HTTP 404"
+    # la sonda risponde: il 404 viene da un indirizzo sbagliato nostro e resta un errore vero
+    assert cds_down_reason(exc, probe=lambda host: None) is None
+    assert cds_down_reason(_not_found("https://example.org/x"), probe=lambda host: "giù") is None
+
+
+def test_cds_404_skip_in_a_run(pytester):
+    pytester.makeconftest(open(__import__("conftest").__file__, encoding="utf-8").read()
+                          + "\nprobe_service = lambda host: 'sonda finta: HTTP 404' if host.startswith('simbad') "
+                            "else None\n")
+    pytester.makepyfile(test_y='''
+import pytest, requests
+
+def _nf(url):
+    r = requests.models.Response(); r.status_code, r.url = 404, url
+    return requests.exceptions.HTTPError(f"404 Client Error: Not Found for url: {url}", response=r)
+
+@pytest.mark.network
+def test_cds_down():
+    raise _nf("https://simbad.cds.unistra.fr/simbad/sim-tap/sync")
+
+@pytest.mark.network
+def test_our_wrong_url():
+    raise _nf("https://vizier.cds.unistra.fr/sbagliato.xml")
+''')
+    pytester.makeini("[pytest]\nmarkers =\n    network: rete\n")
+    result = pytester.runpytest("-p", "no:cacheprovider", "-rs")
+    result.assert_outcomes(skipped=1, failed=1)
+    result.stdout.fnmatch_lines(["*servizio giù: HTTP 404 (simbad.cds.unistra.fr); sonda finta: HTTP 404*"])
+

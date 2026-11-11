@@ -338,7 +338,10 @@ _PYVO_NETWORK_TEXTS = ("Connection failed", "Request timed out")
 # Decisione del proprietario del 2026-10-16: servizio esterno temporaneamente non disponibile, trattato
 # come la connessione (stesse ripetizioni, commit dichiarato). Gli altri 4xx restano risultati sbagliati.
 TRANSIENT_HTTP_STATUSES = (429, 502, 503, 504)
-_TRANSIENT_HTTP_TEXT = re.compile(r"\bHTTP (429|502|503|504)\b|\b(429|502|503|504) (?:Client|Server) Error\b")
+_TRANSIENT_HTTP_TEXT = re.compile(
+    r"\bHTTP (?P<a>429|502|503|504)\b|\b(?P<b>429|502|503|504) (?:Client|Server) Error\b"
+    # testo dell'archivio Gaia (astroquery, sprint D8): "Error 503: Server overloaded: …"
+    r"|\bError (?P<c>429|502|503|504):")
 
 
 def _transient_http_status(exc: BaseException) -> int | None:
@@ -350,7 +353,7 @@ def _transient_http_status(exc: BaseException) -> int | None:
         if isinstance(status, int) and status in TRANSIENT_HTTP_STATUSES:
             return status
     match = _TRANSIENT_HTTP_TEXT.search(str(exc))
-    return int(match.group(1) or match.group(2)) if match else None
+    return int(match.group("a") or match.group("b") or match.group("c")) if match else None
 
 
 def network_reason(exc: BaseException) -> str | None:
@@ -378,6 +381,81 @@ def network_reason(exc: BaseException) -> str | None:
     return None
 
 
+# --- 404 del CDS = servizio giù (decisione del proprietario del 2026-11-11, come D14-16 del 14) ---------------
+# Durante il guasto del CDS osservato dal 2026-11-10 i suoi servizi rispondono HTTP 404 (pagina HTML). Un test di
+# rete che riceve un 404 da un host del CDS si **salta** con il motivo «servizio giù: HTTP 404 (<host>)», ma solo se
+# una **sonda** indipendente su un indirizzo del servizio noto e valido fallisce anche lei (404, 429, 5xx,
+# connessione o timeout). Se la sonda risponde, il 404 viene da un indirizzo sbagliato nostro e il test **fallisce**
+# come prima. Host del CDS senza sonda: non si può distinguere, il test fallisce (02-convenzioni.md §8, punto 8).
+
+CDS_HOST_SUFFIXES = (".cds.unistra.fr", ".u-strasbg.fr")
+#: Sonda di ogni servizio del CDS: un indirizzo valido che risponde 200 quando il servizio funziona.
+CDS_PROBES = {
+    "simbad.cds.unistra.fr": "https://simbad.cds.unistra.fr/simbad/sim-tap/sync?REQUEST=doQuery&LANG=ADQL"
+                             "&FORMAT=votable&QUERY=SELECT%20TOP%201%20main_id%20FROM%20basic",
+    "tapvizier.cds.unistra.fr": "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL"
+                                "&FORMAT=votable&QUERY=SELECT%20TOP%201%20*%20FROM%20%22II/246/out%22",
+    "vizier.cds.unistra.fr": "https://vizier.cds.unistra.fr/viz-bin/VizieR?-source=II/246",
+    "alasky.cds.unistra.fr": "https://alasky.cds.unistra.fr/MocServer/query?ID=CDS/P/DSS2/color&get=record",
+}
+_URL = re.compile(r"https?://([A-Za-z0-9.-]+)")
+_NOT_FOUND_TEXT = re.compile(r"\bHTTP 404\b|\b404 (?:Client Error|Not Found)\b|\bError 404\b")
+
+
+def _status_404(exc: BaseException) -> bool:
+    response = getattr(exc, "response", None)
+    details = getattr(exc, "details", None)
+    params = getattr(exc, "params", None)
+    for status in (getattr(exc, "status", None), getattr(response, "status_code", None),
+                   details.get("status") if isinstance(details, dict) else None,
+                   params.get("status") if isinstance(params, dict) else None):
+        if status == 404 and not isinstance(status, bool):
+            return True
+    return bool(_NOT_FOUND_TEXT.search(str(exc)))
+
+
+def cds_not_found_host(exc: BaseException) -> str | None:
+    """Host del CDS che ha risposto HTTP 404 lungo la catena delle cause, altrimenti ``None``."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, AssertionError):
+            return None
+        if _status_404(exc):
+            response = getattr(exc, "response", None)
+            hosts = _URL.findall(f"{getattr(response, 'url', '') or ''} {exc}")
+            for host in hosts:
+                if host.lower().endswith(CDS_HOST_SUFFIXES):
+                    return host.lower()
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
+def probe_service(host: str) -> str | None:
+    """Esito della sonda di ``host``: testo del guasto se il servizio è giù, ``None`` se risponde (o senza sonda)."""
+    import requests
+
+    url = CDS_PROBES.get(host)
+    if url is None:
+        return None
+    try:
+        status = requests.get(url, timeout=(10, 30)).status_code
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        return f"sonda {url}: {type(exc).__name__}"
+    if status == 404 or status == 429 or status >= 500:
+        return f"sonda {url}: HTTP {status}"
+    return None
+
+
+def cds_down_reason(exc: BaseException, probe=None) -> str | None:
+    """Motivo «servizio giù: HTTP 404 (<host>)» se il 404 viene dal CDS e la sonda conferma il guasto."""
+    host = cds_not_found_host(exc)
+    if host is None:
+        return None
+    failed = (probe or probe_service)(host)
+    return f"servizio giù: HTTP 404 ({host}); {failed}" if failed else None
+
+
 def network_failure(exc: BaseException) -> bool:
     """Vero solo per connessione, timeout o servizio temporaneamente non disponibile (02-convenzioni.md §8)."""
     return network_reason(exc) is not None
@@ -392,6 +470,11 @@ def _with_network_retries(item):
                 return original()
             except BaseException as exc:
                 reason = network_reason(exc)
+                if reason is None:
+                    down = cds_down_reason(exc)  # 404 del CDS confermato dalla sonda: saltato, mai nascosto
+                    if down is not None:
+                        item.user_properties.append(("network_skipped", down))
+                        pytest.skip(down)
                 if attempt == NETWORK_RETRIES or reason is None:
                     if reason is not None:
                         # Fallito ancora per la rete dopo le ripetizioni (02-convenzioni.md §8, punto 8).

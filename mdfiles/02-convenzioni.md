@@ -259,6 +259,14 @@ Dettagli in `61-strategia-test.md`; qui le regole di base:
    ripetizioni è marcato come tale nel risultato (proprietà `network_final`,
    con il motivo: "connessione" oppure "servizio temporaneamente non
    disponibile: HTTP n"). Implementazione in `tests/conftest.py`.
+   **Dal 2026-11-11 (decisione del proprietario, sprint D8): il CDS che risponde HTTP 404 è un servizio giù,
+   anche nei test di rete** (come D14-16 del `14`). Un test di rete che riceve un 404 da un host del CDS
+   (`*.cds.unistra.fr`, `*.u-strasbg.fr`) si **salta** con il motivo «servizio giù: HTTP 404 (<host>)» solo se
+   una **sonda** indipendente su un indirizzo valido dello stesso servizio (`CDS_PROBES`) fallisce anche lei
+   (404, 429, 5xx, connessione, timeout); se la sonda risponde, il 404 viene da un indirizzo sbagliato nostro e il
+   test **fallisce** come prima. Un host del CDS senza sonda non si può distinguere: il test fallisce. Un salto è
+   marcato nel risultato (proprietà `network_skipped`) e dichiarato nel messaggio di commit (punto 9). Conta come
+   servizio non disponibile anche il testo «Error 503:» dell'archivio Gaia.
 9. **Regola dei commit (decisione del proprietario del 2026-10-11):** si fa
    commit **solo se tutti i test di default passano**. I test di rete si
    eseguono e si riportano **a parte**: se falliscono **solo per
@@ -367,3 +375,4 @@ livello 1): nessuna decisione di questo file resta aperta.
 | 2026-11-10 | Claude Code | **DD-1 (decisione del proprietario del 2026-11-10):** §2 nuova regola «Lingua dei file esportati» (sempre possibile in inglese, inglese di default nel dialogo, lingua parametro registrato, stesso contenuto nella stessa lingua = stesso file byte per byte, vale per ogni esportazione futura). Modifica a un file approvato che registra una decisione del proprietario; da confermare insieme a DD-3. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 confermata e approvata la modifica del D2 a questo file («Lingua dei file esportati»); §2 nuove regole «Permessi dei file esportati» (0666 meno l'umask, mai 0600) e «Assenze solo dopo una richiesta vera» (D25-23, regola generale; 404 sull'indirizzo di un servizio = guasto, D14-16). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **D25-24 (decisione del proprietario del 2026-11-10):** §2 nuova regola «Testo vuoto = valore assente dichiarato» (regola generale, confronto della validazione). Modifica a un file approvato che registra una decisione del proprietario. Stato `approvato` invariato. |
+| 2026-11-11 | Claude Code | **Sprint D8 (decisione del proprietario del 2026-11-11):** §8 punto 8: il 404 del CDS è un servizio giù anche nei test di rete, con la sonda che distingue un indirizzo sbagliato nostro; test saltato e dichiarato nel commit; testo «Error 503:» di Gaia riconosciuto. Modifica di un file approvato su decisione del proprietario. |
