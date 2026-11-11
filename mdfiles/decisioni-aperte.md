@@ -2,6 +2,46 @@
 
 **Stato:** bozza
 
+## 0. Smistamento per la 1.0 (sprint D7, 2026-11-11)
+
+Richiesto dal proprietario il 2026-11-11. Per ognuna delle **19 decisioni
+aperte** (§5, Gruppo 3): se blocca la 1.0 e il consiglio di Claude Code.
+**Nessuna decisione è chiusa qui:** le chiude il proprietario; dopo, si
+aggiornano il file di origine e §5. «Blocca la 1.0» = senza quella decisione
+non si può fare uno dei passi 1–9 della checklist `63` (dettaglio in
+`64-cosa-manca-1-0.md`). La validazione non misurata (Gaia, VizieR/SED,
+SIMBAD contro il CDS, Pianeti) blocca la 1.0 per decisione del proprietario
+del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
+(`docs/validation.md` §5.0).
+
+| ID | Di cosa si tratta | Blocca la 1.0 | Consiglio di Claude Code | Perché |
+|---|---|---|---|---|
+| `D14-15` | Nove scelte minori del ripiego sui mirror e di «Riesegui con dati aggiornati» (`14` §13), già nel codice come proposte | **no** (ma da chiudere prima) | **Confermare così come sono** | Sono nel codice dal 2026-11-07 e usate nella seconda misura (mirror di Harvard) e nella prova a mano; la 1.0 non dovrebbe uscire con scelte già in uso ma «da confermare» |
+| `D42-1` | Sette scelte minori dell'incrocio nell'interfaccia (`42` §13), già nel codice | **no** (ma da chiudere prima) | **Confermare così come sono** | Nel codice dal 2026-11-05 e coperte dal megatest (X1–X4); stesso motivo di `D14-15` |
+| `A6-b` | Firma Developer ID e notarizzazione (`60` §3.12), preparate e non eseguite | **no** | **Decidere per la 1.0:** con l'account Apple pronto, firmare e notarizzare; altrimenti dichiarare per scritto «1.0 con firma ad hoc e "Apri comunque"» | La checklist `63` ammette i due casi (passi 7–8), ma il passo 7 o 8 dipende da questa scelta; per un programma da citare in articoli la notarizzazione evita il blocco di Gatekeeper sugli altri Mac |
+| `D40-10` | Pulizia delle tabelle SAMP ricevute (`40` §13), voce futura | no | Rinviare a dopo la 1.0 | Le tabelle si accumulano ma non rompono niente; serve una specifica nuova (comando, sessioni che citano file cancellati) |
+| `D10-5` | Catalogo di riferimento e limiti di magnitudine per la calibrazione astrometrica (H6) | no | Rinviare a dopo la 1.0 | La calibrazione astrometrica non è nella 1.0; si decide quando si scrive quella funzione |
+| `A8` | Livello di compatibilità con lo scripting di Aladin | no | Rinviare a dopo la 1.0 | Già rimandata a dopo il livello 1; il modulo `24` non esiste ancora |
+| `AP1` | Validazione finale della parità: AstroTwo e Aladin sugli stessi dati | no | Rinviare a dopo la 1.0, ma **dirlo nelle note di rilascio** | Già rimandata «alla fine del progetto»; la 1.0 ha la propria validazione (`docs/validation.md`) e il megatest (`62`), che non sono la parità completa |
+| `AP4` | AstroTwo esegue gli script di Aladin o solo le proprie pipeline | no | Rinviare con `A8` | Si decide insieme ad `A8` |
+| `D10-6` | Tempo massimo per le conversioni di massa di posizioni | no | Rinviare al `61` (strategia dei test, non esiste) | Obiettivo di prestazioni senza un utente bloccato; va con gli altri obiettivi del `61` |
+| `D05-3` | Adattatore del 19 (dati planetari) ai comandi del 05 | no | Rinviare a dopo la 1.0 | L'interfaccia della 1.0 non usa i dati planetari |
+| `D40-2` | Avvio tramite URL (H18) | no | Rinviare alla versione successiva del `40` | Già rimandata; nessuna prova del megatest lo richiede |
+| `D41-5` | Zoom e spostamento su un'immagine senza WCS valido | no | Rinviare a dopo la 1.0 (già deciso) | Rinviata dal proprietario il 2026-10-21; la v1 la mostra intera, dichiarato |
+| `D41-7` | P1 non raggiunto: 1 milione di simboli a 46 ms contro 16,7 ms | no | Rinviare allo sprint di prestazioni dopo la 1.0, **dichiararlo nelle note di rilascio** | Il risultato è corretto, solo più lento; con 5 000 righe di default (`D41-10`) il caso normale non lo raggiunge |
+| `D41-8` | P5 non raggiunto: avvio a freddo 4,46 s contro 3 s | no | Come `D41-7` | Lentezza, non errore; va misurata di nuovo sull'app installata dal `.dmg` candidato (megatest A1) |
+| `D19-8` | PDS3 con `pdr` | no | Rinviare (bassa priorità, già deciso) | Un'etichetta PDS3 dà già un errore chiaro `PDS_UNREADABLE` |
+| `D14-13` | URL dell'ESO in http rifiutati dopo il reindirizzamento a https | no | Rinviare a dopo la 1.0; **una prova di rete** prima di chiuderla | Il codice del 14 non cambia; tocca solo i servizi ESO, non usati dal profilo né dal megatest |
+| `D32-2` | Comando di ricerca nell'elenco dei cataloghi per l'assistente | no | Rinviare a dopo la 1.0 (già deciso) | Funzione nuova, rinviata dal proprietario |
+| `D32-3` | Risultati più leggeri verso l'IA per provider con pochi token | no | Rinviare a dopo la 1.0 (già deciso) | Rinviata dal proprietario il 2026-10-25 |
+| `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS | no | Rinviare (bassa priorità, già deciso) | Opzione esplicita, nessun uso nella 1.0 |
+
+**Conteggio (ricontato dalle righe sopra):** 19 aperte; **0 bloccano la
+1.0 da sole**; **3 da decidere prima della 1.0** (`D14-15`, `D42-1` da
+confermare perché già nel codice; `A6-b` per scegliere tra il passo 7 e il
+passo 8 della `63`); 16 da rinviare a dopo la 1.0, di cui 3 da citare
+nelle note di rilascio (`AP1`, `D41-7`, `D41-8`).
+
 ## 1. Scopo
 
 Raccogliere **tutte** le decisioni ancora aperte del progetto in un unico
@@ -515,3 +555,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-10 | Claude Code | **Sprint D5a (decisione del proprietario del 2026-11-10):** `D25-24` decisa (proposta (a); regola generale: un testo vuoto di una fonte è un valore assente dichiarato), tolta dal Gruppo 3; scritta prima nel file di origine (`25` §3.10 e §13, `02` §2). **20 aperte.** |
 | 2026-11-10 | Claude Code | **Sprint D5c:** `D60-6` approvata e tolta; nuove `D60-7` (`60` §13), `D63-1` e `D63-2` (`63` §13), scritte prima nei file di origine. **22 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** `D60-7` (`60` §13), `D63-1` e `D63-2` (`63` §13) decise e tolte, prima nei file di origine. **19 aperte.** |
+| 2026-11-11 | Claude Code | **Sprint D7 (richiesta del proprietario del 2026-11-11):** nuova §0, smistamento delle 19 decisioni aperte per la 1.0 (blocca sì/no, consiglio, motivo): 0 bloccanti da sole, 3 da decidere prima (`D14-15`, `D42-1`, `A6-b`), 16 da rinviare. Nessuna decisione chiusa né cambiata. **19 aperte.** |

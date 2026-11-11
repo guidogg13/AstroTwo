@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-11 — **sprint D6:** `63-checklist-rilascio.md` **approvato** dal proprietario (correzione su `date-released`); D60-7, D63-1, D63-2 decise; `62` con le prove K1–K3 del `.dmg`. Riepilogo: approvato 29, bozza 6, non esiste 11, totale 46 (corretta la tabella del riepilogo, rimasta a bozza 6 / totale 45 dopo lo sprint D5c). **19 aperte.**
+**Ultimo aggiornamento:** 2026-11-11 — **sprint D7:** nuovo `64-cosa-manca-1-0.md` (`bozza`), rapporto «cosa manca alla 1.0»; smistamento delle decisioni aperte in `decisioni-aperte.md` §0. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **19 aperte.**
+
+Prima, 2026-11-11 — **sprint D6:** `63-checklist-rilascio.md` **approvato** dal proprietario (correzione su `date-released`); D60-7, D63-1, D63-2 decise; `62` con le prove K1–K3 del `.dmg`. Riepilogo: approvato 29, bozza 6, non esiste 11, totale 46 (corretta la tabella del riepilogo, rimasta a bozza 6 / totale 45 dopo lo sprint D5c). **19 aperte.**
 
 Prima, 2026-11-10 — **sprint D5c:** nuovo `63-checklist-rilascio.md` (`bozza`); `60` §3.10 (60b, `hdiutil`), D60-6 approvata. Riepilogo: approvato 28, bozza 7, non esiste 11, totale 46. **22 aperte.**
 
@@ -376,7 +378,7 @@ Dove si trovano le decisioni:
 | `03-parita-aladin.md` | Funzioni di Aladin e modulo di AstroTwo che le copre; esito della verifica documentale (colonne Copertura e Note, sezioni A–H, "funzioni extra" vuota); AP5 decisa; lettura delle sezioni 5.9–8 (ed. giugno 2022) completata il 2026-10-08 (prima lette 1–5.8 dell'ed. giugno 2022; esito parziale: ed. febbraio 2021, sezioni 1–5.7.2 + indice); AP6 decisa: edizione di riferimento del manuale = giugno 2022; AP3 decisa: Aladin Lite escluso dalla parità; 86 righe (H20–H27 dalla lettura AP5; H21 → `19-core-dati-planetari.md`) | approvato |
 | `04-cache.md` | Cache A7 condivisa: `~/Library/Caches/AstroTwo/`, SQLite + file, limite 5 GB, timeout dichiarati, origine e data di ogni dato; usata da 10–14, 16, 18 e 19 (AM1 accettata il 2026-10-09; timeout 10 s / 60 s, un solo limite, nessuna cache propria nei moduli, codice in `src/astrotwo/core/cache.py`) | approvato |
 | `05-comandi-sessione.md` | Registro dei comandi e sessione (livello 1, file generale come il 04; AM1 accettata il 2026-10-15; codice previsto in `src/astrotwo/core/commands.py`): comandi con nome, versione, parametri tipizzati con unità, descrizioni EN/IT, risultato strutturato, indicatori; sessione JSON senza pixel, riapertura = riesecuzione con stop se lo SHA di un file è cambiato; schema JSON per il 32; `run_command` del 18 come adattatore; D05-1 e D05-2 decise (impronta dei risultati di rete nella sessione), D05-3 rimandata; dal 2026-10-16 `requested_by`, indicatore `confirm`, comandi di sola lettura per l'assistente e blocco facoltativo `conversations`; dal 2026-10-17 tipo `record` (D05-4) e **codice scritto** | approvato |
-| `decisioni-aperte.md` | Decisioni aperte (16: Gruppo 1 = 0, Gruppo 2 = 2, Gruppo 3 = 14, aggiornate il 2026-10-23) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
+| `decisioni-aperte.md` | Decisioni aperte (19: Gruppo 1 = 0, Gruppo 2 = 0, Gruppo 3 = 19, aggiornate il 2026-11-11; in §0 lo smistamento per la 1.0) e, in §3, gli esiti delle 22 decisioni prese il 2026-10-04 | bozza |
 
 ## Nucleo (livello 1)
 
@@ -444,13 +446,14 @@ Dove si trovano le decisioni:
 | `61-strategia-test.md` | Strategia dei test: unitari, integrazione, confronto con riferimenti; qui vanno definiti gli obiettivi di prestazioni **almeno pari ad Aladin** (righe di catalogo, dimensione di immagini e cubi — §8 di `01-architettura.md`) | non esiste |
 | `62-megatest-1-0.md` | Megatest a mano prima della 1.0 (sprint D2, Fase D): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 approvata il 2026-11-10 (prove D6–D8 aggiunte); dal 2026-11-11 (sprint D6) prove K1–K3 del `.dmg` e megatest sull'app installata dal `.dmg` candidato | bozza |
 | `63-checklist-rilascio.md` | Checklist di ogni rilascio (sprint D5c): 17 passi nell'ordine con chi e comando (versione, `uv lock`, suite, build, firma, `.dmg`, megatest, tag, release, Zenodo e DOI, sito con «Sostieni AstroTwo»); D63-1 e D63-2 decise il 2026-11-11; `date-released` = data del commit della versione; **approvato dal proprietario il 2026-11-11** | approvato |
+| `64-cosa-manca-1-0.md` | Rapporto «cosa manca alla 1.0» (sprint D7, 2026-11-11): per i passi 1–9 della `63` stato, cosa manca e chi (Claude Code o Guido); prerequisiti P1–P5; numero di test dei commit del D5 | bozza |
 
 ## Riepilogo
 
 | Stato | Quanti |
 |---|---|
-| bozza | 6 |
+| bozza | 7 |
 | in revisione | 0 |
 | approvato | 29 |
 | non esiste | 11 |
-| **Totale file in `mdfiles/`** | **46** |
+| **Totale file in `mdfiles/`** | **47** |
