@@ -298,6 +298,68 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
   fatta», non KO; (5) prove di confronto con TOPCAT (X2, Q2) dentro il
   megatest, oltre alla pagina di validazione.
 
+**Decisioni aperte dalle prove automatiche dello sprint D12 (2026-11-12)**
+(esito e dettagli in `docs/megatest-runs/1.0.0.md`, «Prove automatiche»;
+nessuna correzione fatta; le decide il proprietario):
+
+- **D62-2 — Grafico della SED assente nell'app costruita: DA DECIDERE, bloccante,
+  richiede un build 8.** In `scripts/build_app.py` (`EXCLUDES`, righe 71–73)
+  sono esclusi `matplotlib.backends.backend_qtagg`, `backend_qt` e
+  `matplotlib.pyplot`. `PhotometryView._plot` (`43`, `src/astrotwo/ui/profiles.py:604`)
+  importa `backend_qtagg`. Nel build 7 (PYZ verificato) l'import fallisce: la
+  finestra Profili resta «Running», **Export…** e **Load SED points as
+  catalog** restano disattivati per ogni profilo con punti SED (P1, P2, E1–E5).
+  Proposta: **(a)** togliere `backend_qtagg` e `backend_qt` da `EXCLUDES`
+  (`pyplot` può restare escluso, perché il codice non lo usa), aggiungere
+  all'autocontrollo V4 (`60` §3.8) l'import dei moduli caricati solo dentro le
+  funzioni (almeno `backend_qtagg`) e un test che lo controlla; nuovo candidato
+  build 8 dal passo 3 della `63`, poi megatest a mano sul build 8. **(b)**
+  Disegnare il grafico come immagine con `backend_agg` (già nel bundle) invece
+  del widget Qt: anche questo vuole un build 8 e cambia il `43`. Consiglio di
+  Claude Code: **(a)**, la correzione più piccola, che non cambia il
+  comportamento specificato.
+- **D62-3 — «Profile of this source» su righe Gaia DR3 assenti da SIMBAD:
+  DA DECIDERE.** Il `43` (§3.2 punto 5, §10) manda `name = "Gaia DR3 <id>"`. Se
+  SIMBAD non conosce la sorgente, il profilo finisce in `NAME_NOT_FOUND` senza
+  sezioni (P7, provato su due righe delle Pleiadi). Proposta: **(a)** se il nome
+  riconosciuto dalla riga dà `NAME_NOT_FOUND`, ripartire con `layer` + `row`
+  (profilo per posizione, già previsto per le righe senza identificativo),
+  dichiarandolo; cambia `43` e codice, quindi va nel build 8 se D62-2 lo apre;
+  **(b)** lasciare così e dichiararlo nelle note di rilascio e nella `62` (P7 con
+  una stella nota a SIMBAD). Consiglio: (a) se si fa comunque il build 8,
+  altrimenti (b).
+- **D62-4 — Un livello con il corpo ignoto blocca gli altri caricamenti:
+  DA DECIDERE, non bloccante.** Con un CSV aperto e le colonne non confermate,
+  cone search, ADQL, FITS e MOC falliscono tutti con un `BODY_UNKNOWN` che parla
+  del CSV. È la regola del `13` §10 e del `19`. Proposta: **(a)** nessun build,
+  dirlo in `docs/quickstart.md` e nelle note di rilascio; dopo la 1.0, un
+  messaggio che dica quale livello blocca e come sbloccarlo (confermare le
+  colonne o togliere il livello); **(b)** cambiare la regola (un dato a corpo
+  ignoto non impedisce agli altri di aprirsi): decisione di specifica sul `19`.
+  Consiglio: (a).
+- **D62-5 — Immagini del README assenti: DA DECIDERE, non bloccante (solo
+  documentazione, nessun build).** `README.md` righe 12–14 citano
+  `docs/screenshots/pleiades-gaia.png`, `profile-51peg.png` e `ai-panel.png`,
+  che non esistono. Proposta: **(a)** tre immagini fatte da Guido durante il
+  megatest a mano, aggiunte con un commit di sola documentazione prima del tag;
+  **(b)** togliere le tre righe. Consiglio: (a).
+- **D62-6 — Dettagli minori di lingua e di aspetto: DA DECIDERE, non
+  bloccante.** PDF in italiano con «done» non tradotto, una nota in inglese e
+  le intestazioni «Separazione» e «Note» che si toccano; riga italiana nel
+  dialogo «Position columns» inglese; nomi di servizi in italiano nei livelli
+  dell'interfaccia inglese; messaggio tecnico di `MOC_TYPE_REQUIRED`; ultimo
+  carattere del titolo della barra di stato forse tagliato senza «…» (U1, da
+  vedere a mano). Consiglio: correggerli nel build 8 se D62-2 lo apre e se non
+  allargano il lavoro, altrimenti dopo la 1.0.
+- **D62-7 — Testo di alcune prove di questo file: DA DECIDERE (solo questo
+  file).** C1: dire di stringere il campo (con il campo delle Pleiadi Gaia ha
+  più di 5000 righe: `REGION_TOO_LARGE`); P4: le coordinate del nucleo di M 31
+  danno 40 candidati SIMBAD (finestra di scelta), quindi l'atteso va riscritto
+  o va scelta un'altra posizione; E5: usare un oggetto con limiti superiori
+  (51 Peg non ne ha); M1: il MocServer risponde 413 al MOC di un survey intero,
+  meglio il `Moc.fits` del survey HiPS; I1–I2: Ollama **o** LM Studio. Consiglio:
+  correggere il testo prima della prova a mano (stato `bozza` invariato).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -309,3 +371,4 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
 | 2026-11-10 | Claude Code | **Sprint D5b (prova a mano del proprietario del 2026-11-10):** nuove prove L5 (nome «AstroTwo» nella barra dei menu, corretto anche avviando dal codice), L6 (plurali) e §3.14bis U1–U3 (titolo leggibile del comando senza coprire Annulla, finestra stretta, messaggi lunghi con suggerimento, Dettagli…, doppio clic e Copia). Stato `bozza` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** il megatest si fa sull'app installata dal `.dmg` candidato (`63` passo 9; §3.1, §9); nuove prove **K1–K3** del `.dmg` (impronta con `shasum -a 256 -c`, volume con sole due voci AstroTwo e Applications, trascinamento in `/Applications`; D60-7), A1 riscritta di conseguenza; le quattro correzioni del D5b richiamate in §3.14bis (U1, U2, U3) e in L5, L6, L5 sull'app installata; §4, §6, §8, §10 aggiornati. Stato `bozza` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D8 (A6-b decisa dal proprietario il 2026-11-11: 1.0 senza firma Developer ID):** A4 riscritta per l'app senza firma (avviso al primo avvio e «Apri comunque» secondo `docs/installation.md`, `.dmg` scaricato con l'attributo di quarantena); la prova «nessun avviso» resta come A4bis per la prima versione firmata. |
+| 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12: prove automatiche prima del megatest a mano, sul candidato build 7):** esito delle prove automatiche in `docs/megatest-runs/1.0.0.md` (84 prove: 48 ok, 9 problema, 27 non fatte, da fare a mano); nuove decisioni aperte **D62-2** (grafico della SED assente nell'app costruita, bloccante, build 8), **D62-3** (profilo di una riga Gaia assente da SIMBAD), **D62-4** (livello a corpo ignoto che blocca gli altri), **D62-5** (immagini del README), **D62-6** (dettagli di lingua e di aspetto), **D62-7** (testo di C1, P4, E5, M1, I1–I2) in §13. Nessuna correzione al codice né alle prove. Stato `bozza` invariato. |

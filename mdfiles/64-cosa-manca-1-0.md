@@ -34,6 +34,14 @@ decisioni, account Apple, Zenodo, Ko-fi, sito).
 - Il candidato **resta il build 7** (`c43d622`); lo sprint D11 non cambia il
   codice dell'app.
 
+**Decisioni del proprietario del 2026-11-12 (sprint D12):**
+
+- Prima del megatest a mano, Claude Code fa tutte le prove della `62` che si
+  possono fare senza vedere lo schermo, sul candidato build 7 (`.dmg`
+  `89daad42…174f`), senza l'app avviata dal codice; il proprietario fa solo
+  quelle che chiedono occhi e mani.
+- `D05-7` resta aperta.
+
 ### 3.2 Prima della checklist: cosa blocca il passo 3
 
 | # | Cosa | Stato al 2026-11-11 | Chi |
@@ -56,7 +64,7 @@ decisioni, account Apple, Zenodo, Ko-fi, sito).
 | 6 | Costruzione dell'app | **Fatto** (sprint D10) | `uv run python scripts/build_app.py` dal commit `c43d622`, albero pulito (`BUILD_INFO.json`: 1.0.0, build 7, `dirty: false`, CPython 3.12.16, PySide6 6.11.3, PyInstaller 6.22.3, costruita alle 21:25:53 UTC); 1352 test passati nell'ambiente di build; V1–V9 ok; app 246,2 MB; prima vista 1,22 s a freddo, 1,19 s a caldo. Avviso atteso `BUILD_SOURCE_NOT_PUBLIC` (il tag `v1.0.0` non esiste ancora) | Claude Code |
 | 7 | Firma Developer ID e notarizzazione | **Non per la 1.0** (A6-b, decisione del 2026-11-11: si salta) | Per una versione successiva: Su questo Mac `security find-identity -v -p codesigning` dà **0 identità valide** (2026-11-11); `notarytool` c'è (Command Line Tools). Mancano i passi una tantum del `60` §3.12: iscrizione all'**Apple Developer Program**, certificato «Developer ID Application», password specifica per l'app, `xcrun notarytool store-credentials astrotwo-notary`. `sign_notarize.py` resta com'è | **Guido** (account Apple, certificato, credenziali), quando vuole; poi Claude Code |
 | 8 | `.dmg` (senza Developer ID) — **strada della 1.0** (A6-b) | **Fatto: `.dmg` candidato build 7** (sprint D10) | `uv run python scripts/make_dmg.py` (prova a secco) poi `--execute`. **`dist/AstroTwo-1.0.0.dmg`**, 121 491 995 byte (115,9 MiB); **`dist/AstroTwo-1.0.0.dmg.sha256`**; SHA-256 `89daad42cd2813b6e45f6ea625b8dd5efa83bc76d60987c0cee67aee0756174f`. Controlli: `shasum -a 256 -c` → OK; volume (montato in sola lettura) con solo `AstroTwo.app` e `Applications` → `/Applications`; `codesign --verify --deep --strict` valido, firma ad hoc (`TeamIdentifier` non impostato); `Info.plist`: AstroTwo, 1.0.0, build 7; nessun volume rimasto montato. Il candidato build 6 (`1bf583b2…a097a`) è in `dist/scartati/AstroTwo-1.0.0-build6.dmg` con il suo `.sha256` (che cita ancora il nome vecchio: `shasum -c` va fatto con quel nome) | Claude Code |
-| 9 | Megatest `62` sull'app installata dal `.dmg` candidato | **No — tocca a Guido** | `.dmg` candidato pronto (passo 8). Mancano: `62` approvato (P4); sul Mac della prova **TOPCAT**, **Ollama** o **LM Studio** con un modello, una **chiave API** cloud, un FITS con WCS e un VOTable/CSV (`62` §3.1); per A4 il `.dmg` va **scaricato** (quarantena), possibilmente su un Mac con macOS 15. Le prove che dipendono dal CDS (profili, D1–D3, X3) risultano «non fatte» se il CDS è ancora giù. Esito in `docs/megatest-runs/1.0.0.md` (D63-1). **Un KO bloccante → nuovo candidato dal passo 3 con build 7** (`63` §3.1; il `.dmg` 1.0.0 non si sovrascrive: `DMG_EXISTS`) | **Guido** (prova); Claude Code (file dell'esito, commit di sola documentazione) |
+| 9 | Megatest `62` sull'app installata dal `.dmg` candidato | **Parte automatica fatta** (sprint D12, 2026-11-12); **parte a mano no — tocca a Guido** | Prove automatiche sul build 7 in `docs/megatest-runs/1.0.0.md`: 84 prove, **48 ok, 9 problema, 27 non fatte** (da fare a mano, lista «Restano a Guido»). **Problema bloccante `D62-2`:** `backend_qtagg` di matplotlib escluso dal bundle, finestra Profili bloccata e **Export…** disattivato per ogni profilo con SED: se il proprietario lo conferma, **nuovo candidato build 8** dal passo 3 e parte a mano sul build 8. Altre decisioni: `D62-3`…`D62-7`. Per la parte a mano servono ancora: `62` approvato (P4); TOPCAT, LM Studio o Ollama con un modello, una chiave API cloud; per A4 il `.dmg` **scaricato** (quarantena). Esito finale in `docs/megatest-runs/1.0.0.md` (D63-1) | Claude Code (parte automatica, fatta); **Guido** (decisione su D62-2, parte a mano) |
 
 ### 3.4 Dopo il passo 9 (solo per sapere cosa prepara Guido)
 
@@ -196,3 +204,4 @@ validazione completa resta una scelta del proprietario (§3.1).
 | 2026-11-11 | Claude Code | **Sprint D9 (via del proprietario al candidato):** passi 1–6 e 8 fatti (commit della versione `8e08ddb`, build 6, `.dmg` candidato `dist/AstroTwo-1.0.0.dmg` con impronta e controlli), passo 7 saltato (A6-b), P5 dato, P1 in parte (terza misura, `D05-6`); passo 9 al proprietario. |
 | 2026-11-11 | Claude Code | **Sprint D10 (decisioni del proprietario del 2026-11-11: D05-6 (a), build 6 scartato, nuovo candidato build 7):** passi 1, 3–6 e 8 rifatti (D10a `fe542ff`, commit della versione `c43d622`, build 7, `.dmg` `89daad42…174f`), passo 7 saltato (A6-b); P1 con la quarta misura (379 pass, 0 fail, 48 non misurati); passo 9 al proprietario sul nuovo candidato. |
 | 2026-11-12 | Claude Code | **Sprint D11 (decisioni del proprietario del 2026-11-12):** `gaia_circle` accettato come limite dell'archivio Gaia, da riprovare prima del rilascio (§3.1, passo 5); candidato invariato (build 7); P1 con i servizi riprovati alle 06:26 e 06:35 UTC (CDS giù, nessuna nuova misura); nuova §3.8, verifica delle unità senza rete e nuova `D05-7`. |
+| 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12):** passo 9 con la parte automatica fatta (`docs/megatest-runs/1.0.0.md`: 48 ok, 9 problema, 27 non fatte); `D62-2` bloccante (build 8 se confermata); §3.1 con le decisioni del giorno. |

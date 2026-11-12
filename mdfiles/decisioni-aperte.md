@@ -8,7 +8,7 @@ Richiesto dal proprietario il 2026-11-11 (sprint D7). **Aggiornato nello sprint 
 il 2026-11-11 `A6-b` (la 1.0 esce senza firma Developer ID né notarizzazione, passo 8 della `63`), `D14-15` e
 `D42-1` (confermate così come sono nel codice); righe tolte, esiti nei file di origine (`60` §13, `14` §13,
 `42` §13). `AP1`, `D41-7`, `D41-8` restano aperte, rinviate a dopo la 1.0 e dichiarate come limiti noti nelle
-note di rilascio (decisione del 2026-11-11). **Aggiornato nello sprint D11 (2026-11-12):** nuova `D05-7`. Per ognuna delle **17 decisioni
+note di rilascio (decisione del 2026-11-11). **Aggiornato nello sprint D11 (2026-11-12):** nuova `D05-7`. **Aggiornato nello sprint D12 (2026-11-12, prove automatiche del megatest):** nuove `D62-2`…`D62-7`. Per ognuna delle **23 decisioni
 aperte** (§5, Gruppo 3): se blocca la 1.0 e il consiglio di Claude Code.
 **Nessuna decisione è chiusa qui:** le chiude il proprietario; dopo, si
 aggiornano il file di origine e §5. «Blocca la 1.0» = senza quella decisione
@@ -21,6 +21,12 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 | ID | Di cosa si tratta | Blocca la 1.0 | Consiglio di Claude Code | Perché |
 |---|---|---|---|---|
 | `D05-7` | Unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy, fuori da D05-6: `hourangle` → `15deg` (VOUnit valida, esatta), `cycle` → `6.2831853rad` (fattore troncato), FITS `UnitScaleError`; unità VOUnit tra apici di Gaia (`'electron'.s**-1`) perse in ingresso e assenti nel VOTable via SAMP (`05` §13, `docs/validation-runs/2026-11-12-units/results.md`) | **da decidere dal proprietario prima del rilascio** (aperta il 2026-11-12, sprint D11): correzione con un build 8 oppure limite dichiarato | **(a)** nessun build 8, dichiarare i punti 1 e 3 nelle note di rilascio, correggere dopo la 1.0; se il megatest chiede comunque un nuovo candidato, includere la correzione | Nessun numero cambia; `15deg` è VOUnit valida ed esatta; `cycle` e il FITS di tabella non si raggiungono dall'interfaccia; la perdita di Gaia toglie un'unità, non ne scrive una sbagliata |
+| `D62-2` | Grafico della SED assente nell'app costruita: `build_app.py` esclude `matplotlib.backends.backend_qtagg`, la finestra Profili resta «Running» e **Export…** disattivato per ogni profilo con SED (`62` §13, `docs/megatest-runs/1.0.0.md`) | **sì** (aperta il 2026-11-12, sprint D12): nessun profilo con SED si esporta dal menu; **richiede un build 8** | **(a)** togliere `backend_qtagg` e `backend_qt` da `EXCLUDES`, import controllato da V4 e da un test, build 8 e megatest a mano sul build 8 | Correzione di una riga nel `60` (esclusioni); il comportamento specificato nel `43` non cambia |
+| `D62-3` | «Profile of this source» su una riga Gaia DR3 assente da SIMBAD finisce in `NAME_NOT_FOUND` (`62` §13) | no | (a) ripiego su `layer` + `row` dichiarato, **se** si fa il build 8; altrimenti (b) limite dichiarato | Previsto dal `43`, ma per le stelle deboli la funzione non dà mai un profilo |
+| `D62-4` | Un livello a corpo ignoto (CSV con colonne non confermate) blocca ogni altro caricamento con un `BODY_UNKNOWN` che parla di quel livello (`62` §13) | no | (a) nessun build: dirlo nella guida e nelle note; messaggio migliore dopo la 1.0 | È la regola del `13`/`19`; si sblocca confermando le colonne |
+| `D62-5` | Tre immagini citate dal README assenti dal repository (`62` §13) | no (solo documentazione) | (a) tre immagini da Guido durante il megatest, commit di documentazione prima del tag | Su GitHub sarebbero immagini rotte; nessun build |
+| `D62-6` | Dettagli minori di lingua e di aspetto (PDF italiano, dialogo delle colonne, nomi dei livelli, messaggio del MOC, titolo della barra di stato) (`62` §13) | no | nel build 8 se D62-2 lo apre e non allargano il lavoro, altrimenti dopo la 1.0 | Nessun numero cambia |
+| `D62-7` | Testo delle prove C1, P4, E5, M1, I1–I2 della `62` (`62` §13) | no (solo la `62`) | correggere la `62` prima della prova a mano | Le prove come scritte non danno l'atteso per ragioni del testo, non dell'app |
 | `D40-10` | Pulizia delle tabelle SAMP ricevute (`40` §13), voce futura | no | Rinviare a dopo la 1.0 | Le tabelle si accumulano ma non rompono niente; serve una specifica nuova (comando, sessioni che citano file cancellati) |
 | `D10-5` | Catalogo di riferimento e limiti di magnitudine per la calibrazione astrometrica (H6) | no | Rinviare a dopo la 1.0 | La calibrazione astrometrica non è nella 1.0; si decide quando si scrive quella funzione |
 | `A8` | Livello di compatibilità con lo scripting di Aladin | no | Rinviare a dopo la 1.0 | Già rimandata a dopo il livello 1; il modulo `24` non esiste ancora |
@@ -38,7 +44,7 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 | `D32-3` | Risultati più leggeri verso l'IA per provider con pochi token | no | Rinviare a dopo la 1.0 (già deciso) | Rinviata dal proprietario il 2026-10-25 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS | no | Rinviare (bassa priorità, già deciso) | Opzione esplicita, nessun uso nella 1.0 |
 
-**Conteggio (ricontato dalle righe sopra, sprint D11):** 17 aperte; `D05-7` nuova, **da decidere prima del rilascio** (correzione con un build 8, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D10a): 16 aperte; **0 bloccano la 1.0** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), e corretta nel codice: `05` §13). Prima (sprint D9): 17 aperte; `D05-6` nuova, **da decidere prima del rilascio** (correzione con un nuovo candidato, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D8): 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
+**Conteggio (ricontato dalle righe sopra, sprint D12):** 23 aperte; nuove `D62-2`…`D62-7` dalle prove automatiche del megatest; **`D62-2` blocca la 1.0 e richiede un build 8** (se il proprietario la conferma); `D05-7` resta da decidere prima del rilascio; le altre 21 non bloccano. Prima (sprint D11): 17 aperte; `D05-7` nuova, **da decidere prima del rilascio** (correzione con un build 8, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D10a): 16 aperte; **0 bloccano la 1.0** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), e corretta nel codice: `05` §13). Prima (sprint D9): 17 aperte; `D05-6` nuova, **da decidere prima del rilascio** (correzione con un nuovo candidato, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D8): 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
 dopo la 1.0, di cui 3 dichiarate come limiti noti nelle note di rilascio (`AP1`, `D41-7`, `D41-8`, decisione del
 proprietario del 2026-11-11). Prima (sprint D7): 19 aperte, 3 da decidere prima della 1.0 (`D14-15`, `D42-1`,
 `A6-b`).
@@ -78,7 +84,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-12 (sprint D11): 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D05-7`, unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella fuori dalla regola D05-6, aperta dalla verifica d'interoperabilità delle unità; prima nel file di origine `05` §13).
+**Dal 2026-11-12 (sprint D12): 23 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **23** (nuove `D62-2`…`D62-7` dalle prove automatiche del megatest sul candidato build 7; prima nel file di origine `62` §13).
+
+Prima, **Dal 2026-11-12 (sprint D11): 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D05-7`, unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella fuori dalla regola D05-6, aperta dalla verifica d'interoperabilità delle unità; prima nel file di origine `05` §13).
 
 Prima, **Dal 2026-11-11 (sprint D10a): 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a): unità senza forma FITS col nome di Astropy, mai un fattore troncato; confronto delle unità come unità di Astropy nella validazione; prima nel file di origine `05` §13, poi tolta).
 
@@ -408,10 +416,16 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (17)
+## 5. GRUPPO 3 — rimandabili al momento del codice (23)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| `D62-2` | Grafico della SED assente nell'app costruita (`backend_qtagg` escluso da `build_app.py`): (a) toglierlo dalle esclusioni con controllo in V4 e test, build 8; (b) grafico come immagine con `backend_agg`, build 8; aperta il 2026-11-12 (sprint D12), **bloccante** | `62-megatest-1-0.md` §13 (codice del `60` e del `43`) |
+| `D62-3` | Profilo di una riga Gaia DR3 assente da SIMBAD (`NAME_NOT_FOUND`): (a) ripiego dichiarato su `layer` + `row`; (b) limite dichiarato | `62-megatest-1-0.md` §13 (`43`) |
+| `D62-4` | Livello a corpo ignoto che blocca gli altri caricamenti: (a) nessun build, guida e note, messaggio migliore dopo la 1.0; (b) cambiare la regola del `19` | `62-megatest-1-0.md` §13 (`13`, `19`) |
+| `D62-5` | Immagini del README assenti: (a) tre immagini dal megatest a mano; (b) togliere le righe | `62-megatest-1-0.md` §13 (`README.md`) |
+| `D62-6` | Dettagli minori di lingua e di aspetto trovati dalle prove automatiche | `62-megatest-1-0.md` §13 (`40`, `42`, `43`, `25`) |
+| `D62-7` | Testo delle prove C1, P4, E5, M1, I1–I2 | `62-megatest-1-0.md` §13 |
 | `D05-7` | Unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy, fuori dalla regola D05-6 (`15deg`, `6.2831853rad` troncato, `UnitScaleError` nel FITS), e unità VOUnit tra apici perse in ingresso (Gaia `'electron'.s**-1`): (a) nessun build 8, limite dichiarato e correzione dopo la 1.0, (b) build 8 con la correzione, (c) build 8 solo per l'ingresso; aperta il 2026-11-12 (sprint D11) | `05-comandi-sessione.md` §13 (codice del `13` e del `14`) |
 | — | (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), corretta nel codice nello sprint D10a; `05` §13) | — |
 | — | (`A6-b` decisa, `D14-15` e `D42-1` confermate dal proprietario il 2026-11-11; `60` §13, `14` §13, `42` §13) | — |
@@ -569,3 +583,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-11 | Claude Code | **Sprint D9 (candidato 1.0.0):** nuova `D05-6` (Gruppo 3; in §0 «da decidere prima del rilascio»), scritta prima nel file di origine (`05` §13), dalla validazione del 2026-11-11 (`docs/validation.md` §5.0bis). **17 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D10a (decisione del proprietario del 2026-11-11):** `D05-6` **decisa**, proposta (a), scritta prima nel file di origine (`05` §13, anche `18` e `25` nel registro) e corretta nel codice; righe tolte da §0 e §5. **16 aperte**, 0 bloccano la 1.0. |
 | 2026-11-12 | Claude Code | **Sprint D11 (verifica delle unità dopo D05-6, senza rete):** nuova `D05-7` (Gruppo 3; in §0 «da decidere prima del rilascio»), scritta prima nel file di origine (`05` §13), da `docs/validation-runs/2026-11-12-units/results.md`. **17 aperte.** |
+| 2026-11-12 | Claude Code | **Sprint D12 (prove automatiche del megatest sul candidato build 7, decisioni del proprietario del 2026-11-12):** nuove `D62-2` (bloccante, build 8), `D62-3`, `D62-4`, `D62-5`, `D62-6`, `D62-7` (Gruppo 3; §0 con consiglio e «blocca la 1.0»), scritte prima nel file di origine `62` §13; esito in `docs/megatest-runs/1.0.0.md`. **23 aperte.** `D05-7` invariata. |
