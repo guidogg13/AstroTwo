@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-11 — **sprint D10b:** candidato 1.0.0 build 7 (`.dmg` fuori dal repository), quarta misura di validazione, `64` aggiornato (`bozza`, invariato); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte.**
+**Ultimo aggiornamento:** 2026-11-12 — **sprint D11:** verifica delle unità dopo D05-6 senza rete (`docs/validation-runs/2026-11-12-units/`); nuova `D05-7` nel `05` (approvato, solo §13 e registro, stato invariato); `64` aggiornato (`bozza`, invariato); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **17 aperte.**
+
+Prima, 2026-11-11 — **sprint D10b:** candidato 1.0.0 build 7 (`.dmg` fuori dal repository), quarta misura di validazione, `64` aggiornato (`bozza`, invariato); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte.**
 
 Prima, 2026-11-11 — **sprint D10a:** D05-6 decisa (proposta (a)) e corretta nel codice: `05` (approvato, §3.1 e §13), registri di `18` e `25` (approvati, stato invariato); 16 aperte; nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47.
 
@@ -454,7 +456,7 @@ Dove si trovano le decisioni:
 | `61-strategia-test.md` | Strategia dei test: unitari, integrazione, confronto con riferimenti; qui vanno definiti gli obiettivi di prestazioni **almeno pari ad Aladin** (righe di catalogo, dimensione di immagini e cubi — §8 di `01-architettura.md`) | non esiste |
 | `62-megatest-1-0.md` | Megatest a mano prima della 1.0 (sprint D2, Fase D): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 approvata il 2026-11-10 (prove D6–D8 aggiunte); dal 2026-11-11 (sprint D6) prove K1–K3 del `.dmg` e megatest sull'app installata dal `.dmg` candidato | bozza |
 | `63-checklist-rilascio.md` | Checklist di ogni rilascio (sprint D5c): 17 passi nell'ordine con chi e comando (versione, `uv lock`, suite, build, firma, `.dmg`, megatest, tag, release, Zenodo e DOI, sito con «Sostieni AstroTwo»); D63-1 e D63-2 decise il 2026-11-11; `date-released` = data del commit della versione; **approvato dal proprietario il 2026-11-11** | approvato |
-| `64-cosa-manca-1-0.md` | Rapporto «cosa manca alla 1.0» (sprint D7, 2026-11-11; aggiornato fino allo sprint D10): per i passi 1–9 della `63` stato, cosa manca e chi (Claude Code o Guido); prerequisiti P1–P5; numero di test dei commit del D5 | bozza |
+| `64-cosa-manca-1-0.md` | Rapporto «cosa manca alla 1.0» (sprint D7, 2026-11-11; aggiornato fino allo sprint D11, con la verifica delle unità): per i passi 1–9 della `63` stato, cosa manca e chi (Claude Code o Guido); prerequisiti P1–P5; numero di test dei commit del D5 | bozza |
 
 ## Riepilogo
 

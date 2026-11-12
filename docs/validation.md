@@ -98,6 +98,10 @@ AstroTwo values are of two kinds, and the ECSV export says which one each value 
 
 ## 5. Results
 
+### 5.00 Service checks of 2026-11-12 (06:26 and 06:35 UTC): no run
+
+The CDS was still down at both checks: SIMBAD TAP and VizieR answered HTTP 404; TAPVizieR, MocServer and XMatch did not answer within 60 s; Sesame answered only from its cache. The Gaia archive, the NASA Exoplanet Archive and the SIMBAD mirror at Harvard answered. The 48 values not measured on 2026-11-11 (including the 11 rows without a 2MASS or AllWISE designation in the Harvard mirror) stay «not measured». The same day, the units that AstroTwo writes in its files were checked without network: [`docs/validation-runs/2026-11-12-units/results.md`](validation-runs/2026-11-12-units/results.md).
+
 ### 5.0 Service checks of 2026-11-11 (05:53–05:57, 13:21–13:25 and 14:21–14:37 UTC): no run at those times
 
 A new run is made only when the CDS, the Gaia archive and the NASA Exoplanet Archive all answer. They were checked twice with one small TAP query each (plain HTTP, no AstroTwo code), at 05:53 and at 05:57 UTC:
@@ -613,6 +617,7 @@ A first run the same day (15:48–16:03 UTC, before the change of the profile no
 ## 6. Files for reproduction
 
 - **Script:** [`scripts/validate_profiles.py`](../scripts/validate_profiles.py). Run it from the repository with `uv run python scripts/validate_profiles.py` (all seven objects) or with object names as arguments. It uses the network, so it is **not** part of the automatic test suite. It writes into `docs/validation-runs/<date>/`.
+- **Unit check of 2026-11-12 (no network, build 7 code):** [`docs/validation-runs/2026-11-12-units/`](validation-runs/2026-11-12-units/): scripts, raw results, the TRAPPIST-1 profile ECSV and SED VOTable made from the recorded test responses, STILTS output, service checks.
 - **Fourth run of 2026-11-11 (objects with planets, build 7):** [`docs/validation-runs/2026-11-11-run2/`](validation-runs/2026-11-11-run2/), same files (rows of section 5.0ter).
 - **Third run of 2026-11-11 (build 6):** [`docs/validation-runs/2026-11-11/`](validation-runs/2026-11-11/), same files (rows of section 5.0bis).
 - **Second run of 2026-11-10:** [`docs/validation-runs/2026-11-10-run2/`](validation-runs/2026-11-10-run2/), same files as below (rows of section 5.2), plus `results-recompared.json` and `results-recompared.md`: the same rows recompared without network with the empty-text rule of D25-24 (`--recompare`, section 5.1).

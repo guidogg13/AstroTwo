@@ -1,0 +1,274 @@
+{
+ "%": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "1.8981246e+27kg": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "10**-2": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "10**9 count": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "10**9 solMass": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "15deg": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "3.6307805e-20erg.Hz**-1.s**-1.cm**-2": {
+  "vounits": "riconosciute=yes raccomandate=no vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "5.9721679e+24kg": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "6.2831853rad": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "6378100m": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "71492000m": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "sintassi non valida"
+ },
+ "AB": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "AU": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "Angstrom": {
+  "vounits": "riconosciute=yes raccomandate=no vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=no vincoli=yes"
+ },
+ "GHz": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "Gcount": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=no"
+ },
+ "Gct": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=no"
+ },
+ "GsolMass": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=no"
+ },
+ "Jy": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "K": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "W / (Hz m2)": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "W Hz-1 m-2": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "W.Hz**-1.m**-2": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "arcmin": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "arcsec": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "count": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "count s-1": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "count.s**-1": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "ct": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "ct / s": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "cycle": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "d": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "deg": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "dex": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "earthMass": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "earthRad": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "electron / s": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "erg / (s cm2)": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "erg s-1 cm-2": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=no vincoli=yes"
+ },
+ "erg.s**-1.cm**-2": {
+  "vounits": "riconosciute=yes raccomandate=no vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=no vincoli=yes"
+ },
+ "h": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "hourangle": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "jupiterMass": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "jupiterRad": {
+  "vounits": "riconosciute=no raccomandate=no vincoli=yes",
+  "fits": "riconosciute=no raccomandate=no vincoli=yes"
+ },
+ "km / s": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "km s-1": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "km.s**-1": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mJy": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mag": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mag / arcsec2": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "mag arcsec-2": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mag.arcsec**-2": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mas": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mas / yr": {
+  "vounits": "sintassi non valida",
+  "fits": "sintassi non valida"
+ },
+ "mas yr-1": {
+  "vounits": "sintassi non valida",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "mas.yr**-1": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "min": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "nm": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "pc": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "pix": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "pixel": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "rad": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "s": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "solLum": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "solMass": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "solRad": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "um": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ },
+ "yr": {
+  "vounits": "riconosciute=yes raccomandate=yes vincoli=yes",
+  "fits": "riconosciute=yes raccomandate=yes vincoli=yes"
+ }
+}

@@ -1,0 +1,533 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Produced with astropy.io.votable version 8.0.1
+     http://www.astropy.org/ -->
+<VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.3 http://www.ivoa.net/xml/VOTable/VOTable-1.4.xsd">
+ <RESOURCE type="results">
+  <INFO ID="A2VERS" name="A2VERS" value="AstroTwo 1.0.0"/>
+  <INFO ID="A2FORMAT" name="A2FORMAT" value="VOTable 1.4"/>
+  <INFO ID="A2WRITER" name="A2WRITER" value="astropy 8.0.1"/>
+  <INFO ID="A2ORIGIN" name="A2ORIGIN" value="punti della SED del profilo di TRAPPIST-1, comandi #1"/>
+  <INFO ID="A2DATE" name="A2DATE" value="2026-11-12T06:33:17.247986Z"/>
+  <INFO ID="A2EXPORT" name="A2EXPORT" value="2026-11-12T06:33:25.131393Z"/>
+  <INFO ID="A2HIST" name="A2HIST" value="punti della SED (20) dai risultati registrati dei comandi object.profile #1; servizi: 127.0.0.1; posizione 127.0.0.1, ICRS J2000 (coo_bibcode 2020yCat.1350....0G) in ogni riga"/>
+  <INFO ID="A2BODY" name="A2BODY" value="celestial"/>
+  <INFO ID="A2POS" name="A2POS" value="ra/dec, frame icrs, fonte ucd"/>
+  <COOSYS ID="a2_coosys" epoch="J2000.000" system="ICRS"/>
+  <TABLE ID="SED_TRAPPIST-1" name="SED TRAPPIST-1">
+   <FIELD ID="ra" datatype="double" name="ra" ref="a2_coosys" ucd="pos.eq.ra;meta.main" unit="deg">
+    <DESCRIPTION>
+     position of the resolved target (same for every row)
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="dec" datatype="double" name="dec" ref="a2_coosys" ucd="pos.eq.dec;meta.main" unit="deg">
+    <DESCRIPTION>
+     position of the resolved target (same for every row)
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="series" arraysize="8" datatype="unicodeChar" name="series" ucd="meta.code">
+    <DESCRIPTION>
+     astrotwo (our points) or vizier (as given by VizieR)
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="catalog" arraysize="8" datatype="unicodeChar" name="catalog" ucd="meta.id;meta.dataset">
+    <DESCRIPTION>
+     source of the point (catalog or VizieR _tabname)
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="band" arraysize="2" datatype="unicodeChar" name="band" ucd="instr.bandpass"/>
+   <FIELD ID="system" arraysize="4" datatype="unicodeChar" name="system" ucd="meta.code">
+    <DESCRIPTION>
+     photometric system
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="wavelength" datatype="double" name="wavelength" ucd="em.wl" unit="um">
+    <DESCRIPTION>
+     reference wavelength (20)
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="flux_nu" datatype="double" name="flux_nu" ucd="phot.flux.density" unit="Jy">
+    <DESCRIPTION>
+     Fnu (conversion of the 20 or as given by VizieR)
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="flux_nu_error" datatype="double" name="flux_nu_error" ucd="stat.error;phot.flux.density" unit="Jy"/>
+   <FIELD ID="magnitude" datatype="double" name="magnitude" ucd="phot.mag" unit="mag">
+    <DESCRIPTION>
+     as given by the catalog
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="magnitude_error" datatype="double" name="magnitude_error" ucd="stat.error;phot.mag" unit="mag"/>
+   <FIELD ID="quality" arraysize="1" datatype="unicodeChar" name="quality" ucd="meta.code.qual"/>
+   <FIELD ID="upper_limit" datatype="bit" name="upper_limit" ucd="meta.code">
+    <DESCRIPTION>
+     upper limit: never a measurement
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="in_plot" datatype="bit" name="in_plot" ucd="meta.code">
+    <DESCRIPTION>
+     point of the measured series of the plot
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="reasons" arraysize="31" datatype="unicodeChar" name="reasons" ucd="meta.note">
+    <DESCRIPTION>
+     SED_* codes
+    </DESCRIPTION>
+   </FIELD>
+   <FIELD ID="zero_point" arraysize="11" datatype="unicodeChar" name="zero_point" ucd="meta.ref"/>
+   <FIELD ID="reference" arraysize="19" datatype="unicodeChar" name="reference" ucd="meta.bib.bibcode"/>
+   <FIELD ID="identifier" arraysize="28" datatype="unicodeChar" name="identifier" ucd="meta.id"/>
+   <FIELD ID="match" arraysize="17" datatype="unicodeChar" name="match" ucd="meta.code"/>
+   <FIELD ID="server" arraysize="54" datatype="unicodeChar" name="server" ucd="meta.ref.url"/>
+   <FIELD ID="table" arraysize="19" datatype="unicodeChar" name="table" ucd="meta.id"/>
+   <FIELD ID="retrieved_at" arraysize="32" datatype="unicodeChar" name="retrieved_at" ucd="time.processing"/>
+   <FIELD ID="from_cache" arraysize="5" datatype="unicodeChar" name="from_cache" ucd="meta.code"/>
+   <FIELD ID="command_id" datatype="long" name="command_id" ucd="meta.id"/>
+   <DATA>
+    <TABLEDATA>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>Gaia DR3</TD>
+      <TD>G</TD>
+      <TD>Vega</TD>
+      <TD>0.62179</TD>
+      <TD>0.0018429241299805989</TD>
+      <TD>5.254900541796745e-06</TD>
+      <TD>15.622554</TD>
+      <TD/>
+      <TD/>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>Gaia DR3 G</TD>
+      <TD>2023A&amp;A...674A...1G</TD>
+      <TD>Gaia DR3 2635476908753563008</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/gaia/sync</TD>
+      <TD>gaiadr3.gaia_source</TD>
+      <TD>2026-11-12T06:33:17.247986+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>Gaia DR3</TD>
+      <TD>BP</TD>
+      <TD>Vega</TD>
+      <TD>0.51097</TD>
+      <TD>8.943636023994409e-05</TD>
+      <TD>3.1326091358016854e-06</TD>
+      <TD>19.005802</TD>
+      <TD/>
+      <TD/>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>Gaia DR3 BP</TD>
+      <TD>2023A&amp;A...674A...1G</TD>
+      <TD>Gaia DR3 2635476908753563008</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/gaia/sync</TD>
+      <TD>gaiadr3.gaia_source</TD>
+      <TD>2026-11-12T06:33:17.247986+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>Gaia DR3</TD>
+      <TD>RP</TD>
+      <TD>Vega</TD>
+      <TD>0.77691</TD>
+      <TD>0.005970133549895679</TD>
+      <TD>1.3830974394278371e-05</TD>
+      <TD>14.103951</TD>
+      <TD/>
+      <TD/>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>Gaia DR3 RP</TD>
+      <TD>2023A&amp;A...674A...1G</TD>
+      <TD>Gaia DR3 2635476908753563008</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/gaia/sync</TD>
+      <TD>gaiadr3.gaia_source</TD>
+      <TD>2026-11-12T06:33:17.247986+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>2MASS</TD>
+      <TD>J</TD>
+      <TD>Vega</TD>
+      <TD>1.235</TD>
+      <TD>0.045802408633597455</TD>
+      <TD>0.0012245157187501577</TD>
+      <TD>11.354</TD>
+      <TD>0.022</TD>
+      <TD>A</TD>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>2MASS J</TD>
+      <TD>2006AJ....131.1163S</TD>
+      <TD>2MASS J23062928-0502285</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=fp_psc</TD>
+      <TD>fp_psc</TD>
+      <TD>2026-11-12T06:33:17.238577+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>2MASS</TD>
+      <TD>H</TD>
+      <TD>Vega</TD>
+      <TD>1.662</TD>
+      <TD>0.05285668920285924</TD>
+      <TD>0.0014529068985973032</TD>
+      <TD>10.718</TD>
+      <TD>0.021</TD>
+      <TD>A</TD>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>2MASS H</TD>
+      <TD>2006AJ....131.1163S</TD>
+      <TD>2MASS J23062928-0502285</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=fp_psc</TD>
+      <TD>fp_psc</TD>
+      <TD>2026-11-12T06:33:17.238577+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>2MASS</TD>
+      <TD>Ks</TD>
+      <TD>Vega</TD>
+      <TD>2.159</TD>
+      <TD>0.05076103342185157</TD>
+      <TD>0.00144104748294608</TD>
+      <TD>10.296</TD>
+      <TD>0.023</TD>
+      <TD>A</TD>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>2MASS Ks</TD>
+      <TD>2006AJ....131.1163S</TD>
+      <TD>2MASS J23062928-0502285</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=fp_psc</TD>
+      <TD>fp_psc</TD>
+      <TD>2026-11-12T06:33:17.238577+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>AllWISE</TD>
+      <TD>W1</TD>
+      <TD>Vega</TD>
+      <TD>3.3526</TD>
+      <TD>0.02907480283019595</TD>
+      <TD>0.0007513853495003294</TD>
+      <TD>10.068</TD>
+      <TD>0.023</TD>
+      <TD>A</TD>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>WISE W1</TD>
+      <TD>2014yCat.2328....0C</TD>
+      <TD>WISEA J230630.02-050234.1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=allwise_p3as_psd</TD>
+      <TD>allwise_p3as_psd</TD>
+      <TD>2026-11-12T06:33:17.032728+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>AllWISE</TD>
+      <TD>W2</TD>
+      <TD>Vega</TD>
+      <TD>4.6028</TD>
+      <TD>0.02052061136529633</TD>
+      <TD>0.00048292288374793973</TD>
+      <TD>9.807</TD>
+      <TD>0.02</TD>
+      <TD>A</TD>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>WISE W2</TD>
+      <TD>2014yCat.2328....0C</TD>
+      <TD>WISEA J230630.02-050234.1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=allwise_p3as_psd</TD>
+      <TD>allwise_p3as_psd</TD>
+      <TD>2026-11-12T06:33:17.032728+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>AllWISE</TD>
+      <TD>W3</TD>
+      <TD>Vega</TD>
+      <TD>11.5608</TD>
+      <TD>0.0049739671464460915</TD>
+      <TD>0.00021360056163337047</TD>
+      <TD>9.51</TD>
+      <TD>0.044</TD>
+      <TD>A</TD>
+      <TD>0</TD>
+      <TD>1</TD>
+      <TD/>
+      <TD>WISE W3</TD>
+      <TD>2014yCat.2328....0C</TD>
+      <TD>WISEA J230630.02-050234.1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=allwise_p3as_psd</TD>
+      <TD>allwise_p3as_psd</TD>
+      <TD>2026-11-12T06:33:17.032728+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>AllWISE</TD>
+      <TD>W4</TD>
+      <TD>Vega</TD>
+      <TD>22.0883</TD>
+      <TD>0.0031358992177789773</TD>
+      <TD/>
+      <TD>8.565</TD>
+      <TD/>
+      <TD>U</TD>
+      <TD>1</TD>
+      <TD>0</TD>
+      <TD>SED_UPPER_LIMIT SED_NO_ERROR</TD>
+      <TD>WISE W4</TD>
+      <TD>2014yCat.2328....0C</TD>
+      <TD>WISEA J230630.02-050234.1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/irsa/SCS?table=allwise_p3as_psd</TD>
+      <TD>allwise_p3as_psd</TD>
+      <TD>2026-11-12T06:33:17.032728+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>G</TD>
+      <TD>Vega</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>15.622554</TD>
+      <TD>0.003093</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_ZERO_POINT SED_DUPLICATE</TD>
+      <TD/>
+      <TD>2020yCat.1350....0G</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>H</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>10.718</TD>
+      <TD>0.021</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_SYSTEM SED_DUPLICATE</TD>
+      <TD/>
+      <TD>2003yCat.2246....0C</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>I</TD>
+      <TD>Vega</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>14.024</TD>
+      <TD>0.115</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_ZERO_POINT</TD>
+      <TD/>
+      <TD>2006AJ....132.1234C</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>J</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>11.354</TD>
+      <TD>0.022</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_SYSTEM SED_DUPLICATE</TD>
+      <TD/>
+      <TD>2003yCat.2246....0C</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>K</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>10.296</TD>
+      <TD>0.023</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_SYSTEM SED_DUPLICATE</TD>
+      <TD/>
+      <TD>2003yCat.2246....0C</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>R</TD>
+      <TD>Vega</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>16.466</TD>
+      <TD>0.065</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_ZERO_POINT</TD>
+      <TD/>
+      <TD>2006AJ....132.1234C</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+     <TR>
+      <TD>346.62236872857875</TD>
+      <TD>-5.041399250518334</TD>
+      <TD>astrotwo</TD>
+      <TD>SIMBAD</TD>
+      <TD>V</TD>
+      <TD>Vega</TD>
+      <TD/>
+      <TD/>
+      <TD/>
+      <TD>18.798</TD>
+      <TD>0.082</TD>
+      <TD>C</TD>
+      <TD>0</TD>
+      <TD>0</TD>
+      <TD>SED_NO_ZERO_POINT</TD>
+      <TD/>
+      <TD>2006AJ....132.1234C</TD>
+      <TD>TRAPPIST-1</TD>
+      <TD>simbad_identifier</TD>
+      <TD>http://127.0.0.1:57773/simbad/sync</TD>
+      <TD>flux</TD>
+      <TD>2026-11-12T06:33:17.015497+00:00</TD>
+      <TD>false</TD>
+      <TD>1</TD>
+     </TR>
+    </TABLEDATA>
+   </DATA>
+  </TABLE>
+ </RESOURCE>
+</VOTABLE>

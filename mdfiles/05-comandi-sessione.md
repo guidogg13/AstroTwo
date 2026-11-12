@@ -1143,6 +1143,60 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   della SED non contiene pianeti. Richiede un nuovo candidato (build 7,
   `63` dal passo 3), autorizzato dal proprietario il 2026-11-11.
 
+- **D05-7 — Unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di
+  tabella, fuori dalla regola D05-6: DA DECIDERE** (aperta il 2026-11-12,
+  sprint D11, dalla verifica d'interoperabilità delle unità senza rete:
+  `docs/validation-runs/2026-11-12-units/results.md`). Nessuna modifica al
+  codice. **Fatti misurati sul codice del candidato build 7 (`c43d622`):**
+  1. Nei VOTable 1.4 dei cataloghi (`export_table`, usato da
+     `samp.send_table` → `table.load.votable`) il testo dell'attributo `unit`
+     lo scrive **Astropy** (`votable_from_table`), non `unit_json`. Colonne di
+     posizione confermate in `hourangle` (scelta offerta dal pannello dei
+     cataloghi) → `unit="15deg"`: VOUnit valida (libreria *unity* di STILTS),
+     esatta, riletta da Astropy senza avvisi; TOPCAT la mostra come testo
+     `15deg` (come la usa per gli assi del cielo: **da verificare** nel
+     megatest). Confermate in `cycle` (solo da comando o dall'assistente) →
+     `unit="6.2831853rad"`: VOUnit valida ma **fattore troncato** (scarto
+     relativo −1,14·10⁻⁹), il difetto di D05-6 in un'uscita che D05-6 non
+     copriva.
+  2. Nei FITS di tabella (`export_table(..., "fits")`, **non raggiungibile da
+     un comando dell'interfaccia** nella 1.0): `hourangle` e `cycle` →
+     `UnitScaleError` di Astropy (esportazione fallita con un errore non del
+     modulo); `electron / s`, `dex` → `TUNIT` omesso in silenzio (avviso di
+     Astropy soppresso in `_write_fits_file`).
+  3. In ingresso (`13`, `catalogs.py` `_unit_string`/`_normalize_units`; il
+     testo di D05-6 qui sopra lo cita come `11`): un'unità VOUnit valida con
+     un nome tra apici (Gaia DR3, `'electron'.s**-1`, 6 colonne di flusso) si
+     rilegge dal testo **generico** di Astropy `electron / s`, che non è né
+     FITS né VOUnit → colonna senza unità, avviso `UNIT_UNRECOGNIZED` con un
+     testo non vero per la fonte, e **unità assente** nel VOTable mandato a
+     TOPCAT via SAMP (e nel FITS); solo l'ECSV la conserva. Stessa perdita,
+     segnalata correttamente, per le unità non standard della fonte (`days`,
+     `Earth Mass`, `Earth Radius` del NASA Exoplanet Archive). Il `14` T5
+     chiede «unità identiche in ECSV, VOTable e FITS». Nessun valore cambia.
+  4. Risultati JSON, ECSV e PDF del profilo: `earthMass`, `earthRad`,
+     `hourangle`, `cycle`, `AB`, `dex` (nomi di Astropy, unità sconosciute in
+     VOUnit e FITS) e `electron / s`, `km / s`, `mas / yr` (sintassi generica
+     di `unit_text`) non seguono uno standard, ma questi file non lo chiedono
+     (nell'ECSV l'unità è una colonna di testo) e Astropy e `unit_from_json`
+     li rileggono tutti esattamente. A posto: VOTable della SED (`deg`, `um`,
+     `Jy`, `mag`), unità standard dei cataloghi (scritte in VOUnit valida).
+  **Proposte:** **(a)** nessun build 8: la 1.0 resta il build 7; i punti 1 e
+  3 dichiarati nelle note di rilascio («Known limitations»); correzione in
+  una versione successiva (VOTable e FITS con il testo VOUnit/FITS di
+  `unit_json`, `cycle` con tutte le cifre o in gradi; ingresso del `13` che
+  prova prima il testo FITS/VOUnit dell'unità letta; `UnitScaleError` → errore
+  del modulo con il motivo). **(b)** build 8 ora con le correzioni dei punti
+  1–3 (codice del `13` e del `14`, test nuovi), nuovo candidato dalla `63`
+  passo 3 e nuova misura. **(c)** build 8 solo per il punto 3 (la perdita
+  visibile all'utente: flussi di Gaia senza unità in TOPCAT), il resto come
+  in (a). **Raccomandazione di Claude Code:** (a); se il megatest chiede
+  comunque un nuovo candidato, includere le correzioni di (b) in quel build.
+  Motivo: nessun numero cambia; `15deg` è VOUnit valida ed esatta; `cycle`
+  e il FITS di tabella non sono raggiungibili dall'interfaccia; il punto 3
+  toglie un'unità, non ne scrive una sbagliata. **Blocca la 1.0:** da
+  decidere prima del rilascio (correzione o limite dichiarato).
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -1182,3 +1236,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-07 | Claude Code | **Sprint B4 — dati aggiornati e ripieghi** (richiesta del proprietario del 2026-11-07, D14-14 del 14; forma D14-15 (8) da confermare; autorizzazione esplicita ad aggiornare il 05): §3.1 — campo `refresh` del comando (scritto solo quando vale `true`, solo per i comandi `network`, `COMMAND_PARAMETER_INVALID` `refresh_not_network`), avviso `DATA_REFRESHED` (`fresh`, `cache_used`), non esposto all'IA; §7 — `catalog.load_region` con il mirror di SIMBAD e gli archivi originali di Gaia DR3 e 2MASS, `POSITION_COLUMNS_REQUIRED` senza sistema (2MASS dall'IRSA); §10.1, T27. Stato `approvato` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D9 (validazione del candidato 1.0.0):** nuova **D05-6** (§13), unità senza forma FITS nei risultati (`5.9721679e+24kg` per le masse terrestri, fattore troncato), proposte (a)–(c), raccomandata (a); nessuna modifica al codice. |
 | 2026-11-11 | Claude Code | **Sprint D10a (decisione del proprietario del 2026-11-11):** **D05-6 decisa, proposta (a)** (§3.1 forma JSON di `quantity`, §13): unità senza forma FITS col nome di Astropy, mai un fattore troncato; nuove `unit_json`, `unit_text`, `unit_from_json` in `commands.py` usate in tutti i punti d'uscita delle unità; test nuovi. Modifica di un file approvato su decisione del proprietario; il file resta `approvato`. |
+| 2026-11-12 | Claude Code | **Sprint D11 (verifica delle unità dopo D05-6, senza rete):** nuova **D05-7** (§13), unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy fuori dalla regola D05-6 (`15deg`, `6.2831853rad` troncato, `UnitScaleError`) e unità VOUnit con nome tra apici perse in ingresso (Gaia `'electron'.s**-1`); proposte (a)–(c), raccomandata (a); nessuna modifica al codice. Solo una decisione aperta aggiunta; il file resta `approvato`. |

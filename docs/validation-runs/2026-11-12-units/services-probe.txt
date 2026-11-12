@@ -1,0 +1,26 @@
+2026-11-12T06:26:28Z
+SIMBAD-TAP     404 0.192412s
+Sesame         302 0.190908s
+TAPVizieR      000 60.005592s
+errore curl 28
+VizieR         404 0.193119s
+MocServer      000 60.002823s
+errore curl 28
+XMatch         000 60.006542s
+errore curl 28
+Gaia-TAP       200 0.421201s
+NASA-TAP       200 1.598248s
+SIMBAD-Harv    200 0.362594s
+2026-11-12T06:35:17Z
+SIMBAD-TAP     404 0.189471s
+Sesame         302 0.215634s
+TAPVizieR      000 60.011604s
+errore curl 28
+VizieR         404 0.192148s
+MocServer      000 60.001459s
+errore curl 28
+XMatch         000 60.010360s
+errore curl 28
+Gaia-TAP       200 0.450254s
+NASA-TAP       200 1.624761s
+SIMBAD-Harv    200 0.348117s

@@ -1,0 +1,31 @@
+{
+ "ecsv_rows": 108,
+ "ecsv_rows_with_unit": 77,
+ "ecsv_units": {
+  "deg": 5,
+  "mas": 3,
+  "yr": 1,
+  "mas yr-1": 2,
+  "pc": 1,
+  "mag": 17,
+  "electron / s": 3,
+  "Jy": 10,
+  "d": 7,
+  "AU": 7,
+  "earthMass": 7,
+  "earthRad": 7,
+  "K": 7
+ },
+ "ecsv_column_units": {},
+ "votable_version": "1.4",
+ "votable_rows": 17,
+ "votable_units": {
+  "ra": "deg",
+  "dec": "deg",
+  "wavelength": "um",
+  "flux_nu": "Jy",
+  "flux_nu_error": "Jy",
+  "magnitude": "mag",
+  "magnitude_error": "mag"
+ }
+}

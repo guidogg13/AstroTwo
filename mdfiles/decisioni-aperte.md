@@ -8,7 +8,7 @@ Richiesto dal proprietario il 2026-11-11 (sprint D7). **Aggiornato nello sprint 
 il 2026-11-11 `A6-b` (la 1.0 esce senza firma Developer ID né notarizzazione, passo 8 della `63`), `D14-15` e
 `D42-1` (confermate così come sono nel codice); righe tolte, esiti nei file di origine (`60` §13, `14` §13,
 `42` §13). `AP1`, `D41-7`, `D41-8` restano aperte, rinviate a dopo la 1.0 e dichiarate come limiti noti nelle
-note di rilascio (decisione del 2026-11-11). Per ognuna delle **16 decisioni
+note di rilascio (decisione del 2026-11-11). **Aggiornato nello sprint D11 (2026-11-12):** nuova `D05-7`. Per ognuna delle **17 decisioni
 aperte** (§5, Gruppo 3): se blocca la 1.0 e il consiglio di Claude Code.
 **Nessuna decisione è chiusa qui:** le chiude il proprietario; dopo, si
 aggiornano il file di origine e §5. «Blocca la 1.0» = senza quella decisione
@@ -20,6 +20,7 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 
 | ID | Di cosa si tratta | Blocca la 1.0 | Consiglio di Claude Code | Perché |
 |---|---|---|---|---|
+| `D05-7` | Unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy, fuori da D05-6: `hourangle` → `15deg` (VOUnit valida, esatta), `cycle` → `6.2831853rad` (fattore troncato), FITS `UnitScaleError`; unità VOUnit tra apici di Gaia (`'electron'.s**-1`) perse in ingresso e assenti nel VOTable via SAMP (`05` §13, `docs/validation-runs/2026-11-12-units/results.md`) | **da decidere dal proprietario prima del rilascio** (aperta il 2026-11-12, sprint D11): correzione con un build 8 oppure limite dichiarato | **(a)** nessun build 8, dichiarare i punti 1 e 3 nelle note di rilascio, correggere dopo la 1.0; se il megatest chiede comunque un nuovo candidato, includere la correzione | Nessun numero cambia; `15deg` è VOUnit valida ed esatta; `cycle` e il FITS di tabella non si raggiungono dall'interfaccia; la perdita di Gaia toglie un'unità, non ne scrive una sbagliata |
 | `D40-10` | Pulizia delle tabelle SAMP ricevute (`40` §13), voce futura | no | Rinviare a dopo la 1.0 | Le tabelle si accumulano ma non rompono niente; serve una specifica nuova (comando, sessioni che citano file cancellati) |
 | `D10-5` | Catalogo di riferimento e limiti di magnitudine per la calibrazione astrometrica (H6) | no | Rinviare a dopo la 1.0 | La calibrazione astrometrica non è nella 1.0; si decide quando si scrive quella funzione |
 | `A8` | Livello di compatibilità con lo scripting di Aladin | no | Rinviare a dopo la 1.0 | Già rimandata a dopo il livello 1; il modulo `24` non esiste ancora |
@@ -37,7 +38,7 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 | `D32-3` | Risultati più leggeri verso l'IA per provider con pochi token | no | Rinviare a dopo la 1.0 (già deciso) | Rinviata dal proprietario il 2026-10-25 |
 | `D13-14c` | Traduzione UCD1 → UCD1+ con il servizio del CDS | no | Rinviare (bassa priorità, già deciso) | Opzione esplicita, nessun uso nella 1.0 |
 
-**Conteggio (ricontato dalle righe sopra, sprint D10a):** 16 aperte; **0 bloccano la 1.0** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), e corretta nel codice: `05` §13). Prima (sprint D9): 17 aperte; `D05-6` nuova, **da decidere prima del rilascio** (correzione con un nuovo candidato, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D8): 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
+**Conteggio (ricontato dalle righe sopra, sprint D11):** 17 aperte; `D05-7` nuova, **da decidere prima del rilascio** (correzione con un build 8, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D10a): 16 aperte; **0 bloccano la 1.0** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), e corretta nel codice: `05` §13). Prima (sprint D9): 17 aperte; `D05-6` nuova, **da decidere prima del rilascio** (correzione con un nuovo candidato, oppure limite dichiarato); le altre 16 non bloccano la 1.0. Prima (sprint D8): 16 aperte; **0 bloccano la 1.0**; tutte da rinviare a
 dopo la 1.0, di cui 3 dichiarate come limiti noti nelle note di rilascio (`AP1`, `D41-7`, `D41-8`, decisione del
 proprietario del 2026-11-11). Prima (sprint D7): 19 aperte, 3 da decidere prima della 1.0 (`D14-15`, `D42-1`,
 `A6-b`).
@@ -77,7 +78,9 @@ Gruppo 3: 5.**
 **Dopo le decisioni del 2026-10-04: 25 ancora aperte** — Gruppo 1: **0**
 (le 22 sono tutte decise, §3) · Gruppo 2: 20 · Gruppo 3: 5.
 
-**Dal 2026-11-11 (sprint D10a): 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a): unità senza forma FITS col nome di Astropy, mai un fattore troncato; confronto delle unità come unità di Astropy nella validazione; prima nel file di origine `05` §13, poi tolta).
+**Dal 2026-11-12 (sprint D11): 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D05-7`, unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella fuori dalla regola D05-6, aperta dalla verifica d'interoperabilità delle unità; prima nel file di origine `05` §13).
+
+Prima, **Dal 2026-11-11 (sprint D10a): 16 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **16** (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a): unità senza forma FITS col nome di Astropy, mai un fattore troncato; confronto delle unità come unità di Astropy nella validazione; prima nel file di origine `05` §13, poi tolta).
 
 Prima, **Dal 2026-11-11 (sprint D9): 17 aperte** — Gruppo 1: **0** · Gruppo 2: **0** · Gruppo 3: **17** (nuova `D05-6`, unità senza forma FITS nei risultati, aperta dalla validazione del candidato 1.0.0; prima nel file di origine `05` §13).
 
@@ -405,10 +408,11 @@ gruppi successivi, A8 dopo il livello 1).
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
 
-## 5. GRUPPO 3 — rimandabili al momento del codice (16)
+## 5. GRUPPO 3 — rimandabili al momento del codice (17)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| `D05-7` | Unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy, fuori dalla regola D05-6 (`15deg`, `6.2831853rad` troncato, `UnitScaleError` nel FITS), e unità VOUnit tra apici perse in ingresso (Gaia `'electron'.s**-1`): (a) nessun build 8, limite dichiarato e correzione dopo la 1.0, (b) build 8 con la correzione, (c) build 8 solo per l'ingresso; aperta il 2026-11-12 (sprint D11) | `05-comandi-sessione.md` §13 (codice del `13` e del `14`) |
 | — | (`D05-6` decisa dal proprietario il 2026-11-11, proposta (a), corretta nel codice nello sprint D10a; `05` §13) | — |
 | — | (`A6-b` decisa, `D14-15` e `D42-1` confermate dal proprietario il 2026-11-11; `60` §13, `14` §13, `42` §13) | — |
 | — | (`D60-6` approvata dal proprietario il 2026-11-10; `60` §13) | — |
@@ -564,3 +568,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-11 | Claude Code | **Sprint D8 (decisioni del proprietario del 2026-11-11):** `A6-b` decisa (1.0 senza firma Developer ID né notarizzazione), `D14-15` e `D42-1` confermate così come sono nel codice; scritte prima nei file di origine (`60` §13, `01` §5, `14` §13, `42` §13) e tolte da §0 e §5. `AP1`, `D41-7`, `D41-8` restano aperte (rinviate, limiti noti nelle note di rilascio). **16 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D9 (candidato 1.0.0):** nuova `D05-6` (Gruppo 3; in §0 «da decidere prima del rilascio»), scritta prima nel file di origine (`05` §13), dalla validazione del 2026-11-11 (`docs/validation.md` §5.0bis). **17 aperte.** |
 | 2026-11-11 | Claude Code | **Sprint D10a (decisione del proprietario del 2026-11-11):** `D05-6` **decisa**, proposta (a), scritta prima nel file di origine (`05` §13, anche `18` e `25` nel registro) e corretta nel codice; righe tolte da §0 e §5. **16 aperte**, 0 bloccano la 1.0. |
+| 2026-11-12 | Claude Code | **Sprint D11 (verifica delle unità dopo D05-6, senza rete):** nuova `D05-7` (Gruppo 3; in §0 «da decidere prima del rilascio»), scritta prima nel file di origine (`05` §13), da `docs/validation-runs/2026-11-12-units/results.md`. **17 aperte.** |

@@ -25,11 +25,20 @@ decisioni, account Apple, Zenodo, Ko-fi, sito).
   proprietario dopo questo rapporto.
 - **Nessun `.dmg` candidato** finché il proprietario non lo autorizza.
 
+**Decisioni del proprietario del 2026-11-12 (sprint D11):**
+
+- Il fallimento del test di rete `test_adql_examples[gaia_circle]` (passo 5)
+  è **accettato come limite dell'archivio Gaia** (interruzione della query
+  d'esempio al limite di 60 s dell'archivio): **si riprova prima del
+  rilascio**. Scritto anche nelle note di rilascio.
+- Il candidato **resta il build 7** (`c43d622`); lo sprint D11 non cambia il
+  codice dell'app.
+
 ### 3.2 Prima della checklist: cosa blocca il passo 3
 
 | # | Cosa | Stato al 2026-11-11 | Chi |
 |---|---|---|---|
-| P1 | **Validazione delle sezioni non misurate** (`docs/validation.md`) | **In parte fatta (sprint D9, D10).** Quarta misura (2026-11-11, 21:28–21:34 UTC, candidato build 7, commit `c43d622`) sui tre oggetti con pianeti, dopo `D05-6`: **72 pianeti su 72 entro la tolleranza**, tolleranze invariate (§5.0ter). Con gli altri quattro oggetti della terza misura: **379 pass, 0 fail, 48 non misurati**. Non misurati: 2MASS/AllWISE contro VizieR e serie SED (TAPVizieR giù, 37 righe); 11 righe senza designazione 2MASS/AllWISE nel mirror di Harvard, **non verificabile contro SIMBAD del CDS** (404 alle 21:04, 21:15, 21:28 UTC; Sesame «Nothing found»): restano «non misurate», non «non applicabili». SIMBAD solo contro il mirror di Harvard. La validazione non blocca il candidato (decisione del 2026-11-11), si riprova prima del rilascio | Guido (rilascio con o senza VizieR/CDS); Claude Code (nuova misura quando il CDS torna) |
+| P1 | **Validazione delle sezioni non misurate** (`docs/validation.md`) | **In parte fatta (sprint D9, D10).** Quarta misura (2026-11-11, 21:28–21:34 UTC, candidato build 7, commit `c43d622`) sui tre oggetti con pianeti, dopo `D05-6`: **72 pianeti su 72 entro la tolleranza**, tolleranze invariate (§5.0ter). Con gli altri quattro oggetti della terza misura: **379 pass, 0 fail, 48 non misurati**. Non misurati: 2MASS/AllWISE contro VizieR e serie SED (TAPVizieR giù, 37 righe); 11 righe senza designazione 2MASS/AllWISE nel mirror di Harvard, **non verificabile contro SIMBAD del CDS** (404 alle 21:04, 21:15, 21:28 UTC; Sesame «Nothing found»): restano «non misurate», non «non applicabili». SIMBAD solo contro il mirror di Harvard. La validazione non blocca il candidato (decisione del 2026-11-11), si riprova prima del rilascio. **Sprint D11 (2026-11-12):** servizi riprovati due volte, alle 06:26 e alle 06:35 UTC: CDS ancora giù (SIMBAD TAP e VizieR HTTP 404; TAPVizieR, MocServer, XMatch nessuna risposta in 60 s; Sesame solo dalla cache), Gaia, NASA e il mirror di Harvard rispondono → **nessuna nuova misura**, le 48 voci e le 11 righe restano «non misurate» (`docs/validation-runs/2026-11-12-units/services-probe.txt`) | Guido (rilascio con o senza VizieR/CDS); Claude Code (nuova misura quando il CDS torna) |
 | P2 | **Decisioni aperte da chiudere prima** (`decisioni-aperte.md` §0): `D14-15` e `D42-1` (scelte già nel codice, «da confermare»), `A6-b` (passo 7 o passo 8) | **Fatto il 2026-11-11** (sprint D8): `A6-b` decisa (1.0 senza firma Developer ID, passo 8), `D14-15` e `D42-1` confermate; 16 aperte, nessuna blocca la 1.0 | Guido (fatto) |
 | P3 | **Testo di posizionamento in `pyproject.toml`**: `description = "AstroTwo: successore di Aladin per gli astrofisici"` (riga 4), contrario al posizionamento «complementare, mai sostituto» del passo 2 | **Fatto nello sprint D8:** descrizione uguale alla prima riga del README; stessa frase tolta dalla docstring di `src/astrotwo/__init__.py`. `CITATION.cff`, `.zenodo.json` e `Info.plist` (generato da `build_app.py`: nomi, versione, copyright) non avevano frasi così | Claude Code (fatto) |
 | P4 | **Approvazione del `62`** (megatest): il file è ancora `bozza`, mentre la `63` (approvata) lo usa al passo 9 | Da approvare | Guido |
@@ -43,7 +52,7 @@ decisioni, account Apple, Zenodo, Ko-fi, sito).
 | 2 | Testi coerenti con il posizionamento | **Fatto** (sprint D9) | Comando del passo 2 ripetuto: nessuna frase «successore/sostituto» nei metadati; resta un falso positivo in un commento del codice (`main_window.py`, «un sostituto» del Portachiavi) | Claude Code |
 | 3 | Versione 1.0.0 in quattro punti | **Fatto** (sprint D9; build 7 nello sprint D10) | `pyproject.toml` `1.0.0`, `__init__.py` `1.0.0`, **build `7`** (il build 6 è scartato), `CITATION.cff` `1.0.0` con `date-released: "2026-11-11"` (data del commit della versione `c43d622`, invariata); `test_build_app.py::test_versions` aggiornato al build 7 | Claude Code |
 | 4 | `uv lock` prima di `git add` | **Fatto** (sprint D10) | `uv lock`: lockfile invariato (versione del progetto invariata, cambia solo il build) | Claude Code |
-| 5 | Suite completa con i test di rete e commit della versione | **Fatto** (sprint D10) | **Commit della versione `c43d622`** («Release 1.0.0: versione (build 7)», 2026-11-11), **1352** test di default passati, ruff pulito, `--no-network`. Test di rete **a parte** (20:54–21:07 UTC, sul codice del commit): **37 passati, 5 saltati** per servizio giù (404 del CDS con la sonda), **9 falliti solo per connessione** (MocServer, TAPVizieR, XMatch del CDS), **1 fallito** (`test_adql_examples[gaia_circle]`): l'archivio Gaia interrompe la query d'esempio al suo limite di 60 s («Maximum execution time (60 s) reached. Job aborted»), due volte; la stessa ADQL inviata direttamente all'archivio, senza AstroTwo, è interrotta anche lei (21:13–21:15 UTC) e la query è invariata dal build 6, quando il test passava → limite del servizio, non un errore di AstroTwo, scritto nelle note di rilascio. Prima: commit `8e08ddb` (build 6, sprint D9) | Claude Code |
+| 5 | Suite completa con i test di rete e commit della versione | **Fatto** (sprint D10) | **Commit della versione `c43d622`** («Release 1.0.0: versione (build 7)», 2026-11-11), **1352** test di default passati, ruff pulito, `--no-network`. Test di rete **a parte** (20:54–21:07 UTC, sul codice del commit): **37 passati, 5 saltati** per servizio giù (404 del CDS con la sonda), **9 falliti solo per connessione** (MocServer, TAPVizieR, XMatch del CDS), **1 fallito** (`test_adql_examples[gaia_circle]`): l'archivio Gaia interrompe la query d'esempio al suo limite di 60 s («Maximum execution time (60 s) reached. Job aborted»), due volte; la stessa ADQL inviata direttamente all'archivio, senza AstroTwo, è interrotta anche lei (21:13–21:15 UTC) e la query è invariata dal build 6, quando il test passava → limite del servizio, non un errore di AstroTwo, scritto nelle note di rilascio. **Accettato dal proprietario il 2026-11-12 come limite dell'archivio Gaia; il test si riprova prima del rilascio.** Prima: commit `8e08ddb` (build 6, sprint D9) | Claude Code |
 | 6 | Costruzione dell'app | **Fatto** (sprint D10) | `uv run python scripts/build_app.py` dal commit `c43d622`, albero pulito (`BUILD_INFO.json`: 1.0.0, build 7, `dirty: false`, CPython 3.12.16, PySide6 6.11.3, PyInstaller 6.22.3, costruita alle 21:25:53 UTC); 1352 test passati nell'ambiente di build; V1–V9 ok; app 246,2 MB; prima vista 1,22 s a freddo, 1,19 s a caldo. Avviso atteso `BUILD_SOURCE_NOT_PUBLIC` (il tag `v1.0.0` non esiste ancora) | Claude Code |
 | 7 | Firma Developer ID e notarizzazione | **Non per la 1.0** (A6-b, decisione del 2026-11-11: si salta) | Per una versione successiva: Su questo Mac `security find-identity -v -p codesigning` dà **0 identità valide** (2026-11-11); `notarytool` c'è (Command Line Tools). Mancano i passi una tantum del `60` §3.12: iscrizione all'**Apple Developer Program**, certificato «Developer ID Application», password specifica per l'app, `xcrun notarytool store-credentials astrotwo-notary`. `sign_notarize.py` resta com'è | **Guido** (account Apple, certificato, credenziali), quando vuole; poi Claude Code |
 | 8 | `.dmg` (senza Developer ID) — **strada della 1.0** (A6-b) | **Fatto: `.dmg` candidato build 7** (sprint D10) | `uv run python scripts/make_dmg.py` (prova a secco) poi `--execute`. **`dist/AstroTwo-1.0.0.dmg`**, 121 491 995 byte (115,9 MiB); **`dist/AstroTwo-1.0.0.dmg.sha256`**; SHA-256 `89daad42cd2813b6e45f6ea625b8dd5efa83bc76d60987c0cee67aee0756174f`. Controlli: `shasum -a 256 -c` → OK; volume (montato in sola lettura) con solo `AstroTwo.app` e `Applications` → `/Applications`; `codesign --verify --deep --strict` valido, firma ad hoc (`TeamIdentifier` non impostato); `Info.plist`: AstroTwo, 1.0.0, build 7; nessun volume rimasto montato. Il candidato build 6 (`1bf583b2…a097a`) è in `dist/scartati/AstroTwo-1.0.0-build6.dmg` con il suo `.sha256` (che cita ancora il nome vecchio: `shasum -c` va fatto con quel nome) | Claude Code |
@@ -102,6 +111,30 @@ rete in `tests/test_network_retries.py` e `tests/test_commit_checked.py`.
   fino all'approvazione, `63` passo 13): app non firmata con il rimando a
   `docs/installation.md`; «Known limitations» con AP1, D41-7 (46,0 ms contro
   16,7 ms) e D41-8 (4,46 s contro 3 s); stato della validazione.
+
+### 3.8 Interoperabilità delle unità dopo D05-6 (sprint D11, 2026-11-12)
+
+Verifica senza rete sul codice del candidato build 7, con Astropy 8.0.1 e
+STILTS 3.5-6 / STIL 4.3-6 (`topcat-full.jar` locale, proxy verso una porta
+chiusa) con la sua libreria di unità *unity*. File, script e tabella
+completa (43 unità, 68 testi distinti controllati con unity) in
+`docs/validation-runs/2026-11-12-units/results.md`.
+
+- **Profilo di TRAPPIST-1 dai dati dei test:** ECSV (108 righe, 77 con unità,
+  13 testi d'unità) riletto da Astropy **senza avvisi** (UnitsWarning
+  compresi) e con le unità giuste (`unit_from_json` e `astropy.units.Unit`);
+  VOTable 1.4 della SED (17 righe) riletto con `verify="exception"` senza
+  avvisi, unità `deg`, `um`, `Jy`, `mag` valide in VOUnit e FITS. STIL legge
+  gli stessi testi; `votlint` dà solo un avviso non sulle unità
+  (`arraysize="1"` sulla colonna di testo `quality`).
+- **Trovato (nuova `D05-7`, da decidere prima del rilascio):** nei VOTable
+  dei cataloghi (anche via SAMP) e nei FITS di tabella le unità le scrive
+  Astropy, fuori dalla regola D05-6: posizioni in `hourangle` → `15deg`
+  (VOUnit valida, esatta), in `cycle` → `6.2831853rad` (fattore troncato),
+  FITS → `UnitScaleError`; le unità VOUnit tra apici di Gaia
+  (`'electron'.s**-1`) si perdono in ingresso e mancano nel VOTable mandato a
+  TOPCAT. Nessun valore cambia; nessuna correzione fatta (regola dello
+  sprint). Raccomandazione: nessun build 8, limite dichiarato.
 
 ## 4. Cosa NON fa
 
@@ -162,3 +195,4 @@ validazione completa resta una scelta del proprietario (§3.1).
 | 2026-11-11 | Claude Code | **Sprint D8:** P2 e P3 fatti; passo 2 pronto; passo 5 pronto (esiti dei test di rete prima e dopo la regola del 404 del CDS); passi 7 (non per la 1.0) e 8 (strada della 1.0, firma ad hoc controllata); P1 con i controlli delle 14:21–14:37 UTC; §3.5 con la spiegazione di 1316 → 1322; nuove §3.6 (sonda del CDS) e §3.7 (documenti della 1.0). |
 | 2026-11-11 | Claude Code | **Sprint D9 (via del proprietario al candidato):** passi 1–6 e 8 fatti (commit della versione `8e08ddb`, build 6, `.dmg` candidato `dist/AstroTwo-1.0.0.dmg` con impronta e controlli), passo 7 saltato (A6-b), P5 dato, P1 in parte (terza misura, `D05-6`); passo 9 al proprietario. |
 | 2026-11-11 | Claude Code | **Sprint D10 (decisioni del proprietario del 2026-11-11: D05-6 (a), build 6 scartato, nuovo candidato build 7):** passi 1, 3–6 e 8 rifatti (D10a `fe542ff`, commit della versione `c43d622`, build 7, `.dmg` `89daad42…174f`), passo 7 saltato (A6-b); P1 con la quarta misura (379 pass, 0 fail, 48 non misurati); passo 9 al proprietario sul nuovo candidato. |
+| 2026-11-12 | Claude Code | **Sprint D11 (decisioni del proprietario del 2026-11-12):** `gaia_circle` accettato come limite dell'archivio Gaia, da riprovare prima del rilascio (§3.1, passo 5); candidato invariato (build 7); P1 con i servizi riprovati alle 06:26 e 06:35 UTC (CDS giù, nessuna nuova misura); nuova §3.8, verifica delle unità senza rete e nuova `D05-7`. |
