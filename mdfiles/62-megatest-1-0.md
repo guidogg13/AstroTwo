@@ -157,7 +157,7 @@ Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
 | E2 | **Export… → Profile sheet (PDF)**, lasciando la lingua proposta | La lingua proposta è **inglese**, anche con l'app in italiano (L2); il PDF è tutto in inglese: intestazioni, avvisi e note |
 | E3 | Esportare di nuovo lo stesso PDF in inglese con un altro nome, poi confrontare i due file (`shasum -a 256`) | Impronte **identiche** |
 | E4 | Lo stesso PDF scegliendo «italiano» | Intestazioni e avvisi in italiano; impronta diversa da E3 |
-| E5 | Su 51 Peg: **Export… → SED plot (PNG)** e **Load SED points as catalog**; poi **SED plot (PNG)** di un profilo con limiti superiori (correzione D62-7: 51 Peg non ne ha; oggetto indicato nell'esito delle prove automatiche, `docs/megatest-runs/1.0.0.md`) | PNG della SED; nuovo livello `SED * 51 Peg` nel cielo e nella tabella; nel secondo PNG i limiti superiori come frecce |
+| E5 | Su 51 Peg: **Export… → SED plot (PNG)** e **Load SED points as catalog**; poi **SED plot (PNG)** del profilo di `TRAPPIST-1` (correzione D62-7: 51 Peg non ha limiti superiori; TRAPPIST-1 ha il limite superiore di AllWISE W4, verificato sul build 8) | PNG della SED; nuovo livello `SED * 51 Peg` nel cielo e nella tabella; nel secondo PNG i limiti superiori come frecce |
 | E6 | **File → Export view as PNG…** | PNG della vista con i crediti dei dati |
 | E7 | Esportare in una cartella senza permesso di scrittura | Finestra «The export was not written» con il motivo; nessun file a metà |
 
@@ -336,6 +336,28 @@ build 8):
   I1–I2 (Ollama o LM Studio). Nelle prove automatiche l'assistente si può provare anche con Ollama, se è acceso
   (decisione del 2026-11-13).
 
+**Decisione aperta dalle prove automatiche sul build 8 (sprint D13c, 2026-11-13)** (esito in
+`docs/megatest-runs/1.0.0.md`; nessuna correzione fatta, perché ogni modifica al codice dopo il commit della
+versione `2784e5a` richiede un nuovo candidato, `63` §3.1):
+
+- **D62-8 — Due difetti del build 8 trovati dalle prove automatiche: DA DECIDERE.**
+  1. **VOTable dei cataloghi con ID ripetuti** (introdotto dalla correzione D05-7 del D13a): per ogni colonna con
+     un'unità non standard (per esempio le 4 colonne `log(cm.s**-2)` del catalogo Gaia DR3 di C1) il VOTable riceve un
+     `INFO name="A2NOTE"`, e Astropy gli dà `ID="A2NOTE"`: con due o più note l'ID si ripete e il file non è valido
+     rispetto allo schema (`votlint`: «ID A2NOTE already defined», 3 errori su `I/355/gaiadr3` mandato via SAMP).
+     STILTS lo legge (514 righe, avviso «Multiple elements with ID A2NOTE»), Astropy anche; i valori e le unità
+     sono giusti. Correzione proposta: `INFO` delle note senza `ID` (o con un ID numerato), test con `votlint`/schema.
+  2. **«Immagini: done» nel PDF italiano** (D62-6 non corretta del tutto): la riga di stato della colonna delle
+     miniature (`profile_export.py`, `_identity_page`) scrive ancora lo stato senza tradurlo; tutte le altre righe
+     «Stato:» sono tradotte. Correzione proposta: usare la stessa traduzione di `_status_lines`.
+  In più, dettaglio di lingua minore: nel messaggio inglese di D62-3 il nome del servizio resta in italiano
+  («SIMBAD (mirror di Harvard)», etichetta del `14`).
+  **Proposte:** **(a)** build 9 con le due correzioni (e l'etichetta del servizio), dal passo 3 della `63`, e di
+  nuovo la parte automatica sul build 9 prima della prova a mano; **(b)** nessun build 9: i due difetti dichiarati
+  nelle note di rilascio e corretti dopo la 1.0. **Consiglio di Claude Code: (a)**: il punto 1 rende non valido
+  rispetto allo schema ogni VOTable del catalogo Gaia DR3 mandato a TOPCAT, ed è un errore introdotto in questo
+  sprint; la correzione è piccola.
+
 ## 14. Registro modifiche
 
 | Data | Chi | Cosa è cambiato |
@@ -349,3 +371,4 @@ build 8):
 | 2026-11-11 | Claude Code | **Sprint D8 (A6-b decisa dal proprietario il 2026-11-11: 1.0 senza firma Developer ID):** A4 riscritta per l'app senza firma (avviso al primo avvio e «Apri comunque» secondo `docs/installation.md`, `.dmg` scaricato con l'attributo di quarantena); la prova «nessun avviso» resta come A4bis per la prima versione firmata. |
 | 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12: prove automatiche prima del megatest a mano, sul candidato build 7):** esito delle prove automatiche in `docs/megatest-runs/1.0.0.md` (84 prove: 48 ok, 9 problema, 27 non fatte, da fare a mano); nuove decisioni aperte **D62-2** (grafico della SED assente nell'app costruita, bloccante, build 8), **D62-3** (profilo di una riga Gaia assente da SIMBAD), **D62-4** (livello a corpo ignoto che blocca gli altri), **D62-5** (immagini del README), **D62-6** (dettagli di lingua e di aspetto), **D62-7** (testo di C1, P4, E5, M1, I1–I2) in §13. Nessuna correzione al codice né alle prove. Stato `bozza` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13 (decisioni del proprietario del 2026-11-13):** D62-2…D62-7 decise (§13); testo di C1, P4, E5, M1, I1, I2 corretto (D62-7) e P7 riscritta per il messaggio di D62-3. Stato `bozza` invariato. |
+| 2026-11-13 | Claude Code | **Sprint D13c (prove automatiche sul candidato build 8):** nuova decisione aperta **D62-8** (§13): ID `A2NOTE` ripetuti nei VOTable dei cataloghi con più unità non standard, «Immagini: done» nel PDF italiano; consiglio build 9. Testo di E5 completato (TRAPPIST-1 e Vega hanno limiti superiori). Stato `bozza` invariato. |
