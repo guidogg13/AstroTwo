@@ -133,7 +133,9 @@ Codice e dati di AstroTwo inclusi:
   `pyinstaller-hooks-contrib`; quelli che mancano li aggiunge lo script (`collect_data_files`,
   `copy_metadata`), e il punto 4 di §3.8 controlla che il codice li trovi davvero;
 - da Qt: i moduli usati dal codice (`QtCore`, `QtGui`, `QtWidgets`, `QtOpenGL`, `QtOpenGLWidgets`, `QtSvg`) con
-  le loro dipendenze dirette, i plugin `platforms/libqcocoa`, `styles/libqmacstyle`, `imageformats/libqsvg`,
+  le loro dipendenze dirette, i plugin `platforms/libqcocoa`, `platforms/libqoffscreen` (dal 2026-11-13, D62-2: solo
+  per la prova di fumo V10 senza schermo; qtbase, stessa licenza LGPL-3.0, circa 250 kB), `styles/libqmacstyle`,
+  `imageformats/libqsvg`,
   `iconengines/libqsvgicon` (e gli altri `imageformats` che il hook di PySide6 include di default) e la
   traduzione `translations/qtbase_it.qm` (usata da `load_translations` del `40`).
 
@@ -149,10 +151,20 @@ con il motivo:
 - i test delle librerie (`astropy/tests` e simili) **solo se** nessun modulo usato li importa (**da verificare**
   per astropy, che importa parti di `astropy.tests` in alcuni moduli);
 - i backend di matplotlib diversi da quelli che il codice usa (**da verificare** prima del codice: quale backend usa
-  AstroTwo).
+  AstroTwo). **Correzione del 2026-11-13 (D62-2, decisione del proprietario):** il codice usa `backend_agg` (PNG e
+  PDF del profilo) **e `backend_qtagg`** (grafico della SED nella finestra Profili, `43`, import dentro
+  `PhotometryView._plot`); fino al build 7 `backend_qtagg` e `backend_qt` erano esclusi per errore e nell'app il
+  grafico non si apriva (finestra Profili ferma su «Running», Export… spento). Ora sono inclusi; resta escluso
+  `matplotlib.pyplot` (il codice usa solo `Figure` e i backend).
 
 Un'esclusione sbagliata la scopre il punto 4 di §3.8 (importazione di tutti i moduli di `astrotwo`), oltre ai test
-dell'app costruita.
+dell'app costruita. **Il punto 4 non basta per gli import dentro le funzioni** (D62-2): dal 2026-11-13 ogni esclusione
+è dimostrata non necessaria in tre modi: (1) test sul codice (`tests/test_smoke_profile.py`): nessun `import` di
+`src/astrotwo`, **anche dentro una funzione**, nomina un modulo escluso; importare tutti i moduli non ne carica
+nessuno; (2) la prova di fumo V10 non ne carica nessuno (un profilo completo con le esportazioni); (3) la suite
+completa è stata eseguita una volta con tutti i moduli esclusi **bloccati** all'importazione (tranne `pytest` e
+`PySide6.QtTest`, che servono solo ai test): esito nel registro di questo file. La prova di fumo V10 è nell'app
+costruita, quindi un'esclusione sbagliata sul percorso del profilo ferma il build.
 
 ### 3.6 Icona
 
@@ -214,7 +226,7 @@ Requisiti di `01` §6.1, punti 1–5:
 
 ### 3.8 Controlli sull'app costruita (passo 9 di §3.3)
 
-Ogni controllo ha un nome (V1…V9) che compare nel rapporto con l'esito.
+Ogni controllo ha un nome (V1…V10) che compare nel rapporto con l'esito.
 
 - **V1 — Firma:** `codesign --verify --deep --strict` riuscito; firma ad hoc (`Signature=adhoc`).
 - **V2 — Nessun riferimento esterno:** tutti i Mach-O dell'app (`otool -L` e `LC_RPATH`) fanno riferimento solo
@@ -230,7 +242,7 @@ Ogni controllo ha un nome (V1…V9) che compare nel rapporto con l'esito.
   non trova il Portachiavi di login, e impostazioni e cache sono quelle di un utente nuovo.
 - **V5 — Qt non modificato:** §3.7 punto 4 (file della ruota, tolta la firma e ignorato `vmsize` di `__LINKEDIT`).
 - **V6 — Nessuna scrittura nell'app:** impronta (percorso, dimensione, SHA-256, data) di ogni file dell'app prima e
-  dopo V4 e V7: devono essere uguali. Nessun `__pycache__` né `.pyc` creato.
+  dopo V4, V10 e V7: devono essere uguali. Nessun `__pycache__` né `.pyc` creato.
 - **V7 — Avvio reale:** l'app si lancia (`open -n -W --stdout <file> dist/AstroTwo.app --args
   --quit-after-first-view`), mostra la finestra, disegna la prima vista del cielo (segnale `first_shown` del `41`),
   scrive la riga `astrotwo: first_view` ed esce da sola. Si misura con un orologio esterno il tempo dal lancio a
@@ -240,6 +252,18 @@ Ogni controllo ha un nome (V1…V9) che compare nel rapporto con l'esito.
 - **V8 — Licenze:** i file di `Resources/licenses/` sono uguali byte per byte a quelli del progetto (per
   `SOURCES.txt`: a quello generato); `THIRD_PARTY_LICENSES` contiene le sezioni Python, Qt e PyInstaller.
 - **V9 — Dimensione:** riportata, con le dieci cartelle più grandi; nessun limite bloccante (si riporta e basta).
+- **V10 — Prova di fumo della finestra Profili** (dal 2026-11-13, D62-2, decisione del proprietario): l'eseguibile
+  `AstroTwo --smoke-profile <cartella>` (§7) con `QT_QPA_PLATFORM=offscreen`, l'ambiente vuoto di V4 (HOME
+  temporanea) e un proxy verso una porta chiusa (`HTTP(S)_PROXY=http://127.0.0.1:9`, solo `127.0.0.1` diretto: nessuna
+  rete). La cartella è `tests/analysis/data/profile` del repository (risposte vere registrate dei servizi del
+  profilo, **fuori dall'app**). Un server HTTP locale risponde al posto di SIMBAD, archivio Gaia, IRSA, NASA Exoplanet
+  Archive, VizieR (SED sintetica di un punto), MocServer e tile HiPS. La prova apre la finestra Profili, fa un profilo
+  **completo** di 51 Peg (cinque sezioni), controlla che **tutte le sezioni arrivino a «Done»** e la scheda a «Done in
+  … s», che il grafico della SED ci sia, che **Export…** e **Load SED points as catalog** siano attivi; poi esporta
+  ECSV, PDF e PNG della SED (file non vuoti) e carica i punti della SED come catalogo (nuovo livello). Ogni eccezione
+  Python non gestita (anche dentro uno slot di Qt, il caso di D62-2), ogni finestra d'errore e ogni richiesta non
+  registrata fanno fallire la prova. **Se V10 fallisce, il build fallisce** (l'app va in `AstroTwo.failed.app`). Gira
+  tra le impronte di V6 (nessuna scrittura nell'app).
 
 ### 3.9 Finestra "Licenses" / "Licenze" (requisito 1 di `01` §6.1; cambia il `40`)
 
@@ -442,7 +466,7 @@ prova T19 → `A6-b` decisa. I sottocomandi di `sign_notarize.py` restano usabil
 - **`keep_entry`** — filtro dei file di Qt (plugin, traduzioni, QML) di §3.4–§3.5, usato dalla specifica generata.
 - **`make_iconset`** — PNG dell'iconset da un SVG con `QSvgRenderer` (§3.6).
 - **`minimum_macos`** — massimo dei `minos` dei Mach-O di una cartella.
-- **`check_bundle`** — controlli V1–V9 su un'app; restituisce l'elenco degli esiti (nome, `ok`/`failed`/`not_run`,
+- **`check_bundle`** — controlli V1–V10 su un'app; restituisce l'elenco degli esiti (nome, `ok`/`failed`/`not_run`,
   dettaglio). Usabile anche da solo su un'app già costruita (`--check-only dist/AstroTwo.app`).
 
 **Firma e notarizzazione** — `scripts/sign_notarize.py` (§3.12; fuori dal pacchetto): **`main`** (sottocomandi
@@ -474,7 +498,9 @@ prova T19 → `A6-b` decisa. I sottocomandi di `sign_notarize.py` restano usabil
   escono (0 se tutto `ok`, 1 altrimenti) senza aprire finestre; `--quit-after-first-view` avvia l'app normale ed
   esce dopo il primo `first_shown` del `41` scrivendo `astrotwo: first_view` (per V7), tramite il parametro
   `on_first_view` di `astrotwo.ui.main_window.main` (funzione chiamata con l'applicazione alla prima vista);
-  senza opzioni chiama `astrotwo.ui.main_window.main`.
+  `--smoke-profile <cartella>` (dal 2026-11-13, D62-2) esegue la prova di fumo V10 (`astrotwo.smoke_profile.run`,
+  rapporto JSON `{"ok", "checks", "errors", "missing"}`; uscita 0 solo se riuscita); senza opzioni chiama
+  `astrotwo.ui.main_window.main`.
 
 **Interfaccia** — `src/astrotwo/ui/licenses_dialog.py` (nuovo file, parte di §3.9 e del `40`):
 
@@ -564,7 +590,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | T9 | Autocontrollo nello sviluppo | `self_check()` senza Portachiavi nel `.venv` | voci comuni `ok` (moduli, dati, traduzioni, kernel, backend caricabile); le voci "dentro l'app" sono `not_bundled` | test |
 | T10 | Autocontrollo e Portachiavi | `self_check()` senza `keychain=True` con un backend finto che fallisce se usato | il backend non viene mai chiamato | test |
 | T11 | `THIRD_PARTY_LICENSES` | `third_party_licenses.py --check` | contiene le sezioni Python (PSF + componenti di python-build-standalone), Qt (attribuzioni di `qtbase`/`qtsvg`), bootloader di PyInstaller | test esistente esteso |
-| T12 | Costruzione completa | `uv run python scripts/build_app.py` su un albero pulito | uscita 0; V1–V6, V8, V9 `ok`; V7 `ok` con schermo; rapporto con dimensione e tempi | costruzione |
+| T12 | Costruzione completa | `uv run python scripts/build_app.py` su un albero pulito | uscita 0; V1–V6, V8, V9, V10 `ok`; V7 `ok` con schermo; rapporto con dimensione e tempi | costruzione |
 | T13 | App autonoma | V4 con `env -i`, poi a mano: `.venv` rinominato, `uv` fuori dal `PATH`, app copiata in un'altra cartella, doppio clic | l'app si apre, il cielo HiPS si carica (con rete), nessun errore nel pannello Messaggi | a mano, esito nel registro |
 | T14 | Portachiavi nell'app | a mano: `AstroTwo.app/Contents/MacOS/AstroTwo --self-check-keychain` | voce `keychain_roundtrip` `ok`; nessuna voce rimasta con servizio `dev.pages.astrotwo.selfcheck` | a mano |
 | T15 | Nessuna scrittura (V6) | impronte prima/dopo V4 e V7 | identiche | costruzione |
@@ -572,6 +598,7 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | T18 | Icona | `make_iconset` su `assets/icon/AstroNew.svg` in una cartella temporanea | dieci PNG con le dimensioni di `iconutil`, non vuote; `.icns` creato | test (salta se `iconutil` manca) |
 | T19 | Firma Developer ID e notarizzazione (§3.12) | test (sempre): identità dall'uscita di `security`, ordine di firma su un'app finta, opzioni `--options runtime --timestamp` senza `--deep`, diritti minimi, profilo del Portachiavi e nessuna credenziale nei comandi, opzioni di credenziali rifiutate, prova a secco che non esegue né scrive niente; **a mano, con l'account pronto**: la sequenza di §3.12 con `--execute`, poi l'app scaricata da un altro Mac si apre con doppio clic senza «Apri comunque» | test: tutto come atteso, nessun comando eseguito; a mano: `Accepted`, `stapler validate` e `spctl` riusciti; se l'app non parte col runtime rinforzato, il diritto mancante si aggiunge solo con la prova, scritto qui | `tests/test_sign_notarize.py`; prova a mano **non ancora eseguita** |
 | T20 | `.dmg` con `hdiutil` (§3.10) | test (sempre, `tests/test_make_dmg.py`): app finta, nessun comando eseguito; ordine dei passi senza e con `--signed`; prova a secco senza app; `.dmg` esistente mai sovrascritto; credenziali rifiutate; percorso `--execute` con strumenti finti e impronta scritta; cartella di lavoro fuori da `build/` rifiutata; cartella data a `hdiutil` con **solo** `AstroTwo.app` (copiata) e il collegamento `Applications` → `/Applications` (D60-7). A mano, al primo rilascio (`63` passo 8): `make_dmg.py --execute`, aprire il `.dmg`, trascinare l'app su Applicazioni, avvio | test: tutto come atteso; a mano: `.dmg` montabile con l'app e il collegamento, `shasum -a 256 -c` sull'impronta | test e prova a mano |
+| T21 | Prova di fumo e esclusioni (V10, D62-2) | `tests/test_smoke_profile.py` (sempre): la prova in un processo a parte con `offscreen` e senza rete; la stessa prova con `backend_qtagg` reso non importabile; analisi degli `import` di `src/astrotwo` (anche nelle funzioni); importazione di tutti i moduli | la prova passa (cinque sezioni «done», pulsanti attivi, esportazioni e catalogo SED) senza caricare moduli esclusi; senza `backend_qtagg` fallisce come il build 7; nessun import né modulo caricato tra le esclusioni | test |
 | T17 | Ripetibilità | due costruzioni di seguito dallo stesso commit | stessi file (stesso elenco e stesse impronte), tranne firma, `BUILD_INFO.json` e file con data | a mano, una volta |
 
 ## 13. Decisioni aperte
@@ -642,6 +669,10 @@ dentro lo script (§3.8) o a mano sull'app costruita.
   `.dmg`, un invio in più; (4) nome del profilo `astrotwo-notary`; (5) il `.dmg` resta creato a mano finché il 60b
   non decide lo strumento.
 
+- **D62-2 (dal `62`) — Esclusioni e prova di fumo: DECISA dal proprietario il 2026-11-13** (proposta (a) più la prova
+  di fumo): §3.4 (plugin `offscreen`), §3.5 (backend di matplotlib, prove sulle esclusioni), §3.8 (V10), §7
+  (`--smoke-profile`), T21. Modifica del file approvato autorizzata dalla decisione, annotata nel registro.
+
 - **D60-7 — Scelte minori del `.dmg`: APPROVATE dal proprietario il 2026-11-11** (proposte da Claude Code il
   2026-11-10, sprint D5c, confermate tutte e cinque così come sono; in più il proprietario chiede che dentro il
   `.dmg` ci sia il collegamento simbolico ad `/Applications`, già creato da `make_dmg.py`, ora controllato da un
@@ -667,3 +698,4 @@ dentro lo script (§3.8) o a mano sull'app costruita.
 | 2026-11-10 | Claude Code | **Sprint D5c (decisioni del proprietario del 2026-11-10):** parte B (60b) scritta: §3.10 con `hdiutil` e `scripts/make_dmg.py` (prova a secco senza `--execute`, collegato a `sign_notarize.py` con `--signed`), §3.12 passo 2 e sequenza, §4, §7, T20; **D60-6 approvata** (diritti minimi da verificare alla prima firma vera); nuova **D60-7** (scelte minori del `.dmg`). Codice: `scripts/make_dmg.py`, `tests/test_make_dmg.py`; nessun `.dmg` creato. Stato `approvato` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D6 (decisione del proprietario del 2026-11-11):** **D60-7 approvata** (HFS+ UDZO, nome `AstroTwo-<versione>.dmg`, nessuna personalizzazione della finestra, impronta nel file `.sha256`, mai sovrascrivere). Collegamento `Applications` → `/Applications` dentro il `.dmg` confermato: §3.10 punto 2 (creato dallo script in Python, cartella con sole due voci), T20 con il nuovo test `test_staged_folder_holds_only_the_app_and_the_applications_link`. Nessun `.dmg` creato. Stato `approvato` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D8 (decisione del proprietario del 2026-11-11):** **A6-b decisa**: 1.0 senza firma Developer ID né notarizzazione, passo 8 della `63`, passo 7 saltato, `sign_notarize.py` invariato per una versione successiva (§3.10 con la firma ad hoc che basta su Apple silicon e il controllo V1, §3.12, §4, §13). Modifica di un file approvato su decisione del proprietario. |
+| 2026-11-13 | Claude Code | **Sprint D13a (D62-2 decisa dal proprietario il 2026-11-13):** `backend_qtagg` e `backend_qt` di matplotlib tolti dalle esclusioni (§3.5, il motivo «solo per le palette» era sbagliato); plugin `platforms/libqoffscreen` nell'app (§3.4); nuovo controllo bloccante **V10** (prova di fumo della finestra Profili dentro l'app costruita, §3.8) con l'opzione `--smoke-profile` (§7) e il modulo `astrotwo.smoke_profile`; prove sulle esclusioni (§3.5) e T21. Il file resta `approvato`. |

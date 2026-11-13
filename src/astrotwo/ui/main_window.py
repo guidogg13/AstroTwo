@@ -919,7 +919,9 @@ class ElidedLabel(QLabel):
         return QSize(min(self.minimum_shown, self.maximumWidth()), super().minimumSizeHint().height())
 
     def sizeHint(self) -> QSize:
-        width = QFontMetrics(self.font()).horizontalAdvance(self.full_text) + 4
+        # D62-6 (U1): margini e cornice dell'etichetta compresi, così il testo intero non si taglia senza «…»
+        extra = self.width() - self.contentsRect().width() + 2 * self.margin() + 6
+        width = QFontMetrics(self.font()).horizontalAdvance(self.full_text) + extra
         return QSize(min(width, self.maximumWidth()), super().sizeHint().height())
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - nome di Qt
@@ -927,8 +929,9 @@ class ElidedLabel(QLabel):
         self._elide()
 
     def _elide(self) -> None:
+        room = self.contentsRect().width() - 2 * self.margin() - 2  # spazio vero del testo (D62-6, U1)
         super().setText(QFontMetrics(self.font()).elidedText(self.full_text, Qt.TextElideMode.ElideRight,
-                                                             max(self.width() - 2, 0)))
+                                                             max(room, 0)))
 
 
 class StatusBar(QStatusBar):
@@ -1972,7 +1975,7 @@ class MainWindow(QMainWindow):
             "position_title": self.tr("Position columns"), "motion_title": self.tr("Proper motion columns"),
             "position_intro": self.tr("Choose the columns that hold the position of each source and say in which "
                                       "system they are."),
-            "position_hint": self.tr("Hypothesis from the column names, to be confirmed: %1"),
+            "position_hint": self.tr("Hypothesis from the column names %1, to be confirmed with the system"),
             "none_found": self.tr("No column was recognised as a position: choose them."),
             "longitude": self.tr("Longitude column"), "latitude": self.tr("Latitude column"),
             "system": self.tr("Coordinate system"), "equinox": self.tr("Equinox (e.g. J2000)"),
@@ -2056,7 +2059,7 @@ class MainWindow(QMainWindow):
             "image": self.tr("image"), "hips": self.tr("HiPS"), "catalog": self.tr("catalog"), "moc": self.tr("MOC"),
             "measure": self.tr("measure"), "visible": self.tr("Visible"), "opacity": self.tr("Opacity"),
             "up": self.tr("Move up"), "down": self.tr("Move down"), "remove": self.tr("Remove layer"),
-            "body": self.tr("body %1"), "body_unknown": self.tr("body unknown (%1)"),
+            "body": self.tr("body %1"), "celestial": self.tr("celestial sky"), "body_unknown": self.tr("body unknown (%1)"),
             "forced": self.tr("overlay forced (force_body)"), "retrieved": self.tr("retrieved %1"),
             "epoch": self.tr("epoch %1"), "epoch_unknown": self.tr("epoch unknown"),
             "drawn": self.tr("Rows drawn: %1 of %2"), "propagated": self.tr("drawn at epoch %1"),

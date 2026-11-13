@@ -496,6 +496,31 @@ _LABELS = {
 }
 
 
+#: D62-6 (decisione del proprietario del 2026-11-13): nel PDF italiano gli stati delle sezioni e le **note fisse** del
+#: motore (testo inglese senza valori, DD-3 (a)) si scrivono in italiano. Il PDF inglese non cambia (byte per byte);
+#: le note con valori dentro (es. «no Gaia DR3 source within … arcsec») restano in inglese, come dichiarato in DD-3.
+_STATUS_TEXT = {"it": {"done": "completata", "partial": "in parte", "error": "errore", "cancelled": "annullata"}}
+_FIXED_NOTES = {"it": {
+    "confirmed by the official Gaia cross-match": "confermato dall'incrocio ufficiale di Gaia",
+    "no host in the archive": "nessuna stella ospite nell'archivio",
+    "ICRS, epoch J2000": "ICRS, epoca J2000",
+    "SIMBAD has no spectral type": "SIMBAD non ha il tipo spettrale",
+    "cross-match failed": "incrocio non riuscito",
+    "check with gaia_dr3_id failed": "controllo con gaia_dr3_id non riuscito",
+    "no parallax zero-point correction (D25-10)": "nessuna correzione del punto zero della parallasse (D25-10)",
+    "RUWE without a threshold: no threshold from a verified official Gaia source (D25-11)":
+        "RUWE senza soglia: nessuna soglia da una fonte ufficiale di Gaia verificata (D25-11)",
+    "not checked: no SIMBAD identifier, no written name and no Gaia DR3 source_id":
+        "non controllato: nessun identificativo SIMBAD, nessun nome scritto e nessun source_id di Gaia DR3",
+}}
+
+
+def _note(text, label: Mapping) -> str:
+    """Nota del motore nella lingua del PDF se è una nota fissa conosciuta, altrimenti invariata (D62-6)."""
+    text = "" if text is None else str(text)
+    return _FIXED_NOTES.get(label.get("lang", "en"), {}).get(text, text)
+
+
 class _Page:
     """Una pagina A4 con un cursore verticale (pollici dal basso); testi e tabelle senza ricalcolare nulla."""
 
@@ -628,16 +653,18 @@ def _status_lines(page: _Page, section: Mapping | None, label: dict) -> None:
     status = section.get("status")
     if (section.get("details") or {}).get("checked") is False and status not in ("error", "cancelled"):
         status = label["status_not_checked"]  # decisione del 2026-11-10; profili vecchi (senza checked) invariati
+    status = _STATUS_TEXT.get(label.get("lang", "en"), {}).get(status, status)  # D62-6: «Stato: completata»
     page.text(f"{label['status']}: {status}  ·  {label['section_command']} "
               f"#{section.get('command_id')}", size=8, color="0.35")
     for line in _messages(section, label):
         page.text("⚠ " + line, size=7)
 
 
-def _value_rows(values: Sequence[Mapping]) -> list[list[str]]:
+def _value_rows(values: Sequence[Mapping], label: Mapping | None = None) -> list[list[str]]:
     rows = []
     for v in values:
-        notes = [x for x in (v.get("note"), v.get("formula"), v.get("reference"), v.get("interval_kind")) if x]
+        notes = [x for x in (_note(v.get("note"), label or {}), v.get("formula"), v.get("reference"),
+                             v.get("interval_kind")) if x]
         rows.append([str(v.get("quantity") or ""), _num(v.get("value")), _error(v), _unit(v.get("value")),
                      "; ".join(str(n) for n in notes)])
     return rows
@@ -661,11 +688,12 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
     _status_lines(page, section, label)
     if section is not None:
         page.table([label["quantity"], label["value"], label["error"], label["unit"]],
-                   [r[:4] for r in _value_rows(section.get("values") or [])], (1.1, 1.6, 0.8, 0.9 if images else 2.0),
+                   [r[:4] for r in _value_rows(section.get("values") or [], label)], (1.1, 1.6, 0.8, 0.9 if images else 2.0),
                    more=label["more"])
         details = section.get("details") or {}
         for absent in details.get("absent") or []:  # D25-24: valore che la fonte dichiara assente, con la nota
-            page.text(f"{absent.get('quantity')}: {absent.get('note')}", size=7, color="0.35", width=left_width)
+            page.text(f"{absent.get('quantity')}: {_note(absent.get('note'), label)}", size=7, color="0.35",
+                      width=left_width)
         groups = details.get("identifiers") or {}
         if groups:
             page.text(label["identifiers"].replace("{count}", str(details.get("identifier_count", ""))), size=8,
@@ -684,7 +712,7 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
             page.text(label["chain"], size=8, bold=True, width=left_width)
             rows = []
             for c in chain:
-                notes = [c.get("note") or ""]
+                notes = [_note(c.get("note"), label)]
                 if c.get("conflict"):
                     notes.append(", ".join(f"{k}: {v}" for k, v in c["conflict"].items()))
                 if c.get("error"):
@@ -692,7 +720,7 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
                 rows.append([str(c.get("catalog") or ""), str(c.get("identifier") or "—"), str(c.get("method") or "—"),
                              _with_unit(c.get("separation")), "; ".join(n for n in notes if n)])
             page.table([label["catalog"], label["identifier"], label["method"], label["separation"], label["notes"]],
-                       rows, (0.6, 1.6, 0.9, 0.6, 0.8) if images else (0.9, 2.0, 1.2, 0.9, 2.07),
+                       rows, (0.6, 1.5, 0.9, 0.75, 0.75) if images else (0.9, 2.0, 1.2, 0.9, 2.07),  # D62-6
                        more=label["more"])
     if images is not None:
         x, y = _LEFT + left_width + 0.2, top
@@ -735,7 +763,7 @@ def _astrometry_page(data: Mapping, label: dict, title: str) -> _Page:
     _status_lines(page, section, label)
     if section is not None:
         page.table([label["quantity"], label["value"], label["error"], label["unit"], label["notes"]],
-                   _value_rows(section.get("values") or []), (1.4, 1.5, 1.2, 0.7, 2.27), size=7, more=label["more"])
+                   _value_rows(section.get("values") or [], label), (1.4, 1.5, 1.2, 0.7, 2.27), size=7, more=label["more"])
         page.footer(_sources(section, label))
     return page
 

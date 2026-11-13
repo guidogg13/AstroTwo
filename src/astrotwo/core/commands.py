@@ -1330,13 +1330,46 @@ def _unique_messages(messages: Sequence[ResultMessage]) -> list[ResultMessage]:
     return out
 
 
-def _overlay(state: WorkspaceState, new_data, force: bool, *, exclude: Sequence[str] = ()) -> list[ResultMessage]:
-    """``check_overlay`` del 19 tra il nuovo dato e i livelli visibili (D19-4); BODY_MISMATCH passa invariato."""
-    from astrotwo.core.planetary_data import check_overlay
+def _not_drawn(data) -> bool:
+    """Catalogo senza colonne di posizione confermate: non si disegna nel cielo, quindi non si sovrappone a niente
+    (D62-4, decisione del proprietario del 2026-11-13)."""
+    from astrotwo.core.catalogs import CatalogTable
 
-    others = [layer.data for layer in state.layers if layer.visible and layer.id not in exclude
-              and layer.kind != "measure" and layer.data is not None]
-    check = check_overlay(others + [new_data], force=force)
+    return isinstance(data, CatalogTable) and data.positions is None
+
+
+def _overlay(state: WorkspaceState, new_data, force: bool, *, exclude: Sequence[str] = ()) -> list[ResultMessage]:
+    """``check_overlay`` del 19 tra il nuovo dato e i livelli visibili (D19-4); BODY_MISMATCH passa invariato.
+
+    D62-4: un catalogo senza colonne di posizione confermate (corpo ignoto, non disegnato) non entra nel controllo,
+    né come livello già aperto né come dato nuovo: non blocca gli altri caricamenti. Se un altro livello a corpo
+    ignoto blocca il dato nuovo, l'errore nomina **quel livello** (``overlay_blocked_by``), non il dato che si apre."""
+    from astrotwo.core.planetary_data import PlanetaryDataError, body_of, check_overlay
+
+    layers = [layer for layer in state.layers if layer.visible and layer.id not in exclude
+              and layer.kind != "measure" and layer.data is not None and not _not_drawn(layer.data)]
+    if _not_drawn(new_data):
+        layers = []  # il dato nuovo non si disegna: si apre da solo (l'avviso BODY_UNKNOWN resta nel risultato)
+    try:
+        check = check_overlay([layer.data for layer in layers] + [new_data], force=force)
+    except PlanetaryDataError as exc:
+        if exc.code != "BODY_UNKNOWN" or (exc.params or {}).get("reason") != "overlay_unknown":
+            raise
+        blocking = []
+        for layer in layers:
+            try:
+                body_of(layer.data)
+            except PlanetaryDataError as inner:
+                if inner.code == "BODY_UNKNOWN":
+                    blocking.append(layer.name)
+            except Exception:  # noqa: BLE001 - qui conta solo il corpo ignoto
+                continue
+        if not blocking:
+            raise  # è il dato nuovo ad avere il corpo ignoto: il messaggio parla già di lui
+        raise PlanetaryDataError(
+            "BODY_UNKNOWN", f"livelli a corpo ignoto ({', '.join(blocking)}): il dato nuovo non si sovrappone e non "
+            "si apre; confermare le colonne di quei livelli o toglierli",
+            params={"reason": "overlay_blocked_by", "layers": blocking}) from exc
     return _module_warnings(check.warnings)
 
 

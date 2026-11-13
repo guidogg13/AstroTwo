@@ -203,7 +203,7 @@ def test_t33_layer_panel_commands(qtbot, win, tmp_path):
     assert win.layer_stack.currentIndex() == 1
     assert panel.panel_order() == tuple(reversed(ids))  # in alto il livello disegnato sopra
     row = panel.rows[ids[0]]
-    assert "body celestial" in row.details.text() and "m0.fits" in row.details.text()
+    assert "celestial sky" in row.details.text() and "body celestial" not in row.details.text() and "m0.fits" in row.details.text()
     assert not panel.rows[ids[2]].up.isEnabled() and not row.down.isEnabled()
     entries = len(win.session.history)
     row.visible.click()  # casella → layer.set_visible

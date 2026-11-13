@@ -50,7 +50,7 @@ DEFAULT_TEXTS = {
 DEFAULT_COLUMN_TEXTS = {
     "position_title": "Position columns", "motion_title": "Proper motion columns",
     "position_intro": "Choose the columns that hold the position of each source and say in which system they are.",
-    "position_hint": "Hypothesis from the column names, to be confirmed: %1",
+    "position_hint": "Hypothesis from the column names %1, to be confirmed with the system",
     "none_found": "No column was recognised as a position: choose them.",
     "longitude": "Longitude column", "latitude": "Latitude column", "system": "Coordinate system",
     "equinox": "Equinox (e.g. J2000)", "unit": "Angular unit of the columns",
@@ -774,7 +774,7 @@ class PositionColumnsDialog(QDialog):
             self._select(self.lon, first.lon)
             self._select(self.lat, first.lat)
             self._select(self.frame, first.frame_hint)
-            self.note.setText(texts["position_hint"].replace("%1", first.reason))
+            self.note.setText(texts["position_hint"].replace("%1", f"'{first.lon}'/'{first.lat}'"))  # D62-6
         else:
             self.note.setText(texts["none_found"])
         form = QFormLayout()

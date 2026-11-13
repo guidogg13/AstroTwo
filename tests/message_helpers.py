@@ -110,6 +110,8 @@ MODULE_14_SUBVARIANTS = {
     ("FROM_CACHE", "cached_origin"), ("FROM_CACHE", "network_cached"), ("FROM_CACHE", "cached_since"),
     ("FROM_CACHE", "network_unavailable"), ("NET_TIMEOUT", "service_servers"), ("NET_TIMEOUT", "mocserver_no_mirror"),
     ("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects"),  # simbad_object (sprint C2)
+    # sollevata dal profilo del 25 sopra simbad_object (D62-3, provata in test_messages_object_profile.py)
+    ("NAME_NOT_FOUND", "profile_needs_simbad"),
 } | {("SERVICE_ERROR", r) for r in (
     "http_message", "http_message_async_hint", "http_no_votable", "service_rejected", "request_failed", "job_phase",
     "job_result_status", "descriptor_missing", "simbad_no_units")}
@@ -163,4 +165,6 @@ MODULE_18_SUBVARIANTS = (
 #: Sotto-voci di codici condivisi che solo il 05 restituisce (provate in ``test_messages_commands.py``).
 MODULE_05_SUBVARIANTS = {("WCS_INVALID", "no_celestial_coordinates"), ("WCS_INVALID", "absent"),
                          ("WCS_INVALID", "absent_with_reasons"), ("WCS_MISSING", "pixel_grid_overlay"),
-                         ("NO_WCS", "distance")}
+                         ("NO_WCS", "distance"),
+                         # D62-4: livello a corpo ignoto che blocca il dato nuovo (provata in test_commands_catalog_sky.py)
+                         ("BODY_UNKNOWN", "overlay_blocked_by")}

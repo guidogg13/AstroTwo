@@ -81,12 +81,12 @@ def test_t26_cone_search_listed_entry(session, listed):
     assert entry.command.parameters["center"]["epoch"] == "J2000.0"
     assert entry.command.parameters["max_rows"] == 100_000  # D14-5
     layer = session.workspace.state.layer(result.layers_created[0])
-    assert layer.kind == "catalog" and layer.name == "IRSA AllWISE (sorgenti) · cone search"
+    assert layer.kind == "catalog" and layer.name == "IRSA AllWISE (sources) · cone search"
     assert layer.source == listed.url + "/scs?table=t"
     assert rows(session, layer.id) == expected_rows(votable_text(5))
     query = result.values["query"]
     assert query["protocol"] == "scs" and query["service"] == "nasa-irsa-allwise-scs"
-    assert query["service_name"] == "IRSA AllWISE (sorgenti)" and query["url"] == listed.url + "/scs?table=t"
+    assert query["service_name"] == "IRSA AllWISE (sources)" and query["url"] == listed.url + "/scs?table=t"
     assert query["params"]["RA"] == params["RA"] and query["rows"] == 5 and query["truncated"] is False
     assert query["from_cache"] is False and query["retrieved_at"].endswith("+00:00")
     assert result.values["positions"]["frame"] == "icrs" and result.values["positions"]["epoch"] == "J2016.0"
@@ -173,7 +173,7 @@ def test_t26_tap_sync_comments_and_registration(session, listed):
     assert query["adql"] == adql and query["params"]["QUERY"] == "SELECT * FROM stelle" and query["mode"] == "sync"
     assert query["truncated"] is True and query["max_rows"] == 4
     assert [w for w in result.warnings if w.code == "ROW_LIMIT_EXCEEDED" and w.params["reason"] == "service_overflow"]
-    assert session.workspace.state.layer(result.layers_created[0]).name == "Archivio Gaia · ADQL"
+    assert session.workspace.state.layer(result.layers_created[0]).name == "Gaia archive · ADQL"
 
 
 def test_t26_tap_async_ok_and_deadline(session, listed):

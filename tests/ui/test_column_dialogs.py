@@ -118,6 +118,8 @@ def test_name_hint_is_only_a_hypothesis(qtbot, win, tmp_path):
     assert isinstance(dialog, PositionColumnsDialog)
     assert (dialog.lon.currentData(), dialog.lat.currentData()) == ("ra", "dec")
     assert "to be confirmed" in dialog.note.text()
+    # D62-6: nell'interfaccia inglese nessuna riga italiana del modulo 13 («ipotesi dal nome, da confermare…»)
+    assert dialog.note.text() == "Hypothesis from the column names 'ra'/'dec', to be confirmed with the system"
     assert not ok_button(dialog).isEnabled()  # il sistema e l'unità restano da dichiarare
     dialog.reject()
     wait_idle(qtbot, win)

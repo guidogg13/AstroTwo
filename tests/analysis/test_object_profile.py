@@ -113,9 +113,9 @@ def test_t38_empty_spectral_type_is_declared_absent(services, cache, empty):
     assert all(v.value is not None or v.quantity != "sp_type" for v in sec.values)
     assert sec.details["absent"] == [{"quantity": "sp_type", "note": "SIMBAD has no spectral type"}]
     data = {"target": {"name": "51 Peg"}, "sections": [dict(sec.as_dict(), command_id=1)]}
-    for lang in ("en", "it"):
+    for lang, note in (("en", "SIMBAD has no spectral type"), ("it", "SIMBAD non ha il tipo spettrale")):  # D62-6
         texts = [t.get_text() for t in pe._identity_page(data, pe._LABELS[lang], "x").fig.texts]
-        assert "sp_type: SIMBAD has no spectral type" in texts
+        assert f"sp_type: {note}" in texts
     # con un tipo spettrale vero: il valore, nessuna nota
     full = op.profile_identity(resolved)
     assert values(full)["sp_type"].value == "G2IV" and "absent" not in full.details
@@ -350,9 +350,17 @@ def test_t13_identifier_conflict_is_shown_without_choice(services, cache):
 
 
 def test_unknown_name_stops_the_profile(services, cache):
-    with pytest.raises(VoProtocolsError) as info:
+    """D62-3 (proprietario, 2026-11-13): il profilo dice che per ora serve un oggetto SIMBAD (it/en)."""
+    from astrotwo.messages_catalog import message_text
+
+    with pytest.raises(op.ObjectProfileError) as info:
         build_profile(ProfileTarget(name="No Such Object 98765"), cache=cache)
-    assert info.value.code == "NAME_NOT_FOUND" and info.value.params["reason"] == "simbad_identifier"
+    assert info.value.code == "NAME_NOT_FOUND" and info.value.params["reason"] == "profile_needs_simbad"
+    assert isinstance(info.value.__cause__, VoProtocolsError)  # l'errore del 14 resta come causa
+    en = message_text(info.value.code, info.value.params, "en", text=info.value.message)
+    it = message_text(info.value.code, info.value.params, "it", text=info.value.message)
+    assert "needs an object known to SIMBAD" in en and "No Such Object 98765" in en
+    assert "richiede un oggetto noto a SIMBAD" in it
 
 
 @pytest.mark.parametrize("target, reason", [

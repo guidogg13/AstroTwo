@@ -247,32 +247,58 @@ def _provenance(table: CatalogTable, fmt: str) -> dict[str, str]:
     return info
 
 
-def _write_votable_file(table: CatalogTable, target: Path, info: dict[str, str]) -> None:
+def _write_votable_file(table: CatalogTable, target: Path, info: dict[str, str]) -> list[str]:
+    """VOTable 1.4; restituisce le colonne con un'unità non standard VOUnit (D05-7)."""
     from astropy.io.votable.tree import Info
 
+    from astrotwo.core.catalogs import column_unit_text
+
     vot, notes = _catalog_votable(table, table.table)
+    nonstandard = []
+    for name in table.table.colnames:
+        text, standard = column_unit_text(table.table[name], "vounit")
+        if text is not None and not standard:
+            nonstandard.append(f"{name} ({text})")
     vot.version = VOTABLE_VERSION
     resource = vot.resources[0]
     for name, value in info.items():
         resource.infos.append(Info(name=name, value=value))
     for note in notes:
         resource.infos.append(Info(name="A2NOTE", value=note))
-    vot.to_xml(str(target))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # W50 di Astropy per un'unità non standard: dichiarata nel risultato (D05-7)
+        vot.to_xml(str(target))
+    return nonstandard
 
 
-def _write_fits_file(table: CatalogTable, target: Path, info: dict[str, str]) -> None:
+def _write_fits_file(table: CatalogTable, target: Path, info: dict[str, str]) -> list[str]:
+    """FITS di tabella; restituisce le colonne con un ``TUNIT`` non standard FITS (D05-7)."""
+    from astrotwo.core.catalogs import column_unit_text
+
     data = table.table.copy(copy_data=False)
     data.meta = {}
+    units = {name: column_unit_text(data[name], "fits") for name in data.colnames}  # prima di togliere le unità
     for name in data.colnames:
         col = data[name]
         if col.dtype == object and all(isinstance(v, str) for v in np.ma.compressed(col)):
             # Testi a lunghezza variabile (es. VOTable arraysize="*"): FITS vuole una larghezza fissa.
             data[name] = col.astype(str)
-            data[name].meta, data[name].unit, data[name].description = col.meta, col.unit, col.description
+            data[name].meta, data[name].description = col.meta, col.description
+        # D05-7: TUNIT scritto da noi (sotto), mai da Astropy: niente UnitScaleError (hourangle, cycle) né unità
+        # omesse in silenzio (electron / s, dex)
+        data[name].unit = None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         hdu = fits.table_to_hdu(data)
     header = hdu.header
+    nonstandard = []
+    for k, name in enumerate(data.colnames, start=1):
+        text, standard = units[name]
+        if text is None:
+            continue
+        header[f"TUNIT{k}"] = text
+        if not standard:
+            nonstandard.append(f"{name} ({text})")
     for name, value in info.items():
         if name == "A2HIST":
             for step in table.history:
@@ -284,6 +310,7 @@ def _write_fits_file(table: CatalogTable, target: Path, info: dict[str, str]) ->
         if ucd:
             header[f"TUCD{k}"] = ucd  # convenzione diffusa per gli UCD nelle tabelle FITS
     fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(target)
+    return nonstandard
 
 
 def _write_csv_file(table: CatalogTable, target: Path, info: dict[str, str]) -> None:
@@ -366,8 +393,12 @@ def export_table(table: CatalogTable, path, format: str, overwrite: bool = False
     info = _provenance(table, format)
     writers = {"votable": _write_votable_file, "fits": _write_fits_file, "csv": _write_csv_file,
                "ecsv": _write_ecsv_file}
-    writers[format](table, target, info)
+    nonstandard = writers[format](table, target, info) or []
     notes = []
+    if nonstandard:  # D05-7: unità scritta esatta ma fuori dallo standard del formato, mai omessa
+        notes.append(ModuleWarning("EXPORT_UNIT_NOT_STANDARD", f"unità non standard in {format}, scritte così come "
+                                   f"sono: {', '.join(nonstandard)}",
+                                   {"format": format, "columns": nonstandard}))
     if format == "csv" and _has_units(table):
         notes.append(ModuleWarning("CSV_UNITS_NOT_SAVED", "il CSV semplice non salva le unità delle colonne: per "
                                    "conservarle esportare in ecsv (D14-10)"))
@@ -1368,14 +1399,14 @@ BUILTIN_SERVERS: tuple[ServerEntry, ...] = (
                 "https://cds.unistra.fr/help/documentation/simbad-more/adql-simbad/", _VERIFIED),
     ServerEntry("cds-vizier-tap", "VizieR (TAPVizieR)", "CDS", "tap", "https://tapvizier.cds.unistra.fr/TAPVizieR/tap",
                 "https://cds.unistra.fr/news/2013/01/15-tapvizier-is-available", _VERIFIED),
-    ServerEntry("esa-gaia-tap", "Archivio Gaia", "ESA", "tap", "https://gea.esac.esa.int/tap-server/tap",
+    ServerEntry("esa-gaia-tap", "Gaia archive", "ESA", "tap", "https://gea.esac.esa.int/tap-server/tap",
                 "https://www.cosmos.esa.int/web/gaia-users/archive/programmatic-access", _VERIFIED),
     ServerEntry("nasa-irsa-tap", "IRSA", "NASA/IPAC", "tap", "https://irsa.ipac.caltech.edu/TAP",
                 "https://irsa.ipac.caltech.edu/docs/program_interface/TAP.html", _VERIFIED),
-    ServerEntry("nasa-irsa-allwise-scs", "IRSA AllWISE (sorgenti)", "NASA/IPAC", "scs",
+    ServerEntry("nasa-irsa-allwise-scs", "IRSA AllWISE (sources)", "NASA/IPAC", "scs",
                 "https://irsa.ipac.caltech.edu/SCS?table=allwise_p3as_psd",
                 "https://irsa.ipac.caltech.edu/docs/program_interface/TAP.html", _VERIFIED),
-    ServerEntry("nasa-irsa-sia2", "IRSA immagini (SIA 2)", "NASA/IPAC", "sia2", "https://irsa.ipac.caltech.edu/SIA",
+    ServerEntry("nasa-irsa-sia2", "IRSA images (SIA 2)", "NASA/IPAC", "sia2", "https://irsa.ipac.caltech.edu/SIA",
                 "https://irsa.ipac.caltech.edu/ibe/sia.html", _VERIFIED),
     ServerEntry("nasa-heasarc-tap", "HEASARC", "NASA/GSFC", "tap", "https://heasarc.gsfc.nasa.gov/xamin/vo/tap",
                 "https://heasarc.gsfc.nasa.gov/docs/archive/vo/", _VERIFIED),

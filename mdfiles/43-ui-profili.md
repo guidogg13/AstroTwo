@@ -509,7 +509,7 @@ Codice previsto in `src/astrotwo/ui/profiles.py` (proposta):
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
-| Nome sconosciuto a SIMBAD | messaggio nella scheda, nessuna sezione | `NAME_NOT_FOUND` |
+| Nome sconosciuto a SIMBAD (anche da «Profile of this source» su una riga Gaia DR3 non in SIMBAD) | messaggio nella scheda, nessuna sezione: dice che per ora il profilo richiede un oggetto noto a SIMBAD (D62-3, 2026-11-13; il profilo da un `source_id` di Gaia è nella Roadmap, dopo la 1.0) | `NAME_NOT_FOUND` (`profile_needs_simbad`) |
 | Più candidati da coordinate | elenco nella scheda, un pulsante per candidato, nessuna scelta | `PROFILE_AMBIGUOUS_TARGET` |
 | Sezione scaduta | intestazione «Errore» con il messaggio e «Riprova questa sezione» | `PROFILE_SECTION_TIMEOUT` |
 | Servizio giù per una sezione | stato `partial` o `error` con il messaggio del modulo | messaggi del 14, del 12 |
@@ -639,3 +639,4 @@ decisione aperta.
 | 2026-11-10 | Claude Code | **Decisioni del proprietario del 2026-11-10 (dopo D2b):** DD-3 confermata e approvate le modifiche del D2 a questo file (§3.10, T17); **D25-23** (assenze solo dopo una richiesta vera): §3 Pianeti con «Not checked» e nessuna riga in errore, T10 esteso; permessi normali del PDF (`02` §2). Codice: `PlanetsView` in `ui/profiles.py` (prima scriveva «No planet in the archive» anche sotto un errore), traduzione «Non controllato» in `astrotwo_it.ts`/`.qm`. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (sprint D3b):** intestazione «Not checked» / «Non controllata» per ogni sezione con `checked` falso (tabella degli stati in §3); codice `SectionView` in `ui/profiles.py` (stato `not_checked`), traduzione in `astrotwo_it.ts`/`.qm`; test `test_planets_view_absence_only_after_a_request`, `test_any_section_with_checked_false_says_not_checked`. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5a (D25-24, decisione del proprietario del 2026-11-10):** §3 Identità: tipo spettrale assente senza riga, con la nota di `details["absent"]` sotto i valori. Stato `approvato` invariato. |
+| 2026-11-13 | Claude Code | **Sprint D13a (D62-3 decisa dal proprietario il 2026-11-13):** §10 — nome sconosciuto a SIMBAD (anche da «Profile of this source» su una riga Gaia DR3) con il messaggio «per ora il profilo richiede un oggetto noto a SIMBAD»; nessun ripiego per posizione. Il grafico della SED nell'app costruita torna a funzionare (D62-2, `60` §3.5, V10). Il file resta `approvato`. |

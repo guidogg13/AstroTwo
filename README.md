@@ -79,6 +79,7 @@ These items are planned **after version 1.0**. None of them is available today, 
 - Linux version
 - Windows version
 - Python API, to use AstroTwo's functions from scripts and notebooks
+- Object profile starting from a Gaia DR3 `source_id`, for sources that are not in SIMBAD (today a profile needs an object known to SIMBAD)
 
 Before 1.0: a full manual test of the application, a `CITATION.cff` with a DOI from Zenodo, and the measurements of the [validation page](docs/validation.md).
 

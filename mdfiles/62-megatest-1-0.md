@@ -95,7 +95,7 @@ Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
 
 | # | Prova | Risultato atteso |
 |---|---|---|
-| C1 | *Go to* `Pleiades`, **Data → Catalog in view…** Gaia DR3 | Simboli sulle stelle; nel pannello Layers il numero di righe, il servizio e l'epoca dichiarata (J2016.0) |
+| C1 | *Go to* `Pleiades`, zoom fino a un campo di circa 15′ (le stelle di Gaia DR3 nel campo devono essere meno di 5000), **Data → Catalog in view…** Gaia DR3 (correzione D62-7: con tutto il campo delle Pleiadi l'app risponde, giustamente, `REGION_TOO_LARGE` «ridurre il raggio») | Simboli sulle stelle; nel pannello Layers il numero di righe, il servizio e l'epoca dichiarata (J2016.0) |
 | C2 | Selezionare una riga nel pannello Table | La sorgente si evidenzia nel cielo; cliccare una sorgente nel cielo seleziona la sua riga |
 | C3 | **File → Open catalog…** con il VOTable o CSV preparato | Nuovo livello catalogo; se il file non dichiara sistema o epoca, il pannello Layers lo dice (nessuna epoca assunta) |
 | C4 | Catalogo SIMBAD nella stessa vista | Secondo livello catalogo con colore diverso; i due livelli si accendono e si spengono a parte |
@@ -122,7 +122,7 @@ Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
 
 | # | Prova | Risultato atteso |
 |---|---|---|
-| M1 | **File → Open MOC…** con un MOC FITS (per esempio quello di un survey, scaricato dal MocServer) | Area colorata nel cielo; nel pannello Layers l'ordine del MOC e l'ordine a cui è disegnato |
+| M1 | **File → Open MOC…** con il `Moc.fits` di un survey HiPS scaricato con il browser (per esempio `https://skies.esac.esa.int/2MASSColor/Moc.fits`; correzione D62-7: il MocServer risponde HTTP 413 alla richiesta del MOC di un survey intero) | Area colorata nel cielo; nel pannello Layers l'ordine del MOC e l'ordine a cui è disegnato |
 | M2 | Zoom molto vicino al bordo del MOC | Il bordo resta coerente; la nota «disegnato all'ordine …, per eccesso» quando l'ordine di disegno è minore |
 | M3 | Aprire un file `.json` che non è un MOC | Messaggio chiaro; nessun livello |
 
@@ -144,10 +144,10 @@ Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
 | P1 | **Data → Object profile…** `51 Peg` | Le cinque sezioni arrivano in parallelo, in meno di un minuto; ogni valore ha la sua provenienza (servizio, server, tabella, data) |
 | P2 | Profilo di `TRAPPIST-1` | Sette pianeti nella sezione Pianeti; distanza con il metodo dichiarato; SED con punti infrarossi |
 | P3 | Profilo di `3C 273` | Nessuna distanza inventata: o la distanza di Bailer-Jones dichiarata come tale, o «nessuna distanza» con il motivo |
-| P4 | Profilo da coordinate (`10.684708 41.268750`) | Bersaglio risolto per posizione, dichiarato (avviso «per posizione») |
+| P4 | Profilo da coordinate `344.3665854 20.7688325`, epoca J2000.0 (51 Peg; correzione D62-7: il nucleo di M 31 ha 40 oggetti SIMBAD entro 10″) | Un solo oggetto SIMBAD vicino: bersaglio risolto per posizione, dichiarato (avviso «per posizione», `PROFILE_POSITIONAL_MATCH`); poi, con `10.684708 41.268750` (nucleo di M 31): finestra dei candidati, nessuna scelta automatica |
 | P5 | Avviare un profilo e premere **Cancel** subito dopo l'arrivo della prima sezione | Le sezioni già arrivate restano; le altre risultano annullate |
 | P6 | **Rerun with fresh data** su 51 Peg | Nuovo comando; i valori non vengono dalla cache (provenienza senza «cache») |
-| P7 | Tasto destro su una sorgente del catalogo di C1 → **Profile of this source** | Profilo della sorgente selezionata, con l'identificativo Gaia DR3 |
+| P7 | Tasto destro su una sorgente del catalogo di C1 → **Profile of this source**, prima su una stella brillante (nota a SIMBAD), poi su una stella debole | Stella brillante: profilo della sorgente, con l'identificativo Gaia DR3. Stella debole non in SIMBAD: messaggio chiaro che per ora il profilo richiede un oggetto noto a SIMBAD (D62-3), in inglese e in italiano; nessuna sezione |
 
 ### 3.11 Esportazioni (E)
 
@@ -157,7 +157,7 @@ Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
 | E2 | **Export… → Profile sheet (PDF)**, lasciando la lingua proposta | La lingua proposta è **inglese**, anche con l'app in italiano (L2); il PDF è tutto in inglese: intestazioni, avvisi e note |
 | E3 | Esportare di nuovo lo stesso PDF in inglese con un altro nome, poi confrontare i due file (`shasum -a 256`) | Impronte **identiche** |
 | E4 | Lo stesso PDF scegliendo «italiano» | Intestazioni e avvisi in italiano; impronta diversa da E3 |
-| E5 | **Export… → SED plot (PNG)** e **Load SED points as catalog** | PNG con i limiti superiori come frecce; nuovo livello `SED 51 Peg` nel cielo e nella tabella |
+| E5 | Su 51 Peg: **Export… → SED plot (PNG)** e **Load SED points as catalog**; poi **SED plot (PNG)** di un profilo con limiti superiori (correzione D62-7: 51 Peg non ne ha; oggetto indicato nell'esito delle prove automatiche, `docs/megatest-runs/1.0.0.md`) | PNG della SED; nuovo livello `SED * 51 Peg` nel cielo e nella tabella; nel secondo PNG i limiti superiori come frecce |
 | E6 | **File → Export view as PNG…** | PNG della vista con i crediti dei dati |
 | E7 | Esportare in una cartella senza permesso di scrittura | Finestra «The export was not written» con il motivo; nessun file a metà |
 
@@ -165,8 +165,8 @@ Prove aggiunte nello sprint D6 (decisione D60-7 del proprietario del
 
 | # | Prova | Risultato atteso |
 |---|---|---|
-| I1 | Pannello dell'assistente (⌃⌘A), provider **Ollama** o **LM Studio**, nessuna chiave | Il pannello dice *local · nothing leaves the Mac*; **Test the model** riesce |
-| I2 | Con il modello locale: *«Go to the Pleiades and load Gaia DR3»* | Carta di conferma (rete), poi i due comandi nel pannello Comandi con origine IA |
+| I1 | Pannello dell'assistente (⌃⌘A), provider locale **Ollama** oppure **LM Studio** (uno dei due basta; correzione D62-7), nessuna chiave | Il pannello dice *local · nothing leaves the Mac*; **Test the model** riesce |
+| I2 | Con il modello locale di I1 (Ollama o LM Studio): *«Go to the Pleiades and load Gaia DR3»* | Carta di conferma (rete), poi i due comandi nel pannello Comandi con origine IA (se il catalogo risponde `REGION_TOO_LARGE`, il messaggio chiaro è l'esito giusto: vedi C1) |
 | I3 | Provider cloud: **Add**, chiave incollata, **Save** | La chiave è nel Portachiavi di macOS (Accesso Portachiavi, voce di AstroTwo); in nessun file di `~/Library/Application Support/AstroTwo/` e in nessun log |
 | I4 | Con il provider cloud: *«Make a profile of 51 Peg»* | Profilo eseguito come comando; nella risposta ogni numero ha il segno «verificato» rispetto al risultato del comando |
 | I5 | Chiedere un numero che nessun comando ha dato (es. *«what is the mass of 51 Peg b in kg?»* senza profilo) | Il numero è segnato come «non viene da un comando»; con la modalità rigorosa la risposta si rigenera una volta |
@@ -298,67 +298,43 @@ Non applicabile: il megatest è fatto da una persona; le prove dell'assistente s
   fatta», non KO; (5) prove di confronto con TOPCAT (X2, Q2) dentro il
   megatest, oltre alla pagina di validazione.
 
-**Decisioni aperte dalle prove automatiche dello sprint D12 (2026-11-12)**
-(esito e dettagli in `docs/megatest-runs/1.0.0.md`, «Prove automatiche»;
-nessuna correzione fatta; le decide il proprietario):
+**Decisioni sulle prove automatiche dello sprint D12 (2026-11-12): DECISE dal proprietario il 2026-11-13**
+(esito delle prove in `docs/megatest-runs/1.0.0.md`; correzioni nello sprint D13, commit D13a, nel candidato
+build 8):
 
-- **D62-2 — Grafico della SED assente nell'app costruita: DA DECIDERE, bloccante,
-  richiede un build 8.** In `scripts/build_app.py` (`EXCLUDES`, righe 71–73)
-  sono esclusi `matplotlib.backends.backend_qtagg`, `backend_qt` e
-  `matplotlib.pyplot`. `PhotometryView._plot` (`43`, `src/astrotwo/ui/profiles.py:604`)
-  importa `backend_qtagg`. Nel build 7 (PYZ verificato) l'import fallisce: la
-  finestra Profili resta «Running», **Export…** e **Load SED points as
-  catalog** restano disattivati per ogni profilo con punti SED (P1, P2, E1–E5).
-  Proposta: **(a)** togliere `backend_qtagg` e `backend_qt` da `EXCLUDES`
-  (`pyplot` può restare escluso, perché il codice non lo usa), aggiungere
-  all'autocontrollo V4 (`60` §3.8) l'import dei moduli caricati solo dentro le
-  funzioni (almeno `backend_qtagg`) e un test che lo controlla; nuovo candidato
-  build 8 dal passo 3 della `63`, poi megatest a mano sul build 8. **(b)**
-  Disegnare il grafico come immagine con `backend_agg` (già nel bundle) invece
-  del widget Qt: anche questo vuole un build 8 e cambia il `43`. Consiglio di
-  Claude Code: **(a)**, la correzione più piccola, che non cambia il
-  comportamento specificato.
-- **D62-3 — «Profile of this source» su righe Gaia DR3 assenti da SIMBAD:
-  DA DECIDERE.** Il `43` (§3.2 punto 5, §10) manda `name = "Gaia DR3 <id>"`. Se
-  SIMBAD non conosce la sorgente, il profilo finisce in `NAME_NOT_FOUND` senza
-  sezioni (P7, provato su due righe delle Pleiadi). Proposta: **(a)** se il nome
-  riconosciuto dalla riga dà `NAME_NOT_FOUND`, ripartire con `layer` + `row`
-  (profilo per posizione, già previsto per le righe senza identificativo),
-  dichiarandolo; cambia `43` e codice, quindi va nel build 8 se D62-2 lo apre;
-  **(b)** lasciare così e dichiararlo nelle note di rilascio e nella `62` (P7 con
-  una stella nota a SIMBAD). Consiglio: (a) se si fa comunque il build 8,
-  altrimenti (b).
-- **D62-4 — Un livello con il corpo ignoto blocca gli altri caricamenti:
-  DA DECIDERE, non bloccante.** Con un CSV aperto e le colonne non confermate,
-  cone search, ADQL, FITS e MOC falliscono tutti con un `BODY_UNKNOWN` che parla
-  del CSV. È la regola del `13` §10 e del `19`. Proposta: **(a)** nessun build,
-  dirlo in `docs/quickstart.md` e nelle note di rilascio; dopo la 1.0, un
-  messaggio che dica quale livello blocca e come sbloccarlo (confermare le
-  colonne o togliere il livello); **(b)** cambiare la regola (un dato a corpo
-  ignoto non impedisce agli altri di aprirsi): decisione di specifica sul `19`.
-  Consiglio: (a).
-- **D62-5 — Immagini del README assenti: DA DECIDERE, non bloccante (solo
-  documentazione, nessun build).** `README.md` righe 12–14 citano
-  `docs/screenshots/pleiades-gaia.png`, `profile-51peg.png` e `ai-panel.png`,
-  che non esistono. Proposta: **(a)** tre immagini fatte da Guido durante il
-  megatest a mano, aggiunte con un commit di sola documentazione prima del tag;
-  **(b)** togliere le tre righe. Consiglio: (a).
-- **D62-6 — Dettagli minori di lingua e di aspetto: DA DECIDERE, non
-  bloccante.** PDF in italiano con «done» non tradotto, una nota in inglese e
-  le intestazioni «Separazione» e «Note» che si toccano; riga italiana nel
-  dialogo «Position columns» inglese; nomi di servizi in italiano nei livelli
-  dell'interfaccia inglese; messaggio tecnico di `MOC_TYPE_REQUIRED`; ultimo
-  carattere del titolo della barra di stato forse tagliato senza «…» (U1, da
-  vedere a mano). Consiglio: correggerli nel build 8 se D62-2 lo apre e se non
-  allargano il lavoro, altrimenti dopo la 1.0.
-- **D62-7 — Testo di alcune prove di questo file: DA DECIDERE (solo questo
-  file).** C1: dire di stringere il campo (con il campo delle Pleiadi Gaia ha
-  più di 5000 righe: `REGION_TOO_LARGE`); P4: le coordinate del nucleo di M 31
-  danno 40 candidati SIMBAD (finestra di scelta), quindi l'atteso va riscritto
-  o va scelta un'altra posizione; E5: usare un oggetto con limiti superiori
-  (51 Peg non ne ha); M1: il MocServer risponde 413 al MOC di un survey intero,
-  meglio il `Moc.fits` del survey HiPS; I1–I2: Ollama **o** LM Studio. Consiglio:
-  correggere il testo prima della prova a mano (stato `bozza` invariato).
+- **D62-2 — Grafico della SED assente nell'app costruita: DECISA (proposta (a)) e corretta.** `backend_qtagg` e
+  `backend_qt` tolti da `EXCLUDES` di `scripts/build_app.py` (`matplotlib.pyplot` resta escluso: il codice usa solo
+  `Figure` e i backend). In più, **prova di fumo dentro l'app costruita** (controllo **V10**, `60` §3.8): l'eseguibile
+  con `--smoke-profile` apre la finestra Profili con Qt `offscreen` e le risposte registrate (nessuna rete), fa un
+  profilo completo di 51 Peg, controlla che tutte le sezioni arrivino a «Done» e che **Export…** e **Load SED points
+  as catalog** siano attivi, esporta ECSV, PDF e PNG e carica i punti della SED; se fallisce, il build fallisce. Ogni
+  altra esclusione di `build_app.py` è controllata: nessun import di AstroTwo, neanche dentro una funzione (test sul
+  codice), e nessun modulo escluso caricato dalla prova di fumo né dalla suite completa eseguita con i moduli esclusi
+  bloccati (`60` §3.5). Test: `tests/test_smoke_profile.py` (la prova passa; senza `backend_qtagg` fallisce come nel
+  build 7).
+- **D62-3 — «Profile of this source» su una riga Gaia DR3 assente da SIMBAD: DECISA (2026-11-13).** Per la 1.0 il
+  messaggio dice chiaramente che il profilo, per ora, richiede un oggetto noto a SIMBAD (in italiano e in inglese:
+  `NAME_NOT_FOUND`, ragione `profile_needs_simbad`, `25` §10, `43` §10), non «nome non trovato». Nessun ripiego per
+  posizione. Il profilo partendo da un `source_id` di Gaia va nella **Roadmap**, dopo la 1.0 (`README.md`). Limite
+  noto nelle note di rilascio. P7 riscritta.
+- **D62-4 — Livello a corpo ignoto che blocca gli altri caricamenti: DECISA (2026-11-13), correggere.** Un catalogo
+  senza colonne di posizione confermate non si disegna nel cielo, quindi non entra nel controllo di sovrapposizione
+  (`05` §13, `_overlay`): non blocca più cone search, ADQL, FITS e MOC. Se un **altro** livello disegnato a corpo
+  ignoto blocca il dato nuovo, l'errore nomina **quel livello** (`BODY_UNKNOWN`, ragione `overlay_blocked_by`), non il
+  file che si sta aprendo. La regola del `19` (corpo ignoto non sovrapponibile, non forzabile) non cambia.
+- **D62-5 — Immagini del README: DECISA (2026-11-13), proposta (a).** Le tre immagini le fa Guido durante il
+  megatest a mano; i riferimenti restano nel `README.md`; segnate come mancanti nel `64`.
+- **D62-6 — Dettagli di lingua e di aspetto: DECISA (2026-11-13), corretti tutti.** PDF italiano: stato delle
+  sezioni tradotto («completata», «in parte», «errore», «annullata») e note fisse del motore in italiano (es.
+  «confermato dall'incrocio ufficiale di Gaia»; le note con valori dentro restano in inglese, come in DD-3), colonne
+  «Separazione» e «Note» non più a contatto; dialogo «Position columns» inglese senza la riga italiana; nomi dei
+  servizi in inglese («Gaia archive», «IRSA AllWISE (sources)», «IRSA images (SIA 2)»); «celestial sky» / «cielo» al
+  posto di «body celestial» / «corpo celestial» nei livelli; messaggio di `MOC_TYPE_REQUIRED` senza la sintassi dei
+  parametri; titolo della barra di stato con margini e cornice nel calcolo del «…» (U1: da guardare a mano).
+- **D62-7 — Testo delle prove: DECISA (2026-11-13), corretto.** C1 (campo stretto), P4 (coordinate di 51 Peg, poi
+  il nucleo di M 31 per la finestra dei candidati), E5 (un oggetto con limiti superiori), M1 (`Moc.fits` del survey),
+  I1–I2 (Ollama o LM Studio). Nelle prove automatiche l'assistente si può provare anche con Ollama, se è acceso
+  (decisione del 2026-11-13).
 
 ## 14. Registro modifiche
 
@@ -372,3 +348,4 @@ nessuna correzione fatta; le decide il proprietario):
 | 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** il megatest si fa sull'app installata dal `.dmg` candidato (`63` passo 9; §3.1, §9); nuove prove **K1–K3** del `.dmg` (impronta con `shasum -a 256 -c`, volume con sole due voci AstroTwo e Applications, trascinamento in `/Applications`; D60-7), A1 riscritta di conseguenza; le quattro correzioni del D5b richiamate in §3.14bis (U1, U2, U3) e in L5, L6, L5 sull'app installata; §4, §6, §8, §10 aggiornati. Stato `bozza` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D8 (A6-b decisa dal proprietario il 2026-11-11: 1.0 senza firma Developer ID):** A4 riscritta per l'app senza firma (avviso al primo avvio e «Apri comunque» secondo `docs/installation.md`, `.dmg` scaricato con l'attributo di quarantena); la prova «nessun avviso» resta come A4bis per la prima versione firmata. |
 | 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12: prove automatiche prima del megatest a mano, sul candidato build 7):** esito delle prove automatiche in `docs/megatest-runs/1.0.0.md` (84 prove: 48 ok, 9 problema, 27 non fatte, da fare a mano); nuove decisioni aperte **D62-2** (grafico della SED assente nell'app costruita, bloccante, build 8), **D62-3** (profilo di una riga Gaia assente da SIMBAD), **D62-4** (livello a corpo ignoto che blocca gli altri), **D62-5** (immagini del README), **D62-6** (dettagli di lingua e di aspetto), **D62-7** (testo di C1, P4, E5, M1, I1–I2) in §13. Nessuna correzione al codice né alle prove. Stato `bozza` invariato. |
+| 2026-11-13 | Claude Code | **Sprint D13 (decisioni del proprietario del 2026-11-13):** D62-2…D62-7 decise (§13); testo di C1, P4, E5, M1, I1, I2 corretto (D62-7) e P7 riscritta per il messaggio di D62-3. Stato `bozza` invariato. |

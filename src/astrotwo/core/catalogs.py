@@ -39,7 +39,7 @@ from astropy.time import Time
 from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import parse as safe_parse_xml
 
-from astrotwo.core.commands import unit_text
+from astrotwo.core.commands import _UNIT_TEXT_LOCK, unit_json, unit_text
 from astrotwo.core.coordinates_wcs import (
     CoordinatesWcsError,
     ModuleWarning,
@@ -324,19 +324,141 @@ def _unit_string(unit) -> str | None:
         return unit.name
     if isinstance(unit, str):
         return unit
-    return unit.to_string()  # testo da rileggere in FITS o VOUnit (ingresso, non un'uscita: D05-6 non si applica)
+    # D05-7 (decisione del proprietario del 2026-11-13): un'unità già letta (es. VOUnit di Gaia con un nome tra apici,
+    # ``'electron'.s**-1``) si riscrive in VOUnit o FITS se il testo si rilegge nella stessa unità; il formato
+    # generico (``electron / s``) non è né FITS né VOUnit e la farebbe perdere
+    with _UNIT_TEXT_LOCK:
+        for fmt in ("vounit", "fits"):
+            text = _exact_text(unit, fmt)
+            if text is not None:
+                return text
+        return unit.to_string()  # testo da rileggere (ingresso, non un'uscita: D05-6 non si applica)
+
+
+def _exact_text(unit: u.UnitBase, fmt: str) -> str | None:
+    """Testo di ``unit`` nel formato ``fmt`` (``vounit`` o ``fits``) **solo se si rilegge nella stessa unità** (fattore
+    esatto, D05-6); per VOUnit anche il fattore SI con tutte le cifre del ``float64`` (``6.283185307179586rad``)."""
+    candidates = []
+    try:
+        candidates.append(unit.to_string(fmt))
+    except (ValueError, TypeError, u.UnitsError):
+        pass
+    if fmt == "vounit":
+        try:
+            si = unit.decompose()
+            bare = u.CompositeUnit(1.0, si.bases, si.powers).to_string("vounit")
+            candidates.append(f"{si.scale!r}{bare}" if si.scale != 1.0 else bare)
+        except (ValueError, TypeError, u.UnitsError):
+            pass
+    for text in candidates:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                if u.Unit(text, format=fmt) == unit:
+                    return text
+        except (ValueError, TypeError, u.UnitsError):
+            continue
+    if fmt == "vounit":
+        text = _quoted_vounit(unit)
+        if text is not None and "'" in text and _same_named(text, unit):
+            return text
+    return None
+
+
+def column_unit_text(column, fmt: str) -> tuple[str | None, bool]:
+    """Testo dell'unità di una colonna per un file d'uscita: attributo ``unit`` del VOTable (``fmt="vounit"``) o
+    ``TUNIT`` del FITS di tabella (``fmt="fits"``) (D05-7, decisione del proprietario del 2026-11-13).
+
+    Restituisce ``(testo, standard)``. Prima il testo standard del formato **esatto** (si rilegge nella stessa unità,
+    mai un fattore troncato: ``hourangle`` → ``15deg`` in VOUnit, ``cycle`` → ``6.283185307179586rad``); se il formato
+    non la scrive esattamente, il testo esatto di un altro standard (VOUnit nel FITS, es. ``'electron'.s**-1``) o il
+    nome di Astropy di ``unit_json`` (es. ``dex``), con ``standard = False``; un'unità che la fonte dava e che non si è
+    potuta leggere resta il **testo della fonte**, invariato. Mai un'unità omessa in silenzio: ``(None, True)`` solo
+    per una colonna senza unità."""
+    unit = column.unit
+    if unit is None:
+        text = (column.meta or {}).get("unit_unrecognized")
+        return (str(text), False) if text else (None, True)
+    if isinstance(unit, u.UnrecognizedUnit):
+        return unit.name, False
+    unit = u.Unit(unit)
+    with _UNIT_TEXT_LOCK:
+        text = _exact_text(unit, fmt)
+        if text is not None:
+            return text, True
+        for other in ("vounit", "fits"):
+            if other != fmt and (text := _exact_text(unit, other)) is not None:
+                return text, False
+        return unit_json(unit), False
+
+
+def _registry_unit(unit: u.UnitBase) -> u.UnitBase:
+    """Le unità tra apici di VOUnit (``'electron'``: per Astropy un'unità nuova, diversa da ``u.electron``) legate
+    all'unità di ``astropy.units`` con lo **stesso nome**, se esiste (D05-7): la stessa grandezza per i moduli che
+    convertono (es. i flussi di Gaia in ``electron / s`` del 20). Un nome che Astropy non conosce resta com'è."""
+    registry = u.get_current_unit_registry().registry
+    if not isinstance(unit, u.CompositeUnit):
+        bases, powers, scale = [unit], [1], 1.0
+    else:
+        bases, powers, scale = unit.bases, unit.powers, unit.scale
+    bound = [registry[b.name] if isinstance(b, u.IrreducibleUnit) and registry.get(b.name) not in (None, b) else b
+             for b in bases]
+    if all(x is y for x, y in zip(bound, bases, strict=True)):
+        return unit
+    return u.CompositeUnit(scale, bound, powers)
 
 
 def _standard_unit(text: str):
-    """Unità se la stringa è valida nel formato FITS o VOUnit di astropy.units (come D18-2)."""
+    """Unità se la stringa è valida nel formato FITS o VOUnit di astropy.units (come D18-2); le unità VOUnit tra
+    apici con un nome noto ad Astropy si legano a quella unità (D05-7, ``_registry_unit``)."""
     for fmt in ("fits", "vounit"):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                return u.Unit(text, format=fmt)
+                unit = u.Unit(text, format=fmt)
         except (ValueError, TypeError):
             continue
+        return _registry_unit(unit) if fmt == "vounit" else unit
     return None
+
+
+def _quoted_vounit(unit: u.UnitBase) -> str | None:
+    """VOUnit con tra apici le unità che lo standard non conosce (``'electron'.s**-1``, come l'archivio Gaia)."""
+    if not isinstance(unit, u.CompositeUnit):
+        bases, powers, scale = [unit], [1], 1.0
+    else:
+        bases, powers, scale = unit.bases, unit.powers, unit.scale
+    parts = []
+    for base, power in zip(bases, powers, strict=True):
+        try:
+            name = base.to_string("vounit")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                u.Unit(name, format="vounit")
+        except (ValueError, TypeError, u.UnitsError):
+            name = f"'{base.name}'"
+        if power == 1:
+            parts.append(name)
+        else:
+            exponent = int(power) if float(power).is_integer() else f"({power})"
+            parts.append(f"{name}**{exponent}")
+    if not parts:
+        return None
+    text = ".".join(parts)
+    return text if scale == 1.0 else f"{scale!r}{text}"
+
+
+def _same_named(text: str, unit: u.UnitBase) -> bool:
+    """Il testo VOUnit con nomi tra apici si rilegge con gli stessi nomi, le stesse potenze e lo stesso fattore."""
+    from astrotwo.core.commands import _named_parts
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            back = u.Unit(text, format="vounit")
+    except (ValueError, TypeError, u.UnitsError):
+        return False
+    return _named_parts(back) == _named_parts(unit)
 
 
 def _normalize_units(table: Table) -> list[ModuleWarning]:
@@ -1679,6 +1801,14 @@ def subset(table: CatalogTable, selection, inplace: bool = False) -> CatalogTabl
     return dataclasses.replace(table, table=table.table[mask], history=table.history + (step,))
 
 
+class _UnitText(str):
+    """Testo dell'unità già scelto da :func:`column_unit_text`: lo scrittore di VOTable di Astropy lo scrive così com'è
+    (chiama ``to_string``), invece di riscriverlo dall'unità con 8 cifre (D05-7)."""
+
+    def to_string(self, *args, **kwargs) -> str:
+        return str(self)
+
+
 _FRAME_TO_COOSYS = {"icrs": "ICRS", "fk5": "eq_FK5", "fk4": "eq_FK4", "galactic": "galactic",
                     "supergalactic": "supergalactic"}
 
@@ -1693,11 +1823,15 @@ def _catalog_votable(table: CatalogTable, part: Table):
         vot = votable_from_table(part)
     resource = vot.resources[0]
     vtable = vot.get_first_table()
+    notes = []
     for field_, name in zip(vtable.fields, part.colnames, strict=True):
         ucd = part[name].meta.get("ucd")
         if ucd:
             field_.ucd = ucd
-    notes = []
+        text, standard = column_unit_text(part[name], "vounit")  # D05-7: mai un fattore troncato né un'unità persa
+        field_._unit = None if text is None else _UnitText(text)
+        if text is not None and not standard:
+            notes.append(f"colonna {name!r}: unità {text!r} non standard in VOUnit, scritta così com'è (D05-7)")
     pos = table.positions
     if pos is not None and pos.frame in _FRAME_TO_COOSYS:
         coosys = CooSys(ID="a2_coosys", system=_FRAME_TO_COOSYS[pos.frame],

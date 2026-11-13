@@ -659,6 +659,14 @@ def resolve_target(target: ProfileTarget, *, match_radius: u.Quantity = DEFAULT_
         try:
             record = _network("simbad", simbad_object, identifier, cache=cache, refresh=refresh, timeouts=timeouts)
         except VoProtocolsError as exc:
+            if exc.code == "NAME_NOT_FOUND" and (exc.params or {}).get("reason") == "simbad_identifier":
+                # D62-3 (decisione del proprietario del 2026-11-13): il profilo, per ora, parte solo da un oggetto
+                # SIMBAD; il messaggio lo dice (il profilo da un source_id di Gaia è nella Roadmap, dopo la 1.0)
+                service = (exc.params or {}).get("service", "SIMBAD")
+                raise ObjectProfileError(
+                    "NAME_NOT_FOUND", f"'{identifier}' non è in {service}: per ora il profilo di un oggetto richiede "
+                    "un oggetto noto a SIMBAD", params={"reason": "profile_needs_simbad", "name": identifier,
+                                                       "service": service}) from exc
             if exc.code in ("NAME_NOT_FOUND", "ADQL_INVALID"):
                 raise
             resolved = _network(None, resolve_name, identifier, cache=cache, refresh=refresh)

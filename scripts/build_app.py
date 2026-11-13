@@ -6,7 +6,7 @@ Uso: ``uv run python scripts/build_app.py`` (opzioni ``--allow-dirty``, ``--skip
 ``--check-only dist/AstroTwo.app``). Passi (§3.3): controlli iniziali, Python 3.12.16 di python-build-standalone
 gestito da uv, ambiente ``build/env`` da ``uv.lock`` (``uv sync --frozen``), test di default e controllo di
 ``THIRD_PARTY_LICENSES`` in quell'ambiente, icona, PyInstaller (``onedir`` + ``BUNDLE``, specifica generata in
-``build/AstroTwo.spec``), firma ad hoc (A6), controlli V1–V9 (§3.8), rapporto in ``dist/build-report.json``.
+``build/AstroTwo.spec``), firma ad hoc (A6), controlli V1–V10 (§3.8), rapporto in ``dist/build-report.json``.
 
 Lo script non legge né scrive il Portachiavi, ``QSettings`` o la cache (regola d'oro 5); cancella solo
 ``dist/AstroTwo.app``, ``dist/AstroTwo-FAILED.app`` e ``build/``, ignorati da git. I messaggi sono in italiano
@@ -68,16 +68,16 @@ EXCLUDES: dict[str, str] = {
     "PySide6.QtSql": "nessun database Qt", "PySide6.QtTest": "solo per i test", "PySide6.QtUiTools": "nessun .ui",
     "PySide6.QtXml": "nessun QtXml", "PySide6.QtConcurrent": "nessun QtConcurrent",
     "PySide6.QtPrintSupport": "nessuna stampa",
-    "matplotlib.backends.backend_qtagg": "matplotlib solo per le palette (V-d)",
-    "matplotlib.backends.backend_qt": "matplotlib solo per le palette (V-d)",
-    "matplotlib.pyplot": "matplotlib solo per le palette (V-d)",
+    # D62-2 (2026-11-13): backend_qtagg e backend_qt NON si escludono (grafico della SED nella finestra Profili, 43)
+    "matplotlib.pyplot": "il codice usa Figure e i backend, mai pyplot (V-d; V10 e test_build_excludes)",
     "pytest": "solo per i test", "IPython": "non usato", "notebook": "non usato",
 }
 
 #: Plugin di Qt da tenere (§3.4): cartella → file. Tutti di qtbase o qtsvg (gli altri formati d'immagine vengono da
 #: qtimageformats o QtPdf, con altre licenze, e AstroTwo non li usa).
 QT_PLUGINS_KEEP: dict[str, frozenset[str]] = {
-    "platforms": frozenset({"libqcocoa.dylib"}),
+    # libqoffscreen (qtbase, LGPL-3.0 come cocoa): solo per la prova di fumo V10 senza schermo (D62-2)
+    "platforms": frozenset({"libqcocoa.dylib", "libqoffscreen.dylib"}),
     "styles": frozenset({"libqmacstyle.dylib"}),
     "imageformats": frozenset({"libqsvg.dylib", "libqjpeg.dylib", "libqgif.dylib", "libqico.dylib"}),
     "iconengines": frozenset({"libqsvgicon.dylib"}),
@@ -517,7 +517,7 @@ def finish_bundle(info: dict, icon: bool) -> None:
 
 
 # --------------------------------------------------------------------------
-# Controlli V1–V9 (§3.8)
+# Controlli V1–V10 (§3.8)
 # --------------------------------------------------------------------------
 
 
@@ -580,6 +580,34 @@ def check_self(app: Path) -> Check:
     bad = [c for c in payload["checks"] if c["status"] != "ok"]
     ok = result.returncode == 0 and payload.get("bundled") and not bad
     return Check("V4_self_check", "ok" if ok else "failed", bad or f"{len(payload['checks'])} voci ok")
+
+
+#: Risposte vere registrate dei servizi del profilo (fuori dall'app) per la prova di fumo V10 (D62-2).
+SMOKE_DATA = ROOT / "tests" / "analysis" / "data" / "profile"
+
+
+def check_smoke_profile(app: Path, data: Path = SMOKE_DATA) -> Check:
+    """V10 — prova di fumo **dentro l'app costruita** (D62-2, decisione del proprietario del 2026-11-13): l'eseguibile
+    con ``--smoke-profile`` apre la finestra Profili (Qt ``offscreen``), fa un profilo completo di 51 Peg con le risposte
+    registrate, controlla che tutte le sezioni arrivino («Done») e che Export… e «Load SED points as catalog» siano
+    attivi, esporta ECSV, PDF e PNG e carica i punti della SED. Senza rete: HOME temporanea e un proxy verso una porta
+    chiusa (solo 127.0.0.1 passa). Se fallisce, il build fallisce."""
+    executable = app / "Contents" / "MacOS" / APP_NAME
+    with tempfile.TemporaryDirectory() as home:
+        env = {**clean_environment(Path(home)), "QT_QPA_PLATFORM": "offscreen",
+               "HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9",
+               "http_proxy": "http://127.0.0.1:9", "https_proxy": "http://127.0.0.1:9",
+               "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"}
+        result = run([executable, "--smoke-profile", data], cwd=Path("/"), env=env, check=False, timeout=600)
+    try:
+        payload = json.loads(result.stdout[result.stdout.index("{"):])
+    except ValueError:
+        return Check("V10_smoke_profile", "failed", {"exit": result.returncode, "stdout": result.stdout[-2000:],
+                                                     "stderr": result.stderr[-3000:]})
+    failed = [c for c in payload.get("checks", []) if not c.get("ok")]
+    ok = result.returncode == 0 and payload.get("ok") and not failed
+    return Check("V10_smoke_profile", "ok" if ok else "failed",
+                 f"{len(payload['checks'])} voci ok" if ok else {"failed": failed, "errors": payload.get("errors")})
 
 
 _LC_SEGMENT_64 = 0x19
@@ -752,6 +780,7 @@ def check_bundle(app: Path, info: Mapping, icon: bool, report: Report) -> list[C
     checks = [check_signature(app), check_references(app), check_layout(app, info, icon)]
     before = snapshot(app)
     checks.append(check_self(app))
+    checks.append(check_smoke_profile(app))  # V10 (D62-2): dentro le impronte di V6, nessuna scrittura nell'app
     checks.append(check_qt_unmodified(app))
     launch = check_launch(app, report)
     checks.append(check_no_writes(before, snapshot(app)))
@@ -820,7 +849,7 @@ def build(args: argparse.Namespace) -> int:
     _step(report, "pyinstaller", run_pyinstaller, spec)
     _step(report, "firma", finish_bundle, info, icon is not None)
     report.info = info
-    report.checks = _step(report, "controlli V1-V9", check_bundle, APP, info, icon is not None, report)
+    report.checks = _step(report, "controlli V1-V10", check_bundle, APP, info, icon is not None, report)
     blocking = [c for c in report.checks if c.status == "failed" and not c.name.startswith(("V7", "V9"))]
     if blocking:
         APP.rename(FAILED_APP)
@@ -850,7 +879,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-dirty", action="store_true", help="costruisce anche con modifiche non salvate")
     parser.add_argument("--skip-tests", action="store_true", help="salta i test (solo prove dello script)")
     parser.add_argument("--keep-build", action="store_true", help="riusa build/env se uv.lock e Python sono gli stessi")
-    parser.add_argument("--check-only", type=Path, metavar="APP", help="solo i controlli V1–V9 su un'app")
+    parser.add_argument("--check-only", type=Path, metavar="APP", help="solo i controlli V1–V10 su un'app")
     parser.add_argument("--make-iconset", nargs=2, type=Path, metavar=("SVG", "CARTELLA"), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:

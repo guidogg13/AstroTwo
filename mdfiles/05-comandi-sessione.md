@@ -1144,7 +1144,32 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   `63` dal passo 3), autorizzato dal proprietario il 2026-11-11.
 
 - **D05-7 — Unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di
-  tabella, fuori dalla regola D05-6: DA DECIDERE** (aperta il 2026-11-12,
+  tabella, fuori dalla regola D05-6: DECISA dal proprietario il 2026-11-13 — correzione nel build 8**
+  (proposta (b)). Testo della decisione: «Anche nei VOTable dei cataloghi (anche via SAMP) e nei FITS di tabella le
+  unità seguono la regola D05-6: nessun fattore troncato. Le unità del flusso Gaia (`'electron'.s**-1`) non si
+  perdono in ingresso nel modulo 13. `hourangle` → `15deg` va bene (esatto).» **Correzione (sprint D13a, codice del
+  `13` e del `14`, un solo scrittore delle unità di colonna, `column_unit_text` del `13`):**
+  1. **VOTable** (`_catalog_votable`, usato da `export_table`, `samp.send_table` e `save_subset`): attributo `unit`
+     scritto da noi, non da Astropy: il testo VOUnit **esatto** (si rilegge nella stessa unità): `hourangle` →
+     `15deg`, `cycle` → `6.283185307179586rad` (tutte le cifre del `float64`, mai `6.2831853rad`); un'unità che VOUnit
+     non conosce si scrive **tra apici** come fa l'archivio Gaia (`'electron'.s**-1`, `'dex'`), riletta con gli stessi
+     nomi; un'unità della fonte che non si è potuta leggere (es. `days` del NASA Exoplanet Archive) resta il **testo
+     della fonte**, invariato. Masse e raggi planetari in una colonna di catalogo: VOUnit esatta con il fattore SI per
+     intero (`5.972167867791379e+24kg`); nel risultato, nell'ECSV e nel PDF del profilo restano `earthMass` /
+     `earthRad` (D05-6).
+  2. **FITS di tabella** (`_write_fits_file`): `TUNIT` scritto da noi: la forma FITS esatta se c'è; altrimenti il
+     testo VOUnit esatto (`15deg`, `6.283185307179586rad`, `'electron'.s**-1`, `'dex'`). Mai `UnitScaleError`, mai un
+     `TUNIT` omesso in silenzio.
+  3. Ogni unità scritta fuori dallo standard del formato è dichiarata nel risultato dell'esportazione con l'avviso
+     **`EXPORT_UNIT_NOT_STANDARD`** (formato e colonne; catalogo dei messaggi, it/en) e, nel VOTable, con un `INFO
+     A2NOTE`.
+  4. **Ingresso** (`13`, `_unit_string` e `_standard_unit`): un'unità già letta si riscrive in VOUnit o FITS se il
+     testo si rilegge nella stessa unità (prima: testo generico `electron / s`, non standard → unità persa); le unità
+     VOUnit tra apici con un nome noto ad Astropy si legano a quell'unità (`'electron'` → `u.electron`), così i moduli
+     che convertono (fotometria del `20`) ricevono la stessa grandezza. La prova di fumo V10 ha trovato proprio questo
+     caso (la Fotometria falliva con `UnitConversionError` prima del legame).
+  **Test:** `tests/core/test_units_d05_7.py` (ingresso di Gaia senza `UNIT_UNRECOGNIZED`; VOTable e FITS con i testi
+  sopra, riletti; unità standard invariate e senza avvisi). Testo originale della decisione aperta (2026-11-12,
   sprint D11, dalla verifica d'interoperabilità delle unità senza rete:
   `docs/validation-runs/2026-11-12-units/results.md`). Nessuna modifica al
   codice. **Fatti misurati sul codice del candidato build 7 (`c43d622`):**
@@ -1195,7 +1220,16 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
   Motivo: nessun numero cambia; `15deg` è VOUnit valida ed esatta; `cycle`
   e il FITS di tabella non sono raggiungibili dall'interfaccia; il punto 3
   toglie un'unità, non ne scrive una sbagliata. **Blocca la 1.0:** da
-  decidere prima del rilascio (correzione o limite dichiarato).
+  decidere prima del rilascio (correzione o limite dichiarato). (Fine del testo originale.)
+
+- **D62-4 — Dato nuovo bloccato da un livello a corpo ignoto (decisione del proprietario del 2026-11-13, `62` §13):**
+  in `_overlay` (controllo D19-4 prima di aggiungere un livello) un **catalogo senza colonne di posizione
+  confermate** non entra nel controllo, né come livello già aperto né come dato nuovo: non si disegna nel cielo, quindi
+  non si sovrappone a niente (l'avviso `BODY_UNKNOWN` del suo caricamento resta). Se un altro livello **disegnato** a
+  corpo ignoto blocca il dato nuovo, l'errore `BODY_UNKNOWN` ha la ragione **`overlay_blocked_by`** con i nomi di quei
+  livelli («il dato nuovo non è stato aperto: il livello … ha il corpo ignoto…; confermarne le colonne o toglierlo»),
+  non il testo del dato che si apre. La regola del `19` non cambia. Test:
+  `tests/core/test_commands_catalog_sky.py::test_d62_4_unconfirmed_csv_does_not_block_other_loads`.
 
 ## 14. Registro modifiche
 
@@ -1237,3 +1271,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-11 | Claude Code | **Sprint D9 (validazione del candidato 1.0.0):** nuova **D05-6** (§13), unità senza forma FITS nei risultati (`5.9721679e+24kg` per le masse terrestri, fattore troncato), proposte (a)–(c), raccomandata (a); nessuna modifica al codice. |
 | 2026-11-11 | Claude Code | **Sprint D10a (decisione del proprietario del 2026-11-11):** **D05-6 decisa, proposta (a)** (§3.1 forma JSON di `quantity`, §13): unità senza forma FITS col nome di Astropy, mai un fattore troncato; nuove `unit_json`, `unit_text`, `unit_from_json` in `commands.py` usate in tutti i punti d'uscita delle unità; test nuovi. Modifica di un file approvato su decisione del proprietario; il file resta `approvato`. |
 | 2026-11-12 | Claude Code | **Sprint D11 (verifica delle unità dopo D05-6, senza rete):** nuova **D05-7** (§13), unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy fuori dalla regola D05-6 (`15deg`, `6.2831853rad` troncato, `UnitScaleError`) e unità VOUnit con nome tra apici perse in ingresso (Gaia `'electron'.s**-1`); proposte (a)–(c), raccomandata (a); nessuna modifica al codice. Solo una decisione aperta aggiunta; il file resta `approvato`. |
+| 2026-11-13 | Claude Code | **Sprint D13a (decisioni del proprietario del 2026-11-13):** **D05-7 decisa** (correzione nel build 8) e corretta nel codice del `13` e del `14` (§13: VOTable e FITS di tabella con il testo esatto, VOUnit tra apici per le unità non standard, `EXPORT_UNIT_NOT_STANDARD`, ingresso delle unità VOUnit di Gaia); **D62-4** in `_overlay` (catalogo senza colonne di posizione fuori dal controllo, ragione `overlay_blocked_by`). Il file resta `approvato`. |

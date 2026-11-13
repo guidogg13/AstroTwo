@@ -46,7 +46,8 @@ def test_t2_spec_contains_data_exclusions_and_plist(tmp_path):
 def test_t2_qt_plugins_and_translations_filter():
     keep = build_app.keep_entry
     assert keep("PySide6/Qt/plugins/platforms/libqcocoa.dylib")
-    assert not keep("PySide6/Qt/plugins/platforms/libqoffscreen.dylib")
+    assert keep("PySide6/Qt/plugins/platforms/libqoffscreen.dylib")  # prova di fumo V10 senza schermo (D62-2)
+    assert not keep("PySide6/Qt/plugins/platforms/libqminimal.dylib")
     assert not keep("PySide6/Qt/plugins/imageformats/libqpdf.dylib")
     assert not keep("PySide6/Qt/plugins/sqldrivers/libqsqlite.dylib")
     assert keep("PySide6/Qt/translations/qtbase_it.qm")

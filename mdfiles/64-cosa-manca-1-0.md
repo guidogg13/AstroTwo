@@ -42,6 +42,18 @@ decisioni, account Apple, Zenodo, Ko-fi, sito).
   quelle che chiedono occhi e mani.
 - `D05-7` resta aperta.
 
+**Decisioni del proprietario del 2026-11-13 (sprint D13):**
+
+- `D62-2` (a) con la **prova di fumo V10** nel build; `D05-7` corretta nel build 8; `D62-4` e `D62-6` corrette;
+  `D62-3` messaggio «il profilo richiede un oggetto SIMBAD» (profilo da Gaia nella Roadmap); `D62-7` testo della
+  `62` corretto; nelle prove automatiche l'assistente si prova anche con Ollama, se è acceso.
+- **`D62-5`: mancano ancora le tre immagini del README** (`docs/screenshots/pleiades-gaia.png`,
+  `profile-51peg.png`, `ai-panel.png`): le fa **Guido durante il megatest a mano**; i riferimenti restano nel
+  `README.md`. Commit di sola documentazione prima del tag.
+- Il **build 7 non è più il candidato**: spostato con il suo `.sha256` in `dist/scartati/AstroTwo-1.0.0-build7.dmg`
+  (né cancellato né sovrascritto). **Autorizzato il nuovo candidato 1.0.0 build 8**, senza firma Developer ID (A6-b).
+  Niente tag, push, release, Zenodo.
+
 ### 3.2 Prima della checklist: cosa blocca il passo 3
 
 | # | Cosa | Stato al 2026-11-11 | Chi |
@@ -205,3 +217,4 @@ validazione completa resta una scelta del proprietario (§3.1).
 | 2026-11-11 | Claude Code | **Sprint D10 (decisioni del proprietario del 2026-11-11: D05-6 (a), build 6 scartato, nuovo candidato build 7):** passi 1, 3–6 e 8 rifatti (D10a `fe542ff`, commit della versione `c43d622`, build 7, `.dmg` `89daad42…174f`), passo 7 saltato (A6-b); P1 con la quarta misura (379 pass, 0 fail, 48 non misurati); passo 9 al proprietario sul nuovo candidato. |
 | 2026-11-12 | Claude Code | **Sprint D11 (decisioni del proprietario del 2026-11-12):** `gaia_circle` accettato come limite dell'archivio Gaia, da riprovare prima del rilascio (§3.1, passo 5); candidato invariato (build 7); P1 con i servizi riprovati alle 06:26 e 06:35 UTC (CDS giù, nessuna nuova misura); nuova §3.8, verifica delle unità senza rete e nuova `D05-7`. |
 | 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12):** passo 9 con la parte automatica fatta (`docs/megatest-runs/1.0.0.md`: 48 ok, 9 problema, 27 non fatte); `D62-2` bloccante (build 8 se confermata); §3.1 con le decisioni del giorno. |
+| 2026-11-13 | Claude Code | **Sprint D13a (decisioni del proprietario del 2026-11-13):** §3.1 con le decisioni su `D62-2`…`D62-7` e `D05-7` (corrette nel codice, commit D13a), le tre immagini del README ancora mancanti (D62-5, a Guido nel megatest), build 7 scartato e build 8 autorizzato. Stato `bozza` invariato. |

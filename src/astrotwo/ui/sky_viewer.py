@@ -94,7 +94,7 @@ NO_POSITION_REASONS = ("columns_not_confirmed", "row_invalid")
 DEFAULT_PANEL_TEXTS = {
     "image": "image", "hips": "HiPS", "catalog": "catalog", "moc": "MOC", "measure": "measure",
     "visible": "Visible", "opacity": "Opacity", "up": "Move up", "down": "Move down", "remove": "Remove layer",
-    "body": "body %1", "body_unknown": "body unknown (%1)", "forced": "overlay forced (force_body)",
+    "body": "body %1", "celestial": "celestial sky", "body_unknown": "body unknown (%1)", "forced": "overlay forced (force_body)",
     "retrieved": "retrieved %1", "epoch": "epoch %1", "epoch_unknown": "epoch unknown",
     "drawn": "Rows drawn: %1 of %2", "propagated": "drawn at epoch %1", "not_propagated": "table positions (not propagated)",
     "order": "drawn at order %1", "by_excess": "drawn at order %1, by excess (MOC order %2)", "cells": "%1 cells", "cells_one": "%1 cell",
@@ -1906,7 +1906,9 @@ class LayerPanel(QWidget):
             parts.append(t["retrieved"].replace("%1", retrieved.strftime("%Y-%m-%dT%H:%M:%SZ")))
         if layer.kind != "measure" and data is not None:
             try:
-                parts.append(t["body"].replace("%1", body_of(data)))
+                body = body_of(data)
+                # D62-6: il cielo si scrive come parola della lingua, mai «body celestial» / «corpo celestial»
+                parts.append(t["celestial"] if body == "celestial" else t["body"].replace("%1", body))
             except Exception as exc:  # noqa: BLE001 - corpo non ricavabile: il codice del 19
                 parts.append(t["body_unknown"].replace("%1", str(getattr(exc, "code", type(exc).__name__))))
         if layer.kind == "measure" and hasattr(data, "value"):  # valore pieno e unità del 17 (41 §3.19)

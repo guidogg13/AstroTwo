@@ -1976,16 +1976,24 @@ _add("MOC_VERSION_UNSUPPORTED",
               "not read)",
               "{path}: TIMESYS '{value}'; lo standard 2.0 prevede TCB (i MOC temporali precedenti, Note STMOC 2019, "
               "non sono letti)", "path value!"))
+_add("EXPORT_UNIT_NOT_STANDARD",
+     "Units that the {format} standard does not have, written exactly as they are (never dropped, never rounded): "
+     "{columns}.",
+     "Unità che lo standard {format} non prevede, scritte esatte così come sono (mai tolte, mai arrotondate): "
+     "{columns}.", "format columns:list!")  # D05-7 (proprietario, 2026-11-13)
 _add("MOC_TYPE_REQUIRED",
      "The MOC type must be given.", "Il tipo del MOC va indicato.",
-     json=("{path}: JSON without the \"s\"/\"t\" prefix: the type is determined by the context (standard 2.0); give "
-           "it with kind='space' or kind='time'.",
-           "{path}: JSON senza prefisso \"s\"/\"t\": il tipo si determina dal contesto d'uso (standard 2.0); "
-           "indicarlo con kind='space' o kind='time'.", "path"),
-     ascii=("{path}: text without the t/s prefix: the type is determined by the context (standard 2.0); give it "
-            "with kind='space' or kind='time'.",
-            "{path}: testo senza prefisso t/s: il tipo si determina dal contesto d'uso (standard 2.0); indicarlo "
-            "con kind='space' o kind='time'.", "path"))
+     # D62-6: testo per chi usa l'interfaccia, senza la sintassi dei parametri (kind=…)
+     json=("{path}: this JSON file does not say whether it is a sky (space) or a time MOC (no \"s\"/\"t\" prefix, "
+           "MOC 2.0 standard), so it is not opened as a MOC. If it is not a MOC, open it as a catalog or an image.",
+           "{path}: questo file JSON non dice se è un MOC del cielo (spazio) o del tempo (manca il prefisso \"s\"/\"t\" "
+           "dello standard MOC 2.0), quindi non si apre come MOC. Se non è un MOC, aprirlo come catalogo o immagine.",
+           "path"),
+     ascii=("{path}: this text file does not say whether it is a sky (space) or a time MOC (no \"s\"/\"t\" prefix, "
+            "MOC 2.0 standard), so it is not opened as a MOC. If it is not a MOC, open it as a catalog or an image.",
+            "{path}: questo file di testo non dice se è un MOC del cielo (spazio) o del tempo (manca il prefisso "
+            "\"s\"/\"t\" dello standard MOC 2.0), quindi non si apre come MOC. Se non è un MOC, aprirlo come catalogo "
+            "o immagine.", "path"))
 _add("MOC_BODY_UNSUPPORTED",
      "The body is not supported for this MOC.", "Il corpo non è supportato per questo MOC.",
      format=("MOC of the body {body}: the body cannot be declared in {format}; non-celestial MOCs are written only in "
@@ -2170,6 +2178,12 @@ _extend("BODY_UNKNOWN",
         overlay_unknown=("{causes}: the data are not overlaid on others (they open on their own).",
                          "{causes}: il dato non si sovrappone ad altri (si apre da solo).", "causes:msgs"),
         layer_alone=("{cause}: the data open on their own.", "{cause}: il dato si apre da solo.", "cause:msg"),
+        # D62-4 (proprietario, 2026-11-13): l'errore nomina il livello che blocca, non il dato che si apre
+        overlay_blocked_by=("The new data were not opened: the layer {layers} has an unknown body and nothing can be "
+                            "overlaid on it. Confirm its columns or remove that layer, then try again.",
+                            "Il dato nuovo non è stato aperto: il livello {layers} ha il corpo ignoto e non vi si può "
+                            "sovrapporre niente. Confermarne le colonne o togliere quel livello, poi riprovare.",
+                            "layers:list!"),
         epntap_columns=("EPN-TAP columns missing from the result ({missing}): body not derivable, the table opens "
                         "on its own.",
                         "Colonne EPN-TAP mancanti nel risultato ({missing}): corpo non ricavabile, la tabella si "
@@ -3408,7 +3422,13 @@ _extend("NAME_NOT_FOUND",
         simbad_identifier=("'{name}' is not an identifier known to {service}.",
                            "'{name}' non è un identificativo noto a {service}.", "name service"),
         several_objects=("'{name}' points to several objects in {service}: no choice is made.",
-                         "'{name}' indica più oggetti in {service}: nessuna scelta.", "name service"))
+                         "'{name}' indica più oggetti in {service}: nessuna scelta.", "name service"),
+        # D62-3 (proprietario, 2026-11-13): il profilo da un source_id di Gaia è nella Roadmap, dopo la 1.0
+        profile_needs_simbad=("'{name}' is not in {service}. For now an object profile needs an object known to "
+                              "SIMBAD: a profile from a Gaia DR3 source_id alone is planned after version 1.0.",
+                              "'{name}' non è in {service}. Per ora il profilo di un oggetto richiede un oggetto noto "
+                              "a SIMBAD: il profilo da un solo source_id di Gaia DR3 è previsto dopo la versione 1.0.",
+                              "name service"))
 _add("PROFILE_TARGET_INVALID",
      "Invalid profile target.", "Bersaglio del profilo non valido.", "",
      none=("No target: give a name, a position or a catalog row.",

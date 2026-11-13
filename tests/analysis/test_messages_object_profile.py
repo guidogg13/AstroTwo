@@ -31,7 +31,8 @@ OWN_CODES = ("PROFILE_TARGET_INVALID", "PROFILE_AMBIGUOUS_TARGET", "PROFILE_NO_I
              "PROFILE_SECTION_TIMEOUT", "PROFILE_PLANETS_COMPOSITE", "PROFILE_PLANET_HOST_MISMATCH",
              "SED_NO_ZERO_POINT", "SED_NO_SYSTEM", "SED_NO_ERROR", "SED_LOW_QUALITY", "SED_UPPER_LIMIT", "SED_DUPLICATE",
              "SED_HIGH_PROPER_MOTION", "PROFILE_VIZIER_SKIPPED", "PROFILE_GAIA_SKIPPED")
-FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects")}
+FROM_14 = {("NAME_NOT_FOUND", "simbad_identifier"), ("NAME_NOT_FOUND", "several_objects"),
+           ("NAME_NOT_FOUND", "profile_needs_simbad")}  # D62-3
 VEGA = (279.234734787025, 38.783688956244)
 PEG = (344.36658535524, 20.768832511140005)
 ETA_TAU = (56.871152303749994, 24.105135651944444)
@@ -199,6 +200,9 @@ def test_every_code_and_reason_of_the_profile(services, cache, monkeypatch, tmp_
         with pytest.raises(VoProtocolsError) as info:
             simbad_object(name, cache=cache)
         seen.error(info.value)
+    with pytest.raises(op.ObjectProfileError) as info:  # D62-3: il profilo dice che serve un oggetto SIMBAD
+        build(ProfileTarget(name="No Such Object 98765"), sections=("identity",), cache=cache)
+    seen.error(info.value)
     services.overrides[("simbad", "WHERE i.id = 'doppio'")] = lambda q: votable(
         [("oid", "long", None), ("main_id", "char", None), ("ra", "double", "deg"), ("dec", "double", "deg")],
         [[1, "a", 0.0, 0.0], [2, "b", 0.0, 0.0]])

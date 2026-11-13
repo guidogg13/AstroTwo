@@ -1394,10 +1394,6 @@
         <translation>Scegli le colonne che contengono la posizione di ogni sorgente e indica in quale sistema sono.</translation>
     </message>
     <message>
-        <source>Hypothesis from the column names, to be confirmed: %1</source>
-        <translation>Ipotesi dai nomi delle colonne, da confermare: %1</translation>
-    </message>
-    <message>
         <source>No column was recognised as a position: choose them.</source>
         <translation>Nessuna colonna è stata riconosciuta come posizione: sceglile tu.</translation>
     </message>
@@ -1484,6 +1480,10 @@
     <message>
         <source>Choose both proper motion columns, or none: parallax and radial velocity are used only together with the proper motion.</source>
         <translation>Scegli entrambe le colonne del moto proprio, oppure nessuna: parallasse e velocità radiale si usano solo insieme al moto proprio.</translation>
+    </message>
+    <message>
+        <source>celestial sky</source>
+        <translation>cielo</translation>
     </message>
     <message>
         <source>epoch unknown</source>
@@ -1684,6 +1684,10 @@
     <message>
         <source>Point at view center</source>
         <translation>Punta al centro della vista</translation>
+    </message>
+    <message>
+        <source>Hypothesis from the column names %1, to be confirmed with the system</source>
+        <translation>Ipotesi dai nomi delle colonne %1, da confermare con il sistema</translation>
     </message>
     <message>
         <source>Point at selected source</source>
@@ -2544,7 +2548,7 @@
     </message>
     <message>
         <source>Evaluating the expression…</source>
-        <translation>Calcolo dell'espressione…</translation>
+        <translation>Calcolo dell&apos;espressione…</translation>
     </message>
     <message>
         <source>Running the cone search…</source>
@@ -2604,11 +2608,11 @@
     </message>
     <message>
         <source>Opening image…</source>
-        <translation>Apertura dell'immagine…</translation>
+        <translation>Apertura dell&apos;immagine…</translation>
     </message>
     <message>
         <source>Changing the image display…</source>
-        <translation>Cambio della visualizzazione dell'immagine…</translation>
+        <translation>Cambio della visualizzazione dell&apos;immagine…</translation>
     </message>
     <message>
         <source>Listing layers…</source>
@@ -2624,7 +2628,7 @@
     </message>
     <message>
         <source>Changing the opacity…</source>
-        <translation>Cambio dell'opacità…</translation>
+        <translation>Cambio dell&apos;opacità…</translation>
     </message>
     <message>
         <source>Changing the visibility…</source>
@@ -2644,7 +2648,7 @@
     </message>
     <message>
         <source>Building the object profile…</source>
-        <translation>Profilo dell'oggetto in corso…</translation>
+        <translation>Profilo dell&apos;oggetto in corso…</translation>
     </message>
     <message>
         <source>Loading the SED points…</source>
@@ -2684,7 +2688,7 @@
     </message>
     <message>
         <source>Changing the appearance…</source>
-        <translation>Cambio dell'aspetto…</translation>
+        <translation>Cambio dell&apos;aspetto…</translation>
     </message>
     <message>
         <source>Changing full screen…</source>

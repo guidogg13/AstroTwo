@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-12 — **sprint D12:** prove automatiche del megatest sul candidato build 7 (`docs/megatest-runs/1.0.0.md`, fuori da `mdfiles/`: 84 prove, 48 ok, 9 problema, 27 non fatte); `62` (`bozza`, invariato) con le nuove `D62-2`…`D62-7` in §13 (`D62-2` bloccante: build 8); `64` aggiornato (`bozza`, invariato); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **23 aperte.**
+**Ultimo aggiornamento:** 2026-11-13 — **sprint D13a:** decisioni del proprietario del 2026-11-13 su `D05-7` e `D62-2`…`D62-7` scritte nei file di origine e corrette nel codice: `05`, `13`, `14`, `25`, `40`, `41`, `43`, `60` (tutti `approvato`, solo §3/§10/§13 e registro dove serve, stato invariato), `62` (`bozza`, invariato: §13 e testo di C1, P4, E5, M1, I1, I2, P7); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
+
+Prima, 2026-11-12 — **sprint D12:** prove automatiche del megatest sul candidato build 7 (`docs/megatest-runs/1.0.0.md`, fuori da `mdfiles/`: 84 prove, 48 ok, 9 problema, 27 non fatte); `62` (`bozza`, invariato) con le nuove `D62-2`…`D62-7` in §13 (`D62-2` bloccante: build 8); `64` aggiornato (`bozza`, invariato); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **23 aperte.**
 
 Prima, 2026-11-12 — **sprint D11:** verifica delle unità dopo D05-6 senza rete (`docs/validation-runs/2026-11-12-units/`); nuova `D05-7` nel `05` (approvato, solo §13 e registro, stato invariato); `64` aggiornato (`bozza`, invariato); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **17 aperte.**
 

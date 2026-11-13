@@ -337,10 +337,20 @@ def self_check(keychain: bool = False) -> dict:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """``--self-check`` / ``--self-check-keychain``: rapporto JSON ed uscita (0 se tutto ``ok``), nessuna finestra;
+    ``--smoke-profile CARTELLA``: prova di fumo della finestra Profili con le risposte registrate della cartella
+    (controllo V10, D62-2; ``smoke_profile``), rapporto JSON ed uscita 0 solo se riuscita;
     ``--quit-after-first-view``: l'app esce dopo la prima vista del cielo (controllo V7); altrimenti l'app normale."""
     args = list(sys.argv[1:] if argv is None else argv)
     if is_bundled():
         sys.dont_write_bytecode = True  # nessun .pyc scritto (V6)
+    if "--smoke-profile" in args:
+        from astrotwo.smoke_profile import main as smoke_main
+
+        position = args.index("--smoke-profile")
+        if position + 1 >= len(args):
+            print("--smoke-profile: serve la cartella delle risposte registrate", file=sys.stderr)
+            return 2
+        return smoke_main(args[position + 1])
     if "--self-check" in args or "--self-check-keychain" in args:
         report = self_check(keychain="--self-check-keychain" in args)
         print(json.dumps(report, indent=2, ensure_ascii=False))

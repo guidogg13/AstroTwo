@@ -243,7 +243,8 @@ negli sprint C3–C4.
    identificativi della tabella `ident` **normalizzandoli** (verificato il
    2026-11-07 sul mirror di Harvard: `'51 Peg'` → `* 51 Peg`, `'vega'` →
    `NAME Vega`, `'eta Tau'` → `* eta Tau`): il nome si passa così come
-   scritto. Nessun oggetto → `NAME_NOT_FOUND` (sotto-voce `simbad_identifier`),
+   scritto. Nessun oggetto → `NAME_NOT_FOUND` (sotto-voce `profile_needs_simbad` dal 2026-11-13, D62-3: il messaggio
+   dice che per ora il profilo richiede un oggetto noto a SIMBAD; l'errore `simbad_identifier` del 14 resta come causa),
    profilo non creato. SIMBAD giù su tutti i server → `resolve_name` del 10
    (fino a NED), sezione Identità in errore con l'errore del 14, profilo per
    posizione con `PROFILE_NO_IDENTIFIERS`.
@@ -1530,7 +1531,7 @@ Codici (testi en/it nel catalogo dei messaggi, D40-3; quelli delle sezioni di C2
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
-| Nome sconosciuto a SIMBAD (server raggiungibile) | profilo non creato, suggerimento coordinate | `NAME_NOT_FOUND` (10/14) |
+| Nome sconosciuto a SIMBAD (server raggiungibile) | profilo non creato; il messaggio dice che per ora il profilo richiede un oggetto noto a SIMBAD (D62-3, 2026-11-13; profilo da un `source_id` di Gaia nella Roadmap, dopo la 1.0) | `NAME_NOT_FOUND` (`profile_needs_simbad`) |
 | SIMBAD giù su tutti i server | nome da `resolve_name` (NED), sezione Identità in errore, resto per posizione | `NET_TIMEOUT` `service_servers` + `PROFILE_NO_IDENTIFIERS` |
 | Più candidati per coordinate | elenco da scegliere; da script errore | `PROFILE_AMBIGUOUS_TARGET` |
 | Pianeti tra i candidati per coordinate (famiglia `Pl` di SIMBAD) | esclusi, avviso con numero e nomi (D25-13 (8)) | `PROFILE_PLANETS_EXCLUDED` |
@@ -1975,3 +1976,4 @@ Nessuna decisione aperta.
 | 2026-11-10 | Claude Code | **Sprint D4 (seconda misura di validazione, SIMBAD contro il mirror di Harvard):** nuova **D25-24** (§13): `sp_type` vuoto in SIMBAD scritto come `null` nel profilo, 2 fail (3C 273, M 13); proposte (a)–(c), raccomandata (a). Nessun codice cambiato. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5a (decisione del proprietario del 2026-11-10):** D25-24 **decisa** (proposta (a), §13); §3.10 tipo spettrale assente non scritto, nota «SIMBAD has no spectral type» in `details["absent"]`, mostrata nell'interfaccia e nel PDF; regola generale nel `02` §2; nuovo T38. Stato `approvato` invariato. |
 | 2026-11-11 | Claude Code | **Sprint D10a (D05-6 del `05`, decisa dal proprietario il 2026-11-11):** §3.13 unità dei pianeti nel risultato e nell'ECSV col nome di Astropy (`earthMass`, `earthRad`), mai kg o m con un fattore; test di rilettura dal JSON e dall'ECSV (`tests/analysis/test_profile_export.py`). Modifica di un file approvato su decisione del proprietario; il file resta `approvato`. |
+| 2026-11-13 | Claude Code | **Sprint D13a (decisioni del proprietario del 2026-11-13, `62` §13):** **D62-3** — nome sconosciuto a SIMBAD → `NAME_NOT_FOUND` con la ragione `profile_needs_simbad` (§3, §10; testo it/en nel catalogo dei messaggi); **D62-6** — PDF italiano con lo stato delle sezioni tradotto e le note fisse del motore in italiano (le note con valori dentro restano in inglese, DD-3), colonne «Separazione»/«Note» allargate (§3.15, `profile_export.py`); PDF inglese invariato. Il file resta `approvato`. |

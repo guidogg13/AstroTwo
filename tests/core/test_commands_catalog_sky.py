@@ -147,3 +147,30 @@ def test_time_text_iso_with_scale_never_jd():
     assert time_text(Time(55000.0, format="mjd", scale="tdb")) == "2009-06-18T00:00:00 TDB"
     assert time_text("J2000.0") == "J2000.0" and time_text(None) is None
     assert "JD" not in time_text(time_json(t))
+
+
+def test_d62_4_unconfirmed_csv_does_not_block_other_loads(session, tmp_path):
+    """D62-4 (proprietario, 2026-11-13): un CSV con le colonne non confermate (corpo ignoto, non disegnato) non blocca
+    gli altri caricamenti; un livello disegnato a corpo ignoto blocca, e l'errore nomina quel livello."""
+    import dataclasses
+
+    from astrotwo.messages_catalog import message_text
+
+    csv = tmp_path / "pleiades.csv"
+    csv.write_text("name,ra,dec\na,56.1,24.1\nb,56.2,24.2\n")
+    first = run(session, "catalog.open_file", file={"path": str(csv)})
+    assert first.status == "ok" and session.workspace.state.layers[-1].data.positions is None
+    second = run(session, "catalog.open_file", file={"path": write_catalog(tmp_path / "v.xml")})
+    assert second.status == "ok", second.error
+    third = run(session, "catalog.open_file", file={"path": str(csv)})  # anche dopo un livello disegnato
+    assert third.status == "ok", third.error
+    # un livello disegnato con il corpo ignoto blocca il dato nuovo: il messaggio parla di quel livello
+    state = session.workspace.state
+    drawn = state.layer(second.values["layer"])
+    unknown = dataclasses.replace(drawn, name="unknown-body.xml", data=dataclasses.replace(drawn.data, body=None))
+    session.workspace._commit(state.replace_layer(unknown))
+    blocked = run(session, "catalog.open_file", file={"path": write_catalog(tmp_path / "w.xml")})
+    assert blocked.status == "error" and blocked.error.code == "BODY_UNKNOWN"
+    assert blocked.error.params == {"reason": "overlay_blocked_by", "layers": ["unknown-body.xml"]}
+    en = message_text(blocked.error.code, blocked.error.params, "en", text=blocked.error.text)
+    assert "unknown-body.xml" in en and "w.xml" not in en and "pleiades.csv" not in en
