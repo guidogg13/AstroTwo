@@ -61,7 +61,7 @@ def test_t2_qt_plugins_and_translations_filter():
 def test_versions():
     assert build_app.short_version("0.1.0-beta.5") == "0.1.0"
     version, build = build_app.bundle_version()
-    assert version == "1.0.0" and build == 8
+    assert version == "1.0.0" and build == 9
 
 
 @pytest.mark.skipif(not (QTCORE.is_file() and CSPICE.is_file()), reason="librerie della ruota non installate")
