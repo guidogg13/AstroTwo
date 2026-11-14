@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-14 — **sprint D14a:** decisioni del proprietario del 2026-11-13 su `D62-8` scritte nei file di origine e corrette nel codice: `05`, `13`, `14`, `25`, `30`, `44`, `63` (tutti `approvato`, solo le sezioni interessate e il registro, stato invariato), `62` e `64` (`bozza`, invariati); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
+**Ultimo aggiornamento:** 2026-11-14 — **sprint D14b–D14c:** candidato 1.0.0 build 9 (commit `499e110`, `.dmg` `0a4f78ac…0281`) e parte automatica del megatest sul build 9 (`docs/megatest-runs/1.0.0.md`); `64` (`bozza`, invariato) aggiornato con i passi 3–9 e la lista «1.0.1»; nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
+
+Prima, 2026-11-14 — **sprint D14a:** decisioni del proprietario del 2026-11-13 su `D62-8` scritte nei file di origine e corrette nel codice: `05`, `13`, `14`, `25`, `30`, `44`, `63` (tutti `approvato`, solo le sezioni interessate e il registro, stato invariato), `62` e `64` (`bozza`, invariati); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
 
 Prima, 2026-11-13 — **sprint D13b–D13c:** candidato 1.0.0 build 8 (commit `2784e5a`, `.dmg` `96419e22…8c58`) e parte automatica del megatest sul build 8 (`docs/megatest-runs/1.0.0.md`); `62` (`bozza`, invariato) con la nuova `D62-8` in §13 e il testo di E5 completato; `64` (`bozza`, invariato) e `60` (`approvato`, solo registro) aggiornati; nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **17 aperte** (`D62-8` da decidere prima del rilascio).
 
