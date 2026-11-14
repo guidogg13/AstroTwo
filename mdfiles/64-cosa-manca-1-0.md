@@ -54,6 +54,20 @@ decisioni, account Apple, Zenodo, Ko-fi, sito).
   (né cancellato né sovrascritto). **Autorizzato il nuovo candidato 1.0.0 build 8**, senza firma Developer ID (A6-b).
   Niente tag, push, release, Zenodo.
 
+**Decisioni del proprietario del 2026-11-13 (sprint D14):**
+
+- **`D62-8`: correggere tutti e tre i punti** (VOTable dei cataloghi validi rispetto allo schema con ID univoci,
+  «Immagini: done» tradotto nel PDF italiano, nessuna etichetta italiana nell'interfaccia inglese) e due controlli
+  nuovi nella suite perché non tornino (schema di ogni VOTable scritto; lingua dell'interfaccia e dei PDF).
+- **Assistente IA:** lettura **180 s** per i provider locali (Ollama, LM Studio), invariata (60 s) per quelli in rete
+  (`30` §3.7).
+- **E4** da rifare sul build 9, con la spiegazione nel report.
+- Il **build 8 non è più il candidato**: in `dist/scartati/AstroTwo-1.0.0-build8.dmg` con il suo `.sha256`.
+  **Autorizzato il candidato 1.0.0 build 9**, senza firma Developer ID (A6-b). Niente tag, push, release, Zenodo.
+- **Regola di stop** (anche in `63` §3.1): dopo il build 9, **solo un difetto BLOCCANTE** (dati o numeri sbagliati,
+  funzione bloccata, file non valido, crash) giustifica un build 10. Ogni altro difetto va nella **lista «1.0.1»**
+  (§3.9 qui sotto e note di rilascio), senza nuovo build.
+
 ### 3.2 Prima della checklist: cosa blocca il passo 3
 
 | # | Cosa | Stato al 2026-11-11 | Chi |
@@ -201,6 +215,15 @@ Non applicabile: documento di progetto.
 |---|---|---|---|---|
 | T1 | Copertura | rileggere §3.3 | una riga per ognuno dei passi 1–9 della `63`, con pronto / cosa manca / chi | lettura |
 
+### 3.9 Lista «1.0.1» (regola di stop, decisione del proprietario del 2026-11-13)
+
+Difetti **non bloccanti** trovati dopo il candidato build 9: non si correggono nel candidato, si correggono nella
+1.0.1. Ogni riga dice dove è stato trovato. La stessa lista è nelle note di rilascio («Planned for 1.0.1»).
+
+| # | Difetto | Trovato | Perché non è bloccante |
+|---|---|---|---|
+| — | *(nessuno finora)* | — | — |
+
 ## 13. Decisioni aperte
 
 Nessuna nuova. Le decisioni che riguardano la 1.0 sono in
@@ -219,3 +242,4 @@ validazione completa resta una scelta del proprietario (§3.1).
 | 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12):** passo 9 con la parte automatica fatta (`docs/megatest-runs/1.0.0.md`: 48 ok, 9 problema, 27 non fatte); `D62-2` bloccante (build 8 se confermata); §3.1 con le decisioni del giorno. |
 | 2026-11-13 | Claude Code | **Sprint D13a (decisioni del proprietario del 2026-11-13):** §3.1 con le decisioni su `D62-2`…`D62-7` e `D05-7` (corrette nel codice, commit D13a), le tre immagini del README ancora mancanti (D62-5, a Guido nel megatest), build 7 scartato e build 8 autorizzato. Stato `bozza` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13b–D13c:** passi 3–6 e 8 con il **build 8** (commit della versione `2784e5a`, test di rete a parte senza errori di AstroTwo, `gaia_circle` passato, V1–V10 ok, `.dmg` `96419e22…8c58`, build 7 in `dist/scartati/`); passo 9 con la parte automatica sul build 8 (D62-2 corretto; nuova `D62-8`, consiglio build 9). Stato `bozza` invariato. |
+| 2026-11-14 | Claude Code | **Sprint D14a (decisioni del proprietario del 2026-11-13):** decisioni su `D62-8`, lettura 180 s per i provider locali, E4, build 8 scartato, candidato build 9; **regola di stop** e nuova §3.9 «Lista 1.0.1». Stato `bozza` invariato. |

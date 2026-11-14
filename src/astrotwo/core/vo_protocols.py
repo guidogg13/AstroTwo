@@ -249,9 +249,7 @@ def _provenance(table: CatalogTable, fmt: str) -> dict[str, str]:
 
 def _write_votable_file(table: CatalogTable, target: Path, info: dict[str, str]) -> list[str]:
     """VOTable 1.4; restituisce le colonne con un'unità non standard VOUnit (D05-7)."""
-    from astropy.io.votable.tree import Info
-
-    from astrotwo.core.catalogs import column_unit_text
+    from astrotwo.core.catalogs import add_votable_infos, column_unit_text
 
     vot, notes = _catalog_votable(table, table.table)
     nonstandard = []
@@ -260,11 +258,7 @@ def _write_votable_file(table: CatalogTable, target: Path, info: dict[str, str])
         if text is not None and not standard:
             nonstandard.append(f"{name} ({text})")
     vot.version = VOTABLE_VERSION
-    resource = vot.resources[0]
-    for name, value in info.items():
-        resource.infos.append(Info(name=name, value=value))
-    for note in notes:
-        resource.infos.append(Info(name="A2NOTE", value=note))
+    add_votable_infos(vot, list(info.items()) + [("A2NOTE", note) for note in notes])  # D62-8: ID univoci
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # W50 di Astropy per un'unità non standard: dichiarata nel risultato (D05-7)
         vot.to_xml(str(target))
@@ -2207,7 +2201,7 @@ def _table_bytes(table: Table) -> bytes:
 
 def _simbad_label(url: str) -> str:
     """Nome del server SIMBAD che ha risposto (provenienza, sprint B4)."""
-    return "SIMBAD (mirror di Harvard)" if "harvard" in (url or "") else "SIMBAD (CDS)"
+    return "SIMBAD (Harvard mirror)" if "harvard" in (url or "") else "SIMBAD (CDS)"
 
 
 def _simbad_region_error(url: str, exc: BaseException, timeouts: NetworkTimeouts) -> VoProtocolsError:
@@ -2345,7 +2339,7 @@ class SimbadRecord:
     coords: SkyFrame
     identifiers: tuple[str, ...]
     magnitudes: tuple[SimbadMagnitude, ...]
-    source: str  # servizio che ha risposto (es. "SIMBAD (mirror di Harvard)")
+    source: str  # servizio che ha risposto (es. "SIMBAD (Harvard mirror)", nome in inglese: D62-6, D62-8)
     requests: tuple[RequestRecord, ...]  # basic, ident, flux
     warnings: tuple[tuple[str, str], ...] = ()
 

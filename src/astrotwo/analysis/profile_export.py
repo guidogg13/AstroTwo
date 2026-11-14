@@ -646,6 +646,11 @@ def _sources(section: Mapping, label: dict) -> str:
     return head + ": " + ("; ".join(parts) if parts else "—")
 
 
+def _status_text(status, label: Mapping) -> str:
+    """Stato di una sezione nella lingua del PDF (D62-6; D62-8: anche la riga delle miniature)."""
+    return _STATUS_TEXT.get(label.get("lang", "en"), {}).get(status, status)
+
+
 def _status_lines(page: _Page, section: Mapping | None, label: dict) -> None:
     if section is None:
         page.text(label["not_requested"], size=9, color="0.35")
@@ -653,7 +658,7 @@ def _status_lines(page: _Page, section: Mapping | None, label: dict) -> None:
     status = section.get("status")
     if (section.get("details") or {}).get("checked") is False and status not in ("error", "cancelled"):
         status = label["status_not_checked"]  # decisione del 2026-11-10; profili vecchi (senza checked) invariati
-    status = _STATUS_TEXT.get(label.get("lang", "en"), {}).get(status, status)  # D62-6: «Stato: completata»
+    status = _status_text(status, label)  # D62-6: «Stato: completata»
     page.text(f"{label['status']}: {status}  ·  {label['section_command']} "
               f"#{section.get('command_id')}", size=8, color="0.35")
     for line in _messages(section, label):
@@ -726,7 +731,7 @@ def _identity_page(data: Mapping, label: dict, title: str) -> _Page:
         x, y = _LEFT + left_width + 0.2, top
         width = _W - _RIGHT - x
         thumbs = (images.get("details") or {}).get("thumbnails") or []
-        status = f"{label['images']}: {images.get('status')}  ·  #{images.get('command_id')}"
+        status = f"{label['images']}: {_status_text(images.get('status'), label)}  ·  #{images.get('command_id')}"
         page.fig.text(x / _W, y / _H, status, fontsize=7, color="0.35", va="top")
         y -= 0.2
         for line in _messages(images, label):

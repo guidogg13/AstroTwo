@@ -294,7 +294,7 @@ def test_t27_simbad_pointer_falls_back_with_one_warning(pair, cache, monkeypatch
 
 
 def test_t27_simbad_source_names_the_harvard_mirror():
-    assert vo._simbad_label("https://simbad.harvard.edu/simbad/sim-tap") == "SIMBAD (mirror di Harvard)"
+    assert vo._simbad_label("https://simbad.harvard.edu/simbad/sim-tap") == "SIMBAD (Harvard mirror)"
     assert vo._simbad_label("https://simbad.cds.unistra.fr/simbad/sim-tap") == "SIMBAD (CDS)"
 
 

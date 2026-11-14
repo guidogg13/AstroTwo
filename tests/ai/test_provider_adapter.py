@@ -296,6 +296,40 @@ def test_t6_timeouts(kind, provider_service):
 
 
 @pytest.mark.parametrize("kind", KINDS)
+def test_t6b_local_read_timeout_180s(kind, monkeypatch):
+    """Decisione del proprietario del 2026-11-13 (§3.7): lettura 180 s per i provider locali (Ollama, LM Studio, ogni
+    indirizzo ``localhost``), 60 s per quelli in rete; un tempo dato nelle opzioni resta quello."""
+    assert (pa.READ_TIMEOUT, pa.LOCAL_READ_TIMEOUT, pa.CONNECT_TIMEOUT, pa.SILENCE_TIMEOUT) == (60.0, 180.0, 10.0, 30.0)
+    remote = {"anthropic": "https://api.anthropic.com", "openai_compatible": "https://api.openai.com/v1"}[kind]
+    cases = [(remote, 60.0)]
+    if kind == "openai_compatible":
+        cases += [("http://localhost:11434/v1", 180.0), ("http://localhost:1234/v1", 180.0),
+                  ("http://127.0.0.1:8080/v1", 180.0)]
+    seen = []
+    monkeypatch.setattr(pa, "_http_client", lambda options: seen.append(options.read_timeout) or None)
+    for url, expected in cases:
+        a = make_adapter(ProviderProfile(kind=kind, base_url=url, model="m"), FakeKeychain({}))
+        assert a._resolved(None).read_timeout == expected
+        assert a._resolved(TurnOptions(tool_choice="none")).read_timeout == expected
+        assert a._resolved(TurnOptions(read_timeout=5.0)).read_timeout == 5.0
+        a._client(FAKE_KEY, a._resolved(None))
+        assert seen[-1] == expected  # tempo passato al client HTTP
+
+
+def test_t6c_local_timeout_message_says_180s(provider_service):
+    """Il messaggio ``AI_TIMEOUT`` dice il tempo vero del profilo locale (il servizio di prova è su 127.0.0.1)."""
+    a, _, _ = adapter("openai_compatible", provider_service)
+    assert a.profile.local
+    import httpx2
+    import openai
+
+    timeout = openai.APITimeoutError(request=httpx2.Request("POST", provider_service.url))
+    error, retry = a._classify(timeout, FAKE_KEY, a._resolved(None))
+    assert error.code == "AI_TIMEOUT" and "lettura 180 s" in error.message and not retry
+    assert error.params["read"] == {"value": 180.0, "unit": "s"}
+
+
+@pytest.mark.parametrize("kind", KINDS)
 def test_t7_cancellation(kind, provider_service):
     parts = [f"p{k}" for k in range(20)]
     body = anthropic_text(parts) if kind == "anthropic" else openai_text(parts)

@@ -88,8 +88,8 @@ Regole:
 | `xai` | xAI | `https://api.x.ai/v1` | `unverified` | docs.x.ai/docs/api-reference (indirizzo); docs.x.ai/developers/model-capabilities/legacy/chat-completions: Chat Completions è un **endpoint "legacy"** (le novità vanno alla Responses API); la pagina non dichiara la chiamata di strumenti su questo endpoint |
 | `groq` | Groq | `https://api.groq.com/openai/v1` | `documented` | console.groq.com/docs/openai (indirizzo, campi non supportati: `logprobs`, `logit_bias`, `top_logprobs`, `messages[].name`, che AstroTwo non manda); console.groq.com/docs/tool-use: "All models hosted on Groq support tool use" |
 | `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `documented` | openrouter.ai/docs/quickstart (indirizzo); openrouter.ai/docs/guides/features/tool-calling: solo i modelli con il parametro `tools` (filtro dell'elenco dei modelli), streaming con `delta.tool_calls` documentato |
-| `ollama` | Ollama (locale) | `http://localhost:11434/v1` | `verified` | docs.ollama.com/api/openai-compatibility ("Streaming" e "Tools" supportati; la chiave è richiesta dal client ma ignorata); verificato il 2026-10-16 con `llama3.2:1b` (§13) |
-| `lmstudio` | LM Studio (locale) | `http://localhost:1234/v1` | `documented` | lmstudio.ai/docs/app/api/endpoints/openai (porta 1234, `/v1/models`, `/v1/chat/completions`); lmstudio.ai/docs/developer/openai-compat/tools (`tools` su `/v1/chat/completions`, chiamate in frammenti nello streaming); **prova nostra rimandata** (LM Studio non installato, §13) |
+| `ollama` | Ollama (local) — «Ollama (locale)» nell'interfaccia italiana (D62-8) | `http://localhost:11434/v1` | `verified` | docs.ollama.com/api/openai-compatibility ("Streaming" e "Tools" supportati; la chiave è richiesta dal client ma ignorata); verificato il 2026-10-16 con `llama3.2:1b` (§13) |
+| `lmstudio` | LM Studio (local) — «LM Studio (locale)» nell'interfaccia italiana (D62-8) | `http://localhost:1234/v1` | `documented` | lmstudio.ai/docs/app/api/endpoints/openai (porta 1234, `/v1/models`, `/v1/chat/completions`); lmstudio.ai/docs/developer/openai-compat/tools (`tools` su `/v1/chat/completions`, chiamate in frammenti nello streaming); **prova nostra rimandata** (LM Studio non installato, §13) |
 
 ### 3.2 Le due implementazioni
 
@@ -211,6 +211,15 @@ provider e restituisce, man mano che arrivano, **eventi normalizzati**:
 - **Tempi massimi** (decisi il 2026-10-16, configurabili): **10 s** per la
   connessione, **60 s** per la lettura, **30 s di silenzio** nello streaming
   (nessun evento) → `AI_TIMEOUT`.
+- **Lettura per i provider locali: 180 s** (decisione del proprietario del
+  2026-11-13, dopo la prova I2 del megatest sul build 8, dove un modello locale
+  da 27B non mandava la prima risposta entro 60 s). Vale per ogni profilo
+  `local` (indirizzo `localhost`, `127.0.0.1`, `::1`: Ollama, LM Studio e un
+  endpoint compatibile sullo stesso Mac); i provider in rete restano a 60 s;
+  connessione (10 s) e silenzio (30 s) non cambiano. Codice:
+  `LOCAL_READ_TIMEOUT = 180.0`; `TurnOptions.read_timeout = None` vuol dire
+  «secondo il profilo», un valore dato nelle opzioni resta quello. Il
+  messaggio `AI_TIMEOUT` dice il tempo vero («lettura 180 s»).
 - **Ripetizioni:** quelle interne degli SDK sono **disattivate**
   (`max_retries = 0`); l'adattatore ripete **al massimo 2 volte**, e solo
   **prima del primo evento ricevuto**, per errori di connessione e per le
@@ -388,7 +397,7 @@ Ogni test vale per **entrambi** gli adattatori, salvo dove indicato.
 | T3 | Risultati degli strumenti | conversazione con un risultato d'errore e uno riuscito | corpo inviato con `tool_result`/`tool` nel formato di ciascun provider, contenuto identico | ispezione del corpo ricevuto dal servizio simulato |
 | T4 | Errori | il servizio risponde 401, 403, 404 sul modello, 429 con `retry-after`, 500, 529, contesto superato, corpo non conforme | codici di §10; 429 e 5xx ripetuti al più 2 volte con le attese, ciascuna dichiarata in un `ProviderNotice` | orologio simulato, conteggio delle richieste |
 | T5 | Nessuna ripetizione dopo il primo evento | 503 simulato dopo 3 frammenti di testo | nessuna ripetizione; `AI_SERVICE` | conteggio delle richieste |
-| T6 | Tempi massimi | servizio che non accetta la connessione; che non risponde per 61 s; che tace 31 s a metà streaming | `AI_TIMEOUT` con il tempo superato | orologio simulato |
+| T6 | Tempi massimi | servizio che non accetta la connessione; che non risponde per 61 s (in rete) o 181 s (profilo locale); che tace 31 s a metà streaming | `AI_TIMEOUT` con il tempo superato; lettura 60 s in rete e 180 s per un profilo locale (decisione del 2026-11-13: `test_t6b_local_read_timeout_180s`, `test_t6c_local_timeout_message_says_180s`) | orologio simulato |
 | T7 | Annullamento | Stop dopo 5 frammenti | connessione chiusa, `TurnEnd(cancelled)`, nessun evento dopo | ispezione del servizio |
 | T8 | Nessun modello nel codice | ricerca nel codice sorgente di `src/astrotwo/ai/` di identificativi di modelli noti dei due provider (elenco del test) | nessuna occorrenza | analisi del testo |
 | T9 | Variabili d'ambiente ignorate | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` impostate a valori di prova | il servizio simulato riceve la chiave finta del `31` simulato e l'indirizzo del profilo, mai i valori delle variabili | ispezione delle richieste |
@@ -487,3 +496,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-17 | Claude Code | **Codice della parte 2 della v1:** `src/astrotwo/ai/provider_adapter.py` (profili e `PROVIDER_PRESETS`, messaggi ed eventi normalizzati, `AnthropicAdapter` e `OpenAICompatibleAdapter` con gli SDK ufficiali, ripetizioni solo prima del primo evento, tempi massimi con il silenzio dello streaming, annullamento, `RequestRecord`, `list_models`, `probe_tools`, `make_adapter`) e `tests/ai/test_provider_adapter.py` con servizi simulati locali (T1–T15 per entrambi gli adattatori dove previsto, 26 test). Scelte minori della parte 2 in §13, da confermare. Lista di controllo manuale con le chiavi dell'utente ancora da fare. Stato `approvato` invariato. |
 | 2026-10-22 | Claude Code | **Decisione del proprietario del 2026-10-22** (sprint 6c del 35): nuova opzione del turno `tool_choice` (`auto` di default, nessun campo inviato; `none` → `{"type": "none"}` per Anthropic, `"none"` per Chat Completions, solo con strumenti presenti) per l'ultima richiesta del `35` dopo il limite di chiamate (§3.5, §6, T16, lista di controllo manuale). Codice in `TurnOptions.tool_choice` e test T16 in `tests/ai/test_provider_adapter.py`. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `ProviderError`, `ProviderAdapterError` e `ProviderNotice` portano `params`; nuova §10.1 con la tabella (inclusi `AI_RETRY` per l'avviso di ripetizione e il codice nuovo `AI_PROFILE_INVALID` per i profili non validi, `ProfileError` sottoclasse di `ValueError`) scritta prima del codice; gli eventi non conformi dello streaming hanno una ragione ciascuno. Test `tests/ai/test_messages_provider.py`. Testo italiano invariato. Stato `approvato` invariato. |
+| 2026-11-14 | Claude Code | **Sprint D14a (decisioni del proprietario del 2026-11-13, D62-8):** lettura **180 s per i provider locali** (§3.7, `LOCAL_READ_TIMEOUT`, `TurnOptions.read_timeout = None` = secondo il profilo; in rete resta 60 s), T6 esteso; nomi dei profili predefiniti locali in inglese «Ollama (local)», «LM Studio (local)», tradotti «(locale)» nell'interfaccia italiana dal `44` (§3.1.1). Modifica del file approvato autorizzata dal proprietario («scrivilo nella specifica giusta»); stato `approvato` invariato. |

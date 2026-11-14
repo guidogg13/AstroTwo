@@ -1832,6 +1832,7 @@ def _catalog_votable(table: CatalogTable, part: Table):
         field_._unit = None if text is None else _UnitText(text)
         if text is not None and not standard:
             notes.append(f"colonna {name!r}: unità {text!r} non standard in VOUnit, scritta così com'è (D05-7)")
+    _unique_field_ids(vtable)
     pos = table.positions
     if pos is not None and pos.frame in _FRAME_TO_COOSYS:
         coosys = CooSys(ID="a2_coosys", system=_FRAME_TO_COOSYS[pos.frame],
@@ -1845,6 +1846,39 @@ def _catalog_votable(table: CatalogTable, part: Table):
     return vot, notes
 
 
+def _unique_field_ids(vtable) -> None:
+    """ID dei FIELD univoci (D62-8): Astropy li ricava dai nomi delle colonne e due nomi diversi possono dare lo
+    stesso ID (es. «a b» e «a_b» → ``a_b``); il secondo prende un suffisso numerato, il ``name`` non cambia."""
+    used = {"a2_coosys"}
+    for field_ in vtable.fields:
+        ident, k = field_.ID, 2
+        if ident is None:
+            continue
+        while ident in used:
+            ident, k = f"{field_.ID}_{k}", k + 1
+        if ident != field_.ID:
+            field_.ID = ident
+        used.add(ident)
+
+
+def add_votable_infos(vot, items) -> None:
+    """Aggiunge gli ``INFO`` di provenienza alla prima risorsa con un **ID univoco nel documento** (D62-8, decisione
+    del proprietario del 2026-11-13): Astropy dà all'``INFO`` l'ID uguale al nome, quindi due note ``A2NOTE`` (una per
+    colonna con un'unità non standard, D05-7) ripetevano l'ID e il file non era valido rispetto allo schema VOTable.
+    Il nome resta quello di sempre (``A2NOTE``); l'ID della seconda nota e delle successive è ``A2NOTE_2``,
+    ``A2NOTE_3``…; valori e unità non cambiano."""
+    used = {x.ID for x in vot.iter_fields_and_params() if x.ID}
+    used |= {x.ID for x in vot.iter_coosys() if x.ID}
+    used |= {x.ID for x in vot.iter_info() if x.ID}
+    resource = vot.resources[0]
+    for name, value in items:
+        ident, k = name, 2
+        while ident in used:
+            ident, k = f"{name}_{k}", k + 1
+        used.add(ident)
+        resource.infos.append(Info(ID=ident, name=name, value=str(value)))
+
+
 def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -> Path:
     """Salva il sottoinsieme in un VOTable scelto dall'utente, con provenienza (D13-13); mai nella cache."""
     target = Path(os.fspath(path)).expanduser()
@@ -1852,7 +1886,6 @@ def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -
         raise CatalogsError("FILE_EXISTS", f"{target}: esiste già; usare overwrite=True", params={"path": str(target)})
     mask = _selection_mask(table, selection)
     vot, notes = _catalog_votable(table, table.table[mask])
-    resource = vot.resources[0]
     pos = table.positions
     saved_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     info = {
@@ -1864,10 +1897,8 @@ def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -
     }
     if pos is not None:
         info["A2POSITIONS"] = f"{pos.lon}/{pos.lat}, frame {pos.frame}, fonte {pos.source}"
-    for note in notes:
-        info.setdefault("A2NOTE", note)
-    for name, value in info.items():
-        resource.infos.append(Info(name=name, value=str(value)))
+    items = list(info.items()) + [("A2NOTE", note) for note in notes]  # D62-8: tutte le note, ID univoci
+    add_votable_infos(vot, items)
     vot.to_xml(str(target))
     return target
 

@@ -2331,6 +2331,17 @@
     </message>
 </context>
 <context>
+    <name>ProviderPresets</name>
+    <message>
+        <source>Ollama (local)</source>
+        <translation>Ollama (locale)</translation>
+    </message>
+    <message>
+        <source>LM Studio (local)</source>
+        <translation>LM Studio (locale)</translation>
+    </message>
+</context>
+<context>
     <name>SaveSessionDialog</name>
     <message>
         <source>Save session</source>

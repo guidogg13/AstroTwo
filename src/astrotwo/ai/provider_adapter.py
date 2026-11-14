@@ -13,6 +13,7 @@ codice; la chiave si legge dal 31 a ogni turno e non va mai in log né nel ``Req
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import logging
 import re
@@ -29,6 +30,7 @@ __all__ = [
     "DEFAULT_MAX_OUTPUT_TOKENS",
     "CONNECT_TIMEOUT",
     "READ_TIMEOUT",
+    "LOCAL_READ_TIMEOUT",
     "SILENCE_TIMEOUT",
     "ProviderErrorCode",
     "ProviderAdapterError",
@@ -66,6 +68,10 @@ DEFAULT_MAX_OUTPUT_TOKENS = 4096
 #: Tempi massimi (decisi il 2026-10-16, configurabili): connessione, lettura, silenzio nello streaming (s).
 CONNECT_TIMEOUT = 10.0
 READ_TIMEOUT = 60.0
+#: Lettura per i provider locali (Ollama, LM Studio, ogni indirizzo ``localhost``: ``ProviderProfile.local``): un
+#: modello grande sul Mac può impiegare più di 60 s prima del primo evento (decisione del proprietario del 2026-11-13,
+#: prova I2 del megatest sul build 8). I provider in rete restano a ``READ_TIMEOUT``.
+LOCAL_READ_TIMEOUT = 180.0
 SILENCE_TIMEOUT = 30.0
 #: Ripetizioni (scelta minore 3): al più 2, solo prima del primo evento.
 MAX_RETRIES = 2
@@ -218,10 +224,10 @@ PROVIDER_PRESETS: tuple[ProviderPreset, ...] = (
                    ("https://openrouter.ai/docs/quickstart",
                     "https://openrouter.ai/docs/guides/features/tool-calling"),
                    "solo i modelli con il parametro tools; intestazioni facoltative delle classifiche non inviate"),
-    ProviderPreset("ollama", "Ollama (locale)", "openai_compatible", "http://localhost:11434/v1", "verified",
+    ProviderPreset("ollama", "Ollama (local)", "openai_compatible", "http://localhost:11434/v1", "verified",
                    ("https://docs.ollama.com/api/openai-compatibility",),
                    "verificato il 2026-10-16 (modello nel 30 §13); la chiave è richiesta dal client ma ignorata"),
-    ProviderPreset("lmstudio", "LM Studio (locale)", "openai_compatible", "http://localhost:1234/v1", "documented",
+    ProviderPreset("lmstudio", "LM Studio (local)", "openai_compatible", "http://localhost:1234/v1", "documented",
                    ("https://lmstudio.ai/docs/app/api/endpoints/openai",
                     "https://lmstudio.ai/docs/developer/openai-compat/tools"),
                    "prova nostra rimandata (LM Studio non installato)"),
@@ -343,7 +349,7 @@ TOOL_CHOICES = ("auto", "none")
 class TurnOptions:
     max_output_tokens: int | None = None  # None: quello del profilo
     connect_timeout: float = CONNECT_TIMEOUT
-    read_timeout: float = READ_TIMEOUT
+    read_timeout: float | None = None  # None: LOCAL_READ_TIMEOUT per un profilo locale, altrimenti READ_TIMEOUT
     silence_timeout: float = SILENCE_TIMEOUT
     tool_choice: str = "auto"  # auto: nessun campo inviato; none: il modello non chiama strumenti (con strumenti)
 
@@ -586,6 +592,15 @@ class ProviderAdapter:
     def _declared_tool_calling(self) -> bool | None:
         return None
 
+    def _resolved(self, options: TurnOptions | None) -> TurnOptions:
+        """Opzioni del turno con il tempo di lettura deciso: quello dato, oppure 180 s per un profilo locale e 60 s
+        per un provider in rete (§3.7, decisione del proprietario del 2026-11-13)."""
+        options = TurnOptions() if options is None else options
+        if options.read_timeout is not None:
+            return options
+        read = LOCAL_READ_TIMEOUT if self.profile.local else READ_TIMEOUT
+        return dataclasses.replace(options, read_timeout=read)
+
     def _client(self, key: str, options: TurnOptions):
         raise NotImplementedError
 
@@ -657,7 +672,7 @@ class ProviderAdapter:
     def stream_turn(self, messages: Sequence[object], tools: Sequence[ToolDefinition] = (),
                     options: TurnOptions | None = None, cancel=None) -> Iterator[object]:
         """Una richiesta; eventi normalizzati man mano che arrivano (§3.5)."""
-        options = TurnOptions() if options is None else options
+        options = self._resolved(options)
         try:
             key = self._key()
         except KeychainError as exc:
@@ -735,11 +750,11 @@ class ProviderAdapter:
             key = self._key()
         except KeychainError as exc:
             raise ProviderAdapterError(exc.code, exc.message, params=exc.params) from None
-        client = self._client(key, TurnOptions())
+        client = self._client(key, self._resolved(None))
         try:
             models = tuple(self._models(client))
         except Exception as exc:  # noqa: BLE001
-            error, _ = self._classify(exc, key, TurnOptions())
+            error, _ = self._classify(exc, key, self._resolved(None))
             if error.code in (ProviderErrorCode.MODEL_NOT_FOUND, ProviderErrorCode.SERVICE,
                               ProviderErrorCode.BAD_RESPONSE):
                 return ModelList((), ProviderError(

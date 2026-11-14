@@ -34,6 +34,15 @@ a non dimenticare niente e a rendere ogni rilascio uguale al precedente.
   `.dmg` candidato diventa il `.dmg` del rilascio solo con il megatest
   superato. Un KO bloccante → correzione → nuovo candidato (dal passo 3, con il
   numero di build aumentato) → megatest di nuovo.
+- **Regola di stop (decisione del proprietario del 2026-11-13, dalla 1.0.0
+  build 9):** dopo un candidato, **solo un difetto bloccante** giustifica un
+  nuovo build: **dati o numeri sbagliati, funzione bloccata, file non valido,
+  crash**. Ogni altro difetto (testo, aspetto, lingua, prestazioni dentro i
+  limiti dichiarati, servizio esterno giù) **non si corregge nel candidato**:
+  va nella lista «1.0.1» (per la 1.0: `64` §3.9 e note di rilascio, sezione
+  «Planned for 1.0.1») e si corregge nella versione successiva, senza nuovo
+  build. Chi trova il difetto lo classifica con questa regola; nel dubbio
+  decide il proprietario.
 
 ### 3.2 Passi
 
@@ -126,6 +135,7 @@ nel `60` (`build_app.py`, `make_dmg.py`, `sign_notarize.py`) e nel `05`
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
 | Megatest con KO bloccante | correzione, nuovo candidato dal passo 3, megatest di nuovo | — |
+| Difetto non bloccante dopo un candidato (regola di stop, §3.1) | nessun nuovo build: lista «1.0.1» del `64` e delle note di rilascio | — |
 | Account Apple Developer non pronto | passo 7 saltato, passo 8 senza firma Developer ID, «Apri comunque» nel sito e nelle note | — |
 | Notarizzazione rifiutata | `dist/notary-log.json` (`60` §3.12); niente release finché non è risolta, oppure rilascio senza notarizzazione deciso dal proprietario | — |
 | Zenodo non attivato prima della release | nessun DOI: si attiva e si crea una nuova release (o un archivio a mano su Zenodo, decisione del proprietario) | — |
@@ -166,3 +176,4 @@ Nessuna aperta. Decise:
 | 2026-11-10 | Claude Code | Creazione del file (stato: bozza), sprint D5c, decisioni del proprietario del 2026-11-10 (checklist in `mdfiles/` uguale per ogni rilascio; pulsante «Sostieni AstroTwo» solo sul sito, passo 16; `.dmg` con `hdiutil`, passi 7–8). Megatest dopo il `.dmg` candidato (D62-1 (2)). Aperte D63-1, D63-2. |
 | 2026-11-11 | Claude Code | **Sprint D6 (decisioni del proprietario del 2026-11-11):** **approvato dal proprietario** (stato `approvato`) con una correzione: `date-released` = data del commit della versione (passo 5), corretta nel commit del passo 14 (solo metadati) se il tag del passo 10 arriva in un giorno diverso (passi 3 e 14, nota in §3.2, §9). **D63-1 approvata** (passi 9 e 13, §9); **D63-2 approvata** (passo 14, §9, T3, `tests/test_zenodo_json.py`). §13 senza decisioni aperte. |
 | 2026-11-11 | Claude Code | **Sprint D8 (decisioni del proprietario del 2026-11-11):** A6-b decisa: passo 7 «non per la 1.0», passo 8 strada della 1.0 (firma ad hoc, «Apri comunque»); passo 5 con la regola del 404 del CDS = servizio giù, controllato da una sonda, test saltato con il motivo. Bozza delle note di rilascio in `dist/release-notes-1.0.0.md` (passo 13, fuori dal repository fino all'approvazione). Modifica di un file approvato su decisione del proprietario. |
+| 2026-11-14 | Claude Code | **Sprint D14a (decisione del proprietario del 2026-11-13):** **regola di stop** in §3.1 e §10: dopo il candidato build 9 solo un difetto bloccante (dati o numeri sbagliati, funzione bloccata, file non valido, crash) giustifica un nuovo build; gli altri vanno nella lista «1.0.1» (`64`, note di rilascio). Modifica del file approvato chiesta dal proprietario («scrivila nella 63 e nel 64»); stato `approvato` invariato. |

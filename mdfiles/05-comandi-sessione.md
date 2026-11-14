@@ -1162,7 +1162,8 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
      `TUNIT` omesso in silenzio.
   3. Ogni unità scritta fuori dallo standard del formato è dichiarata nel risultato dell'esportazione con l'avviso
      **`EXPORT_UNIT_NOT_STANDARD`** (formato e colonne; catalogo dei messaggi, it/en) e, nel VOTable, con un `INFO
-     A2NOTE`.
+     A2NOTE` per colonna, ciascuno con un **ID univoco** (`A2NOTE`, `A2NOTE_2`, …: D62-8, decisione del proprietario
+     del 2026-11-13; nel build 8 l'ID si ripeteva e il file non era valido rispetto allo schema).
   4. **Ingresso** (`13`, `_unit_string` e `_standard_unit`): un'unità già letta si riscrive in VOUnit o FITS se il
      testo si rilegge nella stessa unità (prima: testo generico `electron / s`, non standard → unità persa); le unità
      VOUnit tra apici con un nome noto ad Astropy si legano a quell'unità (`'electron'` → `u.electron`), così i moduli
@@ -1272,3 +1273,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-11 | Claude Code | **Sprint D10a (decisione del proprietario del 2026-11-11):** **D05-6 decisa, proposta (a)** (§3.1 forma JSON di `quantity`, §13): unità senza forma FITS col nome di Astropy, mai un fattore troncato; nuove `unit_json`, `unit_text`, `unit_from_json` in `commands.py` usate in tutti i punti d'uscita delle unità; test nuovi. Modifica di un file approvato su decisione del proprietario; il file resta `approvato`. |
 | 2026-11-12 | Claude Code | **Sprint D11 (verifica delle unità dopo D05-6, senza rete):** nuova **D05-7** (§13), unità delle colonne dei cataloghi nei VOTable (SAMP) e nei FITS di tabella scritte da Astropy fuori dalla regola D05-6 (`15deg`, `6.2831853rad` troncato, `UnitScaleError`) e unità VOUnit con nome tra apici perse in ingresso (Gaia `'electron'.s**-1`); proposte (a)–(c), raccomandata (a); nessuna modifica al codice. Solo una decisione aperta aggiunta; il file resta `approvato`. |
 | 2026-11-13 | Claude Code | **Sprint D13a (decisioni del proprietario del 2026-11-13):** **D05-7 decisa** (correzione nel build 8) e corretta nel codice del `13` e del `14` (§13: VOTable e FITS di tabella con il testo esatto, VOUnit tra apici per le unità non standard, `EXPORT_UNIT_NOT_STANDARD`, ingresso delle unità VOUnit di Gaia); **D62-4** in `_overlay` (catalogo senza colonne di posizione fuori dal controllo, ragione `overlay_blocked_by`). Il file resta `approvato`. |
+| 2026-11-14 | Claude Code | **Sprint D14a (D62-8):** D05-7 punto 3 completato: una nota `A2NOTE` per colonna con ID univoci nel VOTable (`14`, `13`); test di schema per ogni VOTable scritto (`tests/core/test_votable_schema.py`). Stato `approvato` invariato. |

@@ -140,6 +140,16 @@ def token_counts(tokens: TokenCount) -> str:
                              QCoreApplication.translate("TokenCounts", "%1 output tokens")))
 
 
+def provider_name(preset: str | None, default: str | None = None) -> str | None:
+    """Nome del profilo predefinito nella lingua dell'interfaccia (D62-8): i provider locali dicono «local» in
+    inglese e «locale» in italiano; gli altri nomi sono marchi e non si traducono."""
+    local = {"ollama": QCoreApplication.translate("ProviderPresets", "Ollama (local)"),
+             "lmstudio": QCoreApplication.translate("ProviderPresets", "LM Studio (local)")}
+    if preset in local:
+        return local[preset]
+    return next((p.provider for p in PROVIDER_PRESETS if p.preset == preset), default)
+
+
 def _profile_from_json(data: Mapping) -> ProviderProfile:
     return ProviderProfile(kind=data["kind"], base_url=data["base_url"], model=data["model"],
                            max_output_tokens=data.get("max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS),
@@ -975,7 +985,7 @@ class AssistantSettingsDialog(QDialog):
         self.provider = QComboBox()
         self.provider.setObjectName("provider")
         for preset in PROVIDER_PRESETS:
-            self.provider.addItem(preset.provider, preset.preset)
+            self.provider.addItem(provider_name(preset.preset), preset.preset)
             if preset.tool_calling != "verified":
                 index = self.provider.count() - 1
                 self.provider.setItemData(index, f"{self.status_texts[preset.tool_calling]} · "
@@ -1117,7 +1127,7 @@ class AssistantSettingsDialog(QDialog):
 
     @staticmethod
     def _title(entry: Mapping) -> str:
-        preset = next((p.provider for p in PROVIDER_PRESETS if p.preset == entry.get("preset")), None)
+        preset = provider_name(entry.get("preset"))
         host = urllib.parse.urlsplit(entry.get("base_url", "")).netloc
         return f"{preset or host} · {entry.get('model') or '—'}"
 
@@ -1611,7 +1621,7 @@ class AiPanel(QWidget):
             self.local_icon.hide()
             self.lock.hide()
             return
-        provider = next((p.provider for p in PROVIDER_PRESETS if p.preset == profile.preset), profile.host)
+        provider = provider_name(profile.preset, profile.host)
         self.profile_label.setText(f"{provider} · {profile.model}")
         self.profile_label.setToolTip(f"{profile.id} · {profile.base_url}")
         self.local_badge.setVisible(profile.local)

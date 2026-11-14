@@ -336,27 +336,38 @@ build 8):
   I1–I2 (Ollama o LM Studio). Nelle prove automatiche l'assistente si può provare anche con Ollama, se è acceso
   (decisione del 2026-11-13).
 
-**Decisione aperta dalle prove automatiche sul build 8 (sprint D13c, 2026-11-13)** (esito in
-`docs/megatest-runs/1.0.0.md`; nessuna correzione fatta, perché ogni modifica al codice dopo il commit della
-versione `2784e5a` richiede un nuovo candidato, `63` §3.1):
+**Decisione sulle prove automatiche sul build 8 (sprint D13c): DECISA dal proprietario il 2026-11-13** (esito in
+`docs/megatest-runs/1.0.0.md`; correzioni nello sprint D14, commit D14a, nel candidato build 9):
 
-- **D62-8 — Due difetti del build 8 trovati dalle prove automatiche: DA DECIDERE.**
-  1. **VOTable dei cataloghi con ID ripetuti** (introdotto dalla correzione D05-7 del D13a): per ogni colonna con
-     un'unità non standard (per esempio le 4 colonne `log(cm.s**-2)` del catalogo Gaia DR3 di C1) il VOTable riceve un
-     `INFO name="A2NOTE"`, e Astropy gli dà `ID="A2NOTE"`: con due o più note l'ID si ripete e il file non è valido
-     rispetto allo schema (`votlint`: «ID A2NOTE already defined», 3 errori su `I/355/gaiadr3` mandato via SAMP).
-     STILTS lo legge (514 righe, avviso «Multiple elements with ID A2NOTE»), Astropy anche; i valori e le unità
-     sono giusti. Correzione proposta: `INFO` delle note senza `ID` (o con un ID numerato), test con `votlint`/schema.
-  2. **«Immagini: done» nel PDF italiano** (D62-6 non corretta del tutto): la riga di stato della colonna delle
-     miniature (`profile_export.py`, `_identity_page`) scrive ancora lo stato senza tradurlo; tutte le altre righe
-     «Stato:» sono tradotte. Correzione proposta: usare la stessa traduzione di `_status_lines`.
-  In più, dettaglio di lingua minore: nel messaggio inglese di D62-3 il nome del servizio resta in italiano
-  («SIMBAD (mirror di Harvard)», etichetta del `14`).
-  **Proposte:** **(a)** build 9 con le due correzioni (e l'etichetta del servizio), dal passo 3 della `63`, e di
-  nuovo la parte automatica sul build 9 prima della prova a mano; **(b)** nessun build 9: i due difetti dichiarati
-  nelle note di rilascio e corretti dopo la 1.0. **Consiglio di Claude Code: (a)**: il punto 1 rende non valido
-  rispetto allo schema ogni VOTable del catalogo Gaia DR3 mandato a TOPCAT, ed è un errore introdotto in questo
-  sprint; la correzione è piccola.
+- **D62-8 — Due difetti del build 8 trovati dalle prove automatiche: DECISA, correggere tutti e tre i punti.**
+  1. **VOTable dei cataloghi validi rispetto allo schema**, valori e unità invariati: un `INFO A2NOTE` per colonna
+     con un'unità non standard, ciascuno con un **ID univoco** (`A2NOTE`, `A2NOTE_2`, …; il nome resta `A2NOTE`),
+     anche nei sottoinsiemi salvati (`save_subset`, che prima teneva solo la prima nota); ID dei `FIELD` univoci
+     anche per nomi di colonna che Astropy riduce allo stesso ID (`14`, `13`, `05` §13 D05-7).
+  2. **«Immagini: done» tradotto nel PDF italiano** («Immagini: completata»: la stessa traduzione delle righe
+     «Stato:», `25`).
+  3. **Nessuna etichetta italiana nell'interfaccia inglese:** «SIMBAD (Harvard mirror)» (nome del servizio in
+     inglese anche in italiano, come D62-6) e «Ollama (local)» / «LM Studio (local)», tradotti «(locale)» solo
+     nell'interfaccia italiana (`14`, `30`, `44`).
+  **Perché non torni** (due controlli nuovi nella suite, senza rete): **(a)** `tests/core/test_votable_schema.py`:
+  ogni tipo di VOTable che AstroTwo scrive (catalogo esportato, sottoinsieme salvato, tabella mandata via SAMP,
+  punti della SED, risultato di un incrocio, risultato di una query ADQL) è validato con Astropy
+  `verify="exception"` (unica eccezione ammessa: l'avviso `W50` sulle unità **della fonte** che D05-7 scrive così
+  come sono e dichiara con `EXPORT_UNIT_NOT_STANDARD`), con un controllo degli ID ripetuti e con `votlint` di
+  STILTS (zero errori; gli avvisi sulle unità VOUnit, come `'electron'`, restano avvisi), che funziona senza rete
+  e si salta solo dove STILTS non c'è; **(b)** `tests/ui/test_language_purity.py`: con l'interfaccia in inglese
+  nessun testo visibile (finestra principale, impostazioni dell'assistente, Licenze, Profili, ricerca a cono,
+  ADQL), nessun testo inglese del file delle traduzioni, del catalogo dei messaggi e dei nomi dei servizi e
+  nessuna stringa delle pagine del PDF contiene parole italiane (elenco chiuso nel test); viceversa per
+  l'interfaccia italiana, le traduzioni, i testi italiani del catalogo e le etichette e gli stati del PDF italiano
+  (non per i nomi propri dei servizi, D62-6, né per le note del motore con valori dentro, DD-3).
+  **Assistente IA** (decisione dello stesso giorno): lettura **180 s** per i provider locali (Ollama, LM Studio),
+  60 s per quelli in rete (`30` §3.7). Prova I2 da rifare sul build 9.
+  **Candidato:** il build 8 non è più il candidato (spostato in `dist/scartati/AstroTwo-1.0.0-build8.dmg` con il
+  suo `.sha256`); autorizzato il **candidato 1.0.0 build 9**, senza firma Developer ID (A6-b); niente tag, push,
+  release, Zenodo. **Regola di stop** (`63` §3.1, `64`): dopo il build 9 solo un difetto **bloccante** (dati o numeri
+  sbagliati, funzione bloccata, file non valido, crash) giustifica un build 10; ogni altro difetto va nella lista
+  «1.0.1» del `64` e delle note di rilascio, senza nuovo build.
 
 ## 14. Registro modifiche
 
@@ -372,3 +383,4 @@ versione `2784e5a` richiede un nuovo candidato, `63` §3.1):
 | 2026-11-12 | Claude Code | **Sprint D12 (decisioni del proprietario del 2026-11-12: prove automatiche prima del megatest a mano, sul candidato build 7):** esito delle prove automatiche in `docs/megatest-runs/1.0.0.md` (84 prove: 48 ok, 9 problema, 27 non fatte, da fare a mano); nuove decisioni aperte **D62-2** (grafico della SED assente nell'app costruita, bloccante, build 8), **D62-3** (profilo di una riga Gaia assente da SIMBAD), **D62-4** (livello a corpo ignoto che blocca gli altri), **D62-5** (immagini del README), **D62-6** (dettagli di lingua e di aspetto), **D62-7** (testo di C1, P4, E5, M1, I1–I2) in §13. Nessuna correzione al codice né alle prove. Stato `bozza` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13 (decisioni del proprietario del 2026-11-13):** D62-2…D62-7 decise (§13); testo di C1, P4, E5, M1, I1, I2 corretto (D62-7) e P7 riscritta per il messaggio di D62-3. Stato `bozza` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13c (prove automatiche sul candidato build 8):** nuova decisione aperta **D62-8** (§13): ID `A2NOTE` ripetuti nei VOTable dei cataloghi con più unità non standard, «Immagini: done» nel PDF italiano; consiglio build 9. Testo di E5 completato (TRAPPIST-1 e Vega hanno limiti superiori). Stato `bozza` invariato. |
+| 2026-11-14 | Claude Code | **Sprint D14a (decisioni del proprietario del 2026-11-13):** **D62-8 decisa** (§13): tre correzioni (VOTable validi con ID univoci, «Immagini: completata» nel PDF italiano, etichette inglesi nell'interfaccia inglese), due controlli nuovi nella suite (schema dei VOTable, lingua dell'interfaccia e dei PDF), lettura 180 s per i provider locali, build 8 scartato, candidato build 9 autorizzato, regola di stop. Stato `bozza` invariato. |
