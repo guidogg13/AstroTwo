@@ -3028,10 +3028,16 @@ _add("KEYCHAIN_OPERATION",  # solo annidato negli errori del Portachiavi
 _add("KEYCHAIN_UNAVAILABLE",
      "The macOS Keychain is not available: the assistant is not available, the rest of the app works.",
      "Il Portachiavi di macOS non è disponibile: l'assistente non è disponibile, il resto dell'app funziona.",
-     not_macos=("System {system}: there is no macOS Keychain; the assistant is not available, the rest of the app "
-                "works.",
-                "Sistema {system}: il Portachiavi di macOS non c'è; l'assistente non è disponibile, il resto "
-                "dell'app funziona.", "system!"),
+     unsupported_system=("System {system}: no secure key store is provided; the assistant is not available, the "
+                         "rest of the app works.",
+                         "Sistema {system}: nessun archivio sicuro delle chiavi previsto; l'assistente non è "
+                         "disponibile, il resto dell'app funziona.", "system!"),
+     store_not_loadable=("The {store} backend of keyring cannot be loaded ({error_type}).",
+                         "Backend {store} di keyring non caricabile ({error_type}).", "store! error_type"),
+     store_unavailable=("{store} is not available: {detail}. The assistant is not available, the rest of the app "
+                        "works.",
+                        "{store} non disponibile: {detail}. L'assistente non è disponibile, il resto dell'app "
+                        "funziona.", "store! detail!"),
      backend_not_loadable=("The macOS backend of keyring cannot be loaded ({error_type}).",
                            "Backend macOS di keyring non caricabile ({error_type}).", "error_type"),
      api_unavailable=("The macOS Keychain is not available: {detail}", "Portachiavi di macOS non disponibile: {detail}",
@@ -3256,6 +3262,11 @@ _add("GL_UNAVAILABLE", "The sky viewer is not available.", "Il visualizzatore de
      points_program=("The symbols program did not compile: {log}", "Programma dei simboli non compilato: {log}",
                      "log!"),
      moc_program=("The MOC program did not compile: {log}", "Programma dei MOC non compilato: {log}", "log!"))
+_add("GL_SOFTWARE", "The sky is drawn with software OpenGL.", "Il cielo si disegna con OpenGL software.",
+     in_use=("Software OpenGL fallback in use ({renderer}): the sky is drawn without the graphics card and is slower.",
+             "OpenGL di ripiego in uso ({renderer}): cielo disegnato senza scheda grafica, più lento.", "renderer!"),
+     next_start=("From the next start AstroTwo draws the sky with software OpenGL: restart AstroTwo.",
+                 "Dal prossimo avvio AstroTwo disegna il cielo con OpenGL software: riavviare AstroTwo.", ""))
 _add("VIEW_NO_WCS", "The image has no valid WCS: nothing is overlaid on the pixel grid.",
      "L'immagine non ha un WCS valido: niente si sovrappone alla griglia di pixel.",
      hips=("The image has no valid WCS: the HiPS background is not drawn under the pixel grid.",

@@ -885,7 +885,8 @@ dell'interfaccia di disegno; scelta minore 9), `src/astrotwo/ui/sky_tools.py` (s
 
 | Caso limite | Comportamento | Identificatore errore |
 |---|---|---|
-| OpenGL 4.1 non disponibile | messaggio all'avvio, visualizzatore non disponibile (nessun ripiego nella v1) | `GL_UNAVAILABLE` |
+| OpenGL 4.1 non disponibile | messaggio all'avvio, visualizzatore non disponibile (nessun ripiego nella v1). Su Windows e Linux (D65-8, sprint W2): si prova il disegno software dal prossimo avvio (`GL_SOFTWARE` `next_start`); se anche quello non va, nessun altro tentativo | `GL_UNAVAILABLE` |
+| Disegno software in uso (Windows e Linux, D65-8) | messaggio e barra di stato con il nome del renderer (Mesa llvmpipe…); il cielo si disegna, più lento | `GL_SOFTWARE` (`in_use`) |
 | Immagine più grande della texture massima della GPU | divisa in più texture | — |
 | Immagine senza WCS | griglia di pixel; niente HiPS, cataloghi o MOC sovrapposti | `VIEW_NO_WCS` |
 | Corpi diversi tra livelli | errore del 19, forzatura esplicita possibile | `BODY_MISMATCH` |
@@ -922,6 +923,8 @@ ai `params` di questi errori e degli avvisi di epoca. Un'eccezione senza codice 
 | `HIPS_DISPLAY_UNKNOWN` (condiviso con 12) | `no_limits`, `reopen` | — / `hips_id` |
 | `GL_UNAVAILABLE` | `version` | `found`, `required` |
 | | `program`, `points_program`, `moc_program` | `log` (ext) |
+| `GL_SOFTWARE` | `in_use` | `renderer` (ext); avviso, solo Windows e Linux (D65-8, sprint W2) |
+| | `next_start` | — ; avviso, solo Windows e Linux (D65-8) |
 | `EXPORT_PATH_INVALID` | `not_png`, `is_directory` | `path` (ext) |
 | | `folder_unwritable` | `folder` (ext) |
 | `EXPORT_FAILED` | — | `path` (ext), `detail` (ext) |
@@ -1160,3 +1163,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15). Mac di riferimento d
 | 2026-11-07 | Claude Code | **Sprint B4 — puntatore Simbad con il CDS giù** (regole del proprietario del 2026-11-07, D14-14 del 14; autorizzazione esplicita ad aggiornare il 41): §3.19 — riquadro con l'avviso `SERVICE_MIRROR_FALLBACK` e l'origine del server che ha risposto; collegamento alla pagina SIMBAD del server che ha risposto (prefissi CDS e Harvard; D14-15 (9) da confermare). Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Decisione del proprietario del 2026-11-10 (permessi dei file esportati):** §3.15 — PNG della vista con i permessi normali (0666 meno l'umask), temporaneo creato con `export_temp_file` del 14 invece di `tempfile.mkstemp` (che dava 0600). Codice: `write_png` in `ui/export_view.py`; test `test_png_follows_the_umask`. Stato `approvato` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13a (D62-6, decisione del proprietario del 2026-11-13):** pannello dei livelli — il corpo `celestial` si scrive «celestial sky» / «cielo» invece di «body celestial» / «corpo celestial»; gli altri corpi restano «body %1» / «corpo %1». Il file resta `approvato`. |
+| 2026-11-16 | Claude Code | **Sprint W2 (Windows e Linux, decisioni del proprietario del 2026-11-16 nel brief del W2, con autorizzazione a correggere i problemi della `65`):** §10 — D65-8: solo su Windows e Linux, ripiego OpenGL software dichiarato: scelta all'avvio (`configure_opengl`: variabile `ASTROTWO_OPENGL=software/native`, altrimenti `QSettings` `opengl/fallback`), Windows `AA_UseSoftwareOpenGL` (`opengl32sw.dll` di Qt, presenza da verificare nel pacchetto), Linux `LIBGL_ALWAYS_SOFTWARE=1`; dopo un `GL_UNAVAILABLE` nativo `opengl/fallback=software` e messaggio `GL_SOFTWARE` `next_start`; software fallito → `software_failed`, nessun altro tentativo; renderer software riconosciuto dal nome (`is_software_renderer`) → `GL_SOFTWARE` `in_use`. macOS invariato (nessuna lettura delle impostazioni, nessun ripiego). Stato `approvato` invariato. |

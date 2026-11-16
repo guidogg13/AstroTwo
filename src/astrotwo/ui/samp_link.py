@@ -47,7 +47,9 @@ DEFAULT_TABLE_TIMEOUT = float(SAMP_TABLE_REPLY_TIMEOUT)
 
 def default_received_dir() -> Path:
     """Cartella dei VOTable ricevuti (D40-9): mai cancellati da AstroTwo, servono per riaprire le sessioni."""
-    return Path.home() / "Library" / "Application Support" / "AstroTwo" / "SAMP" / "received"
+    from astrotwo.core.cache import default_data_root
+
+    return default_data_root() / "SAMP" / "received"  # macOS invariato; Windows e Linux con D65-2
 
 
 @dataclass(frozen=True)

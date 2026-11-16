@@ -22,6 +22,7 @@ import functools
 import itertools
 import json
 import math
+import os
 import sys
 import threading
 from collections.abc import Callable, Mapping
@@ -224,6 +225,22 @@ class Preference:
 
 # Miei server VO (§3.10, sprint B3): elenco JSON scritto dopo vo.add_server/vo.remove_server, fuori dalla finestra.
 PERSONAL_SERVERS_KEY = "vo/personal_servers"
+
+#: Scorciatoie che cambiano per sistema (D65-9, sprint W2). macOS invariato: ⌃⌘F, ⌃⌘N, ⌃⌘A («Meta» è ⌃ su macOS)
+#: e ⌘, (``StandardKey.Preferences``). Windows e Linux senza il tasto Windows/Super, preso dal sistema: F11 per lo
+#: schermo intero (convenzione di Windows e dei desktop Linux), Ctrl+Shift+N, Ctrl+Shift+A e Ctrl+, (su Windows
+#: ``StandardKey.Preferences`` è vuota).
+SHORTCUTS_MACOS = {"fullscreen": "Meta+Ctrl+F", "night": "Meta+Ctrl+N", "assistant": "Meta+Ctrl+A",
+                   "settings": QKeySequence.StandardKey.Preferences}
+SHORTCUTS_OTHER = {"fullscreen": "F11", "night": "Ctrl+Shift+N", "assistant": "Ctrl+Shift+A", "settings": "Ctrl+,"}
+
+
+def platform_shortcuts(platform_name: str | None = None) -> dict[str, QKeySequence]:
+    """Le scorciatoie di :data:`SHORTCUTS_MACOS` o :data:`SHORTCUTS_OTHER` per ``sys.platform`` (o quello dato)."""
+    table = SHORTCUTS_MACOS if (sys.platform if platform_name is None else platform_name) == "darwin" \
+        else SHORTCUTS_OTHER
+    return {key: QKeySequence(value) for key, value in table.items()}
+
 
 #: Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo.
 PREFERENCES: dict[str, Preference] = {p.key: p for p in (
@@ -1644,8 +1661,14 @@ class PreferencesDialog(QDialog):
         self.samp_startup.setObjectName("prefSampStartup")
         assistant = QPushButton(self.tr("Assistant settings…"))
         assistant.setObjectName("prefAssistant")
-        assistant.setToolTip(self.tr("Profiles, model, strict mode, limits, price. API keys are kept only in the "
-                                     "macOS Keychain."))
+        if sys.platform == "darwin":  # macOS invariato; Windows e Linux con D65-1 (P12 della 65)
+            assistant.setToolTip(self.tr("Profiles, model, strict mode, limits, price. API keys are kept only in the "
+                                         "macOS Keychain."))
+        else:
+            from astrotwo.ai.keychain_keys import store_name
+
+            assistant.setToolTip(self.tr("Profiles, model, strict mode, limits, price. API keys are kept only in "
+                                         "the system key store: %1.").replace("%1", store_name()))
         assistant.clicked.connect(window.ai_panel.open_settings)
         restart = QLabel(self.tr("A new language applies when AstroTwo restarts."))
         restart.setWordWrap(True)
@@ -1876,11 +1899,39 @@ class MainWindow(QMainWindow):
         if hasattr(self.sky.renderer, "failed"):
             self.sky.renderer.failed.connect(
                 lambda code, text, params: self.messages.add(None, ResultMessage(code, text, params), error=True))
+            if sys.platform != "darwin":  # ripiego OpenGL di Windows e Linux (D65-8); macOS invariato
+                self.sky.renderer.failed.connect(lambda *_args: self._opengl_failed())
+                self.sky.renderer.software.connect(self._opengl_software)
         self.sky.tiles_changed.connect(lambda _n: self._update_network())
         self.sky.view_changed.connect(self._show_survey)
         self.sky.first_shown.connect(self._first_view)
         self.sky_area = self.sky
         self.setCentralWidget(self.sky)
+
+    def _opengl_software(self, renderer: str) -> None:
+        """Disegno software in uso (D65-8): si dichiara nei messaggi e resta nella barra di stato."""
+        message = ResultMessage("GL_SOFTWARE", f"OpenGL di ripiego in uso ({renderer}): cielo disegnato senza "
+                                "scheda grafica, più lento", {"reason": "in_use", "renderer": renderer})
+        self.messages.add(None, message, error=False)
+        self.status.showMessage(self.tr("Software OpenGL (slower): %1").replace("%1", renderer))
+
+    def _opengl_failed(self) -> None:
+        """``GL_UNAVAILABLE`` su Windows o Linux (D65-8): col disegno nativo si prova il software al prossimo avvio
+        (dichiarato); se anche il software non va, nessun altro tentativo automatico."""
+        from astrotwo.ui.sky_renderer_gl import SOFTWARE_GL_ENV, SOFTWARE_GL_KEY
+
+        started_software = (QCoreApplication.testAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL)
+                            or os.environ.get("LIBGL_ALWAYS_SOFTWARE") == "1")
+        if started_software:
+            self.settings.setValue(SOFTWARE_GL_KEY, "software_failed")
+            return
+        if os.environ.get(SOFTWARE_GL_ENV, "").strip().lower() == "native" \
+                or self.settings.value(SOFTWARE_GL_KEY) == "software_failed":
+            return
+        self.settings.setValue(SOFTWARE_GL_KEY, "software")
+        self.messages.add(None, ResultMessage("GL_SOFTWARE", "dal prossimo avvio AstroTwo disegna il cielo con "
+                                              "OpenGL software: riavviare AstroTwo", {"reason": "next_start"}),
+                          error=False)
 
     def _panel(self, widget: QWidget) -> QWidget:
         return _as_panel(widget)
@@ -2106,8 +2157,9 @@ class MainWindow(QMainWindow):
         self.act_save_session = a(self.tr("Save session…"), self.save_session_dialog,
                                   shortcut=QKeySequence.StandardKey.Save, name="saveSession")
         self.act_export_png = a(self.tr("Export view as PNG…"), self._export_png, name="exportPng")
-        self.act_settings = a(self.tr("Settings…"), self.preferences_dialog,
-                              shortcut=QKeySequence.StandardKey.Preferences, name="settings")
+        shortcuts = platform_shortcuts()  # D65-9: macOS invariato
+        self.act_settings = a(self.tr("Settings…"), self.preferences_dialog, shortcut=shortcuts["settings"],
+                              name="settings")
         self.act_settings.setMenuRole(QAction.MenuRole.PreferencesRole)
         self.act_quit = a(self.tr("Quit"), self.close, shortcut=QKeySequence.StandardKey.Quit, name="quit")
         self.act_quit.setMenuRole(QAction.MenuRole.QuitRole)
@@ -2139,9 +2191,9 @@ class MainWindow(QMainWindow):
             self.coordinate_actions[key] = act
         self.coordinate_actions[self.preference("view/coordinates")].setChecked(True)
         self.act_fullscreen = a(self.tr("Full screen"), lambda c: self.submit("ui.set_fullscreen", {"enabled": c}),
-                                shortcut="Meta+Ctrl+F", checkable=True, name="fullscreen")
-        self.act_night = a(self.tr("Night mode"), self._night_toggled, shortcut="Meta+Ctrl+N", checkable=True,
-                           name="night")  # ⌃⌘N (D40-4)
+                                shortcut=shortcuts["fullscreen"], checkable=True, name="fullscreen")
+        self.act_night = a(self.tr("Night mode"), self._night_toggled, shortcut=shortcuts["night"], checkable=True,
+                           name="night")  # ⌃⌘N su macOS (D40-4), Ctrl+Shift+N altrove (D65-9)
         self.act_hips = a(self.tr("HiPS survey…"), self.hips_dialog, name="hipsSurvey")
         self.act_catalog_view = a(self.tr("Catalog in view…"), self.catalog_dialog, name="catalogInView")
         self.act_cone_search = a(self.tr("Cone search…"), lambda: self.cone_search_dialog(),
@@ -2170,7 +2222,7 @@ class MainWindow(QMainWindow):
                     checkable=True, name=f"panel_{key}")
             act.setChecked(True)
             self.panel_actions[key] = act
-        self.panel_actions["assistant"].setShortcut(QKeySequence("Meta+Ctrl+A"))
+        self.panel_actions["assistant"].setShortcut(shortcuts["assistant"])
         self.act_about = a(self.tr("About AstroTwo"), self.about_dialog, name="about")
         self.act_about.setMenuRole(QAction.MenuRole.AboutRole)
         # Finestra Licenze (60 §3.9): nel menu dell'app subito dopo About su macOS, nel menu Help altrove.
@@ -3385,6 +3437,24 @@ def set_macos_app_name(name: str = "AstroTwo") -> bool:
         return False
 
 
+def configure_opengl(system: str | None = None) -> str:
+    """Scelta di OpenGL prima della ``QApplication`` (D65-8): ``"native"`` o ``"software"``. Su macOS ``"native"``
+    senza leggere niente (invariato); su Windows e Linux variabile ``ASTROTWO_OPENGL`` o ``QSettings``."""
+    import platform
+
+    from astrotwo.ui.sky_renderer_gl import SOFTWARE_GL_ENV, SOFTWARE_GL_KEY, apply_software_opengl, opengl_choice
+
+    system = platform.system() if system is None else system
+    if system == "Darwin":
+        return "native"
+    QCoreApplication.setOrganizationDomain("pages.dev")  # gli stessi nomi di main(): stesse impostazioni
+    QCoreApplication.setApplicationName("astrotwo")
+    choice = opengl_choice(system, os.environ.get(SOFTWARE_GL_ENV), QSettings().value(SOFTWARE_GL_KEY))
+    if choice == "software":
+        apply_software_opengl(system)
+    return choice
+
+
 def main(argv: list[str] | None = None, *,
          on_first_view: Callable[[QApplication, MainWindow], None] | None = None) -> int:
     """Avvio con ``uv run astrotwo`` (e dall'app costruita, ``app_bundle.main``).
@@ -3397,6 +3467,7 @@ def main(argv: list[str] | None = None, *,
     from astrotwo.ui.sky_renderer_gl import surface_format
 
     QSurfaceFormat.setDefaultFormat(surface_format())  # OpenGL 4.1 core profile prima della QApplication (41)
+    configure_opengl()  # Windows e Linux: ripiego software se scelto (D65-8); su macOS non fa niente
     set_macos_app_name("AstroTwo")  # prima della QApplication: barra dei menu «AstroTwo», non «python» (§3.9)
     app = QApplication(sys.argv if argv is None else argv)
     app.setOrganizationDomain("pages.dev")  # impostazioni in dev.pages.astrotwo (01 §6)

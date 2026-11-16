@@ -374,6 +374,10 @@
         <translation>Chiave API (conservata solo nel Portachiavi di macOS)</translation>
     </message>
     <message>
+        <source>API key (kept only in the system key store: %1)</source>
+        <translation>Chiave API (conservata solo nell&apos;archivio delle chiavi del sistema: %1)</translation>
+    </message>
+    <message>
         <source>Save</source>
         <translation>Salva</translation>
     </message>
@@ -878,7 +882,7 @@
     <name>HistoryPanel</name>
     <message>
         <source>AI</source>
-        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25; valore confermato il 2026-10-25): il troncamento lo dichiara il 13; il comando resta con il default del 14. Durata del pulsante «Profilo» accanto al campo «Vai a» (43 §3.2 punto 2, D43-6). Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
+        <extracomment>Elenco chiuso delle coppie frame/formato del menu &quot;Coordinates shown&quot; (§3.3) e della preferenza (§3.10). Righe massime proposte dalla finestra Catalog in view (§3.3, D41-10, decisione del proprietario del 2026-10-25; valore confermato il 2026-10-25): il troncamento lo dichiara il 13; il comando resta con il default del 14. Durata del pulsante «Profilo» accanto al campo «Vai a» (43 §3.2 punto 2, D43-6). Scorciatoie che cambiano per sistema (D65-9, sprint W2). macOS invariato: ⌃⌘F, ⌃⌘N, ⌃⌘A («Meta» è ⌃ su macOS) e ⌘, (``StandardKey.Preferences``). Windows e Linux senza il tasto Windows/Super, preso dal sistema: F11 per lo schermo intero (convenzione di Windows e dei desktop Linux), Ctrl+Shift+N, Ctrl+Shift+A e Ctrl+, (su Windows ``StandardKey.Preferences`` è vuota). Le cinque preferenze di §3.10: chiave in ``QSettings`` → default (forma testuale) e controllo. Opzioni dello strumento di distanza (41 §3.19): chiave in ``QSettings`` → default e controllo. Notte rossa: solo toni di rosso a bassa luminosità, nessun bianco né blu (dai mockup del 2026-10-15).</extracomment>
         <translation>IA</translation>
     </message>
     <message>
@@ -1368,6 +1372,10 @@
     <message>
         <source>SIMBAD: %1</source>
         <translation>SIMBAD: %1</translation>
+    </message>
+    <message>
+        <source>Software OpenGL (slower): %1</source>
+        <translation>OpenGL software (più lento): %1</translation>
     </message>
     <message>
         <source>%1 row</source>
@@ -2074,6 +2082,10 @@
     <message>
         <source>Profiles, model, strict mode, limits, price. API keys are kept only in the macOS Keychain.</source>
         <translation>Profili, modello, modalità rigorosa, limiti, prezzo. Le chiavi API stanno solo nel Portachiavi di macOS.</translation>
+    </message>
+    <message>
+        <source>Profiles, model, strict mode, limits, price. API keys are kept only in the system key store: %1.</source>
+        <translation>Profili, modello, modalità rigorosa, limiti, prezzo. Le chiavi API stanno solo nell&apos;archivio delle chiavi del sistema: %1.</translation>
     </message>
     <message>
         <source>A new language applies when AstroTwo restarts.</source>

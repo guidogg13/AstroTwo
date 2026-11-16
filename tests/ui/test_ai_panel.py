@@ -25,6 +25,7 @@ from astrotwo.ai.provider_adapter import (
     make_adapter,
 )
 from astrotwo.ai.result_verification import CheckedNumber, VerificationReport, WrittenNumber
+from astrotwo.ui import main_window as mw
 from astrotwo.ui.ai_panel import MARK_STATE_PROPERTY, CommandCard, ConfirmationCard, MessageView
 from tests.ai.ai_workspace import INJECTION, INJECTION_ROWS, offline  # noqa: F401 - fixture
 from tests.ai.fake_providers import (  # noqa: F401 - fixture provider_service
@@ -117,7 +118,7 @@ def test_t1_panel_and_menu(qtbot, settings_path, cache, closing):  # noqa: F811
     assert dock.widget() is win.ai_panel and win.dockWidgetArea(dock) == Qt.DockWidgetArea.RightDockWidgetArea
     assert 380 <= dock.width() <= 420 and dock.minimumWidth() == 380 and dock.maximumWidth() == 420
     action = win.panel_actions["assistant"]
-    assert action.isEnabled() and action.shortcut().toString() == "Meta+Ctrl+A"
+    assert action.isEnabled() and action.shortcut() == mw.platform_shortcuts()["assistant"]
     panel = win.ai_panel
     assert panel.profile_label.text() == f"api.example.invalid · {MODEL}"
     assert panel.lock.toolTip() == "key in the Keychain" and panel.bottom.currentIndex() == 0

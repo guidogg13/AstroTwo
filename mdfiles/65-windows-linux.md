@@ -8,6 +8,11 @@
 > Actions** (runner `windows-latest` e `ubuntu-latest`); prove a mano in macchine virtuali **UTM** sul Mac, alla fine
 > (W3); la **versione Mac 1.0 non si tocca** (nessun cambio di comportamento su macOS, nessun nuovo `.dmg`); sprint
 > W1 analisi + prove automatiche, W2 correzioni + pacchetti, W3 megatest + rilascio 1.1.
+>
+> Sprint **W2** (2026-11-16): il brief del proprietario del 2026-11-16 decide **D65-1, D65-2, D65-3, D65-4, D65-5,
+> D65-7, D65-8, D65-9, D65-10** come nel consiglio di §13 e chiede di correggere i punti «bloccante» e «da
+> correggere» (§3.7), il test dell'identità dei byte sui tre runner (§3.8), il workflow manuale dei pacchetti (§3.9),
+> la documentazione e la sezione Windows/Linux della `62` per il W3. D65-6 (macchine virtuali) resta aperta.
 
 ## 2. Scopo
 
@@ -37,22 +42,22 @@ Le righe si riferiscono al commit del W1. «W1» nella colonna Stato = corretto 
 
 | # | Punto | File e riga | Gravità | Correzione proposta | Stato |
 |---|---|---|---|---|---|
-| P1 | **Chiavi API**: il 31 usa solo il backend macOS di `keyring`; fuori da macOS `KEYCHAIN_UNAVAILABLE` (l'assistente IA non si usa, il resto funziona). Regola d'oro n. 5 e `01` S2/S5 parlano solo del Portachiavi di macOS | `src/astrotwo/ai/keychain_keys.py:105` | bloccante (per l'IA) | Backend forzato per sistema, mai la scelta automatica di `keyring` né file in chiaro: Gestione credenziali di Windows, Secret Service su Linux; senza Secret Service `KEYCHAIN_UNAVAILABLE` come oggi | **D65-1** |
+| P1 | **Chiavi API**: il 31 usa solo il backend macOS di `keyring`; fuori da macOS `KEYCHAIN_UNAVAILABLE` (l'assistente IA non si usa, il resto funziona). Regola d'oro n. 5 e `01` S2/S5 parlano solo del Portachiavi di macOS | `src/astrotwo/ai/keychain_keys.py:105` | bloccante (per l'IA) | Backend forzato per sistema, mai la scelta automatica di `keyring` né file in chiaro: Gestione credenziali di Windows, Secret Service su Linux; senza Secret Service `KEYCHAIN_UNAVAILABLE` come oggi | **W2** (D65-1) |
 | P2 | **Esportazioni con fine riga del sistema**: VOTable (export, SAMP, sottoinsiemi, SED), CSV, ECSV del 14 e del 25, MOC, file di sessione e `properties` dei HiPS scritti in modalità testo o con `os.linesep` di Astropy → `\r\n` su Windows | `catalogs.py` (`save_subset`), `vo_protocols.py:263, 314, 346`, `profile_export.py:927`, `moc.py:670, 672`, `commands.py:3412`, `hips.py:2414` | bloccante | VOTable scritti in memoria e poi in binario (`write_votable_file`, `catalogs.py:1864`); testo di Astropy con `\n` (`ascii_table_text`, `catalogs.py:1877`); `newline="\n"` in ogni `write_text`. Su macOS stessi byte di prima (test) | **W1** |
 | P3 | **ECSV nella codifica di default del sistema**: Astropy apre il file senza `encoding` → cp1252 su Windows; un nome o una descrizione non ASCII (η, Å, °) dà `UnicodeEncodeError` o un file non UTF-8 | `vo_protocols.py:346`, `profile_export.py:927` | bloccante | UTF-8 esplicito (insieme a P2) | **W1** |
 | P4 | **URL `file:` ricevuti via SAMP**: `unquote("/C:/dati/t.xml")` non è un percorso di Windows → copia del VOTable di TOPCAT non riuscita | `vo_protocols.py:2970` | bloccante | Su Windows `nturl2path.url2pathname` (`file_url_path`, `vo_protocols.py:2714`); su macOS e Linux invariato | **W1** |
 | P5 | **Privacy verso l'IA**: i percorsi assoluti nei testi mandati al provider si riducono al nome del file (32 §3.7) solo nella forma POSIX; `C:\Users\…\m45.fits` passerebbe intero | `tool_registry.py:231, 314` | da correggere | Su Windows anche `C:\…`, `C:/…`, `\\server\…`; su macOS e Linux nessun cambio | **W1** |
-| P6 | **Cartelle dei dati** sotto `~/Library/…`: cache (`Caches/AstroTwo`), punti SED (`Application Support/AstroTwo/Profiles`), VOTable ricevuti via SAMP (`…/SAMP/received`). Su Windows e Linux funzionano ma creano `Library` nella home | `core/cache.py:134`, `analysis/profile_export.py:181`, `ui/samp_link.py:50` | da correggere | Una funzione per sistema, macOS invariato; posti proposti in **D65-2** | **D65-2** |
-| P7 | **Nessun pacchetto** per Windows e Linux: `build_app.py` si ferma fuori da macOS arm64; `make_dmg.py` e `sign_notarize.py` sono solo macOS | `scripts/build_app.py:367` | bloccante (niente da consegnare) | Nuovo script del W2 con PyInstaller `onedir` (stesso strumento, A2) sui runner; formati in **D65-3**, **D65-4**, architetture in **D65-5** | **D65-3…5** |
-| P8 | **Controlli dell'app costruita** pensati per il `.app`: plugin `libqcocoa.dylib`/`libqmacstyle.dylib`, backend `keyring.backends.macOS`, cartella `Contents` | `src/astrotwo/app_bundle.py:64, 237, 286` | bloccante (per i pacchetti) | Elenco dei plugin e del backend per sistema (`qwindows.dll`, `libqxcb.so`/`libqwayland*.so`), radice del pacchetto da `sys._MEIPASS` | W2 |
-| P9 | **`THIRD_PARTY_LICENSES`** descrive l'app per macOS: su Windows `keyring` porta `pywin32-ctypes`, su Linux `SecretStorage`, `jeepney`, `cryptography`, `cffi`; Qt porta altre librerie (xcb, ICU…) | `scripts/third_party_licenses.py`, `THIRD_PARTY_LICENSES` | bloccante (obblighi di licenza) | Un file per pacchetto, generato sul runner; test per sistema | **D65-7** |
-| P10 | **OpenGL 4.1 core** obbligatorio per il cielo (41 §3.13): senza GPU (macchina virtuale, desktop remoto, driver vecchi) `GL_UNAVAILABLE`, cielo non disegnato | `ui/sky_renderer_gl.py:29`, `ui/main_window.py:3399` | da correggere (bloccante per le prove in UTM) | **D65-8** | **D65-8** |
-| P11 | **Scorciatoie con `Meta`**: `Meta+Ctrl+F` (schermo intero), `Meta+Ctrl+N` (modo notte), `Meta+Ctrl+A` (assistente). Su macOS `Meta` è ⌃ (⌃⌘F, scorciatoia standard); su Windows e Linux è il tasto Windows/Super, spesso preso dal sistema (Win+Ctrl+F di Windows cerca i computer in rete) | `ui/main_window.py:2142, 2143, 2173` | da correggere | Tabella per sistema, macOS invariato; proposta in **D65-9** | **D65-9** |
-| P12 | **Testi «macOS Keychain»** nell'interfaccia (campo della chiave, avviso) | `ui/ai_panel.py:1014`, `ui/main_window.py:1648`, traduzioni | solo aspetto | Testo per sistema dopo D65-1 | W2 |
-| P13 | **Impostazioni** senza scorciatoia su Windows (`StandardKey.Preferences` vuota lì) | `ui/main_window.py:2110` | solo aspetto | Con D65-9 | W2 |
+| P6 | **Cartelle dei dati** sotto `~/Library/…`: cache (`Caches/AstroTwo`), punti SED (`Application Support/AstroTwo/Profiles`), VOTable ricevuti via SAMP (`…/SAMP/received`). Su Windows e Linux funzionano ma creano `Library` nella home | `core/cache.py:134`, `analysis/profile_export.py:181`, `ui/samp_link.py:50` | da correggere | Una funzione per sistema, macOS invariato; posti proposti in **D65-2** | **W2** (D65-2) |
+| P7 | **Nessun pacchetto** per Windows e Linux: `build_app.py` si ferma fuori da macOS arm64; `make_dmg.py` e `sign_notarize.py` sono solo macOS | `scripts/build_app.py:367` | bloccante (niente da consegnare) | Nuovo script del W2 con PyInstaller `onedir` (stesso strumento, A2) sui runner; formati in **D65-3**, **D65-4**, architetture in **D65-5** | **W2** (D65-3…5, §3.9) |
+| P8 | **Controlli dell'app costruita** pensati per il `.app`: plugin `libqcocoa.dylib`/`libqmacstyle.dylib`, backend `keyring.backends.macOS`, cartella `Contents` | `src/astrotwo/app_bundle.py:64, 237, 286` | bloccante (per i pacchetti) | Elenco dei plugin e del backend per sistema (`qwindows.dll`, `libqxcb.so`/`libqwayland*.so`), radice del pacchetto da `sys._MEIPASS` | **W2** (§3.9) |
+| P9 | **`THIRD_PARTY_LICENSES`** descrive l'app per macOS: su Windows `keyring` porta `pywin32-ctypes`, su Linux `SecretStorage`, `jeepney`, `cryptography`, `cffi`; Qt porta altre librerie (xcb, ICU…) | `scripts/third_party_licenses.py`, `THIRD_PARTY_LICENSES` | bloccante (obblighi di licenza) | Un file per pacchetto, generato sul runner; test per sistema | **W2** (D65-7, §3.9) |
+| P10 | **OpenGL 4.1 core** obbligatorio per il cielo (41 §3.13): senza GPU (macchina virtuale, desktop remoto, driver vecchi) `GL_UNAVAILABLE`, cielo non disegnato | `ui/sky_renderer_gl.py:29`, `ui/main_window.py:3399` | da correggere (bloccante per le prove in UTM) | **D65-8** | **W2** (D65-8) |
+| P11 | **Scorciatoie con `Meta`**: `Meta+Ctrl+F` (schermo intero), `Meta+Ctrl+N` (modo notte), `Meta+Ctrl+A` (assistente). Su macOS `Meta` è ⌃ (⌃⌘F, scorciatoia standard); su Windows e Linux è il tasto Windows/Super, spesso preso dal sistema (Win+Ctrl+F di Windows cerca i computer in rete) | `ui/main_window.py:2142, 2143, 2173` | da correggere | Tabella per sistema, macOS invariato; proposta in **D65-9** | **W2** (D65-9) |
+| P12 | **Testi «macOS Keychain»** nell'interfaccia (campo della chiave, avviso) | `ui/ai_panel.py:1014`, `ui/main_window.py:1648`, traduzioni | solo aspetto | Testo per sistema dopo D65-1 | **W2** |
+| P13 | **Impostazioni** senza scorciatoia su Windows (`StandardKey.Preferences` vuota lì) | `ui/main_window.py:2110` | solo aspetto | Con D65-9 | **W2** |
 | P14 | **File temporanei di SAMP**: `TemporaryDirectory` cancellata all'uscita; su Windows un file ancora aperto da TOPCAT non si cancella (`PermissionError` alla chiusura) | `vo_protocols.py:2915` | da verificare (runner o W3) | `ignore_cleanup_errors=True` solo se la prova lo mostra | da verificare |
-| P15 | **File di sessione** con percorsi assoluti dei file: una sessione salvata su un sistema non si riapre su un altro (`file_unreadable`, `path_not_absolute`) | `core/commands.py:554` | solo aspetto | Limite dichiarato in `05` e nella documentazione; nessun cambio | **D65-10** |
-| P16 | **PNG e PDF** non uguali byte per byte tra sistemi: le etichette del PNG usano i font del sistema; il PDF ha la data di creazione. I dati (CSV, ECSV, VOTable, FITS, MOC, JSON) sì | `ui/export_view.py`, `analysis/profile_export.py` | solo aspetto | Regola in **D65-10** | **D65-10** |
+| P15 | **File di sessione** con percorsi assoluti dei file: una sessione salvata su un sistema non si riapre su un altro (`file_unreadable`, `path_not_absolute`) | `core/commands.py:554` | solo aspetto | Limite dichiarato in `05` e nella documentazione; nessun cambio | **W2** (D65-10, documentato) |
+| P16 | **PNG e PDF** non uguali byte per byte tra sistemi: le etichette del PNG usano i font del sistema; il PDF ha la data di creazione. I dati (CSV, ECSV, VOTable, FITS, MOC, JSON) sì | `ui/export_view.py`, `analysis/profile_export.py` | solo aspetto | Regola in **D65-10** | **W2** (D65-10: fuori dalle impronte) |
 | P17 | **Nome nella barra dei menu** (`set_macos_app_name`): solo macOS, altrove non fa niente (già così) | `ui/main_window.py:3354, 3400` | nessuno | — | ok |
 | P18 | **Icona e voce di menu del sistema**: `.icns` solo per il `.app`; servono `.ico` (Windows) e `.desktop` + PNG (Linux) | `scripts/build_app.py`, `assets/` | solo aspetto | Nel W2, dal file SVG dell'icona | W2 |
 | P19 | **Font dell'interfaccia** del sistema (SF su macOS, Segoe UI su Windows, quello della distribuzione su Linux); cifre tabellari con `tnum` | `ui/main_window.py:690`, `ui/catalog_panel.py:89` | solo aspetto | Nessuno; si guarda nel W3 | W3 |
@@ -127,6 +132,52 @@ Nessuna funzione nuova per l'utente, nessun messaggio nuovo, nessuna dipendenza 
   `file:///C:/…` (`test_samp_file_url_windows`). I risultati del primo run vanno nel W2.
 - **Solo a mano (W3):** OpenGL vero, scorciatoie, font, HiDPI, SAMP con TOPCAT, Ollama, pacchetti.
 
+### 3.7 Correzioni del W2 (sprint W2a; nessun cambio su macOS)
+
+1. **Chiavi API (P1, P12; D65-1).** `_system_backend` del 31: macOS invariato (`_macos_backend`); Windows
+   `WinVaultKeyring`, Linux `SecretService.Keyring`, presi da `SYSTEM_STORES` e creati direttamente; `priority` che
+   solleva → `KEYCHAIN_UNAVAILABLE` `store_unavailable`; modulo non importabile → `store_not_loadable`; sistema senza
+   archivio previsto → `unsupported_system`. Testi «macOS Keychain» solo su macOS, altrove «system key store: …»
+   (`store_name`), tradotti. Regola d'oro n. 5 in `CLAUDE.md` e `01` S5 aggiornate.
+2. **Cartelle (P6; D65-2).** `default_cache_root(system)` e nuova `default_data_root(system)` del 04: Windows
+   `%LOCALAPPDATA%\AstroTwo\Cache\` e `%LOCALAPPDATA%\AstroTwo\`; Linux `$XDG_CACHE_HOME/astrotwo/` e
+   `$XDG_DATA_HOME/astrotwo/` (variabili solo se assolute, se no `~/.cache` e `~/.local/share`); punti SED in
+   `…/Profiles/`, VOTable SAMP in `…/SAMP/received/`; macOS invariato. Nei test la home finta copre anche
+   `USERPROFILE` e `LOCALAPPDATA` (i test non toccano mai le cartelle vere, anche su Windows).
+3. **OpenGL di ripiego dichiarato (P10; D65-8)**, solo Windows e Linux: `configure_opengl` prima della `QApplication`
+   (variabile `ASTROTWO_OPENGL=software|native`, altrimenti `QSettings` `opengl/fallback`); Windows
+   `AA_UseSoftwareOpenGL` (`opengl32sw.dll` di Qt, Mesa llvmpipe), Linux `LIBGL_ALWAYS_SOFTWARE=1`. Dopo un
+   `GL_UNAVAILABLE` col disegno nativo: `opengl/fallback=software` e messaggio `GL_SOFTWARE` `next_start` («riavviare
+   AstroTwo»); se anche il software non va: `software_failed`, nessun altro tentativo automatico (niente cicli). Un
+   renderer software (`llvmpipe`, `softpipe`, `GDI Generic`…, anche scelto da Qt da solo) si dichiara con
+   `GL_SOFTWARE` `in_use` e nella barra di stato. Su macOS non si legge niente e non c'è ripiego (41 v1).
+   **Da verificare nel W3:** che `opengl32sw.dll` di PySide6 dia OpenGL 4.1 core (il workflow dei pacchetti controlla
+   solo che ci sia).
+4. **Scorciatoie (P11, P13; D65-9).** `platform_shortcuts`: macOS ⌃⌘F, ⌃⌘N, ⌃⌘A, ⌘, invariate; Windows e Linux F11,
+   Ctrl+Shift+N, Ctrl+Shift+A, Ctrl+, (mai il tasto Windows/Super).
+5. **Identità dei byte (D65-10, §3.8).**
+
+Messaggi nuovi: `GL_SOFTWARE` (`in_use`, `next_start`), ragioni nuove di `KEYCHAIN_UNAVAILABLE`. Nessuna
+dipendenza nuova (le librerie di `keyring` per Windows e Linux erano già in `uv.lock`).
+
+### 3.8 Identità dei byte tra sistemi (D65-10)
+
+- `scripts/export_fingerprints.py` scrive da un **caso fisso** senza rete i file di dati: CSV, ECSV e VOTable del 14,
+  sottoinsieme VOTable del 13, MOC FITS, JSON e testo del 16, ECSV dei valori e VOTable della SED del 25 (profilo di
+  51 Peg dalle risposte registrate, `tests/data/fingerprint_profile.json`, senza miniature), file di sessione del 05
+  (un comando di conversione di unità: nessun percorso). Provenienza fissa (origine `pleiadi.xml`, non il percorso
+  della cartella temporanea) e orologio fisso (`datetime.now` dei moduli 04 calcolatrici, 05, 13, 14 → 2026-11-16
+  12:00 UTC): la «data fissa» di T9.
+- Impronte di riferimento in `tests/data/export_fingerprints.json` (calcolate su macOS);
+  `tests/test_export_fingerprints.py` le confronta su ogni sistema, controlla che nei file non ci siano `\r` né il
+  percorso della cartella di lavoro.
+- Workflow `tests`: ogni sistema scrive `fingerprints-<os>.json` (anche se un test è fallito) e lo carica come
+  artefatto; il job `fingerprints` li scarica e li confronta (`--compare`): un file diverso o mancante fa fallire il
+  workflow.
+- Fuori dalle impronte (D65-10): PNG e PDF (font del sistema, data del PDF: stesso contenuto, non stessi byte) e le
+  sessioni con file aperti (percorsi assoluti: **una sessione non si riapre su un altro sistema**, limite dichiarato in
+  `docs/installation.md`).
+
 ## 4. Cosa NON fa
 
 - Non cambia niente su macOS: nessun comportamento nuovo, nessun nuovo `.dmg`, la 1.0 resta quella del build 9.
@@ -154,7 +205,13 @@ Nessuna funzione nuova per l'utente, nessun messaggio nuovo, nessuna dipendenza 
 - `astrotwo.core.catalogs.write_votable_file(vot, target) -> None`
 - `astrotwo.core.catalogs.ascii_table_text(table, **kwargs) -> str`
 - `astrotwo.core.vo_protocols.file_url_path(path: str) -> str` (solo Windows)
-- Workflow `tests` di GitHub Actions (§3.5).
+- Workflow `tests` di GitHub Actions (§3.5, §3.8).
+- W2: `astrotwo.ai.keychain_keys.SYSTEM_STORES`, `store_name(system=None) -> str`;
+  `astrotwo.core.cache.default_cache_root(system=None)`, `default_data_root(system=None) -> Path`;
+  `astrotwo.ui.main_window.platform_shortcuts(platform_name=None)`, `configure_opengl(system=None) -> str`;
+  `astrotwo.ui.sky_renderer_gl.opengl_choice`, `apply_software_opengl`, `is_software_renderer`, `SOFTWARE_GL_KEY`,
+  `SOFTWARE_GL_ENV`; `scripts/export_fingerprints.py` (`fingerprints()`, `write_case(folder)`, `--output`,
+  `--compare`).
 
 ## 8. Librerie e standard di riferimento
 
@@ -182,9 +239,11 @@ Nessuna funzione nuova per l'utente, nessun messaggio nuovo, nessuna dipendenza 
   non cambia niente. Da ricontrollare quando i runner Windows girano.
 - Un VOTable salvato con un nome che finisce in `.gz` va ancora ad Astropy, che lo comprime come prima (su macOS
   invariato); su Windows il testo dentro il gzip avrebbe ancora `\r\n`: caso raro, da ricontrollare nel W2.
-- Linux senza Secret Service (server senza sessione grafica): l'IA dà `KEYCHAIN_UNAVAILABLE`, come oggi fuori da
-  macOS; il resto funziona (regola d'oro n. 7).
-- Windows senza OpenGL 4.1: `GL_UNAVAILABLE` (41 §10) finché D65-8 non è decisa.
+- Linux senza Secret Service (server senza sessione grafica): l'IA dà `KEYCHAIN_UNAVAILABLE` `store_unavailable`;
+  il resto funziona (regola d'oro n. 7). Mai un ripiego su file.
+- Windows o Linux senza OpenGL 4.1: `GL_UNAVAILABLE`, poi disegno software dal prossimo avvio (D65-8, §3.7); se
+  anche il software non arriva a 4.1 core, `GL_UNAVAILABLE` e nessun altro tentativo (`ASTROTWO_OPENGL` per forzare).
+- `LOCALAPPDATA` o `XDG_*` relativi o vuoti: si usano i default del sistema (specifica XDG).
 - Sessione aperta su un altro sistema: errori `file_unreadable` / `path_not_absolute` del 05 (D65-10).
 
 ## 11. Esposizione all'IA
@@ -205,9 +264,19 @@ Non applicabile: nessuno strumento nuovo; P5 rafforza solo la riduzione dei perc
   `ubuntu-latest` portato nel W2.
 - **T7** (W2) Pacchetti: avvio con prova di fumo `--quit-after-first-view` e controlli come V1–V10 del `60` adattati.
 - **T8** (W3) Megatest a mano in UTM (D65-6), sezioni della `62` per Windows e Linux.
-- **T9** (W2, runner) Stessa esportazione con data fissa → stessa impronta SHA-256 sui tre sistemi (D65-10).
+- **T9** (W2, runner) Stessa esportazione con data fissa → stessa impronta SHA-256 sui tre sistemi (D65-10):
+  `test_t9_fingerprints_equal_reference` su ogni runner e job `fingerprints` del workflow (§3.8).
+- **T10** (W2) Chiavi: solo il backend del sistema, mai la scelta di `keyring` (`test_keychain_forced_backend_per_system`,
+  `test_keychain_unavailable_without_system_store`); cartelle per sistema (`test_folders_per_system`,
+  `test_sed_and_samp_folders_follow_the_data_root`); scorciatoie (`test_shortcuts_per_system`); OpenGL
+  (`test_opengl_choice_and_software_renderers`, `test_apply_software_opengl`, `test_configure_opengl_*`,
+  `test_opengl_fallback_declared`).
 
 ## 13. Decisioni aperte
+
+**Decise dal proprietario il 2026-11-16 (brief del W2), come nel consiglio:** D65-1 (a), D65-2 (a), D65-3 (a), D65-4
+(a) su `ubuntu-22.04` con `.tar.gz`, D65-5 (a), D65-7 (a), D65-8 (b), D65-9 come proposto, D65-10 (a). **Aperte:**
+D65-6 e la nuova D65-11 (W2). La tabella resta come memoria delle proposte.
 
 | ID | Domanda | Proposte | Consiglio |
 |---|---|---|---|
@@ -221,9 +290,11 @@ Non applicabile: nessuno strumento nuovo; P5 rafforza solo la riduzione dei perc
 | **D65-8** | **OpenGL** senza GPU adatta (VM, desktop remoto, driver vecchi) | (a) come oggi: `GL_UNAVAILABLE` e cielo non disegnato; (b) Windows: Mesa `llvmpipe` di Qt (`opengl32sw.dll`, se è nelle ruote di PySide6: **da verificare**) quando l'OpenGL nativo è sotto 4.1, dichiarato nella barra di stato; Linux: Mesa `llvmpipe` del sistema (già 4.5 core) | **(b)**, solo Windows e Linux: senza, il cielo non si vede nelle VM del W3; un ripiego dichiarato e lento è meglio di niente. Prima va verificato che `opengl32sw.dll` ci sia (altrimenti va incluso Mesa per Windows, licenza MIT) |
 | **D65-9** | **Scorciatoie** su Windows e Linux (40) | Schermo intero **F11** (`StandardKey.FullScreen`), modo notte **Ctrl+Shift+N**, assistente **Ctrl+Shift+A**, impostazioni **Ctrl+,**; macOS invariato (⌃⌘F, ⌃⌘N, ⌃⌘A, ⌘,) | Come proposto: niente tasto Windows/Super (preso dal sistema), F11 è la convenzione di Windows e dei desktop Linux |
 | **D65-10** | **Identità byte per byte** tra sistemi | (a) dati (CSV, ECSV, VOTable, FITS, MOC, sessione, `properties`) identici, provati con impronte sui tre runner; PNG e PDF «stesso contenuto», non stessi byte (font del sistema, data del PDF); sessioni non portabili tra sistemi (percorsi assoluti), dichiarato; (b) anche PNG identici, con un font dentro l'app | **(a)**: i dati scientifici sono quelli che devono essere riproducibili; per il PNG servirebbe disegnare tutto il testo con un font nostro, lavoro grande per un guadagno piccolo |
+| **D65-11** | **Firma dei pacchetti** di Windows (Authenticode) e di Linux (W2) | (a) nessuna firma nella 1.1: impronta SHA-256 accanto a ogni pacchetto, istruzioni per SmartScreen in `docs/installation.md` (come il `.dmg` 1.0 senza Developer ID); (b) certificato Authenticode (OV/EV, a pagamento, o Azure Trusted Signing) per lo `.zip`; (c) firma GPG dell'AppImage | **(a)** per la 1.1: stessa scelta del Mac 1.0 (A6-b), nessun costo; SmartScreen chiede una volta sola. (b) da riconsiderare se gli utenti Windows lo chiedono; (c) poco usata dagli utenti dell'AppImage |
 
 ## 14. Registro modifiche
 
 | Data | Autore | Modifica |
 |---|---|---|
 | 2026-11-16 | Claude Code | Creazione del file (stato: bozza), sprint W1, su richiesta del proprietario (decisioni del 2026-11-16 nella nota in testa). Analisi di portabilità: 23 punti (P1–P23) con file, riga, gravità e correzione; ruote di `uv.lock` per sistema; correzioni del W1 senza cambi su macOS (P2–P5, P22, P23); workflow `.github/workflows/tests.yml` (non spinto); D65-1…D65-10 aperte con consiglio. |
+| 2026-11-16 | Claude Code | **Sprint W2a** (brief del proprietario del 2026-11-16): D65-1, 2, 3, 4, 5, 7, 8, 9, 10 decise come nel consiglio (D65-6 aperta). Correzioni senza cambi su macOS (§3.7): chiavi per sistema (31), cartelle per sistema (04, 25, 40), OpenGL di ripiego dichiarato (41), scorciatoie (40), testi della chiave (40, 44). Identità dei byte (§3.8): `scripts/export_fingerprints.py`, impronte di riferimento, test T9 e job `fingerprints` del workflow `tests`. Stati P1, P6, P10–P13, P15, P16 → W2. Stato del file: bozza. |

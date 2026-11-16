@@ -222,6 +222,11 @@ def _module_messages_match_catalog():
 def _temporary_home(tmp_path_factory, monkeypatch):
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
+    # Windows: Path.home() legge USERPROFILE; cartelle di Windows e di Linux (D65-2) anche loro nella home finta
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("LOCALAPPDATA", str(home / "AppData" / "Local"))
+    for variable in ("XDG_CACHE_HOME", "XDG_DATA_HOME"):
+        monkeypatch.delenv(variable, raising=False)
     return home
 
 

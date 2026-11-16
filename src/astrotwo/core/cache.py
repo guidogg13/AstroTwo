@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import platform
 import re
 import shutil
 import sqlite3
@@ -43,6 +44,7 @@ __all__ = [
     "NetworkTimeouts",
     "SharedCache",
     "default_cache_root",
+    "default_data_root",
 ]
 
 #: Limite unico di default: 5 GB = 5 × 10⁹ byte (CA2).
@@ -129,9 +131,42 @@ class CacheUsage:
     by_module: dict[str, int] = field(default_factory=dict)
 
 
-def default_cache_root() -> Path:
-    """Cartella standard delle cache di macOS: ``~/Library/Caches/AstroTwo/``."""
-    return Path.home() / "Library" / "Caches" / "AstroTwo"
+def _windows_local_appdata() -> Path:
+    """``%LOCALAPPDATA%`` (dati locali dell'utente, non copiati nei profili di rete); se manca, il suo default."""
+    value = os.environ.get("LOCALAPPDATA", "")
+    return Path(value) if value and os.path.isabs(value) else Path.home() / "AppData" / "Local"
+
+
+def _xdg_folder(variable: str, default: str) -> Path:
+    """Cartella XDG (XDG Base Directory Specification): la variabile se è un percorso assoluto, se no il default."""
+    value = os.environ.get(variable, "")
+    return Path(value) if value and os.path.isabs(value) else Path.home() / default
+
+
+def default_cache_root(system: str | None = None) -> Path:
+    """Cartella standard delle cache del sistema (D65-2; ``system`` = ``platform.system()`` se non dato).
+
+    macOS ``~/Library/Caches/AstroTwo/`` (invariato); Windows ``%LOCALAPPDATA%\\AstroTwo\\Cache\\``; Linux e gli altri
+    ``$XDG_CACHE_HOME/astrotwo/`` (di default ``~/.cache/astrotwo/``)."""
+    system = platform.system() if system is None else system
+    if system == "Darwin":
+        return Path.home() / "Library" / "Caches" / "AstroTwo"
+    if system == "Windows":
+        return _windows_local_appdata() / "AstroTwo" / "Cache"
+    return _xdg_folder("XDG_CACHE_HOME", ".cache") / "astrotwo"
+
+
+def default_data_root(system: str | None = None) -> Path:
+    """Cartella dei dati dell'app che si tengono (punti SED del 25, VOTable ricevuti via SAMP), D65-2.
+
+    macOS ``~/Library/Application Support/AstroTwo/`` (invariato); Windows ``%LOCALAPPDATA%\\AstroTwo\\``; Linux e
+    gli altri ``$XDG_DATA_HOME/astrotwo/`` (di default ``~/.local/share/astrotwo/``)."""
+    system = platform.system() if system is None else system
+    if system == "Darwin":
+        return Path.home() / "Library" / "Application Support" / "AstroTwo"
+    if system == "Windows":
+        return _windows_local_appdata() / "AstroTwo"
+    return _xdg_folder("XDG_DATA_HOME", ".local/share") / "astrotwo"
 
 
 def _check_module(module: object) -> str:

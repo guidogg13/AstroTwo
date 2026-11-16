@@ -79,10 +79,19 @@ def test_every_error_has_code_params_and_catalog_entry(security, monkeypatch):  
             assert unreachable.params["reason"] == "unreachable"
     assert mc.message_text("KEYCHAIN_UNAVAILABLE", unreachable.params, "en").startswith(
         "deleting the key of profile p: the Keychain cannot be reached (")
-    # sistema non macOS, backend non caricabile, API non disponibile
+    # sistema senza archivio previsto, archivio di Windows non caricabile o assente (D65-1, simulati sul Mac),
+    # backend macOS non caricabile, API non disponibile
     with monkeypatch.context() as patch:
-        patch.setattr(kk.platform, "system", lambda: "Linux")
-        assert raised(KeychainStore).params == {"reason": "not_macos", "system": "Linux"}
+        patch.setattr(kk.platform, "system", lambda: "FreeBSD")
+        assert raised(KeychainStore).params == {"reason": "unsupported_system", "system": "FreeBSD"}
+    with monkeypatch.context() as patch:
+        patch.setattr(kk.platform, "system", lambda: "Windows")
+        unavailable = raised(KeychainStore)  # WinVaultKeyring senza pywin32-ctypes: priority solleva
+        assert unavailable.params["reason"] == "store_unavailable"
+        assert unavailable.params["store"] == "Windows Credential Manager"
+        patch.setitem(sys.modules, "keyring.backends.Windows", None)
+        assert raised(KeychainStore).params == {"reason": "store_not_loadable", "store": "Windows Credential Manager",
+                                                "error_type": "ModuleNotFoundError"}
     import keyring.backends as backends
     from keyring.backends import macOS
 

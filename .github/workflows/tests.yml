@@ -3,7 +3,8 @@
 #
 # Test di AstroTwo su macOS, Windows e Linux (mdfiles/65-windows-linux.md §3.5, sprint W1, decisione del proprietario
 # del 2026-11-16). Solo i test di default (pytest legge `addopts` da pyproject.toml: niente rete, Portachiavi
-# reale, prestazioni né OpenGL) e ruff. Nessun pacchetto, nessun .dmg, nessuna release: i pacchetti sono del W2.
+# reale, prestazioni né OpenGL) e ruff; dal W2 le impronte del caso fisso confrontate tra i tre sistemi (D65-10).
+# Nessun pacchetto, nessun .dmg, nessuna release: i pacchetti sono nel workflow manuale build-windows-linux.yml.
 # Comandi del progetto: `uv run python -m pytest -q` (mai `uv run pytest`, mai `-m` in più).
 name: tests
 
@@ -77,3 +78,38 @@ jobs:
           name: pytest-${{ matrix.os }}
           path: pytest-${{ matrix.os }}.xml
           if-no-files-found: ignore
+
+      # D65-10 (sprint W2): impronte SHA-256 dei file di dati del caso fisso, anche se un test è fallito
+      - name: Impronte delle esportazioni (caso fisso)
+        if: success() || failure()
+        run: uv run --frozen python scripts/export_fingerprints.py --output fingerprints-${{ matrix.os }}.json
+
+      - name: Impronte come artefatto
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fingerprints-${{ matrix.os }}
+          path: fingerprints-${{ matrix.os }}.json
+          if-no-files-found: error
+
+  # Le impronte dei tre sistemi devono essere uguali (65 T9, D65-10): un file diverso fa fallire il workflow.
+  fingerprints:
+    name: impronte uguali sui tre sistemi
+    needs: tests
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fingerprints-*
+          merge-multiple: true
+          path: fingerprints
+
+      - name: Confronto
+        run: |
+          ls -l fingerprints
+          test "$(ls fingerprints/*.json | wc -l)" -eq 3 || { echo "mancano le impronte di un sistema"; exit 1; }
+          python3 scripts/export_fingerprints.py --compare fingerprints/*.json

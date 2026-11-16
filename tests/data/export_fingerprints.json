@@ -1,0 +1,27 @@
+{
+ "files": {
+  "catalog.csv": "10959eec0d9de924f22f68ca9f840ec59cf5930162c9dff0daf0ca517921c216",
+  "catalog.ecsv": "a89a1fafb6e60a54a649ace9009203fb33e76da52d4d645a578343263fa4a46c",
+  "catalog.xml": "7fa98c607aae2a2efbb575fb643feea512bb7453bc9add37173a173c7e4754ac",
+  "moc.fits": "ac2953426c1bdf842a0d48608261c9d584380128621f608bddddc05035746eb5",
+  "moc.json": "28bff2d8fe2200c0b4f740579da6ae0adf8079fb413d1160f77080fede3c6bd8",
+  "moc.txt": "09d03ff8405babb58ca2bce8e30c4c47dcf9e4a6a24445030c8dec6a9b8cfa04",
+  "profile.ecsv": "5917c14b6447ddb8a26cb075e609a97bd59933fcc2230d472a5a9fc685603f76",
+  "sed.xml": "7654ff3f4b1000d0580c1f3d1685bdb95c7460a8e9c7ce1d8be8c3aabd4498a9",
+  "session.astrotwo": "4e4ce7e55022be77d245d1cdf73bc30bd7d4b0e8ab627ede00acabf0e68bb4fc",
+  "subset.xml": "e1161f10db1deac379e9a7527bc27e31cc5f96a7def38d1b0391a91a7948a476"
+ },
+ "note": "Impronte SHA-256 del caso fisso di scripts/export_fingerprints.py (D65-10, 65 §3.7), calcolate su macOS il 2026-11-16: uguali su Windows e Linux. Si rigenerano solo se cambia un formato di esportazione, con il motivo nel registro della 65.",
+ "sizes": {
+  "catalog.csv": 448,
+  "catalog.ecsv": 1145,
+  "catalog.xml": 2058,
+  "moc.fits": 8640,
+  "moc.json": 47,
+  "moc.txt": 30,
+  "profile.ecsv": 42992,
+  "sed.xml": 16742,
+  "session.astrotwo": 1834,
+  "subset.xml": 1661
+ }
+}

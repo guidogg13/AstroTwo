@@ -16,7 +16,7 @@ Da `CLAUDE.md`:
 2. Prima la specifica, poi il codice.
 3. Un modulo = un file `.md`.
 4. Non reinventare la scienza: si usano librerie consolidate.
-5. Le chiavi API vivono solo nel Portachiavi di macOS.
+5. Le chiavi API vivono solo nell'archivio sicuro del sistema: Portachiavi di macOS (Gestione credenziali su Windows, Secret Service su Linux: D65-1, 2026-11-16).
 6. Riproducibilità: ogni operazione dell'utente va registrata e rieseguibile.
 7. Architettura a livelli: un livello non rompe mai quello sotto.
 
@@ -68,7 +68,7 @@ Regole strutturali:
 | S2 | **App desktop per macOS** | requisito del progetto: gli astrofisici lavorano su macOS; consente di usare il Portachiavi di macOS per le chiavi API | adottata (da `CLAUDE.md`) |
 | S3 | **Consegna come file `.dmg`** | distribuzione standard su macOS, installazione trascinando l'icona in Applicazioni | adottata (da `CLAUDE.md`) |
 | S4 | **Livello IA separato dal resto, con adattatore per più provider** | l'utente sceglie il provider e inserisce la propria chiave; il nucleo deve restare utilizzabile senza IA; evita di legare la scienza a un fornitore | adottata (da `CLAUDE.md`) |
-| S5 | **Chiavi API solo nel Portachiavi di macOS** | regola d'oro n. 5: mai in file, log, repository o variabili d'ambiente persistite | adottata (da `CLAUDE.md`) |
+| S5 | **Chiavi API solo nel Portachiavi di macOS** (su Windows Gestione credenziali, su Linux Secret Service: D65-1, 2026-11-16) | regola d'oro n. 5: mai in file, log, repository o variabili d'ambiente persistite | adottata (da `CLAUDE.md`) |
 | S6 | **Librerie consolidate per astronomia e matematica** | regola d'oro n. 4: Astropy (WCS, coordinate, unità, FITS), astroquery (servizi CDS/ESA/NASA), healpy (mappe HEALPix/MOC), e le librerie già usate dalla comunità | adottata; l'elenco esteso è nei file dei singoli moduli |
 | S7 | **Le specifiche sono file `.md` in `mdfiles/`, una per modulo** | leggibili, versionabili, verificabili senza leggere il codice | adottata (da `CLAUDE.md`) |
 
@@ -363,3 +363,4 @@ esecuzione è incompatibile con la GPL-3.0:
 | 2026-10-17 | Claude Code | **A11 decisa dal proprietario: GPL-3.0-or-later**, titolare Guido Ratti 2026 (autorizzazione esplicita a modificare il file approvato): riga A11 spostata da §5 a §4.2; nuova §6.1 (licenza, verifica di compatibilità con le dipendenze, crediti dei dati, requisiti del modulo 60); DA-08 chiusa. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Decisioni del proprietario del 2026-10-25 (sprint 60a):** A2 decisa (PyInstaller), A6 decisa per la prima beta (firma ad hoc, nessuna notarizzazione; Developer ID rinviata, `A6-b`) in §5 e §9; §6: posizione degli strumenti del 60. Dettaglio in `60-distribuzione-dmg.md`. |
 | 2026-11-11 | Claude Code | **Sprint D8 (decisione del proprietario del 2026-11-11):** A6-b decisa (1.0 senza firma Developer ID né notarizzazione; firma in una versione successiva), annotata in §5 (riga A6) e nella voce DA-03; dettaglio nel `60` §3.12, §13. Modifica di un file approvato su decisione del proprietario. |
+| 2026-11-16 | Claude Code | **Sprint W2 (D65-1, decisa dal proprietario il 2026-11-16):** regola d'oro n. 5 e S5 — l'archivio sicuro delle chiavi è quello del sistema: Portachiavi di macOS (invariato), Gestione credenziali di Windows, Secret Service su Linux; mai file. Stato invariato. |

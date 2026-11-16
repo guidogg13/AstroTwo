@@ -51,6 +51,15 @@ disponibile, errore esplicito).
   macOS, Portachiavi bloccato o non raggiungibile, libreria Security non
   caricabile) → errore `KEYCHAIN_UNAVAILABLE` con il motivo. **Mai** un file,
   una variabile d'ambiente o la memoria come alternativa.
+- **Windows e Linux (D65-1, decisa il 2026-11-16, sprint W2):** stesso schema,
+  un solo backend per sistema creato direttamente — Gestione credenziali di
+  Windows (`keyring.backends.Windows.WinVaultKeyring`) e Secret Service su
+  Linux (`keyring.backends.SecretService.Keyring`: GNOME Keyring, KWallet,
+  KeePassXC). Senza l'archivio del sistema `KEYCHAIN_UNAVAILABLE` con
+  ragione `store_unavailable` o `store_not_loadable`; un sistema senza
+  archivio previsto dà `unsupported_system` (prima `not_macos`). Su macOS
+  niente cambia. Testi dell'interfaccia: «macOS Keychain» su macOS, il nome
+  dell'archivio (`store_name`) altrove.
 - **Mai variabili d'ambiente come sorgente di chiavi:** `ANTHROPIC_API_KEY`
   e `OPENAI_API_KEY` non si leggono (anche il `30` le ignora, §3.6 del
   `30`).
@@ -194,7 +203,9 @@ codice `KEYCHAIN_OPERATION`, che dice quale operazione sul profilo è fallita.
 
 | Codice | `reason` | Parametri |
 |---|---|---|
-| `KEYCHAIN_UNAVAILABLE` | `not_macos` | `system` (ext) |
+| `KEYCHAIN_UNAVAILABLE` | `unsupported_system` (era `not_macos` fino al W2) | `system` (ext) |
+| | `store_not_loadable` (Windows e Linux, D65-1) | `store` (ext), `error_type` |
+| | `store_unavailable` (Windows e Linux, D65-1) | `store` (ext), `detail` (ext) |
 | | `backend_not_loadable` | `error_type` |
 | | `api_unavailable` | `detail` (ext) |
 | | `unreachable` | `operation` (messaggio), `detail` (ext) |
@@ -261,3 +272,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta.
 | 2026-10-17 | Claude Code | §3.1: i profili predefiniti del `30` §3.1.1 (decisione del proprietario del 2026-10-17) usano lo stesso identificativo e quindi una chiave ciascuno; nessuna regola nuova. Stato `approvato` invariato. |
 | 2026-10-17 | Claude Code | **Codice della parte 2 della v1:** `src/astrotwo/ai/keychain_keys.py` (`KeychainStore` con il solo backend macOS di `keyring` creato direttamente, `SecretKey` opaco, `KeychainError`, `SERVICE_NAME`; messaggi d'errore ripuliti da ogni parte della chiave) e `tests/ai/test_keychain_keys.py` (T1–T7 con l'API Security simulata in memoria, 8 test; T8 con il marcatore `keychain`, aggiunto a `pyproject.toml` ed escluso di default). **T8 sul Portachiavi reale non ancora eseguito:** al primo tentativo il test è rimasto in attesa (probabile finestra di permesso di macOS), fermato senza lasciare elementi; da eseguire a mano dal proprietario. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `KeychainError` porta `params` (mai la chiave); nuova §10.1 con la tabella (l'operazione fallita è un messaggio annidato `KEYCHAIN_OPERATION`) scritta prima del codice. Test `tests/ai/test_messages_keychain.py`. Testo italiano invariato. Stato `approvato` invariato. |
+| 2026-11-16 | Claude Code | **Sprint W2 (Windows e Linux, decisioni del proprietario del 2026-11-16 nel brief del W2, con autorizzazione a correggere i problemi della `65`):** §3.2 — D65-1: backend forzato anche su Windows (Gestione credenziali) e Linux (Secret Service), mai la scelta automatica di `keyring` né file; nuove ragioni di `KEYCHAIN_UNAVAILABLE` `unsupported_system` (al posto di `not_macos`), `store_not_loadable`, `store_unavailable`; `SYSTEM_STORES` e `store_name`. Codice: `_system_backend` in `ai/keychain_keys.py`; test in `tests/test_platform_portability.py` (backend finti in memoria), `test_messages_keychain`. macOS invariato. Stato `approvato` invariato. |

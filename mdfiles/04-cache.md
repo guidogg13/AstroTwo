@@ -13,7 +13,9 @@ viene e quando è stato preso.
 
 - **Una sola cache per tutta l'app** (decisione A7 di `01-architettura.md`,
   proposta AM1 accettata dal proprietario il 2026-10-09), nella cartella
-  standard delle cache di macOS: **`~/Library/Caches/AstroTwo/`**. La
+  standard delle cache di macOS: **`~/Library/Caches/AstroTwo/`** (Windows
+  `%LOCALAPPDATA%\AstroTwo\Cache\`, Linux `$XDG_CACHE_HOME/astrotwo/`, di
+  default `~/.cache/astrotwo/`: D65-2, sprint W2). La
   cartella si può cambiare solo per i test (cartella temporanea) e per
   un'impostazione esplicita dell'utente; mai implicitamente.
 - **Due supporti, come prevede A7:**
@@ -266,3 +268,4 @@ Nessuna decisione aperta. Decise dal proprietario il 2026-10-09:
 | 2026-10-16 | Claude Code | **D04 decisa dal proprietario il 2026-10-16** (autorizzazione esplicita a modificare il file approvato): accesso da più thread e da più processi — orfani eliminati solo se più vecchi di `orphan_min_age` (600 s di default, configurabile, nel log) e una sola volta per processo alla prima apertura; motivo: la verifica del 2026-10-16 (5 errori su 1200 operazioni con un'istanza per thread, 250 con un'istanza per operazione); test T9 (è il T17 del 05), T10, T11. Stato `approvato` invariato. |
 | 2026-10-16 | Claude Code | **Codice di D04:** `SharedCache(orphan_min_age=600)` in `src/astrotwo/core/cache.py` (orfani eliminati solo se più vecchi della soglia, nel log; pulizia una volta per processo e per cartella); test T9 (8 thread, istanza per thread e per operazione, 1200 operazioni, 0 errori), T10 (due processi, 400 operazioni ciascuno, 0 errori), T11 (soglia e una sola pulizia per processo) in `tests/core/test_cache.py`, falliti prima della correzione e superati dopo. Stato `approvato` invariato. |
 | 2026-10-25 | Claude Code | **Sprint 8e (D40-3):** `CacheError` e `CacheWarning` portano `params`; nuova §10.1 con la tabella di codici, ragioni e parametri (`CACHE_UNAVAILABLE`, `CACHE_FULL`, `CACHE_PROVENANCE_MISSING`, `CACHE_FORBIDDEN`) scritta prima del codice; voci del catalogo en/it e test `tests/core/test_messages_cache.py`. Il modulo non importa il catalogo; testo italiano invariato. Stato `approvato` invariato. |
+| 2026-11-16 | Claude Code | **Sprint W2 (Windows e Linux, decisioni del proprietario del 2026-11-16 nel brief del W2, con autorizzazione a correggere i problemi della `65`):** §3 — D65-2: `default_cache_root(system)` per sistema (macOS invariato, Windows `%LOCALAPPDATA%\AstroTwo\Cache`, Linux XDG con variabili solo assolute) e nuova `default_data_root(system)` (macOS `~/Library/Application Support/AstroTwo`, Windows `%LOCALAPPDATA%\AstroTwo`, Linux `$XDG_DATA_HOME/astrotwo`) per i punti SED del 25 e i VOTable ricevuti via SAMP. T8 per sistema; `_temporary_home` dei test anche con `USERPROFILE`, `LOCALAPPDATA` e senza XDG. Stato `approvato` invariato. |

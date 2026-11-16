@@ -105,7 +105,11 @@ che agisce sui dati produce un comando del `05` (nome tra parentesi).
   strumenti, ⌃⌘A): mostra o nasconde il pannello del `44` (`ui.*`, classe
   `application`).
 - Scorciatoie standard di macOS (⌘O apri, ⌘S salva sessione, ⌘Q esci,
-  ⌃⌘F schermo intero; ⌃⌘N modalità notte, D40-4).
+  ⌃⌘F schermo intero; ⌃⌘N modalità notte, D40-4). Su Windows e Linux
+  (D65-9, sprint W2): F11 schermo intero, Ctrl+Shift+N modalità notte,
+  Ctrl+Shift+A assistente, Ctrl+, impostazioni (`platform_shortcuts`); mai il
+  tasto Windows/Super. Il testo «macOS Keychain» diventa il nome
+  dell'archivio delle chiavi del sistema (D65-1).
 
 ### 3.4 Campo "Vai a" (A2, A3)
 
@@ -937,3 +941,4 @@ Nessuna decisione dei Gruppi 1 e 2 aperta (dal 2026-10-15).
 | 2026-11-07 | Claude Code | **Sprint C2 — comandi del livello 2 nel registro dell'applicazione** (autorizzazione del proprietario del 2026-11-07, D25-12 del `25`, limitata agli sprint C2–C6): la finestra, quando costruisce il registro con `default_registry`, vi aggiunge i comandi dei livelli 2–4 con `register_analysis_commands` (oggi `object.profile` del `25`, 05 §3.2); nessuna voce di menu nuova (interfaccia del profilo nello sprint C5, `43`): in C2 il comando si dà dal registro (script, sessione salvata) e, se registrato in una sessione, si vede e si riesegue dal pannello Comandi. Stato `approvato` invariato. |
 | 2026-11-10 | Claude Code | **Sprint D5b (prova a mano del proprietario del 2026-11-10, quattro problemi):** §3.5 titolo leggibile e tradotto del comando in corso (mai il nome interno), mai sopra la barra e Annulla; rete con il plurale giusto; §3.7 messaggi lunghi (suggerimento completo, Dettagli…, doppio clic, Copia); §3.9 plurali (`counted`, forma `{n|uno|molti}` del catalogo) e nome «AstroTwo» nella barra dei menu anche avviando dal codice; T25, T26. Stato `approvato` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13a (D62-6, decisione del proprietario del 2026-11-13):** §3.5 — il titolo del comando in corso nella barra di stato calcola il «…» sullo spazio vero del testo (margini e cornice compresi), così alla larghezza preferita il titolo è intero e più stretto finisce con «…» (U1 del `62`, da guardare a mano); dialogo delle colonne di posizione con il suggerimento nella lingua dell'interfaccia. Il file resta `approvato`. |
+| 2026-11-16 | Claude Code | **Sprint W2 (Windows e Linux, decisioni del proprietario del 2026-11-16 nel brief del W2, con autorizzazione a correggere i problemi della `65`):** §3.3 — D65-9: scorciatoie per sistema (`SHORTCUTS_MACOS` invariate, `SHORTCUTS_OTHER` F11, Ctrl+Shift+N, Ctrl+Shift+A, Ctrl+,); testi della chiave per sistema (D65-1, due frasi nuove tradotte); ripiego OpenGL dichiarato (D65-8, messaggio `GL_SOFTWARE` e barra di stato, solo fuori da macOS). Test per sistema in `tests/test_platform_portability.py` e `test_opengl_fallback_declared`. macOS invariato. Stato `approvato` invariato. |

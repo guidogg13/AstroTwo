@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 import stat
 import sys
 from datetime import UTC, datetime, timedelta, timezone
@@ -218,8 +219,13 @@ def test_t7_interrupted_row_write(tmp_path, monkeypatch):
 # --- T8 ---------------------------------------------------------------------
 
 
+#: Cartella delle cache per sistema (D65-2), relativa alla home finta (variabili XDG non impostate).
+CACHE_BY_SYSTEM = {"Darwin": ("Library", "Caches", "AstroTwo"), "Windows": ("AppData", "Local", "AstroTwo", "Cache"),
+                   "Linux": (".cache", "astrotwo")}
+
+
 def test_t8_default_location(_temporary_home):
-    expected = Path(_temporary_home) / "Library" / "Caches" / "AstroTwo"
+    expected = Path(_temporary_home).joinpath(*CACHE_BY_SYSTEM[platform.system()])
     assert default_cache_root() == expected
     with SharedCache() as cache:
         assert cache.root == expected and (expected / "cache.sqlite").exists()

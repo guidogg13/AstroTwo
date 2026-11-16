@@ -126,7 +126,9 @@ def test_t4_no_fallback(security, monkeypatch):
     monkeypatch.setattr(kk.platform, "system", lambda: "Linux")
     with pytest.raises(KeychainError) as err:
         KeychainStore()
-    assert err.value.code == "KEYCHAIN_UNAVAILABLE" and "Linux" in err.value.message
+    # Linux simulato sul Mac: solo il Secret Service (D65-1), che qui non c'è → errore, mai un altro backend
+    assert err.value.code == "KEYCHAIN_UNAVAILABLE" and err.value.params["reason"] == "store_unavailable"
+    assert err.value.params["store"] == "Secret Service"
     monkeypatch.undo()
     from keyring.backends import macOS
 

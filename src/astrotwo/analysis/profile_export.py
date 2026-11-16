@@ -178,7 +178,9 @@ def check_export_path(path: str, fmt: str) -> Path:
 
 def default_sed_folder() -> Path:
     """Cartella dei VOTable dei punti SED caricati come catalogo (25 §3.15): mai cancellati, servono alle sessioni."""
-    return Path.home() / "Library" / "Application Support" / "AstroTwo" / "Profiles"
+    from astrotwo.core.cache import default_data_root
+
+    return default_data_root() / "Profiles"  # macOS invariato; Windows e Linux con D65-2
 
 
 def sed_catalog_path(main_id: str | None, number: int, folder: Path | None = None) -> Path:

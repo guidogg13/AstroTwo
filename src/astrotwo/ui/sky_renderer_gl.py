@@ -16,6 +16,8 @@ e linee (perimetro) in un buffer della GPU con colore per vertice; tutto nell'or
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Signal
 from PySide6.QtGui import QColor, QFontMetricsF, QImage, QOpenGLContext, QPainter, QPen, QPolygonF, QSurfaceFormat
@@ -25,7 +27,8 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from astrotwo.ui.sky_viewer import Overlay, PointSet, PolygonSet, SkyRenderer
 
-#: Versione minima di OpenGL (41 §3.13); sotto, ``GL_UNAVAILABLE`` (41 §10, nessun ripiego nella v1).
+#: Versione minima di OpenGL (41 §3.13); sotto, ``GL_UNAVAILABLE`` (41 §10). Su Windows e Linux il ripiego software
+#: dichiarato di D65-8 (``opengl_choice``); su macOS nessun ripiego, come nella v1.
 GL_VERSION = (4, 1)
 # Costanti di OpenGL (specifica OpenGL 4.1): PySide6 non le esporta senza PyOpenGL.
 _GL_FLOAT = 0x1406
@@ -185,6 +188,48 @@ _CORNER_WIDTH = 2 * _ARROW + 30
 _CORNER_HEIGHT = 30 + 2 * _ARROW + 30
 
 
+#: Chiave in ``QSettings`` della scelta di OpenGL su Windows e Linux (D65-8): ``"software"`` = disegno software al
+#: prossimo avvio (scritta dopo un ``GL_UNAVAILABLE`` col disegno nativo), ``"software_failed"`` = anche il software
+#: non va (nessun altro tentativo automatico). Mai letta né scritta su macOS.
+SOFTWARE_GL_KEY = "opengl/fallback"
+#: Variabile d'ambiente che forza la scelta (``software`` o ``native``), sopra ``SOFTWARE_GL_KEY``; solo Windows e Linux.
+SOFTWARE_GL_ENV = "ASTROTWO_OPENGL"
+#: Pezzi del nome del renderer (``GL_RENDERER``) dei disegni software: Mesa (llvmpipe, softpipe, swrast) e Windows.
+_SOFTWARE_RENDERERS = ("llvmpipe", "softpipe", "swrast", "software rasterizer", "gdi generic",
+                       "microsoft basic render")
+_GL_RENDERER = 0x1F01
+
+
+def is_software_renderer(renderer: str | None) -> bool:
+    """Il renderer OpenGL è un disegno software (senza scheda grafica)? Dal nome, senza maiuscole."""
+    return bool(renderer) and any(part in renderer.lower() for part in _SOFTWARE_RENDERERS)
+
+
+def opengl_choice(system: str, env_value: str | None, stored: str | None) -> str:
+    """``"native"`` o ``"software"`` all'avvio (D65-8): su macOS sempre ``"native"`` (invariato); altrove la
+    variabile :data:`SOFTWARE_GL_ENV` se vale ``software``/``native``, se no ``"software"`` solo con
+    ``stored == "software"``."""
+    if system == "Darwin":
+        return "native"
+    forced = (env_value or "").strip().lower()
+    if forced in ("software", "native"):
+        return forced
+    return "software" if stored == "software" else "native"
+
+
+def apply_software_opengl(system: str) -> None:
+    """Disegno software prima della ``QApplication`` (D65-8): Windows ``AA_UseSoftwareOpenGL`` (``opengl32sw.dll``
+    di Qt, Mesa llvmpipe), Linux ``LIBGL_ALWAYS_SOFTWARE=1`` (Mesa llvmpipe del sistema). Mai su macOS."""
+    if system == "Windows":
+        from PySide6.QtCore import QCoreApplication, Qt
+
+        QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL, True)
+    elif system != "Darwin":
+        import os
+
+        os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
+
+
 def surface_format() -> QSurfaceFormat:
     fmt = QSurfaceFormat()
     fmt.setVersion(*GL_VERSION)
@@ -196,6 +241,7 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
     """``SkyRenderer`` su ``QOpenGLWidget``: una texture per il piano dello sfondo, trasformazione sulla GPU."""
 
     failed = Signal(str, str, object)  # codice, testo, params (GL_UNAVAILABLE)
+    software = Signal(str)  # nome del renderer software in uso (D65-8): si dichiara, solo fuori da macOS
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -214,6 +260,7 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
         self._points_dirty = False
         self._point_count = 0
         self.available = True
+        self.renderer_name: str | None = None  # GL_RENDERER del contesto (D65-8)
         self.program: QOpenGLShaderProgram | None = None
         self.point_program: QOpenGLShaderProgram | None = None
         self.poly_program: QOpenGLShaderProgram | None = None
@@ -287,6 +334,12 @@ class GlSkyRenderer(QOpenGLWidget, SkyRenderer):
                               f"{GL_VERSION[1]} core profile; visualizzatore non disponibile",
                               {"found": f"{version[0]}.{version[1]}", "required": f"{GL_VERSION[0]}.{GL_VERSION[1]}"})
             return
+        try:
+            self.renderer_name = str(self.context().functions().glGetString(_GL_RENDERER) or "") or None
+        except Exception:  # noqa: BLE001 - solo per la dichiarazione del disegno software
+            self.renderer_name = None
+        if sys.platform != "darwin" and is_software_renderer(self.renderer_name):
+            self.software.emit(self.renderer_name)  # ripiego dichiarato (D65-8); macOS invariato
         program = QOpenGLShaderProgram(self)
         ok = (program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, _VERTEX)
               and program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _FRAGMENT)

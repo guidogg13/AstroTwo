@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import sys
 import unicodedata
 import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
@@ -82,7 +83,7 @@ from astrotwo.ai.chat_assistant import (
     ToolCallFinished,
     ToolCallStarted,
 )
-from astrotwo.ai.keychain_keys import KeychainError
+from astrotwo.ai.keychain_keys import KeychainError, store_name
 from astrotwo.ai.provider_adapter import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     PROVIDER_PRESETS,
@@ -1011,7 +1012,11 @@ class AssistantSettingsDialog(QDialog):
         self.key.setObjectName("apiKey")
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self.key.setPlaceholderText(self.tr("API key (kept only in the macOS Keychain)"))
+        if sys.platform == "darwin":  # macOS invariato; Windows e Linux con D65-1 (P12 della 65)
+            self.key.setPlaceholderText(self.tr("API key (kept only in the macOS Keychain)"))
+        else:
+            self.key.setPlaceholderText(self.tr("API key (kept only in the system key store: %1)")
+                                        .replace("%1", store_name()))
         save_key = QPushButton(self.tr("Save"))
         save_key.setObjectName("saveKey")
         save_key.clicked.connect(self.save_key)

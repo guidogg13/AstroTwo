@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Guido Ratti
-"""Chiavi API dei provider IA solo nel Portachiavi di macOS (livello 3).
+"""Chiavi API dei provider IA solo nell'archivio sicuro del sistema (livello 3).
 
-Specifica: ``mdfiles/31-ia-chiavi-portachiavi.md`` (stato ``approvato``).
+Specifica: ``mdfiles/31-ia-chiavi-portachiavi.md`` (stato ``approvato``); Windows e Linux: ``65`` (D65-1, sprint W2).
 
 Regola d'oro n. 5: una chiave non finisce mai in un file, in un log, nella cronologia, nella sessione o nel
-repository. Il modulo usa **solo** il backend macOS di ``keyring`` (``keyring.backends.macOS.Keyring``), creato
-direttamente: la scelta automatica di ``keyring``, ``PYTHON_KEYRING_BACKEND``, ``keyringrc.cfg`` e i backend di
-altri pacchetti (es. ``keyrings.alt``, in chiaro su file) non si usano mai, e non c'è alcun ripiego.
+repository. Il modulo usa **un solo backend di ``keyring`` per sistema**, creato direttamente: su macOS il Portachiavi
+(``keyring.backends.macOS.Keyring``, invariato), su Windows la Gestione credenziali
+(``keyring.backends.Windows.WinVaultKeyring``), su Linux il Secret Service (``keyring.backends.SecretService.Keyring``:
+GNOME Keyring, KWallet, KeePassXC). La scelta automatica di ``keyring``, ``PYTHON_KEYRING_BACKEND``,
+``keyringrc.cfg`` e i backend di altri pacchetti (es. ``keyrings.alt``, in chiaro su file) non si usano mai, e non
+c'è alcun ripiego: senza l'archivio del sistema, ``KEYCHAIN_UNAVAILABLE``.
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ __all__ = [
     "KeychainError",
     "SecretKey",
     "KeychainStore",
+    "SYSTEM_STORES",
+    "store_name",
 ]
 
 #: Nome del servizio degli elementi del Portachiavi (decisione del proprietario del 2026-10-16).
@@ -102,10 +107,6 @@ def _profile(profile_id: object) -> str:
 
 def _macos_backend():
     """Il solo backend macOS di ``keyring``, creato direttamente (nessuna scelta automatica, nessun ripiego)."""
-    if platform.system() != "Darwin":
-        raise KeychainError("KEYCHAIN_UNAVAILABLE", f"sistema {platform.system()!r}: il Portachiavi di macOS non "
-                            "c'è; l'assistente non è disponibile, il resto dell'app funziona",
-                            params={"reason": "not_macos", "system": platform.system()})
     try:
         from keyring.backends import macOS
     except Exception as exc:  # noqa: BLE001 - libreria Security non caricabile
@@ -122,14 +123,58 @@ def _macos_backend():
     return backend
 
 
+#: Archivio sicuro di ogni sistema (D65-1): sistema di ``platform.system()`` → (modulo di ``keyring.backends``,
+#: classe, nome mostrato). Nessun altro backend, mai.
+SYSTEM_STORES = {
+    "Windows": ("Windows", "WinVaultKeyring", "Windows Credential Manager"),
+    "Linux": ("SecretService", "Keyring", "Secret Service"),
+}
+
+
+def store_name(system: str | None = None) -> str:
+    """Nome dell'archivio delle chiavi del sistema, per i testi (``macOS Keychain`` su macOS)."""
+    system = platform.system() if system is None else system
+    return "macOS Keychain" if system == "Darwin" else SYSTEM_STORES.get(system, (None, None, "—"))[2]
+
+
+def _other_backend(system: str):
+    """Backend forzato di Windows o Linux (D65-1), creato direttamente; ``KEYCHAIN_UNAVAILABLE`` se non c'è."""
+    if system not in SYSTEM_STORES:
+        raise KeychainError("KEYCHAIN_UNAVAILABLE", f"sistema {system!r}: nessun archivio sicuro delle chiavi "
+                            "previsto; l'assistente non è disponibile, il resto dell'app funziona",
+                            params={"reason": "unsupported_system", "system": system})
+    module_name, class_name, name = SYSTEM_STORES[system]
+    try:
+        import importlib
+
+        backend_class = getattr(importlib.import_module(f"keyring.backends.{module_name}"), class_name)
+    except Exception as exc:  # noqa: BLE001 - backend non caricabile
+        raise KeychainError("KEYCHAIN_UNAVAILABLE", f"backend {name} di keyring non caricabile "
+                            f"({type(exc).__name__})",
+                            params={"reason": "store_not_loadable", "store": name,
+                                    "error_type": type(exc).__name__}) from exc
+    try:
+        backend_class.priority  # noqa: B018 - solleva se l'archivio non c'è (pywin32-ctypes, D-Bus, servizio)
+    except Exception as exc:  # noqa: BLE001
+        raise KeychainError("KEYCHAIN_UNAVAILABLE", f"{name} non disponibile: {exc}",
+                            params={"reason": "store_unavailable", "store": name, "detail": str(exc)}) from exc
+    return backend_class()
+
+
+def _system_backend():
+    """Il backend dell'archivio del sistema: macOS invariato, Windows e Linux con D65-1."""
+    system = platform.system()
+    return _macos_backend() if system == "Darwin" else _other_backend(system)
+
+
 class KeychainStore:
-    """Accesso al Portachiavi con il backend macOS forzato (§3.2); ``KEYCHAIN_UNAVAILABLE`` se non c'è."""
+    """Accesso all'archivio del sistema con il backend forzato (§3.2, D65-1); ``KEYCHAIN_UNAVAILABLE`` se non c'è."""
 
     def __init__(self, *, service: str = SERVICE_NAME) -> None:
         if not isinstance(service, str) or not service:
             raise ValueError("service: nome del servizio del Portachiavi")
         self.service = service
-        self._backend = _macos_backend()
+        self._backend = _system_backend()
 
     def _failure(self, exc: BaseException, operation: str, profile_id: str, secret: str | None = None) -> KeychainError:
         """Errore del Portachiavi per l'operazione ``operation`` (``read``, ``write``, ``delete``) sul profilo."""

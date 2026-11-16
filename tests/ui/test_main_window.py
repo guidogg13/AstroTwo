@@ -462,7 +462,7 @@ def test_t10_assistant_area(qtbot, window):
     assert dock.widget() is win.ai_panel  # pannello del 44; senza profilo dice perché non è disponibile
     assert "not available" in win.ai_panel.unavailable.text() and win.ai_panel.bottom.currentIndex() == 1
     action = win.panel_actions["assistant"]
-    assert action.shortcut().toString() == "Meta+Ctrl+A" and action.isEnabled()
+    assert action.shortcut() == mw.platform_shortcuts()["assistant"] and action.isEnabled()
     assert action in win.toolbar.actions()
     action.trigger()
     wait_idle(qtbot, win)
@@ -564,7 +564,7 @@ def stylesheet_colors(text):
 def test_t13_night_stylesheet_and_icons(qtbot, window):
     """Modalità notte (§3.11): anche foglio di stile, icone e stati vuoti solo in toni di rosso; ⌃⌘N (D40-4)."""
     win = window
-    assert win.act_night.shortcut().toString() == "Meta+Ctrl+N"
+    assert win.act_night.shortcut() == mw.platform_shortcuts()["night"]  # ⌃⌘N su macOS (D65-9)
     win.act_night.trigger()
     wait_idle(qtbot, win)
     colors = list(stylesheet_colors(QApplication.instance().styleSheet()))
@@ -778,3 +778,35 @@ def test_t12_startup_time(qtbot, settings_path, cache):
     elapsed = time.monotonic() - t0
     win.close()
     assert elapsed <= 3.0
+
+
+# =============================================================================
+# D65-8 (sprint W2) — OpenGL di ripiego su Windows e Linux, dichiarato
+
+
+def test_opengl_fallback_declared(qtbot, window, monkeypatch):
+    """Dopo ``GL_UNAVAILABLE`` col disegno nativo: software al prossimo avvio, detto all'utente; se anche il software
+    non va, nessun altro tentativo; il renderer software in uso si dichiara nei messaggi e nella barra di stato.
+    I metodi sono collegati solo fuori da macOS: qui si chiamano direttamente."""
+    from PySide6.QtCore import QCoreApplication
+
+    from astrotwo.ui.sky_renderer_gl import SOFTWARE_GL_KEY
+
+    win = window
+    monkeypatch.delenv("LIBGL_ALWAYS_SOFTWARE", raising=False)
+    monkeypatch.delenv("ASTROTWO_OPENGL", raising=False)
+    monkeypatch.setattr(QCoreApplication, "testAttribute", staticmethod(lambda attribute: False))
+    win._opengl_failed()
+    assert win.settings.value(SOFTWARE_GL_KEY) == "software"
+    assert win.messages.messages[-1][1] == "GL_SOFTWARE"
+    assert "restart AstroTwo" in win.messages.messages[-1][2] or "riavviare" in win.messages.messages[-1][2]
+    monkeypatch.setenv("LIBGL_ALWAYS_SOFTWARE", "1")  # avvio col disegno software: anche lui non va
+    count = len(win.messages.messages)
+    win._opengl_failed()
+    assert win.settings.value(SOFTWARE_GL_KEY) == "software_failed" and len(win.messages.messages) == count
+    monkeypatch.delenv("LIBGL_ALWAYS_SOFTWARE")
+    win._opengl_failed()  # dopo un software fallito nessun nuovo tentativo automatico
+    assert win.settings.value(SOFTWARE_GL_KEY) == "software_failed" and len(win.messages.messages) == count
+    win._opengl_software("llvmpipe (LLVM 15.0.7, 256 bits)")
+    assert win.messages.messages[-1][1] == "GL_SOFTWARE" and "llvmpipe" in win.messages.messages[-1][2]
+    assert "llvmpipe" in win.status.currentMessage()
