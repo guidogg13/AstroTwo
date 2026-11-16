@@ -261,6 +261,71 @@ def app_components() -> tuple[Component, ...]:
     )
 
 
+#: Componenti dei pacchetti di Windows e Linux che non sono negli avvisi raccolti per macOS (scripts/licenses/qt/
+#: README.md: criterio di macOS, che esclude xcb, wintab, D3D12MemoryAllocator, zlib) né in un pacchetto Python, più
+#: il runtime dell'AppImage. D65-7: **testi integrali da aggiungere prima del rilascio 1.1** (sprint W3); qui l'elenco.
+QT_PLATFORM_EXTRAS: dict[str, tuple[str, ...]] = {
+    "Windows": (
+        "zlib (inclusa in Qt6Core.dll sulle ruote di Windows; licenza Zlib)",
+        "D3D12MemoryAllocator e wintab (qtbase, plugin qwindows; licenza MIT)",
+        "Mesa llvmpipe in opengl32sw.dll (OpenGL software di D65-8; Mesa MIT, LLVM Apache-2.0 WITH LLVM-exception)",
+    ),
+    "Linux": (
+        "xcb, xcb-util e xkbcommon (plugin libqxcb e QtGui; licenze MIT/X11)",
+        "ICU (librerie libicu* incluse nella ruota di PySide6; licenza Unicode-3.0)",
+        "runtime statico dell'AppImage (AppImage/type2-runtime 20251108, MIT; include squashfuse, libfuse, zstd e "
+        "zlib con le loro licenze), solo nell'AppImage",
+    ),
+}
+
+#: Nome del sistema → (descrizione del pacchetto, eseguibile, triplo di python-build-standalone).
+PACKAGES = {
+    "Windows": ("pacchetto .zip per Windows x86_64 (D65-3, D65-5)", "AstroTwo.exe", "x86_64-pc-windows-msvc"),
+    "Linux": ("AppImage e .tar.gz per Linux x86_64 (D65-4, D65-5)", "AstroTwo", "x86_64-unknown-linux-gnu"),
+}
+
+
+def package_components(system: str) -> tuple[Component, ...]:
+    """Componenti che entrano solo nel pacchetto di Windows o di Linux (D65-7): come :func:`app_components` del .dmg,
+    con il Python e l'eseguibile di quel sistema e l'elenco delle componenti di Qt ancora da completare."""
+    import platform
+
+    description, executable, triple = PACKAGES[system]
+    extras = "\n".join(f"- {item}" for item in QT_PLATFORM_EXTRAS[system])
+    qt_notices = (_LICENSES_DIR / "qt" / "QT_THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
+    return (
+        Component(
+            name="Python (CPython, python-build-standalone)",
+            version=platform.python_version(),
+            license="PSF-2.0; OpenSSL Apache-2.0; SQLite pubblico dominio; libffi, expat MIT; XZ 0BSD; bzip2; "
+                    "mpdecimal BSD-2-Clause; libuuid BSD-3-Clause",
+            source=(f"interprete del {description}: Python {platform.python_version()} di python-build-standalone "
+                    f"({triple}) installato da uv 0.13.7 sul runner di GitHub Actions (workflow "
+                    "build-windows-linux.yml); testi in scripts/licenses/python/ (elenco delle librerie incluse da "
+                    "ricontrollare per questo sistema nel W3)"),
+            license_text=_texts(_LICENSES_DIR / "python", _PYTHON_LICENSES),
+        ),
+        Component(
+            name="Qt 6.11.3, componenti di terze parti (qtbase, qtsvg)",
+            version="6.11.3",
+            license="licenze delle singole componenti, elencate sotto (Licenses Used in Qt)",
+            source=("qt_attribution.json e LICENSES/ dei sorgenti ufficiali qtbase e qtsvg 6.11.3 "
+                    "(https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/); criterio e SHA-256 in "
+                    "scripts/licenses/qt/README.md"),
+            license_text=(f"Componenti del pacchetto per {system} non ancora coperte dai testi sotto (D65-7, testi "
+                          f"integrali da aggiungere prima del rilascio 1.1):\n{extras}\n\n{qt_notices}"),
+        ),
+        Component(
+            name="Bootloader e hook di esecuzione di PyInstaller",
+            version=f"pyinstaller {md.version('pyinstaller')}, hooks-contrib {md.version('pyinstaller-hooks-contrib')}",
+            license="GPL-2.0-or-later con eccezione del bootloader; hook di esecuzione Apache-2.0",
+            source=(f"eseguibile {executable} e hook di esecuzione del pacchetto, dai pacchetti pyinstaller e "
+                    "pyinstaller-hooks-contrib (gruppo build); lo strumento PyInstaller non si distribuisce"),
+            license_text=_pyinstaller_texts(),
+        ),
+    )
+
+
 #: Dati di terze parti inclusi solo per i test (tests/core/data/README.md), con le condizioni d'uso delle fonti.
 TEST_DATA: tuple[tuple[str, str], ...] = ()  # dal 2026-10-22 nessuno: i dati di test sono sintetici
 
@@ -332,7 +397,15 @@ def _license_files(distribution: md.Distribution) -> list[tuple[str, str]]:
     return sorted(files)
 
 
-def render() -> str:
+def render(system: str | None = None) -> str:
+    """Testo del file. ``system`` (``platform.system()`` se non dato): ``Darwin`` = il file dell'app per macOS (nella
+    radice, invariato); ``Windows`` o ``Linux`` = il file del pacchetto di quel sistema (D65-7), da generare **sul
+    sistema stesso**: le dipendenze sono quelle installate, con i marcatori valutati sulla piattaforma corrente."""
+    import platform
+
+    system = platform.system() if system is None else system
+    if system != "Darwin":
+        return _render_package(system)
     distributions = runtime_closure()
     lines = [
         "THIRD_PARTY_LICENSES — componenti di terze parti di AstroTwo",
@@ -356,6 +429,35 @@ def render() -> str:
     for distribution in distributions:
         lines.append(f"{distribution.metadata['Name']:<{width}}  {distribution.version:<22}  {_license(distribution)}")
     components = EXTRA_COMPONENTS + app_components()
+    return _render_body(lines, distributions, components, width)
+
+
+def _render_package(system: str) -> str:
+    """File ``THIRD_PARTY_LICENSES`` del pacchetto di Windows o di Linux (D65-7, sprint W2)."""
+    if system not in PACKAGES:
+        raise ValueError(f"sistema {system!r}: pacchetti solo per Windows e Linux (65)")
+    distributions = runtime_closure()
+    lines = [
+        f"THIRD_PARTY_LICENSES — componenti di terze parti di AstroTwo, {PACKAGES[system][0]}",
+        "",
+        "File generato da scripts/third_party_licenses.py sul sistema del pacchetto (D65-7, decisa dal proprietario",
+        "il 2026-11-16): tutte le dipendenze di esecuzione installate su questo sistema (chiusura delle dipendenze di",
+        "pyproject.toml con i marcatori valutati qui), con nome, versione, licenza dichiarata e il testo integrale dei",
+        "file di licenza e degli avvisi distribuiti con ogni pacchetto, più i componenti non Python inclusi nel",
+        "progetto e quelli che entrano solo nel pacchetto (Python, componenti di Qt, bootloader di PyInstaller).",
+        "Licenza di AstroTwo: GPL-3.0-or-later. In fondo, a parte, gli strumenti di sviluppo, che non si distribuiscono.",
+        "",
+        "Riepilogo",
+        "=========",
+        "",
+    ]
+    width = max(len(d.metadata["Name"]) for d in distributions)
+    for distribution in distributions:
+        lines.append(f"{distribution.metadata['Name']:<{width}}  {distribution.version:<22}  {_license(distribution)}")
+    return _render_body(lines, distributions, EXTRA_COMPONENTS + package_components(system), width)
+
+
+def _render_body(lines: list[str], distributions, components, width: int) -> str:
     for component in components:
         lines.append(f"{component.name:<{width}}  {component.version:<22}  {component.license}")
     lines.append("")
@@ -407,7 +509,14 @@ def render() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="controlla che il file sia aggiornato, senza scriverlo")
+    parser.add_argument("--package", type=Path, metavar="FILE",
+                        help="scrive in FILE il file del pacchetto di questo sistema (Windows o Linux, D65-7)")
     args = parser.parse_args()
+    if args.package is not None:
+        import platform
+
+        args.package.write_bytes(render(platform.system()).encode("utf-8"))  # UTF-8 e \n su ogni sistema
+        return 0
     content = render()
     if args.check:
         current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""

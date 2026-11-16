@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
+#
+# Pacchetti di AstroTwo per Windows e Linux x86_64 (mdfiles/65-windows-linux.md §3.9, sprint W2; decisioni del
+# proprietario del 2026-11-16: D65-3 .zip per Windows, D65-4 AppImage + .tar.gz costruiti su ubuntu-22.04, D65-5 solo
+# x86_64, D65-7 THIRD_PARTY_LICENSES per pacchetto). Solo a mano (workflow_dispatch): nessun avvio automatico, nessuna
+# firma, nessuna release, nessun tag. I pacchetti restano come artefatti di questo workflow.
+# Ogni pacchetto si prova scompattato (o lanciato, l'AppImage) con l'autocontrollo e la prova di fumo della finestra
+# Profili con le risposte registrate (come V10 del .dmg): Qt offscreen, senza rete.
+name: build-windows-linux
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: pacchetto Windows x86_64 (.zip)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      QT_QPA_PLATFORM: offscreen
+      UV_PYTHON: "3.12"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Fine riga del repository invariata
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+          enable-cache: true
+
+      - name: Python e dipendenze da uv.lock (anche il gruppo build)
+        run: uv sync --locked
+
+      - name: Costruzione, pacchetto e controlli W1-W4
+        run: uv run --frozen python scripts/build_windows_linux.py
+
+      - name: Pacchetto come artefatto
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astrotwo-windows-x86_64
+          path: |
+            dist/AstroTwo-*-windows-x86_64.zip
+            dist/AstroTwo-*-windows-x86_64.zip.sha256
+            dist/build-report-windows.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  linux:
+    name: pacchetti Linux x86_64 (AppImage, .tar.gz)
+    # glibc 2.35: la più vecchia ammessa da PySide6 6.11.3 (manylinux_2_34), D65-4
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      QT_QPA_PLATFORM: offscreen
+      UV_PYTHON: "3.12"
+      # Strumenti dell'AppImage fissati per versione e impronta (scaricati e controllati il 2026-11-16)
+      APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+      APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+      APPIMAGE_RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+      APPIMAGE_RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Librerie di sistema per Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
+      - name: appimagetool e runtime statico (versioni fissate)
+        run: |
+          mkdir -p "$RUNNER_TEMP/appimage"
+          curl -fsSL -o "$RUNNER_TEMP/appimage/appimagetool" "$APPIMAGETOOL_URL"
+          curl -fsSL -o "$RUNNER_TEMP/appimage/runtime-x86_64" "$APPIMAGE_RUNTIME_URL"
+          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimage/appimagetool" | sha256sum -c -
+          echo "$APPIMAGE_RUNTIME_SHA256  $RUNNER_TEMP/appimage/runtime-x86_64" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/appimage/appimagetool"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+          enable-cache: true
+
+      - name: Python e dipendenze da uv.lock (anche il gruppo build)
+        run: uv sync --locked
+
+      - name: Costruzione, pacchetti e controlli W1-W4
+        run: |
+          uv run --frozen python scripts/build_windows_linux.py \
+            --appimagetool "$RUNNER_TEMP/appimage/appimagetool" \
+            --appimage-runtime "$RUNNER_TEMP/appimage/runtime-x86_64"
+
+      - name: Pacchetti come artefatto
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astrotwo-linux-x86_64
+          path: |
+            dist/AstroTwo-*-linux-x86_64.AppImage
+            dist/AstroTwo-*-linux-x86_64.AppImage.sha256
+            dist/AstroTwo-*-linux-x86_64.tar.gz
+            dist/AstroTwo-*-linux-x86_64.tar.gz.sha256
+            dist/build-report-linux.json
+          if-no-files-found: warn
+          retention-days: 30

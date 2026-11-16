@@ -15,9 +15,9 @@ third_party_licenses = importlib.util.module_from_spec(spec)
 sys.modules["third_party_licenses"] = third_party_licenses  # richiesto da dataclass
 spec.loader.exec_module(third_party_licenses)
 
-#: THIRD_PARTY_LICENSES descrive l'app per macOS: su Windows e Linux keyring porta altre dipendenze (pywin32-ctypes;
-#: SecretStorage, jeepney, cryptography), quindi l'elenco delle dipendenze installate è diverso. Il file per ogni
-#: sistema è una decisione aperta (65, D65-7, sprint W2): fino ad allora questi due confronti solo su macOS.
+#: THIRD_PARTY_LICENSES nella radice descrive l'app per macOS: su Windows e Linux keyring porta altre dipendenze
+#: (pywin32-ctypes; SecretStorage, jeepney, cryptography). I pacchetti di Windows e Linux hanno un file proprio,
+#: generato sul runner (D65-7, sprint W2, test in fondo): i due confronti col file della radice solo su macOS.
 only_macos = pytest.mark.skipif(sys.platform != "darwin", reason="THIRD_PARTY_LICENSES è quello dell'app per macOS "
                                 "(65, D65-7)")
 
@@ -62,3 +62,42 @@ def test_t11_app_components_present():
     for needle in ("PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2", "Apache License", "PCRE2", "FreeType",
                    "Bootloader Exception"):
         assert needle in distributed, needle
+
+
+# --- D65-7 (sprint W2): un file per pacchetto di Windows e di Linux, generato sul sistema stesso -------------------
+
+
+@pytest.mark.parametrize("system", ["Windows", "Linux"])
+def test_package_file_per_system(system):
+    text = third_party_licenses.render(system)
+    distributed = text.split("Strumenti di sviluppo (test e costruzione", 1)[0]
+    assert text.startswith(f"THIRD_PARTY_LICENSES — componenti di terze parti di AstroTwo, "
+                           f"{third_party_licenses.PACKAGES[system][0]}")
+    for title in ("Python (CPython, python-build-standalone)", "Qt 6.11.3, componenti di terze parti (qtbase, qtsvg)",
+                  "Bootloader e hook di esecuzione di PyInstaller", "pck00011.tpc", "Lucide"):
+        assert f"\n{title}" in distributed, title
+    for item in third_party_licenses.QT_PLATFORM_EXTRAS[system]:  # componenti di Qt da completare, dichiarate
+        assert f"- {item}" in distributed
+    assert "Contents/MacOS" not in distributed and "aarch64-apple-darwin" not in distributed
+    assert third_party_licenses.PACKAGES[system][1] in distributed
+    assert "GNU LESSER GENERAL PUBLIC LICENSE" in distributed
+
+
+def test_package_file_only_for_windows_and_linux():
+    with pytest.raises(ValueError):
+        third_party_licenses.render("FreeBSD")
+
+
+@pytest.mark.skipif(sys.platform == "darwin", reason="file del pacchetto: dipendenze del sistema del runner")
+def test_package_file_lists_the_system_dependencies(tmp_path, monkeypatch):
+    """Sul runner il file del pacchetto elenca le dipendenze di keyring di quel sistema (65 P9)."""
+    import platform
+
+    monkeypatch.setattr(sys, "argv", ["third_party_licenses.py", "--package", str(tmp_path / "T")])
+    assert third_party_licenses.main() == 0
+    data = (tmp_path / "T").read_bytes()
+    assert b"\r" not in data
+    summary = data.decode("utf-8").split("Riepilogo\n=========\n", 1)[1].split("\n\n=", 1)[0]
+    names = {canonicalize_name(line.split()[0]) for line in summary.splitlines() if line.strip()}
+    expected = {"pywin32-ctypes"} if platform.system() == "Windows" else {"secretstorage", "jeepney", "cryptography"}
+    assert expected <= names

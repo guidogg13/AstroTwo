@@ -48,9 +48,9 @@ Le righe si riferiscono al commit del W1. «W1» nella colonna Stato = corretto 
 | P4 | **URL `file:` ricevuti via SAMP**: `unquote("/C:/dati/t.xml")` non è un percorso di Windows → copia del VOTable di TOPCAT non riuscita | `vo_protocols.py:2970` | bloccante | Su Windows `nturl2path.url2pathname` (`file_url_path`, `vo_protocols.py:2714`); su macOS e Linux invariato | **W1** |
 | P5 | **Privacy verso l'IA**: i percorsi assoluti nei testi mandati al provider si riducono al nome del file (32 §3.7) solo nella forma POSIX; `C:\Users\…\m45.fits` passerebbe intero | `tool_registry.py:231, 314` | da correggere | Su Windows anche `C:\…`, `C:/…`, `\\server\…`; su macOS e Linux nessun cambio | **W1** |
 | P6 | **Cartelle dei dati** sotto `~/Library/…`: cache (`Caches/AstroTwo`), punti SED (`Application Support/AstroTwo/Profiles`), VOTable ricevuti via SAMP (`…/SAMP/received`). Su Windows e Linux funzionano ma creano `Library` nella home | `core/cache.py:134`, `analysis/profile_export.py:181`, `ui/samp_link.py:50` | da correggere | Una funzione per sistema, macOS invariato; posti proposti in **D65-2** | **W2** (D65-2) |
-| P7 | **Nessun pacchetto** per Windows e Linux: `build_app.py` si ferma fuori da macOS arm64; `make_dmg.py` e `sign_notarize.py` sono solo macOS | `scripts/build_app.py:367` | bloccante (niente da consegnare) | Nuovo script del W2 con PyInstaller `onedir` (stesso strumento, A2) sui runner; formati in **D65-3**, **D65-4**, architetture in **D65-5** | **W2** (D65-3…5, §3.9) |
-| P8 | **Controlli dell'app costruita** pensati per il `.app`: plugin `libqcocoa.dylib`/`libqmacstyle.dylib`, backend `keyring.backends.macOS`, cartella `Contents` | `src/astrotwo/app_bundle.py:64, 237, 286` | bloccante (per i pacchetti) | Elenco dei plugin e del backend per sistema (`qwindows.dll`, `libqxcb.so`/`libqwayland*.so`), radice del pacchetto da `sys._MEIPASS` | **W2** (§3.9) |
-| P9 | **`THIRD_PARTY_LICENSES`** descrive l'app per macOS: su Windows `keyring` porta `pywin32-ctypes`, su Linux `SecretStorage`, `jeepney`, `cryptography`, `cffi`; Qt porta altre librerie (xcb, ICU…) | `scripts/third_party_licenses.py`, `THIRD_PARTY_LICENSES` | bloccante (obblighi di licenza) | Un file per pacchetto, generato sul runner; test per sistema | **W2** (D65-7, §3.9) |
+| P7 | **Nessun pacchetto** per Windows e Linux: `build_app.py` si ferma fuori da macOS arm64; `make_dmg.py` e `sign_notarize.py` sono solo macOS | `scripts/build_app.py:367` | bloccante (niente da consegnare) | Nuovo script del W2 con PyInstaller `onedir` (stesso strumento, A2) sui runner; formati in **D65-3**, **D65-4**, architetture in **D65-5** | **W2b** (§3.9, da provare sui runner) |
+| P8 | **Controlli dell'app costruita** pensati per il `.app`: plugin `libqcocoa.dylib`/`libqmacstyle.dylib`, backend `keyring.backends.macOS`, cartella `Contents` | `src/astrotwo/app_bundle.py:64, 237, 286` | bloccante (per i pacchetti) | Elenco dei plugin e del backend per sistema (`qwindows.dll`, `libqxcb.so`/`libqwayland*.so`), radice del pacchetto da `sys._MEIPASS` | **W2b** (§3.9) |
+| P9 | **`THIRD_PARTY_LICENSES`** descrive l'app per macOS: su Windows `keyring` porta `pywin32-ctypes`, su Linux `SecretStorage`, `jeepney`, `cryptography`, `cffi`; Qt porta altre librerie (xcb, ICU…) | `scripts/third_party_licenses.py`, `THIRD_PARTY_LICENSES` | bloccante (obblighi di licenza) | Un file per pacchetto, generato sul runner; test per sistema | **W2b** (D65-7, §3.9; testi di `QT_PLATFORM_EXTRAS` da completare nel W3) |
 | P10 | **OpenGL 4.1 core** obbligatorio per il cielo (41 §3.13): senza GPU (macchina virtuale, desktop remoto, driver vecchi) `GL_UNAVAILABLE`, cielo non disegnato | `ui/sky_renderer_gl.py:29`, `ui/main_window.py:3399` | da correggere (bloccante per le prove in UTM) | **D65-8** | **W2** (D65-8) |
 | P11 | **Scorciatoie con `Meta`**: `Meta+Ctrl+F` (schermo intero), `Meta+Ctrl+N` (modo notte), `Meta+Ctrl+A` (assistente). Su macOS `Meta` è ⌃ (⌃⌘F, scorciatoia standard); su Windows e Linux è il tasto Windows/Super, spesso preso dal sistema (Win+Ctrl+F di Windows cerca i computer in rete) | `ui/main_window.py:2142, 2143, 2173` | da correggere | Tabella per sistema, macOS invariato; proposta in **D65-9** | **W2** (D65-9) |
 | P12 | **Testi «macOS Keychain»** nell'interfaccia (campo della chiave, avviso) | `ui/ai_panel.py:1014`, `ui/main_window.py:1648`, traduzioni | solo aspetto | Testo per sistema dopo D65-1 | **W2** |
@@ -59,10 +59,10 @@ Le righe si riferiscono al commit del W1. «W1» nella colonna Stato = corretto 
 | P15 | **File di sessione** con percorsi assoluti dei file: una sessione salvata su un sistema non si riapre su un altro (`file_unreadable`, `path_not_absolute`) | `core/commands.py:554` | solo aspetto | Limite dichiarato in `05` e nella documentazione; nessun cambio | **W2** (D65-10, documentato) |
 | P16 | **PNG e PDF** non uguali byte per byte tra sistemi: le etichette del PNG usano i font del sistema; il PDF ha la data di creazione. I dati (CSV, ECSV, VOTable, FITS, MOC, JSON) sì | `ui/export_view.py`, `analysis/profile_export.py` | solo aspetto | Regola in **D65-10** | **W2** (D65-10: fuori dalle impronte) |
 | P17 | **Nome nella barra dei menu** (`set_macos_app_name`): solo macOS, altrove non fa niente (già così) | `ui/main_window.py:3354, 3400` | nessuno | — | ok |
-| P18 | **Icona e voce di menu del sistema**: `.icns` solo per il `.app`; servono `.ico` (Windows) e `.desktop` + PNG (Linux) | `scripts/build_app.py`, `assets/` | solo aspetto | Nel W2, dal file SVG dell'icona | W2 |
+| P18 | **Icona e voce di menu del sistema**: `.icns` solo per il `.app`; servono `.ico` (Windows) e `.desktop` + PNG (Linux) | `scripts/build_app.py`, `assets/` | solo aspetto | Nel W2, dal file SVG dell'icona | **W2b** (`.ico` e PNG dall'SVG) |
 | P19 | **Font dell'interfaccia** del sistema (SF su macOS, Segoe UI su Windows, quello della distribuzione su Linux); cifre tabellari con `tnum` | `ui/main_window.py:690`, `ui/catalog_panel.py:89` | solo aspetto | Nessuno; si guarda nel W3 | W3 |
 | P20 | **Schermi HiDPI con scala frazionaria** (125 %, 150 % su Windows): il disegno usa `devicePixelRatioF`; precisione del clic entro 1 pixel (41) da verificare | `ui/sky_renderer_gl.py:448-516`, `ui/sky_viewer.py:886` | da verificare (W3) | — | da verificare |
-| P21 | **Documentazione** per gli utenti solo macOS («Apri comunque», `.dmg`) | `docs/installation.md`, `README.md` | solo aspetto | Nel W2/W3 con i pacchetti (Windows SmartScreen «Ulteriori informazioni → Esegui comunque») | W2 |
+| P21 | **Documentazione** per gli utenti solo macOS («Apri comunque», `.dmg`) | `docs/installation.md`, `README.md` | solo aspetto | Nel W2/W3 con i pacchetti (Windows SmartScreen «Ulteriori informazioni → Esegui comunque») | **W2b** (`docs/installation.md`) |
 | P22 | **Test** non portabili: `import pwd` (non esiste su Windows), backend Security di macOS importato in testa al file, permessi POSIX (`umask`, `chmod`), confronto di `THIRD_PARTY_LICENSES` | `tests/votable_check.py`, `tests/ai/test_keychain_keys.py`, `tests/ai/test_messages_keychain.py`, `tests/analysis/test_profile_export.py`, `tests/ui/test_export_png.py`, `tests/core/test_cache.py`, `tests/test_third_party_licenses.py` | da correggere (solo test) | `pwd` facoltativo; test del Portachiavi di macOS solo su macOS; permessi POSIX saltati su Windows; confronto delle licenze solo su macOS fino a D65-7 | **W1** |
 | P23 | **Estrazione del repository su Windows**: `core.autocrlf` di git sul runner convertirebbe i file in CRLF e i confronti byte per byte dei test fallirebbero | `.github/workflows/tests.yml` | da correggere (solo CI) | `git config --global core.autocrlf false` prima del checkout | **W1** |
 
@@ -178,6 +178,54 @@ dipendenza nuova (le librerie di `keyring` per Windows e Linux erano già in `uv
   sessioni con file aperti (percorsi assoluti: **una sessione non si riapre su un altro sistema**, limite dichiarato in
   `docs/installation.md`).
 
+### 3.9 Pacchetti di Windows e Linux (sprint W2b; D65-3, D65-4, D65-5, D65-7)
+
+- **Workflow** `.github/workflows/build-windows-linux.yml`, **solo a mano** (`workflow_dispatch`): nessun avvio
+  automatico, nessuna firma (D65-11), nessuna release né tag; i pacchetti restano **artefatti del workflow** (30
+  giorni). Job `windows` su `windows-latest`, job `linux` su **`ubuntu-22.04`** (glibc 2.35, D65-4); uv 0.13.7,
+  `uv sync --locked` (gruppo `build` compreso), Qt `offscreen`.
+- **Script** `scripts/build_windows_linux.py` (gira solo su Windows o Linux x86_64, D65-5; `BuildError` altrove):
+  test di default (se non `--skip-tests`), `THIRD_PARTY_LICENSES` del pacchetto generato sul runner
+  (`third_party_licenses.py --package`, D65-7), icona dall'SVG (`.ico` 16–256 px su Windows, PNG 256 su Linux),
+  PyInstaller **`onedir`** (A2) con gli stessi dati, moduli ed esclusioni del `.app` (`build_app.astrotwo_datas`,
+  `DATA_PACKAGES`, `EXCLUDES`), plugin di Qt del sistema (`QT_PLUGINS_KEEP`: `qwindows`, `libqxcb`, Wayland,
+  `offscreen` per i controlli, formati d'immagine di qtbase e qtsvg), moduli di `keyring` del sistema
+  (`HIDDEN_IMPORTS`), su Windows `opengl32sw.dll` della ruota di PySide6 accanto alle DLL di Qt (D65-8).
+- **Pacchetti** (in `dist/`, ognuno con il suo `.sha256` nel formato di `sha256sum`):
+  `AstroTwo-<versione>-windows-x86_64.zip` (cartella `AstroTwo\` con `AstroTwo.exe`, D65-3);
+  `AstroTwo-<versione>-linux-x86_64.tar.gz` (cartella `AstroTwo/`) e `AstroTwo-<versione>-linux-x86_64.AppImage`
+  (AppDir con `AppRun`, `astrotwo.desktop`, icona; `appimagetool` 1.9.1 e runtime statico `type2-runtime` 20251108
+  fissati per URL e SHA-256 nel workflow: non serve `libfuse2`, D65-4).
+- **Controlli sui pacchetti** (scompattati in una cartella nuova, come li riceve l'utente; l'AppImage lanciata con
+  `APPIMAGE_EXTRACT_AND_RUN=1`), con una home finta e il `PATH` del sistema: **W1** contenuto (eseguibile,
+  `BUILD_INFO.json`, i quattro file di licenza, plugin di Qt del sistema, `THIRD_PARTY_LICENSES` con le dipendenze
+  del sistema); **W2** `opengl32sw.dll` su Windows; **W3** autocontrollo `--self-check` (60 §7, ora per sistema: P8);
+  **W4** prova di fumo `--smoke-profile` con le risposte registrate di `tests/analysis/data/profile` (come V10 del
+  `.dmg`: Qt `offscreen`, proxy verso una porta chiusa, nessuna rete). Un controllo fallito → workflow rosso; il
+  rapporto è in `dist/build-report-<sistema>.json` (anche lui artefatto).
+- **Autocontrollo per sistema (P8, 60):** `QT_PLUGINS_NEEDED` e `KEYRING_BACKENDS` di `app_bundle` per
+  `sys.platform`; su Linux senza Secret Service in esecuzione (runner) il backend incluso basta (`store_unavailable`
+  annotato, voce `ok`). Nuova opzione `--report-file FILE` dell'avvio: il rapporto di `--self-check` e
+  `--smoke-profile` va anche in un file, perché l'eseguibile di Windows senza console può non avere lo standard
+  output. Su macOS nessun cambio di comportamento (l'opzione non si usa).
+- **Licenze per pacchetto (D65-7):** `third_party_licenses.py --package FILE` scrive il file del sistema corrente
+  (dipendenze installate lì, Python del runner, avvisi di Qt, bootloader di PyInstaller con l'eseguibile giusto);
+  il file nella radice resta quello di macOS (stessi byte). **Da completare prima del rilascio 1.1 (W3):** testi
+  integrali delle componenti elencate in `QT_PLATFORM_EXTRAS` (Windows: zlib, D3D12MemoryAllocator e wintab, Mesa
+  llvmpipe di `opengl32sw.dll`; Linux: xcb e xkbcommon, ICU, runtime dell'AppImage), oggi dichiarate per nome e
+  licenza nel file del pacchetto.
+- **Non provato sul Mac** (solo sui runner, al primo run dopo il push): PyInstaller su Windows e Linux, nomi esatti
+  dei plugin di Qt 6.11.3 (es. `qmodernwindowsstyle.dll`, plugin Wayland), presenza di `opengl32sw.dll` nella ruota,
+  standard output dell'eseguibile senza console, `appimagetool` sul runner. Sul Mac: test di unità dello script
+  (`tests/test_build_windows_linux.py`: filtro dei plugin, nomi, zip e tar, AppDir, `.sha256`, ambiente, specifica,
+  `--report-file`) e dei file delle licenze per sistema.
+
+### 3.10 Megatest di Windows e Linux (W3)
+
+Nuova sezione **§3.16 della `62`** (prove W1–W16): pacchetti scaricati dagli artefatti, due VM UTM (Windows 11 ARM
+con l'emulazione x86_64, Ubuntu 24.04 x86_64 emulato; configurazione da D65-6), limiti delle VM scritti (OpenGL solo
+software, emulazione lenta, niente HiDPI vero). Le prove della 1.0 per macOS non cambiano.
+
 ## 4. Cosa NON fa
 
 - Non cambia niente su macOS: nessun comportamento nuovo, nessun nuovo `.dmg`, la 1.0 resta quella del build 9.
@@ -262,8 +310,9 @@ Non applicabile: nessuno strumento nuovo; P5 rafforza solo la riduzione dei perc
   (`test_windows_paths_reduced_to_file_names_only_on_windows`).
 - **T6** (runner) Suite di default verde su `macos-latest`; elenco dei fallimenti di `windows-latest` e
   `ubuntu-latest` portato nel W2.
-- **T7** (W2) Pacchetti: avvio con prova di fumo `--quit-after-first-view` e controlli come V1–V10 del `60` adattati.
-- **T8** (W3) Megatest a mano in UTM (D65-6), sezioni della `62` per Windows e Linux.
+- **T7** (W2b, runner) Pacchetti: controlli W1–W4 di §3.9 sui pacchetti scompattati (contenuto e licenze,
+  `opengl32sw.dll`, `--self-check`, `--smoke-profile`); sul Mac `tests/test_build_windows_linux.py`.
+- **T8** (W3) Megatest a mano in UTM (D65-6), `62` §3.16 (W1–W16).
 - **T9** (W2, runner) Stessa esportazione con data fissa → stessa impronta SHA-256 sui tre sistemi (D65-10):
   `test_t9_fingerprints_equal_reference` su ogni runner e job `fingerprints` del workflow (§3.8).
 - **T10** (W2) Chiavi: solo il backend del sistema, mai la scelta di `keyring` (`test_keychain_forced_backend_per_system`,
@@ -298,3 +347,4 @@ D65-6 e la nuova D65-11 (W2). La tabella resta come memoria delle proposte.
 |---|---|---|
 | 2026-11-16 | Claude Code | Creazione del file (stato: bozza), sprint W1, su richiesta del proprietario (decisioni del 2026-11-16 nella nota in testa). Analisi di portabilità: 23 punti (P1–P23) con file, riga, gravità e correzione; ruote di `uv.lock` per sistema; correzioni del W1 senza cambi su macOS (P2–P5, P22, P23); workflow `.github/workflows/tests.yml` (non spinto); D65-1…D65-10 aperte con consiglio. |
 | 2026-11-16 | Claude Code | **Sprint W2a** (brief del proprietario del 2026-11-16): D65-1, 2, 3, 4, 5, 7, 8, 9, 10 decise come nel consiglio (D65-6 aperta). Correzioni senza cambi su macOS (§3.7): chiavi per sistema (31), cartelle per sistema (04, 25, 40), OpenGL di ripiego dichiarato (41), scorciatoie (40), testi della chiave (40, 44). Identità dei byte (§3.8): `scripts/export_fingerprints.py`, impronte di riferimento, test T9 e job `fingerprints` del workflow `tests`. Stati P1, P6, P10–P13, P15, P16 → W2. Stato del file: bozza. |
+| 2026-11-16 | Claude Code | **Sprint W2b:** §3.9 pacchetti (workflow manuale `build-windows-linux.yml`, `scripts/build_windows_linux.py`, `.zip` di Windows, AppImage e `.tar.gz` di Linux su `ubuntu-22.04`, `.sha256`, controlli W1–W4 sui pacchetti scompattati, autocontrollo per sistema e `--report-file` nel 60, licenze per pacchetto con le componenti da completare); §3.10 megatest W1–W16 nella `62` §3.16; `docs/installation.md` per Windows e Linux con i limiti; P7, P8, P9, P18, P21 → W2b; T7, T8. Stato del file: bozza. |

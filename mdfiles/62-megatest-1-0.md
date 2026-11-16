@@ -220,6 +220,39 @@ che si legge tutto (U3); nome **AstroTwo** nella barra dei menu (L5).
 | D9 | Bloccare solo il mirror di Harvard (`simbad.harvard.edu`) in `/etc/hosts` in un giorno in cui il CDS risponde 404 (o bloccare entrambi): profilo di `Vega` | Errore della sezione Identità «no server answers (tried 2 …)» che riporta anche il **primo errore** (il messaggio del server del CDS) |
 | D8 | Esportare un PDF e un PNG (E2, E6), poi `ls -l` sui file | Permessi `-rw-r--r--` (0644 con l'umask normale), non `-rw-------` |
 
+### 3.16 Windows e Linux nelle macchine virtuali UTM (W) — sprint W3, rilascio 1.1
+
+Aggiunta nello sprint W2 (2026-11-16, `65` §3.10) per il **W3**: si fa sui pacchetti scaricati dagli artefatti del
+workflow manuale `build-windows-linux` (non sul `.dmg`), in due macchine virtuali UTM sul Mac: **Windows 11 ARM**
+(AstroTwo x86_64 nell'emulazione di Windows) e **Ubuntu 24.04 x86_64 emulato** (QEMU). Prove brevi: il resto è già
+coperto dalle prove automatiche sui runner (test di default, impronte dei file di dati, autocontrollo e prova di fumo
+dentro i pacchetti). Il proprietario sceglie la configurazione delle VM (D65-6, ancora aperta).
+
+**Limiti delle VM, da scrivere nel resoconto:** nessuna GPU con OpenGL 4.1 → il cielo si vede solo col **disegno
+software** (D65-8: lento, la fluidità non si giudica qui); emulazione x86_64 lenta (tempi di avvio e di risposta non
+rappresentativi: si annotano, non si giudicano); niente scala HiDPI vera (P20 resta da verificare su una macchina
+vera); su Ubuntu emulato la sessione grafica è quella della VM (X11 o Wayland, da annotare); la rete è quella del
+Mac (i servizi giù valgono come per il megatest della 1.0).
+
+| # | Prova | Risultato atteso |
+|---|---|---|
+| W1 | Windows: scaricare lo `.zip` e il `.sha256`, controllare l'impronta in PowerShell (`docs/installation.md`) | Le due impronte coincidono |
+| W2 | Windows: **Extract All…** in una cartella dell'utente, doppio clic su `AstroTwo.exe` | SmartScreen «Windows protected your PC» → **More info → Run anyway**; nessuna richiesta di diritti di amministratore; finestra di AstroTwo |
+| W3 | Windows: primo avvio nella VM | Messaggio `GL_UNAVAILABLE` e «dal prossimo avvio … OpenGL software» (o subito il disegno software, se Qt lo sceglie da solo); dopo il riavvio il cielo si vede, con «OpenGL di ripiego in uso (llvmpipe …)» nei messaggi e nella barra di stato. Se anche il software non va: annotare il messaggio (D65-8 da rivedere) |
+| W4 | Windows: *Go to* `M 45`, **Catalog in view…** Gaia DR3, clic su una stella | Survey e catalogo come su macOS; scheda della sorgente con i valori |
+| W5 | Windows: profilo di `51 Peg`, poi **Export…** ECSV e PDF in `Documenti` | Cinque sezioni fino a «Done»; file scritti; l'ECSV si apre in Blocco note con a capo corretti e caratteri non ASCII leggibili |
+| W6 | Windows: scorciatoie **F11**, **Ctrl+Shift+N**, **Ctrl+Shift+A**, **Ctrl+,** | Schermo intero, modo notte, assistente, impostazioni; nessuna scorciatoia presa dal sistema |
+| W7 | Windows: impostazioni dell'assistente, salvare una chiave **finta** (es. `sk-finta-123`), poi cancellarla | Testo «system key store: Windows Credential Manager»; la voce `dev.pages.astrotwo.ai` compare e poi sparisce in **Gestione credenziali → Credenziali di Windows**; nessun file con la chiave nella cartella dell'app né in `%LOCALAPPDATA%\AstroTwo` |
+| W8 | Windows: chiudere AstroTwo e guardare `%LOCALAPPDATA%\AstroTwo\` | `Cache\` presente; nessuna cartella `Library` nella home |
+| W9 | Linux: `sha256sum -c` dell'AppImage e del `.tar.gz`, `chmod +x`, avvio dell'AppImage | Impronte OK; AstroTwo si avvia senza installare `libfuse2` |
+| W10 | Linux: come W3 e W4 | Disegno software dichiarato (Mesa llvmpipe); survey e catalogo come su macOS |
+| W11 | Linux: profilo di `51 Peg` ed **Export…** ECSV e PDF | Come W5 |
+| W12 | Linux: chiave finta nell'assistente con GNOME Keyring attivo (sessione di Ubuntu) | La voce compare e sparisce in *Passwords and Keys* (Seahorse); senza Secret Service (es. sessione senza portachiavi) messaggio «Secret Service non disponibile», il resto funziona |
+| W13 | Linux: `ls ~/.cache/astrotwo ~/.local/share/astrotwo` dopo W10–W11 | Cartelle presenti; nessuna `~/Library` |
+| W14 | Linux: avvio dal `.tar.gz` scompattato (`./AstroTwo/AstroTwo`) | Come W9 |
+| W15 | Una sessione salvata su macOS con un file aperto, aperta su Windows | Errore dichiarato (`file_unreadable` / `path_not_absolute`), nessun crash: limite documentato (D65-10) |
+| W16 | Licenze: **Help → Licenses…** su Windows e su Linux | `THIRD_PARTY_LICENSES` del pacchetto (con `pywin32-ctypes` su Windows, `SecretStorage` su Linux) e l'elenco delle componenti ancora da completare (D65-7) |
+
 ## 4. Cosa NON fa
 
 - Non sostituisce i test automatici (`uv run python -m pytest -q`) né le
@@ -384,3 +417,4 @@ build 8):
 | 2026-11-13 | Claude Code | **Sprint D13 (decisioni del proprietario del 2026-11-13):** D62-2…D62-7 decise (§13); testo di C1, P4, E5, M1, I1, I2 corretto (D62-7) e P7 riscritta per il messaggio di D62-3. Stato `bozza` invariato. |
 | 2026-11-13 | Claude Code | **Sprint D13c (prove automatiche sul candidato build 8):** nuova decisione aperta **D62-8** (§13): ID `A2NOTE` ripetuti nei VOTable dei cataloghi con più unità non standard, «Immagini: done» nel PDF italiano; consiglio build 9. Testo di E5 completato (TRAPPIST-1 e Vega hanno limiti superiori). Stato `bozza` invariato. |
 | 2026-11-14 | Claude Code | **Sprint D14a (decisioni del proprietario del 2026-11-13):** **D62-8 decisa** (§13): tre correzioni (VOTable validi con ID univoci, «Immagini: completata» nel PDF italiano, etichette inglesi nell'interfaccia inglese), due controlli nuovi nella suite (schema dei VOTable, lingua dell'interfaccia e dei PDF), lettura 180 s per i provider locali, build 8 scartato, candidato build 9 autorizzato, regola di stop. Stato `bozza` invariato. |
+| 2026-11-16 | Claude Code | **Sprint W2b (Windows e Linux):** nuova §3.16 «Windows e Linux nelle macchine virtuali UTM (W)», prove W1–W16 per il W3 sui pacchetti del workflow `build-windows-linux`, con i limiti delle VM (OpenGL solo software, emulazione lenta, niente HiDPI vero). Le prove per macOS e la 1.0 non cambiano. Stato: bozza. |

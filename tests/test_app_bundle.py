@@ -7,6 +7,7 @@ Portachiavi (T10 lo controlla).
 """
 
 import re
+import sys
 import tomllib
 from pathlib import Path
 
@@ -77,16 +78,19 @@ def test_t9_self_check_in_development(qapp):
 
 
 def test_t10_self_check_never_touches_the_keychain(qapp, monkeypatch):
-    from keyring.backends import macOS
+    import importlib
 
+    # backend dell'archivio del sistema (D65-1): Portachiavi, Gestione credenziali o Secret Service
+    module = importlib.import_module(app_bundle.KEYRING_BACKENDS.get(sys.platform, app_bundle.KEYRING_BACKENDS["linux"]))
+    backend = module.WinVaultKeyring if sys.platform == "win32" else module.Keyring
     used = []
 
     def forbidden(*args, **kwargs):
         used.append(args)
-        raise AssertionError("Portachiavi usato dall'autocontrollo")
+        raise AssertionError("archivio delle chiavi usato dall'autocontrollo")
 
     for method in ("get_password", "set_password", "delete_password", "get_credential"):
-        monkeypatch.setattr(macOS.Keyring, method, forbidden)
+        monkeypatch.setattr(backend, method, forbidden)
     report = app_bundle.self_check()
     assert used == [] and any(c["name"] == "keyring_backend" and c["status"] == "ok" for c in report["checks"])
 

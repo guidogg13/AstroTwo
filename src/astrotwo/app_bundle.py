@@ -46,6 +46,19 @@ QT_SOURCES = (
      "9bdf6fa4b5a2d91c3eaa2edd12263fdff0ae19d0ac25d3c99946cd4189a07123"),
 )
 
+#: Plugin di Qt che devono esserci nell'app costruita, per ``sys.platform`` (60 §3.8 V4; Windows e Linux: P8 della 65).
+QT_PLUGINS_NEEDED = {
+    "darwin": ("platforms/libqcocoa.dylib", "styles/libqmacstyle.dylib", "imageformats/libqsvg.dylib",
+               "imageformats/libqjpeg.dylib", "iconengines/libqsvgicon.dylib"),
+    "win32": ("platforms/qwindows.dll", "platforms/qoffscreen.dll", "imageformats/qsvg.dll", "imageformats/qjpeg.dll",
+              "iconengines/qsvgicon.dll"),
+    "linux": ("platforms/libqxcb.so", "platforms/libqoffscreen.so", "imageformats/libqsvg.so",
+              "imageformats/libqjpeg.so", "iconengines/libqsvgicon.so"),
+}
+#: Modulo di ``keyring`` del backend dell'archivio delle chiavi, per ``sys.platform`` (31, D65-1).
+KEYRING_BACKENDS = {"darwin": "keyring.backends.macOS", "win32": "keyring.backends.Windows",
+                    "linux": "keyring.backends.SecretService"}
+
 #: File di licenza dell'app, nell'ordine della finestra Licenze (§3.9).
 LICENSE_NAMES = ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES", "SOURCES.txt")
 BUILD_INFO_NAME = "BUILD_INFO.json"
@@ -234,8 +247,7 @@ def _check_qt(root: Path | None) -> list[dict]:
     else:
         items.append(_item("qt_paths_inside_app", _inside(plugins, root) and _inside(translations, root),
                            {"plugins": str(plugins), "translations": str(translations)}))
-    needed = ["platforms/libqcocoa.dylib", "styles/libqmacstyle.dylib", "imageformats/libqsvg.dylib",
-              "imageformats/libqjpeg.dylib", "iconengines/libqsvgicon.dylib"]
+    needed = list(QT_PLUGINS_NEEDED.get(sys.platform, QT_PLUGINS_NEEDED["linux"]))  # P8 della 65: per sistema
     missing = [name for name in needed if not (plugins / name).is_file()]
     formats = sorted(bytes(f).decode() for f in QImageReader.supportedImageFormats())
     lacking = [f for f in ("jpeg", "png", "svg") if f not in formats]
@@ -280,11 +292,22 @@ def _check_naif() -> dict:
 
 
 def _check_keyring() -> dict:
-    from astrotwo.ai.keychain_keys import KeychainStore
+    """Il backend dell'archivio del sistema c'è nell'app (D65-1): crea solo il backend, nessun accesso alle voci.
 
-    store = KeychainStore(service=SELF_CHECK_SERVICE)  # crea solo il backend macOS: nessun accesso alle voci
-    return _item("keyring_backend", type(store._backend).__module__ == "keyring.backends.macOS",
-                 {"backend": f"{type(store._backend).__module__}.{type(store._backend).__name__}"})
+    Su Linux senza Secret Service in esecuzione (runner, server) il backend è incluso ma l'archivio non risponde:
+    ``store_unavailable`` vale come voce ``ok`` con il motivo, perché si controlla l'app, non la sessione."""
+    from astrotwo.ai.keychain_keys import KeychainError, KeychainStore
+
+    expected = KEYRING_BACKENDS.get(sys.platform, KEYRING_BACKENDS["linux"])
+    try:
+        store = KeychainStore(service=SELF_CHECK_SERVICE)
+    except KeychainError as exc:
+        if sys.platform.startswith("linux") and exc.params.get("reason") == "store_unavailable":
+            return _item("keyring_backend", True, {"backend": expected, "store": "not running",
+                                                   "detail": exc.params.get("detail")})
+        raise
+    found = type(store._backend).__module__
+    return _item("keyring_backend", found == expected, {"backend": f"{found}.{type(store._backend).__name__}"})
 
 
 def _check_keychain_roundtrip() -> dict:
@@ -339,10 +362,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     """``--self-check`` / ``--self-check-keychain``: rapporto JSON ed uscita (0 se tutto ``ok``), nessuna finestra;
     ``--smoke-profile CARTELLA``: prova di fumo della finestra Profili con le risposte registrate della cartella
     (controllo V10, D62-2; ``smoke_profile``), rapporto JSON ed uscita 0 solo se riuscita;
-    ``--quit-after-first-view``: l'app esce dopo la prima vista del cielo (controllo V7); altrimenti l'app normale."""
+    ``--quit-after-first-view``: l'app esce dopo la prima vista del cielo (controllo V7); altrimenti l'app normale.
+    ``--report-file FILE`` (con ``--self-check`` o ``--smoke-profile``): il rapporto va anche in ``FILE`` (UTF-8,
+    ``\n``): l'eseguibile di Windows senza console può non avere lo standard output (65 §3.9, sprint W2)."""
     args = list(sys.argv[1:] if argv is None else argv)
     if is_bundled():
         sys.dont_write_bytecode = True  # nessun .pyc scritto (V6)
+    if "--report-file" in args:
+        position = args.index("--report-file")
+        if position + 1 >= len(args):
+            print("--report-file: serve il percorso del file", file=sys.stderr)
+            return 2
+        target = args[position + 1]
+        del args[position:position + 2]
+        return _with_report_file(target, args)
     if "--smoke-profile" in args:
         from astrotwo.smoke_profile import main as smoke_main
 
@@ -360,6 +393,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     rest = [a for a in args if a != "--quit-after-first-view"]
     hook = _quit_after_first_view if "--quit-after-first-view" in args else None
     return window_main([sys.argv[0] if sys.argv else "AstroTwo", *rest], on_first_view=hook)
+
+
+def _with_report_file(target: str, args: list[str]) -> int:
+    """Esegue :func:`main` con lo standard output scritto in ``target`` (rapporti di ``--self-check`` e
+    ``--smoke-profile`` dei controlli dei pacchetti di Windows e Linux)."""
+    previous = sys.stdout
+    with open(target, "w", encoding="utf-8", newline="\n") as handle:
+        sys.stdout = handle
+        try:
+            return main(args)
+        finally:
+            sys.stdout = previous
 
 
 def _quit_after_first_view(app, window) -> None:
