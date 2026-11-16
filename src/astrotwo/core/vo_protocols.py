@@ -35,7 +35,6 @@ from pathlib import Path
 
 import astropy
 import numpy as np
-from astropy.io import ascii as astropy_ascii
 from astropy.io import fits
 import astropy.units as u
 import pyvo
@@ -249,7 +248,7 @@ def _provenance(table: CatalogTable, fmt: str) -> dict[str, str]:
 
 def _write_votable_file(table: CatalogTable, target: Path, info: dict[str, str]) -> list[str]:
     """VOTable 1.4; restituisce le colonne con un'unità non standard VOUnit (D05-7)."""
-    from astrotwo.core.catalogs import add_votable_infos, column_unit_text
+    from astrotwo.core.catalogs import add_votable_infos, column_unit_text, write_votable_file
 
     vot, notes = _catalog_votable(table, table.table)
     nonstandard = []
@@ -261,7 +260,7 @@ def _write_votable_file(table: CatalogTable, target: Path, info: dict[str, str])
     add_votable_infos(vot, list(info.items()) + [("A2NOTE", note) for note in notes])  # D62-8: ID univoci
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # W50 di Astropy per un'unità non standard: dichiarata nel risultato (D05-7)
-        vot.to_xml(str(target))
+        write_votable_file(vot, target)  # stessi byte su ogni sistema (65 §3.2)
     return nonstandard
 
 
@@ -308,15 +307,16 @@ def _write_fits_file(table: CatalogTable, target: Path, info: dict[str, str]) ->
 
 
 def _write_csv_file(table: CatalogTable, target: Path, info: dict[str, str]) -> None:
-    buffer = io.StringIO()
+    from astrotwo.core.catalogs import ascii_table_text
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        astropy_ascii.write(table.table, buffer, format="csv", fast_writer=False)
+        text = ascii_table_text(table.table, format="csv", fast_writer=False)  # fine riga \n ovunque (65 §3.2)
     # CSV semplice (D14-10): provenienza e valori, nessuna unità (avviso CSV_UNITS_NOT_SAVED).
     lines = [f"# {name} = {value}" for name, value in info.items()]
     with open(target, "w", encoding="utf-8", newline="") as handle:
         handle.write("\n".join(lines) + "\n")
-        handle.write(buffer.getvalue())
+        handle.write(text)
 
 
 def _write_ecsv_file(table: CatalogTable, target: Path, info: dict[str, str]) -> None:
@@ -337,9 +337,13 @@ def _write_ecsv_file(table: CatalogTable, target: Path, info: dict[str, str]) ->
             data[name].description = col.description
         data[name].meta = meta
         data[name].unit = col.unit if unrecognized is None else u.Unit(unrecognized, parse_strict="silent")
+    from astrotwo.core.catalogs import ascii_table_text
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        astropy_ascii.write(data, str(target), format="ecsv", delimiter=",")
+        text = ascii_table_text(data, format="ecsv", delimiter=",")
+    # UTF-8 e fine riga \n su ogni sistema (65 §3.2): su macOS gli stessi byte della scrittura diretta di Astropy
+    Path(target).write_bytes(text.encode("utf-8"))
 
 
 def _has_units(table: CatalogTable) -> bool:
@@ -2706,6 +2710,14 @@ def _restricted_client_class():
     return RestrictedSampClient
 
 
+def file_url_path(path: str) -> str:
+    """Percorso di Windows dalla parte ``path`` di un URL ``file:`` (65 §3.2, sprint W1): ``/C:/dati/t%20b.xml`` →
+    ``C:\\dati\\t b.xml``. Si usa solo su Windows; su macOS e Linux resta ``unquote`` come prima."""
+    import nturl2path
+
+    return nturl2path.url2pathname(path)
+
+
 class SampHub:
     """Collegamento SAMP: hub già attivo se presente, altrimenti hub proprio (profilo web disattivato).
 
@@ -2955,7 +2967,7 @@ class SampHub:
         target = Path(os.fspath(path))
         parts = urlsplit(str(url))
         if parts.scheme == "file":
-            source = Path(unquote(parts.path))
+            source = Path(file_url_path(parts.path) if os.name == "nt" else unquote(parts.path))
             try:
                 shutil.copyfile(source, target)
             except OSError as exc:

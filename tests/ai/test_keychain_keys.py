@@ -10,12 +10,20 @@ marcatore ``keychain`` (escluso di default, eseguito a mano).
 import json
 import logging
 import os
-import pwd
 import subprocess
+import sys
 
 import pytest
 from keyring.backend import KeyringBackend
-from keyring.backends.macOS import api
+
+# L'API Security simulata è quella del backend macOS di keyring, che fuori da macOS non si carica: su Windows e Linux
+# questi test si saltano (65 §3.2, sprint W1); lì il 31 risponde KEYCHAIN_UNAVAILABLE (tests/test_platform_portability.py).
+if sys.platform != "darwin":
+    pytest.skip("Portachiavi di macOS: test solo su macOS (65, D65-1)", allow_module_level=True)
+
+import pwd  # noqa: E402 - dopo il salto: solo su macOS
+
+from keyring.backends.macOS import api  # noqa: E402
 
 from astrotwo.ai import keychain_keys as kk
 from astrotwo.ai.keychain_keys import SERVICE_NAME, KeychainError, KeychainStore, SecretKey

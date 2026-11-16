@@ -16,6 +16,8 @@ import json
 import re
 
 import numpy as np
+import sys
+
 import pytest
 from astropy.table import Table
 
@@ -246,6 +248,7 @@ def test_pdf_planets_not_checked_and_old_profiles(cache, services, tmp_path):  #
     assert any(t.startswith("Status: done") for t in shown)  # intestazione invariata per i profili vecchi
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="permessi POSIX (umask, chmod): su Windows non ci sono (65 §3.2)")
 @pytest.mark.parametrize("umask", [0o022, 0o077])
 def test_exported_files_follow_the_umask(cache, services, tmp_path, umask):  # noqa: F811
     """Decisione del proprietario del 2026-11-10: i file esportati hanno i permessi normali (0666 meno l'umask, di
@@ -339,7 +342,8 @@ def test_t27_write_error_leaves_no_partial_file(cache, services, tmp_path, monke
     def broken(*args, **kwargs):
         raise OSError(28, "No space left on device")
 
-    monkeypatch.setattr(pe.Table, "write", broken)
+    # Dal W1 l'ECSV si scrive in byte (UTF-8 e \n su ogni sistema, 65 §3.3): il disco pieno arriva da write_bytes
+    monkeypatch.setattr(pe.Path, "write_bytes", broken)
     with pytest.raises(ProfileExportError) as info:
         export_profile(merge_profile_results([(number, values_of(result))]), tmp_path / "x.ecsv", "ecsv")
     assert info.value.code == "PROFILE_EXPORT_FAILED" and "No space left" in info.value.params["detail"]

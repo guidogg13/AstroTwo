@@ -3409,7 +3409,7 @@ class Session:
         payload = json.dumps(self.to_json(app_version=app_version, conversations=conversations), ensure_ascii=False,
                              indent=1, allow_nan=False)
         tmp = target.with_name(target.name + ".tmp")
-        tmp.write_text(payload, encoding="utf-8")
+        tmp.write_text(payload, encoding="utf-8", newline="\n")  # stessi byte su ogni sistema (65 §3.2)
         os.replace(tmp, target)
 
     # --- apertura e riesecuzione -------------------------------------------------------------

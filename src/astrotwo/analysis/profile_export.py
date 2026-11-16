@@ -921,7 +921,10 @@ def export_profile(data: Mapping, path: str | os.PathLike, format: str, *, langu
     try:
         if format == "ecsv":
             table = profile_values_table(data)
-            table.write(str(temp), format="ascii.ecsv", overwrite=True)
+            from astrotwo.core.catalogs import ascii_table_text
+
+            # UTF-8 e fine riga \n su ogni sistema (65 §3.2): su macOS gli stessi byte di ``table.write``
+            temp.write_bytes(ascii_table_text(table, format="ecsv").encode("utf-8"))
             rows = len(table)
         elif format == "pdf":
             pages = _write_pdf(data, temp, language)

@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Guido Ratti
+#
+# Test di AstroTwo su macOS, Windows e Linux (mdfiles/65-windows-linux.md §3.5, sprint W1, decisione del proprietario
+# del 2026-11-16). Solo i test di default (pytest legge `addopts` da pyproject.toml: niente rete, Portachiavi
+# reale, prestazioni né OpenGL) e ruff. Nessun pacchetto, nessun .dmg, nessuna release: i pacchetti sono del W2.
+# Comandi del progetto: `uv run python -m pytest -q` (mai `uv run pytest`, mai `-m` in più).
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false  # un sistema che fallisce non ferma gli altri: il W1 vuole l'elenco completo dei problemi
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen  # anche tests/conftest.py lo imposta: Qt senza schermo su tutti e tre i sistemi
+      UV_PYTHON: "3.12"
+      # Niente PYTHONUTF8: su Windows si prova la codifica di default del sistema, come nell'app vera (65 §3.2).
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Su windows-latest git converte LF → CRLF all'estrazione (core.autocrlf): i test confrontano file del
+      # repository byte per byte (THIRD_PARTY_LICENSES, dati di prova), quindi si estrae così com'è.
+      - name: Fine riga del repository invariata
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Librerie di sistema per Qt (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"  # la stessa del Mac di sviluppo
+          enable-cache: true
+
+      - name: Python e dipendenze da uv.lock
+        run: uv sync --locked
+
+      - name: Sistema
+        run: |
+          uv run --frozen python -c "import os, platform, sys, locale; print(platform.platform(), platform.machine(), sys.version); print('linesep', repr(os.linesep), 'encoding', locale.getpreferredencoding(False))"
+          uv run --frozen python -c "import PySide6.QtCore as q; print('Qt', q.qVersion())"
+
+      - name: ruff
+        run: uv run --frozen ruff check .
+
+      - name: pytest (test di default)
+        run: uv run --frozen python -m pytest -q -p no:cacheprovider -ra --junitxml=pytest-${{ matrix.os }}.xml
+
+      - name: Rapporto JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.os }}
+          path: pytest-${{ matrix.os }}.xml
+          if-no-files-found: ignore

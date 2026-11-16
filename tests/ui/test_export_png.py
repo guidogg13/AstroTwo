@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 import astropy.units as u
 import numpy as np
+import sys
+
 import pytest
 from PIL import Image
 
@@ -76,6 +78,7 @@ def test_path_validation(tmp_path):
     assert caught.value.code == "EXPORT_PATH_INVALID"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="permessi POSIX (umask, chmod): su Windows non ci sono (65 §3.2)")
 def test_png_follows_the_umask(qtbot, tmp_path):
     """Decisione del proprietario del 2026-11-10: PNG esportato con i permessi normali (0666 meno l'umask)."""
     import os

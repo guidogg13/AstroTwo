@@ -667,9 +667,9 @@ def write_moc(moc: Moc, path, format: str = "fits", overwrite: bool = False) -> 
                 {"reason": "write", "path": str(target), "body": moc._body_label(), "keyword": BODY_KEYWORD}))
         moc.moc.save(target, format="fits", overwrite=True, pre_v2=moc.kind == "space", fits_keywords=keywords)
     elif format == "json":
-        target.write_text(json.dumps(_json_payload(moc)), encoding="utf-8")
+        target.write_text(json.dumps(_json_payload(moc)), encoding="utf-8", newline="\n")
     else:
-        target.write_text(moc.moc.to_string("ascii"), encoding="utf-8")
+        target.write_text(moc.moc.to_string("ascii"), encoding="utf-8", newline="\n")
     return MocWriteResult(path=target, format=format, version=WRITTEN_VERSION if format == "fits" else None,
                           warnings=tuple(notes))
 

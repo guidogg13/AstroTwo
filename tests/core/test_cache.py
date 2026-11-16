@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import stat
+import sys
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -160,6 +161,7 @@ def test_t6_corrupted_database_is_recreated(tmp_path):
         assert cache.get("11", "k").data == b"nuovo"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="permessi POSIX (umask, chmod): su Windows non ci sono (65 §3.2)")
 def test_t6_unwritable_folder_is_ignored_with_warning(tmp_path):
     locked = tmp_path / "bloccata"
     locked.mkdir()
@@ -257,7 +259,6 @@ def test_invalid_arguments(tmp_path):
 # --- D04 (decisione del proprietario del 2026-10-16): più thread, più processi, orfani -------------
 
 import subprocess  # noqa: E402
-import sys  # noqa: E402
 import threading  # noqa: E402
 
 LOAD_LIMIT = 2_000_000

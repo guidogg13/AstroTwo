@@ -1861,6 +1861,36 @@ def _unique_field_ids(vtable) -> None:
         used.add(ident)
 
 
+def write_votable_file(vot, target) -> None:
+    """Scrive ``vot`` in ``target`` con gli stessi byte su ogni sistema (65 §3.2, sprint W1).
+
+    Astropy, dato un nome di file, lo apre in modalità testo: su Windows ogni ``\\n`` diventerebbe ``\\r\\n``. Qui
+    Astropy scrive in memoria (UTF-8, fine riga ``\\n``) e i byte vanno su disco così come sono: su macOS e Linux il
+    file è identico a quello di ``vot.to_xml(nome)``. Un nome che finisce in ``.gz`` (Astropy comprime con gzip) va
+    ancora ad Astropy come prima: comportamento invariato (65 §10)."""
+    import io
+
+    if os.fspath(target).endswith(".gz"):
+        vot.to_xml(os.fspath(target))
+        return
+    buffer = io.BytesIO()
+    vot.to_xml(buffer)
+    Path(os.fspath(target)).write_bytes(buffer.getvalue())
+
+
+def ascii_table_text(table: Table, **kwargs) -> str:
+    """Testo di ``astropy.io.ascii.write`` con fine riga ``\\n`` su ogni sistema (65 §3.2, sprint W1).
+
+    Il writer di Astropy che non è «fast» unisce le righe con ``os.linesep`` (``\\r\\n`` su Windows); dove
+    ``os.linesep`` è già ``\\n`` (macOS, Linux) il testo resta esattamente quello di Astropy."""
+    import io
+
+    buffer = io.StringIO()
+    astropy_ascii.write(table, buffer, **kwargs)
+    text = buffer.getvalue()
+    return text if os.linesep == "\n" else text.replace(os.linesep, "\n")
+
+
 def add_votable_infos(vot, items) -> None:
     """Aggiunge gli ``INFO`` di provenienza alla prima risorsa con un **ID univoco nel documento** (D62-8, decisione
     del proprietario del 2026-11-13): Astropy dà all'``INFO`` l'ID uguale al nome, quindi due note ``A2NOTE`` (una per
@@ -1899,7 +1929,7 @@ def save_subset(table: CatalogTable, selection, path, overwrite: bool = False) -
         info["A2POSITIONS"] = f"{pos.lon}/{pos.lat}, frame {pos.frame}, fonte {pos.source}"
     items = list(info.items()) + [("A2NOTE", note) for note in notes]  # D62-8: tutte le note, ID univoci
     add_votable_infos(vot, items)
-    vot.to_xml(str(target))
+    write_votable_file(vot, target)
     return target
 
 

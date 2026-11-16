@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-14 — **sprint D14b–D14c:** candidato 1.0.0 build 9 (commit `499e110`, `.dmg` `0a4f78ac…0281`) e parte automatica del megatest sul build 9 (`docs/megatest-runs/1.0.0.md`); `64` (`bozza`, invariato) aggiornato con i passi 3–9 e la lista «1.0.1»; nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
+**Ultimo aggiornamento:** 2026-11-16 — **sprint W1 (Windows e Linux, decisioni del proprietario del 2026-11-16):** nuovo `65-windows-linux.md` (`bozza`) su richiesta del proprietario: analisi di portabilità (23 punti con file, riga, gravità e correzione), correzioni piccole senza cambi su macOS, workflow `.github/workflows/tests.yml` (non spinto), `D65-1`…`D65-10` aperte (Gruppo 2); registri di `05`, `12`, `13`, `14`, `16`, `25`, `32` (tutti `approvato`, solo registro, stato invariato). Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 8, non esiste 11, totale 48. **26 aperte** (le 10 nuove bloccano il W2, non la 1.0).
+
+Prima, 2026-11-14 — **sprint D14b–D14c:** candidato 1.0.0 build 9 (commit `499e110`, `.dmg` `0a4f78ac…0281`) e parte automatica del megatest sul build 9 (`docs/megatest-runs/1.0.0.md`); `64` (`bozza`, invariato) aggiornato con i passi 3–9 e la lista «1.0.1»; nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
 
 Prima, 2026-11-14 — **sprint D14a:** decisioni del proprietario del 2026-11-13 su `D62-8` scritte nei file di origine e corrette nel codice: `05`, `13`, `14`, `25`, `30`, `44`, `63` (tutti `approvato`, solo le sezioni interessate e il registro, stato invariato), `62` e `64` (`bozza`, invariati); nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 7, non esiste 11, totale 47. **16 aperte, nessuna blocca la 1.0.**
 
@@ -467,13 +469,14 @@ Dove si trovano le decisioni:
 | `62-megatest-1-0.md` | Megatest a mano prima della 1.0 (sprint D2, Fase D): prove brevi con risultato atteso per avvio, atlante, FITS, cataloghi, incrocio, cone search e ADQL, MOC, SAMP con TOPCAT, profili, esportazioni (anche in inglese), assistente locale e con chiave, sessioni, lingue, servizi giù e mirror; D62-1 approvata il 2026-11-10 (prove D6–D8 aggiunte); dal 2026-11-11 (sprint D6) prove K1–K3 del `.dmg` e megatest sull'app installata dal `.dmg` candidato; dal 2026-11-12 (sprint D12) prove automatiche fatte (`docs/megatest-runs/1.0.0.md`), D62-2…D62-7 aperte (D62-2 bloccante, build 8) | bozza |
 | `63-checklist-rilascio.md` | Checklist di ogni rilascio (sprint D5c): 17 passi nell'ordine con chi e comando (versione, `uv lock`, suite, build, firma, `.dmg`, megatest, tag, release, Zenodo e DOI, sito con «Sostieni AstroTwo»); D63-1 e D63-2 decise il 2026-11-11; `date-released` = data del commit della versione; **approvato dal proprietario il 2026-11-11** | approvato |
 | `64-cosa-manca-1-0.md` | Rapporto «cosa manca alla 1.0» (sprint D7, 2026-11-11; aggiornato fino allo sprint D11, con la verifica delle unità): per i passi 1–9 della `63` stato, cosa manca e chi (Claude Code o Guido); prerequisiti P1–P5; numero di test dei commit del D5 | bozza |
+| `65-windows-linux.md` | AstroTwo su Windows e Linux (sprint W1, decisioni del proprietario del 2026-11-16: un solo codice Python, pacchetti con GitHub Actions, prove a mano in UTM, Mac 1.0 invariato): 23 punti di portabilità con file, riga, gravità e correzione; correzioni del W1 (fine riga e UTF-8 delle esportazioni, URL `file:` di SAMP, percorsi di Windows verso l'IA, test portabili); workflow dei test su tre sistemi; `D65-1`…`D65-10` aperte (chiavi, cartelle, formati dei pacchetti, architetture, VM, licenze, OpenGL, scorciatoie, identità dei byte) | bozza |
 
 ## Riepilogo
 
 | Stato | Quanti |
 |---|---|
-| bozza | 7 |
+| bozza | 8 |
 | in revisione | 0 |
 | approvato | 29 |
 | non esiste | 11 |
-| **Totale file in `mdfiles/`** | **47** |
+| **Totale file in `mdfiles/`** | **48** |

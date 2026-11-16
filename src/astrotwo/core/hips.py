@@ -2411,7 +2411,7 @@ def build_hips(images, output, *, order: int, hips_id: str, title: str, method: 
     lines = [f"# HiPS generato da AstroTwo {astrotwo.__version__} secondo lo standard IVOA HiPS 1.0",
              f"# sorgenti: {', '.join(im.origin for im in images)}"]
     lines += [f"{key:20} = {value}" for key, value in props.items()]
-    (root / "properties").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "properties").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     counts = {level: len(indices) for level, indices in sorted(written.items())}
     notes.append(ModuleWarning("HIPS_ALLSKY_NOT_WRITTEN", "file Allsky non scritto (facoltativo nello standard; D12-8)"))
     description = (f"HiPS {hips_id} in {root}: {len(images)} immagini, ordine 0–{order}, tile {tile_width}×"

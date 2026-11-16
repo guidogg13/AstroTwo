@@ -9,7 +9,7 @@ il 2026-11-11 `A6-b` (la 1.0 esce senza firma Developer ID né notarizzazione, p
 `D42-1` (confermate così come sono nel codice); righe tolte, esiti nei file di origine (`60` §13, `14` §13,
 `42` §13). `AP1`, `D41-7`, `D41-8` restano aperte, rinviate a dopo la 1.0 e dichiarate come limiti noti nelle
 note di rilascio (decisione del 2026-11-11). **Aggiornato nello sprint D11 (2026-11-12):** nuova `D05-7`. **Aggiornato nello sprint D12 (2026-11-12, prove automatiche del megatest):** nuove `D62-2`…`D62-7`. **Aggiornato nello sprint D13 (2026-11-13):** il proprietario ha deciso `D05-7` (correzione nel build 8) e `D62-2`…`D62-7`; righe tolte, esiti nei file di origine (`05` §13, `62` §13). **Aggiornato nello sprint D13c (2026-11-13):** nuova `D62-8`. **Aggiornato nello sprint D14a (2026-11-13):** il proprietario ha deciso `D62-8` (correggere tutti e tre i punti, candidato build 9); righe tolte, esito in `62` §13. Per ognuna delle **17 decisioni
-aperte** (§5, Gruppo 3): se blocca la 1.0 e il consiglio di Claude Code.
+aperte** (§5, Gruppo 3): se blocca la 1.0 e il consiglio di Claude Code. **Aggiornato nello sprint W1 (2026-11-16):** nuove `D65-1`…`D65-10` (§4, Gruppo 2): non bloccano la 1.0 per macOS, bloccano l'approvazione del `65` e il codice del W2. **26 aperte.**
 **Nessuna decisione è chiusa qui:** le chiude il proprietario; dopo, si
 aggiornano il file di origine e §5. «Blocca la 1.0» = senza quella decisione
 non si può fare uno dei passi 1–9 della checklist `63` (dettaglio in
@@ -20,6 +20,16 @@ del 2026-11-11, ma **non è una decisione aperta**: è un lavoro da finire
 
 | ID | Di cosa si tratta | Blocca la 1.0 | Consiglio di Claude Code | Perché |
 |---|---|---|---|---|
+| `D65-1` | Chiavi API su Windows e Linux (regola d'oro n. 5) (`65` §13, sprint W1) | no (blocca il W2) | (a) Gestione credenziali di Windows e Secret Service, backend forzato, mai file | Vedi `65` §13 |
+| `D65-2` | Cartelle di cache, punti SED e VOTable SAMP su Windows e Linux (`65` §13, sprint W1) | no (blocca il W2) | (a) `%LOCALAPPDATA%\AstroTwo\…` e XDG (`~/.cache/astrotwo`, `~/.local/share/astrotwo`), macOS invariato | Vedi `65` §13 |
+| `D65-3` | Formato del pacchetto Windows (`65` §13, sprint W1) | no (blocca il W2) | (a) `.zip` della cartella `onedir` per la 1.1; installatore dopo | Vedi `65` §13 |
+| `D65-4` | Formato del pacchetto Linux (`65` §13, sprint W1) | no (blocca il W2) | (a) AppImage costruita su `ubuntu-22.04` (glibc 2.35), runtime statico, più `.tar.gz` | Vedi `65` §13 |
+| `D65-5` | Architetture (`65` §13, sprint W1) | no (blocca il W2) | (a) solo x86_64 nella 1.1 (niente ruote `win_arm64` per 8 dipendenze) | Vedi `65` §13 |
+| `D65-6` | Macchine virtuali UTM per il W3 (`65` §13, sprint W1) | no (blocca il W2) | (a) Windows 11 ARM con emulazione x64 + Ubuntu x86_64 emulato; prova breve all'inizio del W2 | Vedi `65` §13 |
+| `D65-7` | Licenze di terze parti per Windows e Linux (`65` §13, sprint W1) | no (blocca il W2) | (a) un `THIRD_PARTY_LICENSES` per pacchetto, generato sul runner | Vedi `65` §13 |
+| `D65-8` | OpenGL senza GPU adatta (VM, desktop remoto) (`65` §13, sprint W1) | no (blocca il W2) | (b) Mesa `llvmpipe` dichiarato come ripiego su Windows e Linux (da verificare `opengl32sw.dll`) | Vedi `65` §13 |
+| `D65-9` | Scorciatoie su Windows e Linux (`65` §13, sprint W1) | no (blocca il W2) | F11, Ctrl+Shift+N, Ctrl+Shift+A, Ctrl+, ; macOS invariato | Vedi `65` §13 |
+| `D65-10` | Identità byte per byte tra sistemi (`65` §13, sprint W1) | no (blocca il W2) | (a) dati identici (provati con impronte sui runner), PNG e PDF stesso contenuto, sessioni non portabili dichiarate | Vedi `65` §13 |
 | `D40-10` | Pulizia delle tabelle SAMP ricevute (`40` §13), voce futura | no | Rinviare a dopo la 1.0 | Le tabelle si accumulano ma non rompono niente; serve una specifica nuova (comando, sessioni che citano file cancellati) |
 | `D10-5` | Catalogo di riferimento e limiti di magnitudine per la calibrazione astrometrica (H6) | no | Rinviare a dopo la 1.0 | La calibrazione astrometrica non è nella 1.0; si decide quando si scrive quella funzione |
 | `A8` | Livello di compatibilità con lo scripting di Aladin | no | Rinviare a dopo la 1.0 | Già rimandata a dopo il livello 1; il modulo `24` non esiste ancora |
@@ -401,10 +411,20 @@ Con il passo del 2026-10-04 il Gruppo 1 era rimasto **vuoto**: nessun'altra deci
 la scrittura di moduli futuri oltre a quanto già previsto (AP5 prima dei
 gruppi successivi, A8 dopo il livello 1).
 
-## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (0)
+## 4. GRUPPO 2 — bloccanti solo per l'approvazione del modulo (10)
 
 | Etichetta | Domanda | Modulo |
 |---|---|---|
+| `D65-1` | Chiavi API su Windows e Linux (regola d'oro n. 5)? Consiglio: (a) Gestione credenziali di Windows e Secret Service, backend forzato, mai file | `65-windows-linux.md` §13 |
+| `D65-2` | Cartelle di cache, punti SED e VOTable SAMP su Windows e Linux? Consiglio: (a) `%LOCALAPPDATA%\AstroTwo\…` e XDG (`~/.cache/astrotwo`, `~/.local/share/astrotwo`), macOS invariato | `65-windows-linux.md` §13 |
+| `D65-3` | Formato del pacchetto Windows? Consiglio: (a) `.zip` della cartella `onedir` per la 1.1; installatore dopo | `65-windows-linux.md` §13 |
+| `D65-4` | Formato del pacchetto Linux? Consiglio: (a) AppImage costruita su `ubuntu-22.04` (glibc 2.35), runtime statico, più `.tar.gz` | `65-windows-linux.md` §13 |
+| `D65-5` | Architetture? Consiglio: (a) solo x86_64 nella 1.1 (niente ruote `win_arm64` per 8 dipendenze) | `65-windows-linux.md` §13 |
+| `D65-6` | Macchine virtuali UTM per il W3? Consiglio: (a) Windows 11 ARM con emulazione x64 + Ubuntu x86_64 emulato; prova breve all'inizio del W2 | `65-windows-linux.md` §13 |
+| `D65-7` | Licenze di terze parti per Windows e Linux? Consiglio: (a) un `THIRD_PARTY_LICENSES` per pacchetto, generato sul runner | `65-windows-linux.md` §13 |
+| `D65-8` | OpenGL senza GPU adatta (VM, desktop remoto)? Consiglio: (b) Mesa `llvmpipe` dichiarato come ripiego su Windows e Linux (da verificare `opengl32sw.dll`) | `65-windows-linux.md` §13 |
+| `D65-9` | Scorciatoie su Windows e Linux? Consiglio: F11, Ctrl+Shift+N, Ctrl+Shift+A, Ctrl+, ; macOS invariato | `65-windows-linux.md` §13 |
+| `D65-10` | Identità byte per byte tra sistemi? Consiglio: (a) dati identici (provati con impronte sui runner), PNG e PDF stesso contenuto, sessioni non portabili dichiarate | `65-windows-linux.md` §13 |
 | — | (`D43-9` decisa dal proprietario il 2026-11-08: limiti superiori come frecce ovunque, `D20-9` (3) cambiata; `43` approvato; `43` §13, `20` §13) | — |
 | — | (`D25-1`…`D25-12` e `D20-1`…`D20-8` decise dal proprietario il 2026-11-07, `25` §13 e `20` §13; `20` (parte SED) e `25` approvati) | — |
 | — | (`A2` e `A6` decise dal proprietario il 2026-10-25, `60` §13) | — |
@@ -575,3 +595,4 @@ gruppi successivi, A8 dopo il livello 1).
 | 2026-11-13 | Claude Code | **Sprint D13 (decisioni del proprietario del 2026-11-13):** decise e tolte `D05-7` (correzione nel build 8: unità esatte nei VOTable e nei FITS di tabella, unità di Gaia conservate in ingresso; `05` §13) e `D62-2` (esclusione di `backend_qtagg` tolta, prova di fumo V10 nel build), `D62-3` (messaggio «il profilo richiede un oggetto SIMBAD», profilo da Gaia nella Roadmap), `D62-4` (CSV non confermato non blocca gli altri caricamenti), `D62-5` (immagini del README da Guido nel megatest), `D62-6` (lingua e aspetto), `D62-7` (testo della `62`) (`62` §13). **16 aperte, nessuna blocca la 1.0.** |
 | 2026-11-13 | Claude Code | **Sprint D13c (prove automatiche sul candidato build 8):** nuova `D62-8` (ID `A2NOTE` ripetuti nei VOTable dei cataloghi, «Immagini: done» nel PDF italiano; consiglio build 9). **17 aperte**, `D62-8` da decidere prima del rilascio. |
 | 2026-11-14 | Claude Code | **Sprint D14a:** `D62-8` decisa dal proprietario (tre correzioni, due controlli nella suite, build 9); righe tolte da §0 e §5, esito in `62` §13. **16 aperte**, nessuna blocca la 1.0. |
+| 2026-11-16 | Claude Code | **Sprint W1 (Windows e Linux, decisioni del proprietario del 2026-11-16):** nuove `D65-1`…`D65-10` (§4, Gruppo 2, e §0 con consiglio; `65` §13). **26 aperte**, nessuna blocca la 1.0 per macOS. |

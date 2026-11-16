@@ -17,7 +17,6 @@ Tre controlli, tutti senza rete:
 from __future__ import annotations
 
 import os
-import pwd
 import re
 import shutil
 import subprocess
@@ -31,7 +30,16 @@ from defusedxml.ElementTree import parse as safe_parse_xml
 
 #: Dove cercare STILTS (``ASTROTWO_STILTS_JAR`` prima): ``votlint`` lavora senza rete (schema dentro il ``.jar``).
 #: La cartella home è quella vera dell'utente (``pwd``): i test girano con una ``HOME`` temporanea (``conftest``).
-_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
+def _real_home() -> Path:
+    """Home vera dell'utente: ``pwd`` su macOS e Linux; su Windows (niente ``pwd``) ``USERPROFILE`` (65, sprint W1)."""
+    try:
+        import pwd
+    except ImportError:
+        return Path(os.environ.get("USERPROFILE") or Path.home())
+    return Path(pwd.getpwuid(os.getuid()).pw_dir)
+
+
+_HOME = _real_home()
 STILTS_JARS = (os.environ.get("ASTROTWO_STILTS_JAR", ""),
                str(_HOME / "Applications/topcat/topcat-full.jar"), str(_HOME / "Applications/topcat/stilts.jar"),
                "/Applications/TOPCAT.app/Contents/Resources/Java/topcat-full.jar")

@@ -14,11 +14,14 @@ import sys
 import pytest
 from keyring.errors import KeyringError
 
-from astrotwo import messages_catalog as mc
-from astrotwo.ai import keychain_keys as kk
-from astrotwo.ai.keychain_keys import KeychainError, KeychainStore
-from tests.ai.test_keychain_keys import FAKE_KEY, security  # noqa: F401
-from tests.message_helpers import catalog_combinations, check_error, nested_pairs
+if sys.platform != "darwin":  # API Security simulata del backend macOS di keyring (65 §3.2, sprint W1)
+    pytest.skip("Portachiavi di macOS: test solo su macOS (65, D65-1)", allow_module_level=True)
+
+from astrotwo import messages_catalog as mc  # noqa: E402
+from astrotwo.ai import keychain_keys as kk  # noqa: E402
+from astrotwo.ai.keychain_keys import KeychainError, KeychainStore  # noqa: E402
+from tests.ai.test_keychain_keys import FAKE_KEY, security  # noqa: E402, F401
+from tests.message_helpers import catalog_combinations, check_error, nested_pairs  # noqa: E402
 
 OWN_CODES = ("KEYCHAIN_UNAVAILABLE", "KEYCHAIN_ACCESS_DENIED", "KEYCHAIN_WRITE_FAILED", "KEY_NOT_FOUND",
              "KEY_FORMAT_INVALID", "KEYCHAIN_OPERATION")

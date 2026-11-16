@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import functools
 import json
+import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -224,6 +225,10 @@ ASTROTWO_MESSAGE_CODES = frozenset({
 # ("https://h/p") né in una divisione ("10 /2"): servono almeno due elementi dopo "/" (o "~/" e uno).
 _SEGMENT = r"[^\s/'\"()\[\]{},;]+"
 _ABSOLUTE_PATH = re.compile(rf"(?<![\w:/.~-])(?:file://)?(?:~(?:/{_SEGMENT})+|(?:/{_SEGMENT}){{2,}})/?")
+#: Solo su Windows (65 §3.2, sprint W1): "C:\\a\\b…", "C:/a/b…", "\\\\server\\share\\…", "file:///C:/…"; stessa
+#: regola dei percorsi POSIX (fino al primo spazio). Su macOS e Linux non si applica: testi invariati.
+_WIN_SEGMENT = r"[^\s/\\'\"()\[\]{},;]+"
+_WINDOWS_PATH = re.compile(rf"(?<![\w:/.\\-])(?:file:///?)?(?:[A-Za-z]:|\\\\{_WIN_SEGMENT})(?:[\\/]{_WIN_SEGMENT})+[\\/]?")
 
 _FLAG_TEXT = (("confirm", "Requires user confirmation."), ("read_only", "Read-only."),
               ("network", "Uses the network."))
@@ -308,7 +313,10 @@ def string_paths(value: object, path: str = ""):
 
 def _file_name(text: str) -> str:
     """Testo con ogni percorso assoluto ridotto al nome del file (privacy, §3.7)."""
-    return _ABSOLUTE_PATH.sub(lambda m: m.group(0).rstrip("/").rsplit("/", 1)[-1] or "/", text)
+    text = _ABSOLUTE_PATH.sub(lambda m: m.group(0).rstrip("/").rsplit("/", 1)[-1] or "/", text)
+    if os.name == "nt":
+        text = _WINDOWS_PATH.sub(lambda m: re.split(r"[\\/]", m.group(0).rstrip("\\/"))[-1], text)
+    return text
 
 
 def _private(value: object) -> object:

@@ -6,6 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
 from packaging.utils import canonicalize_name
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "third_party_licenses.py"
@@ -14,13 +15,21 @@ third_party_licenses = importlib.util.module_from_spec(spec)
 sys.modules["third_party_licenses"] = third_party_licenses  # richiesto da dataclass
 spec.loader.exec_module(third_party_licenses)
 
+#: THIRD_PARTY_LICENSES descrive l'app per macOS: su Windows e Linux keyring porta altre dipendenze (pywin32-ctypes;
+#: SecretStorage, jeepney, cryptography), quindi l'elenco delle dipendenze installate è diverso. Il file per ogni
+#: sistema è una decisione aperta (65, D65-7, sprint W2): fino ad allora questi due confronti solo su macOS.
+only_macos = pytest.mark.skipif(sys.platform != "darwin", reason="THIRD_PARTY_LICENSES è quello dell'app per macOS "
+                                "(65, D65-7)")
 
+
+@only_macos
 def test_file_is_current():
     expected = third_party_licenses.render()
     current = third_party_licenses.OUTPUT.read_text(encoding="utf-8")
     assert current == expected, "rigenerare THIRD_PARTY_LICENSES con scripts/third_party_licenses.py"
 
 
+@only_macos
 def test_every_runtime_dependency_listed_with_version_and_license():
     text = third_party_licenses.OUTPUT.read_text(encoding="utf-8")
     summary = text.split("Riepilogo\n=========\n", 1)[1].split("\n\n=", 1)[0]
