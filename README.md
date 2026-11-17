@@ -8,11 +8,7 @@ AstroTwo is meant to work **alongside** the tools astronomers already use, such 
 
 > **Version 1.0.0.** Feedback and bug reports are welcome.
 
-<!-- Screenshots: add 3–4 images here, e.g.
-![Gaia DR3 over the Pleiades](docs/screenshots/pleiades-gaia.png)
-![Object profile of 51 Peg](docs/screenshots/profile-51peg.png)
-![AI assistant with verified numbers](docs/screenshots/ai-panel.png)
--->
+<!-- Screenshots will be added after 1.0 (decision D62-5, planned for 1.0.1). -->
 
 ---
 
@@ -20,7 +16,7 @@ AstroTwo is meant to work **alongside** the tools astronomers already use, such 
 
 - [Installation](docs/installation.md): macOS 15 or later, Apple silicon
 - [Quick start](docs/quickstart.md): HiPS atlas, FITS, catalogues and cross-match, cone search and ADQL, object profiles, exports, SAMP, AI assistant
-- [Validation](docs/validation.md): how AstroTwo's results are checked against reference sources (structure; measurements still to be done)
+- [Validation](docs/validation.md): how AstroTwo's results are checked against reference sources (379 values within tolerance, 0 outside, 48 not measured while CDS services were down)
 - [Citing AstroTwo](#citing-astrotwo)
 
 ## What AstroTwo does
@@ -76,12 +72,11 @@ See [Installation](docs/installation.md).
 
 These items are planned **after version 1.0**. None of them is available today, and their details are still to be decided:
 
-- Linux version
-- Windows version
+- Windows and Linux versions (coming in 1.1)
 - Python API, to use AstroTwo's functions from scripts and notebooks
 - Object profile starting from a Gaia DR3 `source_id`, for sources that are not in SIMBAD (today a profile needs an object known to SIMBAD)
 
-Before 1.0: a full manual test of the application, a `CITATION.cff` with a DOI from Zenodo, and the measurements of the [validation page](docs/validation.md).
+Still to be completed after 1.0: the validation values that could not be measured while CDS services were down (see the [validation page](docs/validation.md)).
 
 ## Licence
 

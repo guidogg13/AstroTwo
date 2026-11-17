@@ -1,6 +1,6 @@
 # 62-megatest-1-0.md — Megatest a mano prima della 1.0
 
-**Stato:** bozza
+**Stato:** approvato
 
 > Creato il 2026-11-10 (sprint D2, Fase D) su richiesta del proprietario: il
 > piano dei rilasci (decisione del 2026-11-09, confermata il 2026-11-10) dice
@@ -356,7 +356,9 @@ build 8):
   ignoto blocca il dato nuovo, l'errore nomina **quel livello** (`BODY_UNKNOWN`, ragione `overlay_blocked_by`), non il
   file che si sta aprendo. La regola del `19` (corpo ignoto non sovrapponibile, non forzabile) non cambia.
 - **D62-5 — Immagini del README: DECISA (2026-11-13), proposta (a).** Le tre immagini le fa Guido durante il
-  megatest a mano; i riferimenti restano nel `README.md`; segnate come mancanti nel `64`.
+  megatest a mano; i riferimenti restano nel `README.md`; segnate come mancanti nel `64`. **Cambiata dal proprietario il
+  2026-11-15:** le immagini arrivano dopo la 1.0; i riferimenti alle immagini mancanti sono tolti dal `README.md`
+  e D62-5 va nella lista «1.0.1» (`64` §3.9, note di rilascio).
 - **D62-6 — Dettagli di lingua e di aspetto: DECISA (2026-11-13), corretti tutti.** PDF italiano: stato delle
   sezioni tradotto («completata», «in parte», «errore», «annullata») e note fisse del motore in italiano (es.
   «confermato dall'incrocio ufficiale di Gaia»; le note con valori dentro restano in inglese, come in DD-3), colonne
@@ -418,3 +420,4 @@ build 8):
 | 2026-11-13 | Claude Code | **Sprint D13c (prove automatiche sul candidato build 8):** nuova decisione aperta **D62-8** (§13): ID `A2NOTE` ripetuti nei VOTable dei cataloghi con più unità non standard, «Immagini: done» nel PDF italiano; consiglio build 9. Testo di E5 completato (TRAPPIST-1 e Vega hanno limiti superiori). Stato `bozza` invariato. |
 | 2026-11-14 | Claude Code | **Sprint D14a (decisioni del proprietario del 2026-11-13):** **D62-8 decisa** (§13): tre correzioni (VOTable validi con ID univoci, «Immagini: completata» nel PDF italiano, etichette inglesi nell'interfaccia inglese), due controlli nuovi nella suite (schema dei VOTable, lingua dell'interfaccia e dei PDF), lettura 180 s per i provider locali, build 8 scartato, candidato build 9 autorizzato, regola di stop. Stato `bozza` invariato. |
 | 2026-11-16 | Claude Code | **Sprint W2b (Windows e Linux):** nuova §3.16 «Windows e Linux nelle macchine virtuali UTM (W)», prove W1–W16 per il W3 sui pacchetti del workflow `build-windows-linux`, con i limiti delle VM (OpenGL solo software, emulazione lenta, niente HiDPI vero). Le prove per macOS e la 1.0 non cambiano. Stato: bozza. |
+| 2026-11-17 | Claude Code | **Sprint D15a (decisioni del proprietario del 2026-11-15):** **approvato dal proprietario** (stato `approvato`). Megatest **superato** sul build 9: parte a mano fatta da Guido, tutte le prove ok tranne tre non fatte per Gaia e CDS giù («Aperture», I4, profilo di TRAPPIST-1 dall'assistente); un problema non bloccante (righe lunghe tagliate nel pannello dell'assistente) nella lista «1.0.1»; esito in `docs/megatest-runs/1.0.0.md`. D62-5 cambiata: immagini dopo la 1.0, riferimenti tolti dal README, voce nella lista «1.0.1». La §3.16 (W, Windows e Linux) resta per la 1.1. |

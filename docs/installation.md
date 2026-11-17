@@ -1,6 +1,6 @@
 # Installing AstroTwo
 
-AstroTwo 1.0 is for macOS. **Windows and Linux packages are in preparation for version 1.1**: the instructions for them are below ([Windows](#windows), [Linux](#linux)), with their [limits](#limits-on-windows-and-linux).
+AstroTwo 1.0 is for macOS. **Windows and Linux: coming in 1.1** (no download yet). The instructions for them are below, ready for that version ([Windows](#windows), [Linux](#linux)), with their [limits](#limits-on-windows-and-linux).
 
 ## Requirements
 
@@ -66,7 +66,7 @@ On macOS 15 and later, Control-clicking the app and choosing **Open** no longer 
 
 ## Windows
 
-*Version 1.1 and later. Not yet published: the packages are being tested.*
+*Coming in 1.1. Not yet published: there is no Windows or Linux download for 1.0.*
 
 Requirements: **Windows 10 or 11, 64-bit (x86_64)**. On Windows 11 on ARM the x86_64 package runs through Windows' built-in emulation. Graphics with **OpenGL 4.1** for the sky view; without it, see [Limits](#limits-on-windows-and-linux).
 
@@ -88,7 +88,7 @@ To uninstall, delete the extracted folder. To remove the data too, delete `%LOCA
 
 ## Linux
 
-*Version 1.1 and later. Not yet published: the packages are being tested.*
+*Coming in 1.1. Not yet published: there is no Windows or Linux download for 1.0.*
 
 Requirements: **64-bit x86_64 Linux with glibc 2.35 or later** (for example Ubuntu 22.04, Debian 12, Fedora 36, RHEL 9 and later), an X11 or Wayland desktop. Two packages with the same content:
 
@@ -147,7 +147,7 @@ The default test suite never uses the network. Tests that need real online servi
 - **Saved object profiles and tables received through SAMP:** `~/Library/Application Support/AstroTwo/`.
 - **API keys for the AI assistant:** only in the **macOS Keychain**, never in files or logs.
 
-On Windows and Linux (version 1.1):
+On Windows and Linux (coming in 1.1):
 
 | | Windows | Linux |
 |---|---|---|
