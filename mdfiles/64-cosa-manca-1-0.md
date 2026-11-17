@@ -102,6 +102,18 @@ il 2026-11-11) con pagina di download, impronta, istruzioni e il pulsante
 **«Sostieni AstroTwo»** solo sul sito (passo 16, Guido: account **Ko-fi** o
 equivalente; nel repository nessun riferimento a Ko-fi, com'è giusto).
 
+### 3.4bis Passi 10–17 della checklist `63` (sprint D15, 2026-11-17)
+
+| Passo | Esito |
+|---|---|
+| 10 | **Fatto:** `.dmg` ricontrollato prima del tag (`shasum -c` OK; `BUILD_INFO.json` dentro il `.dmg`: 1.0.0, build 9, commit `499e110`, `dirty: false`); tag annotato `v1.0.0` su `499e110`; push di `main` (`54f1921..fac4609`, con W1, W2 e D15a) e del tag |
+| 11 | **Fatto** da Guido prima del rilascio (Zenodo collegato al repository) |
+| 12–13 | **Fatto:** release «AstroTwo 1.0.0» (non pre-release, «latest») con `AstroTwo-1.0.0.dmg`, `AstroTwo-1.0.0.dmg.sha256` e le note definitive; file riscaricati da GitHub: impronta OK, 121 629 964 byte |
+| 14 | **Fatto:** DOI della versione `10.5281/zenodo.24314750` in `CITATION.cff`, DOI «concept» `10.5281/zenodo.24314749` in `.zenodo.json` (`isVersionOf`) e nel `README.md`; `date-released` portato al 2026-11-17 (giorno del tag) |
+| 15 | **Da fare** (Guido): ORCID, se c'è |
+| 16 | **Da fare** (Guido): sito `astrotwo.pages.dev` |
+| 17 | **Fatto:** file di stato aggiornati; tabella spuntata nelle note di rilascio |
+
 ### 3.5 Numero di test dei commit dello sprint D5 (verificato il 2026-11-11)
 
 I messaggi dei commit non riportano il numero di test. Verificato
@@ -247,3 +259,4 @@ validazione completa resta una scelta del proprietario (§3.1).
 | 2026-11-14 | Claude Code | **Sprint D14a (decisioni del proprietario del 2026-11-13):** decisioni su `D62-8`, lettura 180 s per i provider locali, E4, build 8 scartato, candidato build 9; **regola di stop** e nuova §3.9 «Lista 1.0.1». Stato `bozza` invariato. |
 | 2026-11-14 | Claude Code | **Sprint D14b–D14c:** passi 3–6 e 8 con il **build 9** (commit della versione `499e110`, test di rete a parte senza errori di AstroTwo, V1–V10 ok, `.dmg` `0a4f78ac…0281`); passo 9: parte automatica sul build 9 (20 ok, 1 non fatta, D62-8 corretto, I2 ok); lista «1.0.1» con una voce (§3.9). Stato `bozza` invariato. |
 | 2026-11-17 | Claude Code | **Sprint D15a (decisioni del proprietario del 2026-11-15 e del 2026-11-17):** passo 9 **fatto**: megatest superato sul build 9 (parte a mano di Guido, tre prove non fatte per Gaia e CDS giù, nessun KO bloccante), `62` approvato, **il build 9 è la 1.0.0**; lista «1.0.1» con le voci 2 (righe lunghe tagliate nel pannello dell'assistente) e 3 (immagini del README, D62-5). Rilascio autorizzato: passi 10–17 della `63` (tag `v1.0.0` su `499e110`). Stato `bozza` invariato. |
+| 2026-11-17 | Claude Code | **Sprint D15b:** nuova §3.4bis con i passi 10–17 della `63`: tag `v1.0.0` su `499e110`, release su GitHub, DOI di Zenodo; restano i passi 15 e 16 di Guido. Stato `bozza` invariato. |

@@ -17,11 +17,11 @@ authors:
     # ORCID: not available yet. Add it here when it exists, e.g.
     # orcid: "https://orcid.org/0000-0000-0000-0000"
 version: "1.0.0"
-date-released: "2026-11-14"
+date-released: "2026-11-17"
 license: "GPL-3.0-or-later"
 repository-code: "https://github.com/guidogg13/AstroTwo"
-# DOI: to be added after the first archive on Zenodo, e.g.
-# doi: "10.5281/zenodo.0000000"
+# DOI of this version on Zenodo; the concept DOI of all versions is 10.5281/zenodo.24314749.
+doi: "10.5281/zenodo.24314750"
 keywords:
   - astronomy
   - astrophysics

@@ -8,7 +8,9 @@ Una riga di descrizione e lo stato per ogni file. Stati ammessi:
 
 Aggiornare questo file a ogni creazione o cambio di stato (regola di `CLAUDE.md`).
 
-**Ultimo aggiornamento:** 2026-11-17 — **sprint D15a (rilascio della 1.0.0, decisioni del proprietario del 2026-11-15 e del 2026-11-17):** `62-megatest-1-0.md` **approvato** dal proprietario (megatest superato sul build 9, tre prove non fatte per Gaia e CDS giù, esito in `docs/megatest-runs/1.0.0.md`); `64-cosa-manca-1-0.md` (`bozza`, invariato) con il passo 9 fatto e la lista «1.0.1» (voci 2 e 3). Nessun file nuovo. Riepilogo ricontato dalle righe delle tabelle: approvato 30, bozza 7, non esiste 11, totale 48. **18 aperte.**
+**Ultimo aggiornamento:** 2026-11-17 — **sprint D15b (AstroTwo 1.0.0 rilasciata):** tag `v1.0.0` su `499e110`, release su GitHub, DOI di Zenodo `10.5281/zenodo.24314750` (concept `10.5281/zenodo.24314749`); `64-cosa-manca-1-0.md` (`bozza`, invariato) con i passi 10–17. Nessun file nuovo e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 30, bozza 7, non esiste 11, totale 48. **18 aperte.**
+
+Prima, 2026-11-17 — **sprint D15a (rilascio della 1.0.0, decisioni del proprietario del 2026-11-15 e del 2026-11-17):** `62-megatest-1-0.md` **approvato** dal proprietario (megatest superato sul build 9, tre prove non fatte per Gaia e CDS giù, esito in `docs/megatest-runs/1.0.0.md`); `64-cosa-manca-1-0.md` (`bozza`, invariato) con il passo 9 fatto e la lista «1.0.1» (voci 2 e 3). Nessun file nuovo. Riepilogo ricontato dalle righe delle tabelle: approvato 30, bozza 7, non esiste 11, totale 48. **18 aperte.**
 
 Prima, 2026-11-16 — **sprint W2b (Windows e Linux: pacchetti, documenti, megatest):** `65-windows-linux.md` (`bozza`, invariato) con §3.9 pacchetti e §3.10 megatest; `62-megatest-1-0.md` (`bozza`, invariato) con la nuova §3.16 (W1–W16); registro di `60` (`approvato`, stato invariato: autocontrollo per sistema e `--report-file`). Nessun file nuovo in `mdfiles/` e nessun cambio di stato. Riepilogo ricontato dalle righe delle tabelle: approvato 29, bozza 8, non esiste 11, totale 48. **18 aperte.**
 

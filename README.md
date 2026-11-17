@@ -6,7 +6,7 @@ AstroTwo is a native macOS application to explore the sky, open FITS images, que
 
 AstroTwo is meant to work **alongside** the tools astronomers already use, such as Aladin, TOPCAT and SAOImage DS9, not to replace them. It talks to them through SAMP, the Virtual Observatory messaging protocol: tables and positions travel between the applications in both directions.
 
-> **Version 1.0.0.** Feedback and bug reports are welcome.
+> **Version 1.0.0** ([DOI 10.5281/zenodo.24314750](https://doi.org/10.5281/zenodo.24314750)). Feedback and bug reports are welcome.
 
 <!-- Screenshots will be added after 1.0 (decision D62-5, planned for 1.0.1). -->
 
@@ -99,7 +99,9 @@ The exact acknowledgement for each survey is shown in the app and written into e
 
 ## Citing AstroTwo
 
-If AstroTwo helps your research, please cite it. The citation metadata are in [CITATION.cff](CITATION.cff); GitHub shows them under *Cite this repository*. A DOI will be added when the first version is archived on Zenodo.
+If AstroTwo helps your research, please cite it. The citation metadata are in [CITATION.cff](CITATION.cff); GitHub shows them under *Cite this repository*.
+
+AstroTwo is archived on Zenodo. DOI of all versions (always resolves to the latest): [10.5281/zenodo.24314749](https://doi.org/10.5281/zenodo.24314749). DOI of version 1.0.0: [10.5281/zenodo.24314750](https://doi.org/10.5281/zenodo.24314750).
 
 ## Author
 

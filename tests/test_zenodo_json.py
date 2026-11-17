@@ -5,12 +5,13 @@
 Zenodo, all'archivio di un rilascio GitHub, legge ``.zenodo.json`` al posto di ``CITATION.cff``: i due file devono
 dire la stessa cosa. Titolo, autore, licenza, parole chiave, descrizione in inglese e repository devono coincidere;
 la versione non sta in ``.zenodo.json`` (Zenodo la prende dal tag del rilascio, che è la stessa di ``CITATION.cff``,
-controllata da ``test_citation_cff.py``), così non c'è un secondo numero da tenere allineato. Il DOI non c'è ancora
-(arriva con il primo archivio su Zenodo) e non sta in nessuno dei due file finché non esiste.
+controllata da ``test_citation_cff.py``), così non c'è un secondo numero da tenere allineato. Dalla 1.0.0 (archiviata
+su Zenodo il 2026-11-17, passo 14 della ``63``) ``CITATION.cff`` ha il DOI della versione e ``.zenodo.json`` il DOI
+«concept».
 
 **D63-2 (decisione del proprietario del 2026-11-11):** ``.zenodo.json`` non ha **mai** la chiave ``doi`` (Zenodo
 userebbe quel DOI per il prossimo archivio). Il DOI «concept» di tutte le versioni, quando esiste, sta in
-``related_identifiers`` con ``relation`` = ``isVersionOf`` e ``scheme`` = ``doi``; per la 1.0.0 è assente.
+``related_identifiers`` con ``relation`` = ``isVersionOf`` e ``scheme`` = ``doi``.
 """
 
 from __future__ import annotations
@@ -47,13 +48,13 @@ def doi_problems(data: dict) -> list[str]:
 def test_only_known_keys_and_software():
     assert set(ZENODO) == KEYS
     assert ZENODO["upload_type"] == "software" and CFF["type"] == "software"
-    assert "version" not in ZENODO and "doi" not in CFF
+    assert "version" not in ZENODO
 
 
 def test_doi_rule_d63_2():
     assert doi_problems(ZENODO) == []
     dois = [r for r in ZENODO["related_identifiers"] if r.get("scheme") == "doi"]
-    assert len(dois) <= 1  # al più il DOI «concept»; per la 1.0.0 nessuno, finché non esiste
+    assert len(dois) <= 1  # al più il DOI «concept» di tutte le versioni
 
 
 @pytest.mark.parametrize(("extra", "ok"), [
